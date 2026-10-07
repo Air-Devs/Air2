@@ -1,0 +1,59 @@
+Air2 — iOS 端 Minecraft: Java Edition 启动器
+Copyright (C) 2026 Air-Devs
+
+本程序是自由软件：你可以依照自由软件基金会发布的 GNU 通用公共许可证
+（第 3 版或你选择的任何更新版本）的条款重新发布和/或修改它。
+
+本程序的发布是希望它能有用，但不提供任何担保，甚至不包含对适销性
+或特定用途适用性的默示担保。详见 GNU 通用公共许可证。
+
+你应该已经收到本程序附带的 GNU 通用公共许可证副本。如果没有，
+请见 <https://www.gnu.org/licenses/>。
+
+--------------------------------------------------------------------------
+
+完整许可证文本见同目录下的 LICENSE 文件（GNU GPL v3, 674 行全文）。
+
+--------------------------------------------------------------------------
+
+## 上游来源
+
+Air2 基于 pojav 系后端开发，参考并复用了以下项目的工作：
+
+- Amethyst-iOS-MyRemastered
+  https://github.com/herbrine8403/Amethyst-iOS-MyRemastered
+  iOS 端 pojav 后端实现（Natives / JavaApp / LWJGL 补丁）
+
+- PojavLauncher
+  https://github.com/PojavLauncherTeam/PojavLauncher
+  原始启动核心与 Boardwalk 设计
+
+- ZalithLauncher2
+  https://github.com/ZalithLauncher/ZalithLauncher2
+  架构分层与功能设计参考
+
+上述项目各自遵循其原始许可，详见 docs/DEPENDENCIES.md。
+
+--------------------------------------------------------------------------
+
+## 附加条款（依据 GPLv3 第七节）
+
+依据 GNU 通用公共许可证第 7(c) 条，对本程序的分发附加以下要求：
+
+1. 分发本程序的修改版本时，必须以合理方式修改程序名称或版本号，
+   以示其与原始版本不同。
+
+2. 修改版本不得在名称中使用 "Air2" 或缩写 "Air"，也不得使用与
+   官方名称相近、可能导致混淆的名称。
+
+3. 不得移除本程序显示的版权声明。
+
+--------------------------------------------------------------------------
+
+## 商标声明
+
+Minecraft 是 Mojang Studios 的商标。本项目与 Mojang Studios 及
+Microsoft 无任何隶属或背书关系。
+
+本程序不包含 Minecraft 的任何游戏资源，所有游戏文件均由用户
+通过官方渠道获取。

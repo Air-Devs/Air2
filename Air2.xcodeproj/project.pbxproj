@@ -30,8 +30,6 @@
 		417DB6BA2038F2AFE425AB2B /* A2DownloadListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */; };
 		AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */; };
 		7344000874E6AFAA9489A939 /* A2InstallingViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */; };
-		6225CC987D80810EBF5E4CA8 /* A2LauncherViewController+Actions.m in Sources */ = {isa = PBXBuildFile; fileRef = 765156EE08E4F402C27DB99B /* A2LauncherViewController+Actions.m */; };
-		C98CDE092507553798670AE4 /* A2LauncherViewController+Cards.m in Sources */ = {isa = PBXBuildFile; fileRef = C67D59A7A9737D27EA240AA8 /* A2LauncherViewController+Cards.m */; };
 		F6C91785AE1F856D4C3E08BB /* A2LauncherViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = C8A9221A5FAC2B9E0D63B27A /* A2LauncherViewController.m */; };
 		9F8EE7E69BC7F3C10586FA6A /* A2AboutSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 566EB440D41933073AF9B84A /* A2AboutSettings.m */; };
 		8DF920441794A778BEFD9DD0 /* A2AppearanceSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */; };
@@ -76,8 +74,6 @@
 		904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadListViewController.m"; sourceTree = "<group>"; };
 		58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadViewController.m"; sourceTree = "<group>"; };
 		6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2InstallingViewController.m"; sourceTree = "<group>"; };
-		765156EE08E4F402C27DB99B /* A2LauncherViewController+Actions.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LauncherViewController+Actions.m"; sourceTree = "<group>"; };
-		C67D59A7A9737D27EA240AA8 /* A2LauncherViewController+Cards.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LauncherViewController+Cards.m"; sourceTree = "<group>"; };
 		C8A9221A5FAC2B9E0D63B27A /* A2LauncherViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LauncherViewController.m"; sourceTree = "<group>"; };
 		566EB440D41933073AF9B84A /* A2AboutSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AboutSettings.m"; sourceTree = "<group>"; };
 		CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AppearanceSettings.m"; sourceTree = "<group>"; };
@@ -115,7 +111,6 @@
 		A7D45435EB1780C938976BA4 /* A2DownloadViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadViewController.h"; sourceTree = "<group>"; };
 		C7770877217FAF37A3CE2F32 /* A2InstallingViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InstallingViewController.h"; sourceTree = "<group>"; };
 		39421C371A5FDC787D490323 /* A2LauncherViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LauncherViewController.h"; sourceTree = "<group>"; };
-		A18035593A63164AF4EE8D1D /* A2LauncherViewController_Internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LauncherViewController_Internal.h"; sourceTree = "<group>"; };
 		8A8A69E0C0117AD2228117A1 /* A2BackgroundSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundSettingsViewController.h"; sourceTree = "<group>"; };
 		A309D45ADA810213043EDE96 /* A2SettingsSections.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsSections.h"; sourceTree = "<group>"; };
 		F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsViewController.h"; sourceTree = "<group>"; };
@@ -294,11 +289,8 @@
 		C7F61C0D99C863113AC1C553 /* Home */ = {
 			isa = PBXGroup;
 			children = (
-				765156EE08E4F402C27DB99B /* A2LauncherViewController+Actions.m */,
-				C67D59A7A9737D27EA240AA8 /* A2LauncherViewController+Cards.m */,
 				C8A9221A5FAC2B9E0D63B27A /* A2LauncherViewController.m */,
 				39421C371A5FDC787D490323 /* A2LauncherViewController.h */,
-				A18035593A63164AF4EE8D1D /* A2LauncherViewController_Internal.h */,
 			);
 			path = Home;
 			sourceTree = "<group>";
@@ -427,8 +419,6 @@
 				417DB6BA2038F2AFE425AB2B /* A2DownloadListViewController.m in Sources */,
 				AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */,
 				7344000874E6AFAA9489A939 /* A2InstallingViewController.m in Sources */,
-				6225CC987D80810EBF5E4CA8 /* A2LauncherViewController+Actions.m in Sources */,
-				C98CDE092507553798670AE4 /* A2LauncherViewController+Cards.m in Sources */,
 				F6C91785AE1F856D4C3E08BB /* A2LauncherViewController.m in Sources */,
 				9F8EE7E69BC7F3C10586FA6A /* A2AboutSettings.m in Sources */,
 				8DF920441794A778BEFD9DD0 /* A2AppearanceSettings.m in Sources */,
