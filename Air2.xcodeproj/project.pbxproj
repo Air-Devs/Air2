@@ -158,15 +158,8 @@
 			children = (
 				18FD4D9FAB9B1E1C27AFB511 /* Info.plist */,
 				7B4F16DD90D9362E0A2BDBD1 /* App */,
-				3C208AC8788CF22B0CC6CF18 /* Path */,
-				8B89578D010E17535991475E /* Components */,
-				E4F1D82CF180792A5EDFE454 /* Screens */,
-				ED89BE603E6F0B8503DCD530 /* Theme */,
-				8957500F4C1E2FA1D18DFCD1 /* Account */,
-				55AB3FA6D6516DF096EA9950 /* Download */,
-				C7F61C0D99C863113AC1C553 /* Home */,
-				C09CC792827909A5EC124675 /* Settings */,
-				940C24E13AC2B0BB0C4F8B79 /* Version */,
+				E5BA60354B4EC37E480783EA /* Core */,
+				B33E61FAD84ACA6142548585 /* UI */,
 			);
 			path = Air2;
 			sourceTree = "<group>";
@@ -184,6 +177,26 @@
 				1185FA48A6FE1AB2F1E312DE /* A2SceneDelegate.h */,
 			);
 			path = App;
+			sourceTree = "<group>";
+		};
+
+		E5BA60354B4EC37E480783EA /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				3C208AC8788CF22B0CC6CF18 /* Path */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+
+		B33E61FAD84ACA6142548585 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				8B89578D010E17535991475E /* Components */,
+				E4F1D82CF180792A5EDFE454 /* Screens */,
+				ED89BE603E6F0B8503DCD530 /* Theme */,
+			);
+			path = UI;
 			sourceTree = "<group>";
 		};
 

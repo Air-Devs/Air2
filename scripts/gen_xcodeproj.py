@@ -45,10 +45,21 @@ def scan_sources():
 
 
 def group_tree(paths):
-    """把平铺的路径组织成 {group: [files]} 的字典"""
+    """把平铺的文件路径展开成完整的目录集合。
+
+    注意：不能只收集「有文件的目录」。像 Air2/Core/Path 这种，
+    它的父目录 Air2/Core 本身可能没有文件，但必须也建出组来，
+    否则 Path 组会成为孤立的、没有被引用的对象，
+    Xcode 也找不到它的相对路径。
+    """
     groups = {}
     for p in paths:
         parts = p.split("/")
+        # 逐级补出所有祖先目录（不含文件名）
+        for i in range(1, len(parts)):
+            d = "/".join(parts[:i])
+            groups.setdefault(d, [])
+        # 文件挂到它所在的目录
         group = "/".join(parts[:-1])
         groups.setdefault(group, []).append(p)
     return groups
@@ -147,51 +158,64 @@ def build():
     add("\t\t};")
     add("")
 
-    # Air2 组：按目录建子组
+    # Air2 组：按真实目录层级嵌套。
+    #
+    # 关键：PBXGroup 的 path 是相对父组的。之前我把所有目录都平铺挂在
+    # Air2 组下、path 只写目录名，Xcode 拼出来是 Air2/Version/，
+    # 而实际文件在 Air2/UI/Screens/Version/ —— 于是报
+    # "Build input file cannot be found"。
+    # 必须按真实层级逐层嵌套，每层 path 只写自己那一级。
     groups = group_tree(all_files)
-    sub_group_ids = {}
-    for g in sorted(groups.keys()):
-        sub_group_ids[g] = uid("group", g)
 
-    add(f"\t\t{app_group} /* {PROJECT_NAME} */ = {{")
-    add("\t\t\tisa = PBXGroup;")
-    add("\t\t\tchildren = (")
-    # 顶层直接子项 + 子组
-    top_level_files = groups.get("Air2", [])
-    for f in top_level_files:
-        add(f"\t\t\t\t{uid('fileref', f)} /* {os.path.basename(f)} */,")
-    add(f"\t\t\t\t{plist_ref} /* Info.plist */,")
-    # 子组按目录层级排序，先浅后深
-    for g in sorted(sub_group_ids.keys(), key=lambda x: (x.count("/"), x)):
-        if g == "Air2":
-            continue
-        add(f"\t\t\t\t{sub_group_ids[g]} /* {os.path.basename(g)} */,")
-    add("\t\t\t);")
-    add(f"\t\t\tpath = {PROJECT_NAME};")
-    add("\t\t\tsourceTree = \"<group>\";")
-    add("\t\t};")
-    add("")
+    # 计算每个目录组的父组
+    def parent_group(g):
+        if g == "Air2" or "/" not in g:
+            return "Air2"
+        return g.rsplit("/", 1)[0]
 
-    # 每个子组
-    for g in sorted(sub_group_ids.keys(), key=lambda x: (x.count("/"), x)):
-        if g == "Air2":
-            continue
-        add(f"\t\t{sub_group_ids[g]} /* {os.path.basename(g)} */ = {{")
+    def child_groups(g):
+        """g 的直接子目录组"""
+        out = []
+        prefix = g + "/"
+        for g2 in sorted(groups.keys()):
+            if g2.startswith(prefix) and "/" not in g2[len(prefix):]:
+                out.append(g2)
+        return out
+
+    # 所有目录组（含 Air2 自身）
+    all_dirs = sorted(set(list(groups.keys()) + ["Air2"]), key=lambda x: (x.count("/"), x))
+    dir_group_ids = {g: uid("group", g) for g in all_dirs}
+
+    for g in all_dirs:
+        gid = dir_group_ids[g]
+        name = "Air2" if g == "Air2" else os.path.basename(g)
+
+        add(f"\t\t{gid} /* {name} */ = {{")
         add("\t\t\tisa = PBXGroup;")
         add("\t\t\tchildren = (")
-        # 目录内的文件
+
+        # 该目录下的文件
         for f in groups.get(g, []):
             add(f"\t\t\t\t{uid('fileref', f)} /* {os.path.basename(f)} */,")
-        # 直接子目录
-        prefix = g + "/"
-        for g2 in sorted(sub_group_ids.keys()):
-            if g2.startswith(prefix) and g2.count("/") == g.count("/") + 1:
-                add(f"\t\t\t\t{sub_group_ids[g2]} /* {os.path.basename(g2)} */,")
+
+        # Air2 根组额外挂 Info.plist
+        if g == "Air2":
+            add(f"\t\t\t\t{plist_ref} /* Info.plist */,")
+
+        # 直接子目录组
+        for cg in child_groups(g):
+            cname = os.path.basename(cg)
+            add(f"\t\t\t\t{dir_group_ids[cg]} /* {cname} */,")
+
         add("\t\t\t);")
-        add(f"\t\t\tpath = {os.path.basename(g)};")
+        add(f"\t\t\tpath = {name};")
         add("\t\t\tsourceTree = \"<group>\";")
         add("\t\t};")
         add("")
+
+    # Air2 根组额外挂 Products
+    # （上面已输出，这里改用它作为主组的孩子）
+    # 见下方 main_group 定义处
 
     add("/* End PBXGroup section */")
     add("")
