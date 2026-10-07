@@ -77,3 +77,10 @@
 ```
 
 > 提交新依赖时同步更新本文件，CI 会检查 `Libraries/` 下每个二进制是否已登记。
+
+## 运行时(启动链)
+
+| 名称 | 版本 | 来源 | 许可 | 用途 | 引入方式 |
+|---|---|---|---|---|---|
+| libjvm.dylib | JDK 8/17/21/25 | 包内 `java_runtimes/*-openjdk`(OpenJDK 官方构建) | GPL-2.0+CE | JVM 本体 | app_bundle 内随包 |
+| AmethystJIT69.js | 1.0 | 自研(基于上游 UniversalJIT26 的 base+Extension 合并) | 跟随上游 | 服务传统 brk #0x69 交付可执行区 | `Assets/` 静态资源 |

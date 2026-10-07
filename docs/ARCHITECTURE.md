@@ -207,3 +207,18 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 1. 在本文档对应章节补充条目，写明职责与依赖方向
 2. 确认不产生循环依赖
 3. 提交时 PR 描述中引用本节改动
+
+---
+
+## 自研启动链(runtime chain)落地登记 —— [RT-CHAIN]
+
+| 文件 | 职责 |
+|---|---|
+| `Natives/Context/a2_vmloader.[hm]` | R2:dlopen(libjvm) + JNI_CreateJavaVM(同进程,不经 libjli) |
+| `Natives/Context/a2_argbuilder.[hm]` | R3:JVM 参数拼装(保序 / -D 去重 / classpath / 主类 / 程序参数) |
+| `Natives/Context/a2_resourcepaths.[hm]` | R4:资源与类路径注入(只依赖 Foundation) |
+| `Natives/Support/a2_log.[hm]` | R7:结构化日志 `[RT]` / `[LAUNCH-PROGRESS] 阶段 n/8`(无状态) |
+| `Natives/Support/a2_failbanner.[hm]` | 失败提示条(JIT/启动阶段分流文案) |
+| `Air2/Player/a2_launch.[hm]` | facade 编排:R3→R4→R2→R7,并 dispatch 主类 main |
+
+来源:原 Amethyst 线 `Natives/runtime/*` 的 P1 实现,逐文件搬入并按 Air2 规范归位。
