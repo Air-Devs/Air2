@@ -103,6 +103,10 @@ typedef void (^A2DownloadCompletion)(BOOL success, NSError * _Nullable error);
 - (void)resumeOperation:(A2DownloadOperation *)operation;
 - (void)cancelOperation:(A2DownloadOperation *)operation;
 
+/// 取消全部进行中的下载。
+/// 用于「取消安装」这类场景 —— 装到一半时把所有相关下载都停掉。
+- (void)cancelAll;
+
 #pragma mark - 便捷方法（供高层调用）
 
 /// 下载单个文件（单 URL，自动补断点与校验）

@@ -820,6 +820,17 @@ didCompleteWithError:(NSError *)error {
     if (operation.resumeKey) [self.active removeObjectForKey:operation.resumeKey];
 }
 
+- (void)cancelAll {
+    // 先取快照再遍历 —— cancel 会修改 active 字典，直接遍历会崩
+    NSArray<A2FileFetcher *> *fetchers = self.active.allValues;
+    NSArray<NSString *> *keys = self.active.allKeys;
+
+    for (A2FileFetcher *f in fetchers) {
+        [f cancel];
+    }
+    [self.active removeObjectsForKeys:keys];
+}
+
 - (nullable A2FileFetcher *)fetcherForOperation:(A2DownloadOperation *)op {
     if (!op.resumeKey) return nil;
     return self.active[op.resumeKey];
