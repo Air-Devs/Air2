@@ -24,14 +24,15 @@
     // 动态取色排在最前
     [self addThemeCardForKind:A2ThemeKindDynamic];
 
-    for (A2ColorTheme *t in [A2ColorTheme allThemes]) {
-        [self addThemeCardForKind:t.kind];
+    for (A2ColorTheme *theme in [A2ColorTheme allThemes]) {
+        [self addThemeCardForKind:theme.kind];
     }
 
     [self refreshSelection];
 }
 
 - (void)addThemeCardForKind:(A2ThemeKind)kind {
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
     A2ColorTheme *theme = (kind == A2ThemeKindDynamic)
         ? nil
         : [A2ColorTheme themeForKind:kind];
@@ -91,7 +92,7 @@
     nameLabel.translatesAutoresizingMaskIntoConstraints = NO;
     nameLabel.font = [A2Typography titleCard];
     nameLabel.text = name;
-    nameLabel.textColor = UIColor.whiteColor;
+    nameLabel.textColor = t.onSurface;
 
     UILabel *descLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     descLabel.translatesAutoresizingMaskIntoConstraints = NO;

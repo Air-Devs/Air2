@@ -150,7 +150,7 @@
     _glow.layer.shadowOpacity = 0.8;
     _glow.layer.shadowRadius = 6;
     _glow.layer.shadowOffset = CGSizeZero;
-    _detailLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.6];
+    _detailLabel.textColor = t.onSurfaceVariant;
     _speedLabel.textColor = t.primary;
 }
 

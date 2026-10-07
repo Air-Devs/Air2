@@ -147,6 +147,7 @@ typedef NS_ENUM(NSInteger, A2InstallStep) {
 #pragma mark - 进度卡
 
 - (void)setupProgressCard {
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
     _progressCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
     _progressCard.cornerRadius = A2RadiusXL;
     _progressCard.contentInsets = UIEdgeInsetsMake(A2SpaceXL, A2SpaceL, A2SpaceXL, A2SpaceL);
@@ -163,7 +164,7 @@ typedef NS_ENUM(NSInteger, A2InstallStep) {
     titleLabel.text = self.loader.length
         ? [NSString stringWithFormat:@"%@ · %@", _versionName, _loader]
         : _versionName;
-    titleLabel.textColor = UIColor.whiteColor;
+    titleLabel.textColor = t.onSurface;
 
     _stageLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _stageLabel.font = [A2Typography subtitleCard];

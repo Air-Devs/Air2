@@ -75,6 +75,7 @@
 }
 
 - (UIView *)cardForVersion:(NSDictionary<NSString *, NSString *> *)version {
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
     A2GlassCard *card = [[A2GlassCard alloc] initWithFrame:CGRectZero];
     card.cornerRadius = A2RadiusXL;
     card.contentInsets = UIEdgeInsetsMake(A2SpaceL, A2SpaceL, A2SpaceL, A2SpaceL);
@@ -83,13 +84,13 @@
     name.translatesAutoresizingMaskIntoConstraints = NO;
     name.text = version[@"name"];
     name.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
-    name.textColor = UIColor.whiteColor;
+    name.textColor = t.onSurface;
 
     UILabel *meta = [[UILabel alloc] initWithFrame:CGRectZero];
     meta.translatesAutoresizingMaskIntoConstraints = NO;
     meta.text = version[@"meta"];
     meta.font = [A2Typography caption];
-    meta.textColor = [UIColor colorWithWhite:1.0 alpha:0.58];
+    meta.textColor = t.onSurfaceVariant;
     meta.numberOfLines = 1;
 
     UIStackView *textStack = [[UIStackView alloc] initWithArrangedSubviews:@[name, meta]];

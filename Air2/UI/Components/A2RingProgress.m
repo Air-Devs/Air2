@@ -123,8 +123,8 @@
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
     _trackLayer.strokeColor = [UIColor colorWithWhite:1.0 alpha:0.12].CGColor;
     _progressLayer.strokeColor = t.primary.CGColor;
-    _centerLabel.textColor = UIColor.whiteColor;
-    _captionLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.55];
+    _centerLabel.textColor = t.onSurface;
+    _captionLabel.textColor = t.onSurfaceVariant;
 }
 
 - (void)layoutSubviews {

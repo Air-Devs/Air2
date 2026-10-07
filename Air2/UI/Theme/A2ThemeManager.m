@@ -84,17 +84,41 @@ static NSString *const kBackgroundFileName = @"air2_background.jpg";
 
 #pragma mark - 外观
 
+/// 当前是否暗色。
+///
+/// 注意不能用 UITraitCollection.currentTraitCollection ——
+/// 它返回的是「当前线程的 trait 环境」，在布局、后台回调等上下文里
+/// 会退化成默认值（表现为亮色主题下卡片却取了暗色 surface）。
+/// 正确做法是从窗口的 traitCollection 取，它反映真实的界面外观。
 - (BOOL)isDark {
     switch (_appearanceMode) {
         case A2AppearanceModeLight: return NO;
         case A2AppearanceModeDark:  return YES;
         case A2AppearanceModeSystem:
         default:
-            if (@available(iOS 13.0, *)) {
-                return UITraitCollection.currentTraitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
-            }
-            return NO;
+            return [self resolveSystemDark];
     }
+}
+
+- (BOOL)resolveSystemDark {
+    // 优先用窗口（最可靠）
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:UIWindowScene.class]) continue;
+        if (scene.activationState != UISceneActivationStateForegroundActive &&
+            scene.activationState != UISceneActivationStateForegroundInactive) continue;
+        for (UIWindow *w in ((UIWindowScene *)scene).windows) {
+            if (w.isKeyWindow) {
+                return w.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+            }
+        }
+    }
+    // 退化：取任意窗口
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:UIWindowScene.class]) continue;
+        UIWindow *w = ((UIWindowScene *)scene).windows.firstObject;
+        if (w) return w.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
+    }
+    return NO;
 }
 
 - (void)setAppearanceMode:(A2AppearanceMode)appearanceMode {

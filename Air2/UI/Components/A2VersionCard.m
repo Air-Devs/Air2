@@ -245,7 +245,7 @@
     A2ThemeManager *tm = A2ThemeManager.shared;
     A2ColorScheme *t = tm.scheme;
 
-    _nameLabel.textColor = UIColor.whiteColor;
+    _nameLabel.textColor = t.onSurface;
     _metaLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.62];
 
     UIView *iconBox = [self.contentView viewWithTag:200];

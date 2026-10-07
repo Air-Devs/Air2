@@ -94,8 +94,9 @@
 }
 
 - (void)applyTheme {
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
     _iconView.tintColor = A2ThemeManager.shared.scheme.primary;
-    _label.textColor = [UIColor colorWithWhite:1.0 alpha:0.86];
+    _label.textColor = t.onSurface;
 }
 
 @end

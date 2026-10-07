@@ -233,17 +233,34 @@
 
     UIView *contentBelow = _topBar;
     if (_scrollViewInternal) {
+        // ScrollView 内的自动布局有个经典坑：
+        // 内容视图不能同时用 frame 约束（leading/trailing/width）
+        // 和 content 约束（top/bottom）混着来，否则布局会塌。
+        //
+        // 正确做法：
+        //   contentLayoutGuide  —— 管滚动内容的尺寸（top/bottom/leading/trailing）
+        //   frameLayoutGuide    —— 管可视区域（用来定宽）
+        UILayoutGuide *content = _scrollViewInternal.contentLayoutGuide;
+        UILayoutGuide *frame = _scrollViewInternal.frameLayoutGuide;
+
         [constraints addObjectsFromArray:@[
             [_scrollViewInternal.topAnchor constraintEqualToAnchor:contentBelow.bottomAnchor],
             [_scrollViewInternal.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
             [_scrollViewInternal.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
             [_scrollViewInternal.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
 
-            [_contentStackInternal.topAnchor constraintEqualToAnchor:_scrollViewInternal.topAnchor constant:A2SpaceS],
-            [_contentStackInternal.bottomAnchor constraintEqualToAnchor:_scrollViewInternal.bottomAnchor constant:-A2SpaceXXL],
-            [_contentStackInternal.leadingAnchor constraintEqualToAnchor:_scrollViewInternal.leadingAnchor constant:A2PageMargin],
-            [_contentStackInternal.trailingAnchor constraintEqualToAnchor:_scrollViewInternal.trailingAnchor constant:-A2PageMargin],
-            [_contentStackInternal.widthAnchor constraintEqualToAnchor:_scrollViewInternal.widthAnchor constant:-A2PageMargin * 2],
+            // 内容堆栈四边贴合 contentLayoutGuide —— 这决定了可滚动范围
+            [_contentStackInternal.topAnchor constraintEqualToAnchor:content.topAnchor
+                                                            constant:A2SpaceS],
+            [_contentStackInternal.bottomAnchor constraintEqualToAnchor:content.bottomAnchor
+                                                               constant:-A2SpaceXXL],
+            [_contentStackInternal.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
+                                                                constant:A2PageMargin],
+            [_contentStackInternal.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
+                                                                  constant:-A2PageMargin],
+            // 这条是关键：宽度跟随可视区域，从而让内容只在垂直方向滚动
+            [_contentStackInternal.widthAnchor constraintEqualToAnchor:frame.widthAnchor
+                                                              constant:-A2PageMargin * 2],
         ]];
     } else if (_plainContentViewInternal) {
         [constraints addObjectsFromArray:@[
@@ -265,7 +282,8 @@
 }
 
 - (void)applyTheme {
-    _titleLabel.textColor = UIColor.whiteColor;
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+    _titleLabel.textColor = t.onSurface;
     _backButton.tintColor = UIColor.whiteColor;
     for (UIButton *b in _trailingButtons) {
         b.tintColor = UIColor.whiteColor;

@@ -125,8 +125,9 @@
 }
 
 - (void)applyTheme {
-    _titleLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.5];
-    _footerLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.42];
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+    _titleLabel.textColor = t.onSurfaceVariant;
+    _footerLabel.textColor = [t.onSurfaceVariant colorWithAlphaComponent:0.75];
 }
 
 @end

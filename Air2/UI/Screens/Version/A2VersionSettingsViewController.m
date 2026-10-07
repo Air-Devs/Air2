@@ -52,6 +52,7 @@
 #pragma mark - 顶部信息
 
 - (void)setupHeaderCard {
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
     A2GlassCard *card = [[A2GlassCard alloc] initWithFrame:CGRectZero];
     card.cornerRadius = A2RadiusXL;
 
@@ -59,7 +60,7 @@
     name.translatesAutoresizingMaskIntoConstraints = NO;
     name.text = _versionName;
     name.font = [UIFont systemFontOfSize:19 weight:UIFontWeightBold];
-    name.textColor = UIColor.whiteColor;
+    name.textColor = t.onSurface;
 
     UILabel *path = [[UILabel alloc] initWithFrame:CGRectZero];
     path.translatesAutoresizingMaskIntoConstraints = NO;

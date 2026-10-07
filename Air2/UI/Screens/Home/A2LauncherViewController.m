@@ -37,24 +37,21 @@
 @property (nonatomic, strong) UIScrollView *panelScroll;
 @property (nonatomic, strong) UIStackView *panelStack;
 
-/// 账户卡
+/// 账户条
 @property (nonatomic, strong) A2GlassCard *accountCard;
 @property (nonatomic, strong) UIView *avatarView;
 @property (nonatomic, strong) UILabel *avatarInitial;
 @property (nonatomic, strong) UILabel *accountNameLabel;
 @property (nonatomic, strong) UILabel *accountTypeLabel;
 
-/// 版本卡
+/// 版本卡（右栏主体）
 @property (nonatomic, strong) A2GlassCard *versionCard;
-@property (nonatomic, strong) UIView *versionIconBox;
-@property (nonatomic, strong) UILabel *versionInitial;
 @property (nonatomic, strong) UILabel *versionNameLabel;
 @property (nonatomic, strong) UILabel *versionMetaLabel;
 @property (nonatomic, strong) A2PrimaryButton *launchButton;
 
-/// 快捷入口
-@property (nonatomic, strong) UIStackView *quickRow1;
-@property (nonatomic, strong) UIStackView *quickRow2;
+/// 快捷入口（一行横排）
+@property (nonatomic, strong) UIStackView *quickRow;
 
 @property (nonatomic, assign) BOOL didSetupConstraints;
 @property (nonatomic, assign) BOOL didPlayEntrance;
@@ -168,12 +165,48 @@
     _panelStack = [[UIStackView alloc] initWithFrame:CGRectZero];
     _panelStack.translatesAutoresizingMaskIntoConstraints = NO;
     _panelStack.axis = UILayoutConstraintAxisVertical;
-    _panelStack.spacing = A2SpaceM;
+    _panelStack.spacing = A2SpaceL;   // 16pt
     [_panelScroll addSubview:_panelStack];
 
     [self buildAccountCard];
     [self buildVersionCard];
     [self buildQuickGrid];
+}
+
+#pragma mark - 右栏留白策略
+
+/// 右栏内容的垂直布局。
+///
+/// 设计原则：**右侧是操作区，不是信息面板。**
+/// 之前的做法是把内容从顶栏下方一直排到底部、卡片撑满整高，
+/// 结果整个右栏又满又吵，没有主次。
+///
+/// 现在：内容块整体吸附在垂直中部偏上的位置，
+/// 上方留约 6% 屏高、下方留白交给内容自然长度。
+/// 内容少的时候右侧是大块留白 —— 留白本身就是设计的一部分。
+- (void)setupPanelPlacement {
+    UILayoutGuide *content = _panelScroll.contentLayoutGuide;
+    UILayoutGuide *frame = _panelScroll.frameLayoutGuide;
+
+    [NSLayoutConstraint activateConstraints:@[
+        // 内容区宽度跟随可视区域（只允许垂直滚动）
+        [_panelStack.widthAnchor constraintEqualToAnchor:frame.widthAnchor
+                                               constant:-A2PanelPadding * 2],
+        // 用 top/bottom ≥ 而不是 ==，让内容短时不会被拉伸
+        [_panelStack.topAnchor constraintGreaterThanOrEqualToAnchor:content.topAnchor
+                                                           constant:A2SpaceXL],
+        // 整体在垂直方向居中偏上：用一个高优先级的「居中」约束，
+        // 内容高度不足时它会生效；内容超高时被上面的 ≥ 约束接管。
+        [_panelStack.centerYAnchor constraintEqualToAnchor:frame.centerYAnchor
+                                                  constant:-A2SpaceXXL],
+    ]];
+
+    // 居中约束优先级调低，让内容增高时能被拉伸约束压制
+    for (NSLayoutConstraint *c in _panelScroll.constraints) {
+        if (c.firstItem == _panelStack && c.firstAttribute == NSLayoutAttributeCenterY) {
+            c.priority = UILayoutPriorityDefaultHigh;   // 750
+        }
+    }
 }
 #pragma mark - 约束
 
@@ -223,12 +256,14 @@
         [_panelScroll.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
         [_panelScroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
 
-        [_panelStack.topAnchor constraintEqualToAnchor:_panelScroll.topAnchor constant:A2SpaceS],
-        [_panelStack.bottomAnchor constraintEqualToAnchor:_panelScroll.bottomAnchor constant:-A2PanelPadding],
-        [_panelStack.leadingAnchor constraintEqualToAnchor:_panelScroll.leadingAnchor constant:A2PanelPadding],
-        [_panelStack.trailingAnchor constraintEqualToAnchor:_panelScroll.trailingAnchor constant:-A2PanelPadding],
-        [_panelStack.widthAnchor constraintEqualToAnchor:_panelScroll.widthAnchor constant:-A2PanelPadding * 2],
+        // 右栏水平边距；垂直定位见 setupPanelPlacement
+        [_panelStack.leadingAnchor constraintEqualToAnchor:_panelScroll.frameLayoutGuide.leadingAnchor
+                                                 constant:A2PanelPadding],
+        [_panelStack.trailingAnchor constraintEqualToAnchor:_panelScroll.frameLayoutGuide.trailingAnchor
+                                                  constant:-A2PanelPadding],
     ]];
+
+    [self setupPanelPlacement];
 
     [super updateViewConstraints];
 }
@@ -241,8 +276,7 @@
     NSMutableArray<UIView *> *cards = [NSMutableArray array];
     if (_accountCard) [cards addObject:_accountCard];
     if (_versionCard) [cards addObject:_versionCard];
-    if (_quickRow1) [cards addObject:_quickRow1];
-    if (_quickRow2) [cards addObject:_quickRow2];
+    if (_quickRow) [cards addObject:_quickRow];
 
     A2AnimateCardEntrance(cards, A2CardStaggerDelay, nil);
 
@@ -268,184 +302,227 @@
         if ([b isKindOfClass:UIButton.class]) b.tintColor = s.onSurfaceVariant;
     }
 
+    // ---- 账户条 ----
     _avatarView.backgroundColor = s.primaryContainer;
     _avatarInitial.textColor = s.onPrimaryContainer;
     _accountNameLabel.textColor = s.onSurface;
     _accountTypeLabel.textColor = s.onSurfaceVariant;
 
-    _versionIconBox.backgroundColor = s.primaryContainer;
-    _versionInitial.textColor = s.onPrimaryContainer;
+    // ---- 版本卡 ----
     _versionNameLabel.textColor = s.onSurface;
     _versionMetaLabel.textColor = s.onSurfaceVariant;
 
-    for (UIView *v in _versionCard.contentView.subviews) {
-        if ([v isKindOfClass:UIButton.class]) ((UIButton *)v).tintColor = s.onSurfaceVariant;
+    // ---- 按 tag 统一着色 ----
+    // 注意：不能只遍历直接子视图 —— 控件都在 UIStackView 里，
+    // 必须递归查找。
+    [self tintTaggedViewsIn:_topBar color:s.onSurfaceVariant];
+    [self tintTaggedViewsIn:_versionCard color:s.onSurfaceVariant];
+    [self tintTaggedViewsIn:_accountCard color:s.onSurfaceVariant];
+}
+
+/// 递归给打了标记的视图着色。
+///  703 = 账号切换图标    704 = 分隔点    705 = 文字链接
+- (void)tintTaggedViewsIn:(UIView *)root color:(UIColor *)color {
+    if (root.tag == 703 || root.tag == 705) {
+        if ([root isKindOfClass:UIButton.class]) {
+            ((UIButton *)root).tintColor = color;
+        } else if ([root isKindOfClass:UIImageView.class]) {
+            ((UIImageView *)root).tintColor = color;
+        }
+    }
+    if (root.tag == 704 && [root isKindOfClass:UILabel.class]) {
+        ((UILabel *)root).textColor = [color colorWithAlphaComponent:0.5];
+    }
+    for (UIView *child in root.subviews) {
+        [self tintTaggedViewsIn:child color:color];
     }
 }
 
-#pragma mark - 卡片构建
+#pragma mark - 右侧栏内容构建
 
-#pragma mark 账户卡
-
+/// 账户条 —— 刻意做成「一行」而不是大卡片。
+///
+/// 设计说明：账号切换是低频操作，不需要占据半个屏幕的视觉权重。
+/// 之前做成大卡片是照着 ZL2 的样子走的，结果账号和版本两个卡片
+/// 互相抢焦点，整个右栏没有主次。
+/// 现在把它压成一行，让版本卡成为唯一的主体。
 - (void)buildAccountCard {
     _accountCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
-    _accountCard.cornerRadius = A2RadiusL;
-    _accountCard.elevation = A2CardElevationLow;
+    _accountCard.cornerRadius = A2RadiusM;
+    _accountCard.elevation = A2CardElevationSurface;   // 最低层级，视觉上退后
     _accountCard.tappable = YES;
     _accountCard.onTap = ^{ [self openAccount]; };
+    _accountCard.contentInsets = UIEdgeInsetsMake(A2SpaceS, A2SpaceM, A2SpaceS, A2SpaceS);
 
+    // 头像：小一圈，从 44 收到 32
     _avatarView = [[UIView alloc] initWithFrame:CGRectZero];
     _avatarView.translatesAutoresizingMaskIntoConstraints = NO;
-    _avatarView.layer.cornerRadius = 22;
+    _avatarView.layer.cornerRadius = 16;
     _avatarView.layer.cornerCurve = kCACornerCurveContinuous;
     _avatarView.clipsToBounds = YES;
 
     _avatarInitial = [[UILabel alloc] initWithFrame:CGRectZero];
     _avatarInitial.translatesAutoresizingMaskIntoConstraints = NO;
     _avatarInitial.text = @"S";
-    _avatarInitial.font = [UIFont systemFontOfSize:18 weight:UIFontWeightSemibold];
+    _avatarInitial.font = [UIFont systemFontOfSize:14 weight:UIFontWeightSemibold];
     _avatarInitial.textAlignment = NSTextAlignmentCenter;
     [_avatarView addSubview:_avatarInitial];
 
     _accountNameLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _accountNameLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
+    _accountNameLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
     _accountNameLabel.text = @"Steve";
 
     _accountTypeLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _accountTypeLabel.font = [A2Typography caption];
-    _accountTypeLabel.text = @"Microsoft 正版账号";
+    _accountTypeLabel.text = @"微软账号";
 
-    UIStackView *textStack = [[UIStackView alloc] initWithArrangedSubviews:@[_accountNameLabel, _accountTypeLabel]];
+    UIStackView *textStack =
+        [[UIStackView alloc] initWithArrangedSubviews:@[_accountNameLabel, _accountTypeLabel]];
     textStack.axis = UILayoutConstraintAxisVertical;
-    textStack.spacing = 1;
+    textStack.spacing = 0;
 
-    UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[_avatarView, textStack]];
+    // 右侧「切换」提示，明确这里有交互
+    UIImageSymbolConfiguration *swapCfg =
+        [UIImageSymbolConfiguration configurationWithPointSize:13 weight:UIImageSymbolWeightMedium];
+    UIImageView *swapIcon = [[UIImageView alloc]
+        initWithImage:[UIImage systemImageNamed:@"arrow.left.arrow.right" withConfiguration:swapCfg]];
+    swapIcon.translatesAutoresizingMaskIntoConstraints = NO;
+    swapIcon.tag = 703;   // 主题刷新时着色用
+
+    UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[_avatarView, textStack, swapIcon]];
     row.translatesAutoresizingMaskIntoConstraints = NO;
     row.axis = UILayoutConstraintAxisHorizontal;
-    row.spacing = A2SpaceM;
+    row.spacing = A2SpaceS;
     row.alignment = UIStackViewAlignmentCenter;
+    [row setCustomSpacing:A2SpaceS afterView:textStack];
 
     [_accountCard.contentView addSubview:row];
 
     [NSLayoutConstraint activateConstraints:@[
-        [_avatarView.widthAnchor constraintEqualToConstant:44],
-        [_avatarView.heightAnchor constraintEqualToConstant:44],
+        [_avatarView.widthAnchor constraintEqualToConstant:32],
+        [_avatarView.heightAnchor constraintEqualToConstant:32],
         [_avatarInitial.centerXAnchor constraintEqualToAnchor:_avatarView.centerXAnchor],
         [_avatarInitial.centerYAnchor constraintEqualToAnchor:_avatarView.centerYAnchor],
+        [swapIcon.widthAnchor constraintEqualToConstant:16],
+        [swapIcon.heightAnchor constraintEqualToConstant:16],
+
         [row.topAnchor constraintEqualToAnchor:_accountCard.contentView.topAnchor],
         [row.bottomAnchor constraintEqualToAnchor:_accountCard.contentView.bottomAnchor],
         [row.leadingAnchor constraintEqualToAnchor:_accountCard.contentView.leadingAnchor],
-        [row.trailingAnchor constraintLessThanOrEqualToAnchor:_accountCard.contentView.trailingAnchor],
+        [row.trailingAnchor constraintEqualToAnchor:_accountCard.contentView.trailingAnchor],
     ]];
 
     [_panelStack addArrangedSubview:_accountCard];
 }
 
-#pragma mark 版本卡
-
+/// 版本卡 —— 右栏唯一的视觉主体。
+///
+/// 信息层级（从强到弱）：
+///   版本名（大字，主）→ 加载器信息（小字，次）→ 启动按钮（块，操作）
+///   → 版本设置 / 游戏目录（文字链接，最弱）
+///
+/// 刻意去掉了 ZL2 那种「图标 + 齿轮按钮」的顶部行 ——
+/// 版本图标本来就辨识度低（多数是同一张草方块图），
+/// 齿轮单独放一个 36pt 按钮也浪费横向空间。
+/// 改成文字链接后，整张卡只有两个视觉焦点：版本名和启动按钮。
 - (void)buildVersionCard {
     _versionCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
-    _versionCard.cornerRadius = A2RadiusL;
+    _versionCard.cornerRadius = A2RadiusXL;      // 主体用更大的圆角
     _versionCard.elevation = A2CardElevationHigh;
+    _versionCard.contentInsets = UIEdgeInsetsMake(A2SpaceL, A2SpaceL, A2SpaceM, A2SpaceL);
 
-    // —— 顶行：图标 + 版本名 + 设置按钮 ——
-    _versionIconBox = [[UIView alloc] initWithFrame:CGRectZero];
-    _versionIconBox.translatesAutoresizingMaskIntoConstraints = NO;
-    _versionIconBox.layer.cornerRadius = A2RadiusXS;
-    _versionIconBox.layer.cornerCurve = kCACornerCurveContinuous;
-    _versionIconBox.clipsToBounds = YES;
-
-    _versionInitial = [[UILabel alloc] initWithFrame:CGRectZero];
-    _versionInitial.translatesAutoresizingMaskIntoConstraints = NO;
-    _versionInitial.text = @"1";
-    _versionInitial.font = [UIFont systemFontOfSize:15 weight:UIFontWeightBold];
-    _versionInitial.textAlignment = NSTextAlignmentCenter;
-    [_versionIconBox addSubview:_versionInitial];
-
+    // ---- 版本名 ----
     _versionNameLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _versionNameLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
+    _versionNameLabel.font = [UIFont systemFontOfSize:20 weight:UIFontWeightBold];
     _versionNameLabel.text = @"1.21.5-fabric";
     _versionNameLabel.adjustsFontSizeToFitWidth = YES;
-    _versionNameLabel.minimumScaleFactor = 0.75;
+    _versionNameLabel.minimumScaleFactor = 0.7;
 
+    // ---- 加载器信息 ----
     _versionMetaLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _versionMetaLabel.font = [A2Typography caption];
+    _versionMetaLabel.font = [A2Typography subtitleCard];
     _versionMetaLabel.text = @"Fabric 0.16.10 · Java 21";
+    _versionMetaLabel.adjustsFontSizeToFitWidth = YES;
+    _versionMetaLabel.minimumScaleFactor = 0.8;
 
-    UIStackView *versionTextStack =
-        [[UIStackView alloc] initWithArrangedSubviews:@[_versionNameLabel, _versionMetaLabel]];
-    versionTextStack.axis = UILayoutConstraintAxisVertical;
-    versionTextStack.spacing = 1;
-
-    UIImageSymbolConfiguration *cfg =
-        [UIImageSymbolConfiguration configurationWithPointSize:16 weight:UIImageSymbolWeightMedium];
-    UIButton *settingsBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-    settingsBtn.translatesAutoresizingMaskIntoConstraints = NO;
-    [settingsBtn setImage:[UIImage systemImageNamed:@"gearshape" withConfiguration:cfg]
-                 forState:UIControlStateNormal];
-    settingsBtn.tag = 701;
-    [settingsBtn addAction:[UIAction actionWithHandler:^(UIAction *action) {
-        [self openVersionSettings];
-    }] forControlEvents:UIControlEventTouchUpInside];
-
-    UIStackView *topRow = [[UIStackView alloc] initWithArrangedSubviews:@[_versionIconBox, versionTextStack, settingsBtn]];
-    topRow.translatesAutoresizingMaskIntoConstraints = NO;
-    topRow.axis = UILayoutConstraintAxisHorizontal;
-    topRow.spacing = A2SpaceM;
-    topRow.alignment = UIStackViewAlignmentCenter;
-    [topRow setCustomSpacing:A2SpaceS afterView:versionTextStack];
-
-    // —— 启动按钮 ——
+    // ---- 启动按钮 ----
     _launchButton = [[A2PrimaryButton alloc] initWithTitle:@"启动游戏" style:A2ButtonStylePrimary];
+    _launchButton.icon = [UIImage systemImageNamed:@"play.fill"];
+    _launchButton.minHeight = A2ButtonHeight;
     [_launchButton addTarget:self action:@selector(launchGame) forControlEvents:UIControlEventTouchUpInside];
 
-    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[topRow, _launchButton]];
+    // ---- 次级操作：文字链接，不用按钮 ----
+    UIButton *settingsLink = [self makeTextLink:@"版本设置" action:@selector(openVersionSettings)];
+    UIButton *folderLink = [self makeTextLink:@"游戏目录" action:@selector(openGameFolder)];
+
+    // 中间加个圆点分隔
+    UILabel *dot = [[UILabel alloc] initWithFrame:CGRectZero];
+    dot.text = @"·";
+    dot.font = [A2Typography caption];
+    dot.tag = 704;
+
+    UIStackView *linkRow = [[UIStackView alloc] initWithArrangedSubviews:@[settingsLink, dot, folderLink]];
+    linkRow.axis = UILayoutConstraintAxisHorizontal;
+    linkRow.spacing = A2SpaceXS;
+    linkRow.alignment = UIStackViewAlignmentCenter;
+
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:
+                          @[_versionNameLabel, _versionMetaLabel, _launchButton, linkRow]];
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     stack.axis = UILayoutConstraintAxisVertical;
-    stack.spacing = A2SpaceL;
+    stack.alignment = UIStackViewAlignmentLeading;
+    // 关键：按钮和上方文字贴近，下方链接贴近按钮 ——
+    // 之前按钮上下各留 16pt，卡片被撑得很空
+    [stack setCustomSpacing:A2SpaceXS afterView:_versionNameLabel];
+    [stack setCustomSpacing:A2SpaceL afterView:_versionMetaLabel];
+    [stack setCustomSpacing:A2SpaceM afterView:_launchButton];
 
     [_versionCard.contentView addSubview:stack];
 
     [NSLayoutConstraint activateConstraints:@[
-        [_versionIconBox.widthAnchor constraintEqualToConstant:34],
-        [_versionIconBox.heightAnchor constraintEqualToConstant:34],
-        [_versionInitial.centerXAnchor constraintEqualToAnchor:_versionIconBox.centerXAnchor],
-        [_versionInitial.centerYAnchor constraintEqualToAnchor:_versionIconBox.centerYAnchor],
-        [settingsBtn.widthAnchor constraintEqualToConstant:36],
-        [settingsBtn.heightAnchor constraintEqualToConstant:36],
-
         [stack.topAnchor constraintEqualToAnchor:_versionCard.contentView.topAnchor],
         [stack.bottomAnchor constraintEqualToAnchor:_versionCard.contentView.bottomAnchor],
         [stack.leadingAnchor constraintEqualToAnchor:_versionCard.contentView.leadingAnchor],
         [stack.trailingAnchor constraintEqualToAnchor:_versionCard.contentView.trailingAnchor],
+        // 启动按钮撑满宽度
+        [_launchButton.leadingAnchor constraintEqualToAnchor:stack.leadingAnchor],
+        [_launchButton.trailingAnchor constraintEqualToAnchor:stack.trailingAnchor],
     ]];
 
     [_panelStack addArrangedSubview:_versionCard];
 }
 
-#pragma mark 快捷入口
+/// 造一个文字链接样式的按钮。
+/// 次级操作用链接而不是按钮，是为了不让它们和「启动游戏」抢视觉焦点。
+- (UIButton *)makeTextLink:(NSString *)title action:(SEL)action {
+    UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
+    b.translatesAutoresizingMaskIntoConstraints = NO;
+    [b setTitle:title forState:UIControlStateNormal];
+    b.titleLabel.font = [UIFont systemFontOfSize:12.5 weight:UIFontWeightMedium];
+    b.tag = 705;
+    [b addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
+    return b;
+}
 
+/// 快捷入口 —— 一行横排图标 + 文字。
+///
+/// 之前是 2×2 的大方块，每个 90pt 高，占掉右栏近三分之一。
+/// 改成一行横排后高度降到 56pt，把纵向空间让给版本卡。
 - (void)buildQuickGrid {
     NSArray<NSArray<NSString *> *> *items = @[
-        @[@"版本管理", @"square.stack.3d.up",          @"openVersions"],
-        @[@"下载",     @"arrow.down.circle",           @"openDownload"],
-        @[@"联机",     @"antenna.radiowaves.left.and.right", @"openMultiplayer"],
-        @[@"文件",     @"folder",                      @"openFiles"],
+        @[@"版本", @"square.stack.3d.up",                   @"openVersions"],
+        @[@"下载", @"arrow.down.circle",                    @"openDownload"],
+        @[@"联机", @"antenna.radiowaves.left.and.right",    @"openMultiplayer"],
+        @[@"文件", @"folder",                               @"openFiles"],
     ];
 
-    UIStackView *row1 = [[UIStackView alloc] initWithArrangedSubviews:@[]];
-    UIStackView *row2 = [[UIStackView alloc] initWithArrangedSubviews:@[]];
-    for (UIStackView *r in @[row1, row2]) {
-        r.translatesAutoresizingMaskIntoConstraints = NO;
-        r.axis = UILayoutConstraintAxisHorizontal;
-        r.distribution = UIStackViewDistributionFillEqually;
-        r.spacing = A2SpaceM;
-    }
-
-    for (NSUInteger i = 0; i < items.count; i++) {
-        A2QuickActionCard *card = [[A2QuickActionCard alloc] initWithTitle:items[i][0]
-                                                                symbolName:items[i][1]];
-        SEL sel = NSSelectorFromString(items[i][2]);
+    NSMutableArray<UIView *> *cards = [NSMutableArray array];
+    for (NSArray<NSString *> *item in items) {
+        A2QuickActionCard *card = [[A2QuickActionCard alloc] initWithTitle:item[0]
+                                                                symbolName:item[1]];
+        // 紧凑模式：图标在上、文字在下，但压缩内边距
+        card.contentInsets = UIEdgeInsetsMake(A2SpaceS, A2SpaceXS, A2SpaceS, A2SpaceXS);
+        SEL sel = NSSelectorFromString(item[2]);
         __weak typeof(self) weakSelf = self;
         card.onSelect = ^{
             __strong typeof(weakSelf) self = weakSelf;
@@ -454,20 +531,17 @@
             if ([self respondsToSelector:sel]) [self performSelector:sel];
 #pragma clang diagnostic pop
         };
-        [(i < 2 ? row1 : row2) addArrangedSubview:card];
+        [cards addObject:card];
     }
 
-    _quickRow1 = row1;
-    _quickRow2 = row2;
+    _quickRow = [[UIStackView alloc] initWithArrangedSubviews:cards];
+    _quickRow.translatesAutoresizingMaskIntoConstraints = NO;
+    _quickRow.axis = UILayoutConstraintAxisHorizontal;
+    _quickRow.distribution = UIStackViewDistributionFillEqually;
+    _quickRow.spacing = A2SpaceS;
 
-    UIStackView *grid = [[UIStackView alloc] initWithArrangedSubviews:@[row1, row2]];
-    grid.translatesAutoresizingMaskIntoConstraints = NO;
-    grid.axis = UILayoutConstraintAxisVertical;
-    grid.spacing = A2SpaceM;
-
-    [_panelStack addArrangedSubview:grid];
+    [_panelStack addArrangedSubview:_quickRow];
 }
-
 #pragma mark - 动作与导航
 
 - (void)launchGame {

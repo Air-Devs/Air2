@@ -295,8 +295,8 @@
     _iconBox.backgroundColor = self.symbolColor ?: [t.primary colorWithAlphaComponent:0.9];
     _iconView.tintColor = UIColor.whiteColor;
     _titleLabel.textColor = self.isDestructive ? t.error : UIColor.whiteColor;
-    _subtitleLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.55];
-    _valueLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.62];
+    _subtitleLabel.textColor = t.onSurfaceVariant;
+    _valueLabel.textColor = t.onSurfaceVariant;
     _chevron.tintColor = [UIColor colorWithWhite:1.0 alpha:0.34];
     _checkmark.tintColor = t.primary;
     _toggle.onTintColor = t.primary;

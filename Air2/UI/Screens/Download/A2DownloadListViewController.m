@@ -249,13 +249,13 @@
     title.translatesAutoresizingMaskIntoConstraints = NO;
     title.text = item[@"title"];
     title.font = [A2Typography titleCard];
-    title.textColor = UIColor.whiteColor;
+    title.textColor = t.onSurface;
 
     UILabel *sub = [[UILabel alloc] initWithFrame:CGRectZero];
     sub.translatesAutoresizingMaskIntoConstraints = NO;
     sub.text = item[@"sub"];
     sub.font = [A2Typography caption];
-    sub.textColor = [UIColor colorWithWhite:1.0 alpha:0.58];
+    sub.textColor = t.onSurfaceVariant;
 
     UIStackView *textStack = [[UIStackView alloc] initWithArrangedSubviews:@[title, sub]];
     textStack.translatesAutoresizingMaskIntoConstraints = NO;

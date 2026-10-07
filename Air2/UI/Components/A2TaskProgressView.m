@@ -171,8 +171,8 @@
 
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    _titleLabel.textColor = UIColor.whiteColor;
-    _subtitleLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.55];
+    _titleLabel.textColor = t.onSurface;
+    _subtitleLabel.textColor = t.onSurfaceVariant;
 
     switch (_state) {
         case A2TaskStateRunning:   _statusDot.backgroundColor = t.primary; break;
