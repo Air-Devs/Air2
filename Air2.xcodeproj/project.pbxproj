@@ -13,6 +13,9 @@
 		1D4ED46FBFBF946134C72573 /* A2RootViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E0A962942F56F74CF7617780 /* A2RootViewController.m */; };
 		84C22A76F0D470DBB7E9248C /* A2SceneDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */; };
 		B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 36F3AADE4F4508F86A2F0505 /* main.m */; };
+		434831579F14E55A1DF7A0D1 /* A2Account.m in Sources */ = {isa = PBXBuildFile; fileRef = 88C69537AF21F68A7B1456D3 /* A2Account.m */; };
+		0B32EEA9A11A39AA5D315041 /* A2AccountManager.m in Sources */ = {isa = PBXBuildFile; fileRef = FBBBB4EFA2B5334A45EA3C4E /* A2AccountManager.m */; };
+		3352C680504CA3F9AB6CFD26 /* A2MicrosoftAuth.m in Sources */ = {isa = PBXBuildFile; fileRef = BA94035A25A574575C224EC9 /* A2MicrosoftAuth.m */; };
 		A83EEEB1694635A4E2D8A05C /* A2ModLoaderAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */; };
 		FAE87882A16451C5E2E43DDE /* A2ModrinthAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */; };
 		9F125686BA18A3A79AC3C941 /* A2DownloadEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = 1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */; };
@@ -39,6 +42,7 @@
 		5440FDEA95986768641FF753 /* A2BaseViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */; };
 		912C3DEC9D63AE689DA1F2DE /* A2AccountRowView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */; };
 		AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */; };
+		FB68423E2789A6F0A08E6E54 /* A2LoginViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */; };
 		417DB6BA2038F2AFE425AB2B /* A2DownloadListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */; };
 		AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */; };
 		7344000874E6AFAA9489A939 /* A2InstallingViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */; };
@@ -68,6 +72,9 @@
 		E0A962942F56F74CF7617780 /* A2RootViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RootViewController.m"; sourceTree = "<group>"; };
 		B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SceneDelegate.m"; sourceTree = "<group>"; };
 		36F3AADE4F4508F86A2F0505 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "main.m"; sourceTree = "<group>"; };
+		88C69537AF21F68A7B1456D3 /* A2Account.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Account.m"; sourceTree = "<group>"; };
+		FBBBB4EFA2B5334A45EA3C4E /* A2AccountManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountManager.m"; sourceTree = "<group>"; };
+		BA94035A25A574575C224EC9 /* A2MicrosoftAuth.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MicrosoftAuth.m"; sourceTree = "<group>"; };
 		A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderAPI.m"; sourceTree = "<group>"; };
 		B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModrinthAPI.m"; sourceTree = "<group>"; };
 		1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadEngine.m"; sourceTree = "<group>"; };
@@ -94,6 +101,7 @@
 		BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BaseViewController.m"; sourceTree = "<group>"; };
 		2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountRowView.m"; sourceTree = "<group>"; };
 		CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountViewController.m"; sourceTree = "<group>"; };
+		1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoginViewController.m"; sourceTree = "<group>"; };
 		904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadListViewController.m"; sourceTree = "<group>"; };
 		58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadViewController.m"; sourceTree = "<group>"; };
 		6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2InstallingViewController.m"; sourceTree = "<group>"; };
@@ -117,6 +125,9 @@
 		FFF83F1A982D07C7CBBF5C78 /* A2NavigationController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2NavigationController.h"; sourceTree = "<group>"; };
 		2C58D391DAC32B55049E9809 /* A2RootViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RootViewController.h"; sourceTree = "<group>"; };
 		1185FA48A6FE1AB2F1E312DE /* A2SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SceneDelegate.h"; sourceTree = "<group>"; };
+		748747C748D79B3DAEEDB5CF /* A2Account.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Account.h"; sourceTree = "<group>"; };
+		1EB22C948F38C8AEC14F9AB3 /* A2AccountManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountManager.h"; sourceTree = "<group>"; };
+		845233208F5ECAED2A1B1D6B /* A2MicrosoftAuth.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MicrosoftAuth.h"; sourceTree = "<group>"; };
 		2CDA5A9BDC1B71E004D187AD /* A2ModLoaderAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderAPI.h"; sourceTree = "<group>"; };
 		BEB699597AD1A56E18E868F6 /* A2ModrinthAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModrinthAPI.h"; sourceTree = "<group>"; };
 		DE956596465BDFF25E578448 /* A2DownloadEngine.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadEngine.h"; sourceTree = "<group>"; };
@@ -141,6 +152,7 @@
 		346D941B767D969728343CD3 /* A2BaseViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BaseViewController.h"; sourceTree = "<group>"; };
 		0D773FDDDB48AA7436E8FAA5 /* A2AccountRowView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountRowView.h"; sourceTree = "<group>"; };
 		6D2B976BBD0701B19B6533DD /* A2AccountViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountViewController.h"; sourceTree = "<group>"; };
+		52F4C13395826CC0FD71F073 /* A2LoginViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoginViewController.h"; sourceTree = "<group>"; };
 		03B2D97D5F4CDEEC6A69B6D0 /* A2DownloadListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadListViewController.h"; sourceTree = "<group>"; };
 		A7D45435EB1780C938976BA4 /* A2DownloadViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadViewController.h"; sourceTree = "<group>"; };
 		C7770877217FAF37A3CE2F32 /* A2InstallingViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InstallingViewController.h"; sourceTree = "<group>"; };
@@ -224,6 +236,7 @@
 		E5BA60354B4EC37E480783EA /* Core */ = {
 			isa = PBXGroup;
 			children = (
+				B31D400D67779826215CAD33 /* Account */,
 				184E0966D040B090B9F76405 /* Addons */,
 				6D1D1D1337AE93B0607365A8 /* Download */,
 				3C208AC8788CF22B0CC6CF18 /* Path */,
@@ -241,6 +254,20 @@
 				ED89BE603E6F0B8503DCD530 /* Theme */,
 			);
 			path = UI;
+			sourceTree = "<group>";
+		};
+
+		B31D400D67779826215CAD33 /* Account */ = {
+			isa = PBXGroup;
+			children = (
+				88C69537AF21F68A7B1456D3 /* A2Account.m */,
+				FBBBB4EFA2B5334A45EA3C4E /* A2AccountManager.m */,
+				BA94035A25A574575C224EC9 /* A2MicrosoftAuth.m */,
+				748747C748D79B3DAEEDB5CF /* A2Account.h */,
+				1EB22C948F38C8AEC14F9AB3 /* A2AccountManager.h */,
+				845233208F5ECAED2A1B1D6B /* A2MicrosoftAuth.h */,
+			);
+			path = Account;
 			sourceTree = "<group>";
 		};
 
@@ -370,8 +397,10 @@
 			children = (
 				2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */,
 				CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */,
+				1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */,
 				0D773FDDDB48AA7436E8FAA5 /* A2AccountRowView.h */,
 				6D2B976BBD0701B19B6533DD /* A2AccountViewController.h */,
+				52F4C13395826CC0FD71F073 /* A2LoginViewController.h */,
 			);
 			path = Account;
 			sourceTree = "<group>";
@@ -505,6 +534,9 @@
 				1D4ED46FBFBF946134C72573 /* A2RootViewController.m in Sources */,
 				84C22A76F0D470DBB7E9248C /* A2SceneDelegate.m in Sources */,
 				B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */,
+				434831579F14E55A1DF7A0D1 /* A2Account.m in Sources */,
+				0B32EEA9A11A39AA5D315041 /* A2AccountManager.m in Sources */,
+				3352C680504CA3F9AB6CFD26 /* A2MicrosoftAuth.m in Sources */,
 				A83EEEB1694635A4E2D8A05C /* A2ModLoaderAPI.m in Sources */,
 				FAE87882A16451C5E2E43DDE /* A2ModrinthAPI.m in Sources */,
 				9F125686BA18A3A79AC3C941 /* A2DownloadEngine.m in Sources */,
@@ -531,6 +563,7 @@
 				5440FDEA95986768641FF753 /* A2BaseViewController.m in Sources */,
 				912C3DEC9D63AE689DA1F2DE /* A2AccountRowView.m in Sources */,
 				AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */,
+				FB68423E2789A6F0A08E6E54 /* A2LoginViewController.m in Sources */,
 				417DB6BA2038F2AFE425AB2B /* A2DownloadListViewController.m in Sources */,
 				AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */,
 				7344000874E6AFAA9489A939 /* A2InstallingViewController.m in Sources */,

@@ -248,7 +248,7 @@ static NSString *const kCellID = @"A2DownloadCell";
     }
 
     [NSLayoutConstraint activateConstraints:@[
-        [scroll.topAnchor constraintEqualToAnchor:_filterBar.topAnchor],
+        [scroll.topAnchor constraintEqualToAnchor:_filterBar.topAnchor constant:18],
         [scroll.bottomAnchor constraintEqualToAnchor:_filterBar.bottomAnchor],
         [scroll.leadingAnchor constraintEqualToAnchor:_filterBar.leadingAnchor constant:A2PageMargin],
         [scroll.trailingAnchor constraintEqualToAnchor:_filterBar.trailingAnchor],
@@ -260,10 +260,24 @@ static NSString *const kCellID = @"A2DownloadCell";
         [stack.heightAnchor constraintEqualToAnchor:scroll.heightAnchor],
     ]];
 
+    // 筛选维度说明
+    UILabel *dimLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    dimLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    dimLabel.text = [self filterDimensionName];
+    dimLabel.font = [A2Typography caption];
+    dimLabel.textColor = A2ThemeManager.shared.scheme.cOnSurfaceVariant;
+    dimLabel.tag = 802;
+    [_filterBar addSubview:dimLabel];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [dimLabel.leadingAnchor constraintEqualToAnchor:_filterBar.leadingAnchor constant:A2PageMargin],
+        [dimLabel.topAnchor constraintEqualToAnchor:_filterBar.topAnchor],
+    ]];
+
     [self.plainContentView addSubview:_filterBar];
 }
 
-/// 筛选条：加载器 + 排序
+/// 筛选条：加载器 + 游戏版本
 - (NSArray<NSString *> *)filtersForCategory {
     switch (self.category) {
         case A2DownloadCategoryMod:
@@ -273,7 +287,18 @@ static NSString *const kCellID = @"A2DownloadCell";
         case A2DownloadCategoryResourcePack:
         case A2DownloadCategoryWorld:
         default:
-            return @[@"全部", @"热门", @"最新"];
+            return @[@"全部", @"1.21.5", @"1.21.1", @"1.20.1", @"1.19.2"];
+    }
+}
+
+/// 该分类的筛选维度说明
+- (NSString *)filterDimensionName {
+    switch (self.category) {
+        case A2DownloadCategoryMod:
+        case A2DownloadCategoryModpack:
+            return @"加载器";
+        default:
+            return @"游戏版本";
     }
 }
 
@@ -310,10 +335,18 @@ static NSString *const kCellID = @"A2DownloadCell";
         [self styleChip:(UIButton *)v selected:((UIButton *)v == sender)];
     }
 
-    // 更新筛选条件并重新搜索
+    // 按分类更新对应维度的筛选条件
     NSString *title = [sender titleForState:UIControlStateNormal];
-    if (self.category == A2DownloadCategoryMod || self.category == A2DownloadCategoryModpack) {
-        self.loaderFilter = [title isEqualToString:@"全部"] ? nil : title.lowercaseString;
+    BOOL isAll = [title isEqualToString:@"全部"];
+
+    switch (self.category) {
+        case A2DownloadCategoryMod:
+        case A2DownloadCategoryModpack:
+            self.loaderFilter = isAll ? nil : title.lowercaseString;
+            break;
+        default:
+            self.gameVersionFilter = isAll ? nil : title;
+            break;
     }
     [self reload];
 
@@ -360,7 +393,7 @@ static NSString *const kCellID = @"A2DownloadCell";
         [_filterBar.topAnchor constraintEqualToAnchor:_searchBar.bottomAnchor],
         [_filterBar.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor],
         [_filterBar.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
-        [_filterBar.heightAnchor constraintEqualToConstant:36],
+        [_filterBar.heightAnchor constraintEqualToConstant:56],
 
         [_countLabel.topAnchor constraintEqualToAnchor:_filterBar.bottomAnchor constant:A2SpaceS],
         [_countLabel.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor

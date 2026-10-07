@@ -31,6 +31,8 @@
 #import "A2Typography.h"
 #import "A2SettingsSection.h"
 #import "A2SettingsRow.h"
+#import "A2AccountManager.h"
+#import "A2LoginViewController.h"
 
 @interface A2AccountViewController ()
 @property (nonatomic, strong) A2GlassCard *listCard;
@@ -50,6 +52,11 @@
     [self buildAccounts];
     [self setupAddSection];
     [self setupManageSection];
+
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                          selector:@selector(buildAccounts)
+                                              name:A2AccountsDidChangeNotification
+                                            object:nil];
 }
 
 #pragma mark - 账号列表（一张大卡）
@@ -76,33 +83,53 @@
     [self addSection:_listCard];
 }
 
+/// 从 A2AccountManager 读真实账号
 - (void)buildAccounts {
-    // 示例数据，待接 Core 层的账号管理
-    NSArray<NSArray<id> *> *accounts = @[
-        @[@"Steve", @"Microsoft 正版账号", @YES, @YES],
-        @[@"Offline", @"离线登录", @NO, @NO],
-    ];
+    for (UIView *v in _accountStack.arrangedSubviews) {
+        [_accountStack removeArrangedSubview:v];
+        [v removeFromSuperview];
+    }
+    [_rows removeAllObjects];
 
-    for (NSArray<id> *a in accounts) {
-        A2AccountRowView *row = [[A2AccountRowView alloc] initWithName:a[0] type:a[1]];
-        row.current = [a[2] boolValue];
-        row.refreshable = [a[3] boolValue];
+    A2AccountManager *mgr = A2AccountManager.shared;
+    NSArray<A2Account *> *accounts = mgr.accounts;
+
+    if (accounts.count == 0) {
+        UILabel *empty = [[UILabel alloc] initWithFrame:CGRectZero];
+        empty.translatesAutoresizingMaskIntoConstraints = NO;
+        empty.text = @"还没有添加账号";
+        empty.font = [A2Typography body];
+        empty.textColor = A2ThemeManager.shared.scheme.cOnSurfaceVariant;
+        empty.textAlignment = NSTextAlignmentCenter;
+        [empty.heightAnchor constraintEqualToConstant:80].active = YES;
+        [_accountStack addArrangedSubview:empty];
+        return;
+    }
+
+    for (A2Account *acc in accounts) {
+        A2AccountRowView *row = [[A2AccountRowView alloc] initWithName:acc.username
+                                                                 type:acc.typeDisplayName];
+        row.current = (acc == mgr.currentAccount);
+        row.refreshable = acc.canRefresh;
 
         __weak typeof(self) weakSelf = self;
         __weak A2AccountRowView *weakRow = row;
-        NSString *name = a[0];
 
         row.onSelect = ^{
             __strong typeof(weakSelf) self = weakSelf;
-            [self selectAccount:weakRow];
+            if ([A2AccountManager.shared setCurrentAccount:acc]) {
+                for (A2AccountRowView *r in self.rows) r.current = (r == weakRow);
+                [A2Toast show:[NSString stringWithFormat:@"已切换到 %@", acc.username]
+                       inView:self.view];
+            }
         };
         row.onRefresh = ^{
             __strong typeof(weakSelf) self = weakSelf;
-            [A2Toast show:[NSString stringWithFormat:@"正在刷新 %@", name] inView:self.view];
+            [self refreshAccount:acc];
         };
         row.onMore = ^{
             __strong typeof(weakSelf) self = weakSelf;
-            [self showMoreMenuForName:name fromView:weakRow];
+            [self showMoreMenuForAccount:acc fromView:weakRow];
         };
 
         [_rows addObject:row];
@@ -114,28 +141,56 @@
     }
 }
 
-- (void)selectAccount:(A2AccountRowView *)selected {
-    for (A2AccountRowView *r in _rows) {
-        r.current = (r == selected);
+/// 手动刷新凭据
+- (void)refreshAccount:(A2Account *)acc {
+    [A2Toast show:[NSString stringWithFormat:@"正在刷新 %@…", acc.username] inView:self.view];
+    __weak typeof(self) weakSelf = self;
+    if (acc.type == A2AccountTypeMicrosoft) {
+        A2MicrosoftAuth *auth = [A2MicrosoftAuth new];
+        [auth refreshAccount:acc completion:^(A2Account *newAcc, NSError *error) {
+            __strong typeof(weakSelf) self = weakSelf;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (newAcc) {
+                    [A2AccountManager.shared addAccount:newAcc];
+                    [A2Toast show:@"凭据已刷新" inView:self.view];
+                } else {
+                    [A2Toast show:(error.localizedDescription ?: @"刷新失败") inView:self.view];
+                }
+            });
+        }];
+    } else {
+        [A2Toast show:@"此账号无需刷新" inView:self.view];
     }
-    [A2Toast show:[NSString stringWithFormat:@"已切换到 %@", selected.accountName] inView:self.view];
 }
 
-- (void)showMoreMenuForName:(NSString *)name fromView:(UIView *)source {
+
+/// 账号的更多操作
+- (void)showMoreMenuForAccount:(A2Account *)acc fromView:(UIView *)source {
     UIAlertController *sheet =
-        [UIAlertController alertControllerWithTitle:name message:nil
+        [UIAlertController alertControllerWithTitle:acc.username
+                                            message:acc.typeDisplayName
                                      preferredStyle:UIAlertControllerStyleActionSheet];
-    NSArray<NSString *> *actions = @[@"皮肤与披风", @"复制 UUID", @"移除账号"];
-    for (NSString *a in actions) {
-        BOOL destructive = [a isEqualToString:@"移除账号"];
-        [sheet addAction:[UIAlertAction actionWithTitle:a
-                                                 style:(destructive ? UIAlertActionStyleDestructive
-                                                                    : UIAlertActionStyleDefault)
-                                               handler:^(UIAlertAction *action) {
-            [A2Toast show:[NSString stringWithFormat:@"%@：%@", a, name] inView:self.view];
+
+    if (acc.type != A2AccountTypeOffline) {
+        [sheet addAction:[UIAlertAction actionWithTitle:@"复制 UUID"
+                                                 style:UIAlertActionStyleDefault
+                                               handler:^(UIAlertAction *a) {
+            UIPasteboard.generalPasteboard.string = acc.profileID ?: @"";
+            [A2Toast show:@"UUID 已复制" inView:self.view];
         }]];
     }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+
+    [sheet addAction:[UIAlertAction actionWithTitle:@"移除账号"
+                                             style:UIAlertActionStyleDestructive
+                                           handler:^(UIAlertAction *a) {
+        [A2AccountManager.shared removeAccount:acc];
+        [self buildAccounts];
+        [A2Toast show:@"已移除" inView:self.view];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
+                                             style:UIAlertActionStyleCancel
+                                           handler:nil]];
+
     sheet.popoverPresentationController.sourceView = source;
     sheet.popoverPresentationController.sourceRect = source.bounds;
     [self presentViewController:sheet animated:YES completion:nil];
@@ -159,9 +214,18 @@
         row.title = options[i][0];
         row.subtitle = options[i][1];
         row.accessory = A2SettingsRowAccessoryDisclosure;
-        NSString *title = options[i][0];
+        A2LoginMode mode = A2LoginModeMicrosoft;
+        if (i == 1) mode = A2LoginModeOffline;
+        else if (i == 2) mode = A2LoginModeThirdParty;
+
+        __weak typeof(self) weakSelf = self;
         row.onTap = ^{
-            [A2Toast show:title inView:self.view];
+            __strong typeof(weakSelf) self = weakSelf;
+            A2LoginViewController *vc = [[A2LoginViewController alloc] initWithMode:mode];
+            vc.onSuccess = ^(A2Account *account) {
+                [self buildAccounts];
+            };
+            [self.navigationController pushViewController:vc animated:YES];
         };
         [section addRow:row];
     }
