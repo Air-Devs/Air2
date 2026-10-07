@@ -8,6 +8,7 @@
 
 /* Begin PBXBuildFile section */
 		5B69779F761A566D166C2342 /* A2AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 8DA45F9AA021EBFBF929A56A /* A2AppDelegate.m */; };
+		84B4ED65340FEC57222535E6 /* A2NavigationController.m in Sources */ = {isa = PBXBuildFile; fileRef = F6EE6864D5C02736374620A3 /* A2NavigationController.m */; };
 		1D4ED46FBFBF946134C72573 /* A2RootViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E0A962942F56F74CF7617780 /* A2RootViewController.m */; };
 		84C22A76F0D470DBB7E9248C /* A2SceneDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */; };
 		B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 36F3AADE4F4508F86A2F0505 /* main.m */; };
@@ -52,6 +53,7 @@
 		082E22CB657D9948DD22CF5F /* Air2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Air2.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		18FD4D9FAB9B1E1C27AFB511 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		8DA45F9AA021EBFBF929A56A /* A2AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AppDelegate.m"; sourceTree = "<group>"; };
+		F6EE6864D5C02736374620A3 /* A2NavigationController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2NavigationController.m"; sourceTree = "<group>"; };
 		E0A962942F56F74CF7617780 /* A2RootViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RootViewController.m"; sourceTree = "<group>"; };
 		B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SceneDelegate.m"; sourceTree = "<group>"; };
 		36F3AADE4F4508F86A2F0505 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "main.m"; sourceTree = "<group>"; };
@@ -91,6 +93,7 @@
 		5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ThemeManager.m"; sourceTree = "<group>"; };
 		42B68771E09EA8BB40AC83D7 /* A2Typography.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Typography.m"; sourceTree = "<group>"; };
 		52E0A8862124FBDB57E8C690 /* A2AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AppDelegate.h"; sourceTree = "<group>"; };
+		FFF83F1A982D07C7CBBF5C78 /* A2NavigationController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2NavigationController.h"; sourceTree = "<group>"; };
 		2C58D391DAC32B55049E9809 /* A2RootViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RootViewController.h"; sourceTree = "<group>"; };
 		1185FA48A6FE1AB2F1E312DE /* A2SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SceneDelegate.h"; sourceTree = "<group>"; };
 		CDB8C000E2777EB953C462DD /* A2VersionIsolation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionIsolation.h"; sourceTree = "<group>"; };
@@ -169,10 +172,12 @@
 			isa = PBXGroup;
 			children = (
 				8DA45F9AA021EBFBF929A56A /* A2AppDelegate.m */,
+				F6EE6864D5C02736374620A3 /* A2NavigationController.m */,
 				E0A962942F56F74CF7617780 /* A2RootViewController.m */,
 				B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */,
 				36F3AADE4F4508F86A2F0505 /* main.m */,
 				52E0A8862124FBDB57E8C690 /* A2AppDelegate.h */,
+				FFF83F1A982D07C7CBBF5C78 /* A2NavigationController.h */,
 				2C58D391DAC32B55049E9809 /* A2RootViewController.h */,
 				1185FA48A6FE1AB2F1E312DE /* A2SceneDelegate.h */,
 			);
@@ -410,6 +415,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				5B69779F761A566D166C2342 /* A2AppDelegate.m in Sources */,
+				84B4ED65340FEC57222535E6 /* A2NavigationController.m in Sources */,
 				1D4ED46FBFBF946134C72573 /* A2RootViewController.m in Sources */,
 				84C22A76F0D470DBB7E9248C /* A2SceneDelegate.m in Sources */,
 				B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */,

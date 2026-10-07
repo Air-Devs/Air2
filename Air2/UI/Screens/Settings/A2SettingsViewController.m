@@ -14,11 +14,7 @@
 #import "A2Typography.h"
 #import "A2Toast.h"
 
-#import "A2AppearanceSettings.h"
-#import "A2GameSettings.h"
-#import "A2RendererSettings.h"
-#import "A2StorageSettings.h"
-#import "A2AboutSettings.h"
+#import "A2SettingsSections.h"
 
 @implementation A2SettingsViewController
 

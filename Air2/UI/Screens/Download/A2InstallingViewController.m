@@ -6,7 +6,7 @@
 #import "A2InstallingViewController.h"
 #import "A2GlassCard.h"
 #import "A2PrimaryButton.h"
-#import "A2RingProgress.h"
+#import "A2ProgressView.h"
 #import "A2Toast.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"

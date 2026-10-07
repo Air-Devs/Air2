@@ -32,6 +32,9 @@ jobs:
       - name: 目录与命名规范
         run: bash scripts/lint_structure.sh
 
+      - name: 校验头文件引用
+        run: python3 scripts/check_imports.py
+
       - name: 校验 Xcode 工程完整性
         run: python3 scripts/verify_pbxproj.py
 
