@@ -62,6 +62,12 @@
 - AGPL-3.0 = 强 copyleft：与 GPL 系可并存（AGPL 吸收 GPL，反向不行），但整件作品受其约束。
 - SideInstaller 自定义许可**与 GPL/AGPL 兼容性不明**且**禁止再分发构建** ⇒ 一律**只参考、不入仓**。
 
+**第二阶段工具链前置**（★尚未引入，仅登记★）：设备内自动配对 / 内置 helper 需要
+`idevice`(MIT) 的 **Rust → iOS 静态库**构建（`aarch64-apple-ios` target + `cargo-lipo`/`xcframework`）。
+★不要直接搬 PocketJ 的预编译 `libidevice_ffi.a`（约 90 MB）★——按 ADR-008 / `docs/JIT-PROVISIONING.md` §4
+走「源码 + CI 构建」。iOS 27 自动配对另需 Info.plist 的 `NSLocalNetworkUsageDescription` 与
+`NSBonjourServices`（本单未改 Info.plist）。
+
 ---
 
 ## 登记模板

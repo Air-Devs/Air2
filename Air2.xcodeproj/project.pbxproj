@@ -14,7 +14,14 @@
 		84C22A76F0D470DBB7E9248C /* A2SceneDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */; };
 		B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 36F3AADE4F4508F86A2F0505 /* main.m */; };
 		6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */ = {isa = PBXBuildFile; fileRef = 074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */; };
+		667F2E16A26101EDC1C24664 /* A2JITAutomaticPairingProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = C70E67F4DF02B704BF27F382 /* A2JITAutomaticPairingProvider.m */; };
 		CF0651A1E55C83EC183CFC89 /* A2JITCoordinator.m in Sources */ = {isa = PBXBuildFile; fileRef = ADF3CAB08288C6F624B9D5A6 /* A2JITCoordinator.m */; };
+		0A2D456E706B33C74139D9C1 /* A2JITExternalToolProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = 0A6367E9BEBCFE9B36016095 /* A2JITExternalToolProvider.m */; };
+		E572D0B37C887F2359AF1DF7 /* A2JITFacts.m in Sources */ = {isa = PBXBuildFile; fileRef = D0251E606B523526DEC531C3 /* A2JITFacts.m */; };
+		8164B55A050F723821A91945 /* A2JITImportedPairingProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = 17042A3BE2D68D12388647BD /* A2JITImportedPairingProvider.m */; };
+		DA1E568049E2C81A8B3DDC42 /* A2JITKernelJITProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = CA4B1A0C07D533AA69631300 /* A2JITKernelJITProvider.m */; };
+		0C93DD6BAA11EF16713ADC84 /* A2JITProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D6918C01335A072F8DD093E /* A2JITProvider.m */; };
+		349881CC525759AC6BD5202D /* A2JITStrategySelector.m in Sources */ = {isa = PBXBuildFile; fileRef = 9AEFB11C2421A6A801BA8DA9 /* A2JITStrategySelector.m */; };
 		11706200BD2498A07AEBFDA9 /* A2LaunchChain.m in Sources */ = {isa = PBXBuildFile; fileRef = 5BA8D2CBACEBC7883477ABED /* A2LaunchChain.m */; };
 		B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */ = {isa = PBXBuildFile; fileRef = 872075DCD0F565557A6554D2 /* A2BackgroundView.m */; };
 		D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */ = {isa = PBXBuildFile; fileRef = CA1D52969E0783051081B038 /* A2CardTitleBar.m */; };
@@ -62,7 +69,14 @@
 		B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SceneDelegate.m"; sourceTree = "<group>"; };
 		36F3AADE4F4508F86A2F0505 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "main.m"; sourceTree = "<group>"; };
 		074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionIsolation.m"; sourceTree = "<group>"; };
+		C70E67F4DF02B704BF27F382 /* A2JITAutomaticPairingProvider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITAutomaticPairingProvider.m"; sourceTree = "<group>"; };
 		ADF3CAB08288C6F624B9D5A6 /* A2JITCoordinator.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITCoordinator.m"; sourceTree = "<group>"; };
+		0A6367E9BEBCFE9B36016095 /* A2JITExternalToolProvider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITExternalToolProvider.m"; sourceTree = "<group>"; };
+		D0251E606B523526DEC531C3 /* A2JITFacts.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITFacts.m"; sourceTree = "<group>"; };
+		17042A3BE2D68D12388647BD /* A2JITImportedPairingProvider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITImportedPairingProvider.m"; sourceTree = "<group>"; };
+		CA4B1A0C07D533AA69631300 /* A2JITKernelJITProvider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITKernelJITProvider.m"; sourceTree = "<group>"; };
+		2D6918C01335A072F8DD093E /* A2JITProvider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITProvider.m"; sourceTree = "<group>"; };
+		9AEFB11C2421A6A801BA8DA9 /* A2JITStrategySelector.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITStrategySelector.m"; sourceTree = "<group>"; };
 		5BA8D2CBACEBC7883477ABED /* A2LaunchChain.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchChain.m"; sourceTree = "<group>"; };
 		872075DCD0F565557A6554D2 /* A2BackgroundView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BackgroundView.m"; sourceTree = "<group>"; };
 		CA1D52969E0783051081B038 /* A2CardTitleBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CardTitleBar.m"; sourceTree = "<group>"; };
@@ -104,7 +118,14 @@
 		2C58D391DAC32B55049E9809 /* A2RootViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RootViewController.h"; sourceTree = "<group>"; };
 		1185FA48A6FE1AB2F1E312DE /* A2SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SceneDelegate.h"; sourceTree = "<group>"; };
 		CDB8C000E2777EB953C462DD /* A2VersionIsolation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionIsolation.h"; sourceTree = "<group>"; };
+		B1C425BBB279B3D1FE23B0C2 /* A2JITAutomaticPairingProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITAutomaticPairingProvider.h"; sourceTree = "<group>"; };
 		7D7F0D5221FD49CD23A915CB /* A2JITCoordinator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITCoordinator.h"; sourceTree = "<group>"; };
+		C687B020772911E8015A2EA7 /* A2JITExternalToolProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITExternalToolProvider.h"; sourceTree = "<group>"; };
+		24C1C7C76C9FEC17D6B125DE /* A2JITFacts.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITFacts.h"; sourceTree = "<group>"; };
+		0DE10BB62ADB1C381BFDEC6E /* A2JITImportedPairingProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITImportedPairingProvider.h"; sourceTree = "<group>"; };
+		F34CD4D808A542C69B1DD1D4 /* A2JITKernelJITProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITKernelJITProvider.h"; sourceTree = "<group>"; };
+		5F0683F8CA13308C3E599E19 /* A2JITProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITProvider.h"; sourceTree = "<group>"; };
+		D201ED16953E2525484A6DD4 /* A2JITStrategySelector.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITStrategySelector.h"; sourceTree = "<group>"; };
 		CD73B6F629B6E7F371515ED5 /* A2LaunchChain.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchChain.h"; sourceTree = "<group>"; };
 		930418C55810BF7B65B85AE9 /* A2BackgroundView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundView.h"; sourceTree = "<group>"; };
 		1F985FAD5DEB8D4699A8B5AE /* A2CardTitleBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CardTitleBar.h"; sourceTree = "<group>"; };
@@ -209,9 +230,23 @@
 		BB2DECA4B69E986999FF31DD /* Player */ = {
 			isa = PBXGroup;
 			children = (
+				C70E67F4DF02B704BF27F382 /* A2JITAutomaticPairingProvider.m */,
 				ADF3CAB08288C6F624B9D5A6 /* A2JITCoordinator.m */,
+				0A6367E9BEBCFE9B36016095 /* A2JITExternalToolProvider.m */,
+				D0251E606B523526DEC531C3 /* A2JITFacts.m */,
+				17042A3BE2D68D12388647BD /* A2JITImportedPairingProvider.m */,
+				CA4B1A0C07D533AA69631300 /* A2JITKernelJITProvider.m */,
+				2D6918C01335A072F8DD093E /* A2JITProvider.m */,
+				9AEFB11C2421A6A801BA8DA9 /* A2JITStrategySelector.m */,
 				5BA8D2CBACEBC7883477ABED /* A2LaunchChain.m */,
+				B1C425BBB279B3D1FE23B0C2 /* A2JITAutomaticPairingProvider.h */,
 				7D7F0D5221FD49CD23A915CB /* A2JITCoordinator.h */,
+				C687B020772911E8015A2EA7 /* A2JITExternalToolProvider.h */,
+				24C1C7C76C9FEC17D6B125DE /* A2JITFacts.h */,
+				0DE10BB62ADB1C381BFDEC6E /* A2JITImportedPairingProvider.h */,
+				F34CD4D808A542C69B1DD1D4 /* A2JITKernelJITProvider.h */,
+				5F0683F8CA13308C3E599E19 /* A2JITProvider.h */,
+				D201ED16953E2525484A6DD4 /* A2JITStrategySelector.h */,
 				CD73B6F629B6E7F371515ED5 /* A2LaunchChain.h */,
 			);
 			path = Player;
@@ -445,7 +480,14 @@
 				84C22A76F0D470DBB7E9248C /* A2SceneDelegate.m in Sources */,
 				B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */,
 				6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */,
+				667F2E16A26101EDC1C24664 /* A2JITAutomaticPairingProvider.m in Sources */,
 				CF0651A1E55C83EC183CFC89 /* A2JITCoordinator.m in Sources */,
+				0A2D456E706B33C74139D9C1 /* A2JITExternalToolProvider.m in Sources */,
+				E572D0B37C887F2359AF1DF7 /* A2JITFacts.m in Sources */,
+				8164B55A050F723821A91945 /* A2JITImportedPairingProvider.m in Sources */,
+				DA1E568049E2C81A8B3DDC42 /* A2JITKernelJITProvider.m in Sources */,
+				0C93DD6BAA11EF16713ADC84 /* A2JITProvider.m in Sources */,
+				349881CC525759AC6BD5202D /* A2JITStrategySelector.m in Sources */,
 				11706200BD2498A07AEBFDA9 /* A2LaunchChain.m in Sources */,
 				B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */,
 				D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */,

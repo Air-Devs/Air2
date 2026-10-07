@@ -82,11 +82,26 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 #### `Player/`
 游戏会话运行时宿主。
 - 启动流程编排（准备 → 解压 → 拉 JVM → present）
-- `A2JITCoordinator.h/.m` —— JIT【供给编排】入口：把「配对 → 开启」的状态机
-  （`A2JITState`：等待配对 / 已配对 / 等待开启 / 已启用 / 不可用）与启动流程串起来。
-  平台动作经注入的 `A2JITProvisioning` 协议落到 Natives/Support；★本层只编排、不跨界★。
+- `A2JITCoordinator.h/.m` —— JIT【供给编排】入口：维护状态机
+  （`A2JITState`：等待配对 / 已配对 / 等待开启 / 已启用 / 不可用(带 `A2JITFailureReason` 原因)），
+  ★按系统版本先选策略、再在策略内按优先级逐级回退★。
+  平台动作经注入的 `A2JITProvider` 协议落到 Natives/Support；本机事实经 `A2JITFacts` 注入；
+  ★本层只编排、不跨界★。提供一个「先 JIT 后启 JVM」钩子 `prepareJITThenRunLaunchChain:error:`。
+  分级策略与第二阶段拆分见 `docs/JIT-PROVISIONING.md`、`docs/DECISIONS.md` ADR-008。
+- `A2JITProvider.h/.m` —— 【注入点】单条 JIT 取得路径的协议（`A2JITProvider` + `A2JITStrategy` /
+  `A2JITProviderKind` 枚举 + 统一错误构造）。四路实现：
+  · `A2JITAutomaticPairingProvider`（① 设备内自动配对，iOS 27+）
+  · `A2JITImportedPairingProvider`（② 导入配对文件，iOS 17.4+）
+  · `A2JITExternalToolProvider`（③ 外部工具，stikdebug:// 等）
+  · `A2JITKernelJITProvider`（④ 内核级 JIT，越狱 / TrollStore / dynamic-codesigning）
+  ★本单只落【占位 + 能力检测】，真实机制第二阶段经 Bridge 落到 Natives/Support★。
+- `A2JITFacts.h/.m` —— JIT 决策所需的**本机环境事实**（不可变值对象）：
+  版本、越狱/巨魔形态、配对文件、外部工具、`get-task-allow` / `dynamic-codesigning`。
+  由 App 装配处从 Natives/Support 取好后注入 ⇒ Player 侧全是纯逻辑（可单测）。
+- `A2JITStrategySelector.h/.m` —— ★分级表的唯一实现★：事实 → 策略 → Provider 顺序。
 - `A2LaunchChain.h/.m` —— 启动链【顺序编排】：① 发 JIT 脚本 → ② 探测 JIT 可用 → ③ 建 JVM。
-  只定顺序与短路，步骤实现由注入的 `A2LaunchChainSteps` 提供（真机实现经 Bridge 落到 Natives）。
+  只定顺序与短路，步骤实现由注入的 block 提供（真机实现经 Bridge 落到 Natives）。
+  ★公开行为不因 JIT 分级改动★。
 - 会话生命周期与异常兜底
 - 游戏内菜单与悬浮层
 

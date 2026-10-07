@@ -105,3 +105,50 @@
   - 编排层与实现分离：配对/开启/RPPairing 都会演进，接口稳定后实现可替换，符合 ADR-002 单向分层；
   - 合规上**分两步走**：先只留接口与依赖登记，待许可证逐项核实并拍板后再 vendor（StikJIT MPL-2.0 属**文件级弱 copyleft**，vendor 需保留其文件与许可声明；idevice/isideload 为 MIT；StikDebug 为 AGPL-3.0；SideInstaller **不可 vendor**）。
 - **来源**：`EricoEC/PocketJLauncher` @ `53eac78d`（`JITIntegration/**`、`Vendor/StikJIT/**`、`Natives/JavaLauncher.m`）、`FrizzleM/SideInstaller` @ `7df7d54b`（`rust-core/src/pairing.rs`、`rust-core/Cargo.toml`）。
+
+---
+
+## ADR-008：JIT 供给【按系统分级】，并把取得路径拆成四路可插拔 Provider
+
+- **状态**：已接受（分级策略 + 状态机 + 四路 Provider 骨架已落；真实机制待接入）
+- **日期**：2026-10-07
+- **背景**：
+  - ADR-007 确立了「内置 JIT 工作流」为**主路**，但只给了一条**单一后端**协议
+    （`A2JITProvisioning`）与「① 自动 → ② 导入 → ③ 外部」的**跨系统统一优先级**；
+    源码核实后发现三档系统的**可行路径差别很大**：
+    · 内置 helper（ExtensionKit `AppExtensionProcess`）**只在 iOS 26+** 存在
+      （`PocketJJITCoordinator.swift:5` `@available(iOS 26.0)`）；
+    · **设备内自动配对**（RPPairing）**只在 iOS 27** 可行（SideInstaller `README.md:81-85`：18–26.7 仍需配对文件 + PC）；
+    · iOS 17.4–25 只能「导入配对文件 + 外部工具」；
+    · iOS 16 及更早 / 越狱 / TrollStore 走**内核级 JIT**（不靠外部调试器）。
+  - 用户拍板（2026-10-07）：「**iOS 26 的手动、iOS 27 的自动；17/18 还是走配对文件；16 及更早走内核级**」。
+- **决策**：
+  1. JIT 取得策略**按系统分级**（分级表见 `docs/JIT-PROVISIONING.md`，实现唯一落在
+     `Air2/Player/A2JITStrategySelector.m`）：
+     · iOS 26 = `BuiltInManual` 内置手动（导入配对 → 连 LocalDevVPN → **App 内**开启；**不开自动配对**）；
+     · iOS 27+ = `Automatic` 设备内自动配对；
+     · iOS 17/18（17.4–25）= `ImportedExternal` 导入配对文件 + 外部工具；
+     · iOS 16- / 越狱 / TrollStore = `Kernel` 内核级 JIT（不靠外部调试器、不需配对文件）。
+  2. 把 ADR-007 的**单一后端**细化成**四条可插拔取得路径**，统一在协议 `A2JITProvider` 下：
+     `A2JITAutomaticPairingProvider` / `A2JITImportedPairingProvider` /
+     `A2JITExternalToolProvider` / `A2JITKernelJITProvider`。
+     策略决定**尝试顺序**，编排层在失败时**逐级回退**（顺序见 `JIT-PROVISIONING.md` §2.2）。
+  3. 本机环境事实（版本、越狱/巨魔形态、配对文件、外部工具、签名能力）抽成**不可变值对象
+     `A2JITFacts`**，由 App 装配处从 `Natives/Support` 取好后注入 ⇒ Player 侧全部是纯逻辑，
+     保持 ADR-002 单向分层（Player 只编排、不跨界）。
+  4. 状态机保持 ADR-007 的五态，但**失败态带原因枚举** `A2JITFailureReason`（失败提示条按原因分流，
+     不得用一句万能文案）。
+  5. 与启动链**只接一个钩子** `A2JITCoordinator.prepareJITThenRunLaunchChain:error:`：
+     **先确保 JIT 已启用，未就绪则不运行启动链**；★不修改 `A2LaunchChain` 的任何公开行为★。
+  6. 本单**不 vendor 任何第三方代码/二进制**；四路 Provider 的机制方法一律为**占位**
+     （返回 NO + 可读原因），真实实现 Phase 2 经 Bridge 落到 `Natives/Support`。
+  7. **ADR-007 的决策 3（跨系统统一优先级）由本 ADR 取代**，其余条目继续有效；
+     `A2JITProvisioning` 协议由 `A2JITProvider` ×4 取代。
+- **理由**：
+  - 分档后每档的**前置条件 / 回退 / entitlement / 文案**都能各写各的，不会把「26 的可行路」误用到「17 不可行」上；
+  - Provider 化让「机制演进」与「编排稳定」解耦：换实现不动状态机，符合 ADR-002；
+  - 事实注入让策略可脱离真机单测（`A2JITFacts` 是纯数据）；
+  - 合规上仍分两步：先只留协议与占位，待许可拍板后再 vendor（StikJIT **MPL-2.0**、`idevice`/`isideload` **MIT**、
+    ★StikDebug **AGPL-3.0** 只可当外部 App★、★SideInstaller 自定义许可，禁抄禁再分发★）。
+- **来源**：`docs/JIT-PROVISIONING.md`（本项目）、`D:\CTF\_AIR2_JIT_BUILTIN.md`（PocketJ / SideInstaller 源码核实）、
+  `D:\CTF\_AIR2_JIT_PLAN.md`（本单交付计划）。
