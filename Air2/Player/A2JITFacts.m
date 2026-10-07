@@ -3,6 +3,8 @@
 //  Air2
 //
 //  ★纯判定★：全部是版本号与环境形态的比较，无任何平台调用。
+//  [JIT-IMPL] factsWithSource: 从注入的来源（协议 A2JITFactsSource）读出一份事实，
+//  自身不发平台调用 ⇒ 单测可注入假数据。
 //
 
 #import "A2JITFacts.h"
@@ -25,6 +27,18 @@
     facts->_hasGetTaskAllow = hasGetTaskAllow;
     facts->_hasDynamicCodesigning = hasDynamicCodesigning;
     return facts;
+}
+
+// [JIT-IMPL] 探测接缝：只读来源，不做任何平台调用。
++ (instancetype)factsWithSource:(id<A2JITFactsSource>)source {
+    NSParameterAssert(source);
+    return [self factsWithOSMajorVersion:[source osMajorVersion]
+                            minorVersion:[source osMinorVersion]
+                             environment:[source environment]
+                hasImportedPairingFile:[source hasImportedPairingFile]
+           hasExternalEnablerInstalled:[source hasExternalEnablerInstalled]
+                        hasGetTaskAllow:[source hasGetTaskAllow]
+                  hasDynamicCodesigning:[source hasDynamicCodesigning]];
 }
 
 - (BOOL)supportsRemoteDebugJIT {

@@ -133,6 +133,7 @@
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap)];
     [self addGestureRecognizer:tap];
 
+    _enabled = YES;   // [JIT-IMPL] 默认可用；置 NO 时整行变暗且不响应
     [self applyTheme];
 
     [NSNotificationCenter.defaultCenter addObserver:self
@@ -215,6 +216,12 @@
     [self applyTheme];
 }
 
+// [JIT-IMPL] 启用/禁用：置 NO 时整行变暗且不响应点击（用于 JIT 面板按策略启停）。
+- (void)setEnabled:(BOOL)enabled {
+    _enabled = enabled;
+    [self applyTheme];
+}
+
 - (void)setShowsTopSeparator:(BOOL)showsTopSeparator {
     _showsTopSeparator = showsTopSeparator;
     _topSep.hidden = !showsTopSeparator;
@@ -251,6 +258,7 @@
 }
 
 - (void)handleTap {
+    if (!_enabled) return;
     if (_accessory == A2SettingsRowAccessorySwitch) {
         // 点整行也能切开关
         [_toggle setOn:!_toggle.isOn animated:YES];
@@ -261,6 +269,10 @@
 }
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    if (!_enabled) {
+        [super touchesBegan:touches withEvent:event];
+        return;
+    }
     if (_accessory == A2SettingsRowAccessorySwitch || !self.onTap) {
         [super touchesBegan:touches withEvent:event];
         return;
@@ -300,6 +312,9 @@
     _chevron.tintColor = [UIColor colorWithWhite:1.0 alpha:0.34];
     _checkmark.tintColor = t.primary;
     _toggle.onTintColor = t.primary;
+
+    // [JIT-IMPL] 禁用态视觉：整行变暗。
+    self.alpha = self.isEnabled ? 1.0 : 0.4;
 
     UIColor *sep = [UIColor colorWithWhite:1.0 alpha:0.09];
     _topSep.backgroundColor = sep;

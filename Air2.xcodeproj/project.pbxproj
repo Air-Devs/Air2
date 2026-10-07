@@ -20,9 +20,12 @@
 		E572D0B37C887F2359AF1DF7 /* A2JITFacts.m in Sources */ = {isa = PBXBuildFile; fileRef = D0251E606B523526DEC531C3 /* A2JITFacts.m */; };
 		8164B55A050F723821A91945 /* A2JITImportedPairingProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = 17042A3BE2D68D12388647BD /* A2JITImportedPairingProvider.m */; };
 		DA1E568049E2C81A8B3DDC42 /* A2JITKernelJITProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = CA4B1A0C07D533AA69631300 /* A2JITKernelJITProvider.m */; };
+		DA5E317BAF677DC5A916CD68 /* A2JITLocalFactsSource.m in Sources */ = {isa = PBXBuildFile; fileRef = 4F4F56BC74A3F09CA3D897B6 /* A2JITLocalFactsSource.m */; };
 		0C93DD6BAA11EF16713ADC84 /* A2JITProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D6918C01335A072F8DD093E /* A2JITProvider.m */; };
+		4838532D80277850A79C105B /* A2JITStateMachine.m in Sources */ = {isa = PBXBuildFile; fileRef = 06D7BD5F6D88905112F197A8 /* A2JITStateMachine.m */; };
 		349881CC525759AC6BD5202D /* A2JITStrategySelector.m in Sources */ = {isa = PBXBuildFile; fileRef = 9AEFB11C2421A6A801BA8DA9 /* A2JITStrategySelector.m */; };
 		11706200BD2498A07AEBFDA9 /* A2LaunchChain.m in Sources */ = {isa = PBXBuildFile; fileRef = 5BA8D2CBACEBC7883477ABED /* A2LaunchChain.m */; };
+		6BC6B9771F474583BC578317 /* A2PairingFile.m in Sources */ = {isa = PBXBuildFile; fileRef = 60C0C052E83B35A8E83733BC /* A2PairingFile.m */; };
 		B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */ = {isa = PBXBuildFile; fileRef = 872075DCD0F565557A6554D2 /* A2BackgroundView.m */; };
 		D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */ = {isa = PBXBuildFile; fileRef = CA1D52969E0783051081B038 /* A2CardTitleBar.m */; };
 		350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */ = {isa = PBXBuildFile; fileRef = A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */; };
@@ -46,6 +49,7 @@
 		8DF920441794A778BEFD9DD0 /* A2AppearanceSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */; };
 		28E0E9F04A06993B01FFC1D8 /* A2BackgroundSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */; };
 		C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB44E450592838BA6F7B061 /* A2GameSettings.m */; };
+		9BE8F5D901DBF1D45147781D /* A2JITSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 0F44B4D1AF1E26050C08BDB7 /* A2JITSettings.m */; };
 		5410B17BED6F52D8CF28A79E /* A2RendererSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 40638D8EF5A463CF055C788F /* A2RendererSettings.m */; };
 		1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */; };
 		E889FEBA6CD5092EC90C30B0 /* A2StorageSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 0267E5A9B0F4581B73E92AB8 /* A2StorageSettings.m */; };
@@ -75,9 +79,12 @@
 		D0251E606B523526DEC531C3 /* A2JITFacts.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITFacts.m"; sourceTree = "<group>"; };
 		17042A3BE2D68D12388647BD /* A2JITImportedPairingProvider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITImportedPairingProvider.m"; sourceTree = "<group>"; };
 		CA4B1A0C07D533AA69631300 /* A2JITKernelJITProvider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITKernelJITProvider.m"; sourceTree = "<group>"; };
+		4F4F56BC74A3F09CA3D897B6 /* A2JITLocalFactsSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITLocalFactsSource.m"; sourceTree = "<group>"; };
 		2D6918C01335A072F8DD093E /* A2JITProvider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITProvider.m"; sourceTree = "<group>"; };
+		06D7BD5F6D88905112F197A8 /* A2JITStateMachine.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITStateMachine.m"; sourceTree = "<group>"; };
 		9AEFB11C2421A6A801BA8DA9 /* A2JITStrategySelector.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITStrategySelector.m"; sourceTree = "<group>"; };
 		5BA8D2CBACEBC7883477ABED /* A2LaunchChain.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchChain.m"; sourceTree = "<group>"; };
+		60C0C052E83B35A8E83733BC /* A2PairingFile.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PairingFile.m"; sourceTree = "<group>"; };
 		872075DCD0F565557A6554D2 /* A2BackgroundView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BackgroundView.m"; sourceTree = "<group>"; };
 		CA1D52969E0783051081B038 /* A2CardTitleBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CardTitleBar.m"; sourceTree = "<group>"; };
 		A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GlassCard.m"; sourceTree = "<group>"; };
@@ -101,6 +108,7 @@
 		CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AppearanceSettings.m"; sourceTree = "<group>"; };
 		976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BackgroundSettingsViewController.m"; sourceTree = "<group>"; };
 		0FB44E450592838BA6F7B061 /* A2GameSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameSettings.m"; sourceTree = "<group>"; };
+		0F44B4D1AF1E26050C08BDB7 /* A2JITSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITSettings.m"; sourceTree = "<group>"; };
 		40638D8EF5A463CF055C788F /* A2RendererSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererSettings.m"; sourceTree = "<group>"; };
 		9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsViewController.m"; sourceTree = "<group>"; };
 		0267E5A9B0F4581B73E92AB8 /* A2StorageSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2StorageSettings.m"; sourceTree = "<group>"; };
@@ -124,9 +132,12 @@
 		24C1C7C76C9FEC17D6B125DE /* A2JITFacts.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITFacts.h"; sourceTree = "<group>"; };
 		0DE10BB62ADB1C381BFDEC6E /* A2JITImportedPairingProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITImportedPairingProvider.h"; sourceTree = "<group>"; };
 		F34CD4D808A542C69B1DD1D4 /* A2JITKernelJITProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITKernelJITProvider.h"; sourceTree = "<group>"; };
+		A32D17DF8527A2734A3FAD03 /* A2JITLocalFactsSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITLocalFactsSource.h"; sourceTree = "<group>"; };
 		5F0683F8CA13308C3E599E19 /* A2JITProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITProvider.h"; sourceTree = "<group>"; };
+		5222687EA5235C5BF8ACF2C9 /* A2JITStateMachine.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITStateMachine.h"; sourceTree = "<group>"; };
 		D201ED16953E2525484A6DD4 /* A2JITStrategySelector.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITStrategySelector.h"; sourceTree = "<group>"; };
 		CD73B6F629B6E7F371515ED5 /* A2LaunchChain.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchChain.h"; sourceTree = "<group>"; };
+		E08C19BD77D58E3C7586B07B /* A2PairingFile.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PairingFile.h"; sourceTree = "<group>"; };
 		930418C55810BF7B65B85AE9 /* A2BackgroundView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundView.h"; sourceTree = "<group>"; };
 		1F985FAD5DEB8D4699A8B5AE /* A2CardTitleBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CardTitleBar.h"; sourceTree = "<group>"; };
 		011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GlassCard.h"; sourceTree = "<group>"; };
@@ -236,18 +247,24 @@
 				D0251E606B523526DEC531C3 /* A2JITFacts.m */,
 				17042A3BE2D68D12388647BD /* A2JITImportedPairingProvider.m */,
 				CA4B1A0C07D533AA69631300 /* A2JITKernelJITProvider.m */,
+				4F4F56BC74A3F09CA3D897B6 /* A2JITLocalFactsSource.m */,
 				2D6918C01335A072F8DD093E /* A2JITProvider.m */,
+				06D7BD5F6D88905112F197A8 /* A2JITStateMachine.m */,
 				9AEFB11C2421A6A801BA8DA9 /* A2JITStrategySelector.m */,
 				5BA8D2CBACEBC7883477ABED /* A2LaunchChain.m */,
+				60C0C052E83B35A8E83733BC /* A2PairingFile.m */,
 				B1C425BBB279B3D1FE23B0C2 /* A2JITAutomaticPairingProvider.h */,
 				7D7F0D5221FD49CD23A915CB /* A2JITCoordinator.h */,
 				C687B020772911E8015A2EA7 /* A2JITExternalToolProvider.h */,
 				24C1C7C76C9FEC17D6B125DE /* A2JITFacts.h */,
 				0DE10BB62ADB1C381BFDEC6E /* A2JITImportedPairingProvider.h */,
 				F34CD4D808A542C69B1DD1D4 /* A2JITKernelJITProvider.h */,
+				A32D17DF8527A2734A3FAD03 /* A2JITLocalFactsSource.h */,
 				5F0683F8CA13308C3E599E19 /* A2JITProvider.h */,
+				5222687EA5235C5BF8ACF2C9 /* A2JITStateMachine.h */,
 				D201ED16953E2525484A6DD4 /* A2JITStrategySelector.h */,
 				CD73B6F629B6E7F371515ED5 /* A2LaunchChain.h */,
+				E08C19BD77D58E3C7586B07B /* A2PairingFile.h */,
 			);
 			path = Player;
 			sourceTree = "<group>";
@@ -380,6 +397,7 @@
 				CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */,
 				976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */,
 				0FB44E450592838BA6F7B061 /* A2GameSettings.m */,
+				0F44B4D1AF1E26050C08BDB7 /* A2JITSettings.m */,
 				40638D8EF5A463CF055C788F /* A2RendererSettings.m */,
 				9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */,
 				0267E5A9B0F4581B73E92AB8 /* A2StorageSettings.m */,
@@ -486,9 +504,12 @@
 				E572D0B37C887F2359AF1DF7 /* A2JITFacts.m in Sources */,
 				8164B55A050F723821A91945 /* A2JITImportedPairingProvider.m in Sources */,
 				DA1E568049E2C81A8B3DDC42 /* A2JITKernelJITProvider.m in Sources */,
+				DA5E317BAF677DC5A916CD68 /* A2JITLocalFactsSource.m in Sources */,
 				0C93DD6BAA11EF16713ADC84 /* A2JITProvider.m in Sources */,
+				4838532D80277850A79C105B /* A2JITStateMachine.m in Sources */,
 				349881CC525759AC6BD5202D /* A2JITStrategySelector.m in Sources */,
 				11706200BD2498A07AEBFDA9 /* A2LaunchChain.m in Sources */,
+				6BC6B9771F474583BC578317 /* A2PairingFile.m in Sources */,
 				B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */,
 				D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */,
 				350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */,
@@ -512,6 +533,7 @@
 				8DF920441794A778BEFD9DD0 /* A2AppearanceSettings.m in Sources */,
 				28E0E9F04A06993B01FFC1D8 /* A2BackgroundSettingsViewController.m in Sources */,
 				C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */,
+				9BE8F5D901DBF1D45147781D /* A2JITSettings.m in Sources */,
 				5410B17BED6F52D8CF28A79E /* A2RendererSettings.m in Sources */,
 				1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */,
 				E889FEBA6CD5092EC90C30B0 /* A2StorageSettings.m in Sources */,

@@ -36,4 +36,9 @@ NS_ASSUME_NONNULL_BEGIN
 + (A2SettingsSection *)buildWithHost:(UIViewController *)host;
 @end
 
+/// 运行环境 —— JIT 供给状态 + 导入配对 / 开启 JIT（按策略启用/禁用；★不实现真实 XPC/隧道★）
+@interface A2JITSettings : NSObject
++ (A2SettingsSection *)buildWithHost:(UIViewController *)host;
+@end
+
 NS_ASSUME_NONNULL_END

@@ -98,7 +98,18 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 - `A2JITFacts.h/.m` —— JIT 决策所需的**本机环境事实**（不可变值对象）：
   版本、越狱/巨魔形态、配对文件、外部工具、`get-task-allow` / `dynamic-codesigning`。
   由 App 装配处从 Natives/Support 取好后注入 ⇒ Player 侧全是纯逻辑（可单测）。
-- `A2JITStrategySelector.h/.m` —— ★分级表的唯一实现★：事实 → 策略 → Provider 顺序。
+- `A2JITStrategySelector.h/.m` —— ★分级表的唯一实现★：事实 → 策略 → Provider 顺序；
+  `decisionForFacts:` 同时给出策略与失败原因（供 UI 按原因分流）。
+- `A2JITStateMachine.h/.m` —— ★纯状态机★（`A2JITState` / `A2JITFailureReason` 定义处 +
+  合法迁移表）：只做「是否合法」判定与落状态，★不碰 UIKit / Provider★，可脱离真机单测；
+  `A2JITCoordinator` 持有一台状态机，`settle:` 先过它（非法迁移被拒）。
+- `A2PairingFile.h/.m` —— 【配对文件】解析与校验（`.mobiledevicepairing` / `.plist`）：
+  识别 RemotePairing（`identifier`+Ed25519 公/私钥）与经典 lockdown PairRecord 两种格式，
+  兼容 base64 包裹；★不联网、不调试、不写盘★（纯 Foundation，可单测）。
+- `A2JITLocalFactsSource.h/.m` —— 本机事实的【薄探测适配器】（实现 `A2JITFactsSource`）：
+  只用 Foundation 公开 API 读系统版本 / 越狱文件特征 / 沙盒内配对文件是否存在；
+  ★取不到的字段一律保守返回 NO★，完整探测（TrollStore / entitlement / canOpenURL）
+  归 App 装配处 + Natives/Support（第二阶段）。
 - `A2LaunchChain.h/.m` —— 启动链【顺序编排】：① 发 JIT 脚本 → ② 探测 JIT 可用 → ③ 建 JVM。
   只定顺序与短路，步骤实现由注入的 block 提供（真机实现经 Bridge 落到 Natives）。
   ★公开行为不因 JIT 分级改动★。

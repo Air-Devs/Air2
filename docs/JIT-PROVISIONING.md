@@ -203,6 +203,27 @@ UI（启动按钮）
 （返回 NO + 可读原因），因此本单**不会真正开启 JIT**；带来的是：**分级策略可判定、状态机可跑、
 回退顺序可观测、UI 文案可按原因分流**。
 
+### 3.1【JIT-IMPL】纯逻辑件实现 + 单测（后续一轮）
+
+在上述骨架上把四件「纯逻辑」做成**真能跑、可单测**的实现（★不新增第三方、不碰真实机制★）：
+
+| 文件 | 变更 |
+|---|---|
+| `Air2/Player/A2JITFacts.h/.m` | 新增探测接缝 `A2JITFactsSource`（协议）+ `factsWithSource:` ⇒ 事实可注入假数据单测 |
+| `Air2/Player/A2JITStrategySelector.h/.m` | 新增 `decisionForFacts:`（策略 + 失败原因）；分级表仍唯一在此 |
+| `Air2/Player/A2JITStateMachine.h/.m` | **新增**：纯状态机（`A2JITState`/`A2JITFailureReason` 定义处 + 合法迁移表） |
+| `Air2/Player/A2PairingFile.h/.m` | **新增**：配对文件解析/校验（RemotePairing + lockdown PairRecord，兼容 base64） |
+| `Air2/Player/A2JITLocalFactsSource.h/.m` | **新增**：本机事实薄探测适配器（Foundation-only） |
+| `Air2/Player/A2JITCoordinator.h/.m` | 状态迁移改为委托 `A2JITStateMachine`（非法迁移被拒） |
+| `Air2/UI/Screens/Settings/A2JITSettings.m` | **新增**：设置「运行环境 · JIT」面板（状态 + 导入 + 开启，按策略启停） |
+| `Air2/UI/Components/A2SettingsRow.h/.m` | 新增 `enabled`（禁用态整行变暗且不响应） |
+| `tests/JIT/jit_logic_tests.m` + `run_jit_tests.py` | **新增**：★编译被测真实实现★的单元测试（分级/配对/状态机/事实探测） |
+
+★单测直接 `clang` 链接 `Air2/Player` 下真实 `.m` 运行（非 Python 镜像）★：
+`python3 tests/JIT/run_jit_tests.py` ⇒ 每例 PASS/FAIL 与计数。
+★仍未做★：真实 XPC / RPPairing 隧道 / 自动配对 / 越狱·巨魔·entitlement 的真机取证
+（属 §4 第二阶段）。
+
 ---
 
 ## 4. 第二阶段工作拆分与工作量估算（★本单不实现★）

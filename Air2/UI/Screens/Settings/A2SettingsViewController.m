@@ -26,6 +26,7 @@
     [self buildGameSection];
     [self buildRendererSection];
     [self buildStorageSection];
+    [self buildJITSection];
     [self buildAboutSection];
 }
 
@@ -49,6 +50,10 @@
 
 - (void)buildAboutSection {
     [self addSection:[A2AboutSettings buildWithHost:self]];
+}
+
+- (void)buildJITSection {
+    [self addSection:[A2JITSettings buildWithHost:self]];
 }
 
 @end

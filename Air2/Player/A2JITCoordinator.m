@@ -4,6 +4,7 @@
 //
 //  JIT 供给编排实现。★只做状态推进与优先级判定，不含平台/网络细节★。
 //  所有真正的动作（生成 / 导入 / 开启）都委托给注入的 A2JITProvider。
+//  [JIT-IMPL] 状态迁移委托给 A2JITStateMachine（纯逻辑）：非法迁移被拒、状态不回退到已启用之外。
 //
 
 #import "A2JITCoordinator.h"
@@ -23,9 +24,9 @@ static NSString *const A2JITCoordinatorErrorDomain = @"A2JITCoordinatorError";
 @property (nonatomic, copy) NSArray<id<A2JITProvider>> *providers;
 @property (nonatomic, strong) NSDictionary<NSNumber *, id<A2JITProvider>> *providersByKind;
 
-@property (nonatomic, readwrite) A2JITState state;
-@property (nonatomic, readwrite) A2JITFailureReason failureReason;
-@property (nonatomic, readwrite, copy) NSString *statusDetail;
+/// [JIT-IMPL] 纯状态机（状态 / 原因 / 说明的唯一真相源）。
+@property (nonatomic, strong) A2JITStateMachine *machine;
+
 @property (nonatomic, readwrite) A2JITStrategy strategy;
 @property (nonatomic, readwrite) BOOL hasActiveProvider;
 @property (nonatomic, readwrite) A2JITProviderKind activeProviderKind;
@@ -42,6 +43,20 @@ static NSString *const A2JITCoordinatorErrorDomain = @"A2JITCoordinatorError";
 @end
 
 @implementation A2JITCoordinator
+
+#pragma mark - 对外的只读转发（状态机是唯一真相源）
+
+- (A2JITState)state {
+    return self.machine.state;
+}
+
+- (A2JITFailureReason)failureReason {
+    return self.machine.failureReason;
+}
+
+- (NSString *)statusDetail {
+    return self.machine.statusDetail;
+}
 
 #pragma mark - 装配
 
@@ -60,9 +75,7 @@ static NSString *const A2JITCoordinatorErrorDomain = @"A2JITCoordinatorError";
         }
         _providersByKind = [byKind copy];
 
-        _state = A2JITStateUnavailable;
-        _failureReason = A2JITFailureReasonNone;
-        _statusDetail = @"尚未评估 JIT 环境";
+        _machine = [[A2JITStateMachine alloc] initWithState:A2JITStateUnavailable];
         _strategy = A2JITStrategyUnavailable;
         _hasActiveProvider = NO;
         _activeProviderKind = A2JITProviderKindImportedPairing;
@@ -86,11 +99,20 @@ static NSString *const A2JITCoordinatorErrorDomain = @"A2JITCoordinatorError";
 #pragma mark - 状态推进
 
 - (void)settle:(A2JITState)state detail:(NSString *)detail reason:(A2JITFailureReason)reason {
-    self.state = state;
-    self.statusDetail = detail ?: @"";
-    self.failureReason = reason;
-    NSLog(@"[A2JIT] state=%ld reason=%ld strategy=%ld %@",
-          (long)state, (long)reason, (long)self.strategy, self.statusDetail);
+    // [JIT-IMPL] 先过状态机：非法迁移被拒（状态不变），并留下日志便于回溯。
+    BOOL moved = [self.machine transitionTo:state reason:reason detail:detail];
+    if (!moved) {
+        NSLog(@"[A2JIT] 非法状态迁移被拒: %@ -> %@（保持 %@）",
+              [A2JITStateMachine displayNameForState:self.machine.state],
+              [A2JITStateMachine displayNameForState:state],
+              [A2JITStateMachine displayNameForState:self.machine.state]);
+        return;
+    }
+    NSLog(@"[A2JIT] state=%@ reason=%@ strategy=%@ %@",
+          [A2JITStateMachine displayNameForState:self.machine.state],
+          [A2JITStateMachine displayNameForFailureReason:self.machine.failureReason],
+          [A2JITStrategySelector displayNameForStrategy:self.strategy],
+          self.machine.statusDetail);
 }
 
 - (void)evaluateStrategy {

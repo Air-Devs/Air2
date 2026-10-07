@@ -40,6 +40,10 @@ typedef NS_ENUM(NSInteger, A2SettingsRowAccessory) {
 /// 点击回调（非开关行）
 @property (nonatomic, copy, nullable) void (^onTap)(void);
 
+/// 是否可用（默认 YES）。为 NO 时整行变暗且不响应点击/开关。
+/// 用于「按状态启用/禁用」的设置项（如 JIT 面板按策略启停的按钮）。
+@property (nonatomic, assign, getter=isEnabled) BOOL enabled;
+
 /// 是否显示顶部分隔线（用于同组内的行）
 @property (nonatomic, assign) BOOL showsTopSeparator;
 /// 是否显示底部分隔线
