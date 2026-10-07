@@ -6,7 +6,7 @@
 //  头部带光晕，让进度推进有个明显的"亮头"。
 //
 
-#import "A2ProgressView.h"
+#import "A2ProgressBar.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"

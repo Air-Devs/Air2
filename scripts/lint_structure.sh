@@ -118,11 +118,26 @@ fi
 rm -f /tmp/.air2_files.$$
 
 # ------------------------------------------------------------
-# 6. ObjC 静态检查
+# 6. 头文件引用检查
+# ------------------------------------------------------------
+# 之前这一步只在 CI 跑，本地漏检了三次才被发现。
+# 引用了不存在的头文件时，编译器会报错，但等 CI 要几分钟。
+echo "==> 6. 头文件引用检查"
+if [ -f "$ROOT/scripts/check_imports.py" ]; then
+    if ! python3 "$ROOT/scripts/check_imports.py" 2>&1 | tail -20; then
+        :   # 详细错误已由脚本输出
+    fi
+    if ! python3 "$ROOT/scripts/check_imports.py" >/dev/null 2>&1; then
+        err "存在无法解析的头文件引用"
+    fi
+fi
+
+# ------------------------------------------------------------
+# 7. ObjC 静态检查
 # ------------------------------------------------------------
 # 没有本地编译器，靠脚本过滤掉「一眼能看出」的编译错误，
 # 减少 CI 往返。真实编译仍需 Xcode。
-echo "==> 6. ObjC 静态检查"
+echo "==> 7. ObjC 静态检查"
 if [ -f "$ROOT/scripts/lint_objc.py" ]; then
     if python3 "$ROOT/scripts/lint_objc.py" 2>&1 | tail -20; then
         :

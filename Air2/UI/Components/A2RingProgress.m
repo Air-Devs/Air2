@@ -5,7 +5,7 @@
 //  环形进度 —— 单个任务的进度展示（如版本安装）。
 //
 
-#import "A2ProgressView.h"
+#import "A2RingProgress.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"

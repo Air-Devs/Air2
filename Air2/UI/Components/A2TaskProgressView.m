@@ -6,7 +6,7 @@
 //  含状态点（运行中呼吸）、标题、副标题、进度条、暂停/继续按钮。
 //
 
-#import "A2ProgressView.h"
+#import "A2TaskProgressView.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
