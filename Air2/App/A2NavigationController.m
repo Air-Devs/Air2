@@ -54,12 +54,10 @@
         }
         [container addSubview:toView];
 
-        // 缩放转场用弹簧（有回弹感），位移转场用缓出（更利落）
+        // 缩放转场用标准弹簧（有回弹感），位移转场用更稳的软弹簧
         UIViewPropertyAnimator *anim = (self.style == A2TransitionStyleScaleFade)
             ? A2SpringAnimator(duration)
-            : [[UIViewPropertyAnimator alloc] initWithDuration:duration
-                                                         curve:UIViewAnimationCurveEaseOut
-                                                    animations:nil];
+            : A2SoftSpring(duration);
 
         [anim addAnimations:^{
             switch (self.style) {

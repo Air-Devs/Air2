@@ -117,6 +117,20 @@ fi
 
 rm -f /tmp/.air2_files.$$
 
+# ------------------------------------------------------------
+# 6. ObjC 静态检查
+# ------------------------------------------------------------
+# 没有本地编译器，靠脚本过滤掉「一眼能看出」的编译错误，
+# 减少 CI 往返。真实编译仍需 Xcode。
+echo "==> 6. ObjC 静态检查"
+if [ -f "$ROOT/scripts/lint_objc.py" ]; then
+    if python3 "$ROOT/scripts/lint_objc.py" 2>&1 | tail -20; then
+        :
+    else
+        err "ObjC 静态检查未通过"
+    fi
+fi
+
 echo ""
 if [ "$FAIL" -eq 0 ]; then
     printf '\033[32m检查通过\033[0m\n'

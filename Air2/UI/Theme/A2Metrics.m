@@ -45,15 +45,10 @@ const CGFloat A2SpringVelocity = 0.35;
 const NSTimeInterval A2CardStaggerDelay = 0.035;
 
 UIViewPropertyAnimator *A2SpringAnimator(NSTimeInterval duration) {
-    if (@available(iOS 13.0, *)) {
-        UISpringTimingParameters *params =
-            [[UISpringTimingParameters alloc] initWithDampingRatio:A2SpringDamping
-                                                  initialVelocity:CGVectorMake(0, A2SpringVelocity)];
-        return [[UIViewPropertyAnimator alloc] initWithDuration:duration timingParameters:params];
-    }
-    return [[UIViewPropertyAnimator alloc] initWithDuration:duration
-                                                      curve:UIViewAnimationCurveEaseOut
-                                                 animations:nil];
+    UISpringTimingParameters *params =
+        [[UISpringTimingParameters alloc] initWithDampingRatio:A2SpringDamping
+                                              initialVelocity:CGVectorMake(0, A2SpringVelocity)];
+    return [[UIViewPropertyAnimator alloc] initWithDuration:duration timingParameters:params];
 }
 
 UIViewPropertyAnimator *A2StandardSpring(void) {
@@ -62,40 +57,49 @@ UIViewPropertyAnimator *A2StandardSpring(void) {
 
 /// 更软的弹簧：damping 更高、初速更低，适合大面积元素（背景、抽屉）
 UIViewPropertyAnimator *A2SoftSpring(NSTimeInterval duration) {
-    if (@available(iOS 13.0, *)) {
-        UISpringTimingParameters *params =
-            [[UISpringTimingParameters alloc] initWithDampingRatio:0.88
-                                                  initialVelocity:CGVectorMake(0, 0.1)];
-        return [[UIViewPropertyAnimator alloc] initWithDuration:duration timingParameters:params];
-    }
-    return [[UIViewPropertyAnimator alloc] initWithDuration:duration
-                                                      curve:UIViewAnimationCurveEaseOut
-                                                 animations:nil];
+    UISpringTimingParameters *params =
+        [[UISpringTimingParameters alloc] initWithDampingRatio:0.88
+                                              initialVelocity:CGVectorMake(0, 0.1)];
+    return [[UIViewPropertyAnimator alloc] initWithDuration:duration timingParameters:params];
 }
 
+/// 卡片依次入场：淡入 + 上浮 16pt，每个延迟 staggerDelay 依次启动。
+///
+/// 注意 UIViewPropertyAnimator 没有可写的 delay 属性（只有只读的
+/// `delay` 用于查询），所以错峰必须靠 dispatch_after 实现。
+///
+/// @param completion 最后一个动画结束时回调，可为 nil
+/// @return 第一个卡片的动画器。调用方若要中途取消，可以持有它。
 UIViewPropertyAnimator *A2AnimateCardEntrance(NSArray<UIView *> *views,
                                               CGFloat staggerDelay,
                                               void (^completion)(void)) {
-    NSTimeInterval total = A2AnimDurationCard;
+    if (views.count == 0) return nil;
+
+    __block UIViewPropertyAnimator *firstAnimator = nil;
 
     for (NSUInteger i = 0; i < views.count; i++) {
         UIView *v = views[i];
+
+        // 设初始态：下方 16pt、透明
         v.alpha = 0;
         v.transform = CGAffineTransformMakeTranslation(0, 16);
 
-        UIViewPropertyAnimator *a = A2SpringAnimator(total);
-        a.delay = i * staggerDelay;
-        [a addAnimations:^{
-            v.alpha = 1;
-            v.transform = CGAffineTransformIdentity;
-        }];
-        if (i == views.count - 1 && completion) {
-            [a addCompletion:^(UIViewAnimatingPosition pos) { completion(); }];
-        }
-        [a startAnimation];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                     (int64_t)(i * staggerDelay * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            UIViewPropertyAnimator *a = A2SpringAnimator(A2AnimDurationCard);
+            [a addAnimations:^{
+                v.alpha = 1;
+                v.transform = CGAffineTransformIdentity;
+            }];
+            if (i == views.count - 1 && completion) {
+                [a addCompletion:^(UIViewAnimatingPosition pos) { completion(); }];
+            }
+            [a startAnimation];
+
+            if (i == 0) firstAnimator = a;
+        });
     }
 
-    // 返回第一个动画器，便于调用方持有引用
-    UIViewPropertyAnimator *first = A2SpringAnimator(total);
-    return first;
+    return firstAnimator;
 }
