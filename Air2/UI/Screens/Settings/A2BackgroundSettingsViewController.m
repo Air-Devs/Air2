@@ -45,7 +45,7 @@
     _previewView.clipsToBounds = YES;
     _previewView.layer.cornerRadius = A2RadiusL;
     _previewView.layer.cornerCurve = kCACornerCurveContinuous;
-    _previewView.backgroundColor = A2ThemeManager.shared.scheme.surfaceContainerHigh;
+    _previewView.backgroundColor = A2ThemeManager.shared.scheme.cSurfaceContainerHigh;
 
     [_previewCard.contentView addSubview:_previewView];
 
@@ -172,7 +172,7 @@
     s.minimumValue = min;
     s.maximumValue = max;
     s.value = value;
-    s.minimumTrackTintColor = A2ThemeManager.shared.scheme.primary;
+    s.minimumTrackTintColor = A2ThemeManager.shared.scheme.cPrimary;
     [NSLayoutConstraint activateConstraints:@[
         [s.widthAnchor constraintEqualToConstant:130],
     ]];

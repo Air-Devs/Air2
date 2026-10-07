@@ -245,24 +245,24 @@
     A2ThemeManager *tm = A2ThemeManager.shared;
     A2ColorScheme *t = tm.scheme;
 
-    _nameLabel.textColor = t.onSurface;
+    _nameLabel.textColor = t.cOnSurface;
     _metaLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.62];
 
     UIView *iconBox = [self.contentView viewWithTag:200];
     if (iconBox) {
         // 有图标时透明底，无图标时用主题色渐变底
         iconBox.backgroundColor = _versionIcon ? UIColor.clearColor
-                                               : [t.primary colorWithAlphaComponent:0.85];
+                                               : [t.cPrimary colorWithAlphaComponent:0.85];
     }
     _initialLabel.textColor = UIColor.whiteColor;
-    _pinBadge.tintColor = t.primary;
+    _pinBadge.tintColor = t.cPrimary;
 
-    _selectionRing.layer.borderColor = t.primary.CGColor;
+    _selectionRing.layer.borderColor = t.cPrimary.CGColor;
 
     if (!_statusDot.hidden) {
         _statusDot.backgroundColor = (_status == A2VersionCardStatusDeleted)
-            ? t.error
-            : t.outline;
+            ? t.cError
+            : t.cOutline;
     }
 }
 

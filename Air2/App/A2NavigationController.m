@@ -134,7 +134,7 @@
     self.delegate = self;
     // 用自绘顶栏，隐藏系统导航栏
     self.navigationBarHidden = YES;
-    self.view.backgroundColor = A2ThemeManager.shared.scheme.surface;
+    self.view.backgroundColor = A2ThemeManager.shared.scheme.cSurface;
     // 保留边缘返回手势
     self.interactivePopGestureRecognizer.enabled = YES;
     self.interactivePopGestureRecognizer.delegate = nil;

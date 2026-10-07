@@ -60,7 +60,7 @@
     name.translatesAutoresizingMaskIntoConstraints = NO;
     name.text = _versionName;
     name.font = [UIFont systemFontOfSize:19 weight:UIFontWeightBold];
-    name.textColor = t.onSurface;
+    name.textColor = t.cOnSurface;
 
     UILabel *path = [[UILabel alloc] initWithFrame:CGRectZero];
     path.translatesAutoresizingMaskIntoConstraints = NO;

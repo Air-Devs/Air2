@@ -49,8 +49,8 @@ typedef NS_ENUM(NSInteger, A2ThemeKind) {
                          name:(NSString *)name
                          desc:(NSString *)desc
                      gradient:(NSArray<UIColor *> *)gradient
-                lightOverride:(void (^ _Nullable)(A2ColorScheme *scheme))lightOverride
-                 darkOverride:(void (^ _Nullable)(A2ColorScheme *scheme))darkOverride;
+                lightOverride:(void (^ _Nullable)(id scheme))lightOverride
+                 darkOverride:(void (^ _Nullable)(id scheme))darkOverride;
 
 @end
 

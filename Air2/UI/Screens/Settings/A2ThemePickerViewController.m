@@ -92,7 +92,7 @@
     nameLabel.translatesAutoresizingMaskIntoConstraints = NO;
     nameLabel.font = [A2Typography titleCard];
     nameLabel.text = name;
-    nameLabel.textColor = t.onSurface;
+    nameLabel.textColor = t.cOnSurface;
 
     UILabel *descLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     descLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -171,11 +171,11 @@
     for (A2GlassCard *card in _cards) {
         UIView *check = [card.contentView viewWithTag:901];
         check.hidden = (card.tag != current);
-        check.tintColor = A2ThemeManager.shared.scheme.primary;
+        check.tintColor = A2ThemeManager.shared.scheme.cPrimary;
 
         // 选中项轻微强调
         card.layer.borderWidth = (card.tag == current) ? 1.5 : 0;
-        card.layer.borderColor = A2ThemeManager.shared.scheme.primary.CGColor;
+        card.layer.borderColor = A2ThemeManager.shared.scheme.cPrimary.CGColor;
     }
 }
 

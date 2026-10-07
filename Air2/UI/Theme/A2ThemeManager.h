@@ -36,7 +36,11 @@ extern NSNotificationName const A2BackgroundDidChangeNotification;
 /// 当前主题（永不为 nil）
 @property (nonatomic, strong, readonly) A2ColorTheme *theme;
 
-/// MD3 语义色板的快捷访问
+/// 当前生效的语义色板 —— 【已按当前亮暗模式解析】。
+///
+/// 这里返回的是具体色值，不是动态颜色。视图在 applyTheme 里
+/// 直接取用即可，不需要关心 trait 环境。
+/// 每次 isDark 变化或主题切换后都会重新解析，并广播通知。
 @property (nonatomic, strong, readonly) A2ColorScheme *scheme;
 
 @property (nonatomic, assign) A2ThemeKind selectedKind;

@@ -18,7 +18,28 @@
 /// 说明：MD3 规范用 HCT 色彩空间，这里用 HSB 近似。
 /// 视觉上与规范接近，代价是极端色相下略有偏差（已用钳制规避）。
 /// 完整的 HCT 实现收益不大，代码量却要翻几倍，不划算。
-static void A2FillScheme(A2ColorScheme *s, UIColor *seed, BOOL light) {
+/// 中间结构：填充时先用具体 UIColor，之后再包装成 A2ColorSlot 对。
+/// 这样 A2FillScheme 的推导逻辑不用改（它只认 UIColor），
+/// 只需要在最后把「亮版」和「暗版」的两个具体色配对。
+@interface A2RawScheme : NSObject
+#define A2RAW_PROPS \
+@property (nonatomic, strong) UIColor *primary, *onPrimary, *primaryContainer, *onPrimaryContainer; \
+@property (nonatomic, strong) UIColor *secondary, *onSecondary, *secondaryContainer, *onSecondaryContainer; \
+@property (nonatomic, strong) UIColor *tertiary, *tertiaryContainer; \
+@property (nonatomic, strong) UIColor *surface, *onSurface; \
+@property (nonatomic, strong) UIColor *surfaceContainerLowest, *surfaceContainerLow, *surfaceContainer; \
+@property (nonatomic, strong) UIColor *surfaceContainerHigh, *surfaceContainerHighest; \
+@property (nonatomic, strong) UIColor *surfaceVariant, *onSurfaceVariant; \
+@property (nonatomic, strong) UIColor *outline, *outlineVariant; \
+@property (nonatomic, strong) UIColor *error, *onError, *errorContainer, *onErrorContainer; \
+@property (nonatomic, strong) UIColor *success, *warning; \
+@property (nonatomic, strong) UIColor *inverseSurface, *inverseOnSurface, *inversePrimary;
+A2RAW_PROPS
+@end
+@implementation A2RawScheme
+@end
+
+static void A2FillScheme(A2RawScheme *s, UIColor *seed, BOOL light) {
     if (light) {
         s.primary            = A2Tone(seed, 0.72, 0.48);
         s.onPrimary          = A2Hex(0xFFFFFF);
@@ -106,6 +127,32 @@ static void A2FillScheme(A2ColorScheme *s, UIColor *seed, BOOL light) {
 
 #pragma mark - A2ColorTheme
 
+/// 把「亮版」与「暗版」两个具体色板配对成 A2ColorSlot。
+///
+/// 这是整个配色系统的关键一步：色槽同时持有两种模式的具体色值，
+/// 视图在 applyTheme 时按 isDark 取用 —— 不依赖 trait 解析，
+/// 因此不会出现「系统暗色但卡片渲染成亮色」的问题。
+static void A2PairScheme(A2ColorScheme *out, A2RawScheme *light, A2RawScheme *dark) {
+#define A2PAIR(prop) out.prop = [A2ColorSlot light:light.prop dark:dark.prop]
+    A2PAIR(primary);            A2PAIR(onPrimary);
+    A2PAIR(primaryContainer);   A2PAIR(onPrimaryContainer);
+    A2PAIR(secondary);          A2PAIR(onSecondary);
+    A2PAIR(secondaryContainer); A2PAIR(onSecondaryContainer);
+    A2PAIR(tertiary);           A2PAIR(tertiaryContainer);
+    A2PAIR(surface);            A2PAIR(onSurface);
+    A2PAIR(surfaceContainerLowest);  A2PAIR(surfaceContainerLow);
+    A2PAIR(surfaceContainer);        A2PAIR(surfaceContainerHigh);
+    A2PAIR(surfaceContainerHighest);
+    A2PAIR(surfaceVariant);     A2PAIR(onSurfaceVariant);
+    A2PAIR(outline);            A2PAIR(outlineVariant);
+    A2PAIR(error);              A2PAIR(onError);
+    A2PAIR(errorContainer);     A2PAIR(onErrorContainer);
+    A2PAIR(success);            A2PAIR(warning);
+    A2PAIR(inverseSurface);     A2PAIR(inverseOnSurface);
+    A2PAIR(inversePrimary);
+#undef A2PAIR
+}
+
 @interface A2ColorTheme ()
 @property (nonatomic, assign) A2ThemeKind kind;
 @property (nonatomic, copy) NSString *displayName;
@@ -123,11 +170,11 @@ static void A2FillScheme(A2ColorScheme *s, UIColor *seed, BOOL light) {
                          name:(NSString *)name
                          desc:(NSString *)desc
                      gradient:(NSArray<UIColor *> *)gradient
-                lightOverride:(void (^)(A2ColorScheme *))lightOverride
-                 darkOverride:(void (^)(A2ColorScheme *))darkOverride {
+                lightOverride:(void (^)(A2RawScheme *))lightOverride
+                 darkOverride:(void (^)(A2RawScheme *))darkOverride {
 
-    A2ColorScheme *light = [A2ColorScheme new];
-    A2ColorScheme *dark = [A2ColorScheme new];
+    A2RawScheme *light = [A2RawScheme new];
+    A2RawScheme *dark = [A2RawScheme new];
     A2FillScheme(light, seed, YES);
     A2FillScheme(dark, seed, NO);
 
@@ -135,7 +182,7 @@ static void A2FillScheme(A2ColorScheme *s, UIColor *seed, BOOL light) {
     if (darkOverride) darkOverride(dark);
 
     A2ColorScheme *merged = [A2ColorScheme new];
-    [merged makeDynamicFromLight:light dark:dark];
+    A2PairScheme(merged, light, dark);
 
     A2ColorTheme *t = [A2ColorTheme new];
     t.kind = kind;
@@ -157,7 +204,7 @@ static void A2FillScheme(A2ColorScheme *s, UIColor *seed, BOOL light) {
                          name:@"烈焰红棕"
                          desc:@"暖调，视觉重心强"
                      gradient:@[ A2Hex(0x8B2D0F), A2Hex(0xC4502B), A2Hex(0x4A1A08) ]
-                lightOverride:^(A2ColorScheme *s) {
+                lightOverride:^(A2RawScheme *s) {
         s.primary              = A2Hex(0xA63A17);
         s.primaryContainer     = A2Hex(0xFFDBD1);
         s.surface              = A2Hex(0xFFF8F6);
@@ -165,7 +212,7 @@ static void A2FillScheme(A2ColorScheme *s, UIColor *seed, BOOL light) {
         s.surfaceContainerHigh = A2Hex(0xF7E3DE);
         s.onSurface            = A2Hex(0x241916);
         s.onSurfaceVariant     = A2Hex(0x58423B);
-    } darkOverride:^(A2ColorScheme *s) {
+    } darkOverride:^(A2RawScheme *s) {
         s.primary              = A2Hex(0xFFB59F);
         s.primaryContainer     = A2Hex(0x7F2A05);
         s.surface              = A2Hex(0x1A110E);
@@ -182,11 +229,11 @@ static void A2FillScheme(A2ColorScheme *s, UIColor *seed, BOOL light) {
                          name:@"冰川蓝"
                          desc:@"冷调，长时间使用更舒适"
                      gradient:@[ A2Hex(0x004A66), A2Hex(0x0A8FB8), A2Hex(0x002F42) ]
-                lightOverride:^(A2ColorScheme *s) {
+                lightOverride:^(A2RawScheme *s) {
         s.primary            = A2Hex(0x00658B);
         s.primaryContainer   = A2Hex(0xC2E8FF);
         s.onPrimaryContainer = A2Hex(0x001E2E);
-    } darkOverride:^(A2ColorScheme *s) {
+    } darkOverride:^(A2RawScheme *s) {
         s.primary          = A2Hex(0x7FD0F5);
         s.onPrimary        = A2Hex(0x003549);
         s.primaryContainer = A2Hex(0x004C6B);
@@ -199,11 +246,11 @@ static void A2FillScheme(A2ColorScheme *s, UIColor *seed, BOOL light) {
                          name:@"青野绿"
                          desc:@"自然色，与游戏主题呼应"
                      gradient:@[ A2Hex(0x14501E), A2Hex(0x2E7A3A), A2Hex(0x0A3313) ]
-                lightOverride:^(A2ColorScheme *s) {
+                lightOverride:^(A2RawScheme *s) {
         s.primary            = A2Hex(0x2C6B36);
         s.primaryContainer   = A2Hex(0xC8EFC6);
         s.onPrimaryContainer = A2Hex(0x002204);
-    } darkOverride:^(A2ColorScheme *s) {
+    } darkOverride:^(A2RawScheme *s) {
         s.primary          = A2Hex(0x8ED88E);
         s.onPrimary        = A2Hex(0x00390F);
         s.primaryContainer = A2Hex(0x0F5220);
@@ -216,11 +263,11 @@ static void A2FillScheme(A2ColorScheme *s, UIColor *seed, BOOL light) {
                          name:@"绛紫玫瑰"
                          desc:@"柔和，低对比"
                      gradient:@[ A2Hex(0x4E2438), A2Hex(0x8A4A68), A2Hex(0x33172A) ]
-                lightOverride:^(A2ColorScheme *s) {
+                lightOverride:^(A2RawScheme *s) {
         s.primary            = A2Hex(0x7A3D58);
         s.primaryContainer   = A2Hex(0xFFD8E6);
         s.onPrimaryContainer = A2Hex(0x31081F);
-    } darkOverride:^(A2ColorScheme *s) {
+    } darkOverride:^(A2RawScheme *s) {
         s.primary          = A2Hex(0xF9B2D2);
         s.onPrimary        = A2Hex(0x4B1130);
         s.primaryContainer = A2Hex(0x622947);
@@ -233,11 +280,11 @@ static void A2FillScheme(A2ColorScheme *s, UIColor *seed, BOOL light) {
                          name:@"都市灰"
                          desc:@"中性无彩，专注场景"
                      gradient:@[ A2Hex(0x3A3A3C), A2Hex(0x5A5A5D), A2Hex(0x28282A) ]
-                lightOverride:^(A2ColorScheme *s) {
+                lightOverride:^(A2RawScheme *s) {
         s.primary            = A2Hex(0x5E5E5F);
         s.primaryContainer   = A2Hex(0xE4E2E2);
         s.onPrimaryContainer = A2Hex(0x1B1B1C);
-    } darkOverride:^(A2ColorScheme *s) {
+    } darkOverride:^(A2RawScheme *s) {
         s.primary          = A2Hex(0xC7C6C6);
         s.onPrimary        = A2Hex(0x2F3131);
         s.primaryContainer = A2Hex(0x454747);

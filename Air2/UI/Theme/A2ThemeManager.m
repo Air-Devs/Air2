@@ -18,6 +18,9 @@ static NSString *const kBackgroundFileName = @"air2_background.jpg";
 @implementation A2ThemeManager {
     A2ColorTheme *_theme;
     UIImage *_backgroundImage;
+    // 按模式解析后的色板缓存
+    A2ColorScheme *_resolvedScheme;
+    BOOL _resolvedIsDark;
 }
 
 + (instancetype)shared {
@@ -57,7 +60,13 @@ static NSString *const kBackgroundFileName = @"air2_background.jpg";
 }
 
 - (A2ColorScheme *)scheme {
-    return _theme.scheme;
+    // 缓存：同一模式下反复取色不应重复创建对象。
+    // isDark / theme 变化时清掉缓存。
+    if (!_resolvedScheme || _resolvedIsDark != self.isDark) {
+        _resolvedScheme = [_theme.scheme resolvedForDark:self.isDark];
+        _resolvedIsDark = self.isDark;
+    }
+    return _resolvedScheme;
 }
 
 - (void)setSelectedKind:(A2ThemeKind)selectedKind {
@@ -66,6 +75,7 @@ static NSString *const kBackgroundFileName = @"air2_background.jpg";
 
     _selectedKind = selectedKind;
     [self rebuildTheme];
+    _resolvedScheme = nil;      // 主题变了，解析缓存失效
     [self persist];
     [self notifyThemeChanged];
 }

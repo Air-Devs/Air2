@@ -55,7 +55,7 @@
     _searchBar.placeholder = @"搜索…";
     _searchBar.delegate = self;
     _searchBar.searchBarStyle = UISearchBarStyleMinimal;
-    _searchBar.tintColor = A2ThemeManager.shared.scheme.primary;
+    _searchBar.tintColor = A2ThemeManager.shared.scheme.cPrimary;
     _searchBar.backgroundImage = [UIImage new];
 
     for (UIView *v in _searchBar.subviews) {
@@ -145,7 +145,7 @@
 
 - (void)styleChip:(UIButton *)chip selected:(BOOL)selected {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    chip.backgroundColor = selected ? t.primary : [UIColor colorWithWhite:1.0 alpha:0.12];
+    chip.backgroundColor = selected ? t.cPrimary : [UIColor colorWithWhite:1.0 alpha:0.12];
     [chip setTitleColor:(selected ? UIColor.blackColor : [UIColor colorWithWhite:1.0 alpha:0.82])
                forState:UIControlStateNormal];
 }
@@ -251,13 +251,13 @@
     title.translatesAutoresizingMaskIntoConstraints = NO;
     title.text = item[@"title"];
     title.font = [A2Typography titleCard];
-    title.textColor = t.onSurface;
+    title.textColor = t.cOnSurface;
 
     UILabel *sub = [[UILabel alloc] initWithFrame:CGRectZero];
     sub.translatesAutoresizingMaskIntoConstraints = NO;
     sub.text = item[@"sub"];
     sub.font = [A2Typography caption];
-    sub.textColor = t.onSurfaceVariant;
+    sub.textColor = t.cOnSurfaceVariant;
 
     UIStackView *textStack = [[UIStackView alloc] initWithArrangedSubviews:@[title, sub]];
     textStack.translatesAutoresizingMaskIntoConstraints = NO;
@@ -268,8 +268,8 @@
     tag.translatesAutoresizingMaskIntoConstraints = NO;
     tag.text = item[@"tag"];
     tag.font = [UIFont systemFontOfSize:10.5 weight:UIFontWeightSemibold];
-    tag.textColor = t.primary;
-    tag.backgroundColor = [t.primary colorWithAlphaComponent:0.16];
+    tag.textColor = t.cPrimary;
+    tag.backgroundColor = [t.cPrimary colorWithAlphaComponent:0.16];
     tag.textAlignment = NSTextAlignmentCenter;
     tag.layer.cornerRadius = 8;
     tag.layer.cornerCurve = kCACornerCurveContinuous;

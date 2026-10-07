@@ -25,7 +25,7 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
     // 主题的表面色作为最底层，卡片与背景浮在它上面
-    self.view.backgroundColor = A2ThemeManager.shared.scheme.surface;
+    self.view.backgroundColor = A2ThemeManager.shared.scheme.cSurface;
 
     _launcher = [[A2LauncherViewController alloc] init];
     _nav = [[A2NavigationController alloc] initWithRootViewController:_launcher];
@@ -56,6 +56,28 @@
     [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
+#pragma mark - 系统外观变化
+
+/// 系统亮暗切换时，通知全应用重新取色。
+///
+/// 为什么必须显式处理：
+/// 我们的色板是按 isDark 解析具体色值的，不是 UIColor 动态颜色，
+/// 所以系统切换外观不会自动更新已渲染的视图。
+/// 不处理的话，用户在系统设置里切暗色，App 界面不变
+///（要杀进程重启才生效）。
+- (void)traitCollectionDidChange:(UITraitCollection *)previousTraitCollection {
+    [super traitCollectionDidChange:previousTraitCollection];
+
+    if (previousTraitCollection &&
+        previousTraitCollection.userInterfaceStyle == self.traitCollection.userInterfaceStyle) {
+        return;   // 外观没变，不处理
+    }
+
+    // 走和「用户手动切主题」同一条路径，保证行为一致
+    [A2ThemeManager.shared notifyThemeChanged];
+    [self applyTheme];
+}
+
 #pragma mark - 任务抽屉
 
 - (void)setupTaskDrawer {
@@ -80,7 +102,7 @@
 #pragma mark - 主题
 
 - (void)applyTheme {
-    self.view.backgroundColor = A2ThemeManager.shared.scheme.surface;
+    self.view.backgroundColor = A2ThemeManager.shared.scheme.cSurface;
 }
 
 #pragma mark - 方向与状态栏

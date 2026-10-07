@@ -23,9 +23,21 @@ willConnectToSession:(UISceneSession *)session
 
     UIWindowScene *windowScene = (UIWindowScene *)scene;
     self.window = [[UIWindow alloc] initWithWindowScene:windowScene];
-    self.window.rootViewController = [[A2RootViewController alloc] init];
+
+    // 关键顺序：外观必须在 rootViewController 之前设置。
+    //
+    // 原因：给 window.rootViewController 赋值会立即触发它的 viewDidLoad，
+    // 里面所有取色逻辑都会按「当时的 trait」执行。如果此时还没设
+    // overrideUserInterfaceStyle，取到的就是系统外观（可能与应用内
+    // 选择相反），而且事后改样式不会让已取色的视图自动重算 ——
+    // 表现为「iPad 系统亮色 + 应用选了暗色 → 界面按亮色渲染」。
     [A2ThemeManager.shared applyAppearanceToWindow:self.window];
+
+    self.window.rootViewController = [[A2RootViewController alloc] init];
     [self.window makeKeyAndVisible];
+
+    // 窗口上屏后再刷一次，兜底覆盖 viewDidLoad 阶段可能取错的颜色
+    [A2ThemeManager.shared notifyThemeChanged];
 }
 
 /// 主题变更时同步窗口外观

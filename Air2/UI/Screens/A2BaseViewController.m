@@ -283,7 +283,7 @@
 
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    _titleLabel.textColor = t.onSurface;
+    _titleLabel.textColor = t.cOnSurface;
     _backButton.tintColor = UIColor.whiteColor;
     for (UIButton *b in _trailingButtons) {
         b.tintColor = UIColor.whiteColor;

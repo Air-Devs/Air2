@@ -289,10 +289,10 @@
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
     _grabber.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.28];
-    _summaryLabel.textColor = t.onSurface;
-    _percentLabel.textColor = t.primary;
+    _summaryLabel.textColor = t.cOnSurface;
+    _percentLabel.textColor = t.cPrimary;
     _summaryTrack.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.14];
-    _summaryFill.backgroundColor = t.primary;
+    _summaryFill.backgroundColor = t.cPrimary;
     self.layer.borderWidth = 0.5;
     self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.12].CGColor;
 }

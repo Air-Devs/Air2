@@ -110,8 +110,8 @@
         (__bridge id)theme.backgroundGradient[1].CGColor,
         (__bridge id)theme.backgroundGradient[2].CGColor,
     ];
-    [self renderGlow:_glowTop color:theme.scheme.tertiary];
-    [self renderGlow:_glowBottom color:theme.scheme.primary];
+    [self renderGlow:_glowTop color:tm.scheme.cTertiary];
+    [self renderGlow:_glowBottom color:tm.scheme.cPrimary];
 
     // ---- 图片 ----
     UIImage *image = tm.backgroundImage;
@@ -214,8 +214,8 @@
 
     A2ThemeManager *tm = A2ThemeManager.shared;
     UIColor *edge = tm.isDark
-        ? [tm.scheme.surface colorWithAlphaComponent:0.92]
-        : [tm.scheme.surface colorWithAlphaComponent:0.88];
+        ? [tm.scheme.cSurface colorWithAlphaComponent:0.92]
+        : [tm.scheme.cSurface colorWithAlphaComponent:0.88];
 
     UIColor *clear = [edge colorWithAlphaComponent:0.0];
 

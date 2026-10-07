@@ -303,27 +303,27 @@
     A2ThemeManager *tm = A2ThemeManager.shared;
     A2ColorScheme *s = tm.scheme;
 
-    _appNameLabel.textColor = s.onSurface;
+    _appNameLabel.textColor = s.cOnSurface;
     for (UIButton *b in _topTrailingStack.arrangedSubviews) {
-        if ([b isKindOfClass:UIButton.class]) b.tintColor = s.onSurfaceVariant;
+        if ([b isKindOfClass:UIButton.class]) b.tintColor = s.cOnSurfaceVariant;
     }
 
     // ---- 账户条 ----
-    _avatarView.backgroundColor = s.primaryContainer;
-    _avatarInitial.textColor = s.onPrimaryContainer;
-    _accountNameLabel.textColor = s.onSurface;
-    _accountTypeLabel.textColor = s.onSurfaceVariant;
+    _avatarView.backgroundColor = s.cPrimaryContainer;
+    _avatarInitial.textColor = s.cOnPrimaryContainer;
+    _accountNameLabel.textColor = s.cOnSurface;
+    _accountTypeLabel.textColor = s.cOnSurfaceVariant;
 
     // ---- 版本卡 ----
-    _versionNameLabel.textColor = s.onSurface;
-    _versionMetaLabel.textColor = s.onSurfaceVariant;
+    _versionNameLabel.textColor = s.cOnSurface;
+    _versionMetaLabel.textColor = s.cOnSurfaceVariant;
 
     // ---- 按 tag 统一着色 ----
     // 注意：不能只遍历直接子视图 —— 控件都在 UIStackView 里，
     // 必须递归查找。
-    [self tintTaggedViewsIn:_topBar color:s.onSurfaceVariant];
-    [self tintTaggedViewsIn:_versionCard color:s.onSurfaceVariant];
-    [self tintTaggedViewsIn:_accountCard color:s.onSurfaceVariant];
+    [self tintTaggedViewsIn:_topBar color:s.cOnSurfaceVariant];
+    [self tintTaggedViewsIn:_versionCard color:s.cOnSurfaceVariant];
+    [self tintTaggedViewsIn:_accountCard color:s.cOnSurfaceVariant];
 }
 
 /// 递归给打了标记的视图着色。

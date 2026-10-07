@@ -189,13 +189,13 @@
         case A2ButtonStylePrimary: {
             _gradientLayer.hidden = NO;
             _gradientLayer.colors = @[
-                (__bridge id)t.primary.CGColor,
-                (__bridge id)t.primaryContainer.CGColor,
+                (__bridge id)t.cPrimary.CGColor,
+                (__bridge id)t.cPrimaryContainer.CGColor,
             ];
             _gradientLayer.locations = @[@0.0, @1.0];
-            _titleLabel.textColor = t.onPrimary;
-            _iconView.tintColor = t.onPrimary;
-            _spinner.color = t.onPrimary;
+            _titleLabel.textColor = t.cOnPrimary;
+            _iconView.tintColor = t.cOnPrimary;
+            _spinner.color = t.cOnPrimary;
             self.layer.borderWidth = 0;
             self.backgroundColor = UIColor.clearColor;
             break;
@@ -204,17 +204,17 @@
             _gradientLayer.hidden = YES;
             self.backgroundColor = UIColor.clearColor;
             self.layer.borderWidth = 1.2;
-            self.layer.borderColor = [t.outline colorWithAlphaComponent:0.45].CGColor;
-            _titleLabel.textColor = t.onSurface;
-            _iconView.tintColor = t.onSurface;
-            _spinner.color = t.onSurface;
+            self.layer.borderColor = [t.cOutline colorWithAlphaComponent:0.45].CGColor;
+            _titleLabel.textColor = t.cOnSurface;
+            _iconView.tintColor = t.cOnSurface;
+            _spinner.color = t.cOnSurface;
             break;
         }
         case A2ButtonStyleDanger: {
             _gradientLayer.hidden = NO;
             _gradientLayer.colors = @[
-                (__bridge id)t.error.CGColor,
-                (__bridge id)[t.error colorWithAlphaComponent:0.78].CGColor,
+                (__bridge id)t.cError.CGColor,
+                (__bridge id)[t.cError colorWithAlphaComponent:0.78].CGColor,
             ];
             _gradientLayer.locations = @[@0.0, @1.0];
             _titleLabel.textColor = UIColor.whiteColor;

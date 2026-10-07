@@ -125,10 +125,10 @@
     // 半透明表面：比卡片本体稍亮一点，形成分层
     _fillView.backgroundColor = tm.isDark
         ? [UIColor colorWithWhite:1.0 alpha:0.06]
-        : [[t.surfaceContainerHigh colorWithAlphaComponent:1.0] colorWithAlphaComponent:0.55];
+        : [[t.cSurfaceContainerHigh colorWithAlphaComponent:1.0] colorWithAlphaComponent:0.55];
 
-    _titleLabel.textColor = t.onSurface;
-    _subtitleLabel.textColor = t.onSurfaceVariant;
+    _titleLabel.textColor = t.cOnSurface;
+    _subtitleLabel.textColor = t.cOnSurfaceVariant;
 }
 
 @end

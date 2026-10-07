@@ -30,7 +30,7 @@
     ramSlider.minimumValue = 512;
     ramSlider.maximumValue = 8192;
     ramSlider.value = 2048;
-    ramSlider.minimumTrackTintColor = A2ThemeManager.shared.scheme.primary;
+    ramSlider.minimumTrackTintColor = A2ThemeManager.shared.scheme.cPrimary;
     [NSLayoutConstraint activateConstraints:@[
         [ramSlider.widthAnchor constraintEqualToConstant:130],
     ]];

@@ -144,14 +144,14 @@
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
     _track.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.13];
-    _fill.backgroundColor = t.primary;
-    _glow.backgroundColor = [t.primary colorWithAlphaComponent:0.55];
-    _glow.layer.shadowColor = t.primary.CGColor;
+    _fill.backgroundColor = t.cPrimary;
+    _glow.backgroundColor = [t.cPrimary colorWithAlphaComponent:0.55];
+    _glow.layer.shadowColor = t.cPrimary.CGColor;
     _glow.layer.shadowOpacity = 0.8;
     _glow.layer.shadowRadius = 6;
     _glow.layer.shadowOffset = CGSizeZero;
-    _detailLabel.textColor = t.onSurfaceVariant;
-    _speedLabel.textColor = t.primary;
+    _detailLabel.textColor = t.cOnSurfaceVariant;
+    _speedLabel.textColor = t.cPrimary;
 }
 
 - (void)layoutSubviews {

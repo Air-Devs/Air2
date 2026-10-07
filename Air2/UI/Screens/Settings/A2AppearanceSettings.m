@@ -51,9 +51,9 @@
                                                 usingBlock:^(NSNotification *note) {
         A2ColorTheme *t = A2ThemeManager.shared.theme;
         themeRow.valueText = t.displayName;
-        swatch.backgroundColor = A2ThemeManager.shared.scheme.primary;
+        swatch.backgroundColor = A2ThemeManager.shared.scheme.cPrimary;
     }];
-    swatch.backgroundColor = tm.scheme.primary;
+    swatch.backgroundColor = tm.scheme.cPrimary;
 
     [section addRow:themeRow];
 

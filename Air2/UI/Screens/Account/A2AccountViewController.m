@@ -114,8 +114,8 @@ typedef NS_ENUM(NSInteger, A2AccountType) {
 
 - (void)refreshAvatarColor {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    _avatarView.backgroundColor = t.primary;
-    _nameLabel.textColor = t.onSurface;
+    _avatarView.backgroundColor = t.cPrimary;
+    _nameLabel.textColor = t.cOnSurface;
     _typeLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.6];
 }
 

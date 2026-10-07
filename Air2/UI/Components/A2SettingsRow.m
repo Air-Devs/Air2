@@ -292,14 +292,14 @@
     A2ThemeManager *tm = A2ThemeManager.shared;
     A2ColorScheme *t = tm.scheme;
 
-    _iconBox.backgroundColor = self.symbolColor ?: [t.primary colorWithAlphaComponent:0.9];
+    _iconBox.backgroundColor = self.symbolColor ?: [t.cPrimary colorWithAlphaComponent:0.9];
     _iconView.tintColor = UIColor.whiteColor;
-    _titleLabel.textColor = self.isDestructive ? t.error : UIColor.whiteColor;
-    _subtitleLabel.textColor = t.onSurfaceVariant;
-    _valueLabel.textColor = t.onSurfaceVariant;
+    _titleLabel.textColor = self.isDestructive ? t.cError : UIColor.whiteColor;
+    _subtitleLabel.textColor = t.cOnSurfaceVariant;
+    _valueLabel.textColor = t.cOnSurfaceVariant;
     _chevron.tintColor = [UIColor colorWithWhite:1.0 alpha:0.34];
-    _checkmark.tintColor = t.primary;
-    _toggle.onTintColor = t.primary;
+    _checkmark.tintColor = t.cPrimary;
+    _toggle.onTintColor = t.cPrimary;
 
     UIColor *sep = [UIColor colorWithWhite:1.0 alpha:0.09];
     _topSep.backgroundColor = sep;

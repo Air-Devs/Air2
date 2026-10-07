@@ -79,10 +79,10 @@ typedef NS_ENUM(NSInteger, A2InstallStep) {
 
 - (void)updateDot {
     if (_done) {
-        _dot.backgroundColor = A2ThemeManager.shared.scheme.success;
+        _dot.backgroundColor = A2ThemeManager.shared.scheme.cSuccess;
         _dot.alpha = 1.0;
     } else if (_active) {
-        _dot.backgroundColor = A2ThemeManager.shared.scheme.primary;
+        _dot.backgroundColor = A2ThemeManager.shared.scheme.cPrimary;
         _dot.alpha = 1.0;
     } else {
         _dot.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.25];
@@ -164,7 +164,7 @@ typedef NS_ENUM(NSInteger, A2InstallStep) {
     titleLabel.text = self.loader.length
         ? [NSString stringWithFormat:@"%@ · %@", _versionName, _loader]
         : _versionName;
-    titleLabel.textColor = t.onSurface;
+    titleLabel.textColor = t.cOnSurface;
 
     _stageLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _stageLabel.font = [A2Typography subtitleCard];

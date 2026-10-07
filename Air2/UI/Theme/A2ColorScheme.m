@@ -2,8 +2,6 @@
 //  A2ColorScheme.m
 //  Air2
 //
-//  MD3 语义色板的存储结构与「亮暗合并为动态颜色」逻辑。
-//
 
 #import "A2ColorScheme.h"
 
@@ -16,16 +14,28 @@ UIColor *A2Hex(uint32_t rgb) {
                            alpha:1.0];
 }
 
-/// 构造随亮暗切换的动态颜色
-UIColor *A2DynamicColor(uint32_t lightRGB, uint32_t darkRGB) {
-    UIColor *light = A2Hex(lightRGB);
-    UIColor *dark = A2Hex(darkRGB);
-    if (@available(iOS 13.0, *)) {
-        return [UIColor colorWithDynamicProvider:^UIColor *(UITraitCollection *tc) {
-            return (tc.userInterfaceStyle == UIUserInterfaceStyleDark) ? dark : light;
-        }];
+void A2GetHSB(UIColor *c, CGFloat *h, CGFloat *s, CGFloat *b) {
+    CGFloat a = 0;
+    if (![c getHue:h saturation:s brightness:b alpha:&a]) {
+        *h = 0; *s = 0; *b = 0.5;
     }
-    return light;
+}
+
+UIColor *A2Tone(UIColor *seed, CGFloat sat, CGFloat bright) {
+    CGFloat h = 0, s = 0, b = 0;
+    A2GetHSB(seed, &h, &s, &b);
+    // 灰阶种子也保留一丝饱和度，否则整板死灰没有层次
+    if (s < 0.02) s = 0.02;
+    return [UIColor colorWithHue:h
+                      saturation:MAX(0.0, MIN(1.0, sat))
+                      brightness:MAX(0.0, MIN(1.0, bright))
+                           alpha:1.0];
+}
+
+UIColor *A2ShiftHue(UIColor *seed, CGFloat delta) {
+    CGFloat h = 0, s = 0, b = 0;
+    A2GetHSB(seed, &h, &s, &b);
+    return [UIColor colorWithHue:fmod(h + delta + 1.0, 1.0) saturation:s brightness:b alpha:1.0];
 }
 
 uint32_t A2RGBValue(UIColor *c) {
@@ -36,72 +46,97 @@ uint32_t A2RGBValue(UIColor *c) {
             (uint32_t)lround(b * 255);
 }
 
-void A2GetHSB(UIColor *c, CGFloat *h, CGFloat *s, CGFloat *b) {
-    CGFloat a = 0;
-    if (![c getHue:h saturation:s brightness:b alpha:&a]) {
-        *h = 0; *s = 0; *b = 0.5;
-    }
+#pragma mark - A2ColorSlot
+
+@implementation A2ColorSlot
+
++ (instancetype)light:(UIColor *)light dark:(UIColor *)dark {
+    A2ColorSlot *s = [A2ColorSlot new];
+    s.light = light;
+    s.dark = dark;
+    return s;
 }
 
-/// 以指定饱和度/亮度重建同色相颜色
-UIColor *A2Tone(UIColor *seed, CGFloat sat, CGFloat bright) {
-    CGFloat h = 0, s = 0, b = 0;
-    A2GetHSB(seed, &h, &s, &b);
-    // 灰阶种子也保留一丝色相，否则整板死灰没有层次
-    if (s < 0.02) s = 0.02;
-    return [UIColor colorWithHue:h
-                      saturation:MAX(0.0, MIN(1.0, sat))
-                      brightness:MAX(0.0, MIN(1.0, bright))
-                           alpha:1.0];
+- (UIColor *)colorForDark:(BOOL)isDark {
+    return isDark ? (self.dark ?: self.light) : (self.light ?: self.dark);
 }
 
-/// 色相偏移，用于生成 tertiary
-UIColor *A2ShiftHue(UIColor *seed, CGFloat delta) {
-    CGFloat h = 0, s = 0, b = 0;
-    A2GetHSB(seed, &h, &s, &b);
-    return [UIColor colorWithHue:fmod(h + delta + 1.0, 1.0) saturation:s brightness:b alpha:1.0];
-}
+@end
 
 #pragma mark - A2ColorScheme
 
+@interface A2ColorScheme ()
+// 解析后的具体色值
+@property (nonatomic, strong) UIColor *cPrimary;
+@property (nonatomic, strong) UIColor *cOnPrimary;
+@property (nonatomic, strong) UIColor *cPrimaryContainer;
+@property (nonatomic, strong) UIColor *cOnPrimaryContainer;
+@property (nonatomic, strong) UIColor *cSecondary;
+@property (nonatomic, strong) UIColor *cSecondaryContainer;
+@property (nonatomic, strong) UIColor *cTertiary;
+@property (nonatomic, strong) UIColor *cTertiaryContainer;
+@property (nonatomic, strong) UIColor *cSurface;
+@property (nonatomic, strong) UIColor *cOnSurface;
+@property (nonatomic, strong) UIColor *cSurfaceContainerLowest;
+@property (nonatomic, strong) UIColor *cSurfaceContainerLow;
+@property (nonatomic, strong) UIColor *cSurfaceContainer;
+@property (nonatomic, strong) UIColor *cSurfaceContainerHigh;
+@property (nonatomic, strong) UIColor *cSurfaceContainerHighest;
+@property (nonatomic, strong) UIColor *cSurfaceVariant;
+@property (nonatomic, strong) UIColor *cOnSurfaceVariant;
+@property (nonatomic, strong) UIColor *cOutline;
+@property (nonatomic, strong) UIColor *cOutlineVariant;
+@property (nonatomic, strong) UIColor *cError;
+@property (nonatomic, strong) UIColor *cOnError;
+@property (nonatomic, strong) UIColor *cErrorContainer;
+@property (nonatomic, strong) UIColor *cSuccess;
+@property (nonatomic, strong) UIColor *cWarning;
+@property (nonatomic, strong) UIColor *cInverseSurface;
+@property (nonatomic, strong) UIColor *cInverseOnSurface;
+@property (nonatomic, strong) UIColor *cInversePrimary;
+@property (nonatomic, assign) BOOL resolvedIsDark;
+@end
+
 @implementation A2ColorScheme
 
-/// 关键实现：把亮/暗两组具体色值字段逐个包装成动态颜色。
-/// 手写而不是用 KVC 反射，因为属性名列表是稳定的，
-/// 显式写出来编译期就能查错，也不会在运行时因为改名静默失效。
-- (void)makeDynamicFromLight:(A2ColorScheme *)light dark:(A2ColorScheme *)dark {
-#define A2MERGE(prop) self.prop = A2DynamicColor(A2RGBValue(light.prop), A2RGBValue(dark.prop))
-    A2MERGE(primary);
-    A2MERGE(onPrimary);
-    A2MERGE(primaryContainer);
-    A2MERGE(onPrimaryContainer);
-    A2MERGE(secondary);
-    A2MERGE(onSecondary);
-    A2MERGE(secondaryContainer);
-    A2MERGE(onSecondaryContainer);
-    A2MERGE(tertiary);
-    A2MERGE(tertiaryContainer);
-    A2MERGE(surface);
-    A2MERGE(onSurface);
-    A2MERGE(surfaceContainerLowest);
-    A2MERGE(surfaceContainerLow);
-    A2MERGE(surfaceContainer);
-    A2MERGE(surfaceContainerHigh);
-    A2MERGE(surfaceContainerHighest);
-    A2MERGE(surfaceVariant);
-    A2MERGE(onSurfaceVariant);
-    A2MERGE(outline);
-    A2MERGE(outlineVariant);
-    A2MERGE(error);
-    A2MERGE(onError);
-    A2MERGE(errorContainer);
-    A2MERGE(onErrorContainer);
-    A2MERGE(success);
-    A2MERGE(warning);
-    A2MERGE(inverseSurface);
-    A2MERGE(inverseOnSurface);
-    A2MERGE(inversePrimary);
-#undef A2MERGE
+- (instancetype)resolvedForDark:(BOOL)isDark {
+    A2ColorScheme *r = [A2ColorScheme new];
+    r.resolvedIsDark = isDark;
+
+    // 逐槽按模式取具体值。手写而不是反射 ——
+    // 属性名列表是稳定的，显式写编译期能查错，
+    // 也不会因为改名在运行时静默失效。
+#define A2RESOLVE(slot, prop) r.prop = [self.slot colorForDark:isDark]
+    A2RESOLVE(primary, cPrimary);
+    A2RESOLVE(onPrimary, cOnPrimary);
+    A2RESOLVE(primaryContainer, cPrimaryContainer);
+    A2RESOLVE(onPrimaryContainer, cOnPrimaryContainer);
+    A2RESOLVE(secondary, cSecondary);
+    A2RESOLVE(secondaryContainer, cSecondaryContainer);
+    A2RESOLVE(tertiary, cTertiary);
+    A2RESOLVE(tertiaryContainer, cTertiaryContainer);
+    A2RESOLVE(surface, cSurface);
+    A2RESOLVE(onSurface, cOnSurface);
+    A2RESOLVE(surfaceContainerLowest, cSurfaceContainerLowest);
+    A2RESOLVE(surfaceContainerLow, cSurfaceContainerLow);
+    A2RESOLVE(surfaceContainer, cSurfaceContainer);
+    A2RESOLVE(surfaceContainerHigh, cSurfaceContainerHigh);
+    A2RESOLVE(surfaceContainerHighest, cSurfaceContainerHighest);
+    A2RESOLVE(surfaceVariant, cSurfaceVariant);
+    A2RESOLVE(onSurfaceVariant, cOnSurfaceVariant);
+    A2RESOLVE(outline, cOutline);
+    A2RESOLVE(outlineVariant, cOutlineVariant);
+    A2RESOLVE(error, cError);
+    A2RESOLVE(onError, cOnError);
+    A2RESOLVE(errorContainer, cErrorContainer);
+    A2RESOLVE(success, cSuccess);
+    A2RESOLVE(warning, cWarning);
+    A2RESOLVE(inverseSurface, cInverseSurface);
+    A2RESOLVE(inverseOnSurface, cInverseOnSurface);
+    A2RESOLVE(inversePrimary, cInversePrimary);
+#undef A2RESOLVE
+
+    return r;
 }
 
 @end

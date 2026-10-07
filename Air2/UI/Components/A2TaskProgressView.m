@@ -171,14 +171,14 @@
 
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    _titleLabel.textColor = t.onSurface;
-    _subtitleLabel.textColor = t.onSurfaceVariant;
+    _titleLabel.textColor = t.cOnSurface;
+    _subtitleLabel.textColor = t.cOnSurfaceVariant;
 
     switch (_state) {
-        case A2TaskStateRunning:   _statusDot.backgroundColor = t.primary; break;
-        case A2TaskStateCompleted: _statusDot.backgroundColor = t.success; break;
-        case A2TaskStateFailed:    _statusDot.backgroundColor = t.error; break;
-        case A2TaskStatePaused:    _statusDot.backgroundColor = t.outline; break;
+        case A2TaskStateRunning:   _statusDot.backgroundColor = t.cPrimary; break;
+        case A2TaskStateCompleted: _statusDot.backgroundColor = t.cSuccess; break;
+        case A2TaskStateFailed:    _statusDot.backgroundColor = t.cError; break;
+        case A2TaskStatePaused:    _statusDot.backgroundColor = t.cOutline; break;
         default:                   _statusDot.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.3]; break;
     }
     // 运行中的圆点呼吸，提示"正在动"

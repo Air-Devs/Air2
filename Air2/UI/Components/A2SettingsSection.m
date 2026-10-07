@@ -126,8 +126,8 @@
 
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    _titleLabel.textColor = t.onSurfaceVariant;
-    _footerLabel.textColor = [t.onSurfaceVariant colorWithAlphaComponent:0.75];
+    _titleLabel.textColor = t.cOnSurfaceVariant;
+    _footerLabel.textColor = [t.cOnSurfaceVariant colorWithAlphaComponent:0.75];
 }
 
 @end

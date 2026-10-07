@@ -84,13 +84,13 @@
     name.translatesAutoresizingMaskIntoConstraints = NO;
     name.text = version[@"name"];
     name.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
-    name.textColor = t.onSurface;
+    name.textColor = t.cOnSurface;
 
     UILabel *meta = [[UILabel alloc] initWithFrame:CGRectZero];
     meta.translatesAutoresizingMaskIntoConstraints = NO;
     meta.text = version[@"meta"];
     meta.font = [A2Typography caption];
-    meta.textColor = t.onSurfaceVariant;
+    meta.textColor = t.cOnSurfaceVariant;
     meta.numberOfLines = 1;
 
     UIStackView *textStack = [[UIStackView alloc] initWithArrangedSubviews:@[name, meta]];
@@ -105,7 +105,7 @@
     launchBtn.translatesAutoresizingMaskIntoConstraints = NO;
     [launchBtn setImage:[UIImage systemImageNamed:@"play.circle.fill" withConfiguration:cfg]
                forState:UIControlStateNormal];
-    launchBtn.tintColor = A2ThemeManager.shared.scheme.primary;
+    launchBtn.tintColor = A2ThemeManager.shared.scheme.cPrimary;
     [launchBtn addAction:[UIAction actionWithHandler:^(UIAction *action) {
         [A2Toast show:[NSString stringWithFormat:@"启动 %@", version[@"name"]] inView:self.view];
     }] forControlEvents:UIControlEventTouchUpInside];

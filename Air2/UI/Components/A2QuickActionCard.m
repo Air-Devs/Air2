@@ -95,8 +95,8 @@
 
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    _iconView.tintColor = A2ThemeManager.shared.scheme.primary;
-    _label.textColor = t.onSurface;
+    _iconView.tintColor = A2ThemeManager.shared.scheme.cPrimary;
+    _label.textColor = t.cOnSurface;
 }
 
 @end

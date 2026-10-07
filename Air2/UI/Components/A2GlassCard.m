@@ -209,11 +209,11 @@
     // —— 填充色按层级选 ——
     UIColor *fill;
     switch (_elevation) {
-        case A2CardElevationSurface:       fill = s.surfaceContainerLowest; break;
-        case A2CardElevationHigh:          fill = s.surfaceContainerHigh;   break;
-        case A2CardElevationHighest:       fill = s.surfaceContainerHighest;break;
+        case A2CardElevationSurface:       fill = s.cSurfaceContainerLowest; break;
+        case A2CardElevationHigh:          fill = s.cSurfaceContainerHigh;   break;
+        case A2CardElevationHighest:       fill = s.cSurfaceContainerHighest;break;
         case A2CardElevationLow:
-        default:                           fill = s.surfaceContainer;      break;
+        default:                           fill = s.cSurfaceContainer;      break;
     }
 
     // 有自定义背景时让卡片半透明，让背景色透出来 —— 这是个性化的关键
@@ -240,7 +240,7 @@
     }
 
     // —— 描边：MD3 用 outlineVariant 做低对比描边 ——
-    _borderView.layer.borderColor = [s.outlineVariant colorWithAlphaComponent:
+    _borderView.layer.borderColor = [s.cOutlineVariant colorWithAlphaComponent:
                                      tm.isDark ? 0.6 : 0.9].CGColor;
 
     // —— 阴影：MD3 的 elevation 用阴影表达，但暗色下阴影几乎不可见，
