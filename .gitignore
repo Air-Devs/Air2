@@ -1,0 +1,100 @@
+# ============================================================
+# Air2 — 忽略规则
+# 原则：不提交任何构建产物、用户数据、密钥、IDE 状态
+# ============================================================
+
+# ---------- 构建产物 ----------
+/build/
+/Natives/build/
+/JavaApp/build/
+/artifacts/
+*.ipa
+*.dSYM/
+*.o
+*.a
+*.dylib
+*.so
+!Libraries/**/*.dylib
+*.xcarchive
+
+# ---------- Xcode ----------
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+*.moved-aside
+*.pbxuser
+!default.pbxuser
+!default.mode1v3
+!default.mode2v3
+DerivedData/
+*.hmap
+*.ipa
+*.xccheckout
+
+# ---------- Swift Package Manager ----------
+.swiftpm/
+.build/
+Packages/
+Package.resolved
+
+# ---------- CocoaPods / Carthage ----------
+Pods/
+Cartfile.resolved
+Carthage/Build/
+
+# ---------- Java ----------
+*.class
+*.jar
+!.mvn/wrapper/*.jar
+!JavaApp/libs/**/*.jar
+!Libraries/**/*.jar
+target/
+.gradle/
+hs_err_pid*
+
+# ---------- CMake ----------
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile.bak
+compile_commands.json
+
+# ---------- 脚本 / 系统 ----------
+.DS_Store
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+*.swp
+*.swo
+
+# ---------- 编辑器 / IDE ----------
+.idea/
+*.iml
+.vscode/
+*.code-workspace
+
+# ---------- 敏感信息 ----------
+# 绝不提交签名证书、密钥、配置文件
+*.p12
+*.mobileprovision
+*.cer
+*.key
+*.pem
+entitlements.local.xml
+secrets.xcconfig
+Local.xcconfig
+config.local.h
+.env
+.env.*
+
+# ---------- 日志 ----------
+/logs/
+*.log
+!docs/**/*.md
+
+# ---------- CI 临时文件 ----------
+/ci-logs/
+*.xcresult

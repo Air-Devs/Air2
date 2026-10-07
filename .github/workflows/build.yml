@@ -1,0 +1,117 @@
+name: Build
+
+on:
+  push:
+    branches: [ main, dev, 'feat/**', 'fix/**' ]
+  pull_request:
+    branches: [ main, dev ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ==========================================================
+  # 结构与规范检查 —— 挡住"石山代码"
+  # ==========================================================
+  lint:
+    name: 规范检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 结构与命名规范
+        run: bash scripts/lint_structure.sh
+
+  # ==========================================================
+  # 原生层编译
+  # ==========================================================
+  natives:
+    name: 原生层
+    runs-on: macos-15
+    needs: lint
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: 环境信息
+        run: |
+          xcodebuild -version
+          cmake --version
+
+      - name: 编译原生层
+        run: make natives
+
+      - name: 上传构建目录
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: natives-build
+          path: Natives/build
+          if-no-files-found: warn
+          retention-days: 7
+
+  # ==========================================================
+  # Java 启动核心
+  # ==========================================================
+  java:
+    name: Java 核心
+    runs-on: macos-15
+    needs: lint
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: 准备 JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: 编译 Java 核心
+        run: make java
+
+      - name: 上传 lwjgl.jar
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: java-core
+          path: JavaApp/**/*.jar
+          if-no-files-found: warn
+          retention-days: 7
+
+  # ==========================================================
+  # 打包 IPA
+  # ==========================================================
+  package:
+    name: 打包 IPA
+    runs-on: macos-15
+    needs: [ natives, java ]
+    if: github.event_name != 'pull_request'
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: 构建
+        run: |
+          make natives || true
+          make java || true
+          make package || true
+
+      - name: 上传 IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Air2-ipa
+          path: artifacts/*.ipa
+          if-no-files-found: warn
+          retention-days: 14

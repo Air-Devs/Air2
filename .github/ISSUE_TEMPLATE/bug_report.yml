@@ -1,0 +1,78 @@
+name: 缺陷报告
+description: 提交一个 bug 帮助我们改进 Air2
+title: "[Bug] "
+labels: [ "bug" ]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈。请尽量完整填写，信息不足的 issue 可能无法定位。
+
+  - type: input
+    id: version
+    attributes:
+      label: Air2 版本
+      description: 设置页或关于页中显示的版本号
+      placeholder: 例如 0.1.0 (dev@a1b2c3d)
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: 设备与系统
+      placeholder: 例如 iPhone 15 Pro / iOS 18.2
+    validations:
+      required: true
+
+  - type: dropdown
+    id: renderer
+    attributes:
+      label: 使用的渲染器
+      options:
+        - 未设置 / 不知道
+        - Metal (kopper / zink)
+        - VirGL
+        - GL4ES
+        - NG-GL4ES
+        - 其他
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: 问题描述
+      description: 发生了什么？你期望发生什么？
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      placeholder: |
+        1. 打开 ...
+        2. 点击 ...
+        3. 出现 ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志
+      description: 启动器日志或游戏崩溃日志（可上传文件）
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 确认
+      options:
+        - label: 我已搜索过现有 issue，确认这不是重复问题
+          required: true
+        - label: 我使用的是最新版本
+          required: true

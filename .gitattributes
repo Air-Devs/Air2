@@ -1,0 +1,47 @@
+# 默认：文本文件自动归一化，仓库内统一 LF
+* text=auto eol=lf
+
+# ---------- 明确文本 ----------
+*.swift   text eol=lf
+*.m       text eol=lf
+*.mm      text eol=lf
+*.h       text eol=lf
+*.c       text eol=lf
+*.java    text eol=lf
+*.kt      text eol=lf
+*.md      text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+*.json    text eol=lf
+*.xml     text eol=lf
+*.plist   text eol=lf
+*.sh      text eol=lf
+*.pbxproj text eol=lf
+Makefile  text eol=lf
+
+# ---------- 明确二进制 ----------
+*.ipa     binary
+*.dylib   binary
+*.a       binary
+*.framework binary
+*.xcframework binary
+*.jar     binary
+*.png     binary
+*.jpg     binary
+*.jpeg    binary
+*.gif     binary
+*.webp    binary
+*.pdf     binary
+*.zip     binary
+*.7z      binary
+*.car     binary
+*.p12     binary
+*.mobileprovision binary
+
+# ---------- 语言统计修正 ----------
+*.pbxproj linguist-generated=true
+*.xcconfig linguist-language=INI
+Libraries/** linguist-vendored=true
+
+# ---------- diff 行为 ----------
+*.pbxproj -diff

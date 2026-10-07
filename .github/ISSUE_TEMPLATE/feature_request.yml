@@ -1,0 +1,48 @@
+name: 功能建议
+description: 为 Air2 提出新功能或改进建议
+title: "[Feature] "
+labels: [ "enhancement" ]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        请描述**要解决的问题**，而不只是想要的功能。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: 你遇到的问题
+      description: 现在是什么让你不舒服？例如"每次启动都要手动选版本"
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: 你期望的方案
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 考虑过的替代方案
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及范围
+      multiple: true
+      options:
+        - 界面 / 交互
+        - 版本管理
+        - 账号
+        - 下载
+        - 渲染 / 性能
+        - 触控控件
+        - 联机
+        - 其他
+    validations:
+      required: true
