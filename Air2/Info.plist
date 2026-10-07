@@ -55,12 +55,11 @@
     <key>UIViewControllerBasedStatusBarAppearance</key>
     <false/>
 
-    <!-- 关闭启动画面（用我们自己的首帧） -->
+    <!-- 启动画面：留空字典即可，系统会用窗口底色。
+         之前写 UIColorName = "" 是错的 —— 空字符串会指向一个
+         不存在的色板资源，反而可能出问题。 -->
     <key>UILaunchScreen</key>
-    <dict>
-        <key>UIColorName</key>
-        <string></string>
-    </dict>
+    <dict/>
 
     <!-- 外观：默认跟随系统 -->
     <key>UIUserInterfaceStyle</key>
@@ -76,14 +75,28 @@
     <true/>
 
     <!-- ============================================================
-         Scene 配置。工程用代码方式配置 scene delegate
-         （见 A2AppDelegate 的 configurationForConnectingSceneSession），
-         这里声明支持多场景即可。
+         Scene 配置。
+         注意：delegate 类必须在这里声明。A2AppDelegate 里的
+         configurationForConnectingSceneSession: 只是用来「修改」配置，
+         不能用来「创建」—— 如果这里不写 UISceneConfigurations，
+         系统走 Scene 流程但找不到 delegate，会启动即崩。
          ============================================================ -->
     <key>UIApplicationSceneManifest</key>
     <dict>
         <key>UIApplicationSupportsMultipleScenes</key>
         <false/>
+        <key>UISceneConfigurations</key>
+        <dict>
+            <key>UIWindowSceneSessionRoleApplication</key>
+            <array>
+                <dict>
+                    <key>UISceneConfigurationName</key>
+                    <string>Default Configuration</string>
+                    <key>UISceneDelegateClassName</key>
+                    <string>A2SceneDelegate</string>
+                </dict>
+            </array>
+        </dict>
     </dict>
 
     <!-- 文件共享：允许通过「文件」App 导入整合包与 mod -->

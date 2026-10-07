@@ -185,10 +185,21 @@
     _didSetupConstraints = YES;
 
     UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
-    CGFloat panelW = A2SidePanelWidth(self.view.bounds.size.width);
-    if (panelW <= 0) panelW = 320;   // 布局尚未完成时的兜底
+
+    // 侧栏宽度用「比例约束」而不是算好的固定值。
+    // 之前用 A2SidePanelWidth(self.view.bounds.size.width) 有两个问题：
+    //   1. updateViewConstraints 首次调用时 bounds 还是 0，兜底值会被固化
+    //   2. 该约束只算一次，旋转后不会更新
+    // 用 multiplier 交给 Auto Layout 处理，自动适应任何尺寸。
+    NSLayoutConstraint *panelWidth =
+        [_panelScroll.widthAnchor constraintEqualToAnchor:self.view.widthAnchor
+                                               multiplier:0.38];
 
     [NSLayoutConstraint activateConstraints:@[
+        // 侧栏宽度：屏宽 38%，但不超过 400pt（iPad 上不至于过宽）
+        panelWidth,
+        [_panelScroll.widthAnchor constraintLessThanOrEqualToConstant:400],
+
         // 背景铺满，但右侧被操作栏盖住的部分会被渐隐遮罩压暗
         [_backgroundView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
         [_backgroundView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
@@ -211,7 +222,6 @@
         [_panelScroll.topAnchor constraintEqualToAnchor:_topBar.bottomAnchor],
         [_panelScroll.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
         [_panelScroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        [_panelScroll.widthAnchor constraintEqualToConstant:panelW],
 
         [_panelStack.topAnchor constraintEqualToAnchor:_panelScroll.topAnchor constant:A2SpaceS],
         [_panelStack.bottomAnchor constraintEqualToAnchor:_panelScroll.bottomAnchor constant:-A2PanelPadding],
