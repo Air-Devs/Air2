@@ -84,6 +84,42 @@ def check_file(path, defined_classes):
                 rf'{var}\s*=\s*(?:A2\w*Spring|\[\[UIViewPropertyAnimator)', src):
             errors.append(f"疑似给只读属性赋值: {var}.{prop}")
 
+    # ---------- 属性归属检查 ----------
+    # A2ColorScheme 只有色值，主题名/渐变等元信息在 A2ColorTheme 上。
+    # 两者容易被搞混（都从 A2ThemeManager 取），专门查一遍。
+    scheme_only = {"primary", "onPrimary", "primaryContainer", "onPrimaryContainer",
+                   "secondary", "onSecondary", "secondaryContainer", "onSecondaryContainer",
+                   "tertiary", "tertiaryContainer", "surface", "onSurface",
+                   "surfaceContainerLowest", "surfaceContainerLow", "surfaceContainer",
+                   "surfaceContainerHigh", "surfaceContainerHighest", "surfaceVariant",
+                   "onSurfaceVariant", "outline", "outlineVariant", "error", "onError",
+                   "errorContainer", "onErrorContainer", "success", "warning",
+                   "inverseSurface", "inverseOnSurface", "inversePrimary"}
+    theme_only = {"displayName", "themeDescription", "backgroundGradient",
+                  "lightPrimary", "darkPrimary", "kind", "scheme"}
+
+    # 找 A2ColorScheme 类型的变量
+    scheme_vars = set(re.findall(r'A2ColorScheme \*(\w+)', src))
+    for v in scheme_vars:
+        for m in re.finditer(rf'\b{v}\.(\w+)\b', src):
+            prop = m.group(1)
+            if prop in theme_only:
+                line = src[:m.start()].count('\n') + 1
+                errors.append(
+                    f"第 {line} 行: {v} 是 A2ColorScheme，没有 {prop} 属性"
+                    f"（该属性在 A2ColorTheme 上，应改用 theme.{prop}）")
+
+    # tm.scheme.xxx 形式
+    for m in re.finditer(r'\.scheme\.(\w+)\b', src):
+        prop = m.group(1)
+        if prop in theme_only:
+            line = src[:m.start()].count('\n') + 1
+            errors.append(
+                f"第 {line} 行: .scheme 是 A2ColorScheme，没有 {prop} 属性"
+                f"（该属性在 A2ColorTheme 上，应改用 .theme.{prop}）")
+
+    return errors
+
     # ---------- @selector 里引用的方法是否存在 ----------
     selectors = re.findall(r'@selector\((\w+)\)', src)
     for sel in selectors:

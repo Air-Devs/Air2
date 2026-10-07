@@ -26,7 +26,7 @@
     A2SettingsRow *themeRow = [[A2SettingsRow alloc] init];
     themeRow.symbolName = @"paintpalette.fill";
     themeRow.title = @"主题配色";
-    themeRow.valueText = tm.scheme.displayName;
+    themeRow.valueText = tm.theme.displayName;
     themeRow.accessory = A2SettingsRowAccessoryDisclosure;
     themeRow.onTap = ^{
         A2ThemePickerViewController *vc = [[A2ThemePickerViewController alloc] init];
@@ -49,9 +49,9 @@
                                                     object:nil
                                                      queue:NSOperationQueue.mainQueue
                                                 usingBlock:^(NSNotification *note) {
-        A2ColorScheme *t = A2ThemeManager.shared.scheme;
+        A2ColorTheme *t = A2ThemeManager.shared.theme;
         themeRow.valueText = t.displayName;
-        swatch.backgroundColor = t.primary;
+        swatch.backgroundColor = A2ThemeManager.shared.scheme.primary;
     }];
     swatch.backgroundColor = tm.scheme.primary;
 
