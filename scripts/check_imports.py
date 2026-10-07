@@ -188,6 +188,41 @@ def check_property_readonly():
     return issues
 
 
+
+
+def check_color_scheme_alignment():
+    """
+    检查 A2ColorScheme 的头文件与实现是否字段对齐。
+    """
+    import os, re
+    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    issues = []
+
+    h_path = os.path.join(ROOT, "Air2/UI/Theme/A2ColorScheme.h")
+    m_path = os.path.join(ROOT, "Air2/UI/Theme/A2ColorScheme.m")
+    if not (os.path.exists(h_path) and os.path.exists(m_path)):
+        return issues
+
+    h = open(h_path).read()
+    m = open(m_path).read()
+
+    declared = set(re.findall(r'UIColor \*(c[A-Z]\w+);', h))
+    resolved = set(re.findall(r'A2RESOLVE\(\w+,\s*(c[A-Z]\w+)\)', m))
+
+    for name in sorted(declared - resolved):
+        issues.append(f"A2ColorScheme.h 声明了 {name} 但 .m 里没有对应的 A2RESOLVE")
+    for name in sorted(resolved - declared):
+        issues.append(f"A2ColorScheme.m 解析了 {name} 但 .h 里没有声明")
+
+    # 原始 slot 与解析字段数量应一致
+    slots = set(re.findall(r'A2ColorSlot \*(\w+);', h))
+    if slots and declared and len(slots) != len(declared):
+        issues.append(
+            f"原始色槽 {len(slots)} 个 vs 解析字段 {len(declared)} 个，数量不匹配")
+
+    return issues
+
+
 def main():
     problems = []
     total_imports = 0
@@ -252,6 +287,19 @@ def main():
         return 1
 
     print("✓ 属性修饰符一致")
+
+    # ---------- 色板字段对齐 ----------
+    # A2ColorScheme 头文件声明的 cXxx 字段，必须在 .m 里都有对应的
+    # A2RESOLVE 解析。缺一个就会在运行期取到 nil（界面变透明/黑块），
+    # 而且编译器不报错。
+    scheme_issues = check_color_scheme_alignment()
+    if scheme_issues:
+        print(f"\n发现 {len(scheme_issues)} 处色板字段未对齐：")
+        for msg in scheme_issues:
+            print(f"  {msg}")
+        return 1
+
+    print("✓ 色板字段对齐")
     return 0
     return 0
 

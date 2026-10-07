@@ -72,7 +72,9 @@ uint32_t A2RGBValue(UIColor *c) {
 @property (nonatomic, strong) UIColor *cPrimaryContainer;
 @property (nonatomic, strong) UIColor *cOnPrimaryContainer;
 @property (nonatomic, strong) UIColor *cSecondary;
+@property (nonatomic, strong) UIColor *cOnSecondary;
 @property (nonatomic, strong) UIColor *cSecondaryContainer;
+@property (nonatomic, strong) UIColor *cOnSecondaryContainer;
 @property (nonatomic, strong) UIColor *cTertiary;
 @property (nonatomic, strong) UIColor *cTertiaryContainer;
 @property (nonatomic, strong) UIColor *cSurface;
@@ -89,6 +91,7 @@ uint32_t A2RGBValue(UIColor *c) {
 @property (nonatomic, strong) UIColor *cError;
 @property (nonatomic, strong) UIColor *cOnError;
 @property (nonatomic, strong) UIColor *cErrorContainer;
+@property (nonatomic, strong) UIColor *cOnErrorContainer;
 @property (nonatomic, strong) UIColor *cSuccess;
 @property (nonatomic, strong) UIColor *cWarning;
 @property (nonatomic, strong) UIColor *cInverseSurface;
@@ -112,7 +115,9 @@ uint32_t A2RGBValue(UIColor *c) {
     A2RESOLVE(primaryContainer, cPrimaryContainer);
     A2RESOLVE(onPrimaryContainer, cOnPrimaryContainer);
     A2RESOLVE(secondary, cSecondary);
+    A2RESOLVE(onSecondary, cOnSecondary);
     A2RESOLVE(secondaryContainer, cSecondaryContainer);
+    A2RESOLVE(onSecondaryContainer, cOnSecondaryContainer);
     A2RESOLVE(tertiary, cTertiary);
     A2RESOLVE(tertiaryContainer, cTertiaryContainer);
     A2RESOLVE(surface, cSurface);
@@ -129,6 +134,7 @@ uint32_t A2RGBValue(UIColor *c) {
     A2RESOLVE(error, cError);
     A2RESOLVE(onError, cOnError);
     A2RESOLVE(errorContainer, cErrorContainer);
+    A2RESOLVE(onErrorContainer, cOnErrorContainer);
     A2RESOLVE(success, cSuccess);
     A2RESOLVE(warning, cWarning);
     A2RESOLVE(inverseSurface, cInverseSurface);

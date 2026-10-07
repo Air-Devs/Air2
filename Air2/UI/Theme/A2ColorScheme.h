@@ -63,8 +63,8 @@ uint32_t A2RGBValue(UIColor *c);
 #pragma mark 次要色
 @property (nonatomic, strong) A2ColorSlot *secondary;
 @property (nonatomic, strong) A2ColorSlot *onSecondary;
-@property (nonatomic, strong) A2ColorSlot *secondaryContainer;
 @property (nonatomic, strong) A2ColorSlot *onSecondaryContainer;
+@property (nonatomic, strong) A2ColorSlot *secondaryContainer;
 
 #pragma mark 第三色
 @property (nonatomic, strong) A2ColorSlot *tertiary;
@@ -111,6 +111,8 @@ uint32_t A2RGBValue(UIColor *c);
 @property (nonatomic, strong, readonly) UIColor *cOnPrimaryContainer;
 @property (nonatomic, strong, readonly) UIColor *cSecondary;
 @property (nonatomic, strong, readonly) UIColor *cSecondaryContainer;
+@property (nonatomic, strong, readonly) UIColor *cOnSecondaryContainer;
+@property (nonatomic, strong, readonly) UIColor *cOnSecondary;
 @property (nonatomic, strong, readonly) UIColor *cTertiary;
 @property (nonatomic, strong, readonly) UIColor *cTertiaryContainer;
 @property (nonatomic, strong, readonly) UIColor *cSurface;
@@ -127,6 +129,7 @@ uint32_t A2RGBValue(UIColor *c);
 @property (nonatomic, strong, readonly) UIColor *cError;
 @property (nonatomic, strong, readonly) UIColor *cOnError;
 @property (nonatomic, strong, readonly) UIColor *cErrorContainer;
+@property (nonatomic, strong, readonly) UIColor *cOnErrorContainer;
 @property (nonatomic, strong, readonly) UIColor *cSuccess;
 @property (nonatomic, strong, readonly) UIColor *cWarning;
 @property (nonatomic, strong, readonly) UIColor *cInverseSurface;

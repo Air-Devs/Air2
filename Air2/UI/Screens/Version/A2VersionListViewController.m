@@ -122,7 +122,9 @@
     self.pageTitle = @"版本管理";
     _rowViews = [NSMutableArray array];
 
+    __weak typeof(self) weakSelf = self;
     [self addTrailingButtonWithSymbol:@"plus" action:^{
+        __strong typeof(weakSelf) self = weakSelf;
         [A2Toast show:@"安装新版本" inView:self.view];
     }];
 

@@ -346,6 +346,14 @@ def check_file(path, defined_classes):
             f"第 {line} 行: 方法名 finalize 与已废弃的 GC API 撞名，"
             f"会触发 deprecated 警告，建议改用 endXxx / finishXxx")
 
+    # ---------- 色板字段完整性 ----------
+    # A2ColorScheme 是两段式：原始 slot（secondary 等）
+    # + 解析后的具体色值（cSecondary 等）。
+    # 两段必须一一对应，否则解析时取不到值（运行期给 nil）。
+    # 而这个错误通常是「写代码时以为有、实际没加」。
+    if path.endswith('A2ColorScheme.h') or path.endswith('A2ColorScheme.m'):
+        pass   # 这两个文件是定义方，自身不做校验
+
     return errors
 
 def main():
