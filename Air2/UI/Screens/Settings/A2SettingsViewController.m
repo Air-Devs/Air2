@@ -2,8 +2,11 @@
 //  A2SettingsViewController.m
 //  Air2
 //
-//  设置主页 —— 分组列表。各分组的具体项目较多，
-//  按主题/游戏/渲染/存储/关于拆到分类文件实现。
+//  设置页。
+//
+//  目前只有外观一组 —— 因为它背后的东西是真做过的
+//  （主题色板、亮暗模式、自定义背景处理链）。
+//  其余设置项等对应功能实现后再加。
 //
 
 #import "A2SettingsViewController.h"
@@ -12,7 +15,6 @@
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
-#import "A2Toast.h"
 
 #import "A2SettingsSections.h"
 
@@ -22,33 +24,7 @@
     [super viewDidLoad];
     self.pageTitle = @"设置";
 
-    [self buildAppearanceSection];
-    [self buildGameSection];
-    [self buildRendererSection];
-    [self buildStorageSection];
-    [self buildAboutSection];
-}
-
-#pragma mark - 各分组组装
-
-- (void)buildAppearanceSection {
     [self addSection:[A2AppearanceSettings buildWithHost:self]];
-}
-
-- (void)buildGameSection {
-    [self addSection:[A2GameSettings buildWithHost:self]];
-}
-
-- (void)buildRendererSection {
-    [self addSection:[A2RendererSettings buildWithHost:self]];
-}
-
-- (void)buildStorageSection {
-    [self addSection:[A2StorageSettings buildWithHost:self]];
-}
-
-- (void)buildAboutSection {
-    [self addSection:[A2AboutSettings buildWithHost:self]];
 }
 
 @end

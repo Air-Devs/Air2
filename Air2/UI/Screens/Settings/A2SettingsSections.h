@@ -2,8 +2,15 @@
 //  A2SettingsSections.h
 //  Air2
 //
-//  设置页各分组的构建器。
-//  每个分组一个类方法，接收宿主控制器以便弹出子页面。
+//  设置页的分组构建器。
+//
+//  ⚠️ 只放「已经有实现」的设置项。
+//
+//  教训：之前我凭空编了 30 个设置项（渲染器、Java 运行时、内存分配、
+//  完整性检查…），全都没有对应实现 —— 图标、开关、滑块都渲染出来了，
+//  点下去什么都不会发生。这比没有设置页更糟：用户会以为功能存在。
+//
+//  新增设置项的前提是有真实实现。宁缺毋滥。
 //
 
 #import <UIKit/UIKit.h>
@@ -11,28 +18,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// 外观 —— 主题、亮暗、玻璃强度
+/// 外观 —— 主题、亮暗模式、自定义背景
 @interface A2AppearanceSettings : NSObject
-+ (A2SettingsSection *)buildWithHost:(UIViewController *)host;
-@end
-
-/// 游戏 —— 内存、Java、启动参数、隔离默认值
-@interface A2GameSettings : NSObject
-+ (A2SettingsSection *)buildWithHost:(UIViewController *)host;
-@end
-
-/// 渲染 —— 渲染器、Zink、分辨率、帧率
-@interface A2RendererSettings : NSObject
-+ (A2SettingsSection *)buildWithHost:(UIViewController *)host;
-@end
-
-/// 存储 —— 游戏目录、缓存、清理
-@interface A2StorageSettings : NSObject
-+ (A2SettingsSection *)buildWithHost:(UIViewController *)host;
-@end
-
-/// 关于 —— 版本、开源许可、日志
-@interface A2AboutSettings : NSObject
 + (A2SettingsSection *)buildWithHost:(UIViewController *)host;
 @end
 

@@ -37,6 +37,14 @@ UIKIT_EXTERN const CGFloat A2PanelOuterPadding;
 /// 页面内容左右安全边距（二级页面的通用边距）
 UIKIT_EXTERN const CGFloat A2PageMargin;
 
+/// 二级页面内容的最大宽度。
+///
+/// 横屏下必须限制：iPad 横屏有 1000pt+ 宽，如果卡片撑满，
+/// 一行文字会横跨半个屏幕，阅读时视线要来回扫，非常累。
+/// 680pt 接近纸质文档的舒适行宽。
+/// 窄屏（iPhone 横屏约 850pt）减去边距后小于该值，不生效。
+UIKIT_EXTERN const CGFloat A2ContentMaxWidth;
+
 #pragma mark - 圆角（MD3 Shape Scale）
 
 UIKIT_EXTERN const CGFloat A2RadiusXS;    // 4   extraSmall

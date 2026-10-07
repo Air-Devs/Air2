@@ -243,6 +243,13 @@
         UILayoutGuide *content = _scrollViewInternal.contentLayoutGuide;
         UILayoutGuide *frame = _scrollViewInternal.frameLayoutGuide;
 
+        // 横屏下内容限宽并居中 —— 见 A2ContentMaxWidth 的说明。
+        // 用 ≤ 约束 + 居中：窄屏时内容占满可用宽度，宽屏时限制到 680pt。
+        NSLayoutConstraint *maxWidth =
+            [_contentStackInternal.widthAnchor constraintLessThanOrEqualToConstant:A2ContentMaxWidth];
+        // 优先级降到 999，避免和「撑满」约束冲突时报 Unsatisfiable
+        maxWidth.priority = 999;
+
         [constraints addObjectsFromArray:@[
             [_scrollViewInternal.topAnchor constraintEqualToAnchor:contentBelow.bottomAnchor],
             [_scrollViewInternal.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
@@ -254,14 +261,23 @@
                                                             constant:A2SpaceS],
             [_contentStackInternal.bottomAnchor constraintEqualToAnchor:content.bottomAnchor
                                                                constant:-A2SpaceXXL],
-            [_contentStackInternal.leadingAnchor constraintEqualToAnchor:content.leadingAnchor
-                                                                constant:A2PageMargin],
-            [_contentStackInternal.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
-                                                                  constant:-A2PageMargin],
-            // 这条是关键：宽度跟随可视区域，从而让内容只在垂直方向滚动
-            [_contentStackInternal.widthAnchor constraintEqualToAnchor:frame.widthAnchor
-                                                              constant:-A2PageMargin * 2],
+            [_contentStackInternal.leadingAnchor constraintGreaterThanOrEqualToAnchor:content.leadingAnchor
+                                                                            constant:A2PageMargin],
+            [_contentStackInternal.trailingAnchor constraintLessThanOrEqualToAnchor:content.trailingAnchor
+                                                                          constant:-A2PageMargin],
+            // 水平居中
+            [_contentStackInternal.centerXAnchor constraintEqualToAnchor:frame.centerXAnchor],
+            // 优先撑满可视宽度（窄屏时用），但不超过 A2ContentMaxWidth
+            maxWidth,
         ]];
+
+        // 撑满可用宽度（优先级低于 maxWidth，宽屏时会被压缩）
+        NSLayoutConstraint *fill =
+            [_contentStackInternal.widthAnchor constraintEqualToAnchor:frame.widthAnchor
+                                                             constant:-A2PageMargin * 2];
+        fill.priority = UILayoutPriorityDefaultHigh;
+        fill.active = YES;
+
     } else if (_plainContentViewInternal) {
         [constraints addObjectsFromArray:@[
             [_plainContentViewInternal.topAnchor constraintEqualToAnchor:contentBelow.bottomAnchor],

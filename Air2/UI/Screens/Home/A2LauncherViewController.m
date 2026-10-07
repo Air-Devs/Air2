@@ -591,7 +591,10 @@
 }
 
 - (void)openDownload {
-    [self pushScreen:[[A2DownloadViewController alloc] init] style:A2TransitionStyleSheet];
+    // 用标准的缩放淡入，不用从底部滑入。
+    // 底部滑入适合模态小面板（比如选择器、确认框），
+    // 而下载是个完整的页面，横屏下从底部推一整屏非常突兀。
+    [self pushScreen:[[A2DownloadViewController alloc] init] style:A2TransitionStyleScaleFade];
 }
 
 - (void)openMultiplayer { [A2Toast show:@"联机功能尚未接入" inView:self.view]; }

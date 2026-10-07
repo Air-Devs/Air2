@@ -22,6 +22,8 @@ const CGFloat A2PanelOuterPadding = 12;
 /// 因为页面内容没有卡片包裹，需要更多呼吸空间。
 const CGFloat A2PageMargin        = 16;
 
+const CGFloat A2ContentMaxWidth   = 680;
+
 #pragma mark - 圆角
 
 const CGFloat A2RadiusXS = 4;
