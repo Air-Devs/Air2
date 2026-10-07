@@ -41,7 +41,9 @@ static void A2Main(dispatch_block_t block) {
 
 - (void)cancel {
     _cancelled = YES;
-    [[A2DownloadEngine sharedClient] cancelOperation:nil];
+    // cancelOperation: 的参数标了 nonnull，传 nil 会警告。
+    // 这里改调 cancelAll —— 语义也更对：取消安装就该停掉所有下载。
+    [[A2DownloadEngine sharedClient] cancelAll];
     [_session invalidateAndCancel];
 }
 
@@ -321,7 +323,7 @@ static void A2Main(dispatch_block_t block) {
 
 - (void)installLoaderIfNeeded {
     if (!self.request.loaderType) {
-        [self finalize];
+        [self endInstallation];
         return;
     }
 
@@ -386,7 +388,7 @@ static void A2Main(dispatch_block_t block) {
             __strong typeof(weakSelf) self = weakSelf;
             if (self.cancelled) return;
             if (!success) { [self failWithError:error]; return; }
-            [self finalize];
+            [self endInstallation];
         }];
     }];
 }
@@ -411,7 +413,7 @@ static void A2Main(dispatch_block_t block) {
 
 #pragma mark - 收尾
 
-- (void)finalize {
+- (void)endInstallation {
     [self report:A2InstallStageFinalize progress:0 message:@"正在收尾…"];
 
     // 写入版本配置（含隔离的初始值：跟随全局）

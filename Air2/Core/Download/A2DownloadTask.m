@@ -71,17 +71,24 @@
     NSTimeInterval now = [NSDate date].timeIntervalSince1970;
     [_samples addObject:@{ @"t": @(now), @"b": @(delta) }];
 
-    while (_samples.count > 0 &&
-           now - _samples.firstObject[@"t"].doubleValue > 3.0) {
+    // 注意：NSDictionary 的下标返回 id，不能直接点 longLongValue。
+    // 要先取出来再拆箱。
+    while (_samples.count > 0) {
+        NSNumber *oldest = _samples.firstObject[@"t"];
+        if (now - oldest.doubleValue <= 3.0) break;
         [_samples removeObjectAtIndex:0];
     }
 
     long long totalInWindow = 0;
-    for (NSDictionary *s in _samples) totalInWindow += s[@"b"].longLongValue;
+    for (NSDictionary<NSString *, NSNumber *> *s in _samples) {
+        NSNumber *bytes = s[@"b"];
+        totalInWindow += bytes.longLongValue;
+    }
 
     NSTimeInterval window = 3.0;
     if (_samples.count > 0) {
-        window = MAX(0.5, now - _samples.firstObject[@"t"].doubleValue);
+        NSNumber *oldest = _samples.firstObject[@"t"];
+        window = MAX(0.5, now - oldest.doubleValue);
     }
     _speed = (double)totalInWindow / window;
 

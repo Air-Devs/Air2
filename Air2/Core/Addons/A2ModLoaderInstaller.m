@@ -385,9 +385,15 @@ static void A2Main(dispatch_block_t b) {
 
         if (!url.length) {
             // 按 repo 提示或默认 maven 拼
+            // lib[@"url"] 在有些库上是字符串，有些是数组
             NSString *base = kMojangLibraries;
-            NSArray *repos = lib[@"url"];
-            if ([repos isKindOfClass:NSString.class]) base = repos;
+            id repoField = lib[@"url"];
+            if ([repoField isKindOfClass:NSString.class]) {
+                base = repoField;
+            } else if ([repoField isKindOfClass:NSArray.class] && [repoField count] > 0) {
+                id first = [repoField firstObject];
+                if ([first isKindOfClass:NSString.class]) base = first;
+            }
             url = [NSString stringWithFormat:@"%@/%@", base, relPath];
         }
 
@@ -466,7 +472,6 @@ static void A2Main(dispatch_block_t b) {
         }
 
         NSArray<NSString *> *pair = items[index];
-        NSUInteger current = index;
         A2DownloadRequest *req = [A2DownloadRequest new];
         req.candidateURLs = @[[NSURL URLWithString:pair[0]]];
         req.destinationPath = pair[1];

@@ -271,6 +271,28 @@ def check_file(path, defined_classes):
                         f"第 {line} 行: 属性 {name} 在同一文件里已声明为 readonly，"
                         f"类扩展里重声明为可写会报 illegal redeclaration")
 
+    # ---------- 字典取值类型检查 ----------
+    # NSDictionary 的下标返回 id，直接点属性会报
+    # "property 'xxx' not found on object of type 'id'"。
+    # 常见于 dict[@"k"].longLongValue 这种写法。
+    for m in re.finditer(r'\[\s*@"[^"]+"\s*\]\s*\.\s*(\w+)', src):
+        prop = m.group(1)
+        # 只有这些是 NSNumber 上的属性，属于典型误用
+        if prop in ('longLongValue', 'integerValue', 'doubleValue', 'boolValue',
+                    'floatValue', 'intValue', 'unsignedLongLongValue'):
+            line = src[:m.start()].count('\n') + 1
+            errors.append(
+                f"第 {line} 行: 字典下标返回 id，不能直接点 .{prop}。"
+                f"应先取出再拆箱：NSNumber *n = dict[@\"k\"]; n.{prop}")
+
+    # ---------- finalize 方法名检查 ----------
+    # finalize 与已废弃的 ObjC GC API 撞名，会触发 deprecated 警告
+    if re.search(r'^\s*-\s*\(void\)\s*finalize\b', src, re.M):
+        line = src[:re.search(r'^\s*-\s*\(void\)\s*finalize\b', src, re.M).start()].count('\n') + 1
+        errors.append(
+            f"第 {line} 行: 方法名 finalize 与已废弃的 GC API 撞名，"
+            f"会触发 deprecated 警告，建议改用 endXxx / finishXxx")
+
     return errors
 
 def main():
