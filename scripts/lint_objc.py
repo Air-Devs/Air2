@@ -118,24 +118,25 @@ def check_file(path, defined_classes):
                 f"第 {line} 行: .scheme 是 A2ColorScheme，没有 {prop} 属性"
                 f"（该属性在 A2ColorTheme 上，应改用 .theme.{prop}）")
 
+    # ---------- 约束数组嵌套检查 ----------
+    # 返回 NSArray<NSLayoutConstraint*> 的方法，如果被直接写进
+    # @[ ... ] 传给 activateConstraints:，就变成「数组套数组」，
+    # 运行时报 -[__NSArrayI isActive]: unrecognized selector 并崩溃。
+    # 编译器不会报（id 类型擦除），只在运行时炸 —— 真机上踩过。
+    if not path.endswith('.h'):
+        array_returning = set(re.findall(
+            r'-\s*\(NSArray<NSLayoutConstraint \*> \*\)(\w+)', src))
+        for name in array_returning:
+            for m in re.finditer(r'activateConstraints:@\[(.*?)\]\];', src, re.S):
+                block = m.group(1)
+                if re.search(rf'\[self {name}\b', block):
+                    line = src[:m.start()].count('\n') + 1
+                    errors.append(
+                        f"第 {line} 行: [self {name}] 返回约束数组，"
+                        f"不能直接放进 activateConstraints:@[...]，"
+                        f"应改用 addObjectsFromArray 展开")
+
     return errors
-
-    # ---------- @selector 里引用的方法是否存在 ----------
-    selectors = re.findall(r'@selector\((\w+)\)', src)
-    for sel in selectors:
-        # 方法在该文件里定义，或在别处通过类别定义 —— 只做弱提示
-        if f"- ({sel}" in src or f"({sel})" in src or f"{sel}:" in src:
-            continue
-        # 常见系统方法白名单
-        if sel in ("handleTap", "toggleChanged", "sourceChanged", "sortChanged",
-                   "launchGame", "cancelInstall", "doneTapped", "refreshAvatarColor",
-                   "openAccount", "openSettings", "openVersions", "openDownload",
-                   "openMultiplayer", "openFiles", "openVersionSettings",
-                   "openGameFolder", "handleBack", "switchAccount"):
-            continue
-
-    return errors
-
 
 def main():
     defined_classes = collect_classes()

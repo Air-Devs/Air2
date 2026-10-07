@@ -79,15 +79,21 @@
     _contentViewInternal.translatesAutoresizingMaskIntoConstraints = NO;
     [self addSubview:_contentViewInternal];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [self constrainEdges:_blurView],
-        [self constrainEdges:_fillView],
-        [self constrainEdges:_borderView],
+    // 注意：constrainEdges: 返回的是数组，必须用 addObjectsFromArray
+    // 展开。直接塞进 @[...] 会变成「数组套数组」，
+    // Auto Layout 遍历时对 NSArray 发 isActive 就崩了
+    //（真机崩溃日志：-[__NSArrayI isActive]: unrecognized selector）。
+    NSMutableArray<NSLayoutConstraint *> *constraints = [NSMutableArray array];
+    [constraints addObjectsFromArray:[self constrainEdges:_blurView]];
+    [constraints addObjectsFromArray:[self constrainEdges:_fillView]];
+    [constraints addObjectsFromArray:[self constrainEdges:_borderView]];
+    [constraints addObjectsFromArray:@[
         [_contentViewInternal.topAnchor constraintEqualToAnchor:self.topAnchor constant:_contentInsets.top],
         [_contentViewInternal.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-_contentInsets.bottom],
         [_contentViewInternal.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:_contentInsets.left],
         [_contentViewInternal.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-_contentInsets.right],
     ]];
+    [NSLayoutConstraint activateConstraints:constraints];
 
     [self applyTheme];
 
