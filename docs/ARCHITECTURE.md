@@ -8,7 +8,8 @@
 
 | 目录 | 职责 | 允许依赖 |
 |---|---|---|
-| `Air2/` | iOS 应用主体（Swift） | Natives、Libraries |
+| `Air2/` | iOS 应用主体（ObjC） | Natives、Libraries |
+| `Air2.xcodeproj/` | Xcode 工程定义（**由脚本生成，不手工编辑**） | — |
 | `Natives/` | Objective-C / C 原生层 | Libraries |
 | `JavaApp/` | Java 侧启动核心 | Libraries/Jars |
 | `Libraries/` | 预编译二进制（不放源码） | — |

@@ -30,7 +30,7 @@ collect() {
 # 1. 顶层目录白名单
 # ------------------------------------------------------------
 echo "==> 1. 顶层目录检查"
-ALLOWED_TOP="Air2 Natives JavaApp Libraries Assets cmake scripts docs tests .github"
+ALLOWED_TOP="Air2 Air2.xcodeproj Natives JavaApp Libraries Assets cmake scripts docs tests .github"
 bad_top=0
 for path in * .github; do
     [ -e "$path" ] || continue
