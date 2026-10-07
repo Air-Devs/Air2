@@ -82,6 +82,8 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 #### `Player/`
 游戏会话运行时宿主。
 - 启动流程编排（准备 → 解压 → 拉 JVM → present）
+- `A2LaunchChain.h/.m` —— 启动链【顺序编排】：① 发 JIT 脚本 → ② 探测 JIT 可用 → ③ 建 JVM。
+  只定顺序与短路，步骤实现由注入的 `A2LaunchChainSteps` 提供（真机实现经 Bridge 落到 Natives）。
 - 会话生命周期与异常兜底
 - 游戏内菜单与悬浮层
 
@@ -102,6 +104,13 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 | `Support/` | JIT 环境、签名处理、崩溃探针、诊断日志 |
 
 **约束**：原生层不感知"版本""账号"等业务概念，只接收已解析好的参数。
+
+### 已落地实现
+
+| 路径 | 职责 | 来源 |
+|---|---|---|
+| `Natives/Support/A2JITEnvironment.h/.m` | JIT 环境与判据：可用性、`brk #0x69` 区域取证、真写入+真执行自证、诊断日志（命名 `a2_jit_*` / `A2JIT*`）。★无 UI、无业务★ | 自研启动链（分支 `feat/runtime-native` 的 `Natives/utils.[hm]`，见 `docs/DECISIONS.md` ADR-006） |
+| `Natives/Context/A2JVMContext.h/.m` | JVM 创建 / 销毁：`dlopen(libjvm)` + `JNI_CreateJavaVM`（★同进程内★，不经 libjli / 不 fork-exec） | 自研启动链（`Natives/runtime/jni_boot.m`） |
 
 ---
 
