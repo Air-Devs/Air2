@@ -2,17 +2,27 @@
 //  A2GlassCard.m
 //  Air2
 //
+//  MD3 卡片实现。
+//  设计取舍：不用 UIVisualEffectView 做玻璃。
+//
+//  原因：MD3 的 surfaceContainer 体系本身就是「分层表面」，
+//  用半透明色 + 精确的层级色值就能表达深度，比强制加模糊更可控：
+//    · 卡片数量多时模糊会显著掉帧（尤其中低端设备）
+//    · 用户自定义背景图上叠模糊，色彩完全不可预测
+//  所以这里用「MD3 语义色 + 可选的轻微模糊」，
+//  模糊只在用户显式开启时才启用（走 A2ThemeManager.backgroundBlur 的联动）。
+//
 
 #import "A2GlassCard.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 
 @interface A2GlassCard ()
-@property (nonatomic, strong, nullable) UIVisualEffectView *blurView;
-@property (nonatomic, strong, nullable) UIView *solidFillView;
-@property (nonatomic, strong) UIView *borderLayer;
+@property (nonatomic, strong) UIVisualEffectView *blurView;
+@property (nonatomic, strong) UIView *fillView;
+@property (nonatomic, strong) UIView *borderView;
 @property (nonatomic, strong) UIView *contentViewInternal;
-@property (nonatomic, strong, nullable) UISelectionFeedbackGenerator *feedback;
+@property (nonatomic, strong) UIImpactFeedbackGenerator *impact;
 @end
 
 @implementation A2GlassCard
@@ -34,59 +44,45 @@
 - (void)commonInit {
     _cornerRadius = A2RadiusL;
     _contentInsets = UIEdgeInsetsMake(A2SpaceL, A2SpaceL, A2SpaceL, A2SpaceL);
-    _tappable = NO;
+    _elevation = A2CardElevationLow;
+    _blurAmount = 0;
 
     self.clipsToBounds = NO;
     self.backgroundColor = UIColor.clearColor;
     self.layer.cornerRadius = _cornerRadius;
     self.layer.cornerCurve = kCACornerCurveContinuous;
 
-    // ---- 玻璃层 ----
+    // 模糊层在最底（默认关闭）
     _blurView = [[UIVisualEffectView alloc] initWithEffect:nil];
     _blurView.translatesAutoresizingMaskIntoConstraints = NO;
     _blurView.clipsToBounds = YES;
     _blurView.layer.cornerRadius = _cornerRadius;
     _blurView.layer.cornerCurve = kCACornerCurveContinuous;
+    _blurView.hidden = YES;
     [self addSubview:_blurView];
 
-    // ---- 实色填充层（玻璃关闭时使用，也是玻璃打开时的色调叠加）----
-    _solidFillView = [[UIView alloc] initWithFrame:CGRectZero];
-    _solidFillView.translatesAutoresizingMaskIntoConstraints = NO;
-    _solidFillView.userInteractionEnabled = NO;
-    [self addSubview:_solidFillView];
+    _fillView = [[UIView alloc] initWithFrame:CGRectZero];
+    _fillView.translatesAutoresizingMaskIntoConstraints = NO;
+    _fillView.userInteractionEnabled = NO;
+    [self addSubview:_fillView];
 
-    // ---- 高光描边：模拟玻璃的边缘折射，没有它卡片会显得"糊在背景上" ----
-    _borderLayer = [[UIView alloc] initWithFrame:CGRectZero];
-    _borderLayer.translatesAutoresizingMaskIntoConstraints = NO;
-    _borderLayer.userInteractionEnabled = NO;
-    _borderLayer.layer.cornerRadius = _cornerRadius;
-    _borderLayer.layer.cornerCurve = kCACornerCurveContinuous;
-    _borderLayer.layer.borderWidth = 0.5;
-    _borderLayer.backgroundColor = UIColor.clearColor;
-    [self addSubview:_borderLayer];
+    _borderView = [[UIView alloc] initWithFrame:CGRectZero];
+    _borderView.translatesAutoresizingMaskIntoConstraints = NO;
+    _borderView.userInteractionEnabled = NO;
+    _borderView.layer.cornerRadius = _cornerRadius;
+    _borderView.layer.cornerCurve = kCACornerCurveContinuous;
+    _borderView.layer.borderWidth = 0.5;
+    _borderView.backgroundColor = UIColor.clearColor;
+    [self addSubview:_borderView];
 
-    // ---- 内容 ----
     _contentViewInternal = [[UIView alloc] initWithFrame:CGRectZero];
     _contentViewInternal.translatesAutoresizingMaskIntoConstraints = NO;
-    _contentViewInternal.backgroundColor = UIColor.clearColor;
     [self addSubview:_contentViewInternal];
 
     [NSLayoutConstraint activateConstraints:@[
-        [_blurView.topAnchor constraintEqualToAnchor:self.topAnchor],
-        [_blurView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
-        [_blurView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-        [_blurView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-
-        [_solidFillView.topAnchor constraintEqualToAnchor:self.topAnchor],
-        [_solidFillView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
-        [_solidFillView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-        [_solidFillView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-
-        [_borderLayer.topAnchor constraintEqualToAnchor:self.topAnchor],
-        [_borderLayer.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
-        [_borderLayer.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-        [_borderLayer.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-
+        [self constrainEdges:_blurView],
+        [self constrainEdges:_fillView],
+        [self constrainEdges:_borderView],
         [_contentViewInternal.topAnchor constraintEqualToAnchor:self.topAnchor constant:_contentInsets.top],
         [_contentViewInternal.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-_contentInsets.bottom],
         [_contentViewInternal.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:_contentInsets.left],
@@ -99,6 +95,16 @@
                                           selector:@selector(handleThemeChanged:)
                                               name:A2ThemeDidChangeNotification
                                             object:nil];
+}
+
+/// 让子视图四边贴合自身
+- (NSArray<NSLayoutConstraint *> *)constrainEdges:(UIView *)v {
+    return @[
+        [v.topAnchor constraintEqualToAnchor:self.topAnchor],
+        [v.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+        [v.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+        [v.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+    ];
 }
 
 - (void)dealloc {
@@ -115,37 +121,45 @@
     _cornerRadius = cornerRadius;
     self.layer.cornerRadius = cornerRadius;
     _blurView.layer.cornerRadius = cornerRadius;
-    _borderLayer.layer.cornerRadius = cornerRadius;
+    _borderView.layer.cornerRadius = cornerRadius;
 }
 
-- (void)setContentInsets:(UIEdgeInsets)contentInsets {
-    _contentInsets = contentInsets;
-    // 重新装上约束
+- (void)setElevation:(A2CardElevation)elevation {
+    _elevation = elevation;
+    [self applyTheme];
+}
+
+- (void)setContentInsets:(UIEdgeInsets)insets {
+    _contentInsets = insets;
     for (NSLayoutConstraint *c in self.constraints) {
-        if (c.firstItem == _contentViewInternal || c.secondItem == _contentViewInternal) {
-            c.active = NO;
-        }
+        if (c.firstItem != _contentViewInternal && c.secondItem != _contentViewInternal) continue;
+        c.active = NO;
     }
     [NSLayoutConstraint activateConstraints:@[
-        [_contentViewInternal.topAnchor constraintEqualToAnchor:self.topAnchor constant:contentInsets.top],
-        [_contentViewInternal.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-contentInsets.bottom],
-        [_contentViewInternal.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:contentInsets.left],
-        [_contentViewInternal.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-contentInsets.right],
+        [_contentViewInternal.topAnchor constraintEqualToAnchor:self.topAnchor constant:insets.top],
+        [_contentViewInternal.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-insets.bottom],
+        [_contentViewInternal.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:insets.left],
+        [_contentViewInternal.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-insets.right],
     ]];
+}
+
+- (void)setBlurAmount:(CGFloat)blurAmount {
+    _blurAmount = MAX(0, MIN(1, blurAmount));
+    [self applyTheme];
 }
 
 - (void)setTappable:(BOOL)tappable {
     _tappable = tappable;
-    if (tappable) {
-        if (!_feedback) _feedback = [UISelectionFeedbackGenerator new];
-        UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap)];
+    if (tappable && !_impact) {
+        _impact = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
+        UITapGestureRecognizer *tap =
+            [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap)];
         [self addGestureRecognizer:tap];
         self.userInteractionEnabled = YES;
     }
 }
 
 - (void)handleTap {
-    [_feedback selectionChanged];
     if (self.onTap) self.onTap();
 }
 
@@ -162,6 +176,7 @@
 
 - (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     if (!_tappable) { [super touchesEnded:touches withEvent:event]; return; }
+    [_impact impactOccurred];
     UIViewPropertyAnimator *a = A2SpringAnimator(A2AnimDurationFast);
     [a addAnimations:^{
         self.transform = CGAffineTransformIdentity;
@@ -182,43 +197,67 @@
 
 - (void)applyTheme {
     A2ThemeManager *tm = A2ThemeManager.shared;
-    NSInteger intensity = tm.glassIntensity;
+    A2ColorScheme *s = tm.scheme;
+    BOOL hasCustomBg = (tm.backgroundImage != nil);
 
-    if (intensity > 0) {
-        // 强度映射到系统模糊样式：低强度用薄材质，高强度用厚材质
-        UIBlurEffectStyle style;
-        if (intensity < 35) {
-            style = UIBlurEffectStyleSystemUltraThinMaterial;
-        } else if (intensity < 70) {
-            style = UIBlurEffectStyleSystemThinMaterial;
-        } else {
-            style = UIBlurEffectStyleSystemMaterial;
-        }
-        _blurView.effect = [UIBlurEffect effectWithStyle:style];
-        _blurView.hidden = NO;
-        // 玻璃之上再叠一层主题色，让卡片带上品牌色调
-        _solidFillView.backgroundColor = [tm cardFillColor];
-    } else {
-        // 关闭玻璃：退化为实色卡片
-        _blurView.effect = nil;
-        _blurView.hidden = YES;
-        _solidFillView.backgroundColor = tm.isDark ? tm.surfaceElevatedColor : tm.surfaceElevatedColor;
+    // —— 填充色按层级选 ——
+    UIColor *fill;
+    switch (_elevation) {
+        case A2CardElevationSurface:       fill = s.surfaceContainerLowest; break;
+        case A2CardElevationHigh:          fill = s.surfaceContainerHigh;   break;
+        case A2CardElevationHighest:       fill = s.surfaceContainerHighest;break;
+        case A2CardElevationLow:
+        default:                           fill = s.surfaceContainer;      break;
     }
 
-    _borderLayer.layer.borderColor = (tm.isDark
-        ? [UIColor colorWithWhite:1.0 alpha:0.14]
-        : [UIColor colorWithWhite:0.0 alpha:0.06]).CGColor;
+    // 有自定义背景时让卡片半透明，让背景色透出来 —— 这是个性化的关键
+    if (hasCustomBg) {
+        CGFloat alpha = tm.isDark ? 0.68 : 0.76;
+        // 用户设了模糊，卡片内部也跟一点，整体更统一
+        if (tm.backgroundBlur > 60) alpha -= 0.08;
+        fill = [fill colorWithAlphaComponent:alpha];
+    }
 
-    _contentViewInternal.backgroundColor = UIColor.clearColor;
+    _fillView.backgroundColor = fill;
 
-    // 阴影：玻璃卡片在暗色下用弱阴影，亮色下用柔和投影
+    // —— 模糊（仅在用户开启背景模糊且存在背景图时启用）——
+    BOOL wantBlur = hasCustomBg && tm.backgroundBlur > 0 && _blurAmount > 0;
+    if (wantBlur) {
+        UIBlurEffectStyle style = tm.backgroundBlur < 40 ? UIBlurEffectStyleSystemUltraThinMaterial
+                               : tm.backgroundBlur < 75 ? UIBlurEffectStyleSystemThinMaterial
+                                                        : UIBlurEffectStyleSystemMaterial;
+        _blurView.effect = [UIBlurEffect effectWithStyle:style];
+        _blurView.hidden = NO;
+    } else {
+        _blurView.effect = nil;
+        _blurView.hidden = YES;
+    }
+
+    // —— 描边：MD3 用 outlineVariant 做低对比描边 ——
+    _borderView.layer.borderColor = [s.outlineVariant colorWithAlphaComponent:
+                                     tm.isDark ? 0.6 : 0.9].CGColor;
+
+    // —— 阴影：MD3 的 elevation 用阴影表达，但暗色下阴影几乎不可见，
+    //    所以暗色模式减小阴影、改用描边区分层级 ——
     self.layer.shadowColor = UIColor.blackColor.CGColor;
-    self.layer.shadowOpacity = tm.isDark ? 0.28f : 0.07f;
-    self.layer.shadowRadius = tm.isDark ? 18 : 12;
-    self.layer.shadowOffset = CGSizeMake(0, tm.isDark ? 8 : 4);
+    if (tm.isDark) {
+        self.layer.shadowOpacity = 0.0f;
+    } else {
+        CGFloat opacity;
+        CGFloat radius;
+        CGFloat offsetY;
+        switch (_elevation) {
+            case A2CardElevationHighest: opacity = 0.13f; radius = 20; offsetY = 6; break;
+            case A2CardElevationHigh:    opacity = 0.10f; radius = 16; offsetY = 5; break;
+            case A2CardElevationSurface: opacity = 0.03f; radius = 6;  offsetY = 2; break;
+            case A2CardElevationLow:
+            default:                     opacity = 0.06f; radius = 10; offsetY = 3; break;
+        }
+        self.layer.shadowOpacity = hasCustomBg ? opacity * 1.4f : opacity;
+        self.layer.shadowRadius = radius;
+        self.layer.shadowOffset = CGSizeMake(0, offsetY);
+    }
 }
-
-#pragma mark - 布局
 
 - (void)layoutSubviews {
     [super layoutSubviews];

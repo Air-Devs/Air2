@@ -2,7 +2,13 @@
 //  A2ThemeManager.h
 //  Air2
 //
-//  主题管理 —— 当前主题、亮暗模式、玻璃强度，并广播变更
+//  主题与外观的全局管理。
+//
+//  职责边界：
+//    · 持有当前主题与外观模式
+//    · 广播变更（视图订阅后重新取色）
+//    · 管理自定义背景（图片/模糊/遮罩强度）
+//  不负责：具体视图怎么画 —— 那是视图自己的事。
 //
 
 #import <UIKit/UIKit.h>
@@ -10,54 +16,67 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// 外观模式
 typedef NS_ENUM(NSInteger, A2AppearanceMode) {
     A2AppearanceModeSystem = 0,  ///< 跟随系统
     A2AppearanceModeLight,       ///< 强制亮色
     A2AppearanceModeDark,        ///< 强制暗色
 };
 
-/// 主题变更通知。object 为 A2ThemeManager，userInfo 含 @"theme"。
+/// 主题变更通知。userInfo: @"theme" → A2ColorTheme
 extern NSNotificationName const A2ThemeDidChangeNotification;
+/// 背景变更通知（图片/模糊/遮罩）
+extern NSNotificationName const A2BackgroundDidChangeNotification;
 
 @interface A2ThemeManager : NSObject
 
-/// 当前生效的主题（永不为 nil）
-@property (nonatomic, strong, readonly) A2ColorTheme *currentTheme;
-
-/// 用户选择的主题种类（Dynamic 表示跟随壁纸）
-@property (nonatomic, assign) A2ThemeKind selectedKind;
-
-/// 外观模式
-@property (nonatomic, assign) A2AppearanceMode appearanceMode;
-
-/// 当前是否暗色（综合系统与用户选择）
-@property (nonatomic, assign, readonly, getter=isDark) BOOL dark;
-
-/// 玻璃模糊强度 0~100。值越大越模糊，0 = 关闭玻璃
-@property (nonatomic, assign) NSInteger glassIntensity;
-
-/// 用户壁纸。设置后若 selectedKind 为 Dynamic 会立即重新取色。
-@property (nonatomic, strong, nullable) UIImage *wallpaper;
-
-/// 单例
 + (instancetype)shared;
 
-/// 语义化取色：根据当前亮暗返回对应色
-- (UIColor *)backgroundColor;
-- (UIColor *)surfaceColor;
-- (UIColor *)surfaceElevatedColor;
-/// 卡片填充色（含玻璃适配后的半透明）
-- (UIColor *)cardFillColor;
+#pragma mark - 主题
 
-/// 为整个 window 套用外观
+/// 当前主题（永不为 nil）
+@property (nonatomic, strong, readonly) A2ColorTheme *theme;
+
+/// MD3 语义色板的快捷访问
+@property (nonatomic, strong, readonly) A2ColorScheme *scheme;
+
+@property (nonatomic, assign) A2ThemeKind selectedKind;
+
+#pragma mark - 外观
+
+@property (nonatomic, assign) A2AppearanceMode appearanceMode;
+
+/// 当前是否为暗色（综合系统与用户设置）
+@property (nonatomic, assign, readonly, getter=isDark) BOOL dark;
+
+/// 应用到窗口
 - (void)applyAppearanceToWindow:(UIWindow *)window;
 
-/// 持久化到 UserDefaults
-- (void)persist;
+#pragma mark - 自定义背景
 
-/// 手动触发一次通知（主题对象内部改完后调用）
-- (void)notifyChanged;
+/// 用户设置的背景图。nil 表示使用主题渐变。
+@property (nonatomic, strong, nullable) UIImage *backgroundImage;
+
+/// 背景模糊强度 0~100
+@property (nonatomic, assign) NSInteger backgroundBlur;
+
+/// 背景图在暗色模式下的遮罩强度 0.0~1.0，默认 0.28
+@property (nonatomic, assign) CGFloat backgroundDarkOverlay;
+
+/// 操作栏一侧的渐隐遮罩宽度比例 0.0~1.0，默认 0.35
+/// 作用：用户可能选一张花哨的图，右侧卡片需要稳定的对比度才看得清
+@property (nonatomic, assign) CGFloat backgroundFadeRatio;
+
+/// 持久化背景图（存到沙盒，返回是否成功）
+- (BOOL)persistBackgroundImage:(UIImage *)image;
+/// 从沙盒读取已保存的背景图
+- (nullable UIImage *)loadPersistedBackground;
+/// 清除自定义背景
+- (void)clearBackgroundImage;
+
+#pragma mark - 广播
+
+- (void)notifyThemeChanged;
+- (void)notifyBackgroundChanged;
 
 @end
 

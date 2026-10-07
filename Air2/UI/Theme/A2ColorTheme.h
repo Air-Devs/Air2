@@ -2,68 +2,55 @@
 //  A2ColorTheme.h
 //  Air2
 //
-//  配色系统 —— 5 套手调色板 + 动态取色
-//  参考 ZL2 的 ColorTheme 思路，收敛为 iOS 上辨识度更高的 5 套
+//  主题 —— 一套配色方案 = 一组 MD3 语义色板。
+//
+//  色板本身是「动态颜色」（随系统亮暗自动切换），
+//  视图层拿 A2ColorTheme.scheme.primary 直接用即可，不需要判断模式。
 //
 
 #import <UIKit/UIKit.h>
+#import "A2ColorScheme.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// 主题标识
 typedef NS_ENUM(NSInteger, A2ThemeKind) {
     A2ThemeKindEmbermire = 0,   ///< 烈焰红棕（默认）
     A2ThemeKindGlacier,         ///< 冰川蓝
     A2ThemeKindVerdantDawn,     ///< 青野绿
     A2ThemeKindVelvetRose,      ///< 绛紫玫瑰
     A2ThemeKindUrbanAsh,        ///< 都市灰
-    A2ThemeKindDynamic,         ///< 从壁纸动态提取
+    A2ThemeKindDynamic,         ///< 从自定义背景图取色
     A2ThemeKindCount
 };
 
-/// 一套完整的调色板。字段语义对齐 Material3 的 ColorScheme 命名，
-/// 但收敛到实际会用到的那几档，避免出现"定义了没人用"的颜色。
 @interface A2ColorTheme : NSObject
 
 @property (nonatomic, assign, readonly) A2ThemeKind kind;
 @property (nonatomic, copy, readonly) NSString *displayName;
+@property (nonatomic, copy, readonly) NSString *themeDescription;
 
-// ---- 品牌色 ----
-@property (nonatomic, strong, readonly) UIColor *primary;        ///< 主色，按钮/强调
-@property (nonatomic, strong, readonly) UIColor *onPrimary;      ///< 主色上的文字
-@property (nonatomic, strong, readonly) UIColor *primaryContainer;  ///< 主色容器（浅填充）
+/// MD3 语义色板（动态颜色）
+@property (nonatomic, strong, readonly) A2ColorScheme *scheme;
 
-// ---- 强调色 ----
-@property (nonatomic, strong, readonly) UIColor *accent;         ///< 高亮、进度条、选中态
+/// 亮 / 暗模式下的具体主色值，用于色板预览
+@property (nonatomic, strong, readonly) UIColor *lightPrimary;
+@property (nonatomic, strong, readonly) UIColor *darkPrimary;
 
-// ---- 背景层 ----
-@property (nonatomic, strong, readonly) UIColor *background;     ///< 页面背景（亮模式）
-@property (nonatomic, strong, readonly) UIColor *backgroundDark; ///< 页面背景（暗模式）
-@property (nonatomic, strong, readonly) UIColor *surface;        ///< 卡片表面基准色
-@property (nonatomic, strong, readonly) UIColor *surfaceElevated;///< 悬浮层表面
+/// 无自定义背景图时的页面渐变底色
+@property (nonatomic, strong, readonly) NSArray<UIColor *> *backgroundGradient;
 
-// ---- 文字 ----
-@property (nonatomic, strong, readonly) UIColor *textPrimary;
-@property (nonatomic, strong, readonly) UIColor *textSecondary;
-@property (nonatomic, strong, readonly) UIColor *textTertiary;
-
-// ---- 语义 ----
-@property (nonatomic, strong, readonly) UIColor *danger;
-@property (nonatomic, strong, readonly) UIColor *success;
-
-/// 壁纸渐变用的三个色（用于主页背景）
-@property (nonatomic, strong, readonly) NSArray<UIColor *> *wallpaperGradient;
-
-/// 取出指定主题
 + (instancetype)themeForKind:(A2ThemeKind)kind;
-
-/// 从图片提取主色并生成一套动态主题
-/// @param image 用户壁纸
-/// @return 提取失败时返回 Embermire
++ (NSArray<A2ColorTheme *> *)allThemes;
 + (instancetype)themeFromImage:(UIImage *)image;
 
-/// 全部可选主题（不含 Dynamic）
-+ (NSArray<A2ColorTheme *> *)allThemes;
+/// 构造主题。override 块用于手调关键色，让成品不完全依赖算法。
++ (instancetype)themeWithSeed:(UIColor *)seed
+                         kind:(A2ThemeKind)kind
+                         name:(NSString *)name
+                         desc:(NSString *)desc
+                     gradient:(NSArray<UIColor *> *)gradient
+                lightOverride:(void (^ _Nullable)(A2ColorScheme *scheme))lightOverride
+                 darkOverride:(void (^ _Nullable)(A2ColorScheme *scheme))darkOverride;
 
 @end
 

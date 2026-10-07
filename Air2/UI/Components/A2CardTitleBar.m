@@ -57,7 +57,7 @@
         [_fillView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
         [_fillView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
 
-        [self.heightAnchor constraintGreaterThanOrEqualToConstant:A2CardTitleHeight],
+        [self.heightAnchor constraintGreaterThanOrEqualToConstant:44],
 
         [_textStack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:A2SpaceL],
         [_textStack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
@@ -120,15 +120,15 @@
 
 - (void)applyTheme {
     A2ThemeManager *tm = A2ThemeManager.shared;
-    A2ColorTheme *t = tm.currentTheme;
+    A2ColorScheme *t = tm.scheme;
 
     // 半透明表面：比卡片本体稍亮一点，形成分层
     _fillView.backgroundColor = tm.isDark
         ? [UIColor colorWithWhite:1.0 alpha:0.06]
-        : [[t.surfaceElevated colorWithAlphaComponent:1.0] colorWithAlphaComponent:0.55];
+        : [[t.surfaceContainerHigh colorWithAlphaComponent:1.0] colorWithAlphaComponent:0.55];
 
-    _titleLabel.textColor = t.textPrimary;
-    _subtitleLabel.textColor = t.textSecondary;
+    _titleLabel.textColor = t.onSurface;
+    _subtitleLabel.textColor = t.onSurfaceVariant;
 }
 
 @end

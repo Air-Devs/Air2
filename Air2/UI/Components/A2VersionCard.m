@@ -243,7 +243,7 @@
 
 - (void)applyTheme {
     A2ThemeManager *tm = A2ThemeManager.shared;
-    A2ColorTheme *t = tm.currentTheme;
+    A2ColorScheme *t = tm.scheme;
 
     _nameLabel.textColor = UIColor.whiteColor;
     _metaLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.62];
@@ -255,14 +255,14 @@
                                                : [t.primary colorWithAlphaComponent:0.85];
     }
     _initialLabel.textColor = UIColor.whiteColor;
-    _pinBadge.tintColor = t.accent;
+    _pinBadge.tintColor = t.primary;
 
-    _selectionRing.layer.borderColor = t.accent.CGColor;
+    _selectionRing.layer.borderColor = t.primary.CGColor;
 
     if (!_statusDot.hidden) {
         _statusDot.backgroundColor = (_status == A2VersionCardStatusDeleted)
-            ? t.danger
-            : t.textTertiary;
+            ? t.error
+            : t.outline;
     }
 }
 

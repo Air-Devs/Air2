@@ -183,7 +183,7 @@
 
 - (void)applyTheme {
     A2ThemeManager *tm = A2ThemeManager.shared;
-    A2ColorTheme *t = tm.currentTheme;
+    A2ColorScheme *t = tm.scheme;
 
     switch (_style) {
         case A2ButtonStylePrimary: {
@@ -204,17 +204,17 @@
             _gradientLayer.hidden = YES;
             self.backgroundColor = UIColor.clearColor;
             self.layer.borderWidth = 1.2;
-            self.layer.borderColor = [t.textTertiary colorWithAlphaComponent:0.45].CGColor;
-            _titleLabel.textColor = t.textPrimary;
-            _iconView.tintColor = t.textPrimary;
-            _spinner.color = t.textPrimary;
+            self.layer.borderColor = [t.outline colorWithAlphaComponent:0.45].CGColor;
+            _titleLabel.textColor = t.onSurface;
+            _iconView.tintColor = t.onSurface;
+            _spinner.color = t.onSurface;
             break;
         }
         case A2ButtonStyleDanger: {
             _gradientLayer.hidden = NO;
             _gradientLayer.colors = @[
-                (__bridge id)t.danger.CGColor,
-                (__bridge id)[t.danger colorWithAlphaComponent:0.78].CGColor,
+                (__bridge id)t.error.CGColor,
+                (__bridge id)[t.error colorWithAlphaComponent:0.78].CGColor,
             ];
             _gradientLayer.locations = @[@0.0, @1.0];
             _titleLabel.textColor = UIColor.whiteColor;

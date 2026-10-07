@@ -5,147 +5,243 @@
 
 #import "A2ColorTheme.h"
 
-/// 从 0xRRGGBB 构造颜色
-static UIColor *A2Hex(uint32_t rgb) {
-    return [UIColor colorWithRed:((rgb >> 16) & 0xFF) / 255.0
-                           green:((rgb >> 8) & 0xFF) / 255.0
-                            blue:(rgb & 0xFF) / 255.0
-                           alpha:1.0];
+#pragma mark - 色板推导
+
+/// 由种子色推导一套完整的 MD3 色板。
+///
+/// 明度阶梯参考 MD3 tonal palette 的常用档位：
+///   primary        → tone 40（亮）/ tone 80（暗）
+///   container      → tone 90（亮）/ tone 30（暗）
+///   surface        → tone 99（亮）/ tone 10（暗）
+///   surfaceContainer 逐档加深
+///
+/// 说明：MD3 规范用 HCT 色彩空间，这里用 HSB 近似。
+/// 视觉上与规范接近，代价是极端色相下略有偏差（已用钳制规避）。
+/// 完整的 HCT 实现收益不大，代码量却要翻几倍，不划算。
+static void A2FillScheme(A2ColorScheme *s, UIColor *seed, BOOL light) {
+    if (light) {
+        s.primary            = A2Tone(seed, 0.72, 0.48);
+        s.onPrimary          = A2Hex(0xFFFFFF);
+        s.primaryContainer   = A2Tone(seed, 0.34, 0.92);
+        s.onPrimaryContainer = A2Tone(seed, 0.66, 0.24);
+
+        s.secondary            = A2Tone(seed, 0.30, 0.40);
+        s.onSecondary          = A2Hex(0xFFFFFF);
+        s.secondaryContainer   = A2Tone(seed, 0.20, 0.90);
+        s.onSecondaryContainer = A2Tone(seed, 0.38, 0.26);
+
+        // 第三色偏移 1/3 色相，给界面一点色彩变化，避免单一色相发闷
+        UIColor *t3 = A2ShiftHue(seed, 0.33);
+        s.tertiary          = A2Tone(t3, 0.42, 0.42);
+        s.tertiaryContainer = A2Tone(t3, 0.24, 0.90);
+
+        s.surface                 = A2Tone(seed, 0.03, 0.985);
+        s.onSurface               = A2Tone(seed, 0.16, 0.12);
+        s.surfaceContainerLowest  = A2Hex(0xFFFFFF);
+        s.surfaceContainerLow     = A2Tone(seed, 0.05, 0.965);
+        s.surfaceContainer        = A2Tone(seed, 0.07, 0.935);
+        s.surfaceContainerHigh    = A2Tone(seed, 0.09, 0.905);
+        s.surfaceContainerHighest = A2Tone(seed, 0.11, 0.875);
+        s.surfaceVariant          = A2Tone(seed, 0.13, 0.90);
+        s.onSurfaceVariant        = A2Tone(seed, 0.24, 0.32);
+
+        s.outline        = A2Tone(seed, 0.18, 0.50);
+        s.outlineVariant = A2Tone(seed, 0.15, 0.78);
+
+        s.inverseSurface   = A2Tone(seed, 0.16, 0.20);
+        s.inverseOnSurface = A2Tone(seed, 0.07, 0.94);
+        s.inversePrimary   = A2Tone(seed, 0.34, 0.86);
+
+    } else {
+        s.primary            = A2Tone(seed, 0.55, 0.82);
+        s.onPrimary          = A2Tone(seed, 0.75, 0.18);
+        s.primaryContainer   = A2Tone(seed, 0.68, 0.34);
+        s.onPrimaryContainer = A2Tone(seed, 0.34, 0.92);
+
+        s.secondary            = A2Tone(seed, 0.26, 0.80);
+        s.onSecondary          = A2Tone(seed, 0.40, 0.20);
+        s.secondaryContainer   = A2Tone(seed, 0.30, 0.30);
+        s.onSecondaryContainer = A2Tone(seed, 0.20, 0.90);
+
+        UIColor *t3 = A2ShiftHue(seed, 0.33);
+        s.tertiary          = A2Tone(t3, 0.34, 0.80);
+        s.tertiaryContainer = A2Tone(t3, 0.26, 0.32);
+
+        s.surface                 = A2Tone(seed, 0.16, 0.09);
+        s.onSurface               = A2Tone(seed, 0.07, 0.92);
+        s.surfaceContainerLowest  = A2Tone(seed, 0.18, 0.05);
+        s.surfaceContainerLow     = A2Tone(seed, 0.16, 0.12);
+        s.surfaceContainer        = A2Tone(seed, 0.15, 0.15);
+        s.surfaceContainerHigh    = A2Tone(seed, 0.14, 0.19);
+        s.surfaceContainerHighest = A2Tone(seed, 0.13, 0.23);
+        s.surfaceVariant          = A2Tone(seed, 0.18, 0.27);
+        s.onSurfaceVariant        = A2Tone(seed, 0.12, 0.80);
+
+        s.outline        = A2Tone(seed, 0.12, 0.58);
+        s.outlineVariant = A2Tone(seed, 0.16, 0.30);
+
+        s.inverseSurface   = A2Tone(seed, 0.07, 0.92);
+        s.inverseOnSurface = A2Tone(seed, 0.16, 0.20);
+        s.inversePrimary   = A2Tone(seed, 0.72, 0.48);
+    }
+
+    // 语义色全主题统一 —— 错误必须是红的，这是跨应用的认知一致性，
+    // 不跟着主色走。
+    if (light) {
+        s.error            = A2Hex(0xBA1A1A);
+        s.onError          = A2Hex(0xFFFFFF);
+        s.errorContainer   = A2Hex(0xFFDAD6);
+        s.onErrorContainer = A2Hex(0x410002);
+        s.success          = A2Hex(0x2E6B36);
+        s.warning          = A2Hex(0x8A5300);
+    } else {
+        s.error            = A2Hex(0xFFB4AB);
+        s.onError          = A2Hex(0x690005);
+        s.errorContainer   = A2Hex(0x93000A);
+        s.onErrorContainer = A2Hex(0xFFDAD6);
+        s.success          = A2Hex(0x8ED88E);
+        s.warning          = A2Hex(0xF5C36B);
+    }
 }
 
-#pragma mark - 私有可变实现
+#pragma mark - A2ColorTheme
 
 @interface A2ColorTheme ()
 @property (nonatomic, assign) A2ThemeKind kind;
 @property (nonatomic, copy) NSString *displayName;
-@property (nonatomic, strong) UIColor *primary;
-@property (nonatomic, strong) UIColor *onPrimary;
-@property (nonatomic, strong) UIColor *primaryContainer;
-@property (nonatomic, strong) UIColor *accent;
-@property (nonatomic, strong) UIColor *background;
-@property (nonatomic, strong) UIColor *backgroundDark;
-@property (nonatomic, strong) UIColor *surface;
-@property (nonatomic, strong) UIColor *surfaceElevated;
-@property (nonatomic, strong) UIColor *textPrimary;
-@property (nonatomic, strong) UIColor *textSecondary;
-@property (nonatomic, strong) UIColor *textTertiary;
-@property (nonatomic, strong) UIColor *danger;
-@property (nonatomic, strong) UIColor *success;
-@property (nonatomic, strong) NSArray<UIColor *> *wallpaperGradient;
+@property (nonatomic, copy) NSString *themeDescription;
+@property (nonatomic, strong) A2ColorScheme *scheme;
+@property (nonatomic, strong) UIColor *lightPrimary;
+@property (nonatomic, strong) UIColor *darkPrimary;
+@property (nonatomic, strong) NSArray<UIColor *> *backgroundGradient;
 @end
 
 @implementation A2ColorTheme
 
-#pragma mark - 五套手调色板
++ (instancetype)themeWithSeed:(UIColor *)seed
+                         kind:(A2ThemeKind)kind
+                         name:(NSString *)name
+                         desc:(NSString *)desc
+                     gradient:(NSArray<UIColor *> *)gradient
+                lightOverride:(void (^)(A2ColorScheme *))lightOverride
+                 darkOverride:(void (^)(A2ColorScheme *))darkOverride {
 
-/// Embermire —— 烈焰红棕。暖调，默认主题。
+    A2ColorScheme *light = [A2ColorScheme new];
+    A2ColorScheme *dark = [A2ColorScheme new];
+    A2FillScheme(light, seed, YES);
+    A2FillScheme(dark, seed, NO);
+
+    if (lightOverride) lightOverride(light);
+    if (darkOverride) darkOverride(dark);
+
+    A2ColorScheme *merged = [A2ColorScheme new];
+    [merged makeDynamicFromLight:light dark:dark];
+
+    A2ColorTheme *t = [A2ColorTheme new];
+    t.kind = kind;
+    t.displayName = name;
+    t.themeDescription = desc;
+    t.scheme = merged;
+    t.lightPrimary = light.primary;
+    t.darkPrimary = dark.primary;
+    t.backgroundGradient = gradient;
+    return t;
+}
+
+#pragma mark 五套内置主题
+
 + (instancetype)embermire {
-    A2ColorTheme *t = [A2ColorTheme new];
-    t.kind = A2ThemeKindEmbermire;
-    t.displayName = @"烈焰红棕";
-    t.primary = A2Hex(0xA63A17);
-    t.onPrimary = UIColor.whiteColor;
-    t.primaryContainer = A2Hex(0xFE7A52);
-    t.accent = A2Hex(0xFFB59F);
-    t.background = A2Hex(0xFFF8F6);
-    t.backgroundDark = A2Hex(0x1A0E0A);
-    t.surface = A2Hex(0xFFE9E4);
-    t.surfaceElevated = A2Hex(0xFFFFF1ED);
-    t.textPrimary = A2Hex(0x241916);
-    t.textSecondary = A2Hex(0x58423B);
-    t.textTertiary = A2Hex(0x8B716A);
-    t.danger = A2Hex(0xBA1A1A);
-    t.success = A2Hex(0x276E31);
-    t.wallpaperGradient = @[ A2Hex(0x8B2D0F), A2Hex(0xC4502B), A2Hex(0x4A1A08) ];
-    return t;
+    // 暖棕色的自动推导容易偏灰，关键色手调
+    return [self themeWithSeed:A2Hex(0xA63A17)
+                         kind:A2ThemeKindEmbermire
+                         name:@"烈焰红棕"
+                         desc:@"暖调，视觉重心强"
+                     gradient:@[ A2Hex(0x8B2D0F), A2Hex(0xC4502B), A2Hex(0x4A1A08) ]
+                lightOverride:^(A2ColorScheme *s) {
+        s.primary              = A2Hex(0xA63A17);
+        s.primaryContainer     = A2Hex(0xFFDBD1);
+        s.surface              = A2Hex(0xFFF8F6);
+        s.surfaceContainer     = A2Hex(0xFCEAE5);
+        s.surfaceContainerHigh = A2Hex(0xF7E3DE);
+        s.onSurface            = A2Hex(0x241916);
+        s.onSurfaceVariant     = A2Hex(0x58423B);
+    } darkOverride:^(A2ColorScheme *s) {
+        s.primary              = A2Hex(0xFFB59F);
+        s.primaryContainer     = A2Hex(0x7F2A05);
+        s.surface              = A2Hex(0x1A110E);
+        s.surfaceContainer     = A2Hex(0x271A16);
+        s.surfaceContainerHigh = A2Hex(0x33231F);
+        s.onSurface            = A2Hex(0xF1DFDA);
+        s.onSurfaceVariant     = A2Hex(0xDBC2BA);
+    }];
 }
 
-/// Glacier —— 冰川蓝。冷调，长时间使用眼睛负担小。
 + (instancetype)glacier {
-    A2ColorTheme *t = [A2ColorTheme new];
-    t.kind = A2ThemeKindGlacier;
-    t.displayName = @"冰川蓝";
-    t.primary = A2Hex(0x007EA2);
-    t.onPrimary = UIColor.whiteColor;
-    t.primaryContainer = A2Hex(0x4CAFD6);
-    t.accent = A2Hex(0x73D2FB);
-    t.background = A2Hex(0xF6FAFD);
-    t.backgroundDark = A2Hex(0x081A22);
-    t.surface = A2Hex(0xEBEEF1);
-    t.surfaceElevated = A2Hex(0xF0F4F7);
-    t.textPrimary = A2Hex(0x181C1F);
-    t.textSecondary = A2Hex(0x3E484E);
-    t.textTertiary = A2Hex(0x6E797E);
-    t.danger = A2Hex(0xBA1A1A);
-    t.success = A2Hex(0x276E31);
-    t.wallpaperGradient = @[ A2Hex(0x00506B), A2Hex(0x0A8FB8), A2Hex(0x00303F) ];
-    return t;
+    return [self themeWithSeed:A2Hex(0x00658B)
+                         kind:A2ThemeKindGlacier
+                         name:@"冰川蓝"
+                         desc:@"冷调，长时间使用更舒适"
+                     gradient:@[ A2Hex(0x004A66), A2Hex(0x0A8FB8), A2Hex(0x002F42) ]
+                lightOverride:^(A2ColorScheme *s) {
+        s.primary            = A2Hex(0x00658B);
+        s.primaryContainer   = A2Hex(0xC2E8FF);
+        s.onPrimaryContainer = A2Hex(0x001E2E);
+    } darkOverride:^(A2ColorScheme *s) {
+        s.primary          = A2Hex(0x7FD0F5);
+        s.onPrimary        = A2Hex(0x003549);
+        s.primaryContainer = A2Hex(0x004C6B);
+    }];
 }
 
-/// VerdantDawn —— 青野绿。生机感，适合 Minecraft 主题。
 + (instancetype)verdantDawn {
-    A2ColorTheme *t = [A2ColorTheme new];
-    t.kind = A2ThemeKindVerdantDawn;
-    t.displayName = @"青野绿";
-    t.primary = A2Hex(0x276E31);
-    t.onPrimary = UIColor.whiteColor;
-    t.primaryContainer = A2Hex(0x4E9A5C);
-    t.accent = A2Hex(0x8ED88E);
-    t.background = A2Hex(0xF7FBF2);
-    t.backgroundDark = A2Hex(0x0C170C);
-    t.surface = A2Hex(0xECEFE6);
-    t.surfaceElevated = A2Hex(0xF1F5EC);
-    t.textPrimary = A2Hex(0x181D18);
-    t.textSecondary = A2Hex(0x40493E);
-    t.textTertiary = A2Hex(0x707A6D);
-    t.danger = A2Hex(0xBA1A1A);
-    t.success = A2Hex(0x276E31);
-    t.wallpaperGradient = @[ A2Hex(0x14501E), A2Hex(0x2E7A3A), A2Hex(0x0A3313) ];
-    return t;
+    return [self themeWithSeed:A2Hex(0x2C6B36)
+                         kind:A2ThemeKindVerdantDawn
+                         name:@"青野绿"
+                         desc:@"自然色，与游戏主题呼应"
+                     gradient:@[ A2Hex(0x14501E), A2Hex(0x2E7A3A), A2Hex(0x0A3313) ]
+                lightOverride:^(A2ColorScheme *s) {
+        s.primary            = A2Hex(0x2C6B36);
+        s.primaryContainer   = A2Hex(0xC8EFC6);
+        s.onPrimaryContainer = A2Hex(0x002204);
+    } darkOverride:^(A2ColorScheme *s) {
+        s.primary          = A2Hex(0x8ED88E);
+        s.onPrimary        = A2Hex(0x00390F);
+        s.primaryContainer = A2Hex(0x0F5220);
+    }];
 }
 
-/// VelvetRose —— 绛紫玫瑰。柔和，偏女性化审美。
 + (instancetype)velvetRose {
-    A2ColorTheme *t = [A2ColorTheme new];
-    t.kind = A2ThemeKindVelvetRose;
-    t.displayName = @"绛紫玫瑰";
-    t.primary = A2Hex(0x723D57);
-    t.onPrimary = UIColor.whiteColor;
-    t.primaryContainer = A2Hex(0x9B607C);
-    t.accent = A2Hex(0xF9B2D2);
-    t.background = A2Hex(0xFFF8F8);
-    t.backgroundDark = A2Hex(0x1B1016);
-    t.surface = A2Hex(0xF7EBED);
-    t.surfaceElevated = A2Hex(0xFCF1F3);
-    t.textPrimary = A2Hex(0x1F1A1C);
-    t.textSecondary = A2Hex(0x504348);
-    t.textTertiary = A2Hex(0x827378);
-    t.danger = A2Hex(0xBA1A1A);
-    t.success = A2Hex(0x276E31);
-    t.wallpaperGradient = @[ A2Hex(0x4E2438), A2Hex(0x8A4A68), A2Hex(0x33172A) ];
-    return t;
+    return [self themeWithSeed:A2Hex(0x7A3D58)
+                         kind:A2ThemeKindVelvetRose
+                         name:@"绛紫玫瑰"
+                         desc:@"柔和，低对比"
+                     gradient:@[ A2Hex(0x4E2438), A2Hex(0x8A4A68), A2Hex(0x33172A) ]
+                lightOverride:^(A2ColorScheme *s) {
+        s.primary            = A2Hex(0x7A3D58);
+        s.primaryContainer   = A2Hex(0xFFD8E6);
+        s.onPrimaryContainer = A2Hex(0x31081F);
+    } darkOverride:^(A2ColorScheme *s) {
+        s.primary          = A2Hex(0xF9B2D2);
+        s.onPrimary        = A2Hex(0x4B1130);
+        s.primaryContainer = A2Hex(0x622947);
+    }];
 }
 
-/// UrbanAsh —— 都市灰。中性无彩，适合专注场景。
 + (instancetype)urbanAsh {
-    A2ColorTheme *t = [A2ColorTheme new];
-    t.kind = A2ThemeKindUrbanAsh;
-    t.displayName = @"都市灰";
-    t.primary = A2Hex(0x5E5E5F);
-    t.onPrimary = UIColor.whiteColor;
-    t.primaryContainer = A2Hex(0x8E8E90);
-    t.accent = A2Hex(0xC7C6C6);
-    t.background = A2Hex(0xFCF8F8);
-    t.backgroundDark = A2Hex(0x141414);
-    t.surface = A2Hex(0xF1EDEC);
-    t.surfaceElevated = A2Hex(0xF7F3F2);
-    t.textPrimary = A2Hex(0x1C1B1B);
-    t.textSecondary = A2Hex(0x444748);
-    t.textTertiary = A2Hex(0x747878);
-    t.danger = A2Hex(0xBA1A1A);
-    t.success = A2Hex(0x276E31);
-    t.wallpaperGradient = @[ A2Hex(0x3A3A3C), A2Hex(0x5A5A5D), A2Hex(0x28282A) ];
-    return t;
+    return [self themeWithSeed:A2Hex(0x5E5E5F)
+                         kind:A2ThemeKindUrbanAsh
+                         name:@"都市灰"
+                         desc:@"中性无彩，专注场景"
+                     gradient:@[ A2Hex(0x3A3A3C), A2Hex(0x5A5A5D), A2Hex(0x28282A) ]
+                lightOverride:^(A2ColorScheme *s) {
+        s.primary            = A2Hex(0x5E5E5F);
+        s.primaryContainer   = A2Hex(0xE4E2E2);
+        s.onPrimaryContainer = A2Hex(0x1B1B1C);
+    } darkOverride:^(A2ColorScheme *s) {
+        s.primary          = A2Hex(0xC7C6C6);
+        s.onPrimary        = A2Hex(0x2F3131);
+        s.primaryContainer = A2Hex(0x454747);
+    }];
 }
 
 + (NSArray<A2ColorTheme *> *)allThemes {
@@ -170,55 +266,25 @@ static UIColor *A2Hex(uint32_t rgb) {
     }
 }
 
-#pragma mark - 动态取色
-
-/// 把任意颜色规范化为「有品牌感」的主色：
-/// 饱和度不足时提升，亮度钳制到中等区间，避免取到灰扑扑或刺眼的色
-static UIColor *A2NormalizeBrandColor(UIColor *src) {
-    CGFloat h = 0, s = 0, b = 0, a = 0;
-    if (![src getHue:&h saturation:&s brightness:&b alpha:&a]) return src;
-
-    // 低饱和度的壁纸（灰阶/黑白云图）提取出来没有品牌感，给一个最低饱和度
-    if (s < 0.28) s = 0.28 + s * 0.4;
-    // 亮度太低会与暗色背景糊在一起，太高会刺眼
-    if (b < 0.34) b = 0.34;
-    if (b > 0.78) b = 0.78;
-
-    return [UIColor colorWithHue:h saturation:s brightness:b alpha:1.0];
-}
-
-/// 主色的浅色版本，用于 container
-static UIColor *A2Lighten(UIColor *src, CGFloat amount) {
-    CGFloat h = 0, s = 0, b = 0, a = 0;
-    if (![src getHue:&h saturation:&s brightness:&b alpha:&a]) return src;
-    return [UIColor colorWithHue:h
-                      saturation:MAX(0, s - amount * 0.4)
-                      brightness:MIN(1.0, b + amount)
-                           alpha:1.0];
-}
+#pragma mark 从图片取色
 
 + (instancetype)themeFromImage:(UIImage *)image {
     if (!image) return [self embermire];
 
-    // 缩到 1x1 取平均色 —— 比逐像素遍历快几个数量级，且天然抗噪
-    CGSize side = CGSizeMake(1, 1);
-    UIGraphicsBeginImageContextWithOptions(side, YES, 1.0);
+    // 缩到 1x1 取平均色：比逐像素遍历快几个数量级，且天然抗噪
+    UIGraphicsBeginImageContextWithOptions(CGSizeMake(1, 1), YES, 1.0);
     [image drawInRect:CGRectMake(0, 0, 1, 1)];
     UIImage *averaged = UIGraphicsGetImageFromCurrentImageContext();
     UIGraphicsEndImageContext();
 
-    if (!averaged) return [self embermire];
-
     CGImageRef cg = averaged.CGImage;
     if (!cg) return [self embermire];
 
-    CGDataProviderRef provider = CGImageGetDataProvider(cg);
-    CFDataRef data = CGDataProviderCopyData(provider);
+    CFDataRef data = CGDataProviderCopyData(CGImageGetDataProvider(cg));
     if (!data) return [self embermire];
 
     const UInt8 *bytes = CFDataGetBytePtr(data);
-    size_t len = CFDataGetLength(data);
-    if (len < 4) {
+    if (CFDataGetLength(data) < 4) {
         CFRelease(data);
         return [self embermire];
     }
@@ -228,35 +294,27 @@ static UIColor *A2Lighten(UIColor *src, CGFloat amount) {
     CGFloat b = bytes[2] / 255.0;
     CFRelease(data);
 
-    UIColor *extracted = A2NormalizeBrandColor([UIColor colorWithRed:r green:g blue:b alpha:1.0]);
+    // 规范化：灰阶图（黑白壁纸）直接取色会得到一个没有品牌感的灰。
+    // 给出饱和度下限 + 亮度钳制，保证提取结果始终可用。
+    CGFloat h = 0, s = 0, br = 0, a = 0;
+    [[UIColor colorWithRed:r green:g blue:b alpha:1.0] getHue:&h saturation:&s brightness:&br alpha:&a];
+    if (s < 0.15) s = 0.15 + s * 0.5;
+    if (br < 0.30) br = 0.30;
+    if (br > 0.80) br = 0.80;
 
-    A2ColorTheme *t = [A2ColorTheme new];
-    t.kind = A2ThemeKindDynamic;
-    t.displayName = @"动态取色";
-    t.primary = extracted;
-    t.onPrimary = UIColor.whiteColor;
-    t.primaryContainer = A2Lighten(extracted, 0.22);
-    t.accent = A2Lighten(extracted, 0.38);
+    UIColor *seed = [UIColor colorWithHue:h saturation:s brightness:br alpha:1.0];
 
-    CGFloat h = 0, s = 0, br = 0, alpha = 0;
-    [extracted getHue:&h saturation:&s brightness:&br alpha:&alpha];
-
-    t.background = [UIColor colorWithHue:h saturation:MIN(0.06, s * 0.2) brightness:0.98 alpha:1.0];
-    t.backgroundDark = [UIColor colorWithHue:h saturation:MIN(0.42, s * 0.7) brightness:0.10 alpha:1.0];
-    t.surface = [UIColor colorWithHue:h saturation:MIN(0.10, s * 0.25) brightness:0.93 alpha:1.0];
-    t.surfaceElevated = [UIColor colorWithHue:h saturation:MIN(0.08, s * 0.2) brightness:0.96 alpha:1.0];
-    t.textPrimary = [UIColor colorWithHue:h saturation:MIN(0.35, s * 0.6) brightness:0.12 alpha:1.0];
-    t.textSecondary = [UIColor colorWithHue:h saturation:MIN(0.30, s * 0.5) brightness:0.32 alpha:1.0];
-    t.textTertiary = [UIColor colorWithHue:h saturation:MIN(0.25, s * 0.4) brightness:0.52 alpha:1.0];
-    t.danger = A2Hex(0xBA1A1A);
-    t.success = A2Hex(0x276E31);
-
-    // 背景渐变：深→主色→更深，保证玻璃卡片有足够的明暗层次可透
-    UIColor *deep = [UIColor colorWithHue:h saturation:MIN(1.0, s * 1.15) brightness:MAX(0.18, br * 0.55) alpha:1.0];
-    UIColor *darker = [UIColor colorWithHue:h saturation:MIN(1.0, s * 1.2) brightness:MAX(0.10, br * 0.30) alpha:1.0];
-    t.wallpaperGradient = @[ deep, extracted, darker ];
-
-    return t;
+    return [self themeWithSeed:seed
+                         kind:A2ThemeKindDynamic
+                         name:@"动态取色"
+                         desc:@"从自定义背景提取主色"
+                     gradient:@[
+                         A2Tone(seed, MIN(1.0, s * 1.1), MAX(0.22, br * 0.55)),
+                         seed,
+                         A2Tone(seed, MIN(1.0, s * 1.15), MAX(0.12, br * 0.30)),
+                     ]
+                lightOverride:nil
+                 darkOverride:nil];
 }
 
 @end
