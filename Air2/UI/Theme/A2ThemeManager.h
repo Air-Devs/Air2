@@ -12,7 +12,13 @@
 //
 
 #import <UIKit/UIKit.h>
+// A2ThemeManager 是主题层的聚合点：
+// 所有取色的调用方只要能拿到 A2ThemeManager，就能拿到
+// A2ColorScheme 与 A2ColorTheme 的类型定义。
+// 因此下面这两个 import 是【故意】的 —— 视图层只需
+// #import "A2ThemeManager.h" 即可使用全部主题类型。
 #import "A2ColorTheme.h"
+#import "A2ColorScheme.h"
 
 NS_ASSUME_NONNULL_BEGIN
 

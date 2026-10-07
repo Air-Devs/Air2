@@ -6,6 +6,7 @@
 #import "A2LoginViewController.h"
 #import "A2MicrosoftAuth.h"
 #import "A2AccountManager.h"
+#import "A2Account.h"
 #import "A2GlassCard.h"
 #import "A2PrimaryButton.h"
 #import "A2SettingsSection.h"

@@ -14,6 +14,8 @@
 #import "A2Metrics.h"
 #import "A2Typography.h"
 #import "A2GameInstaller.h"
+#import "A2VersionManager.h"
+#import "A2ModLoaderAPI.h"
 
 #pragma mark - 步骤行
 

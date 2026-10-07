@@ -20,6 +20,7 @@
 #import "A2NavigationController.h"
 #import "A2VersionManager.h"
 #import "A2AccountManager.h"
+#import "A2Account.h"
 #import "A2QuickActionCard.h"
 #import "A2PrimaryButton.h"
 

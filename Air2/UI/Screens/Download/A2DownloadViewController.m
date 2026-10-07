@@ -25,6 +25,7 @@
 #import "A2DownloadViewController.h"
 #import "A2CategoryNavView.h"
 #import "A2DownloadListViewController.h"
+#import "A2ContentSource.h"
 #import "A2SettingsSection.h"
 #import "A2SettingsRow.h"
 #import "A2GlassCard.h"

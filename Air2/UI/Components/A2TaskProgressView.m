@@ -7,6 +7,7 @@
 //
 
 #import "A2TaskProgressView.h"
+#import "A2ProgressBar.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"

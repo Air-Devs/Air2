@@ -12,6 +12,7 @@
 //
 
 #import "A2VersionSettingsViewController.h"
+#import "A2VersionIsolation.h"
 #import "A2SettingsSection.h"
 #import "A2SettingsRow.h"
 #import "A2GlassCard.h"

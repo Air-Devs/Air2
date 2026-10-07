@@ -223,6 +223,57 @@ def check_color_scheme_alignment():
     return issues
 
 
+
+
+def check_component_dependencies():
+    """
+    检查同层组件之间是否直接 import 了对方。
+    只查 Components 与 Screens —— 这两层里「同层组件互相引用」是常态，
+    靠传递引入容易在别处改动时断掉。
+    """
+    import os, re
+    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    type_to_header = {}
+    for dirpath, _, files in os.walk(os.path.join(ROOT, "Air2")):
+        for f in files:
+            if not f.endswith(".h"):
+                continue
+            src = open(os.path.join(dirpath, f)).read()
+            for m in re.finditer(r'@interface\s+(A2\w+)', src):
+                type_to_header[m.group(1)] = f
+
+    THEME_LAYER = {'A2ColorScheme.h', 'A2ColorTheme.h', 'A2ThemeManager.h',
+                   'A2ColorTheme_Internal.h'}
+
+    issues = []
+    for sub in ("Air2/UI/Components", "Air2/UI/Screens"):
+        base = os.path.join(ROOT, sub)
+        if not os.path.isdir(base):
+            continue
+        for dirpath, _, files in os.walk(base):
+            for f in files:
+                if not f.endswith(".m"):
+                    continue
+                p = os.path.join(dirpath, f)
+                src = open(p).read()
+                imported = set(re.findall(r'#import\s+"(\w+\.h)"', src))
+                own = f[:-2] + ".h"
+
+                for t in set(re.findall(r'\b(A2[A-Z]\w+)\b', src)):
+                    if t not in type_to_header:
+                        continue
+                    hdr = type_to_header[t]
+                    if hdr == own or hdr in imported or hdr in THEME_LAYER:
+                        continue
+                    rel = os.path.relpath(p, ROOT)
+                    msg = f'{rel} \u7528\u5230 {t}\uff0c\u9700 #import "{hdr}"'
+                    if msg not in issues:
+                        issues.append(msg)
+
+    return issues
+
+
 def main():
     problems = []
     total_imports = 0
@@ -299,7 +350,16 @@ def main():
             print(f"  {msg}")
         return 1
 
-    print("✓ 色板字段对齐")
+    print("\u2713 \u8272\u677f\u5b57\u6bb5\u5bf9\u9f50")
+
+    dep_issues = check_component_dependencies()
+    if dep_issues:
+        print(f"\n\u53d1\u73b0 {len(dep_issues)} \u5904\u7ec4\u4ef6\u95f4\u7f3a\u5931 import\uff1a")
+        for msg in dep_issues:
+            print(f"  {msg}")
+        return 1
+
+    print("\u2713 \u7ec4\u4ef6\u95f4\u4f9d\u8d56\u5b8c\u6574")
     return 0
     return 0
 

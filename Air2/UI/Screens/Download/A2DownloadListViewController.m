@@ -14,6 +14,7 @@
 #import "A2Metrics.h"
 #import "A2Typography.h"
 #import "A2ContentSource.h"
+#import "A2ModrinthAPI.h"
 #import "A2DownloadEngine.h"
 
 static NSString *const kCellID = @"A2DownloadCell";

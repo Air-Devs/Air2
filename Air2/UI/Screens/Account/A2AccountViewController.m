@@ -32,6 +32,8 @@
 #import "A2SettingsSection.h"
 #import "A2SettingsRow.h"
 #import "A2AccountManager.h"
+#import "A2Account.h"
+#import "A2MicrosoftAuth.h"
 #import "A2LoginViewController.h"
 
 @interface A2AccountViewController ()

@@ -4,6 +4,7 @@
 //
 
 #import "A2SettingsSection.h"
+#import "A2SettingsRow.h"
 #import "A2ThemeManager.h"
 #import "A2Typography.h"
 
