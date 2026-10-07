@@ -82,6 +82,9 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 #### `Player/`
 游戏会话运行时宿主。
 - 启动流程编排（准备 → 解压 → 拉 JVM → present）
+- `A2JITCoordinator.h/.m` —— JIT【供给编排】入口：把「配对 → 开启」的状态机
+  （`A2JITState`：等待配对 / 已配对 / 等待开启 / 已启用 / 不可用）与启动流程串起来。
+  平台动作经注入的 `A2JITProvisioning` 协议落到 Natives/Support；★本层只编排、不跨界★。
 - `A2LaunchChain.h/.m` —— 启动链【顺序编排】：① 发 JIT 脚本 → ② 探测 JIT 可用 → ③ 建 JVM。
   只定顺序与短路，步骤实现由注入的 `A2LaunchChainSteps` 提供（真机实现经 Bridge 落到 Natives）。
 - 会话生命周期与异常兜底

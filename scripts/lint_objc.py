@@ -67,14 +67,18 @@ def check_file(path, defined_classes):
     if stripped.count("(") != stripped.count(")"):
         errors.append(f"圆括号不平衡: {stripped.count('(')} vs {stripped.count(')')}")
 
-    # ---------- @interface / @implementation / @end ----------
+    # ---------- @interface / @implementation / @protocol / @end ----------
+    #  @protocol 也是合法的定义起始，同样以 @end 收尾。
+    #  早期只数 @interface/@implementation，会把带协议的 .h 误判为「多余的 @end」，
+    #  迫使代码用 block 替代协议（见 A2LaunchChain.h 的注释）。此处补上 @protocol。
     ifaces = len(re.findall(r'@interface\b', src))
     impls = len(re.findall(r'@implementation\b', src))
+    protos = len(re.findall(r'@protocol\b', src))
     ends = len(re.findall(r'@end\b', src))
-    if ifaces + impls != ends:
+    if ifaces + impls + protos != ends:
         errors.append(
-            f"@interface({ifaces}) + @implementation({impls}) = {ifaces+impls} "
-            f"≠ @end({ends})")
+            f"@interface({ifaces}) + @implementation({impls}) + @protocol({protos}) "
+            f"= {ifaces+impls+protos} ≠ @end({ends})")
 
     # ---------- 只读属性赋值 ----------
     for var, prop in re.findall(r'\b(\w+)\.(delay|isRunning|state)\s*=', src):

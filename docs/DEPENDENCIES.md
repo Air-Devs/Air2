@@ -43,6 +43,27 @@
 
 ---
 
+## JIT 供给（候选 —— ★尚未引入，许可证待核实 / 待拍板★）
+
+> 本节是 **预登记**：仅记录候选与已知许可，**仓内当前未 vendor 任何一项**（无源码、无二进制）。
+> 引入方式一栏为空 = 未引入。引进前须逐项核实许可并更新本表（见 ADR-007）。
+
+| 名称 | 版本 | 来源 | 许可（待核实） | 用途 | 引入方式 |
+|---|---|---|---|---|---|
+| StikJIT | — | https://github.com/StikDebug/StikJIT | **MPL-2.0**（弱 copyleft，文件级） | iOS 26+ 内置 JIT 引擎（`enableJIT`：DDI 准备 + 脚本/附加） | 未引入 |
+| idevice (rust) | — | https://github.com/jkcoxson/idevice | **MIT** | RSD/TLS-PSK 隧道、lockdown、RPPairing（`tunnel_create_rppairing` 等） | 未引入 |
+| isideload | — | https://github.com/nab138/isideload | **MIT** | Apple ID 登录 + 设备内签名（自动配对路径可能需要） | 未引入 |
+| StikDebug | — | https://github.com/StikDebug/StikDebug | **AGPL-3.0**（强 copyleft） | 外部 JIT 工具（`stikdebug://enable-jit`）；其隧道/调试代理实现 | 未引入 |
+| SideInstaller | 1.3.0 | https://github.com/FrizzleM/SideInstaller | **自定义 / 非 OSI**（非商业 + 禁止再分发官方构建；源码可参考不得直接用） | ★仅作【设备内配对】思路参考★，**禁止 vendor / 禁止抄代码** | 不引入 |
+| LocalDevVPN | — | App Store `id6755608044` | 专有（第三方 App） | 提供本机 Loopback 路由（10.7.0.1） | 外部依赖（用户自装） |
+
+**许可口径备忘**（核实于 2026-10-07，源码/仓内 LICENSE 为准）：
+- MPL-2.0 = **文件级** copyleft：可并入更大作品，但**修改过的 StikJIT 文件**须开源该文件，且必须保留其许可与版权声明。
+- AGPL-3.0 = 强 copyleft：与 GPL 系可并存（AGPL 吸收 GPL，反向不行），但整件作品受其约束。
+- SideInstaller 自定义许可**与 GPL/AGPL 兼容性不明**且**禁止再分发构建** ⇒ 一律**只参考、不入仓**。
+
+---
+
 ## 登记模板
 
 ```markdown
