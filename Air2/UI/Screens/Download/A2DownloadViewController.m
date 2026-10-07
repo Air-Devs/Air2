@@ -32,13 +32,17 @@
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
+#import "A2ModpackInstallingViewController.h"
+#import "A2ModpackInstaller.h"
+#import "A2VersionManager.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 typedef NS_ENUM(NSInteger, A2ContentSource) {
     A2ContentSourceModrinth = 0,
     A2ContentSourceCurseForge,
 };
 
-@interface A2DownloadViewController ()
+@interface A2DownloadViewController () <UIDocumentPickerDelegate>
 @property (nonatomic, strong) A2CategoryNavView *nav;
 @property (nonatomic, strong) UIScrollView *contentScroll;
 @property (nonatomic, strong) UIStackView *contentStack;
@@ -125,6 +129,9 @@ typedef NS_ENUM(NSInteger, A2ContentSource) {
     // 「游戏」分类：安装新版本 + 模组加载器
     if (index == 0) {
         [_contentStack addArrangedSubview:[self buildGameSection]];
+    } else if (index == 1) {
+        // 「整合包」分类：浏览 + 本地导入
+        [_contentStack addArrangedSubview:[self buildModpackSection]];
     } else {
         [_contentStack addArrangedSubview:[self buildResourceHint:index]];
     }
@@ -210,6 +217,30 @@ typedef NS_ENUM(NSInteger, A2ContentSource) {
     return section;
 }
 
+/// 整合包分类：浏览在线整合包 + 导入本地 zip
+- (UIView *)buildModpackSection {
+    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:nil];
+    section.footerText = @"支持 Modrinth / CurseForge / MultiMC / MCBBS 四种整合包格式。";
+
+    A2SettingsRow *browseRow = [[A2SettingsRow alloc] init];
+    browseRow.symbolName = @"shippingbox.fill";
+    browseRow.title = @"浏览整合包";
+    browseRow.subtitle = @"搜索并一键安装完整整合包";
+    browseRow.accessory = A2SettingsRowAccessoryDisclosure;
+    browseRow.onTap = ^{ [self openListWithCategory:A2DownloadCategoryModpack]; };
+    [section addRow:browseRow];
+
+    A2SettingsRow *importRow = [[A2SettingsRow alloc] init];
+    importRow.symbolName = @"square.and.arrow.down";
+    importRow.title = @"导入本地整合包";
+    importRow.subtitle = @"从文件中选择整合包 zip 安装";
+    importRow.accessory = A2SettingsRowAccessoryDisclosure;
+    importRow.onTap = ^{ [self importLocalModpack]; };
+    [section addRow:importRow];
+
+    return section;
+}
+
 /// 资源分类：直接给搜索入口
 - (UIView *)buildResourceHint:(NSInteger)index {
     A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:nil];
@@ -249,6 +280,32 @@ typedef NS_ENUM(NSInteger, A2ContentSource) {
 - (void)openListWithCategory:(A2DownloadCategory)category {
     A2DownloadListViewController *vc = [[A2DownloadListViewController alloc] init];
     vc.category = category;
+    [self.navigationController pushViewController:vc animated:YES];
+}
+
+#pragma mark - 导入本地整合包
+
+- (void)importLocalModpack {
+    UIDocumentPickerViewController *picker =
+        [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeZIP]
+                                                                   asCopy:YES];
+    picker.delegate = self;
+    picker.allowsMultipleSelection = NO;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller
+didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    NSURL *url = urls.firstObject;
+    if (!url) return;
+
+    A2ModpackInstallRequest *req = [A2ModpackInstallRequest new];
+    req.localPackPath = url.path;
+    req.versionName = url.URLByDeletingPathExtension.lastPathComponent;
+    req.gameHome = A2VersionManager.shared.gameHome;
+
+    A2ModpackInstallingViewController *vc =
+        [[A2ModpackInstallingViewController alloc] initWithRequest:req];
     [self.navigationController pushViewController:vc animated:YES];
 }
 

@@ -65,3 +65,29 @@
 - **背景**：混合命名（`download` / `Downloads` / `downloads`）在大型项目中会造成认知负担。
 - **决策**：目录一律 UpperCamelCase 且用单数：`Download/`、`Version/`、`Account/`。
 - **理由**：与 Swift/ObjC 类型命名一致，导入路径与类型名视觉统一；单数避免"目录里到底装一个还是多个"的歧义。
+
+---
+
+## ADR-006：整合包四格式解析统一归入 `Core/Addons/Modpack/`
+
+- **状态**：已接受
+- **日期**：2026-10-07
+- **背景**：整合包来源格式互不兼容 —— Modrinth（`modrinth.index.json`）、CurseForge（`manifest.json`）、MultiMC（`mmc-pack.json` + `instance.cfg`）、MCBBS（`mcbbs.packmeta`）。若每种格式都往 UI 或下载引擎里塞分支，会把「来源差异」扩散到整条链路。
+- **决策**：四种格式各自一个解析器，统一产出 `A2ModpackInfo` 模型；由 `A2ModpackParser` 按 CF → MR → MultiMC → MCBBS 顺序命中即止。上层（安装编排、UI）只面对统一模型，不感知来源格式。
+- **理由**：
+  - 来源差异收敛在一处，新增格式只加解析器
+  - 解析器纯逻辑、可单测，符合 Core 不依赖 UIKit 的约束
+  - 错误域 `A2ModpackParserErrorDomain` 统一对外，UI 报错文案无需分格式
+
+---
+
+## ADR-007：只读 zip 解析器放在 `Utils/` 而非 `Core/`
+
+- **状态**：已接受
+- **日期**：2026-10-07
+- **背景**：整合包安装需要读取 zip 内的清单与解压文件。iOS 无公开的同步 zip 读取 API，需自行解析中央目录并用 zlib 做 raw inflate。
+- **决策**：`A2ZipReader`（只读条目、按名取数据）与 `A2ZipExtractor`（按前缀解压到目录）放在 `Utils/`，不进 Core；解压用 zlib，链接参数由 `scripts/gen_xcodeproj.py` 生成 `OTHER_LDFLAGS = ("-lz")`。
+- **理由**：
+  - zip 是通用容器格式，与 Minecraft 无关，符合 Utils「能放这里的必须与 MC 无关」的界定
+  - Core 只依赖「按条目名取数据」的抽象，不关心压缩算法
+  - 避免把 zlib 依赖绑到业务层

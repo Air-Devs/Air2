@@ -322,6 +322,9 @@ def build():
                 "PRODUCT_NAME": "$(TARGET_NAME)",
                 "SWIFT_EMIT_LOC_STRINGS": "YES",
                 "TARGETED_DEVICE_FAMILY": "1,2",
+                # A2ZipReader / A2DownloadEngine 用 zlib 的 inflate 解压 zip，
+                # 需要显式链上系统 zlib。
+                "OTHER_LDFLAGS": '("-lz")',
             })
         else:
             s.update({

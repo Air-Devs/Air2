@@ -15,6 +15,10 @@
 #import "A2Typography.h"
 #import "A2ModrinthAPI.h"
 #import "A2DownloadEngine.h"
+#import "A2ModpackInstallingViewController.h"
+#import "A2ModpackInstaller.h"
+#import "A2VersionManager.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 static NSString *const kCellID = @"A2DownloadCell";
 
@@ -143,7 +147,8 @@ static NSString *const kCellID = @"A2DownloadCell";
 
 #pragma mark - 列表页
 
-@interface A2DownloadListViewController () <UITableViewDataSource, UITableViewDelegate, UISearchBarDelegate>
+@interface A2DownloadListViewController () <UITableViewDataSource, UITableViewDelegate,
+                                             UISearchBarDelegate, UIDocumentPickerDelegate>
 @property (nonatomic, strong) UISearchBar *searchBar;
 @property (nonatomic, strong) UIView *filterBar;
 @property (nonatomic, strong) UITableView *tableView;
@@ -170,6 +175,15 @@ static NSString *const kCellID = @"A2DownloadCell";
     [self setupSearchBar];
     [self setupFilterBar];
     [self setupTable];
+
+    // 整合包分类：右上角提供本地导入入口
+    if (self.category == A2DownloadCategoryModpack) {
+        __weak typeof(self) weakSelf = self;
+        [self addTrailingButtonWithSymbol:@"square.and.arrow.down" action:^{
+            __strong typeof(weakSelf) self = weakSelf;
+            [self presentLocalModpackImporter];
+        }];
+    }
 
     [self reload];
 }
@@ -530,6 +544,16 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         return;
     }
 
+    // 整合包：不是简单落盘，而是走「下载 → 解压 → 解析 → 安装」全流程
+    if (self.category == A2DownloadCategoryModpack) {
+        [self installModpackAtURL:version.downloadURL
+                             sha1:version.sha1
+                             size:version.fileSize
+                          iconURL:project.iconURL
+                             name:project.title];
+        return;
+    }
+
     // 目标目录：按资源类型落盘
     NSString *subdir = [self directoryNameForCategory];
     NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
@@ -573,6 +597,53 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         case A2DownloadCategoryWorld:        return @"saves";
         default:                             return @"downloads";
     }
+}
+
+#pragma mark - 整合包安装
+
+/// 用在线下载的整合包启动安装流程
+- (void)installModpackAtURL:(NSString *)url
+                       sha1:(NSString *)sha1
+                       size:(long long)size
+                    iconURL:(NSString *)iconURL
+                       name:(NSString *)name {
+    A2ModpackInstallRequest *req = [A2ModpackInstallRequest new];
+    req.packURL = url;
+    req.packSHA1 = sha1;
+    req.packSize = size;
+    req.iconURL = iconURL;
+    req.versionName = name;
+    req.gameHome = A2VersionManager.shared.gameHome;
+    [self pushModpackInstallerWithRequest:req];
+}
+
+/// 弹出系统文件选择器，从本地导入整合包 zip
+- (void)presentLocalModpackImporter {
+    UIDocumentPickerViewController *picker =
+        [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeZIP]
+                                                                   asCopy:YES];
+    picker.delegate = self;
+    picker.allowsMultipleSelection = NO;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller
+didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    NSURL *url = urls.firstObject;
+    if (!url) return;
+
+    A2ModpackInstallRequest *req = [A2ModpackInstallRequest new];
+    req.localPackPath = url.path;
+    req.versionName = url.URLByDeletingPathExtension.lastPathComponent;
+    req.gameHome = A2VersionManager.shared.gameHome;
+    [self pushModpackInstallerWithRequest:req];
+}
+
+/// 进入安装进度页
+- (void)pushModpackInstallerWithRequest:(A2ModpackInstallRequest *)request {
+    A2ModpackInstallingViewController *vc =
+        [[A2ModpackInstallingViewController alloc] initWithRequest:request];
+    [self.navigationController pushViewController:vc animated:YES];
 }
 
 #pragma mark - UISearchBarDelegate

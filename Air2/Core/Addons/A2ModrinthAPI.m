@@ -72,9 +72,11 @@ static NSString *const kUserAgent = @"Air-Devs/Air2/0.1.0 (github.com/Air-Devs/A
         NSDictionary *f = files.firstObject;
         v.downloadURL = f[@"url"];
         v.fileName = f[@"filename"];
-        NSDictionary *hashes = f[@"hashes"];
+        NSDictionary *hashes = [f[@"hashes"] isKindOfClass:NSDictionary.class] ? f[@"hashes"] : nil;
+        // Modrinth 同时给 sha1/sha512，下载校验用 sha1
+        NSString *sha1 = [hashes[@"sha1"] isKindOfClass:NSString.class] ? hashes[@"sha1"] : nil;
+        v.sha1 = sha1.lowercaseString;
         v.fileSize = [f[@"size"] longLongValue];
-        (void)hashes;
     }
     return v;
 }

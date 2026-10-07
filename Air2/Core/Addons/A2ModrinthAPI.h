@@ -49,6 +49,8 @@ typedef NS_ENUM(NSInteger, A2ModrinthProjectType) {
 /// 主文件的下载地址
 @property (nonatomic, copy, nullable) NSString *downloadURL;
 @property (nonatomic, copy, nullable) NSString *fileName;
+/// 主文件的 SHA1，小写十六进制；接口未提供则 nil
+@property (nonatomic, copy, nullable) NSString *sha1;
 @property (nonatomic, assign) long long fileSize;
 + (instancetype)fromJSON:(NSDictionary *)json;
 @end

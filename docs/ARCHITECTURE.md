@@ -68,6 +68,14 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 
 **禁止**：`import SwiftUI`、`import UIKit`。
 
+`Core/Addons/` 下的整合包（Modpack）支持：
+
+| 路径 | 职责 |
+|---|---|
+| `Modpack/` | 整合包模型、四格式解析（Modrinth / CurseForge / MultiMC / MCBBS）、文件并发下载与安装编排 |
+| `A2ModrinthAPI.*` | Modrinth API 客户端：搜索、项目版本、文件下载地址与 SHA1 |
+| `A2CurseForgeAPI.*` | CurseForge API 客户端：搜索、列文件、批量取直链/SHA1 与项目分类 |
+
 #### `UI/`
 
 | 子目录 | 职责 |
@@ -88,6 +96,7 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 #### `Utils/`
 无业务语义的纯工具。**能放进这里的，必须与 Minecraft 无关。**
 日期格式化、JSON 编解码扩展、字符串处理、数学工具等。
+`A2ZipReader` / `A2ZipExtractor`：只读 zip（method 0 直取、method 8 走 zlib raw inflate）与按前缀解压到目录，同样与 Minecraft 无关，故放在 Utils。
 
 ---
 
