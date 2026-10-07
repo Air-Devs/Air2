@@ -11,10 +11,14 @@
 
 #import <UIKit/UIKit.h>
 #import "A2AppDelegate.h"
+#import "A2CrashGuard.h"
 
 int main(int argc, char *argv[]) {
     NSString *delegateName = NSStringFromClass([A2AppDelegate class]);
     @autoreleasepool {
+        // 崩溃兜底要在最早时机注册 —— 之后任何一行代码崩溃都能留下线索。
+        // 这个环境没有调试器，日志是唯一的定位手段。
+        [A2CrashGuard install];
         return UIApplicationMain(argc, argv, nil, delegateName);
     }
 }

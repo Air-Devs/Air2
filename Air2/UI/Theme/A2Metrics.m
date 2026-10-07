@@ -69,13 +69,10 @@ UIViewPropertyAnimator *A2SoftSpring(NSTimeInterval duration) {
 /// `delay` 用于查询），所以错峰必须靠 dispatch_after 实现。
 ///
 /// @param completion 最后一个动画结束时回调，可为 nil
-/// @return 第一个卡片的动画器。调用方若要中途取消，可以持有它。
-UIViewPropertyAnimator *A2AnimateCardEntrance(NSArray<UIView *> *views,
-                                              CGFloat staggerDelay,
-                                              void (^completion)(void)) {
-    if (views.count == 0) return nil;
-
-    __block UIViewPropertyAnimator *firstAnimator = nil;
+void A2AnimateCardEntrance(NSArray<UIView *> *views,
+                           CGFloat staggerDelay,
+                           void (^completion)(void)) {
+    if (views.count == 0) return;
 
     for (NSUInteger i = 0; i < views.count; i++) {
         UIView *v = views[i];
@@ -96,10 +93,6 @@ UIViewPropertyAnimator *A2AnimateCardEntrance(NSArray<UIView *> *views,
                 [a addCompletion:^(UIViewAnimatingPosition pos) { completion(); }];
             }
             [a startAnimation];
-
-            if (i == 0) firstAnimator = a;
         });
     }
-
-    return firstAnimator;
 }

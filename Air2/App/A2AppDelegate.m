@@ -11,8 +11,9 @@
 
 - (BOOL)application:(UIApplication *)application
 didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *)launchOptions {
-    // 主题要在窗口建立前就位，避免首帧闪一下默认配色
-    [A2ThemeManager.shared applyAppearanceToWindow:nil];
+    // 提前实例化主题管理器。它第一次访问会读 UserDefaults 与沙盒里的
+    // 背景图，放在启动早期做，避免首次渲染时在布局过程中触发磁盘 IO。
+    (void)A2ThemeManager.shared;
     return YES;
 }
 
@@ -31,6 +32,11 @@ didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *
 
 #pragma mark - Scene 生命周期
 
+/// 返回 Scene 配置。
+///
+/// 用代码显式指定代理类，不依赖 Info.plist 的 UIApplicationSceneManifest
+/// 清单 —— 清单方式在字段不全时会静默失败（没有窗口 / 白屏 / 闪退），
+/// 原因极难定位。代码方式配置是明确的。
 - (UISceneConfiguration *)application:(UIApplication *)application
 configurationForConnectingSceneSession:(UISceneSession *)connectingSceneSession
                               options:(UISceneConnectionOptions *)options {

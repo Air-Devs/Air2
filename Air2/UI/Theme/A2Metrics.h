@@ -6,7 +6,6 @@
 //
 
 #import <UIKit/UIKit.h>
-#import "A2GlassCard.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -73,9 +72,13 @@ UIViewPropertyAnimator *A2SoftSpring(NSTimeInterval duration);
 
 #pragma mark - 卡片入场动画
 
-/// 给一组视图做依次淡入上浮的入场动画
-UIViewPropertyAnimator *A2AnimateCardEntrance(NSArray<UIView *> *views,
-                                              CGFloat staggerDelay,
-                                              void (^ _Nullable completion)(void));
+/// 给一组视图做依次淡入上浮的入场动画。
+///
+/// 注意：不要返回动画器。动画是异步错峰启动的，函数返回时第一个
+/// 动画器往往尚未创建，返回它只会返回 nil，调用方拿去做任何操作都会出问题。
+/// 需要感知结束时用 completion。
+void A2AnimateCardEntrance(NSArray<UIView *> *views,
+                           CGFloat staggerDelay,
+                           void (^ _Nullable completion)(void));
 
 NS_ASSUME_NONNULL_END
