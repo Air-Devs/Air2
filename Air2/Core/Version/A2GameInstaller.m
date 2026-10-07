@@ -5,6 +5,7 @@
 
 #import "A2GameInstaller.h"
 #import "A2VersionIsolation.h"
+#import "A2ModLoaderInstaller.h"
 
 /// 官方版本清单地址（Mojang piston-meta）
 static NSString *const kVersionManifestURL = @"https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
@@ -325,6 +326,15 @@ static void A2Main(dispatch_block_t block) {
     }
 
     A2ModLoaderType type = (A2ModLoaderType)self.request.loaderType.integerValue;
+
+    // 不支持自动安装的加载器直接拒绝，不假装成功
+    if (![A2ModLoaderInstaller supportsAutoInstall:type]) {
+        [self failWithMessage:[NSString stringWithFormat:
+            @"%@ 不支持自动安装，请手动下载安装包后放入 versions 目录",
+            [A2ModLoaderAPI displayNameForType:type]]];
+        return;
+    }
+
     [self report:A2InstallStageInstallLoader progress:0
          message:[NSString stringWithFormat:@"正在准备 %@…",
                   [A2ModLoaderAPI displayNameForType:type]]];
@@ -359,13 +369,25 @@ static void A2Main(dispatch_block_t block) {
         }
         if (!chosen) chosen = versions.firstObject;
 
-        [self report:A2InstallStageInstallLoader progress:1
-             message:[NSString stringWithFormat:@"已选定 %@", chosen.displayName]];
+        [self report:A2InstallStageInstallLoader progress:0.1
+             message:[NSString stringWithFormat:@"正在安装 %@…", chosen.displayName]];
 
-        // 记录到版本配置，真正的加载器安装（下载并生成版本 json）
-        // 需要在后续实现 —— 这里先把选择持久化，避免给出"安装成功"的假象
-        [self saveLoaderSelection:chosen];
-        [self finalize];
+        // 真正执行安装
+        A2ModLoaderInstaller *installer = [[A2ModLoaderInstaller alloc] init];
+        [installer installLoader:chosen
+                       mcVersion:self.request.mcVersion
+                     versionName:self.request.versionName
+                        gameHome:self.request.gameHome
+                        progress:^(double p, NSString *message) {
+            // 把加载器安装的进度映射到本阶段
+            [self report:A2InstallStageInstallLoader progress:p message:message];
+        }
+                      completion:^(BOOL success, NSError *error) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (self.cancelled) return;
+            if (!success) { [self failWithError:error]; return; }
+            [self finalize];
+        }];
     }];
 }
 

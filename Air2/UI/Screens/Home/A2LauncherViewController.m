@@ -18,6 +18,8 @@
 #import "A2VersionCard.h"
 #import "A2Toast.h"
 #import "A2NavigationController.h"
+#import "A2VersionManager.h"
+#import "A2AccountManager.h"
 #import "A2QuickActionCard.h"
 #import "A2PrimaryButton.h"
 
@@ -76,6 +78,17 @@
                                           selector:@selector(handleThemeChanged:)
                                               name:A2BackgroundDidChangeNotification
                                             object:nil];
+    // 版本与账号变化时刷新右侧
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                          selector:@selector(handleDataChanged)
+                                              name:A2VersionsDidChangeNotification
+                                            object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                          selector:@selector(handleDataChanged)
+                                              name:A2AccountsDidChangeNotification
+                                            object:nil];
+
+    [self handleDataChanged];
 }
 
 - (void)dealloc {
@@ -170,6 +183,7 @@
     // 功能重叠，还把右栏撑得很满。ZL2 的操作区也只有账户卡与版本卡。
     [self buildAccountCard];
     [self buildVersionCard];
+    [self buildRecentCard];
 }
 
 #pragma mark - 操作区垂直布局
@@ -188,34 +202,35 @@
 /// 这里用两个 spacer 实现同样的分层：
 ///   账户卡（定高） + spacer（弹性） + 版本卡（定高）
 /// spacer 吸收多余空间，卡片贴住上下两端。
+/// 右栏的垂直布局：三张卡按自然高度从顶部依次排列。
+///
+/// 之前是「撑满高度 + 卡片拉伸」，但右侧只有两张卡时，
+/// 卡片会被拉得很长而内容稀疏，看起来是变形的。
+/// 改成内容自适应后，卡片保持自然比例，下方留白 ——
+/// 留白比拉伸好看。
 - (void)setupPanelPlacement {
     UILayoutGuide *content = _panelScroll.contentLayoutGuide;
     UILayoutGuide *frame = _panelScroll.frameLayoutGuide;
 
     [NSLayoutConstraint activateConstraints:@[
-        // 内容宽度跟随可视区域（只允许垂直滚动）
+        // 宽度跟随可视区域（只允许垂直滚动）
         [_panelStack.widthAnchor constraintEqualToAnchor:frame.widthAnchor
                                                constant:-A2PanelOuterPadding * 2],
 
-        // 撑满高度：内容区上下贴合
+        // 顶部对齐，底部按内容自然结束
         [_panelStack.topAnchor constraintEqualToAnchor:content.topAnchor
                                               constant:A2PanelOuterPadding],
-        [_panelStack.bottomAnchor constraintEqualToAnchor:content.bottomAnchor
-                                                 constant:-A2PanelOuterPadding],
-
-        // 内容高度不足一屏时，也至少撑满可视区域 ——
-        // 这样卡片才会贴住上下边，而不是缩成一小块
-        [_panelStack.heightAnchor constraintGreaterThanOrEqualToAnchor:frame.heightAnchor
-                                                             constant:-A2PanelOuterPadding * 2],
+        [_panelStack.bottomAnchor constraintLessThanOrEqualToAnchor:content.bottomAnchor
+                                                           constant:-A2PanelOuterPadding],
     ]];
 
-    // 版本卡吃掉剩余空间（账户卡定高、版本卡弹性）
-    [_versionCard setContentHuggingPriority:UILayoutPriorityDefaultLow
-                                    forAxis:UILayoutConstraintAxisVertical];
-    [_accountCard setContentHuggingPriority:UILayoutPriorityDefaultHigh
-                                    forAxis:UILayoutConstraintAxisVertical];
-    [_versionCard setContentCompressionResistancePriority:UILayoutPriorityDefaultLow
-                                                 forAxis:UILayoutConstraintAxisVertical];
+    // 三张卡都按内容撑高，不互相争抢空间
+    for (UIView *card in @[_accountCard, _versionCard, _recentCard]) {
+        [card setContentHuggingPriority:UILayoutPriorityRequired
+                                forAxis:UILayoutConstraintAxisVertical];
+        [card setContentCompressionResistancePriority:UILayoutPriorityRequired
+                                              forAxis:UILayoutConstraintAxisVertical];
+    }
 }
 #pragma mark - 约束
 
@@ -282,6 +297,7 @@
     NSMutableArray<UIView *> *cards = [NSMutableArray array];
     if (_accountCard) [cards addObject:_accountCard];
     if (_versionCard) [cards addObject:_versionCard];
+    if (_recentCard) [cards addObject:_recentCard];
 
 
     A2AnimateCardEntrance(cards, A2CardStaggerDelay, nil);
@@ -324,6 +340,16 @@
     [self tintTaggedViewsIn:_topBar color:s.cOnSurfaceVariant];
     [self tintTaggedViewsIn:_versionCard color:s.cOnSurfaceVariant];
     [self tintTaggedViewsIn:_accountCard color:s.cOnSurfaceVariant];
+    [self tintTaggedViewsIn:_recentCard color:s.cOnSurfaceVariant];
+}
+
+#pragma mark - 数据刷新
+
+/// 版本或账号变化时刷新界面
+- (void)handleDataChanged {
+    [self refreshCurrentVersionUI];
+    [self refreshAccountUI];
+    [self refreshRecentVersions];
 }
 
 /// 递归给打了标记的视图着色。
@@ -346,46 +372,42 @@
 }
 #pragma mark - 右侧操作区
 //
-// 布局规格对齐 ZalithLauncher2（Android 上成熟落地的 MD3 启动器）：
+//  布局：
+//    ┌───────────────────────────┐
+//    │      ┌─────┐              │  账户卡
+//    │      │ 头像 │  64pt       │    头像居中
+//    │      └─────┘              │
+//    │       Steve               │
+//    │       Microsoft 正版账号    │
+//    └───────────────────────────┘
+//    ┌───────────────────────────┐
+//    │  1.21.5-fabric        ⚙   │  版本卡
+//    │  Fabric 0.16.10 · Java 21 │
+//    │  ┌─────────────────────┐  │
+//    │  │      启动游戏        │  │
+//    │  └─────────────────────┘  │
+//    │  版本设置 · 游戏目录        │
+//    └───────────────────────────┘
+//    ┌───────────────────────────┐
+//    │  最近游玩                  │  最近游玩（新增）
+//    │  [1.21.5]  [1.20.1]  ...  │    横向滚动的小卡
+//    └───────────────────────────┘
 //
-//   ┌───────────────────────────┐
-//   │      ┌─────┐              │  账户卡
-//   │      │ 头像 │  64pt       │    头像居中，名字与类型在下方居中
-//   │      └─────┘              │
-//   │       Steve               │
-//   │       Microsoft 正版账号    │
-//   ├───────────────────────────┤
-//   │  1.21.5-fabric        ⚙   │  版本卡
-//   │  Fabric 0.16.10 · Java 21 │    版本信息 + 齿轮（有版本时才出现）
-//   │  ┌─────────────────────┐  │
-//   │  │      启动游戏        │  │    主操作按钮
-//   │  └─────────────────────┘  │
-//   │  版本设置 · 游戏目录        │    次级操作（文字链接）
-//   └───────────────────────────┘
-//
-//  两张卡撑满操作区高度（高度 = 屏高 - 上下外边距），
-//  而不是内容自适应 —— ZL2 就是这么做的，撑满但不臃肿，
-//  因为内部是分层的：账户区在上、版本区在下。
-//
-//  卡片外边距与内边距都是 12，圆角用 MD3 的 extraLarge(28)。
+//  三张卡从顶部依次排列，不强行撑满高度 ——
+//  内容少时下方留白，比把两张卡拉变形好看。
 
 #pragma mark 账户卡
 
-/// 账户卡 —— 头像居中的竖向排列（对应 ZL2 的 AccountAvatarCenter）。
-///
-/// 为什么用居中而不是横向一行：
-/// 操作区宽度只有屏幕的 30%，横向排列时文字空间被挤压，
-/// 竖排能让 64pt 头像成为视觉锚点，名字和类型在下方居中。
 - (void)buildAccountCard {
     _accountCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
-    _accountCard.cornerRadius = A2RadiusXL;          // MD3 extraLarge
+    _accountCard.cornerRadius = A2RadiusXL;
     _accountCard.elevation = A2CardElevationLow;
     _accountCard.tappable = YES;
     _accountCard.onTap = ^{ [self openAccount]; };
-    _accountCard.contentInsets = UIEdgeInsetsMake(A2CardPadding, A2CardPadding,
-                                                  A2CardPadding, A2CardPadding);
+    _accountCard.contentInsets = UIEdgeInsetsMake(A2CardPadding + 4, A2CardPadding,
+                                                  A2CardPadding + 4, A2CardPadding);
 
-    // ---- 头像 64pt ----
+    // ---- 头像 ----
     _avatarView = [[UIView alloc] initWithFrame:CGRectZero];
     _avatarView.translatesAutoresizingMaskIntoConstraints = NO;
     _avatarView.layer.cornerRadius = A2AvatarSizeLarge / 2;
@@ -394,23 +416,23 @@
 
     _avatarInitial = [[UILabel alloc] initWithFrame:CGRectZero];
     _avatarInitial.translatesAutoresizingMaskIntoConstraints = NO;
-    _avatarInitial.text = @"S";
     _avatarInitial.font = [UIFont systemFontOfSize:26 weight:UIFontWeightSemibold];
     _avatarInitial.textAlignment = NSTextAlignmentCenter;
+    _avatarInitial.text = @"?";
     [_avatarView addSubview:_avatarInitial];
 
     // ---- 名字与类型 ----
     _accountNameLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _accountNameLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
     _accountNameLabel.textAlignment = NSTextAlignmentCenter;
-    _accountNameLabel.text = @"Steve";
+    _accountNameLabel.text = @"未登录";
     _accountNameLabel.adjustsFontSizeToFitWidth = YES;
     _accountNameLabel.minimumScaleFactor = 0.8;
 
     _accountTypeLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _accountTypeLabel.font = [A2Typography caption];
     _accountTypeLabel.textAlignment = NSTextAlignmentCenter;
-    _accountTypeLabel.text = @"Microsoft 正版账号";
+    _accountTypeLabel.text = @"点击添加账号";
     _accountTypeLabel.adjustsFontSizeToFitWidth = YES;
     _accountTypeLabel.minimumScaleFactor = 0.8;
 
@@ -420,7 +442,6 @@
     textStack.spacing = 2;
     textStack.alignment = UIStackViewAlignmentCenter;
 
-    // ---- 竖向整体 ----
     UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[_avatarView, textStack]];
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     stack.axis = UILayoutConstraintAxisVertical;
@@ -435,7 +456,6 @@
         [_avatarInitial.centerXAnchor constraintEqualToAnchor:_avatarView.centerXAnchor],
         [_avatarInitial.centerYAnchor constraintEqualToAnchor:_avatarView.centerYAnchor],
 
-        // 文字撑满卡片宽度，超出则截断（而不是撑破布局）
         [textStack.leadingAnchor constraintEqualToAnchor:_accountCard.contentView.leadingAnchor],
         [textStack.trailingAnchor constraintEqualToAnchor:_accountCard.contentView.trailingAnchor],
 
@@ -446,20 +466,10 @@
     ]];
 
     [_panelStack addArrangedSubview:_accountCard];
-
-    // 账户卡的内部留白要多一些 —— 它是「个人信息」区，不是数据行
-    [_accountCard.contentView.heightAnchor
-        constraintGreaterThanOrEqualToConstant:A2AvatarSizeLarge + A2SpaceXL].active = YES;
 }
 
 #pragma mark 版本卡
 
-/// 版本卡 —— 操作区的功能主体。
-///
-/// 与 ZL2 的 VersionsContent 一致：
-///   · 版本信息占满宽度，齿轮只在有有效版本时出现
-///   · 启动按钮撑满卡片宽度
-///   · 版本名用大字，加载器信息用 labelSmall
 - (void)buildVersionCard {
     _versionCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
     _versionCard.cornerRadius = A2RadiusXL;
@@ -467,16 +477,16 @@
     _versionCard.contentInsets = UIEdgeInsetsMake(A2CardPadding, A2CardPadding,
                                                   A2CardPadding, A2CardPadding);
 
-    // ---- 顶部行：版本信息 + 齿轮 ----
+    // ---- 顶部行 ----
     _versionNameLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _versionNameLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
-    _versionNameLabel.text = @"1.21.5-fabric";
+    _versionNameLabel.text = @"未选择版本";
     _versionNameLabel.adjustsFontSizeToFitWidth = YES;
     _versionNameLabel.minimumScaleFactor = 0.7;
 
     _versionMetaLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _versionMetaLabel.font = [A2Typography caption];
-    _versionMetaLabel.text = @"Fabric 0.16.10 · Java 21";
+    _versionMetaLabel.text = @"点右下角进入版本管理";
     _versionMetaLabel.adjustsFontSizeToFitWidth = YES;
     _versionMetaLabel.minimumScaleFactor = 0.8;
 
@@ -485,7 +495,6 @@
     infoStack.axis = UILayoutConstraintAxisVertical;
     infoStack.spacing = 2;
 
-    // 齿轮：仅在有版本时显示（无版本时显示「去安装」提示）
     UIImageSymbolConfiguration *gearCfg =
         [UIImageSymbolConfiguration configurationWithPointSize:17 weight:UIImageSymbolWeightRegular];
     UIButton *gearBtn = [UIButton buttonWithType:UIButtonTypeSystem];
@@ -501,7 +510,6 @@
     topRow.axis = UILayoutConstraintAxisHorizontal;
     topRow.alignment = UIStackViewAlignmentCenter;
     topRow.spacing = A2SpaceS;
-    // 信息区吃掉剩余宽度，齿轮靠右固定大小
     [infoStack setContentHuggingPriority:UILayoutPriorityDefaultLow
                                  forAxis:UILayoutConstraintAxisHorizontal];
 
@@ -511,7 +519,7 @@
     _launchButton.minHeight = A2ButtonHeight;
     [_launchButton addTarget:self action:@selector(launchGame) forControlEvents:UIControlEventTouchUpInside];
 
-    // ---- 次级操作：文字链接 ----
+    // ---- 次级操作 ----
     UIButton *settingsLink = [self makeTextLink:@"版本设置" action:@selector(openVersionSettings)];
     UILabel *dot = [[UILabel alloc] initWithFrame:CGRectZero];
     dot.text = @"·";
@@ -528,7 +536,7 @@
                           @[topRow, _launchButton, linkRow]];
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     stack.axis = UILayoutConstraintAxisVertical;
-    stack.alignment = UIStackViewAlignmentFill;   // 子项撑满宽度
+    stack.alignment = UIStackViewAlignmentFill;
     [stack setCustomSpacing:A2SpaceL afterView:topRow];
     [stack setCustomSpacing:A2SpaceM afterView:_launchButton];
 
@@ -547,8 +555,187 @@
     [_panelStack addArrangedSubview:_versionCard];
 }
 
-/// 文字链接样式的次级操作。
-/// 用链接而不是按钮 —— 次级操作不该和「启动游戏」争视觉焦点。
+#pragma mark 最近游玩
+
+/// 最近游玩 —— 横向滚动的版本小卡。
+///
+/// 之前右侧只有两张卡，内容太少而卡片被拉满高度，显空。
+/// 加这一块后信息密度合适，且确实有用：快速切换常玩的版本。
+- (void)buildRecentCard {
+    _recentCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
+    _recentCard.cornerRadius = A2RadiusXL;
+    _recentCard.elevation = A2CardElevationLow;
+    _recentCard.contentInsets = UIEdgeInsetsMake(A2CardPadding, 0, A2CardPadding, 0);
+
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectZero];
+    title.translatesAutoresizingMaskIntoConstraints = NO;
+    title.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
+    title.text = @"最近游玩";
+
+    // 横向滚动
+    UIScrollView *scroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    scroll.showsHorizontalScrollIndicator = NO;
+
+    _recentStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _recentStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _recentStack.axis = UILayoutConstraintAxisHorizontal;
+    _recentStack.spacing = A2SpaceS;
+    [scroll addSubview:_recentStack];
+
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[title, scroll]];
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = A2SpaceM;
+
+    [_recentCard.contentView addSubview:stack];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [stack.topAnchor constraintEqualToAnchor:_recentCard.contentView.topAnchor],
+        [stack.bottomAnchor constraintEqualToAnchor:_recentCard.contentView.bottomAnchor],
+        [stack.leadingAnchor constraintEqualToAnchor:_recentCard.contentView.leadingAnchor],
+        [stack.trailingAnchor constraintEqualToAnchor:_recentCard.contentView.trailingAnchor],
+        [title.leadingAnchor constraintEqualToAnchor:_recentCard.contentView.leadingAnchor
+                                            constant:A2CardPadding],
+
+        [scroll.heightAnchor constraintEqualToConstant:56],
+        [_recentStack.topAnchor constraintEqualToAnchor:scroll.topAnchor],
+        [_recentStack.bottomAnchor constraintEqualToAnchor:scroll.bottomAnchor],
+        [_recentStack.leadingAnchor constraintEqualToAnchor:scroll.leadingAnchor
+                                                   constant:A2CardPadding],
+        [_recentStack.trailingAnchor constraintEqualToAnchor:scroll.trailingAnchor
+                                                    constant:-A2CardPadding],
+        [_recentStack.heightAnchor constraintEqualToAnchor:scroll.heightAnchor],
+    ]];
+
+    [_panelStack addArrangedSubview:_recentCard];
+    [self refreshRecentVersions];
+}
+
+/// 用真实安装的版本刷新最近游玩
+- (void)refreshRecentVersions {
+    for (UIView *v in _recentStack.arrangedSubviews) {
+        [_recentStack removeArrangedSubview:v];
+        [v removeFromSuperview];
+    }
+
+    NSArray<A2Version *> *versions = A2VersionManager.shared.versions;
+    if (versions.count == 0) {
+        UILabel *empty = [[UILabel alloc] initWithFrame:CGRectZero];
+        empty.translatesAutoresizingMaskIntoConstraints = NO;
+        empty.text = @"还没有安装版本";
+        empty.font = [A2Typography caption];
+        empty.textColor = A2ThemeManager.shared.scheme.cOnSurfaceVariant;
+        [_recentStack addArrangedSubview:empty];
+        return;
+    }
+
+    // 最多显示 6 个
+    NSUInteger count = MIN(6, versions.count);
+    for (NSUInteger i = 0; i < count; i++) {
+        A2Version *v = versions[i];
+        UIView *chip = [self makeVersionChip:v];
+        [_recentStack addArrangedSubview:chip];
+    }
+}
+
+/// 版本小卡：图标 + 名称
+- (UIView *)makeVersionChip:(A2Version *)version {
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+
+    UIControl *chip = [[UIControl alloc] initWithFrame:CGRectZero];
+    chip.translatesAutoresizingMaskIntoConstraints = NO;
+    chip.backgroundColor = t.cSurfaceContainerHigh;
+    chip.layer.cornerRadius = A2RadiusM;
+    chip.layer.cornerCurve = kCACornerCurveContinuous;
+
+    UILabel *initial = [[UILabel alloc] initWithFrame:CGRectZero];
+    initial.translatesAutoresizingMaskIntoConstraints = NO;
+    initial.text = version.name.length ? [[version.name substringToIndex:1] uppercaseString] : @"?";
+    initial.font = [UIFont systemFontOfSize:14 weight:UIFontWeightBold];
+    initial.textAlignment = NSTextAlignmentCenter;
+    initial.textColor = t.cOnPrimaryContainer;
+    initial.backgroundColor = t.cPrimaryContainer;
+    initial.layer.cornerRadius = A2RadiusS;
+    initial.layer.cornerCurve = kCACornerCurveContinuous;
+    initial.clipsToBounds = YES;
+
+    UILabel *name = [[UILabel alloc] initWithFrame:CGRectZero];
+    name.translatesAutoresizingMaskIntoConstraints = NO;
+    name.text = version.name;
+    name.font = [UIFont systemFontOfSize:11 weight:UIFontWeightMedium];
+    name.textColor = t.cOnSurface;
+    name.textAlignment = NSTextAlignmentCenter;
+    name.numberOfLines = 1;
+    name.adjustsFontSizeToFitWidth = YES;
+    name.minimumScaleFactor = 0.7;
+
+    [chip addSubview:initial];
+    [chip addSubview:name];
+
+    __weak typeof(self) weakSelf = self;
+    A2Version *capturedVersion = version;
+    [chip addAction:[UIAction actionWithHandler:^(UIAction *action) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if ([A2VersionManager.shared setCurrentVersion:capturedVersion]) {
+            [self refreshCurrentVersionUI];
+            [A2Toast show:[NSString stringWithFormat:@"已切换到 %@", capturedVersion.name]
+                   inView:self.view];
+        }
+    }] forControlEvents:UIControlEventTouchUpInside];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [chip.widthAnchor constraintGreaterThanOrEqualToConstant:72],
+        [chip.heightAnchor constraintEqualToConstant:56],
+
+        [initial.topAnchor constraintEqualToAnchor:chip.topAnchor constant:6],
+        [initial.centerXAnchor constraintEqualToAnchor:chip.centerXAnchor],
+        [initial.widthAnchor constraintEqualToConstant:26],
+        [initial.heightAnchor constraintEqualToConstant:26],
+
+        [name.topAnchor constraintEqualToAnchor:initial.bottomAnchor constant:3],
+        [name.leadingAnchor constraintEqualToAnchor:chip.leadingAnchor constant:4],
+        [name.trailingAnchor constraintEqualToAnchor:chip.trailingAnchor constant:-4],
+        [name.bottomAnchor constraintLessThanOrEqualToAnchor:chip.bottomAnchor constant:-4],
+    ]];
+
+    return chip;
+}
+
+/// 刷新版本卡上的版本信息
+- (void)refreshCurrentVersionUI {
+    A2Version *current = A2VersionManager.shared.currentVersion;
+    if (!current) {
+        _versionNameLabel.text = @"未选择版本";
+        _versionMetaLabel.text = @"点右下角进入版本管理";
+        return;
+    }
+
+    _versionNameLabel.text = current.name;
+
+    NSMutableArray<NSString *> *parts = [NSMutableArray array];
+    if (current.loaderInfo.length) [parts addObject:current.loaderInfo];
+    if (current.isIsolationEnabled) [parts addObject:@"隔离开启"];
+    parts.count > 0 ?: [parts addObject:@"原版"];
+    _versionMetaLabel.text = [parts componentsJoinedByString:@" · "];
+}
+
+/// 刷新账户卡
+- (void)refreshAccountUI {
+    A2Account *acc = A2AccountManager.shared.currentAccount;
+    if (!acc) {
+        _avatarInitial.text = @"+";
+        _accountNameLabel.text = @"未登录";
+        _accountTypeLabel.text = @"点击添加账号";
+        return;
+    }
+    _avatarInitial.text = acc.username.length ? [[acc.username substringToIndex:1] uppercaseString] : @"?";
+    _accountNameLabel.text = acc.username;
+    _accountTypeLabel.text = acc.typeDisplayName;
+}
+
+#pragma mark 文字链接
+
 - (UIButton *)makeTextLink:(NSString *)title action:(SEL)action {
     UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
     b.translatesAutoresizingMaskIntoConstraints = NO;
@@ -558,6 +745,7 @@
     [b addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
     return b;
 }
+
 #pragma mark - 动作与导航
 
 - (void)launchGame {
