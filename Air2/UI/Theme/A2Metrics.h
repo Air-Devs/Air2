@@ -2,59 +2,81 @@
 //  A2Metrics.h
 //  Air2
 //
-//  尺寸与动效常量。视图层禁止硬编码字面量，一律从这里取。
+//  尺寸与动效常量。
+//
+//  数值参考 Material Design 3 规范，并与 ZalithLauncher2 的实际取值对齐
+//  （它是 Android 上成熟落地的 MD3 启动器，这些值是经过真机验证的）：
+//    · 操作区 : 内容区 = 3 : 7
+//    · 卡片外边距 12dp
+//    · 卡片圆角用 MD3 的 extraLarge 一档
+//    · 卡片内边距 12dp
 //
 
 #import <UIKit/UIKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-#pragma mark - 间距（4pt 网格）
+#pragma mark - 间距（MD3 的 4dp 网格）
 
 UIKIT_EXTERN const CGFloat A2SpaceXS;    // 4
 UIKIT_EXTERN const CGFloat A2SpaceS;     // 8
-UIKIT_EXTERN const CGFloat A2SpaceM;     // 12
+UIKIT_EXTERN const CGFloat A2SpaceM;     // 12  ← MD3 卡片内边距的常用值
 UIKIT_EXTERN const CGFloat A2SpaceL;     // 16
 UIKIT_EXTERN const CGFloat A2SpaceXL;    // 24
 UIKIT_EXTERN const CGFloat A2SpaceXXL;   // 32
 
-/// 页面左右安全边距
+/// 卡片内边距。MD3 的卡片默认 12dp，不是 16。
+UIKIT_EXTERN const CGFloat A2CardPadding;
+
+/// 卡片之间的间距，同样 12
+UIKIT_EXTERN const CGFloat A2CardSpacing;
+
+/// 操作区相对屏幕的外边距
+UIKIT_EXTERN const CGFloat A2PanelOuterPadding;
+
+/// 页面内容左右安全边距（二级页面的通用边距）
 UIKIT_EXTERN const CGFloat A2PageMargin;
 
-#pragma mark - 圆角
+#pragma mark - 圆角（MD3 Shape Scale）
 
-UIKIT_EXTERN const CGFloat A2RadiusXS;   // 8
-UIKIT_EXTERN const CGFloat A2RadiusS;    // 12
-UIKIT_EXTERN const CGFloat A2RadiusM;    // 16
-UIKIT_EXTERN const CGFloat A2RadiusL;    // 20
-UIKIT_EXTERN const CGFloat A2RadiusXL;   // 28
+UIKIT_EXTERN const CGFloat A2RadiusXS;    // 4   extraSmall
+UIKIT_EXTERN const CGFloat A2RadiusS;     // 8   small
+UIKIT_EXTERN const CGFloat A2RadiusM;     // 12  medium
+UIKIT_EXTERN const CGFloat A2RadiusL;     // 16  large
+UIKIT_EXTERN const CGFloat A2RadiusXL;    // 28  extraLarge  ← 卡片用这档
 
 #pragma mark - 高度
 
-UIKIT_EXTERN const CGFloat A2TopBarHeight;      // 52
-UIKIT_EXTERN const CGFloat A2ButtonHeight;      // 52
-UIKIT_EXTERN const CGFloat A2MinTouchTarget;    // 44
-UIKIT_EXTERN const CGFloat A2IconSize;          // 24
+UIKIT_EXTERN const CGFloat A2TopBarHeight;    // 52
+UIKIT_EXTERN const CGFloat A2ButtonHeight;    // 52  MD3 的按钮高度
+UIKIT_EXTERN const CGFloat A2MinTouchTarget;  // 44
 
-#pragma mark - 布局
+#pragma mark - 头像
 
-/// 主界面右侧操作栏宽度
-UIKIT_EXTERN CGFloat A2SidePanelWidth(CGFloat screenWidth);
-/// 侧栏内边距
-UIKIT_EXTERN const CGFloat A2PanelPadding;
+/// 头像尺寸。大卡用 64，小行用 48 —— 对齐 ZL2 的两种形态。
+UIKIT_EXTERN const CGFloat A2AvatarSizeLarge;
+UIKIT_EXTERN const CGFloat A2AvatarSizeSmall;
 
-#pragma mark - 动效
+#pragma mark - 布局划分
 
-/// 标准过渡（页面切换、卡片展开）
+/// 操作区宽度占屏幕的比例（3 : 7）
+UIKIT_EXTERN const CGFloat A2PanelWidthRatio;
+
+/// 屏幕高度达到该值时可使用「更宽松」的布局（多展示一块区域）
+UIKIT_EXTERN const CGFloat A2TallLayoutThreshold;
+
+#pragma mark - 动效（MD3 Expressive MotionScheme）
+
+/// 标准过渡
 UIKIT_EXTERN const NSTimeInterval A2AnimDuration;
 /// 快速反馈（按压、高亮）
 UIKIT_EXTERN const NSTimeInterval A2AnimDurationFast;
-/// 慢速（背景切换、大面积）
+/// 慢速（页面切换、背景）
 UIKIT_EXTERN const NSTimeInterval A2AnimDurationSlow;
 /// 卡片入场
 UIKIT_EXTERN const NSTimeInterval A2AnimDurationCard;
 
-/// 弹簧阻尼比。越接近 1 越稳，0.78 有轻微回弹但不晃。
+/// 弹簧阻尼比
 UIKIT_EXTERN const CGFloat A2SpringDamping;
 UIKIT_EXTERN const CGFloat A2SpringVelocity;
 
@@ -63,22 +85,18 @@ UIKIT_EXTERN const NSTimeInterval A2CardStaggerDelay;
 
 #pragma mark - 动画器
 
-/// 指定时长的弹簧动画器
 UIViewPropertyAnimator *A2SpringAnimator(NSTimeInterval duration);
-/// 标准弹簧
 UIViewPropertyAnimator *A2StandardSpring(void);
-/// 更"软"的弹簧，用于大面积元素
+/// 更"软"的弹簧，适合大面积元素
 UIViewPropertyAnimator *A2SoftSpring(NSTimeInterval duration);
 
-#pragma mark - 卡片入场动画
+/// MD3 Expressive 风格的弹性动画（回弹更明显，用于强调操作）
+UIViewPropertyAnimator *A2ExpressiveSpring(NSTimeInterval duration);
 
-/// 给一组视图做依次淡入上浮的入场动画。
-///
-/// 注意：不要返回动画器。动画是异步错峰启动的，函数返回时第一个
-/// 动画器往往尚未创建，返回它只会返回 nil，调用方拿去做任何操作都会出问题。
-/// 需要感知结束时用 completion。
-void A2AnimateCardEntrance(NSArray<UIView *> *views,
-                           CGFloat staggerDelay,
-                           void (^ _Nullable completion)(void));
+#pragma mark - 卡片入场
+
+UIViewPropertyAnimator *A2AnimateCardEntrance(NSArray<UIView *> *views,
+                                              CGFloat staggerDelay,
+                                              void (^ _Nullable completion)(void));
 
 NS_ASSUME_NONNULL_END
