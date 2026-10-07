@@ -80,10 +80,18 @@ extern const NSInteger A2CFMinecraftGameID;
 - (void)searchClassID:(A2CFClassID)classID
                 query:(nullable NSString *)query
           gameVersion:(nullable NSString *)gameVersion
+            sortField:(nullable NSString *)sortField
                offset:(NSInteger)offset
                 limit:(NSInteger)limit
            completion:(void (^)(NSArray<A2CFProject *> * _Nullable results,
                                 NSError * _Nullable error))completion;
+
+/// 按文件的 murmur2 哈希反查版本。
+/// CurseForge 用 MurmurHash2 而不是 SHA1 —— 这是它自己的指纹体系。
+- (void)versionByMurmurHash:(NSString *)sha1
+                       size:(long long)size
+                 completion:(void (^)(A2CFFile * _Nullable file,
+                                      NSError * _Nullable error))completion;
 
 /// 取项目的文件列表
 - (void)filesForProject:(NSInteger)projectID

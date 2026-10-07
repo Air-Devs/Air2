@@ -235,23 +235,28 @@ static void A2Main(dispatch_block_t b) {
 - (void)searchClassID:(A2CFClassID)classID
                 query:(NSString *)query
           gameVersion:(NSString *)gameVersion
+            sortField:(NSString *)sortField
                offset:(NSInteger)offset
                 limit:(NSInteger)limit
            completion:(void (^)(NSArray<A2CFProject *> *, NSError *))completion {
+
+    NSInteger pageSize = MIN(limit, 50);
 
     NSMutableArray<NSURLQueryItem *> *items = [NSMutableArray array];
     [items addObject:[NSURLQueryItem queryItemWithName:@"gameId"
                                                  value:[@(A2CFMinecraftGameID) stringValue]]];
     [items addObject:[NSURLQueryItem queryItemWithName:@"classId"
                                                  value:[@(classID) stringValue]]];
-    [items addObject:[NSURLQueryItem queryItemWithName:@"index" value:@"0"]];   // 按热度
-    [items addObject:[NSURLQueryItem queryItemWithName:@"pageSize"
-                                                 value:[@(MIN(limit, 50)) stringValue]]];
+    // sortField 是 CurseForge 的数字排序码（1=相关 6=下载量 2=人气 11=最新 3=更新）
+    [items addObject:[NSURLQueryItem queryItemWithName:@"sortField"
+                                                 value:sortField.length ? sortField : @"1"]];
     [items addObject:[NSURLQueryItem queryItemWithName:@"sortOrder" value:@"desc"]];
+    [items addObject:[NSURLQueryItem queryItemWithName:@"pageSize"
+                                                 value:[@(pageSize) stringValue]]];
 
-    if (offset > 0) {
-        NSInteger pageSize = MIN(limit, 50);
-        NSInteger index = offset / (pageSize > 0 ? pageSize : 1);
+    // CurseForge 用 index/pageSize 分页，不是 offset
+    if (offset > 0 && pageSize > 0) {
+        NSInteger index = offset / pageSize;
         [items addObject:[NSURLQueryItem queryItemWithName:@"index"
                                                      value:[@(index) stringValue]]];
     }
@@ -314,6 +319,24 @@ static void A2Main(dispatch_block_t b) {
         A2CFProject *p = [A2CFProject fromJSON:dict[@"data"]];
         if (completion) completion(p, p ? nil : [self err:@"项目不存在"]);
     }];
+}
+
+#pragma mark - MurmurHash 反查
+
+/// CurseForge 用 MurmurHash2 做文件指纹，不是 SHA1。
+/// 接口：POST /v1/fingerprints 带 fingerprints 数组。
+///
+/// 注意：这里传进来的 sha1 参数实际没用到 —— CurseForge 只认它自己的
+/// murmur2 值。要查 CurseForge 必须先本地算 murmur2。
+/// 当前实现为「尽力而为」：没有 murmur2 实现时返回 nil，
+/// 调用方应回退到 Modrinth 查询或直接提示无法检查更新。
+- (void)versionByMurmurHash:(NSString *)sha1
+                       size:(long long)size
+                 completion:(void (^)(A2CFFile *, NSError *))completion {
+    (void)sha1;
+    (void)size;
+    // 未实现 murmur2 计算 —— 明确返回 nil 而不是给错数据
+    if (completion) completion(nil, nil);
 }
 
 @end

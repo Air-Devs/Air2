@@ -79,6 +79,22 @@ typedef NS_ENUM(NSInteger, A2ModrinthProjectType) {
            completion:(void (^)(A2ModrinthProject * _Nullable project,
                                 NSError * _Nullable error))completion;
 
+/// 按 project_type 字符串搜索（供统一资源源调用）
+- (void)searchWithProjectType:(NSString *)projectType
+                        query:(nullable NSString *)query
+                  gameVersion:(nullable NSString *)gameVersion
+                       loader:(nullable NSString *)loader
+                    sortField:(NSString *)sortField
+                       offset:(NSInteger)offset
+                        limit:(NSInteger)limit
+                   completion:(void (^)(NSArray<A2ModrinthProject *> * _Nullable results,
+                                        NSError * _Nullable error))completion;
+
+/// 按文件的 SHA1 反查版本 —— 用于检查已装资源的更新
+- (void)versionBySHA1:(NSString *)sha1
+           completion:(void (^)(A2ModrinthVersion * _Nullable version,
+                                NSError * _Nullable error))completion;
+
 @end
 
 NS_ASSUME_NONNULL_END

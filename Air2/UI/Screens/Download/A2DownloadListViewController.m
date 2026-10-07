@@ -157,6 +157,8 @@ static NSString *const kCellID = @"A2DownloadCell";
 @property (nonatomic, assign) A2ContentPlatform platform;
 @property (nonatomic, strong) A2ContentSource *source;
 @property (nonatomic, strong) UISegmentedControl *platformSwitch;
+/// 当前排序方式
+@property (nonatomic, assign) A2ContentSortField sortField;
 @property (nonatomic, copy) NSString *gameVersionFilter;
 @property (nonatomic, copy) NSString *loaderFilter;
 @end
@@ -190,15 +192,16 @@ static NSString *const kCellID = @"A2DownloadCell";
     return @"下载";
 }
 
-- (NSInteger)categoryIndex {
+/// 下载分类 → 统一资源分类
+- (A2ContentClass)contentClass {
     switch (self.category) {
-        case A2DownloadCategoryModpack:      return 1;
-        case A2DownloadCategoryResourcePack: return 2;
-        case A2DownloadCategoryShader:       return 3;
-        case A2DownloadCategoryWorld:        return 4;
+        case A2DownloadCategoryModpack:      return A2ContentClassModPack;
+        case A2DownloadCategoryResourcePack: return A2ContentClassResourcePack;
+        case A2DownloadCategoryShader:       return A2ContentClassShader;
+        case A2DownloadCategoryWorld:        return A2ContentClassWorld;
         case A2DownloadCategoryMod:
         case A2DownloadCategoryGame:
-        default:                             return 0;
+        default:                             return A2ContentClassMod;
     }
 }
 
@@ -251,15 +254,33 @@ static NSString *const kCellID = @"A2DownloadCell";
     scroll.showsHorizontalScrollIndicator = NO;
     [_filterBar addSubview:scroll];
 
-    NSArray<NSString *> *filters = [self filtersForCategory];
     UIStackView *stack = [[UIStackView alloc] initWithFrame:CGRectZero];
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     stack.axis = UILayoutConstraintAxisHorizontal;
     stack.spacing = A2SpaceS;
     [scroll addSubview:stack];
 
+    // 第一组：该分类的主筛选维度
+    NSArray<NSString *> *filters = [self filtersForCategory];
     for (NSUInteger i = 0; i < filters.count; i++) {
         UIButton *chip = [self makeChip:filters[i] selected:(i == 0) tag:i];
+        [stack addArrangedSubview:chip];
+    }
+
+    // 分组分隔线
+    UIView *sep = [[UIView alloc] initWithFrame:CGRectZero];
+    sep.translatesAutoresizingMaskIntoConstraints = NO;
+    sep.backgroundColor = [A2ThemeManager.shared.scheme.cOutlineVariant colorWithAlphaComponent:0.5];
+    [NSLayoutConstraint activateConstraints:@[
+        [sep.widthAnchor constraintEqualToConstant:1],
+        [sep.heightAnchor constraintEqualToConstant:18],
+    ]];
+    [stack addArrangedSubview:sep];
+
+    // 第二组：排序方式（用 A2ContentSortField 统一映射）
+    for (NSNumber *n in A2AllSortFields()) {
+        A2ContentSortField f = (A2ContentSortField)n.integerValue;
+        UIButton *chip = [self makeSortChip:f];
         [stack addArrangedSubview:chip];
     }
 
@@ -298,7 +319,7 @@ static NSString *const kCellID = @"A2DownloadCell";
 - (void)setupPlatformSwitch {
     _platformSwitch = [[UISegmentedControl alloc] initWithItems:@[@"Modrinth", @"CurseForge"]];
     _platformSwitch.translatesAutoresizingMaskIntoConstraints = NO;
-    _platformSwitch.selectedSegmentIndex = 0;
+    _platformSwitch.selectedSegmentIndex = ([A2ContentSource preferredPlatform] == A2ContentPlatformCurseForge) ? 1 : 0;
     [_platformSwitch addTarget:self action:@selector(platformChanged)
               forControlEvents:UIControlEventValueChanged];
     [self.plainContentView addSubview:_platformSwitch];
@@ -313,14 +334,30 @@ static NSString *const kCellID = @"A2DownloadCell";
     ]];
 }
 
+/// 切换资源来源。选择会被记住。
 - (void)platformChanged {
     self.platform = (_platformSwitch.selectedSegmentIndex == 0)
         ? A2ContentPlatformModrinth : A2ContentPlatformCurseForge;
     self.source = [A2ContentSource sourceForPlatform:self.platform];
+    [A2ContentSource setPreferredPlatform:self.platform];
 
-    // 切到 CurseForge 但没配 Key 时给出明确提示
+    // 切到 CurseForge 但没配 Key 时明确提示，不静默失败
     if (!self.source.isAvailable) {
         [A2Toast show:self.source.unavailableReason ?: @"该资源源不可用" inView:self.view];
+    }
+    [self reload];
+}
+
+/// 切换排序方式
+- (void)sortTapped:(UIButton *)sender {
+    A2ContentSortField field = (A2ContentSortField)sender.tag;
+    if (self.sortField == field) return;
+    self.sortField = field;
+
+    for (UIView *v in sender.superview.subviews) {
+        if (![v isKindOfClass:UIButton.class]) continue;
+        UIButton *b = (UIButton *)v;
+        [self styleChip:b selected:(b.tag == (NSInteger)field)];
     }
     [self reload];
 }
@@ -365,6 +402,27 @@ static NSString *const kCellID = @"A2DownloadCell";
     [self styleChip:b selected:selected];
     [b addAction:[UIAction actionWithHandler:^(UIAction *action) {
         [self chipTapped:(UIButton *)action.sender];
+    }] forControlEvents:UIControlEventTouchUpInside];
+    return b;
+}
+
+/// 排序 chip。tag 存排序枚举值，点击走 sortTapped:
+- (UIButton *)makeSortChip:(A2ContentSortField)field {
+    UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
+    b.translatesAutoresizingMaskIntoConstraints = NO;
+    [b setTitle:A2SortDisplayName(field) forState:UIControlStateNormal];
+    b.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+    b.layer.cornerRadius = 15;
+    b.layer.cornerCurve = kCACornerCurveContinuous;
+    b.contentEdgeInsets = UIEdgeInsetsMake(0, 14, 0, 14);
+    b.tag = field;
+    [NSLayoutConstraint activateConstraints:@[
+        [b.heightAnchor constraintEqualToConstant:30],
+    ]];
+    // 默认按相关度，所以只有 RELEVANCE 是选中的
+    [self styleChip:b selected:(field == A2ContentSortFieldRelevance)];
+    [b addAction:[UIAction actionWithHandler:^(UIAction *action) {
+        [self sortTapped:(UIButton *)action.sender];
     }] forControlEvents:UIControlEventTouchUpInside];
     return b;
 }
@@ -484,12 +542,16 @@ static NSString *const kCellID = @"A2DownloadCell";
     }
 
     __weak typeof(self) weakSelf = self;
-    [self.source searchWithQuery:_searchBar.text
-                        category:[self categoryIndex]
-                     gameVersion:_gameVersionFilter
-                          loader:_loaderFilter
-                          offset:_offset
-                           limit:20
+    A2ContentFilter *filter = [A2ContentFilter defaultFilter];
+    filter.query = _searchBar.text;
+    filter.gameVersion = _gameVersionFilter;
+    filter.loader = _loaderFilter;
+    filter.sortField = self.sortField;
+    filter.offset = _offset;
+    filter.limit = 20;
+
+    [self.source searchWithFilter:filter
+                    contentClass:[self contentClass]
                       completion:^(NSArray<A2ContentItem *> *results, NSError *error) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
@@ -587,8 +649,9 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 }
 
 - (void)downloadVersion:(A2ContentVersion *)version project:(A2ContentItem *)project {
-    if (version.downloadURL.length == 0) {
-        [A2Toast show:@"此版本没有可下载的文件" inView:self.view];
+    if (version.candidateURLs.count == 0) {
+        [A2Toast show:@"此版本没有可下载的文件（可能作者禁止第三方分发）"
+               inView:self.view];
         return;
     }
 
@@ -607,7 +670,13 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     [A2Toast show:[NSString stringWithFormat:@"开始下载 %@", fileName] inView:self.view];
 
     A2DownloadRequest *req = [A2DownloadRequest new];
-    req.candidateURLs = @[[NSURL URLWithString:version.downloadURL]];
+    // candidateURLs 里已含镜像候选（按设置排序），下载引擎会依次尝试
+    NSMutableArray<NSURL *> *urls = [NSMutableArray array];
+    for (NSString *u in version.candidateURLs) {
+        NSURL *url = [NSURL URLWithString:u];
+        if (url) [urls addObject:url];
+    }
+    req.candidateURLs = urls;
     req.destinationPath = dest;
     req.expectedSize = version.fileSize;
     req.allowZipFallbackCheck = YES;
@@ -627,14 +696,10 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     }];
 }
 
+/// 目标目录用统一映射，避免各处硬编码字符串
 - (NSString *)directoryNameForCategory {
-    switch (self.category) {
-        case A2DownloadCategoryMod:          return @"mods";
-        case A2DownloadCategoryShader:       return @"shaderpacks";
-        case A2DownloadCategoryResourcePack: return @"resourcepacks";
-        case A2DownloadCategoryWorld:        return @"saves";
-        default:                             return @"downloads";
-    }
+    if (self.category == A2DownloadCategoryGame) return @"downloads";
+    return A2VersionFolderForClass([self contentClass]);
 }
 
 #pragma mark - UISearchBarDelegate

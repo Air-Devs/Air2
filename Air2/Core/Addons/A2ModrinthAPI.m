@@ -244,4 +244,84 @@ static NSString *const kUserAgent = @"Air-Devs/Air2/0.1.0 (github.com/Air-Devs/A
                            userInfo:@{NSLocalizedDescriptionKey: msg}];
 }
 
+#pragma mark - 按 project_type 搜索（统一资源源用）
+
+- (void)searchWithProjectType:(NSString *)projectType
+                        query:(NSString *)query
+                  gameVersion:(NSString *)gameVersion
+                       loader:(NSString *)loader
+                    sortField:(NSString *)sortField
+                       offset:(NSInteger)offset
+                        limit:(NSInteger)limit
+                   completion:(void (^)(NSArray<A2ModrinthProject *> *, NSError *))completion {
+
+    NSMutableDictionary<NSString *, NSString *> *params = [NSMutableDictionary dictionary];
+    if (query.length) params[@"query"] = query;
+    params[@"limit"] = [NSString stringWithFormat:@"%ld", (long)limit];
+    params[@"offset"] = [NSString stringWithFormat:@"%ld", (long)offset];
+    params[@"index"] = sortField.length ? sortField : @"relevance";
+
+    // facets 是嵌套数组的 JSON 字符串
+    NSMutableArray<NSString *> *groups = [NSMutableArray array];
+    if (projectType.length) {
+        [groups addObject:[NSString stringWithFormat:@"[[\"project_type:%@\"]]", projectType]];
+    }
+    if (gameVersion.length) {
+        [groups addObject:[NSString stringWithFormat:@"[[\"versions:%@\"]]", gameVersion]];
+    }
+    if (loader.length) {
+        [groups addObject:[NSString stringWithFormat:@"[[\"categories:%@\"]]", loader]];
+    }
+    if (groups.count) params[@"facets"] = [groups componentsJoinedByString:@","];
+
+    NSURLSessionDataTask *task = [NSURLSession.sharedSession dataTaskWithRequest:
+        [self requestWithPath:@"/search" params:params]
+        completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
+        if (error) { dispatch_main_async(^{ if (completion) completion(nil, error); }); return; }
+
+        NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        NSArray *hits = [json isKindOfClass:NSDictionary.class] ? json[@"hits"] : nil;
+        NSMutableArray<A2ModrinthProject *> *out = [NSMutableArray array];
+        if ([hits isKindOfClass:NSArray.class]) {
+            for (NSDictionary *h in hits) {
+                A2ModrinthProject *p = [A2ModrinthProject fromJSON:h];
+                if (p) [out addObject:p];
+            }
+        }
+        dispatch_main_async(^{ if (completion) completion(out, nil); });
+    }];
+    [task resume];
+}
+
+#pragma mark - SHA1 反查
+
+- (void)versionBySHA1:(NSString *)sha1
+           completion:(void (^)(A2ModrinthVersion *, NSError *))completion {
+    if (sha1.length == 0) {
+        if (completion) completion(nil, nil);
+        return;
+    }
+
+    // Modrinth 的接口是 /version_file/{hash}?algorithm=sha1
+    NSString *path = [NSString stringWithFormat:@"/version_file/%@", sha1];
+    NSDictionary *params = @{ @"algorithm": @"sha1" };
+
+    NSURLSessionDataTask *task = [NSURLSession.sharedSession dataTaskWithRequest:
+        [self requestWithPath:path params:params]
+        completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
+        NSHTTPURLResponse *http = (NSHTTPURLResponse *)resp;
+        // 404 表示这个 hash 不在 Modrinth 上，不是错误
+        if (http.statusCode == 404) {
+            dispatch_main_async(^{ if (completion) completion(nil, nil); });
+            return;
+        }
+        if (error) { dispatch_main_async(^{ if (completion) completion(nil, error); }); return; }
+
+        NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        A2ModrinthVersion *v = [A2ModrinthVersion fromJSON:json];
+        dispatch_main_async(^{ if (completion) completion(v, nil); });
+    }];
+    [task resume];
+}
+
 @end

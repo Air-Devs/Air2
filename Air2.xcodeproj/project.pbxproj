@@ -18,6 +18,7 @@
 		3352C680504CA3F9AB6CFD26 /* A2MicrosoftAuth.m in Sources */ = {isa = PBXBuildFile; fileRef = BA94035A25A574575C224EC9 /* A2MicrosoftAuth.m */; };
 		514C73BF78432EFA524E3D87 /* A2ContentSource.m in Sources */ = {isa = PBXBuildFile; fileRef = 1701CD5F8C697E4FB0EA95CC /* A2ContentSource.m */; };
 		0D17D81407F6A22D20B89620 /* A2CurseForgeAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = B9FA6C49037A18A6B1E59FD5 /* A2CurseForgeAPI.m */; };
+		178E4C042E711E4F72FAAAED /* A2MirrorResolver.m in Sources */ = {isa = PBXBuildFile; fileRef = C4D9FC19281C2C7616C83363 /* A2MirrorResolver.m */; };
 		A83EEEB1694635A4E2D8A05C /* A2ModLoaderAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */; };
 		06B9E837FB19EE06FB5B8001 /* A2ModLoaderInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */; };
 		FAE87882A16451C5E2E43DDE /* A2ModrinthAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */; };
@@ -81,6 +82,7 @@
 		BA94035A25A574575C224EC9 /* A2MicrosoftAuth.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MicrosoftAuth.m"; sourceTree = "<group>"; };
 		1701CD5F8C697E4FB0EA95CC /* A2ContentSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ContentSource.m"; sourceTree = "<group>"; };
 		B9FA6C49037A18A6B1E59FD5 /* A2CurseForgeAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CurseForgeAPI.m"; sourceTree = "<group>"; };
+		C4D9FC19281C2C7616C83363 /* A2MirrorResolver.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MirrorResolver.m"; sourceTree = "<group>"; };
 		A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderAPI.m"; sourceTree = "<group>"; };
 		452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderInstaller.m"; sourceTree = "<group>"; };
 		B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModrinthAPI.m"; sourceTree = "<group>"; };
@@ -138,6 +140,7 @@
 		845233208F5ECAED2A1B1D6B /* A2MicrosoftAuth.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MicrosoftAuth.h"; sourceTree = "<group>"; };
 		7452A96D7665BFCA516E1759 /* A2ContentSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ContentSource.h"; sourceTree = "<group>"; };
 		732674FFF97FD95863EEEAC7 /* A2CurseForgeAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CurseForgeAPI.h"; sourceTree = "<group>"; };
+		D10B30C91899E9D94389EF4D /* A2MirrorResolver.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MirrorResolver.h"; sourceTree = "<group>"; };
 		2CDA5A9BDC1B71E004D187AD /* A2ModLoaderAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderAPI.h"; sourceTree = "<group>"; };
 		D845B0CEB9AEB5591C34C008 /* A2ModLoaderInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderInstaller.h"; sourceTree = "<group>"; };
 		BEB699597AD1A56E18E868F6 /* A2ModrinthAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModrinthAPI.h"; sourceTree = "<group>"; };
@@ -291,12 +294,14 @@
 			children = (
 				1701CD5F8C697E4FB0EA95CC /* A2ContentSource.m */,
 				B9FA6C49037A18A6B1E59FD5 /* A2CurseForgeAPI.m */,
+				C4D9FC19281C2C7616C83363 /* A2MirrorResolver.m */,
 				A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */,
 				452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */,
 				B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */,
 				C7F15DE318744485CEE00538 /* A2ZipReader.m */,
 				7452A96D7665BFCA516E1759 /* A2ContentSource.h */,
 				732674FFF97FD95863EEEAC7 /* A2CurseForgeAPI.h */,
+				D10B30C91899E9D94389EF4D /* A2MirrorResolver.h */,
 				2CDA5A9BDC1B71E004D187AD /* A2ModLoaderAPI.h */,
 				D845B0CEB9AEB5591C34C008 /* A2ModLoaderInstaller.h */,
 				BEB699597AD1A56E18E868F6 /* A2ModrinthAPI.h */,
@@ -565,6 +570,7 @@
 				3352C680504CA3F9AB6CFD26 /* A2MicrosoftAuth.m in Sources */,
 				514C73BF78432EFA524E3D87 /* A2ContentSource.m in Sources */,
 				0D17D81407F6A22D20B89620 /* A2CurseForgeAPI.m in Sources */,
+				178E4C042E711E4F72FAAAED /* A2MirrorResolver.m in Sources */,
 				A83EEEB1694635A4E2D8A05C /* A2ModLoaderAPI.m in Sources */,
 				06B9E837FB19EE06FB5B8001 /* A2ModLoaderInstaller.m in Sources */,
 				FAE87882A16451C5E2E43DDE /* A2ModrinthAPI.m in Sources */,

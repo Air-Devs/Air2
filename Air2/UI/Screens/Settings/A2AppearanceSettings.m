@@ -19,6 +19,7 @@
 #import "A2BackgroundSettingsViewController.h"
 #import "A2ColorThemeDialog.h"
 #import "A2CurseForgeAPI.h"
+#import "A2MirrorResolver.h"
 #import "A2Toast.h"
 
 @implementation A2AppearanceSettings
@@ -170,6 +171,50 @@
         }];
     };
     [section addRow:testRow];
+
+    // ---- 镜像加速 ----
+    A2SettingsRow *mirrorRow = [[A2SettingsRow alloc] init];
+    mirrorRow.symbolName = @"arrow.triangle.2.circlepath";
+    mirrorRow.title = @"使用国内镜像加速";
+    mirrorRow.subtitle = @"通过 MCIM 镜像下载 CurseForge / Modrinth 的文件，"
+                          "仅在中国大陆网络下生效";
+    mirrorRow.accessory = A2SettingsRowAccessorySwitch;
+    mirrorRow.on = [A2MirrorResolver shared].enabled;
+    mirrorRow.onToggle = ^(BOOL isOn) {
+        [A2MirrorResolver shared].enabled = isOn;
+    };
+    [section addRow:mirrorRow];
+
+    A2SettingsRow *priorityRow = [[A2SettingsRow alloc] init];
+    priorityRow.symbolName = @"arrow.up.arrow.down";
+    priorityRow.title = @"镜像优先级";
+    priorityRow.valueText = ([A2MirrorResolver shared].priority == A2MirrorPriorityMirrorFirst)
+        ? @"镜像优先" : @"官方优先";
+    priorityRow.accessory = A2SettingsRowAccessoryDisclosure;
+    priorityRow.onTap = ^{
+        UIAlertController *sheet =
+            [UIAlertController alertControllerWithTitle:@"镜像优先级"
+                                                message:@"下载引擎会依次尝试候选地址，失败自动切换"
+                                         preferredStyle:UIAlertControllerStyleActionSheet];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"官方优先"
+                                                 style:UIAlertActionStyleDefault
+                                               handler:^(UIAlertAction *a) {
+            [A2MirrorResolver shared].priority = A2MirrorPriorityOfficialFirst;
+            priorityRow.valueText = @"官方优先";
+        }]];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"镜像优先"
+                                                 style:UIAlertActionStyleDefault
+                                               handler:^(UIAlertAction *a) {
+            [A2MirrorResolver shared].priority = A2MirrorPriorityMirrorFirst;
+            priorityRow.valueText = @"镜像优先";
+        }]];
+        [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
+                                                 style:UIAlertActionStyleCancel handler:nil]];
+        sheet.popoverPresentationController.sourceView = priorityRow;
+        sheet.popoverPresentationController.sourceRect = priorityRow.bounds;
+        [host presentViewController:sheet animated:YES completion:nil];
+    };
+    [section addRow:priorityRow];
 
     A2SettingsRow *clearRow = [[A2SettingsRow alloc] init];
     clearRow.symbolName = @"trash";
