@@ -36,8 +36,6 @@ static const NSInteger kBackoffCount = 3;
 static const NSUInteger kWriteBufferSize = 256 * 1024;
 /// 半成品文件后缀
 static NSString *const kPartSuffix = @".part";
-/// resumeData 存放目录名
-static NSString *const kResumeDirName = @"A2DownloadResume";
 
 #pragma mark - 请求
 
@@ -48,7 +46,6 @@ static NSString *const kResumeDirName = @"A2DownloadResume";
 
 @interface A2DownloadOperation ()
 @property (nonatomic, assign) A2DownloadState state;
-@property (nonatomic, copy, nullable) NSData *resumeData;
 @property (nonatomic, strong) A2DownloadRequest *request;
 @property (nonatomic, copy) NSString *resumeKey;
 @property (nonatomic, weak, nullable) id owner;
@@ -455,7 +452,6 @@ didCompleteWithError:(NSError *)error {
         return;
     }
 
-    [self cleanupResumeData];
     [self finishSuccess];
 }
 
@@ -642,42 +638,33 @@ didCompleteWithError:(NSError *)error {
 
 #pragma mark 续传数据
 
-- (NSString *)resumeDataPath {
-    NSString *tmp = NSTemporaryDirectory();
-    NSString *dir = [tmp stringByAppendingPathComponent:kResumeDirName];
-    [[NSFileManager defaultManager] createDirectoryAtPath:dir
-                              withIntermediateDirectories:YES attributes:nil error:nil];
-    return [dir stringByAppendingPathComponent:
-            [self.operation.resumeKey stringByAppendingPathExtension:@"data"]];
-}
 
-- (void)cleanupResumeData {
-    NSString *p = [self resumeDataPath];
-    [[NSFileManager defaultManager] removeItemAtPath:p error:nil];
-}
 
 #pragma mark 暂停 / 恢复 / 取消
 
 - (void)pause {
     dispatch_async(self.queue, ^{
         if (self.finished) return;
+
+        // 先落盘缓冲，保证已收数据都写进 .part 文件
         [self flushBuffer];
         [self closeFileHandle];
 
-        __weak typeof(self) weakSelf = self;
-        [self.currentTask cancelByProducingResumeData:^(NSData *resumeData) {
-            __strong typeof(weakSelf) self = weakSelf;
-            dispatch_async(self.queue, ^{
-                if (resumeData) {
-                    self.operation.resumeData = resumeData;
-                    [resumeData writeToFile:[self resumeDataPath] atomically:YES];
-                }
-                self.operation.state = A2DownloadStatePaused;
-                [self stopSpeedTimer];
-                [self.session invalidateAndCancel];
-                self.session = nil;
-            });
-        }];
+        // 取消当前请求。
+        //
+        // 这里【不能】用 cancelByProducingResumeData: ——
+        // 那是 NSURLSessionDownloadTask 的方法，而我们用 dataTask
+        // （自己写文件、自己管断点区间）。
+        //
+        // 我们的断点是「半成品文件 + Range 请求」：
+        // .part 里已有 N 字节，恢复时带 Range: bytes=N- 继续下。
+        // 所以暂停只需取消请求，进度本来就在磁盘上。
+        [self.currentTask cancel];
+        [self.session invalidateAndCancel];
+        self.session = nil;
+
+        self.operation.state = A2DownloadStatePaused;
+        [self stopSpeedTimer];
     });
 }
 
@@ -686,29 +673,24 @@ didCompleteWithError:(NSError *)error {
         if (self.finished) return;
         self.operation.state = A2DownloadStateRunning;
 
-        NSData *data = self.operation.resumeData;
-        if (!data) {
-            data = [NSData dataWithContentsOfFile:[self resumeDataPath]];
-        }
-
-        if (data.length > 0) {
-            NSURLSessionConfiguration *cfg = NSURLSessionConfiguration.defaultSessionConfiguration;
-            cfg.timeoutIntervalForRequest = 60;
-            cfg.timeoutIntervalForResource = 3600;
-            self.session = [NSURLSession sessionWithConfiguration:cfg
-                                                         delegate:self
-                                                    delegateQueue:nil];
-            self.currentTask = [self.session downloadTaskWithResumeData:data];
-            // downloadTask 与 dataTask 的 delegate 回调不同，这里退回普通请求更可控
-            [self.session invalidateAndCancel];
-            self.session = nil;
-            [self.operation setResumeData:nil];
-        }
-
-        // 用普通请求续传：从 part 文件已有长度继续
+        // 从 .part 文件的当前长度继续 —— 这就是我们的断点
         NSDictionary *attrs = [[NSFileManager defaultManager]
                                attributesOfItemAtPath:[self partFilePath] error:nil];
-        self.receivedBytes = [attrs[NSFileSize] longLongValue];
+        int64_t existing = [attrs[NSFileSize] longLongValue];
+
+        if (self.contentLength > 0 && existing >= self.contentLength) {
+            // 其实已经下完，直接校验
+            [self verifyAndFinish];
+            return;
+        }
+
+        if (existing > 0 && (self.contentLength <= 0 || existing < self.contentLength)) {
+            // startCurrentCandidate 会在 receivedBytes > 0 时自动带 Range 头
+            self.receivedBytes = existing;
+        } else {
+            self.receivedBytes = 0;
+        }
+
         [self startCurrentCandidate];
     });
 }
@@ -721,8 +703,7 @@ didCompleteWithError:(NSError *)error {
         [self stopSpeedTimer];
         [self.session invalidateAndCancel];
         [self discardPartialDownload];
-        [self cleanupResumeData];
-
+    
         self.operation.state = A2DownloadStateCancelled;
         A2DownloadCompletion cb = self.completion;
         if (cb) {

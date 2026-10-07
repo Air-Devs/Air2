@@ -10,7 +10,9 @@
 //    · SHA1 流式校验 + zip EOCD 兜底
 //    · 下载前检查已存在文件，校验通过则直接成功（零网络流量）
 //    · 进度支持负 delta 回退，调用方累加即可保持贴合真实进度
-//    · resumeData 断点续传，暂停时落盘
+//    · 断点续传：半成品写 .part，恢复时带 Range 头从已有长度继续
+//      （不用系统的 resumeData —— 那是 downloadTask 的机制，
+//       我们用 dataTask 自己管区间，两套混用会出错）
 //
 //  线程模型：start/pause/resume/cancel 可从任意线程调用；
 //  回调在内部串行队列执行，UI 操作由调用方自行切回主线程。
@@ -77,7 +79,6 @@ typedef void (^A2DownloadCompletion)(BOOL success, NSError * _Nullable error);
 
 @interface A2DownloadOperation : NSObject
 @property (nonatomic, readonly, assign) A2DownloadState state;
-@property (nonatomic, readonly, copy, nullable) NSData *resumeData;
 @property (nonatomic, readonly, strong) A2DownloadRequest *request;
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)new NS_UNAVAILABLE;
@@ -92,7 +93,7 @@ typedef void (^A2DownloadCompletion)(BOOL success, NSError * _Nullable error);
 - (instancetype)initWithSessionConfiguration:(nullable NSURLSessionConfiguration *)configuration;
 
 /// 开始下载。会先检查目标文件（SHA1 或 zip 校验通过则直接成功）；
-/// 有同 taskIdentifier 的 resumeData 则优先续传。
+/// 若 .part 半成品存在，则从其长度继续（断点续传）。
 /// @return 操作句柄；参数错误时返回 nil 并异步回调错误
 - (nullable A2DownloadOperation *)startRequest:(A2DownloadRequest *)request
                                       progress:(nullable A2DownloadProgressHandler)progress
