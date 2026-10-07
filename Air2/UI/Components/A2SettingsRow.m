@@ -5,10 +5,10 @@
 
 #import "A2SettingsRow.h"
 #import "A2ThemeManager.h"
-#import "A2Metrics.h"
 #import "A2Typography.h"
 
 @interface A2SettingsRow ()
+@property (nonatomic, strong) UIView *fillView;
 @property (nonatomic, strong) UIView *iconBox;
 @property (nonatomic, strong) UIImageView *iconView;
 @property (nonatomic, strong) UILabel *titleLabel;
@@ -17,10 +17,10 @@
 @property (nonatomic, strong) UIImageView *chevron;
 @property (nonatomic, strong) UISwitch *toggle;
 @property (nonatomic, strong) UIImageView *checkmark;
-@property (nonatomic, strong) UIView *topSep;
-@property (nonatomic, strong) UIView *bottomSep;
+@property (nonatomic, strong) UIView *separator;
 @property (nonatomic, strong) UIStackView *textStack;
 @property (nonatomic, strong) UIStackView *trailingStack;
+@property (nonatomic, strong) UISelectionFeedbackGenerator *feedback;
 @end
 
 @implementation A2SettingsRow
@@ -34,6 +34,17 @@
 
 - (void)setup {
     self.translatesAutoresizingMaskIntoConstraints = NO;
+    self.clipsToBounds = YES;
+    _feedback = [UISelectionFeedbackGenerator new];
+    _accessory = A2SettingsRowAccessoryNone;
+    _cardPosition = A2CardPositionSingle;
+
+    // 背景填充（圆角由 cardPosition 决定）
+    _fillView = [[UIView alloc] initWithFrame:CGRectZero];
+    _fillView.translatesAutoresizingMaskIntoConstraints = NO;
+    _fillView.userInteractionEnabled = NO;
+    _fillView.layer.cornerCurve = kCACornerCurveContinuous;
+    [self addSubview:_fillView];
 
     // ---- 图标 ----
     _iconBox = [[UIView alloc] initWithFrame:CGRectZero];
@@ -50,36 +61,40 @@
 
     // ---- 文字 ----
     _titleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _titleLabel.font = [A2Typography body];
+    _titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
     _titleLabel.numberOfLines = 1;
 
     _subtitleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _subtitleLabel.font = [A2Typography caption];
+    _subtitleLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightRegular];
     _subtitleLabel.numberOfLines = 2;
     _subtitleLabel.hidden = YES;
 
     _textStack = [[UIStackView alloc] initWithArrangedSubviews:@[_titleLabel, _subtitleLabel]];
     _textStack.translatesAutoresizingMaskIntoConstraints = NO;
     _textStack.axis = UILayoutConstraintAxisVertical;
-    _textStack.spacing = 2;
+    _textStack.spacing = 1;
     _textStack.alignment = UIStackViewAlignmentLeading;
     [self addSubview:_textStack];
 
     // ---- 右侧 ----
     _valueLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _valueLabel.font = [A2Typography subtitleCard];
+    _valueLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightRegular];
     _valueLabel.textAlignment = NSTextAlignmentRight;
     _valueLabel.hidden = YES;
+    [_valueLabel setContentCompressionResistancePriority:UILayoutPriorityDefaultHigh
+                                                 forAxis:UILayoutConstraintAxisHorizontal];
 
-    UIImageSymbolConfiguration *cfg =
+    UIImageSymbolConfiguration *chevCfg =
         [UIImageSymbolConfiguration configurationWithPointSize:12 weight:UIImageSymbolWeightSemibold];
-    _chevron = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"chevron.right" withConfiguration:cfg]];
+    _chevron = [[UIImageView alloc] initWithImage:
+                [UIImage systemImageNamed:@"chevron.right" withConfiguration:chevCfg]];
     _chevron.translatesAutoresizingMaskIntoConstraints = NO;
     _chevron.hidden = YES;
 
     _toggle = [[UISwitch alloc] initWithFrame:CGRectZero];
     _toggle.translatesAutoresizingMaskIntoConstraints = NO;
     _toggle.hidden = YES;
+    _toggle.transform = CGAffineTransformMakeScale(0.85, 0.85);   // MD3 的开关更小
     [_toggle addTarget:self action:@selector(toggleChanged) forControlEvents:UIControlEventValueChanged];
 
     _checkmark = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"checkmark"]];
@@ -93,13 +108,19 @@
     _trailingStack.alignment = UIStackViewAlignmentCenter;
     [self addSubview:_trailingStack];
 
-    // ---- 分隔线 ----
-    _topSep = [self makeSeparator];
-    _bottomSep = [self makeSeparator];
-    _topSep.hidden = YES;
+    // ---- 分隔线：与文字左对齐 ----
+    _separator = [[UIView alloc] initWithFrame:CGRectZero];
+    _separator.translatesAutoresizingMaskIntoConstraints = NO;
+    _separator.hidden = YES;
+    [self addSubview:_separator];
 
     [NSLayoutConstraint activateConstraints:@[
         [self.heightAnchor constraintGreaterThanOrEqualToConstant:A2MinTouchTarget],
+
+        [_fillView.topAnchor constraintEqualToAnchor:self.topAnchor],
+        [_fillView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+        [_fillView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+        [_fillView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
 
         [_iconBox.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:A2SpaceL],
         [_iconBox.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
@@ -117,21 +138,12 @@
 
         [_trailingStack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-A2SpaceL],
         [_trailingStack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
-        [_trailingStack.leadingAnchor constraintGreaterThanOrEqualToAnchor:_textStack.trailingAnchor constant:A2SpaceM],
+        [_trailingStack.leadingAnchor constraintGreaterThanOrEqualToAnchor:_textStack.trailingAnchor
+                                                                  constant:A2SpaceM],
 
-        [_topSep.topAnchor constraintEqualToAnchor:self.topAnchor],
-        [_topSep.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:A2SpaceL],
-        [_topSep.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-        [_topSep.heightAnchor constraintEqualToConstant:0.5],
-
-        [_bottomSep.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
-        [_bottomSep.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:A2SpaceL],
-        [_bottomSep.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-        [_bottomSep.heightAnchor constraintEqualToConstant:0.5],
+        [_separator.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+        [_separator.heightAnchor constraintEqualToConstant:1],
     ]];
-
-    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap)];
-    [self addGestureRecognizer:tap];
 
     [self applyTheme];
 
@@ -145,19 +157,12 @@
     [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
-- (UIView *)makeSeparator {
-    UIView *v = [[UIView alloc] initWithFrame:CGRectZero];
-    v.translatesAutoresizingMaskIntoConstraints = NO;
-    [self addSubview:v];
-    return v;
-}
-
 #pragma mark - 属性
 
 - (void)setSymbolName:(NSString *)symbolName {
     _symbolName = [symbolName copy];
     UIImageSymbolConfiguration *cfg =
-        [UIImageSymbolConfiguration configurationWithPointSize:15 weight:UIImageSymbolWeightSemibold];
+        [UIImageSymbolConfiguration configurationWithPointSize:15 weight:UIImageSymbolWeightMedium];
     _iconView.image = [UIImage systemImageNamed:symbolName withConfiguration:cfg];
     _iconBox.hidden = (symbolName.length == 0);
     [self updateTextLeading];
@@ -215,71 +220,94 @@
     [self applyTheme];
 }
 
-- (void)setShowsTopSeparator:(BOOL)showsTopSeparator {
-    _showsTopSeparator = showsTopSeparator;
-    _topSep.hidden = !showsTopSeparator;
+- (void)setCardPosition:(A2CardPosition)cardPosition {
+    _cardPosition = cardPosition;
+    [self applyTheme];
 }
 
-- (void)setShowsBottomSeparator:(BOOL)showsBottomSeparator {
-    _showsBottomSeparator = showsBottomSeparator;
-    _bottomSep.hidden = !showsBottomSeparator;
+- (void)setShowsSeparator:(BOOL)showsSeparator {
+    _showsSeparator = showsSeparator;
+    _separator.hidden = !showsSeparator;
 }
 
-/// 有图标时文字后移，没图标时文字顶到左边
+- (void)setUseHighContainer:(BOOL)useHighContainer {
+    _useHighContainer = useHighContainer;
+    [self applyTheme];
+}
+
+/// 有图标时文字后移
 - (void)updateTextLeading {
+    CGFloat leading = _iconBox.hidden ? A2SpaceL : (A2SpaceL + 28 + A2SpaceM);
     for (NSLayoutConstraint *c in self.constraints) {
         if (c.firstItem == _textStack && c.firstAttribute == NSLayoutAttributeLeading) {
-            c.constant = _iconBox.hidden ? A2SpaceL : (A2SpaceL + 28 + A2SpaceM);
-            break;
+            c.constant = leading;
         }
     }
+    // 分隔线也与文字左对齐
+    [self updateSeparatorInsets:leading];
+}
+
+- (void)updateSeparatorInsets:(CGFloat)leading {
+    // 移除旧的分隔线水平约束
+    NSMutableArray *toRemove = [NSMutableArray array];
     for (NSLayoutConstraint *c in self.constraints) {
-        if (c.firstItem == _topSep && c.firstAttribute == NSLayoutAttributeLeading) {
-            c.constant = _iconBox.hidden ? A2SpaceL : (A2SpaceL + 28 + A2SpaceM);
-        }
-        if (c.firstItem == _bottomSep && c.firstAttribute == NSLayoutAttributeLeading) {
-            c.constant = _iconBox.hidden ? A2SpaceL : (A2SpaceL + 28 + A2SpaceM);
+        if (c.firstItem == _separator || c.secondItem == _separator) {
+            if (c.firstAttribute != NSLayoutAttributeBottom &&
+                c.firstAttribute != NSLayoutAttributeHeight) {
+                [toRemove addObject:c];
+            }
         }
     }
+    [NSLayoutConstraint deactivateConstraints:toRemove];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [_separator.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:leading],
+        [_separator.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+    ]];
 }
 
 #pragma mark - 交互
 
 - (void)toggleChanged {
     _on = _toggle.isOn;
+    [_feedback selectionChanged];
     if (self.onToggle) self.onToggle(_on);
 }
 
-- (void)handleTap {
-    if (_accessory == A2SettingsRowAccessorySwitch) {
-        // 点整行也能切开关
-        [_toggle setOn:!_toggle.isOn animated:YES];
-        [self toggleChanged];
-        return;
-    }
-    if (self.onTap) self.onTap();
-}
-
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    if (_accessory == A2SettingsRowAccessorySwitch || !self.onTap) {
-        [super touchesBegan:touches withEvent:event];
-        return;
-    }
+    [super touchesBegan:touches withEvent:event];
+    if (_accessory == A2SettingsRowAccessorySwitch) return;
     [UIView animateWithDuration:A2AnimDurationFast animations:^{
-        self.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.06];
+        self.fillView.backgroundColor = [self.fillView.backgroundColor
+            colorWithAlphaComponent:0.75];
     }];
 }
 
 - (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    [UIView animateWithDuration:A2AnimDurationFast animations:^{
-        self.backgroundColor = UIColor.clearColor;
-    }];
     [super touchesEnded:touches withEvent:event];
+    [self applyTheme];
+
+    if (_accessory == A2SettingsRowAccessorySwitch) {
+        // 点整行也能切开关
+        CGPoint p = [touches.anyObject locationInView:self];
+        if (CGRectContainsPoint(self.bounds, p)) {
+            [_toggle setOn:!_toggle.isOn animated:YES];
+            [self toggleChanged];
+        }
+        return;
+    }
+
+    CGPoint p = [touches.anyObject locationInView:self];
+    if (CGRectContainsPoint(self.bounds, p)) {
+        [_feedback selectionChanged];
+        [self sendActionsForControlEvents:UIControlEventTouchUpInside];
+        if (self.onTap) self.onTap();
+    }
 }
 
 - (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
-    self.backgroundColor = UIColor.clearColor;
     [super touchesCancelled:touches withEvent:event];
+    [self applyTheme];
 }
 
 #pragma mark - 主题
@@ -289,21 +317,25 @@
 }
 
 - (void)applyTheme {
-    A2ThemeManager *tm = A2ThemeManager.shared;
-    A2ColorScheme *t = tm.scheme;
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
 
-    _iconBox.backgroundColor = self.symbolColor ?: [t.cPrimary colorWithAlphaComponent:0.9];
-    _iconView.tintColor = UIColor.whiteColor;
-    _titleLabel.textColor = self.isDestructive ? t.cError : UIColor.whiteColor;
+    // 背景：按层级取值，圆角按位置
+    UIColor *fill = _useHighContainer ? t.cSurfaceContainerHigh : t.cSurfaceContainerLow;
+    _fillView.backgroundColor = fill;
+    _fillView.layer.cornerRadius = (_cardPosition == A2CardPositionMiddle)
+        ? A2RadiusXS : A2RadiusXL;
+    _fillView.layer.maskedCorners = A2CornerMaskForPosition(_cardPosition);
+
+    _iconBox.backgroundColor = self.symbolColor ?: t.cPrimaryContainer;
+    _iconView.tintColor = self.symbolColor ? UIColor.whiteColor : t.cOnPrimaryContainer;
+
+    _titleLabel.textColor = self.isDestructive ? t.cError : t.cOnSurface;
     _subtitleLabel.textColor = t.cOnSurfaceVariant;
     _valueLabel.textColor = t.cOnSurfaceVariant;
-    _chevron.tintColor = [UIColor colorWithWhite:1.0 alpha:0.34];
+    _chevron.tintColor = t.cOutline;
     _checkmark.tintColor = t.cPrimary;
     _toggle.onTintColor = t.cPrimary;
-
-    UIColor *sep = [UIColor colorWithWhite:1.0 alpha:0.09];
-    _topSep.backgroundColor = sep;
-    _bottomSep.backgroundColor = sep;
+    _separator.backgroundColor = [t.cOutlineVariant colorWithAlphaComponent:0.6];
 }
 
 @end

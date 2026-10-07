@@ -5,14 +5,17 @@
 
 #import "A2SettingsSection.h"
 #import "A2ThemeManager.h"
-#import "A2Metrics.h"
 #import "A2Typography.h"
+
+/// ZL2 的 SettingsCardColumn 用 2dp 行间距
+static const CGFloat kRowSpacing = 2;
 
 @interface A2SettingsSection ()
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UILabel *footerLabel;
 @property (nonatomic, strong) UIStackView *stack;
 @property (nonatomic, strong) NSMutableArray<A2SettingsRow *> *mutableRows;
+@property (nonatomic, strong) NSMutableArray<UIView *> *customViews;
 @end
 
 @implementation A2SettingsSection
@@ -22,58 +25,54 @@
     if (!self) return nil;
     _sectionTitle = [title copy];
     _mutableRows = [NSMutableArray array];
+    _customViews = [NSMutableArray array];
     [self setup];
     return self;
 }
 
 - (void)setup {
-    self.cornerRadius = A2RadiusL;
-    self.contentInsets = UIEdgeInsetsZero;
+    self.translatesAutoresizingMaskIntoConstraints = NO;
 
     _titleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    _titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
     _titleLabel.text = _sectionTitle;
     _titleLabel.hidden = (_sectionTitle.length == 0);
 
-    _stack = [[UIStackView alloc] initWithArrangedSubviews:@[]];
+    _stack = [[UIStackView alloc] initWithFrame:CGRectZero];
     _stack.translatesAutoresizingMaskIntoConstraints = NO;
     _stack.axis = UILayoutConstraintAxisVertical;
-    _stack.spacing = 0;
+    _stack.spacing = kRowSpacing;
 
     _footerLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _footerLabel.font = [A2Typography caption];
+    _footerLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _footerLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightRegular];
     _footerLabel.numberOfLines = 0;
     _footerLabel.hidden = YES;
 
-    UIView *container = [[UIView alloc] initWithFrame:CGRectZero];
-    container.translatesAutoresizingMaskIntoConstraints = NO;
-    [container addSubview:_stack];
-
-    UIStackView *outer = [[UIStackView alloc] initWithArrangedSubviews:@[_titleLabel, container, _footerLabel]];
-    outer.translatesAutoresizingMaskIntoConstraints = NO;
-    outer.axis = UILayoutConstraintAxisVertical;
-    outer.spacing = A2SpaceS;
-    [outer setCustomSpacing:A2SpaceXS afterView:_titleLabel];
-    [outer setCustomSpacing:A2SpaceXS afterView:container];
-
-    [self.contentView addSubview:outer];
+    [self addSubview:_titleLabel];
+    [self addSubview:_stack];
+    [self addSubview:_footerLabel];
 
     [NSLayoutConstraint activateConstraints:@[
-        [outer.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:A2SpaceM],
-        [outer.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-A2SpaceM],
-        [outer.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
-        [outer.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
+        [_titleLabel.topAnchor constraintEqualToAnchor:self.topAnchor],
+        [_titleLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:A2SpaceL],
+        [_titleLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-A2SpaceL],
 
-        [_stack.topAnchor constraintEqualToAnchor:container.topAnchor],
-        [_stack.bottomAnchor constraintEqualToAnchor:container.bottomAnchor],
-        [_stack.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
-        [_stack.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
+        [_stack.topAnchor constraintEqualToAnchor:_titleLabel.bottomAnchor constant:A2SpaceS],
+        [_stack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+        [_stack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+
+        [_footerLabel.topAnchor constraintEqualToAnchor:_stack.bottomAnchor constant:A2SpaceS],
+        [_footerLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:A2SpaceL],
+        [_footerLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-A2SpaceL],
+        [_footerLabel.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
     ]];
 
     [self applyTheme];
 
     [NSNotificationCenter.defaultCenter addObserver:self
-                                          selector:@selector(handleThemeChanged:)
+                                          selector:@selector(applyTheme)
                                               name:A2ThemeDidChangeNotification
                                             object:nil];
 }
@@ -99,35 +98,62 @@
 }
 
 - (void)addRow:(A2SettingsRow *)row {
-    // 前一行不该有底部分隔线（由新行用顶部分隔线代替）
-    A2SettingsRow *previous = _mutableRows.lastObject;
-    if (previous) {
-        previous.showsBottomSeparator = NO;
-        row.showsTopSeparator = NO;   // 用上一行的底部分隔线即可
-    }
-
+    row.cardPosition = A2CardPositionMiddle;   // 先按中间处理，收尾时统一修正
+    row.showsSeparator = YES;
     [_mutableRows addObject:row];
     [_stack addArrangedSubview:row];
 
-    [row.leadingAnchor constraintEqualToAnchor:_stack.leadingAnchor].active = YES;
-    [row.trailingAnchor constraintEqualToAnchor:_stack.trailingAnchor].active = YES;
+    [NSLayoutConstraint activateConstraints:@[
+        [row.leadingAnchor constraintEqualToAnchor:_stack.leadingAnchor],
+        [row.trailingAnchor constraintEqualToAnchor:_stack.trailingAnchor],
+    ]];
+
+    [self fixupPositions];
 }
 
 - (void)addCustomView:(UIView *)view {
     view.translatesAutoresizingMaskIntoConstraints = NO;
+    [_customViews addObject:view];
     [_stack addArrangedSubview:view];
-    [view.leadingAnchor constraintEqualToAnchor:_stack.leadingAnchor].active = YES;
-    [view.trailingAnchor constraintEqualToAnchor:_stack.trailingAnchor].active = YES;
+    [NSLayoutConstraint activateConstraints:@[
+        [view.leadingAnchor constraintEqualToAnchor:_stack.leadingAnchor],
+        [view.trailingAnchor constraintEqualToAnchor:_stack.trailingAnchor],
+    ]];
+    [self fixupPositions];
 }
 
-- (void)handleThemeChanged:(NSNotification *)note {
-    [self applyTheme];
+/// 重新分配首/中/末位置。
+///
+/// 这是「一组行拼成一张卡」的关键：只有首行的上角与末行的下角
+/// 用大圆角，中间各行的四角都是小圆角。行数变化时要重算。
+- (void)fixupPositions {
+    NSUInteger count = _mutableRows.count;
+    if (count == 0) return;
+
+    for (NSUInteger i = 0; i < count; i++) {
+        A2SettingsRow *row = _mutableRows[i];
+        if (count == 1) {
+            row.cardPosition = A2CardPositionSingle;
+            row.showsSeparator = NO;
+        } else if (i == 0) {
+            row.cardPosition = A2CardPositionTop;
+            row.showsSeparator = YES;
+        } else if (i == count - 1) {
+            row.cardPosition = A2CardPositionBottom;
+            row.showsSeparator = NO;
+        } else {
+            row.cardPosition = A2CardPositionMiddle;
+            row.showsSeparator = YES;
+        }
+    }
 }
 
 - (void)applyTheme {
-    A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    _titleLabel.textColor = t.cOnSurfaceVariant;
-    _footerLabel.textColor = [t.cOnSurfaceVariant colorWithAlphaComponent:0.75];
+    // 分组标题在卡片外，用较低对比的色
+    _titleLabel.textColor = [A2ThemeManager.shared.scheme.cOnSurfaceVariant
+                             colorWithAlphaComponent:0.85];
+    _footerLabel.textColor = [A2ThemeManager.shared.scheme.cOnSurfaceVariant
+                              colorWithAlphaComponent:0.7];
 }
 
 @end

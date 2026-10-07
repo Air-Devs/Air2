@@ -2,11 +2,29 @@
 //  A2DownloadViewController.m
 //  Air2
 //
-//  下载中心。上部分是资源来源切换（Modrinth / CurseForge），
-//  下面按分类列出入口。
+//  下载中心 —— 左侧分类导航 + 右侧内容。
+//
+//  结构对齐 ZL2 的 DownloadScreen：
+//    ┌──────────┬──────────────────────────────────┐
+//    │ 🎮 游戏   │                                  │
+//    │ 📦 整合包 │  当前分类的内容                    │
+//    │ 🧩 模组   │                                  │
+//    │ ───────  │                                  │
+//    │ 🎨 资源包 │                                  │
+//    │ 🗺 存档   │                                  │
+//    │ 💡 光影   │                                  │
+//    │ ───────  │                                  │
+//    │ # 按 ID   │                                  │
+//    │ ⭐ 收藏   │                                  │
+//    └──────────┴──────────────────────────────────┘
+//
+//  资源来源（Modrinth / CurseForge）放在内容区顶部，
+//  不再占一整块卡片。
 //
 
 #import "A2DownloadViewController.h"
+#import "A2CategoryNavView.h"
+#import "A2DownloadListViewController.h"
 #import "A2SettingsSection.h"
 #import "A2SettingsRow.h"
 #import "A2GlassCard.h"
@@ -14,7 +32,6 @@
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
-#import "A2DownloadListViewController.h"
 
 typedef NS_ENUM(NSInteger, A2ContentSource) {
     A2ContentSourceModrinth = 0,
@@ -22,6 +39,9 @@ typedef NS_ENUM(NSInteger, A2ContentSource) {
 };
 
 @interface A2DownloadViewController ()
+@property (nonatomic, strong) A2CategoryNavView *nav;
+@property (nonatomic, strong) UIScrollView *contentScroll;
+@property (nonatomic, strong) UIStackView *contentStack;
 @property (nonatomic, assign) A2ContentSource source;
 @property (nonatomic, strong) UISegmentedControl *sourceSwitch;
 @property (nonatomic, strong) UILabel *sourceHint;
@@ -31,43 +51,118 @@ typedef NS_ENUM(NSInteger, A2ContentSource) {
 
 - (void)viewDidLoad {
     [super viewDidLoad];
+    self.usesScrollContent = NO;
     self.pageTitle = @"下载";
     self.source = A2ContentSourceModrinth;
 
-    [self setupSourcePicker];
-    [self setupGameSection];
-    [self setupContentSection];
-    [self setupMiscSection];
+    NSArray<A2NavCategory *> *cats = @[
+        [A2NavCategory title:@"游戏"   symbol:@"sports.esports"],
+        [A2NavCategory title:@"整合包" symbol:@"shippingbox.fill"],
+        [A2NavCategory title:@"模组"   symbol:@"puzzlepiece.extension.fill" division:YES],
+        [A2NavCategory title:@"资源包" symbol:@"photo.stack.fill"],
+        [A2NavCategory title:@"存档"   symbol:@"map.fill"],
+        [A2NavCategory title:@"光影"   symbol:@"sun.max.fill"],
+        [A2NavCategory title:@"按 ID"  symbol:@"number" division:YES],
+        [A2NavCategory title:@"收藏"   symbol:@"star.fill"],
+    ];
+
+    __weak typeof(self) weakSelf = self;
+    _nav = [[A2CategoryNavView alloc] initWithCategories:cats];
+    _nav.onSelect = ^(NSInteger index) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self rebuildContentForIndex:index];
+    };
+    [self.plainContentView addSubview:_nav];
+
+    _contentScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    _contentScroll.translatesAutoresizingMaskIntoConstraints = NO;
+    _contentScroll.showsVerticalScrollIndicator = NO;
+    _contentScroll.alwaysBounceVertical = YES;
+    [self.plainContentView addSubview:_contentScroll];
+
+    _contentStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _contentStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _contentStack.axis = UILayoutConstraintAxisVertical;
+    _contentStack.spacing = A2SpaceL;
+    [_contentScroll addSubview:_contentStack];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [_nav.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_nav.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
+        [_nav.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
+                                           constant:A2SpaceS],
+
+        [_contentScroll.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_contentScroll.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
+        [_contentScroll.leadingAnchor constraintEqualToAnchor:_nav.trailingAnchor
+                                                    constant:A2SpaceM],
+        [_contentScroll.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
+
+        [_contentStack.topAnchor constraintEqualToAnchor:_contentScroll.topAnchor constant:A2SpaceS],
+        [_contentStack.bottomAnchor constraintEqualToAnchor:_contentScroll.bottomAnchor
+                                                   constant:-A2SpaceXXL],
+        [_contentStack.leadingAnchor constraintEqualToAnchor:_contentScroll.leadingAnchor
+                                                    constant:A2SpaceM],
+        [_contentStack.trailingAnchor constraintEqualToAnchor:_contentScroll.trailingAnchor
+                                                     constant:-A2SpaceXL],
+    ]];
+
+    [_nav selectIndex:0 animated:NO];
 }
 
-#pragma mark - 来源切换
+- (void)rebuildContentForIndex:(NSInteger)index {
+    for (UIView *v in _contentStack.arrangedSubviews) {
+        [_contentStack removeArrangedSubview:v];
+        [v removeFromSuperview];
+    }
 
-- (void)setupSourcePicker {
+    // 资源来源选择（仅 Modrinth / CurseForge 类分类需要）
+    BOOL needsSource = (index != 0);   // 「游戏」分类不需要
+    if (needsSource) {
+        [_contentStack addArrangedSubview:[self buildSourceRow]];
+    }
+
+    // 「游戏」分类：安装新版本 + 模组加载器
+    if (index == 0) {
+        [_contentStack addArrangedSubview:[self buildGameSection]];
+    } else {
+        [_contentStack addArrangedSubview:[self buildResourceHint:index]];
+    }
+
+    _contentStack.alpha = 0;
+    _contentStack.transform = CGAffineTransformMakeTranslation(0, 8);
+    UIViewPropertyAnimator *a = A2SpringAnimator(A2AnimDurationCard);
+    [a addAnimations:^{
+        self.contentStack.alpha = 1;
+        self.contentStack.transform = CGAffineTransformIdentity;
+    }];
+    [a startAnimation];
+}
+
+/// 资源来源：一行分段控件 + 说明，不再占整块卡片
+- (UIView *)buildSourceRow {
     A2GlassCard *card = [[A2GlassCard alloc] initWithFrame:CGRectZero];
     card.cornerRadius = A2RadiusL;
-    card.contentInsets = UIEdgeInsetsMake(A2SpaceM, A2SpaceM, A2SpaceM, A2SpaceM);
-
-    UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
-    label.translatesAutoresizingMaskIntoConstraints = NO;
-    label.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
-    label.text = @"资源来源";
+    card.elevation = A2CardElevationLow;
+    card.contentInsets = UIEdgeInsetsMake(A2CardPadding + 4, A2CardPadding,
+                                          A2CardPadding + 4, A2CardPadding);
 
     _sourceSwitch = [[UISegmentedControl alloc] initWithItems:@[@"Modrinth", @"CurseForge"]];
     _sourceSwitch.translatesAutoresizingMaskIntoConstraints = NO;
-    _sourceSwitch.selectedSegmentIndex = 0;
-    [_sourceSwitch addTarget:self action:@selector(sourceChanged) forControlEvents:UIControlEventValueChanged];
+    _sourceSwitch.selectedSegmentIndex = self.source;
+    [_sourceSwitch addTarget:self action:@selector(sourceChanged)
+            forControlEvents:UIControlEventValueChanged];
 
     _sourceHint = [[UILabel alloc] initWithFrame:CGRectZero];
     _sourceHint.translatesAutoresizingMaskIntoConstraints = NO;
     _sourceHint.font = [A2Typography caption];
     _sourceHint.numberOfLines = 0;
-    _sourceHint.text = @"Modrinth 免费开放；CurseForge 部分作者禁止第三方分发，需要 API Key。";
+    _sourceHint.text = [self hintForSource:self.source];
 
-    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[label, _sourceSwitch, _sourceHint]];
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[_sourceSwitch, _sourceHint]];
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     stack.axis = UILayoutConstraintAxisVertical;
-    stack.spacing = A2SpaceS;
-    [stack setCustomSpacing:A2SpaceM afterView:_sourceSwitch];
+    stack.spacing = A2SpaceM;
 
     [card.contentView addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[
@@ -76,35 +171,31 @@ typedef NS_ENUM(NSInteger, A2ContentSource) {
         [stack.leadingAnchor constraintEqualToAnchor:card.contentView.leadingAnchor],
         [stack.trailingAnchor constraintEqualToAnchor:card.contentView.trailingAnchor],
     ]];
+    return card;
+}
 
-    [self addSection:card];
+- (NSString *)hintForSource:(A2ContentSource)source {
+    return (source == A2ContentSourceModrinth)
+        ? @"Modrinth 免费开放，无需额外配置。"
+        : @"CurseForge 需要在设置中填入 API Key。";
 }
 
 - (void)sourceChanged {
     self.source = (A2ContentSource)_sourceSwitch.selectedSegmentIndex;
-    _sourceHint.text = (self.source == A2ContentSourceModrinth)
-        ? @"Modrinth 免费开放；CurseForge 部分作者禁止第三方分发，需要 API Key。"
-        : @"CurseForge 资源更全，但需要在设置中填入 API Key 才能使用。";
-    [A2Toast show:(self.source == A2ContentSourceModrinth ? @"已切换到 Modrinth" : @"已切换到 CurseForge")
-           inView:self.view];
+    _sourceHint.text = [self hintForSource:self.source];
 }
 
-#pragma mark - 游戏版本
-
-- (void)setupGameSection {
-    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"游戏"];
-    section.footerText = @"安装时可同时选择模组加载器，会自动匹配对应的版本。";
+/// 游戏分类：安装新版本 + 模组加载器
+- (UIView *)buildGameSection {
+    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:nil];
+    section.footerText = @"安装时可同时选择模组加载器，会自动匹配对应的游戏版本。";
 
     A2SettingsRow *gameRow = [[A2SettingsRow alloc] init];
     gameRow.symbolName = @"cube.fill";
     gameRow.title = @"安装新版本";
     gameRow.subtitle = @"选择游戏版本与模组加载器";
     gameRow.accessory = A2SettingsRowAccessoryDisclosure;
-    gameRow.onTap = ^{
-        A2DownloadListViewController *vc = [[A2DownloadListViewController alloc] init];
-        vc.category = A2DownloadCategoryGame;
-        [self.navigationController pushViewController:vc animated:YES];
-    };
+    gameRow.onTap = ^{ [self openListWithCategory:A2DownloadCategoryGame]; };
     [section addRow:gameRow];
 
     A2SettingsRow *loaderRow = [[A2SettingsRow alloc] init];
@@ -113,74 +204,52 @@ typedef NS_ENUM(NSInteger, A2ContentSource) {
     loaderRow.subtitle = @"Fabric / Forge / NeoForge / Quilt / OptiFine";
     loaderRow.valueText = @"Fabric";
     loaderRow.accessory = A2SettingsRowAccessoryDisclosure;
-    loaderRow.showsBottomSeparator = NO;
     loaderRow.onTap = ^{ [A2Toast show:@"加载器选择" inView:self.view]; };
     [section addRow:loaderRow];
 
-    [self addSection:section];
+    return section;
 }
 
-#pragma mark - 内容资源
+/// 资源分类：直接给搜索入口
+- (UIView *)buildResourceHint:(NSInteger)index {
+    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:nil];
 
-- (void)setupContentSection {
-    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"资源"];
-
-    NSArray<NSArray<NSString *> *> *items = @[
-        @[@"模组",     @"puzzlepiece.extension.fill", @"Install mods into a version"],
-        @[@"光影包",   @"sun.max.fill",               @"Shaders"],
-        @[@"资源包",   @"photo.stack.fill",           @"Resource packs"],
-        @[@"整合包",   @"shippingbox.and.arrow.backward.fill", @"Modpacks"],
-        @[@"存档",     @"map.fill",                   @"Worlds"],
+    NSArray<NSArray<NSString *> *> *names = @[
+        @[@"安装新版本", @"游戏版本与加载器"],
+        @[@"整合包", @"一键安装完整整合包"],
+        @[@"模组", @"单模组安装"],
+        @[@"资源包", @"材质与音效包"],
+        @[@"存档", @"世界存档"],
+        @[@"光影包", @"光影效果"],
+        @[@"按 ID 下载", @"已知项目 ID 直接定位"],
+        @[@"收藏夹", @"已收藏的项目"],
     ];
-    A2DownloadCategory categories[] = {
-        A2DownloadCategoryMod,
-        A2DownloadCategoryShader,
-        A2DownloadCategoryResourcePack,
-        A2DownloadCategoryModpack,
-        A2DownloadCategoryWorld,
+    NSArray<NSString *> *symbols = @[@"cube.fill", @"shippingbox.fill", @"puzzlepiece.extension.fill",
+                                     @"photo.stack.fill", @"map.fill", @"sun.max.fill",
+                                     @"number", @"star.fill"];
+
+    NSUInteger i = (NSUInteger)index;
+    if (i >= names.count) i = 0;
+
+    A2SettingsRow *row = [[A2SettingsRow alloc] init];
+    row.symbolName = symbols[i];
+    row.title = names[i][0];
+    row.subtitle = names[i][1];
+    row.accessory = A2SettingsRowAccessoryDisclosure;
+    NSInteger captured = index;
+    row.onTap = ^{
+        __strong typeof(self) self = self;
+        [self openListWithCategory:(A2DownloadCategory)captured];
     };
+    [section addRow:row];
 
-    for (NSUInteger i = 0; i < items.count; i++) {
-        A2SettingsRow *row = [[A2SettingsRow alloc] init];
-        row.symbolName = items[i][1];
-        row.title = items[i][0];
-        row.accessory = A2SettingsRowAccessoryDisclosure;
-        A2DownloadCategory cat = categories[i];
-        row.onTap = ^{
-            A2DownloadListViewController *vc = [[A2DownloadListViewController alloc] init];
-            vc.category = cat;
-            [self.navigationController pushViewController:vc animated:YES];
-        };
-        if (i == items.count - 1) row.showsBottomSeparator = NO;
-        [section addRow:row];
-    }
-
-    [self addSection:section];
+    return section;
 }
 
-#pragma mark - 其他
-
-- (void)setupMiscSection {
-    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"其他"];
-
-    A2SettingsRow *taskRow = [[A2SettingsRow alloc] init];
-    taskRow.symbolName = @"arrow.down.circle.dotted";
-    taskRow.title = @"下载任务";
-    taskRow.subtitle = @"查看进行中与已完成的任务";
-    taskRow.accessory = A2SettingsRowAccessoryDisclosure;
-    taskRow.onTap = ^{ [A2Toast show:@"下载任务列表" inView:self.view]; };
-    [section addRow:taskRow];
-
-    A2SettingsRow *importRow = [[A2SettingsRow alloc] init];
-    importRow.symbolName = @"square.and.arrow.down";
-    importRow.title = @"从本地导入整合包";
-    importRow.subtitle = @".mrpack / .zip";
-    importRow.accessory = A2SettingsRowAccessoryDisclosure;
-    importRow.showsBottomSeparator = NO;
-    importRow.onTap = ^{ [A2Toast show:@"选择文件" inView:self.view]; };
-    [section addRow:importRow];
-
-    [self addSection:section];
+- (void)openListWithCategory:(A2DownloadCategory)category {
+    A2DownloadListViewController *vc = [[A2DownloadListViewController alloc] init];
+    vc.category = category;
+    [self.navigationController pushViewController:vc animated:YES];
 }
 
 @end

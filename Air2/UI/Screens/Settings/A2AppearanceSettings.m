@@ -22,7 +22,7 @@
 @implementation A2AppearanceSettings
 
 + (A2SettingsSection *)buildWithHost:(UIViewController *)host {
-    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"外观"];
+    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"主题"];
 
     A2ThemeManager *tm = A2ThemeManager.shared;
 

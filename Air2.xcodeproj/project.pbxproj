@@ -15,7 +15,9 @@
 		B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 36F3AADE4F4508F86A2F0505 /* main.m */; };
 		6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */ = {isa = PBXBuildFile; fileRef = 074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */; };
 		B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */ = {isa = PBXBuildFile; fileRef = 872075DCD0F565557A6554D2 /* A2BackgroundView.m */; };
+		BAF1CF7998AAC1E178EC66D0 /* A2CardPosition.m in Sources */ = {isa = PBXBuildFile; fileRef = C733462374B52500F6D83649 /* A2CardPosition.m */; };
 		D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */ = {isa = PBXBuildFile; fileRef = CA1D52969E0783051081B038 /* A2CardTitleBar.m */; };
+		0769485BDAD9E62F52C32A8C /* A2CategoryNavView.m in Sources */ = {isa = PBXBuildFile; fileRef = A283C0C24413C706B449C36A /* A2CategoryNavView.m */; };
 		0964A8EE7FBEE0DA072679D2 /* A2ColorWheel.m in Sources */ = {isa = PBXBuildFile; fileRef = 75554051E6AED37FAF518AAF /* A2ColorWheel.m */; };
 		350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */ = {isa = PBXBuildFile; fileRef = A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */; };
 		552EA36099808FC6CF1AF68C /* A2PrimaryButton.m in Sources */ = {isa = PBXBuildFile; fileRef = EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */; };
@@ -29,6 +31,7 @@
 		5A0A0E6AE2BBFCAD8A947CA9 /* A2Toast.m in Sources */ = {isa = PBXBuildFile; fileRef = F3C972A56B473038ED5074FD /* A2Toast.m */; };
 		46BEB683A03C405C1E74C0B2 /* A2VersionCard.m in Sources */ = {isa = PBXBuildFile; fileRef = DCF1F61258EDBCB81698B32B /* A2VersionCard.m */; };
 		5440FDEA95986768641FF753 /* A2BaseViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */; };
+		912C3DEC9D63AE689DA1F2DE /* A2AccountRowView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */; };
 		AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */; };
 		417DB6BA2038F2AFE425AB2B /* A2DownloadListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */; };
 		AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */; };
@@ -39,6 +42,7 @@
 		231BA8D647ED52A70C2A644B /* A2ColorThemeDialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */; };
 		1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */; };
 		5C3C3472B73A413C081E753F /* A2VersionListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */; };
+		7635F6BA870CB67CA1FBFDF4 /* A2VersionRowView.m in Sources */ = {isa = PBXBuildFile; fileRef = 8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */; };
 		D33BBA190C82A6A3205F3A9E /* A2VersionSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */; };
 		27702DAD22876D499AD213EF /* A2ColorScheme.m in Sources */ = {isa = PBXBuildFile; fileRef = 93BF612ED3930C6A33249855 /* A2ColorScheme.m */; };
 		141BC76960489907EC08BDBA /* A2ColorTheme+Seed.m in Sources */ = {isa = PBXBuildFile; fileRef = 25966F1F7F932D2795B0F1A8 /* A2ColorTheme+Seed.m */; };
@@ -60,7 +64,9 @@
 		36F3AADE4F4508F86A2F0505 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "main.m"; sourceTree = "<group>"; };
 		074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionIsolation.m"; sourceTree = "<group>"; };
 		872075DCD0F565557A6554D2 /* A2BackgroundView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BackgroundView.m"; sourceTree = "<group>"; };
+		C733462374B52500F6D83649 /* A2CardPosition.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CardPosition.m"; sourceTree = "<group>"; };
 		CA1D52969E0783051081B038 /* A2CardTitleBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CardTitleBar.m"; sourceTree = "<group>"; };
+		A283C0C24413C706B449C36A /* A2CategoryNavView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CategoryNavView.m"; sourceTree = "<group>"; };
 		75554051E6AED37FAF518AAF /* A2ColorWheel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorWheel.m"; sourceTree = "<group>"; };
 		A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GlassCard.m"; sourceTree = "<group>"; };
 		EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PrimaryButton.m"; sourceTree = "<group>"; };
@@ -74,6 +80,7 @@
 		F3C972A56B473038ED5074FD /* A2Toast.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Toast.m"; sourceTree = "<group>"; };
 		DCF1F61258EDBCB81698B32B /* A2VersionCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionCard.m"; sourceTree = "<group>"; };
 		BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BaseViewController.m"; sourceTree = "<group>"; };
+		2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountRowView.m"; sourceTree = "<group>"; };
 		CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountViewController.m"; sourceTree = "<group>"; };
 		904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadListViewController.m"; sourceTree = "<group>"; };
 		58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadViewController.m"; sourceTree = "<group>"; };
@@ -84,6 +91,7 @@
 		5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorThemeDialog.m"; sourceTree = "<group>"; };
 		9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsViewController.m"; sourceTree = "<group>"; };
 		ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionListViewController.m"; sourceTree = "<group>"; };
+		8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionRowView.m"; sourceTree = "<group>"; };
 		4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionSettingsViewController.m"; sourceTree = "<group>"; };
 		93BF612ED3930C6A33249855 /* A2ColorScheme.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorScheme.m"; sourceTree = "<group>"; };
 		25966F1F7F932D2795B0F1A8 /* A2ColorTheme+Seed.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorTheme+Seed.m"; sourceTree = "<group>"; };
@@ -99,7 +107,9 @@
 		1185FA48A6FE1AB2F1E312DE /* A2SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SceneDelegate.h"; sourceTree = "<group>"; };
 		CDB8C000E2777EB953C462DD /* A2VersionIsolation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionIsolation.h"; sourceTree = "<group>"; };
 		930418C55810BF7B65B85AE9 /* A2BackgroundView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundView.h"; sourceTree = "<group>"; };
+		EB440E13AD4A8BB54186F381 /* A2CardPosition.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CardPosition.h"; sourceTree = "<group>"; };
 		1F985FAD5DEB8D4699A8B5AE /* A2CardTitleBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CardTitleBar.h"; sourceTree = "<group>"; };
+		853858C5BCCD6563D696BCE9 /* A2CategoryNavView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CategoryNavView.h"; sourceTree = "<group>"; };
 		D0D70559C6A4486D1060EC44 /* A2ColorWheel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorWheel.h"; sourceTree = "<group>"; };
 		011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GlassCard.h"; sourceTree = "<group>"; };
 		F483F847F6597D3BD17BBBA5 /* A2PrimaryButton.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PrimaryButton.h"; sourceTree = "<group>"; };
@@ -111,6 +121,7 @@
 		DBF31C9D8FD1524E6BEB2D62 /* A2Toast.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Toast.h"; sourceTree = "<group>"; };
 		88C9076497160DA45470EFB1 /* A2VersionCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionCard.h"; sourceTree = "<group>"; };
 		346D941B767D969728343CD3 /* A2BaseViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BaseViewController.h"; sourceTree = "<group>"; };
+		0D773FDDDB48AA7436E8FAA5 /* A2AccountRowView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountRowView.h"; sourceTree = "<group>"; };
 		6D2B976BBD0701B19B6533DD /* A2AccountViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountViewController.h"; sourceTree = "<group>"; };
 		03B2D97D5F4CDEEC6A69B6D0 /* A2DownloadListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadListViewController.h"; sourceTree = "<group>"; };
 		A7D45435EB1780C938976BA4 /* A2DownloadViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadViewController.h"; sourceTree = "<group>"; };
@@ -121,6 +132,7 @@
 		A309D45ADA810213043EDE96 /* A2SettingsSections.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsSections.h"; sourceTree = "<group>"; };
 		F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsViewController.h"; sourceTree = "<group>"; };
 		271E6A92F0F655D2A7EA5627 /* A2VersionListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionListViewController.h"; sourceTree = "<group>"; };
+		EF8A5FB174D5923A21B4D162 /* A2VersionRowView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionRowView.h"; sourceTree = "<group>"; };
 		E0C16E70541109926240BD8B /* A2VersionSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionSettingsViewController.h"; sourceTree = "<group>"; };
 		DAC23739A567EAE9F7189258 /* A2ColorScheme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorScheme.h"; sourceTree = "<group>"; };
 		89FE8C9FAF9D157BFC4F8D14 /* A2ColorTheme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorTheme.h"; sourceTree = "<group>"; };
@@ -225,7 +237,9 @@
 			isa = PBXGroup;
 			children = (
 				872075DCD0F565557A6554D2 /* A2BackgroundView.m */,
+				C733462374B52500F6D83649 /* A2CardPosition.m */,
 				CA1D52969E0783051081B038 /* A2CardTitleBar.m */,
+				A283C0C24413C706B449C36A /* A2CategoryNavView.m */,
 				75554051E6AED37FAF518AAF /* A2ColorWheel.m */,
 				A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */,
 				EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */,
@@ -239,7 +253,9 @@
 				F3C972A56B473038ED5074FD /* A2Toast.m */,
 				DCF1F61258EDBCB81698B32B /* A2VersionCard.m */,
 				930418C55810BF7B65B85AE9 /* A2BackgroundView.h */,
+				EB440E13AD4A8BB54186F381 /* A2CardPosition.h */,
 				1F985FAD5DEB8D4699A8B5AE /* A2CardTitleBar.h */,
+				853858C5BCCD6563D696BCE9 /* A2CategoryNavView.h */,
 				D0D70559C6A4486D1060EC44 /* A2ColorWheel.h */,
 				011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */,
 				F483F847F6597D3BD17BBBA5 /* A2PrimaryButton.h */,
@@ -295,7 +311,9 @@
 		8957500F4C1E2FA1D18DFCD1 /* Account */ = {
 			isa = PBXGroup;
 			children = (
+				2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */,
 				CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */,
+				0D773FDDDB48AA7436E8FAA5 /* A2AccountRowView.h */,
 				6D2B976BBD0701B19B6533DD /* A2AccountViewController.h */,
 			);
 			path = Account;
@@ -346,8 +364,10 @@
 			isa = PBXGroup;
 			children = (
 				ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */,
+				8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */,
 				4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */,
 				271E6A92F0F655D2A7EA5627 /* A2VersionListViewController.h */,
+				EF8A5FB174D5923A21B4D162 /* A2VersionRowView.h */,
 				E0C16E70541109926240BD8B /* A2VersionSettingsViewController.h */,
 			);
 			path = Version;
@@ -430,7 +450,9 @@
 				B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */,
 				6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */,
 				B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */,
+				BAF1CF7998AAC1E178EC66D0 /* A2CardPosition.m in Sources */,
 				D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */,
+				0769485BDAD9E62F52C32A8C /* A2CategoryNavView.m in Sources */,
 				0964A8EE7FBEE0DA072679D2 /* A2ColorWheel.m in Sources */,
 				350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */,
 				552EA36099808FC6CF1AF68C /* A2PrimaryButton.m in Sources */,
@@ -444,6 +466,7 @@
 				5A0A0E6AE2BBFCAD8A947CA9 /* A2Toast.m in Sources */,
 				46BEB683A03C405C1E74C0B2 /* A2VersionCard.m in Sources */,
 				5440FDEA95986768641FF753 /* A2BaseViewController.m in Sources */,
+				912C3DEC9D63AE689DA1F2DE /* A2AccountRowView.m in Sources */,
 				AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */,
 				417DB6BA2038F2AFE425AB2B /* A2DownloadListViewController.m in Sources */,
 				AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */,
@@ -454,6 +477,7 @@
 				231BA8D647ED52A70C2A644B /* A2ColorThemeDialog.m in Sources */,
 				1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */,
 				5C3C3472B73A413C081E753F /* A2VersionListViewController.m in Sources */,
+				7635F6BA870CB67CA1FBFDF4 /* A2VersionRowView.m in Sources */,
 				D33BBA190C82A6A3205F3A9E /* A2VersionSettingsViewController.m in Sources */,
 				27702DAD22876D499AD213EF /* A2ColorScheme.m in Sources */,
 				141BC76960489907EC08BDBA /* A2ColorTheme+Seed.m in Sources */,
