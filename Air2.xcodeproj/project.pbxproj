@@ -1,0 +1,588 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		5B69779F761A566D166C2342 /* A2AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 8DA45F9AA021EBFBF929A56A /* A2AppDelegate.m */; };
+		1D4ED46FBFBF946134C72573 /* A2RootViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E0A962942F56F74CF7617780 /* A2RootViewController.m */; };
+		84C22A76F0D470DBB7E9248C /* A2SceneDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */; };
+		B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 36F3AADE4F4508F86A2F0505 /* main.m */; };
+		6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */ = {isa = PBXBuildFile; fileRef = 074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */; };
+		B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */ = {isa = PBXBuildFile; fileRef = 872075DCD0F565557A6554D2 /* A2BackgroundView.m */; };
+		D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */ = {isa = PBXBuildFile; fileRef = CA1D52969E0783051081B038 /* A2CardTitleBar.m */; };
+		350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */ = {isa = PBXBuildFile; fileRef = A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */; };
+		552EA36099808FC6CF1AF68C /* A2PrimaryButton.m in Sources */ = {isa = PBXBuildFile; fileRef = EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */; };
+		8ABD4DA07F7A241239D71053 /* A2ProgressBar.m in Sources */ = {isa = PBXBuildFile; fileRef = EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */; };
+		ED8B276093698A47A8E600CB /* A2QuickActionCard.m in Sources */ = {isa = PBXBuildFile; fileRef = BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */; };
+		54F109AC2BE3E147AEEE07FF /* A2RingProgress.m in Sources */ = {isa = PBXBuildFile; fileRef = 65B73468B0B2BABA009E64BC /* A2RingProgress.m */; };
+		41CF931E6887AD8AF73E145F /* A2SettingsRow.m in Sources */ = {isa = PBXBuildFile; fileRef = 235D2D4A2ABFFA39AEDB334D /* A2SettingsRow.m */; };
+		2AF28D616C17109E5DDEB2E6 /* A2SettingsSection.m in Sources */ = {isa = PBXBuildFile; fileRef = EE215D4473E1887376B33E1E /* A2SettingsSection.m */; };
+		5B82BB5F439B75DE2AE64C6A /* A2TaskDrawer.m in Sources */ = {isa = PBXBuildFile; fileRef = DA139E80AEDB846DE5191C14 /* A2TaskDrawer.m */; };
+		464FCB1D2C9D4FA080A24820 /* A2TaskProgressView.m in Sources */ = {isa = PBXBuildFile; fileRef = ADC4C42CB382EAFDCA556C09 /* A2TaskProgressView.m */; };
+		5A0A0E6AE2BBFCAD8A947CA9 /* A2Toast.m in Sources */ = {isa = PBXBuildFile; fileRef = F3C972A56B473038ED5074FD /* A2Toast.m */; };
+		46BEB683A03C405C1E74C0B2 /* A2VersionCard.m in Sources */ = {isa = PBXBuildFile; fileRef = DCF1F61258EDBCB81698B32B /* A2VersionCard.m */; };
+		5440FDEA95986768641FF753 /* A2BaseViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */; };
+		AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */; };
+		417DB6BA2038F2AFE425AB2B /* A2DownloadListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */; };
+		AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */; };
+		7344000874E6AFAA9489A939 /* A2InstallingViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */; };
+		6225CC987D80810EBF5E4CA8 /* A2LauncherViewController+Actions.m in Sources */ = {isa = PBXBuildFile; fileRef = 765156EE08E4F402C27DB99B /* A2LauncherViewController+Actions.m */; };
+		C98CDE092507553798670AE4 /* A2LauncherViewController+Cards.m in Sources */ = {isa = PBXBuildFile; fileRef = C67D59A7A9737D27EA240AA8 /* A2LauncherViewController+Cards.m */; };
+		F6C91785AE1F856D4C3E08BB /* A2LauncherViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = C8A9221A5FAC2B9E0D63B27A /* A2LauncherViewController.m */; };
+		9F8EE7E69BC7F3C10586FA6A /* A2AboutSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 566EB440D41933073AF9B84A /* A2AboutSettings.m */; };
+		8DF920441794A778BEFD9DD0 /* A2AppearanceSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */; };
+		28E0E9F04A06993B01FFC1D8 /* A2BackgroundSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */; };
+		C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB44E450592838BA6F7B061 /* A2GameSettings.m */; };
+		5410B17BED6F52D8CF28A79E /* A2RendererSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 40638D8EF5A463CF055C788F /* A2RendererSettings.m */; };
+		1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */; };
+		E889FEBA6CD5092EC90C30B0 /* A2StorageSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 0267E5A9B0F4581B73E92AB8 /* A2StorageSettings.m */; };
+		DD810A84EC081CCEF2657B15 /* A2ThemePickerViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = DC16169EDDEE76681A6CF1E2 /* A2ThemePickerViewController.m */; };
+		5C3C3472B73A413C081E753F /* A2VersionListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */; };
+		D33BBA190C82A6A3205F3A9E /* A2VersionSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */; };
+		27702DAD22876D499AD213EF /* A2ColorScheme.m in Sources */ = {isa = PBXBuildFile; fileRef = 93BF612ED3930C6A33249855 /* A2ColorScheme.m */; };
+		86D43CE5B95D29876BF7D34D /* A2ColorTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = 82FE348CB0D3A5CE4DD665A1 /* A2ColorTheme.m */; };
+		01294C3B04FD73AA638FC63E /* A2Metrics.m in Sources */ = {isa = PBXBuildFile; fileRef = C144BE68C9BFFFAA61A92B1A /* A2Metrics.m */; };
+		7B7A47F5F8AA510170F1A159 /* A2ThemeManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */; };
+		0771576A647FFB4348CEC538 /* A2Typography.m in Sources */ = {isa = PBXBuildFile; fileRef = 42B68771E09EA8BB40AC83D7 /* A2Typography.m */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		082E22CB657D9948DD22CF5F /* Air2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Air2.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		18FD4D9FAB9B1E1C27AFB511 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		8DA45F9AA021EBFBF929A56A /* A2AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2AppDelegate.m; sourceTree = "<group>"; };
+		E0A962942F56F74CF7617780 /* A2RootViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2RootViewController.m; sourceTree = "<group>"; };
+		B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2SceneDelegate.m; sourceTree = "<group>"; };
+		36F3AADE4F4508F86A2F0505 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = main.m; sourceTree = "<group>"; };
+		074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2VersionIsolation.m; sourceTree = "<group>"; };
+		872075DCD0F565557A6554D2 /* A2BackgroundView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2BackgroundView.m; sourceTree = "<group>"; };
+		CA1D52969E0783051081B038 /* A2CardTitleBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2CardTitleBar.m; sourceTree = "<group>"; };
+		A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2GlassCard.m; sourceTree = "<group>"; };
+		EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2PrimaryButton.m; sourceTree = "<group>"; };
+		EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2ProgressBar.m; sourceTree = "<group>"; };
+		BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2QuickActionCard.m; sourceTree = "<group>"; };
+		65B73468B0B2BABA009E64BC /* A2RingProgress.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2RingProgress.m; sourceTree = "<group>"; };
+		235D2D4A2ABFFA39AEDB334D /* A2SettingsRow.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2SettingsRow.m; sourceTree = "<group>"; };
+		EE215D4473E1887376B33E1E /* A2SettingsSection.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2SettingsSection.m; sourceTree = "<group>"; };
+		DA139E80AEDB846DE5191C14 /* A2TaskDrawer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2TaskDrawer.m; sourceTree = "<group>"; };
+		ADC4C42CB382EAFDCA556C09 /* A2TaskProgressView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2TaskProgressView.m; sourceTree = "<group>"; };
+		F3C972A56B473038ED5074FD /* A2Toast.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2Toast.m; sourceTree = "<group>"; };
+		DCF1F61258EDBCB81698B32B /* A2VersionCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2VersionCard.m; sourceTree = "<group>"; };
+		BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2BaseViewController.m; sourceTree = "<group>"; };
+		CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2AccountViewController.m; sourceTree = "<group>"; };
+		904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2DownloadListViewController.m; sourceTree = "<group>"; };
+		58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2DownloadViewController.m; sourceTree = "<group>"; };
+		6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2InstallingViewController.m; sourceTree = "<group>"; };
+		765156EE08E4F402C27DB99B /* A2LauncherViewController+Actions.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2LauncherViewController+Actions.m; sourceTree = "<group>"; };
+		C67D59A7A9737D27EA240AA8 /* A2LauncherViewController+Cards.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2LauncherViewController+Cards.m; sourceTree = "<group>"; };
+		C8A9221A5FAC2B9E0D63B27A /* A2LauncherViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2LauncherViewController.m; sourceTree = "<group>"; };
+		566EB440D41933073AF9B84A /* A2AboutSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2AboutSettings.m; sourceTree = "<group>"; };
+		CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2AppearanceSettings.m; sourceTree = "<group>"; };
+		976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2BackgroundSettingsViewController.m; sourceTree = "<group>"; };
+		0FB44E450592838BA6F7B061 /* A2GameSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2GameSettings.m; sourceTree = "<group>"; };
+		40638D8EF5A463CF055C788F /* A2RendererSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2RendererSettings.m; sourceTree = "<group>"; };
+		9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2SettingsViewController.m; sourceTree = "<group>"; };
+		0267E5A9B0F4581B73E92AB8 /* A2StorageSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2StorageSettings.m; sourceTree = "<group>"; };
+		DC16169EDDEE76681A6CF1E2 /* A2ThemePickerViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2ThemePickerViewController.m; sourceTree = "<group>"; };
+		ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2VersionListViewController.m; sourceTree = "<group>"; };
+		4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2VersionSettingsViewController.m; sourceTree = "<group>"; };
+		93BF612ED3930C6A33249855 /* A2ColorScheme.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2ColorScheme.m; sourceTree = "<group>"; };
+		82FE348CB0D3A5CE4DD665A1 /* A2ColorTheme.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2ColorTheme.m; sourceTree = "<group>"; };
+		C144BE68C9BFFFAA61A92B1A /* A2Metrics.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2Metrics.m; sourceTree = "<group>"; };
+		5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2ThemeManager.m; sourceTree = "<group>"; };
+		42B68771E09EA8BB40AC83D7 /* A2Typography.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = A2Typography.m; sourceTree = "<group>"; };
+		52E0A8862124FBDB57E8C690 /* A2AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2AppDelegate.h; sourceTree = "<group>"; };
+		2C58D391DAC32B55049E9809 /* A2RootViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2RootViewController.h; sourceTree = "<group>"; };
+		1185FA48A6FE1AB2F1E312DE /* A2SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2SceneDelegate.h; sourceTree = "<group>"; };
+		CDB8C000E2777EB953C462DD /* A2VersionIsolation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2VersionIsolation.h; sourceTree = "<group>"; };
+		930418C55810BF7B65B85AE9 /* A2BackgroundView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2BackgroundView.h; sourceTree = "<group>"; };
+		1F985FAD5DEB8D4699A8B5AE /* A2CardTitleBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2CardTitleBar.h; sourceTree = "<group>"; };
+		011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2GlassCard.h; sourceTree = "<group>"; };
+		F483F847F6597D3BD17BBBA5 /* A2PrimaryButton.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2PrimaryButton.h; sourceTree = "<group>"; };
+		D771FB41CA40081650206A01 /* A2ProgressView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2ProgressView.h; sourceTree = "<group>"; };
+		6585C7CB91A28A24F014676B /* A2QuickActionCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2QuickActionCard.h; sourceTree = "<group>"; };
+		32854779149E0E29A0EC1CE2 /* A2SettingsRow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2SettingsRow.h; sourceTree = "<group>"; };
+		96423A07FE49DD9B2383632F /* A2SettingsSection.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2SettingsSection.h; sourceTree = "<group>"; };
+		86BA725A974D441AEC4C7082 /* A2TaskDrawer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2TaskDrawer.h; sourceTree = "<group>"; };
+		DBF31C9D8FD1524E6BEB2D62 /* A2Toast.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2Toast.h; sourceTree = "<group>"; };
+		88C9076497160DA45470EFB1 /* A2VersionCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2VersionCard.h; sourceTree = "<group>"; };
+		346D941B767D969728343CD3 /* A2BaseViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2BaseViewController.h; sourceTree = "<group>"; };
+		6D2B976BBD0701B19B6533DD /* A2AccountViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2AccountViewController.h; sourceTree = "<group>"; };
+		03B2D97D5F4CDEEC6A69B6D0 /* A2DownloadListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2DownloadListViewController.h; sourceTree = "<group>"; };
+		A7D45435EB1780C938976BA4 /* A2DownloadViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2DownloadViewController.h; sourceTree = "<group>"; };
+		C7770877217FAF37A3CE2F32 /* A2InstallingViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2InstallingViewController.h; sourceTree = "<group>"; };
+		39421C371A5FDC787D490323 /* A2LauncherViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2LauncherViewController.h; sourceTree = "<group>"; };
+		A18035593A63164AF4EE8D1D /* A2LauncherViewController_Internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2LauncherViewController_Internal.h; sourceTree = "<group>"; };
+		8A8A69E0C0117AD2228117A1 /* A2BackgroundSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2BackgroundSettingsViewController.h; sourceTree = "<group>"; };
+		A309D45ADA810213043EDE96 /* A2SettingsSections.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2SettingsSections.h; sourceTree = "<group>"; };
+		F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2SettingsViewController.h; sourceTree = "<group>"; };
+		BE9D08E19D7AD6A9AAE197CF /* A2ThemePickerViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2ThemePickerViewController.h; sourceTree = "<group>"; };
+		271E6A92F0F655D2A7EA5627 /* A2VersionListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2VersionListViewController.h; sourceTree = "<group>"; };
+		E0C16E70541109926240BD8B /* A2VersionSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2VersionSettingsViewController.h; sourceTree = "<group>"; };
+		DAC23739A567EAE9F7189258 /* A2ColorScheme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2ColorScheme.h; sourceTree = "<group>"; };
+		89FE8C9FAF9D157BFC4F8D14 /* A2ColorTheme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2ColorTheme.h; sourceTree = "<group>"; };
+		E61D2D443ACA03984F35EFCA /* A2Metrics.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2Metrics.h; sourceTree = "<group>"; };
+		789AF4E406F5B8122812523E /* A2ThemeManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2ThemeManager.h; sourceTree = "<group>"; };
+		2146F61DDD3A2234BEDF108A /* A2Typography.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = A2Typography.h; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B365BE9502C3128F5D540532 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		E2258AA71B17E0A3529C6C95 = {
+			isa = PBXGroup;
+			children = (
+				0D7DB83B69709B8B97AE4409 /* Air2 */,
+				31A5E41A9BD04E385DB196E5 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+
+		31A5E41A9BD04E385DB196E5 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				082E22CB657D9948DD22CF5F /* Air2.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+
+		0D7DB83B69709B8B97AE4409 /* Air2 */ = {
+			isa = PBXGroup;
+			children = (
+				18FD4D9FAB9B1E1C27AFB511 /* Info.plist */,
+				7B4F16DD90D9362E0A2BDBD1 /* App */,
+				3C208AC8788CF22B0CC6CF18 /* Path */,
+				8B89578D010E17535991475E /* Components */,
+				E4F1D82CF180792A5EDFE454 /* Screens */,
+				ED89BE603E6F0B8503DCD530 /* Theme */,
+				8957500F4C1E2FA1D18DFCD1 /* Account */,
+				55AB3FA6D6516DF096EA9950 /* Download */,
+				C7F61C0D99C863113AC1C553 /* Home */,
+				C09CC792827909A5EC124675 /* Settings */,
+				940C24E13AC2B0BB0C4F8B79 /* Version */,
+			);
+			path = Air2;
+			sourceTree = "<group>";
+		};
+
+		7B4F16DD90D9362E0A2BDBD1 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				8DA45F9AA021EBFBF929A56A /* A2AppDelegate.m */,
+				E0A962942F56F74CF7617780 /* A2RootViewController.m */,
+				B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */,
+				36F3AADE4F4508F86A2F0505 /* main.m */,
+				52E0A8862124FBDB57E8C690 /* A2AppDelegate.h */,
+				2C58D391DAC32B55049E9809 /* A2RootViewController.h */,
+				1185FA48A6FE1AB2F1E312DE /* A2SceneDelegate.h */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+
+		3C208AC8788CF22B0CC6CF18 /* Path */ = {
+			isa = PBXGroup;
+			children = (
+				074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */,
+				CDB8C000E2777EB953C462DD /* A2VersionIsolation.h */,
+			);
+			path = Path;
+			sourceTree = "<group>";
+		};
+
+		8B89578D010E17535991475E /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				872075DCD0F565557A6554D2 /* A2BackgroundView.m */,
+				CA1D52969E0783051081B038 /* A2CardTitleBar.m */,
+				A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */,
+				EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */,
+				EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */,
+				BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */,
+				65B73468B0B2BABA009E64BC /* A2RingProgress.m */,
+				235D2D4A2ABFFA39AEDB334D /* A2SettingsRow.m */,
+				EE215D4473E1887376B33E1E /* A2SettingsSection.m */,
+				DA139E80AEDB846DE5191C14 /* A2TaskDrawer.m */,
+				ADC4C42CB382EAFDCA556C09 /* A2TaskProgressView.m */,
+				F3C972A56B473038ED5074FD /* A2Toast.m */,
+				DCF1F61258EDBCB81698B32B /* A2VersionCard.m */,
+				930418C55810BF7B65B85AE9 /* A2BackgroundView.h */,
+				1F985FAD5DEB8D4699A8B5AE /* A2CardTitleBar.h */,
+				011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */,
+				F483F847F6597D3BD17BBBA5 /* A2PrimaryButton.h */,
+				D771FB41CA40081650206A01 /* A2ProgressView.h */,
+				6585C7CB91A28A24F014676B /* A2QuickActionCard.h */,
+				32854779149E0E29A0EC1CE2 /* A2SettingsRow.h */,
+				96423A07FE49DD9B2383632F /* A2SettingsSection.h */,
+				86BA725A974D441AEC4C7082 /* A2TaskDrawer.h */,
+				DBF31C9D8FD1524E6BEB2D62 /* A2Toast.h */,
+				88C9076497160DA45470EFB1 /* A2VersionCard.h */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+
+		E4F1D82CF180792A5EDFE454 /* Screens */ = {
+			isa = PBXGroup;
+			children = (
+				BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */,
+				346D941B767D969728343CD3 /* A2BaseViewController.h */,
+				8957500F4C1E2FA1D18DFCD1 /* Account */,
+				55AB3FA6D6516DF096EA9950 /* Download */,
+				C7F61C0D99C863113AC1C553 /* Home */,
+				C09CC792827909A5EC124675 /* Settings */,
+				940C24E13AC2B0BB0C4F8B79 /* Version */,
+			);
+			path = Screens;
+			sourceTree = "<group>";
+		};
+
+		ED89BE603E6F0B8503DCD530 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				93BF612ED3930C6A33249855 /* A2ColorScheme.m */,
+				82FE348CB0D3A5CE4DD665A1 /* A2ColorTheme.m */,
+				C144BE68C9BFFFAA61A92B1A /* A2Metrics.m */,
+				5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */,
+				42B68771E09EA8BB40AC83D7 /* A2Typography.m */,
+				DAC23739A567EAE9F7189258 /* A2ColorScheme.h */,
+				89FE8C9FAF9D157BFC4F8D14 /* A2ColorTheme.h */,
+				E61D2D443ACA03984F35EFCA /* A2Metrics.h */,
+				789AF4E406F5B8122812523E /* A2ThemeManager.h */,
+				2146F61DDD3A2234BEDF108A /* A2Typography.h */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+
+		8957500F4C1E2FA1D18DFCD1 /* Account */ = {
+			isa = PBXGroup;
+			children = (
+				CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */,
+				6D2B976BBD0701B19B6533DD /* A2AccountViewController.h */,
+			);
+			path = Account;
+			sourceTree = "<group>";
+		};
+
+		55AB3FA6D6516DF096EA9950 /* Download */ = {
+			isa = PBXGroup;
+			children = (
+				904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */,
+				58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */,
+				6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */,
+				03B2D97D5F4CDEEC6A69B6D0 /* A2DownloadListViewController.h */,
+				A7D45435EB1780C938976BA4 /* A2DownloadViewController.h */,
+				C7770877217FAF37A3CE2F32 /* A2InstallingViewController.h */,
+			);
+			path = Download;
+			sourceTree = "<group>";
+		};
+
+		C7F61C0D99C863113AC1C553 /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				765156EE08E4F402C27DB99B /* A2LauncherViewController+Actions.m */,
+				C67D59A7A9737D27EA240AA8 /* A2LauncherViewController+Cards.m */,
+				C8A9221A5FAC2B9E0D63B27A /* A2LauncherViewController.m */,
+				39421C371A5FDC787D490323 /* A2LauncherViewController.h */,
+				A18035593A63164AF4EE8D1D /* A2LauncherViewController_Internal.h */,
+			);
+			path = Home;
+			sourceTree = "<group>";
+		};
+
+		C09CC792827909A5EC124675 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				566EB440D41933073AF9B84A /* A2AboutSettings.m */,
+				CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */,
+				976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */,
+				0FB44E450592838BA6F7B061 /* A2GameSettings.m */,
+				40638D8EF5A463CF055C788F /* A2RendererSettings.m */,
+				9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */,
+				0267E5A9B0F4581B73E92AB8 /* A2StorageSettings.m */,
+				DC16169EDDEE76681A6CF1E2 /* A2ThemePickerViewController.m */,
+				8A8A69E0C0117AD2228117A1 /* A2BackgroundSettingsViewController.h */,
+				A309D45ADA810213043EDE96 /* A2SettingsSections.h */,
+				F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */,
+				BE9D08E19D7AD6A9AAE197CF /* A2ThemePickerViewController.h */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+
+		940C24E13AC2B0BB0C4F8B79 /* Version */ = {
+			isa = PBXGroup;
+			children = (
+				ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */,
+				4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */,
+				271E6A92F0F655D2A7EA5627 /* A2VersionListViewController.h */,
+				E0C16E70541109926240BD8B /* A2VersionSettingsViewController.h */,
+			);
+			path = Version;
+			sourceTree = "<group>";
+		};
+
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		489989357F50184436B4C36D /* Air2 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 09185177824D0012F345AF29 /* Build configuration list for PBXNativeTarget "Air2" */;
+			buildPhases = (
+				E9AC67C993D2511BDAD48561 /* Sources */,
+				B365BE9502C3128F5D540532 /* Frameworks */,
+				483A0E0C9C74F0CBD6A612E6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Air2;
+			productName = Air2;
+			productReference = 082E22CB657D9948DD22CF5F /* Air2.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		807E8FCA71E1D108200A94CC /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					489989357F50184436B4C36D = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = F086F31674BEA44957E3CCA5 /* Build configuration list for PBXProject "Air2" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = "zh-Hans";
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				"zh-Hans",
+				en,
+				Base,
+			);
+			mainGroup = E2258AA71B17E0A3529C6C95;
+			productRefGroup = 31A5E41A9BD04E385DB196E5 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				489989357F50184436B4C36D /* Air2 */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		483A0E0C9C74F0CBD6A612E6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E9AC67C993D2511BDAD48561 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5B69779F761A566D166C2342 /* A2AppDelegate.m in Sources */,
+				1D4ED46FBFBF946134C72573 /* A2RootViewController.m in Sources */,
+				84C22A76F0D470DBB7E9248C /* A2SceneDelegate.m in Sources */,
+				B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */,
+				6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */,
+				B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */,
+				D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */,
+				350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */,
+				552EA36099808FC6CF1AF68C /* A2PrimaryButton.m in Sources */,
+				8ABD4DA07F7A241239D71053 /* A2ProgressBar.m in Sources */,
+				ED8B276093698A47A8E600CB /* A2QuickActionCard.m in Sources */,
+				54F109AC2BE3E147AEEE07FF /* A2RingProgress.m in Sources */,
+				41CF931E6887AD8AF73E145F /* A2SettingsRow.m in Sources */,
+				2AF28D616C17109E5DDEB2E6 /* A2SettingsSection.m in Sources */,
+				5B82BB5F439B75DE2AE64C6A /* A2TaskDrawer.m in Sources */,
+				464FCB1D2C9D4FA080A24820 /* A2TaskProgressView.m in Sources */,
+				5A0A0E6AE2BBFCAD8A947CA9 /* A2Toast.m in Sources */,
+				46BEB683A03C405C1E74C0B2 /* A2VersionCard.m in Sources */,
+				5440FDEA95986768641FF753 /* A2BaseViewController.m in Sources */,
+				AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */,
+				417DB6BA2038F2AFE425AB2B /* A2DownloadListViewController.m in Sources */,
+				AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */,
+				7344000874E6AFAA9489A939 /* A2InstallingViewController.m in Sources */,
+				6225CC987D80810EBF5E4CA8 /* A2LauncherViewController+Actions.m in Sources */,
+				C98CDE092507553798670AE4 /* A2LauncherViewController+Cards.m in Sources */,
+				F6C91785AE1F856D4C3E08BB /* A2LauncherViewController.m in Sources */,
+				9F8EE7E69BC7F3C10586FA6A /* A2AboutSettings.m in Sources */,
+				8DF920441794A778BEFD9DD0 /* A2AppearanceSettings.m in Sources */,
+				28E0E9F04A06993B01FFC1D8 /* A2BackgroundSettingsViewController.m in Sources */,
+				C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */,
+				5410B17BED6F52D8CF28A79E /* A2RendererSettings.m in Sources */,
+				1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */,
+				E889FEBA6CD5092EC90C30B0 /* A2StorageSettings.m in Sources */,
+				DD810A84EC081CCEF2657B15 /* A2ThemePickerViewController.m in Sources */,
+				5C3C3472B73A413C081E753F /* A2VersionListViewController.m in Sources */,
+				D33BBA190C82A6A3205F3A9E /* A2VersionSettingsViewController.m in Sources */,
+				27702DAD22876D499AD213EF /* A2ColorScheme.m in Sources */,
+				86D43CE5B95D29876BF7D34D /* A2ColorTheme.m in Sources */,
+				01294C3B04FD73AA638FC63E /* A2Metrics.m in Sources */,
+				7B7A47F5F8AA510170F1A159 /* A2ThemeManager.m in Sources */,
+				0771576A647FFB4348CEC538 /* A2Typography.m in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		282F8BED7AC8E61EF9F4311F /* Build configuration list for PBXProject "Air2" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+			};
+			name = Debug;
+		};
+		BAA844323E141A79DF10B0D7 /* Build configuration list for PBXProject "Air2" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 15.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = iphoneos;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		2381CE2D4AF8729870E1984E /* Build configuration list for PBXNativeTarget "Air2" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Air2/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.airdevs.air2;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AB7D16C820D649D1E1709822 /* Build configuration list for PBXNativeTarget "Air2" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = "Air2/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = dev.airdevs.air2;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		F086F31674BEA44957E3CCA5 /* Build configuration list for PBXProject "Air2" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				282F8BED7AC8E61EF9F4311F /* Debug */,
+				BAA844323E141A79DF10B0D7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+
+		09185177824D0012F345AF29 /* Build configuration list for PBXNativeTarget "Air2" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2381CE2D4AF8729870E1984E /* Debug */,
+				AB7D16C820D649D1E1709822 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = 807E8FCA71E1D108200A94CC /* Project object */;
+}

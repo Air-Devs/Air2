@@ -1,4 +1,9 @@
-name: Build
+name: Build IPA
+
+# 出可安装的未签名 IPA。
+# 没有 Apple 开发者证书时走这条路：
+#   CI 用 CODE_SIGNING_ALLOWED=NO 编译 → 产出未签名 .app → 手动包成 ipa
+#   用户拿到后用 AltStore / Sideloadly / TrollStore 自行签名安装。
 
 on:
   push:
@@ -15,103 +20,102 @@ permissions:
   contents: read
 
 jobs:
-  # ==========================================================
-  # 结构与规范检查 —— 挡住"石山代码"
-  # ==========================================================
+  # ============================================================
+  # 规范检查 —— 挡住"石山代码"
+  # ============================================================
   lint:
     name: 规范检查
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: 结构与命名规范
+      - name: 目录与命名规范
         run: bash scripts/lint_structure.sh
 
-  # ==========================================================
-  # 原生层编译
-  # ==========================================================
-  natives:
-    name: 原生层
+      - name: 校验 Xcode 工程完整性
+        run: python3 scripts/verify_pbxproj.py
+
+  # ============================================================
+  # 编译并打包 IPA
+  # ============================================================
+  build:
+    name: 编译打包
     runs-on: macos-15
     needs: lint
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: 环境信息
         run: |
           xcodebuild -version
-          cmake --version
+          xcrun --sdk iphoneos --show-sdk-version
 
-      - name: 编译原生层
-        run: make natives
+      - name: 重新生成工程文件
+        run: python3 scripts/gen_xcodeproj.py
 
-      - name: 上传构建目录
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: natives-build
-          path: Natives/build
-          if-no-files-found: warn
-          retention-days: 7
+      - name: 校验工程
+        run: python3 scripts/verify_pbxproj.py
 
-  # ==========================================================
-  # Java 启动核心
-  # ==========================================================
-  java:
-    name: Java 核心
-    runs-on: macos-15
-    needs: lint
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: 准备 JDK 17
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '17'
-
-      - name: 编译 Java 核心
-        run: make java
-
-      - name: 上传 lwjgl.jar
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: java-core
-          path: JavaApp/**/*.jar
-          if-no-files-found: warn
-          retention-days: 7
-
-  # ==========================================================
-  # 打包 IPA
-  # ==========================================================
-  package:
-    name: 打包 IPA
-    runs-on: macos-15
-    needs: [ natives, java ]
-    if: github.event_name != 'pull_request'
-    continue-on-error: true
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      - name: 构建
+      - name: 编译（未签名）
         run: |
-          make natives || true
-          make java || true
-          make package || true
+          set -o pipefail
+          xcodebuild \
+            -project Air2.xcodeproj \
+            -scheme Air2 \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            ONLY_ACTIVE_ARCH=NO \
+            ARCHS=arm64 \
+            build \
+            | xcbeautify --renderer github-actions 2>/dev/null \
+            || xcodebuild \
+                -project Air2.xcodeproj \
+                -scheme Air2 \
+                -configuration Release \
+                -sdk iphoneos \
+                -derivedDataPath build \
+                CODE_SIGNING_ALLOWED=NO \
+                CODE_SIGNING_REQUIRED=NO \
+                CODE_SIGN_IDENTITY="" \
+                ONLY_ACTIVE_ARCH=NO \
+                ARCHS=arm64 \
+                build
+
+      - name: 打包 IPA
+        run: |
+          set -e
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          if [ -z "$APP" ]; then
+            echo "::error::找不到编译产物 .app"
+            find build/Build/Products -maxdepth 3 -type d | head -20
+            exit 1
+          fi
+          echo "产物: $APP"
+          mkdir -p artifacts/Payload
+          cp -R "$APP" artifacts/Payload/
+          cd artifacts
+          zip -qry Air2-unsigned.ipa Payload
+          rm -rf Payload
+          ls -lh Air2-unsigned.ipa
 
       - name: 上传 IPA
         uses: actions/upload-artifact@v4
         with:
-          name: Air2-ipa
+          name: Air2-IPA
           path: artifacts/*.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 上传编译日志（失败时）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs
+          path: |
+            build/Logs
           if-no-files-found: warn
-          retention-days: 14
+          retention-days: 7
