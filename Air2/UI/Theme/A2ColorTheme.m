@@ -4,6 +4,7 @@
 //
 
 #import "A2ColorTheme.h"
+#import "A2ColorTheme_Internal.h"
 
 #pragma mark - 色板推导
 
@@ -18,30 +19,17 @@
 /// 说明：MD3 规范用 HCT 色彩空间，这里用 HSB 近似。
 /// 视觉上与规范接近，代价是极端色相下略有偏差（已用钳制规避）。
 /// 完整的 HCT 实现收益不大，代码量却要翻几倍，不划算。
-/// 中间结构：填充时先用具体 UIColor，之后再包装成 A2ColorSlot 对。
-/// 这样 A2FillScheme 的推导逻辑不用改（它只认 UIColor），
-/// 只需要在最后把「亮版」和「暗版」的两个具体色配对。
-@interface A2RawScheme : NSObject
-#define A2RAW_PROPS \
-@property (nonatomic, strong) UIColor *primary, *onPrimary, *primaryContainer, *onPrimaryContainer; \
-@property (nonatomic, strong) UIColor *secondary, *onSecondary, *secondaryContainer, *onSecondaryContainer; \
-@property (nonatomic, strong) UIColor *tertiary, *tertiaryContainer; \
-@property (nonatomic, strong) UIColor *surface, *onSurface; \
-@property (nonatomic, strong) UIColor *surfaceContainerLowest, *surfaceContainerLow, *surfaceContainer; \
-@property (nonatomic, strong) UIColor *surfaceContainerHigh, *surfaceContainerHighest; \
-@property (nonatomic, strong) UIColor *surfaceVariant, *onSurfaceVariant; \
-@property (nonatomic, strong) UIColor *outline, *outlineVariant; \
-@property (nonatomic, strong) UIColor *error, *onError, *errorContainer, *onErrorContainer; \
-@property (nonatomic, strong) UIColor *success, *warning; \
-@property (nonatomic, strong) UIColor *inverseSurface, *inverseOnSurface, *inversePrimary;
-A2RAW_PROPS
-@end
 @implementation A2RawScheme
 @end
 
-static void A2FillScheme(A2RawScheme *s, UIColor *seed, BOOL light) {
+/// 按风格参数调整后的饱和度上限
+static CGFloat A2ApplySat(float sat, A2PaletteParams p) {
+    return MIN(p.saturationCap, sat * p.saturationScale);
+}
+
+void A2FillSchemeWithParams(A2RawScheme *s, UIColor *seed, BOOL light, A2PaletteParams p) {
     if (light) {
-        s.primary            = A2Tone(seed, 0.72, 0.48);
+        s.primary            = A2Tone(seed, A2ApplySat(0.72, p), 0.48);
         s.onPrimary          = A2Hex(0xFFFFFF);
         s.primaryContainer   = A2Tone(seed, 0.34, 0.92);
         s.onPrimaryContainer = A2Tone(seed, 0.66, 0.24);
@@ -52,15 +40,15 @@ static void A2FillScheme(A2RawScheme *s, UIColor *seed, BOOL light) {
         s.onSecondaryContainer = A2Tone(seed, 0.38, 0.26);
 
         // 第三色偏移 1/3 色相，给界面一点色彩变化，避免单一色相发闷
-        UIColor *t3 = A2ShiftHue(seed, 0.33);
+        UIColor *t3 = A2ShiftHue(seed, p.tertiaryHueShift);
         s.tertiary          = A2Tone(t3, 0.42, 0.42);
         s.tertiaryContainer = A2Tone(t3, 0.24, 0.90);
 
-        s.surface                 = A2Tone(seed, 0.03, 0.985);
+        s.surface                 = A2Tone(seed, 0.03 * p.surfaceTint * 3, 0.985);
         s.onSurface               = A2Tone(seed, 0.16, 0.12);
         s.surfaceContainerLowest  = A2Hex(0xFFFFFF);
         s.surfaceContainerLow     = A2Tone(seed, 0.05, 0.965);
-        s.surfaceContainer        = A2Tone(seed, 0.07, 0.935);
+        s.surfaceContainer        = A2Tone(seed, 0.07 * p.surfaceTint * 2, 0.935);
         s.surfaceContainerHigh    = A2Tone(seed, 0.09, 0.905);
         s.surfaceContainerHighest = A2Tone(seed, 0.11, 0.875);
         s.surfaceVariant          = A2Tone(seed, 0.13, 0.90);
@@ -74,7 +62,7 @@ static void A2FillScheme(A2RawScheme *s, UIColor *seed, BOOL light) {
         s.inversePrimary   = A2Tone(seed, 0.34, 0.86);
 
     } else {
-        s.primary            = A2Tone(seed, 0.55, 0.82);
+        s.primary            = A2Tone(seed, A2ApplySat(0.55, p), 0.82);
         s.onPrimary          = A2Tone(seed, 0.75, 0.18);
         s.primaryContainer   = A2Tone(seed, 0.68, 0.34);
         s.onPrimaryContainer = A2Tone(seed, 0.34, 0.92);
@@ -84,15 +72,15 @@ static void A2FillScheme(A2RawScheme *s, UIColor *seed, BOOL light) {
         s.secondaryContainer   = A2Tone(seed, 0.30, 0.30);
         s.onSecondaryContainer = A2Tone(seed, 0.20, 0.90);
 
-        UIColor *t3 = A2ShiftHue(seed, 0.33);
+        UIColor *t3 = A2ShiftHue(seed, p.tertiaryHueShift);
         s.tertiary          = A2Tone(t3, 0.34, 0.80);
         s.tertiaryContainer = A2Tone(t3, 0.26, 0.32);
 
-        s.surface                 = A2Tone(seed, 0.16, 0.09);
+        s.surface                 = A2Tone(seed, 0.16 * p.surfaceTint, 0.09);
         s.onSurface               = A2Tone(seed, 0.07, 0.92);
         s.surfaceContainerLowest  = A2Tone(seed, 0.18, 0.05);
         s.surfaceContainerLow     = A2Tone(seed, 0.16, 0.12);
-        s.surfaceContainer        = A2Tone(seed, 0.15, 0.15);
+        s.surfaceContainer        = A2Tone(seed, 0.15 * p.surfaceTint, 0.15);
         s.surfaceContainerHigh    = A2Tone(seed, 0.14, 0.19);
         s.surfaceContainerHighest = A2Tone(seed, 0.13, 0.23);
         s.surfaceVariant          = A2Tone(seed, 0.18, 0.27);
@@ -132,7 +120,7 @@ static void A2FillScheme(A2RawScheme *s, UIColor *seed, BOOL light) {
 /// 这是整个配色系统的关键一步：色槽同时持有两种模式的具体色值，
 /// 视图在 applyTheme 时按 isDark 取用 —— 不依赖 trait 解析，
 /// 因此不会出现「系统暗色但卡片渲染成亮色」的问题。
-static void A2PairScheme(A2ColorScheme *out, A2RawScheme *light, A2RawScheme *dark) {
+void A2PairSchemePublic(A2ColorScheme *out, A2RawScheme *light, A2RawScheme *dark) {
 #define A2PAIR(prop) out.prop = [A2ColorSlot light:light.prop dark:dark.prop]
     A2PAIR(primary);            A2PAIR(onPrimary);
     A2PAIR(primaryContainer);   A2PAIR(onPrimaryContainer);
@@ -153,16 +141,6 @@ static void A2PairScheme(A2ColorScheme *out, A2RawScheme *light, A2RawScheme *da
 #undef A2PAIR
 }
 
-@interface A2ColorTheme ()
-@property (nonatomic, assign) A2ThemeKind kind;
-@property (nonatomic, copy) NSString *displayName;
-@property (nonatomic, copy) NSString *themeDescription;
-@property (nonatomic, strong) A2ColorScheme *scheme;
-@property (nonatomic, strong) UIColor *lightPrimary;
-@property (nonatomic, strong) UIColor *darkPrimary;
-@property (nonatomic, strong) NSArray<UIColor *> *backgroundGradient;
-@end
-
 @implementation A2ColorTheme
 
 + (instancetype)themeWithSeed:(UIColor *)seed
@@ -173,16 +151,19 @@ static void A2PairScheme(A2ColorScheme *out, A2RawScheme *light, A2RawScheme *da
                 lightOverride:(void (^)(A2RawScheme *))lightOverride
                  darkOverride:(void (^)(A2RawScheme *))darkOverride {
 
+    // 内置主题用中性基准风格（TonalSpot）
+    A2PaletteParams params = A2PaletteParamsForStyle(A2PaletteStyleTonalSpot);
+
     A2RawScheme *light = [A2RawScheme new];
     A2RawScheme *dark = [A2RawScheme new];
-    A2FillScheme(light, seed, YES);
-    A2FillScheme(dark, seed, NO);
+    A2FillSchemeWithParams(light, seed, YES, params);
+    A2FillSchemeWithParams(dark, seed, NO, params);
 
     if (lightOverride) lightOverride(light);
     if (darkOverride) darkOverride(dark);
 
     A2ColorScheme *merged = [A2ColorScheme new];
-    A2PairScheme(merged, light, dark);
+    A2PairSchemePublic(merged, light, dark);
 
     A2ColorTheme *t = [A2ColorTheme new];
     t.kind = kind;
@@ -309,7 +290,11 @@ static void A2PairScheme(A2ColorScheme *out, A2RawScheme *light, A2RawScheme *da
         case A2ThemeKindVelvetRose:  return [self velvetRose];
         case A2ThemeKindUrbanAsh:    return [self urbanAsh];
         case A2ThemeKindDynamic:
-        default:                     return [self embermire];
+        case A2ThemeKindCustom:
+        default:
+            // Dynamic / Custom 都需要外部提供种子色或背景图，
+            // 单靠 kind 无法构造 —— 回落到默认主题，由 ThemeManager 覆盖
+            return [self embermire];
     }
 }
 

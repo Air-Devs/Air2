@@ -45,6 +45,13 @@ extern NSNotificationName const A2BackgroundDidChangeNotification;
 
 @property (nonatomic, assign) A2ThemeKind selectedKind;
 
+/// 配色风格（对应 MD3 的 PaletteStyle）。
+/// 影响从种子色推导色板的方式，不改变主题本身。
+@property (nonatomic, assign) NSInteger paletteStyle;
+
+/// 用户自定义的种子色。非 nil 时 selectedKind 视为「自定义」。
+@property (nonatomic, strong, nullable) UIColor *customSeedColor;
+
 #pragma mark - 外观
 
 @property (nonatomic, assign) A2AppearanceMode appearanceMode;

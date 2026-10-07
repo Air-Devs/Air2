@@ -13,6 +13,8 @@ static NSString *const kKeyAppearance  = @"A2AppearanceMode";
 static NSString *const kKeyBgBlur      = @"A2BackgroundBlur";
 static NSString *const kKeyBgOverlay   = @"A2BackgroundDarkOverlay";
 static NSString *const kKeyBgFade      = @"A2BackgroundFadeRatio";
+static NSString *const kKeyPaletteStyle = @"A2PaletteStyle";
+static NSString *const kKeyCustomSeed  = @"A2CustomSeedColor";
 static NSString *const kBackgroundFileName = @"air2_background.jpg";
 
 @implementation A2ThemeManager {
@@ -46,6 +48,12 @@ static NSString *const kBackgroundFileName = @"air2_background.jpg";
     NSInteger kind = [d objectForKey:kKeyThemeKind] ? [d integerForKey:kKeyThemeKind] : A2ThemeKindEmbermire;
     if (kind < 0 || kind >= A2ThemeKindCount) kind = A2ThemeKindEmbermire;
     _selectedKind = (A2ThemeKind)kind;
+
+    _paletteStyle = [d objectForKey:kKeyPaletteStyle] ? [d integerForKey:kKeyPaletteStyle] : 0;
+    NSInteger seedRGB = [d objectForKey:kKeyCustomSeed] ? [d integerForKey:kKeyCustomSeed] : -1;
+    if (seedRGB >= 0) {
+        _customSeedColor = A2Hex((uint32_t)seedRGB);
+    }
 
     _backgroundImage = [self loadPersistedBackground];
     [self rebuildTheme];
@@ -82,6 +90,15 @@ static NSString *const kBackgroundFileName = @"air2_background.jpg";
 
 /// 依据当前种类重建主题对象
 - (void)rebuildTheme {
+    // 自定义种子色优先：用户在大色盘里选的颜色会覆盖主题预设
+    if (_customSeedColor) {
+        _theme = [A2ColorTheme themeWithSeedColor:_customSeedColor
+                                          paletteStyle:_paletteStyle
+                                                 name:@"自定义"
+                                                 desc:@"从色盘选取的种子色"];
+        return;
+    }
+
     if (_selectedKind == A2ThemeKindDynamic && _backgroundImage) {
         _theme = [A2ColorTheme themeFromImage:_backgroundImage];
     } else if (_selectedKind == A2ThemeKindDynamic) {
@@ -129,6 +146,23 @@ static NSString *const kBackgroundFileName = @"air2_background.jpg";
         if (w) return w.traitCollection.userInterfaceStyle == UIUserInterfaceStyleDark;
     }
     return NO;
+}
+
+- (void)setPaletteStyle:(NSInteger)paletteStyle {
+    if (_paletteStyle == paletteStyle) return;
+    _paletteStyle = paletteStyle;
+    if (_customSeedColor) [self rebuildTheme];
+    _resolvedScheme = nil;
+    [self persist];
+    [self notifyThemeChanged];
+}
+
+- (void)setCustomSeedColor:(UIColor *)customSeedColor {
+    _customSeedColor = customSeedColor;
+    [self rebuildTheme];
+    _resolvedScheme = nil;
+    [self persist];
+    [self notifyThemeChanged];
 }
 
 - (void)setAppearanceMode:(A2AppearanceMode)appearanceMode {
@@ -256,6 +290,12 @@ static NSString *const kBackgroundFileName = @"air2_background.jpg";
     [d setInteger:_backgroundBlur forKey:kKeyBgBlur];
     [d setDouble:_backgroundDarkOverlay forKey:kKeyBgOverlay];
     [d setDouble:_backgroundFadeRatio forKey:kKeyBgFade];
+    [d setInteger:_paletteStyle forKey:kKeyPaletteStyle];
+    if (_customSeedColor) {
+        [d setInteger:(NSInteger)A2RGBValue(_customSeedColor) forKey:kKeyCustomSeed];
+    } else {
+        [d removeObjectForKey:kKeyCustomSeed];
+    }
 }
 
 - (void)notifyThemeChanged {

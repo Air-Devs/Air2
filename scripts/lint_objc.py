@@ -70,11 +70,13 @@ def check_file(path, defined_classes):
     # ---------- @interface / @implementation / @end ----------
     ifaces = len(re.findall(r'@interface\b', src))
     impls = len(re.findall(r'@implementation\b', src))
+    protos = len(re.findall(r'@protocol\b', src))
     ends = len(re.findall(r'@end\b', src))
-    if ifaces + impls != ends:
+    # 注意 @protocol 也有配对的 @end，之前漏算了会误报
+    if ifaces + impls + protos != ends:
         errors.append(
-            f"@interface({ifaces}) + @implementation({impls}) = {ifaces+impls} "
-            f"≠ @end({ends})")
+            f"@interface({ifaces}) + @implementation({impls}) + @protocol({protos}) "
+            f"= {ifaces+impls+protos} ≠ @end({ends})")
 
     # ---------- 只读属性赋值 ----------
     for var, prop in re.findall(r'\b(\w+)\.(delay|isRunning|state)\s*=', src):

@@ -20,6 +20,7 @@ typedef NS_ENUM(NSInteger, A2ThemeKind) {
     A2ThemeKindVelvetRose,      ///< 绛紫玫瑰
     A2ThemeKindUrbanAsh,        ///< 都市灰
     A2ThemeKindDynamic,         ///< 从自定义背景图取色
+    A2ThemeKindCustom,          ///< 用户从色盘自定义的种子色
     A2ThemeKindCount
 };
 
@@ -42,6 +43,12 @@ typedef NS_ENUM(NSInteger, A2ThemeKind) {
 + (instancetype)themeForKind:(A2ThemeKind)kind;
 + (NSArray<A2ColorTheme *> *)allThemes;
 + (instancetype)themeFromImage:(UIImage *)image;
+
+/// 从「种子色 + 配色风格」构造主题（颜色主题弹窗用）
++ (instancetype)themeWithSeedColor:(UIColor *)seed
+                      paletteStyle:(NSInteger)style
+                              name:(NSString *)name
+                              desc:(NSString *)desc;
 
 /// 构造主题。override 块用于手调关键色，让成品不完全依赖算法。
 + (instancetype)themeWithSeed:(UIColor *)seed
