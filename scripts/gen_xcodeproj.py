@@ -100,7 +100,10 @@ def build():
             ftype = "sourcecode.c.h"
         else:
             ftype = "sourcecode.c.objc"
-        add(f"\t\t{u} /* {name} */ = {{isa = PBXFileReference; lastKnownFileType = {ftype}; path = {name}; sourceTree = \"<group>\"; }};")
+        # path 一律加引号：文件名可能含 + - # 等字符
+        #（如 A2LauncherViewController+Actions.m），
+        # 不加引号会让 Xcode 的旧式 plist 解析器在遇到特殊字符时中断
+        add(f"\t\t{u} /* {name} */ = {{isa = PBXFileReference; lastKnownFileType = {ftype}; path = \"{name}\"; sourceTree = \"<group>\"; }};")
     add("/* End PBXFileReference section */")
     add("")
 
@@ -284,17 +287,17 @@ def build():
         s = {}
         if is_target:
             s.update({
-                "ASSETCATALOG_COMPILER_APPICON_NAME": '"AppIcon"',
+                "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
                 "CODE_SIGN_STYLE": "Automatic",
                 "CURRENT_PROJECT_VERSION": BUILD_VERSION,
                 "GENERATE_INFOPLIST_FILE": "NO",
-                "INFOPLIST_FILE": '"Air2/Info.plist"',
+                "INFOPLIST_FILE": "Air2/Info.plist",
                 "LD_RUNPATH_SEARCH_PATHS": '(\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t"@executable_path/Frameworks",\n\t\t\t\t)',
                 "MARKETING_VERSION": MARKETING_VERSION,
                 "PRODUCT_BUNDLE_IDENTIFIER": BUNDLE_ID,
-                "PRODUCT_NAME": '"$(TARGET_NAME)"',
+                "PRODUCT_NAME": "$(TARGET_NAME)",
                 "SWIFT_EMIT_LOC_STRINGS": "YES",
-                "TARGETED_DEVICE_FAMILY": '"1,2"',
+                "TARGETED_DEVICE_FAMILY": "1,2",
             })
         else:
             s.update({
@@ -327,7 +330,12 @@ def build():
         add("\t\t\tisa = XCBuildConfiguration;")
         add("\t\t\tbuildSettings = {")
         for k in sorted(settings.keys()):
-            add(f"\t\t\t\t{k} = {settings[k]};")
+            v = settings[k]
+            # 字符串值一律加引号。旧式 plist 里不加引号的值
+            # 遇到 $( ) @ / 等字符会解析失败。
+            if isinstance(v, str) and not v.startswith(("(", '"')):
+                v = '"' + v + '"'
+            add(f"\t\t\t\t{k} = {v};")
         add("\t\t\t};")
         add(f"\t\t\tname = {name};")
         add("\t\t};")
@@ -353,7 +361,7 @@ def build():
 
     proj_rel = common_settings(False)
     proj_rel.update({
-        "DEBUG_INFORMATION_FORMAT": '"dwarf-with-dsym"',
+        "DEBUG_INFORMATION_FORMAT": "dwarf-with-dsym",
         "ENABLE_NS_ASSERTIONS": "NO",
         "MTL_ENABLE_DEBUG_INFO": "NO",
         "VALIDATE_PRODUCT": "YES",
