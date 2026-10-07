@@ -21,6 +21,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// 外观 —— 主题、亮暗模式、自定义背景
 @interface A2AppearanceSettings : NSObject
 + (A2SettingsSection *)buildWithHost:(UIViewController *)host;
+/// 资源下载来源（CurseForge API Key 配置）
++ (A2SettingsSection *)buildSourceSectionWithHost:(UIViewController *)host;
 @end
 
 NS_ASSUME_NONNULL_END

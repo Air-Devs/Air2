@@ -13,7 +13,7 @@
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
-#import "A2ModrinthAPI.h"
+#import "A2ContentSource.h"
 #import "A2DownloadEngine.h"
 
 static NSString *const kCellID = @"A2DownloadCell";
@@ -103,7 +103,7 @@ static NSString *const kCellID = @"A2DownloadCell";
     [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
-- (void)configureWithProject:(A2ModrinthProject *)project {
+- (void)configureWithProject:(A2ContentItem *)project {
     _titleLabel.text = project.title;
     _subtitleLabel.text = project.projectDescription;
 
@@ -149,10 +149,14 @@ static NSString *const kCellID = @"A2DownloadCell";
 @property (nonatomic, strong) UITableView *tableView;
 @property (nonatomic, strong) UILabel *countLabel;
 @property (nonatomic, strong) UIActivityIndicatorView *spinner;
-@property (nonatomic, strong) NSMutableArray<A2ModrinthProject *> *projects;
+@property (nonatomic, strong) NSMutableArray<A2ContentItem *> *items;
 @property (nonatomic, assign) NSInteger offset;
 @property (nonatomic, assign) BOOL loading;
 @property (nonatomic, assign) BOOL reachedEnd;
+/// 当前资源来源（Modrinth / CurseForge）
+@property (nonatomic, assign) A2ContentPlatform platform;
+@property (nonatomic, strong) A2ContentSource *source;
+@property (nonatomic, strong) UISegmentedControl *platformSwitch;
 @property (nonatomic, copy) NSString *gameVersionFilter;
 @property (nonatomic, copy) NSString *loaderFilter;
 @end
@@ -163,7 +167,7 @@ static NSString *const kCellID = @"A2DownloadCell";
     self.usesScrollContent = NO;
     [super viewDidLoad];
 
-    _projects = [NSMutableArray array];
+    _items = [NSMutableArray array];
     _offset = 0;
     self.pageTitle = [self titleForCategory];
 
@@ -184,6 +188,18 @@ static NSString *const kCellID = @"A2DownloadCell";
         case A2DownloadCategoryWorld:        return @"存档";
     }
     return @"下载";
+}
+
+- (NSInteger)categoryIndex {
+    switch (self.category) {
+        case A2DownloadCategoryModpack:      return 1;
+        case A2DownloadCategoryResourcePack: return 2;
+        case A2DownloadCategoryShader:       return 3;
+        case A2DownloadCategoryWorld:        return 4;
+        case A2DownloadCategoryMod:
+        case A2DownloadCategoryGame:
+        default:                             return 0;
+    }
 }
 
 - (A2ModrinthProjectType)projectType {
@@ -275,6 +291,38 @@ static NSString *const kCellID = @"A2DownloadCell";
     ]];
 
     [self.plainContentView addSubview:_filterBar];
+    [self setupPlatformSwitch];
+}
+
+/// 资源来源切换。只有 CurseForge 有 Key 时才可选第二项。
+- (void)setupPlatformSwitch {
+    _platformSwitch = [[UISegmentedControl alloc] initWithItems:@[@"Modrinth", @"CurseForge"]];
+    _platformSwitch.translatesAutoresizingMaskIntoConstraints = NO;
+    _platformSwitch.selectedSegmentIndex = 0;
+    [_platformSwitch addTarget:self action:@selector(platformChanged)
+              forControlEvents:UIControlEventValueChanged];
+    [self.plainContentView addSubview:_platformSwitch];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [_platformSwitch.topAnchor constraintEqualToAnchor:_searchBar.bottomAnchor],
+        [_platformSwitch.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
+                                                      constant:A2PageMargin],
+        [_platformSwitch.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
+                                                       constant:-A2PageMargin],
+        [_platformSwitch.heightAnchor constraintEqualToConstant:32];
+    ]];
+}
+
+- (void)platformChanged {
+    self.platform = (_platformSwitch.selectedSegmentIndex == 0)
+        ? A2ContentPlatformModrinth : A2ContentPlatformCurseForge;
+    self.source = [A2ContentSource sourceForPlatform:self.platform];
+
+    // 切到 CurseForge 但没配 Key 时给出明确提示
+    if (!self.source.isAvailable) {
+        [A2Toast show:self.source.unavailableReason ?: @"该资源源不可用" inView:self.view];
+    }
+    [self reload];
 }
 
 /// 筛选条：加载器 + 游戏版本
@@ -390,7 +438,8 @@ static NSString *const kCellID = @"A2DownloadCell";
         [_searchBar.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor constant:-A2SpaceS],
         [_searchBar.heightAnchor constraintEqualToConstant:44],
 
-        [_filterBar.topAnchor constraintEqualToAnchor:_searchBar.bottomAnchor],
+        [_filterBar.topAnchor constraintEqualToAnchor:_platformSwitch.bottomAnchor
+                                            constant:A2SpaceS],
         [_filterBar.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor],
         [_filterBar.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
         [_filterBar.heightAnchor constraintEqualToConstant:56],
@@ -416,7 +465,7 @@ static NSString *const kCellID = @"A2DownloadCell";
 - (void)reload {
     _offset = 0;
     _reachedEnd = NO;
-    [_projects removeAllObjects];
+    [_items removeAllObjects];
     [_tableView reloadData];
     [self loadMore];
 }
@@ -426,14 +475,22 @@ static NSString *const kCellID = @"A2DownloadCell";
     _loading = YES;
     [_spinner startAnimating];
 
+    // 源不可用时给出明确提示（CurseForge 缺 Key）
+    if (!self.source.isAvailable) {
+        self.loading = NO;
+        [self.spinner stopAnimating];
+        self.countLabel.text = self.source.unavailableReason;
+        return;
+    }
+
     __weak typeof(self) weakSelf = self;
-    [[A2ModrinthAPI shared] searchWithQuery:_searchBar.text
-                                       type:[self projectType]
-                                gameVersion:_gameVersionFilter
-                                     loader:_loaderFilter
-                                     offset:_offset
-                                      limit:20
-                                 completion:^(NSArray<A2ModrinthProject *> *results, NSError *error) {
+    [self.source searchWithQuery:_searchBar.text
+                        category:[self categoryIndex]
+                     gameVersion:_gameVersionFilter
+                          loader:_loaderFilter
+                          offset:_offset
+                           limit:20
+                      completion:^(NSArray<A2ContentItem *> *results, NSError *error) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
 
@@ -449,31 +506,31 @@ static NSString *const kCellID = @"A2DownloadCell";
         if (results.count == 0) {
             self.reachedEnd = YES;
         } else {
-            [self.projects addObjectsFromArray:results];
+            [self.items addObjectsFromArray:results];
             self.offset += results.count;
         }
 
         [self.tableView reloadData];
-        self.countLabel.text = [NSString stringWithFormat:@"共 %lu 项", (unsigned long)self.projects.count];
+        self.countLabel.text = [NSString stringWithFormat:@"共 %lu 项", (unsigned long)self.items.count];
     }];
 }
 
 #pragma mark - UITableViewDataSource
 
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    return _projects.count;
+    return _items.count;
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
     A2DownloadListCell *cell = [tableView dequeueReusableCellWithIdentifier:kCellID forIndexPath:indexPath];
-    [cell configureWithProject:_projects[indexPath.row]];
+    [cell configureWithProject:_items[indexPath.row]];
     return cell;
 }
 
 - (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell
 forRowAtIndexPath:(NSIndexPath *)indexPath {
     // 滚到接近底部时加载下一页
-    if (indexPath.row >= (NSInteger)_projects.count - 4) {
+    if (indexPath.row >= (NSInteger)_items.count - 4) {
         [self loadMore];
     }
 }
@@ -482,14 +539,19 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    A2ModrinthProject *p = _projects[indexPath.row];
+    A2ContentItem *p = _items[indexPath.row];
+
+    if (!p.downloadable) {
+        [A2Toast show:@"该作者禁止第三方分发，请前往官网下载" inView:self.view];
+        return;
+    }
 
     // 显示可下载的版本列表
     __weak typeof(self) weakSelf = self;
-    [[A2ModrinthAPI shared] versionsForProject:p.projectID
-                                   gameVersion:_gameVersionFilter
-                                        loader:_loaderFilter
-                                    completion:^(NSArray<A2ModrinthVersion *> *versions, NSError *error) {
+    [[A2ContentSource sourceForPlatform:p.platform] versionsForProject:p.projectID
+                                                          gameVersion:_gameVersionFilter
+                                                               loader:_loaderFilter
+                                                           completion:^(NSArray<A2ContentVersion *> *versions, NSError *error) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
         if (error || versions.count == 0) {
@@ -500,7 +562,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     }];
 }
 
-- (void)showVersionPicker:(NSArray<A2ModrinthVersion *> *)versions project:(A2ModrinthProject *)project {
+- (void)showVersionPicker:(NSArray<A2ContentVersion *> *)versions project:(A2ContentItem *)project {
     UIAlertController *sheet =
         [UIAlertController alertControllerWithTitle:project.title
                                             message:@"选择要下载的版本"
@@ -508,7 +570,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
     NSInteger max = MIN(10, (NSInteger)versions.count);
     for (NSInteger i = 0; i < max; i++) {
-        A2ModrinthVersion *v = versions[i];
+        A2ContentVersion *v = versions[i];
         NSString *title = [NSString stringWithFormat:@"%@%@", v.versionNumber,
                            v.loaders.count ? [NSString stringWithFormat:@" · %@", v.loaders.firstObject] : @""];
         [sheet addAction:[UIAlertAction actionWithTitle:title
@@ -524,7 +586,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     [self presentViewController:sheet animated:YES completion:nil];
 }
 
-- (void)downloadVersion:(A2ModrinthVersion *)version project:(A2ModrinthProject *)project {
+- (void)downloadVersion:(A2ContentVersion *)version project:(A2ContentItem *)project {
     if (version.downloadURL.length == 0) {
         [A2Toast show:@"此版本没有可下载的文件" inView:self.view];
         return;

@@ -88,6 +88,7 @@
 
     if (index == 0) {
         [_contentStack addArrangedSubview:[A2AppearanceSettings buildWithHost:self]];
+        [_contentStack addArrangedSubview:[A2AppearanceSettings buildSourceSectionWithHost:self]];
     }
 
     // 内容切换时淡入上浮

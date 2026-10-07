@@ -18,6 +18,8 @@
 #import "A2Toast.h"
 #import "A2BackgroundSettingsViewController.h"
 #import "A2ColorThemeDialog.h"
+#import "A2CurseForgeAPI.h"
+#import "A2Toast.h"
 
 @implementation A2AppearanceSettings
 
@@ -123,6 +125,98 @@
     }];
 
     return section;
+}
+
+#pragma mark - 资源来源（CurseForge Key）
+
++ (A2SettingsSection *)buildSourceSectionWithHost:(UIViewController *)host {
+    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"资源下载"];
+    section.footerText = @"Modrinth 无需配置。CurseForge 需要 API Key，"
+                          "可在 console.curseforge.com 免费申请。"
+                          "Key 保存在设备钥匙串中，不会随备份外传。";
+
+    BOOL hasKey = [A2CurseForgeAPI hasAPIKey];
+
+    A2SettingsRow *cfRow = [[A2SettingsRow alloc] init];
+    cfRow.symbolName = @"flame.fill";
+    cfRow.title = @"CurseForge API Key";
+    cfRow.subtitle = hasKey ? @"已配置" : @"未配置，无法使用 CurseForge 资源";
+    cfRow.valueText = hasKey ? @"已设置" : @"未设置";
+    cfRow.accessory = A2SettingsRowAccessoryDisclosure;
+    cfRow.onTap = ^{
+        [self showKeyEditorFrom:host row:cfRow];
+    };
+    [section addRow:cfRow];
+
+    A2SettingsRow *testRow = [[A2SettingsRow alloc] init];
+    testRow.symbolName = @"checkmark.seal";
+    testRow.title = @"验证 Key";
+    testRow.subtitle = @"向 CurseForge 发一次请求确认有效";
+    testRow.accessory = A2SettingsRowAccessoryDisclosure;
+    testRow.onTap = ^{
+        if (![A2CurseForgeAPI hasAPIKey]) {
+            [A2Toast show:@"请先填写 API Key" inView:host.view];
+            return;
+        }
+        [A2Toast show:@"正在验证…" inView:host.view];
+        [[A2CurseForgeAPI shared] validateKeyWithCompletion:^(BOOL valid, NSError *error) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (valid) {
+                    [A2Toast show:@"Key 有效" inView:host.view];
+                } else {
+                    [A2Toast show:(error.localizedDescription ?: @"Key 无效") inView:host.view];
+                }
+            });
+        }];
+    };
+    [section addRow:testRow];
+
+    A2SettingsRow *clearRow = [[A2SettingsRow alloc] init];
+    clearRow.symbolName = @"trash";
+    clearRow.title = @"清除 Key";
+    clearRow.destructive = YES;
+    clearRow.accessory = A2SettingsRowAccessoryNone;
+    clearRow.onTap = ^{
+        [A2CurseForgeAPI setAPIKey:nil];
+        cfRow.subtitle = @"未配置，无法使用 CurseForge 资源";
+        cfRow.valueText = @"未设置";
+        [A2Toast show:@"已清除" inView:host.view];
+    };
+    [section addRow:clearRow];
+
+    return section;
+}
+
++ (void)showKeyEditorFrom:(UIViewController *)host row:(A2SettingsRow *)row {
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"CurseForge API Key"
+                                            message:@"粘贴从 console.curseforge.com 获取的 Key"
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
+        tf.placeholder = @"$2a$10$...";
+        tf.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        tf.autocorrectionType = UITextAutocorrectionTypeNo;
+        tf.clearButtonMode = UITextFieldViewModeWhileEditing;
+        // Key 是凭据，输入时不显示明文
+        tf.secureTextEntry = YES;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消"
+                                             style:UIAlertActionStyleCancel
+                                           handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"保存"
+                                             style:UIAlertActionStyleDefault
+                                           handler:^(UIAlertAction *a) {
+        NSString *key = alert.textFields.firstObject.text;
+        if (key.length == 0) {
+            [A2Toast show:@"Key 不能为空" inView:host.view];
+            return;
+        }
+        [A2CurseForgeAPI setAPIKey:key];
+        row.subtitle = @"已配置";
+        row.valueText = @"已设置";
+        [A2Toast show:@"已保存到钥匙串" inView:host.view];
+    }]];
+    [host presentViewController:alert animated:YES completion:nil];
 }
 
 @end
