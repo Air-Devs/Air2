@@ -22,6 +22,8 @@
 #import "A2VersionManager.h"
 
 @interface A2VersionSettingsViewController ()
+/// 版本名（在 init 里赋值，后续只读）
+@property (nonatomic, copy) NSString *versionName;
 @property (nonatomic, strong) A2Version *version;
 @property (nonatomic, strong) A2SettingsRow *isolationRow;
 @property (nonatomic, strong) A2SettingsRow *customPathRow;
@@ -273,6 +275,9 @@
     jvmRow.title = @"JVM 参数";
     jvmRow.valueText = iso.jvmArgs.length ? iso.jvmArgs : @"跟随全局";
     jvmRow.accessory = A2SettingsRowAccessoryDisclosure;
+    // 注意：row 持有 onTap，onTap 里若再强引用 row 就会形成循环。
+    // 这里对 row 也用 weak 捕获。
+    __weak A2SettingsRow *weakJvmRow = jvmRow;
     jvmRow.onTap = ^{
         __weak typeof(self) weakSelf = self;
         UIAlertController *alert =
@@ -288,7 +293,7 @@
                                                handler:^(UIAlertAction *a) {
             weakSelf.version.isolation.jvmArgs = alert.textFields.firstObject.text;
             [weakSelf.version saveConfig];
-            jvmRow.valueText = weakSelf.version.isolation.jvmArgs.length
+            weakJvmRow.valueText = weakSelf.version.isolation.jvmArgs.length
                 ? weakSelf.version.isolation.jvmArgs : @"跟随全局";
         }]];
         [weakSelf presentViewController:alert animated:YES completion:nil];
@@ -300,6 +305,7 @@
     gameArgsRow.title = @"游戏参数";
     gameArgsRow.valueText = iso.gameArgs.length ? iso.gameArgs : @"跟随全局";
     gameArgsRow.accessory = A2SettingsRowAccessoryDisclosure;
+    __weak A2SettingsRow *weakGameArgsRow = gameArgsRow;
     gameArgsRow.onTap = ^{
         __weak typeof(self) weakSelf = self;
         UIAlertController *alert =
@@ -315,7 +321,7 @@
                                                handler:^(UIAlertAction *a) {
             weakSelf.version.isolation.gameArgs = alert.textFields.firstObject.text;
             [weakSelf.version saveConfig];
-            gameArgsRow.valueText = weakSelf.version.isolation.gameArgs.length
+            weakGameArgsRow.valueText = weakSelf.version.isolation.gameArgs.length
                 ? weakSelf.version.isolation.gameArgs : @"跟随全局";
         }]];
         [weakSelf presentViewController:alert animated:YES completion:nil];

@@ -238,6 +238,59 @@ def check_file(path, defined_classes):
                 f"第 {line} 行: 变量 {var} 的声明位置在使用之后，"
                 f"会导致 use of undeclared identifier")
 
+    # ---------- block 循环引用检查 ----------
+    # 常见模式：xxx.onTap = ^{ ... 引用 xxx ... } ——
+    # xxx 持有 block，block 又强引用 xxx，形成循环，对象永不释放。
+    # 编译器只在部分写法下报 -Warc-retain-cycles，这里主动扫。
+    #
+    # 做法：找「变量.block属性 = ^{ ... }」结构，检查 block 体内
+    # 是否直接引用了同一个变量名（且未先用 __weak 声明弱引用）。
+    block_assign = re.compile(
+        r'\b(\w+)\.(onTap|onSelect|onRefresh|onMore|onToggle|onTogglePause|'
+        r'onProgress|onStateChange|onPinned|onPin|onSettings|completion|'
+        r'progress|action)\s*=\s*\^',
+        re.M)
+    for m in block_assign.finditer(src):
+        var = m.group(1)
+        if var == 'self':
+            continue   # self 的循环引用交给编译器警告，避免大量误报
+        # 从 = ^{ 开始找到配对的 }（简易括号计数）
+        try:
+            start = src.index('^{', m.start())
+        except ValueError:
+            continue
+        depth = 0
+        i = start + 1
+        while i < len(src):
+            if src[i] == '{':
+                depth += 1
+            elif src[i] == '}':
+                depth -= 1
+                if depth == 0:
+                    break
+            i += 1
+        body = src[start:i+1]
+        if i >= len(src):
+            continue
+
+        # block 体内是否直接使用该变量（不是 weakXxx）
+        if re.search(rf'(?<![\w_]){var}\s*\.', body) or \
+           re.search(rf'(?<![\w_]){var}\s*\]', body):
+            # 但如果先声明了 __weak 别名并只用别名，就不算
+            weak_alias = re.search(rf'__weak[^;]*?\b(\w+)\s*=\s*{var}\b', body)
+            if weak_alias:
+                alias = weak_alias.group(1)
+                # 检查是否还有直接引用 var（排除别名声明那一行）
+                body_wo_decl = re.sub(
+                    rf'__weak[^;]*?{var}\s*;', '', body)
+                if not re.search(rf'(?<![\w_]){var}\s*\.', body_wo_decl):
+                    continue
+            line = src[:m.start()].count('\n') + 1
+            errors.append(
+                f"第 {line} 行: {var} 的 block 里直接引用了 {var} 自身，"
+                f"会形成循环引用（{var} 持有 block，block 又持有 {var}）。"
+                f"应先用 __weak typeof({var}) weak{var[0].upper()}{var[1:]} = {var};")
+
     # ---------- setter 命名检查 ----------
     # 形如 - (非void) setXxx:(T)v; 的方法会被编译器当成属性 setter，
     # 而 ObjC 要求 setter 必须返回 void，否则报

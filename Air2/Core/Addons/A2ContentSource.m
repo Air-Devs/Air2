@@ -342,11 +342,9 @@ NSArray<NSNumber *> *A2AllContentClasses(void) {
 - (void)projectWithID:(NSString *)projectID
            completion:(void (^)(A2ContentItem *, NSError *))completion {
 
-    __weak typeof(self) weakSelf = self;
     if (self.platform == A2ContentPlatformModrinth) {
         [[A2ModrinthAPI shared] projectWithID:projectID
                                    completion:^(A2ModrinthProject *p, NSError *error) {
-            __strong typeof(weakSelf) self = weakSelf;
             if (error) { if (completion) completion(nil, error); return; }
             A2ContentItem *item = [A2ContentItem new];
             item.platform = A2ContentPlatformModrinth;
@@ -363,7 +361,6 @@ NSArray<NSNumber *> *A2AllContentClasses(void) {
     } else {
         [[A2CurseForgeAPI shared] projectWithID:projectID.integerValue
                                      completion:^(A2CFProject *p, NSError *error) {
-            (void)weakSelf;   // 这个分支不需要 self，但保留 weak 捕获以防将来扩展
             if (error) { if (completion) completion(nil, error); return; }
             A2ContentItem *item = [A2ContentItem new];
             item.platform = A2ContentPlatformCurseForge;

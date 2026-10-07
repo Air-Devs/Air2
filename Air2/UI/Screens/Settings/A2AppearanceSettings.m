@@ -78,6 +78,8 @@
         default:                    appearanceRow.valueText = @"跟随系统"; break;
     }
     appearanceRow.accessory = A2SettingsRowAccessoryDisclosure;
+    // row 持有 block，block 里若强引用 row 会循环 —— 用 weak
+    __weak A2SettingsRow *weakAppearanceRow = appearanceRow;
     appearanceRow.onTap = ^{
         UIAlertController *sheet =
             [UIAlertController alertControllerWithTitle:@"深色模式"
@@ -90,14 +92,14 @@
                                                      style:UIAlertActionStyleDefault
                                                    handler:^(UIAlertAction *a) {
                 A2ThemeManager.shared.appearanceMode = (A2AppearanceMode)mode;
-                appearanceRow.valueText = names[mode];
+                weakAppearanceRow.valueText = names[mode];
             }]];
         }
         [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
                                                 style:UIAlertActionStyleCancel
                                               handler:nil]];
-        sheet.popoverPresentationController.sourceView = appearanceRow;
-        sheet.popoverPresentationController.sourceRect = appearanceRow.bounds;
+        sheet.popoverPresentationController.sourceView = weakAppearanceRow;
+        sheet.popoverPresentationController.sourceRect = weakAppearanceRow.bounds;
         [host presentViewController:sheet animated:YES completion:nil];
     };
     [section addRow:appearanceRow];
@@ -144,8 +146,9 @@
     cfRow.subtitle = hasKey ? @"已配置" : @"未配置，无法使用 CurseForge 资源";
     cfRow.valueText = hasKey ? @"已设置" : @"未设置";
     cfRow.accessory = A2SettingsRowAccessoryDisclosure;
+    __weak A2SettingsRow *weakCfRow = cfRow;
     cfRow.onTap = ^{
-        [self showKeyEditorFrom:host row:cfRow];
+        [self showKeyEditorFrom:host row:weakCfRow];
     };
     [section addRow:cfRow];
 
@@ -191,6 +194,7 @@
     priorityRow.valueText = ([A2MirrorResolver shared].priority == A2MirrorPriorityMirrorFirst)
         ? @"镜像优先" : @"官方优先";
     priorityRow.accessory = A2SettingsRowAccessoryDisclosure;
+    __weak A2SettingsRow *weakPriorityRow = priorityRow;
     priorityRow.onTap = ^{
         UIAlertController *sheet =
             [UIAlertController alertControllerWithTitle:@"镜像优先级"
@@ -200,18 +204,18 @@
                                                  style:UIAlertActionStyleDefault
                                                handler:^(UIAlertAction *a) {
             [A2MirrorResolver shared].priority = A2MirrorPriorityOfficialFirst;
-            priorityRow.valueText = @"官方优先";
+            weakPriorityRow.valueText = @"官方优先";
         }]];
         [sheet addAction:[UIAlertAction actionWithTitle:@"镜像优先"
                                                  style:UIAlertActionStyleDefault
                                                handler:^(UIAlertAction *a) {
             [A2MirrorResolver shared].priority = A2MirrorPriorityMirrorFirst;
-            priorityRow.valueText = @"镜像优先";
+            weakPriorityRow.valueText = @"镜像优先";
         }]];
         [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
                                                  style:UIAlertActionStyleCancel handler:nil]];
-        sheet.popoverPresentationController.sourceView = priorityRow;
-        sheet.popoverPresentationController.sourceRect = priorityRow.bounds;
+        sheet.popoverPresentationController.sourceView = weakPriorityRow;
+        sheet.popoverPresentationController.sourceRect = weakPriorityRow.bounds;
         [host presentViewController:sheet animated:YES completion:nil];
     };
     [section addRow:priorityRow];
@@ -223,8 +227,8 @@
     clearRow.accessory = A2SettingsRowAccessoryNone;
     clearRow.onTap = ^{
         [A2CurseForgeAPI setAPIKey:nil];
-        cfRow.subtitle = @"未配置，无法使用 CurseForge 资源";
-        cfRow.valueText = @"未设置";
+        weakCfRow.subtitle = @"未配置，无法使用 CurseForge 资源";
+        weakCfRow.valueText = @"未设置";
         [A2Toast show:@"已清除" inView:host.view];
     };
     [section addRow:clearRow];
