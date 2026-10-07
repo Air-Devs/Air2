@@ -2,26 +2,18 @@
 //  A2InstallingViewController.m
 //  Air2
 //
+//  安装进度页 —— 接真实的 A2GameInstaller。
+//
 
 #import "A2InstallingViewController.h"
 #import "A2GlassCard.h"
 #import "A2PrimaryButton.h"
-#import "A2ProgressView.h"
+#import "A2RingProgress.h"
 #import "A2Toast.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
-
-/// 安装步骤
-typedef NS_ENUM(NSInteger, A2InstallStep) {
-    A2InstallStepFetchManifest = 0,   ///< 获取版本清单
-    A2InstallStepDownloadJar,         ///< 下载客户端
-    A2InstallStepDownloadLibraries,   ///< 下载依赖库
-    A2InstallStepDownloadAssets,      ///< 下载资源文件
-    A2InstallStepInstallLoader,       ///< 安装模组加载器
-    A2InstallStepFinalize,            ///< 收尾
-    A2InstallStepCount,
-};
+#import "A2GameInstaller.h"
 
 #pragma mark - 步骤行
 
@@ -48,7 +40,7 @@ typedef NS_ENUM(NSInteger, A2InstallStep) {
     _titleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _titleLabel.text = title;
-    _titleLabel.font = [A2Typography body];
+    _titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightRegular];
     [self addSubview:_titleLabel];
 
     [NSLayoutConstraint activateConstraints:@[
@@ -67,31 +59,37 @@ typedef NS_ENUM(NSInteger, A2InstallStep) {
     return self;
 }
 
-- (void)setActive:(BOOL)active {
-    _active = active;
-    [self updateDot];
-}
-
-- (void)setDone:(BOOL)done {
-    _done = done;
-    [self updateDot];
-}
+- (void)setActive:(BOOL)active { _active = active; [self updateDot]; }
+- (void)setDone:(BOOL)done { _done = done; [self updateDot]; }
 
 - (void)updateDot {
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
     if (_done) {
-        _dot.backgroundColor = A2ThemeManager.shared.scheme.cSuccess;
+        _dot.backgroundColor = t.cSuccess;
         _dot.alpha = 1.0;
     } else if (_active) {
-        _dot.backgroundColor = A2ThemeManager.shared.scheme.cPrimary;
+        _dot.backgroundColor = t.cPrimary;
         _dot.alpha = 1.0;
+        // 运行中的圆点呼吸
+        if (!_dot.layer.animationKeys.count) {
+            CABasicAnimation *pulse = [CABasicAnimation animationWithKeyPath:@"opacity"];
+            pulse.fromValue = @1.0;
+            pulse.toValue = @0.35;
+            pulse.duration = 0.8;
+            pulse.autoreverses = YES;
+            pulse.repeatCount = HUGE_VALF;
+            [_dot.layer addAnimation:pulse forKey:@"pulse"];
+        }
     } else {
-        _dot.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.25];
+        [_dot.layer removeAllAnimations];
+        _dot.backgroundColor = t.cOutline;
         _dot.alpha = 0.7;
     }
 }
 
 - (void)updateTheme {
-    _titleLabel.textColor = _done ? [UIColor colorWithWhite:1.0 alpha:0.62] : UIColor.whiteColor;
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+    _titleLabel.textColor = _done ? t.cOnSurfaceVariant : t.cOnSurface;
     [self updateDot];
 }
 
@@ -102,14 +100,12 @@ typedef NS_ENUM(NSInteger, A2InstallStep) {
 @interface A2InstallingViewController ()
 @property (nonatomic, copy) NSString *versionName;
 @property (nonatomic, copy, nullable) NSString *loader;
+@property (nonatomic, strong) A2GameInstaller *installer;
 @property (nonatomic, strong) A2GlassCard *progressCard;
 @property (nonatomic, strong) A2RingProgress *ring;
 @property (nonatomic, strong) UILabel *stageLabel;
 @property (nonatomic, strong) NSMutableArray<A2InstallStepRow *> *stepRows;
 @property (nonatomic, strong) A2PrimaryButton *actionButton;
-@property (nonatomic, assign) A2InstallStep currentStep;
-@property (nonatomic, assign) CGFloat overallProgress;
-@property (nonatomic, strong, nullable) NSTimer *demoTimer;
 @end
 
 @implementation A2InstallingViewController
@@ -120,6 +116,7 @@ typedef NS_ENUM(NSInteger, A2InstallStep) {
     _versionName = [versionName copy];
     _loader = [loader copy];
     _stepRows = [NSMutableArray array];
+    _installer = [[A2GameInstaller alloc] init];
     return self;
 }
 
@@ -130,27 +127,25 @@ typedef NS_ENUM(NSInteger, A2InstallStep) {
     __weak typeof(self) weakSelf = self;
     self.onBack = ^{
         __strong typeof(weakSelf) self = weakSelf;
-        [self cancelInstall];
+        [self confirmCancel];
     };
 
     [self setupProgressCard];
     [self setupStepList];
     [self setupActionButton];
-
-    [self startDemoProgress];
+    [self startInstall];
 }
 
 - (void)dealloc {
-    [_demoTimer invalidate];
+    [_installer cancel];
 }
 
-#pragma mark - 进度卡
+#pragma mark - UI
 
 - (void)setupProgressCard {
-    A2ColorScheme *t = A2ThemeManager.shared.scheme;
     _progressCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
     _progressCard.cornerRadius = A2RadiusXL;
-    _progressCard.contentInsets = UIEdgeInsetsMake(A2SpaceXL, A2SpaceL, A2SpaceXL, A2SpaceL);
+    _progressCard.elevation = A2CardElevationLow;
 
     _ring = [[A2RingProgress alloc] initWithFrame:CGRectZero];
     _ring.translatesAutoresizingMaskIntoConstraints = NO;
@@ -164,13 +159,14 @@ typedef NS_ENUM(NSInteger, A2InstallStep) {
     titleLabel.text = self.loader.length
         ? [NSString stringWithFormat:@"%@ · %@", _versionName, _loader]
         : _versionName;
-    titleLabel.textColor = t.cOnSurface;
+    titleLabel.textColor = A2ThemeManager.shared.scheme.cOnSurface;
 
     _stageLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _stageLabel.font = [A2Typography subtitleCard];
+    _stageLabel.font = [A2Typography caption];
     _stageLabel.textAlignment = NSTextAlignmentCenter;
-    _stageLabel.textColor = [UIColor colorWithWhite:1.0 alpha:0.6];
+    _stageLabel.textColor = A2ThemeManager.shared.scheme.cOnSurfaceVariant;
     _stageLabel.text = @"正在准备…";
+    _stageLabel.numberOfLines = 2;
 
     UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[_ring, titleLabel, _stageLabel]];
     stack.translatesAutoresizingMaskIntoConstraints = NO;
@@ -180,8 +176,8 @@ typedef NS_ENUM(NSInteger, A2InstallStep) {
 
     [_progressCard.contentView addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[
-        [_ring.widthAnchor constraintEqualToConstant:132],
-        [_ring.heightAnchor constraintEqualToConstant:132],
+        [_ring.widthAnchor constraintEqualToConstant:140],
+        [_ring.heightAnchor constraintEqualToConstant:140],
         [stack.topAnchor constraintEqualToAnchor:_progressCard.contentView.topAnchor],
         [stack.bottomAnchor constraintEqualToAnchor:_progressCard.contentView.bottomAnchor],
         [stack.leadingAnchor constraintEqualToAnchor:_progressCard.contentView.leadingAnchor],
@@ -191,14 +187,14 @@ typedef NS_ENUM(NSInteger, A2InstallStep) {
     [self addSection:_progressCard];
 }
 
-#pragma mark - 步骤清单
-
 - (void)setupStepList {
     A2GlassCard *card = [[A2GlassCard alloc] initWithFrame:CGRectZero];
     card.cornerRadius = A2RadiusL;
+    card.elevation = A2CardElevationLow;
 
     NSArray<NSString *> *titles = @[
         @"获取版本清单",
+        @"下载版本信息",
         @"下载客户端",
         @"下载依赖库",
         @"下载资源文件",
@@ -213,7 +209,7 @@ typedef NS_ENUM(NSInteger, A2InstallStep) {
 
     for (NSString *t in titles) {
         A2InstallStepRow *row = [[A2InstallStepRow alloc] initWithTitle:t];
-        [row.heightAnchor constraintEqualToConstant:22].active = YES;
+        [row.heightAnchor constraintEqualToConstant:20].active = YES;
         [_stepRows addObject:row];
         [stack addArrangedSubview:row];
     }
@@ -229,95 +225,116 @@ typedef NS_ENUM(NSInteger, A2InstallStep) {
     [self addSection:card];
 }
 
-#pragma mark - 操作按钮
-
 - (void)setupActionButton {
     _actionButton = [[A2PrimaryButton alloc] initWithTitle:@"取消安装" style:A2ButtonStyleSecondary];
     _actionButton.icon = [UIImage systemImageNamed:@"xmark"];
-    [_actionButton addTarget:self action:@selector(cancelInstall) forControlEvents:UIControlEventTouchUpInside];
+    [_actionButton addTarget:self action:@selector(confirmCancel) forControlEvents:UIControlEventTouchUpInside];
     [self addSection:_actionButton];
 }
 
-- (void)cancelInstall {
-    [_demoTimer invalidate];
-    _demoTimer = nil;
-    [A2Toast show:@"已取消安装" inView:self.view];
-    __weak typeof(self) weakSelf = self;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        [weakSelf.navigationController popViewControllerAnimated:YES];
-    });
-}
+#pragma mark - 安装
 
-#pragma mark - 进度驱动（演示用，待接 Core 层真实进度）
+- (void)startInstall {
+    A2InstallRequest *req = [A2InstallRequest new];
+    req.mcVersion = self.versionName;
+    req.gameHome = A2VersionManager.shared.gameHome;
 
-- (void)startDemoProgress {
-    _currentStep = A2InstallStepFetchManifest;
-    _overallProgress = 0;
-
-    _demoTimer = [NSTimer scheduledTimerWithTimeInterval:0.08
-                                                 target:self
-                                               selector:@selector(tick)
-                                               userInfo:nil
-                                                repeats:YES];
-}
-
-- (void)tick {
-    _overallProgress += 0.004;
-    if (_overallProgress >= 1.0) {
-        _overallProgress = 1.0;
-        [_demoTimer invalidate];
-        _demoTimer = nil;
-        [self finishInstall];
+    // 加载器信息从版本名推断（形如 1.21.5-fabric）
+    if (self.loader.length) {
+        for (NSNumber *n in [A2ModLoaderAPI allLoaderTypes]) {
+            A2ModLoaderType type = (A2ModLoaderType)n.integerValue;
+            if ([self.loader.lowercaseString containsString:
+                 [A2ModLoaderAPI identifierForType:type]]) {
+                req.loaderType = n;
+                break;
+            }
+        }
     }
 
-    NSInteger step = (NSInteger)floor(_overallProgress * A2InstallStepCount);
-    if (step >= A2InstallStepCount) step = A2InstallStepCount - 1;
-    _currentStep = (A2InstallStep)step;
+    __weak typeof(self) weakSelf = self;
+    [_installer install:req
+        progress:^(A2InstallStage stage, double progress, NSString *message) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        [self updateUIForStage:stage progress:progress message:message];
+    }
+        completion:^(BOOL success, NSError *error) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        [self handleCompletion:success error:error];
+    }];
+}
 
-    [_ring setProgress:_overallProgress animated:YES];
-    _ring.centerText = [NSString stringWithFormat:@"%.0f%%", _overallProgress * 100];
+- (void)updateUIForStage:(A2InstallStage)stage progress:(double)progress message:(NSString *)message {
+    _stageLabel.text = message;
 
-    _stageLabel.text = [self stageTextForStep:_currentStep];
+    // 总进度：8 个阶段等分
+    double total = ((double)stage + progress) / (double)A2InstallStageCount;
+    [_ring setProgress:total animated:YES];
+    _ring.centerText = [NSString stringWithFormat:@"%.0f%%", total * 100];
 
     for (NSUInteger i = 0; i < _stepRows.count; i++) {
         A2InstallStepRow *row = _stepRows[i];
-        row.done = (i < (NSUInteger)_currentStep);
-        row.active = (i == (NSUInteger)_currentStep);
+        row.done = (i < (NSUInteger)stage);
+        row.active = (i == (NSUInteger)stage);
         [row updateTheme];
     }
 }
 
-- (NSString *)stageTextForStep:(A2InstallStep)step {
-    switch (step) {
-        case A2InstallStepFetchManifest:     return @"正在获取版本清单…";
-        case A2InstallStepDownloadJar:       return @"正在下载客户端…";
-        case A2InstallStepDownloadLibraries: return @"正在下载依赖库…";
-        case A2InstallStepDownloadAssets:    return @"正在下载资源文件…";
-        case A2InstallStepInstallLoader:     return @"正在安装模组加载器…";
-        case A2InstallStepFinalize:          return @"正在收尾…";
-        default:                             return @"";
+- (void)handleCompletion:(BOOL)success error:(NSError *)error {
+    if (success) {
+        for (A2InstallStepRow *row in _stepRows) {
+            row.done = YES;
+            row.active = NO;
+            [row updateTheme];
+        }
+        self.pageTitle = @"安装完成";
+        _stageLabel.text = @"安装完成";
+        [_ring setProgress:1.0 animated:YES];
+        _ring.centerText = @"100%";
+
+        [_actionButton removeFromSuperview];
+        A2PrimaryButton *done = [[A2PrimaryButton alloc] initWithTitle:@"完成"
+                                                                style:A2ButtonStylePrimary];
+        done.icon = [UIImage systemImageNamed:@"checkmark"];
+        [done addTarget:self action:@selector(doneTapped) forControlEvents:UIControlEventTouchUpInside];
+        [self addSection:done];
+        _actionButton = done;
+
+        UINotificationFeedbackGenerator *fb = [UINotificationFeedbackGenerator new];
+        [fb notificationOccurred:UINotificationFeedbackTypeSuccess];
+
+        // 让版本管理页刷新
+        [A2VersionManager.shared reload];
+    } else {
+        self.pageTitle = @"安装失败";
+        _stageLabel.text = error.localizedDescription ?: @"安装失败";
+
+        UINotificationFeedbackGenerator *fb = [UINotificationFeedbackGenerator new];
+        [fb notificationOccurred:UINotificationFeedbackTypeError];
     }
 }
 
-- (void)finishInstall {
-    for (A2InstallStepRow *row in _stepRows) {
-        row.done = YES;
-        row.active = NO;
-        [row updateTheme];
+#pragma mark - 动作
+
+- (void)confirmCancel {
+    if (_actionButton.title.length && [_actionButton.title isEqualToString:@"完成"]) {
+        [self doneTapped];
+        return;
     }
-    self.pageTitle = @"安装完成";
-    _stageLabel.text = @"安装完成";
 
-    [_actionButton removeFromSuperview];
-    A2PrimaryButton *done = [[A2PrimaryButton alloc] initWithTitle:@"完成" style:A2ButtonStylePrimary];
-    done.icon = [UIImage systemImageNamed:@"checkmark"];
-    [done addTarget:self action:@selector(doneTapped) forControlEvents:UIControlEventTouchUpInside];
-    [self addSection:done];
-    _actionButton = done;
-
-    UINotificationFeedbackGenerator *fb = [UINotificationFeedbackGenerator new];
-    [fb notificationOccurred:UINotificationFeedbackTypeSuccess];
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"取消安装"
+                                            message:@"已下载的文件会保留，下次可以继续。"
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"继续安装" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消安装" style:UIAlertActionStyleDestructive
+                                           handler:^(UIAlertAction *a) {
+        __weak typeof(self) weakSelf = self;
+        [weakSelf.installer cancel];
+        [weakSelf.navigationController popViewControllerAnimated:YES];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)doneTapped {
