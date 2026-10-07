@@ -33,6 +33,12 @@ SOURCES = [
     os.path.join(PLAYER, "A2JITStrategySelector.m"),
     os.path.join(PLAYER, "A2PairingFile.m"),
     os.path.join(PLAYER, "A2JITStateMachine.m"),
+    os.path.join(PLAYER, "A2JITCoordinator.m"),
+    os.path.join(PLAYER, "A2LaunchChain.m"),
+    os.path.join(PLAYER, "A2JITAutomaticPairingProvider.m"),
+    os.path.join(PLAYER, "A2JITImportedPairingProvider.m"),
+    os.path.join(PLAYER, "A2JITExternalToolProvider.m"),
+    os.path.join(PLAYER, "A2JITKernelJITProvider.m"),
     os.path.join(HERE, "jit_logic_tests.m"),
 ]
 

@@ -21,6 +21,8 @@
 #import "A2JITStateMachine.h"
 #import "A2JITStrategySelector.h"
 #import "A2PairingFile.h"
+#import "A2JITCoordinator.h"
+#import "A2LaunchChain.h"
 
 static int gPass = 0;
 static int gFail = 0;
@@ -79,6 +81,44 @@ static A2JITFacts *Facts(NSInteger maj, NSInteger min, A2JITEnvironmentKind env)
                                hasGetTaskAllow:NO
                          hasDynamicCodesigning:NO];
 }
+
+static A2JITFacts *FactsPairing(NSInteger maj, NSInteger min, A2JITEnvironmentKind env, BOOL pairing) {
+    return [A2JITFacts factsWithOSMajorVersion:maj
+                                   minorVersion:min
+                                    environment:env
+                       hasImportedPairingFile:pairing
+                  hasExternalEnablerInstalled:NO
+                               hasGetTaskAllow:NO
+                         hasDynamicCodesigning:NO];
+}
+
+#pragma mark - 假的 Provider（验证编排层逐级推进 / 回退）
+
+@interface FakeProvider : NSObject <A2JITProvider>
+@property (nonatomic, assign) A2JITProviderKind kind;
+@property (nonatomic, assign, getter=isAvailable) BOOL available;
+@property (nonatomic, assign, getter=isPairingReady) BOOL pairingReady;
+@property (nonatomic, assign) BOOL prepareResult;
+@property (nonatomic, assign) BOOL activateResult;
+@property (nonatomic, assign) int activateCalls;
+@end
+
+@implementation FakeProvider
+- (NSString *)displayName { return @"fake"; }
+- (BOOL)preparePairingWithError:(NSError *_Nullable *_Nullable)error {
+    if (!self.prepareResult && error) {
+        *error = A2JITProviderNotImplementedError(@"fake prepare 失败");
+    }
+    return self.prepareResult;
+}
+- (BOOL)activateJITWithError:(NSError *_Nullable *_Nullable)error {
+    self.activateCalls += 1;
+    if (!self.activateResult && error) {
+        *error = A2JITProviderNotImplementedError(@"fake activate 失败");
+    }
+    return self.activateResult;
+}
+@end
 
 #pragma mark - 配对文件样本构造
 
@@ -344,6 +384,84 @@ static void testFactsProbe(void) {
     ok([[f description] containsString:@"iOS 16"], @"description 含版本");
 }
 
+#pragma mark - ⑤ 编排（Coordinator 端到端状态推进）
+
+static void testCoordinator(void) {
+    printf("\n=== ⑤ 编排端到端（A2JITCoordinator + 假 Provider）===\n");
+
+    // iOS 26 + 已导入配对，导入 Provider 可用且就绪 ⇒ Paired → enableJIT → Enabled
+    FakeProvider *imp = [[FakeProvider alloc] init];
+    imp.kind = A2JITProviderKindImportedPairing;
+    imp.available = YES;
+    imp.pairingReady = YES;
+    imp.prepareResult = YES;
+    imp.activateResult = YES;
+    A2JITCoordinator *co = [[A2JITCoordinator alloc] initWithFacts:FactsPairing(26, 0, A2JITEnvironmentKindPlain, YES)
+                                                        providers:@[ imp ]];
+    eqInt(co.strategy, A2JITStrategyBuiltInManual, @"策略 = 内置手动");
+    eqInt(co.state, A2JITStatePaired, @"26 + 已导入配对 → Paired");
+    ok(co.hasActiveProvider, @"hasActiveProvider = YES");
+    ok([co enableJITWithError:NULL], @"enableJIT 成功");
+    eqInt(co.state, A2JITStateEnabled, @"→ Enabled");
+    ok(co.readyToRunGame, @"readyToRunGame = YES");
+    eqInt(imp.activateCalls, 1, @"activateJIT 被调用 1 次");
+
+    // 17.3 纯签名 ⇒ 不可用（无 Provider 被尝试）
+    FakeProvider *imp2 = [[FakeProvider alloc] init];
+    imp2.kind = A2JITProviderKindImportedPairing;
+    imp2.available = YES;
+    A2JITCoordinator *co2 = [[A2JITCoordinator alloc] initWithFacts:FactsPairing(17, 3, A2JITEnvironmentKindPlain, YES)
+                                                        providers:@[ imp2 ]];
+    eqInt(co2.state, A2JITStateUnavailable, @"17.3 → Unavailable");
+    eqInt(co2.failureReason, A2JITFailureReasonSystemTooOld, @"17.3 原因 = SystemTooOld");
+    ok(!co2.readyToRunGame, @"readyToRunGame = NO");
+
+    // 26 + 无配对文件 ⇒ WaitingPairing；取配对失败 ⇒ 停留并报原因
+    FakeProvider *imp3 = [[FakeProvider alloc] init];
+    imp3.kind = A2JITProviderKindImportedPairing;
+    imp3.available = YES;
+    imp3.pairingReady = NO;
+    imp3.prepareResult = NO;
+    A2JITCoordinator *co3 = [[A2JITCoordinator alloc] initWithFacts:FactsPairing(26, 0, A2JITEnvironmentKindPlain, NO)
+                                                        providers:@[ imp3 ]];
+    eqInt(co3.state, A2JITStateWaitingPairing, @"26 + 无配对 → WaitingPairing");
+    eqInt(co3.failureReason, A2JITFailureReasonPairingMissing, @"原因 = PairingMissing");
+    ok(![co3 acquirePairingWithError:NULL], @"取配对失败 → NO");
+    eqInt(co3.state, A2JITStateWaitingPairing, @"失败后仍 WaitingPairing");
+
+    // 开启失败 ⇒ 停留 WaitingActivation + ActivationFailed（不回退未配对）
+    FakeProvider *imp4 = [[FakeProvider alloc] init];
+    imp4.kind = A2JITProviderKindImportedPairing;
+    imp4.available = YES;
+    imp4.pairingReady = YES;
+    imp4.activateResult = NO;
+    A2JITCoordinator *co4 = [[A2JITCoordinator alloc] initWithFacts:FactsPairing(26, 0, A2JITEnvironmentKindPlain, YES)
+                                                        providers:@[ imp4 ]];
+    eqInt(co4.state, A2JITStatePaired, @"就绪 → Paired");
+    ok(![co4 enableJITWithError:NULL], @"开启失败 → NO");
+    eqInt(co4.state, A2JITStateWaitingActivation, @"失败后停留 WaitingActivation");
+    eqInt(co4.failureReason, A2JITFailureReasonActivationFailed, @"原因 = ActivationFailed");
+
+    // 「先 JIT 后启 JVM」钩子：未就绪 ⇒ 阻止启动链
+    __block BOOL ranDeliver = NO, ranVerify = NO, ranVM = NO;
+    A2LaunchChain *chain = [A2LaunchChain chainWithDeliverScript:^BOOL(NSError **e) { ranDeliver = YES; return YES; }
+                                                          verify:^BOOL(NSString **r) { ranVerify = YES; return YES; }
+                                                       createJVM:^BOOL(NSError **e) { ranVM = YES; return YES; }];
+    ok(![co3 prepareJITThenRunLaunchChain:chain error:NULL], @"未就绪 → 钩子返回 NO");
+    ok(!ranDeliver && !ranVerify && !ranVM, @"★未就绪时启动链完全未运行★");
+
+    // 就绪 ⇒ 钩子放行启动链
+    FakeProvider *imp5 = [[FakeProvider alloc] init];
+    imp5.kind = A2JITProviderKindImportedPairing;
+    imp5.available = YES;
+    imp5.pairingReady = YES;
+    imp5.activateResult = YES;
+    A2JITCoordinator *co5 = [[A2JITCoordinator alloc] initWithFacts:FactsPairing(26, 0, A2JITEnvironmentKindPlain, YES)
+                                                        providers:@[ imp5 ]];
+    ok([co5 prepareJITThenRunLaunchChain:chain error:NULL], @"已启用 → 钩子放行并跑启动链");
+    ok(ranDeliver && ranVerify && ranVM, @"启动链三步都跑到");
+}
+
 #pragma mark - main
 
 int main(int argc, const char *argv[]) {
@@ -355,6 +473,7 @@ int main(int argc, const char *argv[]) {
         testPairingFile();
         testStateMachine();
         testFactsProbe();
+        testCoordinator();
 
         printf("\n----------------------------------------\n");
         printf("TOTAL pass=%d fail=%d\n", gPass, gFail);
