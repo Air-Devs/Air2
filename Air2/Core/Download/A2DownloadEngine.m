@@ -2,326 +2,202 @@
 //  A2DownloadEngine.m
 //  Air2
 //
+//  统一下载客户端。
+//
+//  设计同时参考两家 iOS/Android 上的成熟实现：
+//    · Amethyst-iOS 的 PLDownloadClient（Air 1，iOS 落地经验）
+//    · ZalithLauncher2 的 Fetcher / DownloadStats / FileDownloader
+//
+//  关键机制（来自 ZL2 的 Fetcher.ResumeContext）：
+//    断点续传必须严格校验，接受「看起来差不多」会静默损坏文件：
+//      · 必须 206（200 说明服务端忽略了 Range）
+//      · Content-Encoding 必须是 identity（压缩传输时 Range 语义错乱）
+//      · 长度要对得上：contentLength == bodyLength + 已收字节
+//      · 优先用 strong ETag（W/ 开头的弱 ETag 不可靠），否则校验 URL + Last-Modified
+//      · Content-Range 的 start/end/total 逐字段精确匹配
+//      · 请求带 If-Range，服务端不匹配就返回 200 全量，我们据此回退重下
+//
+//  测速（来自 ZL2 的 DownloadStats）：
+//    逐秒采样、不平滑不外推 —— 报出来的数字永远对应真实的落盘流量。
+//    平滑会让数字好看但不真实，这是取舍。
+//
 
 #import "A2DownloadEngine.h"
+#import <CommonCrypto/CommonDigest.h>
+#import <zlib.h>
 
-/// 分片大小下限（小于这个不分片）
-static const long long kChunkThreshold = 1 * 1024 * 1024;   // 1MB
-/// 每片大小
-static const long long kChunkSize = 1 * 1024 * 1024;        // 1MB
-/// 看门狗：多久没有新数据就判定卡住（秒）
-static const NSTimeInterval kStallTimeout = 12.0;
-/// 单请求超时
-static const NSTimeInterval kRequestTimeout = 20.0;
-/// 最大重试次数
-static const NSInteger kMaxRetries = 3;
+NSString *const A2DownloadErrorDomain = @"A2DownloadError";
+NSString *const A2DownloadUnderlyingErrorsKey = @"A2DownloadUnderlyingErrors";
 
-#pragma mark - 已写入区间
+/// 单候选的重试退避（秒）
+static const NSTimeInterval kBackoffSeconds[] = {1.0, 2.0, 4.0};
+static const NSInteger kBackoffCount = 3;
+/// 缓冲写盘阈值：攒够这么多字节写一次，减少磁盘操作
+static const NSUInteger kWriteBufferSize = 256 * 1024;
+/// 半成品文件后缀
+static NSString *const kPartSuffix = @".part";
+/// resumeData 存放目录名
+static NSString *const kResumeDirName = @"A2DownloadResume";
 
-/// 记录文件已写入的区间，用于断点续传。
-/// 用「有序区间表 + 合并」而不是简单的偏移量 ——
-/// 并发分片写入是乱序的，只记「下载到哪」会漏掉中间的空洞。
-@interface A2WriteLedger : NSObject
-@property (nonatomic, assign) long long totalSize;
-@property (nonatomic, strong) NSMutableArray<NSValue *> *ranges;   // NSRange 数组，有序不重叠
-- (instancetype)initWithTotalSize:(long long)size;
-/// 登记一段已写入的区间
-- (void)record:(long long)start length:(long long)length;
-/// 已写入的总字节（不重复计算）
-- (long long)writtenBytes;
-/// 找出还没写的缺口
-- (NSArray<NSValue *> *)gaps;
-/// 是否完整
-- (BOOL)isComplete;
+#pragma mark - 请求
+
+@implementation A2DownloadRequest
 @end
 
-@implementation A2WriteLedger
+#pragma mark - 操作句柄
 
-- (instancetype)initWithTotalSize:(long long)size {
+@interface A2DownloadOperation ()
+@property (nonatomic, assign) A2DownloadState state;
+@property (nonatomic, copy, nullable) NSData *resumeData;
+@property (nonatomic, strong) A2DownloadRequest *request;
+@property (nonatomic, copy) NSString *resumeKey;
+@property (nonatomic, weak, nullable) id owner;
+@end
+
+@implementation A2DownloadOperation
+- (instancetype)init NS_UNAVAILABLE { return nil; }
++ (instancetype)new NS_UNAVAILABLE { return nil; }
+
+- (instancetype)initInternalWithRequest:(A2DownloadRequest *)request key:(NSString *)key {
     self = [super init];
     if (!self) return nil;
-    _totalSize = size;
-    _ranges = [NSMutableArray array];
+    _request = request;
+    _resumeKey = [key copy];
+    _state = A2DownloadStateRunning;
+    return self;
+}
+@end
+
+#pragma mark - 单个下载任务
+
+@interface A2FileFetcher : NSObject <NSURLSessionDataDelegate>
+
+@property (nonatomic, strong) A2DownloadRequest *request;
+@property (nonatomic, weak, nullable) A2DownloadOperation *operation;
+@property (nonatomic, copy, nullable) A2DownloadProgressHandler progressHandler;
+@property (nonatomic, copy, nullable) A2DownloadSpeedHandler speedHandler;
+@property (nonatomic, copy, nullable) A2DownloadCompletion completion;
+
+// 状态
+@property (nonatomic, assign) NSInteger candidateIndex;
+@property (nonatomic, assign) NSInteger retryCount;
+@property (nonatomic, assign) BOOL finished;
+@property (nonatomic, copy, nullable) NSMutableArray<NSError *> *candidateErrors;
+
+// 断点续传校验信息（对应 ZL2 的 ResumeContext）
+@property (nonatomic, assign) int64_t contentLength;
+@property (nonatomic, assign) int64_t receivedBytes;
+@property (nonatomic, copy, nullable) NSString *strongETag;
+@property (nonatomic, copy, nullable) NSString *lastModified;
+@property (nonatomic, copy, nullable) NSURL *resolvedURL;
+
+// 写入
+@property (nonatomic, strong, nullable) NSFileHandle *fileHandle;
+@property (nonatomic, strong) NSMutableData *writeBuffer;
+
+// 测速：逐秒采样
+@property (nonatomic, strong) NSTimer *speedTimer;
+@property (nonatomic, assign) int64_t bytesSinceLastTick;
+@property (nonatomic, assign) int64_t lastReportedTotal;
+
+@property (nonatomic, strong, nullable) NSURLSession *session;
+@property (nonatomic, strong, nullable) NSURLSessionDataTask *currentTask;
+@property (nonatomic, strong) dispatch_queue_t queue;
+
+@end
+
+@implementation A2FileFetcher
+
+- (instancetype)init {
+    self = [super init];
+    if (!self) return nil;
+    _queue = dispatch_queue_create("dev.airdevs.air2.download.fetcher", DISPATCH_QUEUE_SERIAL);
+    _writeBuffer = [NSMutableData data];
+    _candidateErrors = [NSMutableArray array];
     return self;
 }
 
-- (void)record:(long long)start length:(long long)length {
-    if (length <= 0) return;
-    long long end = start + length;   // 左闭右开
-
-    NSMutableArray<NSValue *> *merged = [NSMutableArray array];
-    BOOL inserted = NO;
-
-    for (NSValue *v in _ranges) {
-        NSRange r = v.rangeValue;
-        long long rs = (long long)r.location;
-        long long re = rs + (long long)r.length;
-
-        if (re < start) {
-            // 完全在左侧，保留
-            [merged addObject:v];
-        } else if (rs > end) {
-            // 完全在右侧，先插入新区间（如果还没插）
-            if (!inserted) {
-                [merged addObject:[NSValue valueWithRange:NSMakeRange((NSUInteger)start,
-                                                                     (NSUInteger)(end - start))]];
-                inserted = YES;
-            }
-            [merged addObject:v];
-        } else {
-            // 有重叠，合并
-            start = MIN(start, rs);
-            end = MAX(end, re);
-        }
-    }
-
-    if (!inserted) {
-        [merged addObject:[NSValue valueWithRange:NSMakeRange((NSUInteger)start,
-                                                             (NSUInteger)(end - start))]];
-    }
-
-    _ranges = merged;
-}
-
-- (long long)writtenBytes {
-    long long sum = 0;
-    for (NSValue *v in _ranges) sum += (long long)v.rangeValue.length;
-    return sum;
-}
-
-- (NSArray<NSValue *> *)gaps {
-    NSMutableArray<NSValue *> *out = [NSMutableArray array];
-    long long cursor = 0;
-    for (NSValue *v in _ranges) {
-        NSRange r = v.rangeValue;
-        long long rs = (long long)r.location;
-        if (rs > cursor) {
-            [out addObject:[NSValue valueWithRange:NSMakeRange((NSUInteger)cursor,
-                                                              (NSUInteger)(rs - cursor))]];
-        }
-        cursor = MAX(cursor, rs + (long long)r.length);
-    }
-    if (cursor < _totalSize) {
-        [out addObject:[NSValue valueWithRange:NSMakeRange((NSUInteger)cursor,
-                                                          (NSUInteger)(_totalSize - cursor))]];
-    }
-    return out;
-}
-
-- (BOOL)isComplete {
-    if (_totalSize <= 0) return NO;
-    long long cursor = 0;
-    for (NSValue *v in _ranges) {
-        NSRange r = v.rangeValue;
-        if ((long long)r.location > cursor) return NO;   // 有空洞
-        cursor = MAX(cursor, (long long)r.location + (long long)r.length);
-    }
-    return cursor >= _totalSize;
-}
-
-@end
-
-#pragma mark - 单个文件下载器
-
-@interface A2FileDownloader : NSObject <NSURLSessionDataDelegate>
-@property (nonatomic, copy) NSString *url;
-@property (nonatomic, copy) NSString *path;
-@property (nonatomic, assign) long long totalSize;
-@property (nonatomic, strong) A2WriteLedger *ledger;
-@property (nonatomic, strong) NSFileHandle *fileHandle;
-@property (nonatomic, strong) NSURLSession *session;
-@property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSMutableDictionary *> *tasks;
-@property (nonatomic, assign) long long lastActivityBytes;
-@property (nonatomic, strong) NSDate *lastActivity;
-@property (nonatomic, strong) NSTimer *watchdog;
-@property (nonatomic, assign) NSInteger retryCount;
-@property (nonatomic, copy, nullable) void (^progressBlock)(long long, long long);
-@property (nonatomic, copy, nullable) void (^completionBlock)(NSError *);
-@property (nonatomic, assign) BOOL finished;
-@end
-
-@implementation A2FileDownloader
+#pragma mark 启动
 
 - (void)start {
-    _finished = NO;
-    _retryCount = 0;
-    [self probeAndStart];
-}
-
-/// 先探测文件大小（HEAD），再决定是否分片
-- (void)probeAndStart {
-    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:_url]];
-    req.HTTPMethod = @"HEAD";
-    req.timeoutInterval = kRequestTimeout;
-
-    NSURLSessionDataTask *t = [NSURLSession.sharedSession dataTaskWithRequest:req
-        completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
-        if (self.finished) return;
-
-        NSHTTPURLResponse *http = (NSHTTPURLResponse *)resp;
-        long long total = http.expectedContentLength;
-        if (total <= 0) total = 0;
-
-        // 检查是否支持 Range
-        NSString *acceptRanges = http.allHeaderFields[@"Accept-Ranges"];
-        BOOL supportsRange = [acceptRanges isEqualToString:@"bytes"];
-
-        dispatch_async(dispatch_get_main_queue(), ^{
-            self.totalSize = total;
-            [self setupLedgerAndFile];
-            if (total >= kChunkThreshold && supportsRange) {
-                [self startChunkedDownload];
-            } else {
-                [self startSingleDownload];
+    dispatch_async(self.queue, ^{
+        // 1. 先检查目标文件是否已经完好（增量下载，零流量）
+        if ([self isExistingFileValid]) {
+            A2DownloadRequest *req = self.request;
+            if (self.progressHandler && req.expectedSize > 0) {
+                self.progressHandler(req.expectedSize, req.expectedSize);
             }
-        });
-    }];
-    [t resume];
-}
-
-- (void)setupLedgerAndFile {
-    NSString *dir = [_path stringByDeletingLastPathComponent];
-    [NSFileManager.defaultManager createDirectoryAtPath:dir
-                            withIntermediateDirectories:YES attributes:nil error:nil];
-
-    _ledger = [[A2WriteLedger alloc] initWithTotalSize:_totalSize];
-
-    // 从已有的半成品文件恢复进度：文件里已有的字节视为「可能已写好」
-    NSFileManager *fm = NSFileManager.defaultManager;
-    if ([fm fileExistsAtPath:_path]) {
-        NSDictionary *attrs = [fm attributesOfItemAtPath:_path error:nil];
-        long long existing = [attrs[NSFileSize] longLongValue];
-        if (existing > 0 && _totalSize > 0) {
-            // 保守处理：只有整个已知长度都写满才认为完成，
-            // 否则从 0 重下（分片下载会自然补齐缺口）
-            if (existing >= _totalSize) {
-                [_ledger record:0 length:_totalSize];
-            }
+            [self finishSuccess];
+            return;
         }
-    } else {
-        [fm createFileAtPath:_path contents:nil attributes:nil];
-    }
-
-    _fileHandle = [NSFileHandle fileHandleForWritingAtPath:_path];
-}
-
-#pragma mark 单连接下载
-
-- (void)startSingleDownload {
-    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:_url]];
-    req.timeoutInterval = kRequestTimeout;
-
-    NSURLSessionConfiguration *cfg = NSURLSessionConfiguration.defaultSessionConfiguration;
-    cfg.timeoutIntervalForRequest = kRequestTimeout;
-    cfg.timeoutIntervalForResource = 3600;
-    _session = [NSURLSession sessionWithConfiguration:cfg delegate:self delegateQueue:nil];
-    _tasks = [NSMutableDictionary dictionary];
-
-    NSURLSessionDataTask *t = [_session dataTaskWithRequest:req];
-    _tasks[@(t.taskIdentifier)] = [NSMutableDictionary dictionary];
-    _lastActivity = [NSDate date];
-    [self startWatchdog];
-    [t resume];
-}
-
-#pragma mark 分片下载
-
-- (void)startChunkedDownload {
-    NSURLSessionConfiguration *cfg = NSURLSessionConfiguration.defaultSessionConfiguration;
-    cfg.timeoutIntervalForRequest = kRequestTimeout;
-    cfg.timeoutIntervalForResource = 3600;
-    cfg.HTTPMaximumConnectionsPerHost = 4;
-
-    _session = [NSURLSession sessionWithConfiguration:cfg delegate:self delegateQueue:nil];
-    _tasks = [NSMutableDictionary dictionary];
-
-    // 已完整下载则直接完成
-    if ([_ledger isComplete]) {
-        [self finishWithError:nil];
-        return;
-    }
-
-    _lastActivity = [NSDate date];
-    [self startWatchdog];
-    [self scheduleChunksFromGaps];
-}
-
-/// 按缺口排队分片请求
-- (void)scheduleChunksFromGaps {
-    NSArray<NSValue *> *gaps = [_ledger gaps];
-    NSInteger maxConcurrent = 4;
-
-    for (NSValue *v in gaps) {
-        if (self.finished) return;
-        NSRange gap = v.rangeValue;
-        long long start = (long long)gap.location;
-        long long remaining = (long long)gap.length;
-
-        while (remaining > 0 && _tasks.count < (NSUInteger)maxConcurrent) {
-            long long len = MIN(kChunkSize, remaining);
-            [self requestRange:start length:len];
-            start += len;
-            remaining -= len;
-        }
-        if (_tasks.count >= (NSUInteger)maxConcurrent) break;
-    }
-}
-
-- (void)requestRange:(long long)start length:(long long)length {
-    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:[NSURL URLWithString:_url]];
-    req.timeoutInterval = kRequestTimeout;
-    NSString *range = [NSString stringWithFormat:@"bytes=%lld-%lld", start, start + length - 1];
-    [req setValue:range forHTTPHeaderField:@"Range"];
-
-    NSURLSessionDataTask *t = [_session dataTaskWithRequest:req];
-    _tasks[@(t.taskIdentifier)] = [@{
-        @"start": @(start),
-        @"length": @(length),
-        @"buffer": [NSMutableData data],
-    } mutableCopy];
-    [t resume];
-}
-
-#pragma mark 看门狗
-
-/// CDN 可能持续发心跳字节，让 URLSession 的空闲超时永不触发，
-/// 表现为「卡住但没报错」。这里改成看「有没有真的写进文件」。
-- (void)startWatchdog {
-    _watchdog = [NSTimer scheduledTimerWithTimeInterval:2.0
-                                                repeats:YES
-                                                  block:^(NSTimer *timer) {
-        if (self.finished) { [timer invalidate]; return; }
-        NSTimeInterval idle = -[self.lastActivity timeIntervalSinceNow];
-        if (idle > kStallTimeout) {
-            [self handleStall];
-        }
-    }];
-}
-
-- (void)handleStall {
-    if (self.finished) return;
-    if (_retryCount >= kMaxRetries) {
-        [self finishWithError:[NSError errorWithDomain:@"A2Download" code:2
-                                              userInfo:@{NSLocalizedDescriptionKey:
-                                                             @"下载卡住，重试次数已用尽"}]];
-        return;
-    }
-    _retryCount++;
-
-    [_session invalidateAndCancel];
-    _tasks = [NSMutableDictionary dictionary];
-    _lastActivity = [NSDate date];
-
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if (self.totalSize >= kChunkThreshold) {
-            [self startChunkedDownload];
-        } else {
-            [self startSingleDownload];
-        }
+        [self startCurrentCandidate];
     });
 }
 
-#pragma mark NSURLSessionDataDelegate
+/// 已存在的文件是否可用 —— SHA1 匹配或 zip 结构完好
+- (BOOL)isExistingFileValid {
+    NSString *path = self.request.destinationPath;
+    if (![[NSFileManager defaultManager] fileExistsAtPath:path]) return NO;
+
+    NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:path error:nil];
+    unsigned long long size = [attrs[NSFileSize] unsignedLongLongValue];
+    if (size == 0) return NO;
+
+    // 有期望大小且不一致，直接判无效
+    if (self.request.expectedSize > 0 && (int64_t)size != self.request.expectedSize) return NO;
+
+    if (self.request.expectedSHA1.length > 0) {
+        return [[self sha1OfFile:path] caseInsensitiveCompare:self.request.expectedSHA1] == NSOrderedSame;
+    }
+
+    if (self.request.allowZipFallbackCheck) {
+        NSString *ext = path.pathExtension.lowercaseString;
+        if ([ext isEqualToString:@"zip"] || [ext isEqualToString:@"jar"]) {
+            return [self hasValidZipEOCD:path];
+        }
+    }
+
+    // 没有校验方式时不认为已存在文件可用 —— 宁可重下也不冒损坏风险
+    return NO;
+}
+
+- (void)startCurrentCandidate {
+    if (self.finished) return;
+    if (self.candidateIndex >= (NSInteger)self.request.candidateURLs.count) {
+        [self finishAllCandidatesExhausted];
+        return;
+    }
+
+    NSURL *url = self.request.candidateURLs[self.candidateIndex];
+    NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
+    req.timeoutInterval = 60;
+    [req setValue:@"identity" forHTTPHeaderField:@"Accept-Encoding"];
+
+    // 有断点则带 If-Range，服务端不匹配会返回 200（我们就从 0 重下）
+    if (self.receivedBytes > 0 && self.ifRangeValidator) {
+        [req setValue:self.ifRangeValidator forHTTPHeaderField:@"If-Range"];
+        NSString *range = [NSString stringWithFormat:@"bytes=%lld-", self.receivedBytes];
+        [req setValue:range forHTTPHeaderField:@"Range"];
+    }
+
+    NSURLSessionConfiguration *cfg = NSURLSessionConfiguration.defaultSessionConfiguration;
+    cfg.timeoutIntervalForRequest = 60;
+    cfg.timeoutIntervalForResource = 3600;
+    cfg.HTTPMaximumConnectionsPerHost = 8;
+    self.session = [NSURLSession sessionWithConfiguration:cfg delegate:self delegateQueue:nil];
+
+    self.currentTask = [self.session dataTaskWithRequest:req];
+    [self.currentTask resume];
+}
+
+/// If-Range 的取值：优先 strong ETag，否则 Last-Modified
+- (NSString *)ifRangeValidator {
+    if (self.strongETag.length > 0) return self.strongETag;
+    if (self.lastModified.length > 0) return self.lastModified;
+    return nil;
+}
+
+#pragma mark 响应处理
 
 - (void)URLSession:(NSURLSession *)session
           dataTask:(NSURLSessionDataTask *)dataTask
@@ -329,139 +205,546 @@ didReceiveResponse:(NSURLResponse *)response
  completionHandler:(void (^)(NSURLSessionResponseDisposition))completionHandler {
 
     NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
-    NSMutableDictionary *info = _tasks[@(dataTask.taskIdentifier)];
+    NSInteger code = http.statusCode;
 
-    if (http.statusCode == 200) {
-        // 服务端忽略了 Range，返回整个文件 —— 只能从头写
-        if ([info[@"fromRange"] boolValue] || info[@"start"]) {
-            // 分片请求拿到 200，说明不支持 Range，退回单连接
-            if (self.totalSize >= kChunkThreshold) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    [session invalidateAndCancel];
-                    self.tasks = [NSMutableDictionary dictionary];
-                    [self startSingleDownload];
-                });
-                completionHandler(NSURLSessionResponseCancel);
-                return;
-            }
-        }
-        if (self.totalSize <= 0) self.totalSize = http.expectedContentLength;
-        if (self.totalSize > 0 && _ledger.totalSize != self.totalSize) {
-            _ledger = [[A2WriteLedger alloc] initWithTotalSize:self.totalSize];
-        }
+    if (code < 200 || code >= 300) {
+        completionHandler(NSURLSessionResponseCancel);
+        NSError *err = [self errorWithCode:A2DownloadErrorNetworkFailure
+                                   message:[NSString stringWithFormat:@"HTTP %ld", (long)code]];
+        dispatch_async(self.queue, ^{ [self handleCandidateFailure:err]; });
+        return;
     }
+
+    // ---- 断点续传的严格校验（对应 ZL2 的 ResumeContext.canResume）----
+    if (code == 206 && self.receivedBytes > 0) {
+        if (![self validateResumeResponse:http]) {
+            // 校验不过 → 丢弃断点，从头下
+            dispatch_async(self.queue, ^{
+                [self discardPartialDownload];
+                completionHandler(NSURLSessionResponseCancel);
+                [self restartCurrentCandidateFromScratch];
+            });
+            return;
+        }
+    } else if (code == 200) {
+        // 200：服务端返回全量。若本地有半成品，说明服务端不支持续传或内容已变
+        if (self.receivedBytes > 0) {
+            dispatch_async(self.queue, ^{
+                // 上报负增量，让调用方的累计值回退到真实进度
+                if (self.progressHandler) self.progressHandler(-self.receivedBytes, -1);
+                [self discardPartialDownload];
+            });
+        }
+        [self captureResumeInfoFromResponse:http];
+        self.contentLength = http.expectedContentLength;
+    } else if (code == 206) {
+        [self captureResumeInfoFromResponse:http];
+    }
+
+    // 首次收到响应时开测速
+    dispatch_async(self.queue, ^{
+        if (!self.speedTimer) [self startSpeedTimer];
+    });
+
     completionHandler(NSURLSessionResponseAllow);
 }
+
+/// 校验 206 响应是否真的对得上我们的断点
+- (BOOL)validateResumeResponse:(NSHTTPURLResponse *)http {
+    // 压缩传输时 Range 语义错乱，不接受
+    NSString *encoding = http.allHeaderFields[@"Content-Encoding"];
+    if (encoding.length > 0 && ![encoding.lowercaseString isEqualToString:@"identity"]) {
+        return NO;
+    }
+
+    // 长度必须对得上
+    int64_t bodyLength = http.expectedContentLength;
+    if (self.contentLength != bodyLength + self.receivedBytes) return NO;
+
+    // 校验器：优先 strong ETag
+    if (self.strongETag.length > 0) {
+        NSString *etag = http.allHeaderFields[@"ETag"];
+        if (![self.strongETag isEqualToString:etag]) return NO;
+    } else {
+        NSURL *respURL = http.URL;
+        if (![respURL.absoluteString isEqualToString:self.resolvedURL.absoluteString]) return NO;
+        NSString *lm = http.allHeaderFields[@"Last-Modified"];
+        if (![self.lastModified isEqualToString:lm ?: @""]) return NO;
+    }
+
+    // Content-Range 逐字段精确匹配
+    NSString *contentRange = http.allHeaderFields[@"Content-Range"];
+    if (contentRange.length == 0) return NO;
+
+    NSArray<NSNumber *> *parsed = [self parseContentRange:contentRange];
+    if (parsed.count != 3) return NO;
+
+    int64_t start = parsed[0].longLongValue;
+    int64_t end = parsed[1].longLongValue;
+    int64_t total = parsed[2].longLongValue;
+
+    if (start != self.receivedBytes) return NO;
+    if (end < start) return NO;
+    if (total != self.contentLength) return NO;
+    if (end - start + 1 != bodyLength) return NO;
+
+    return YES;
+}
+
+/// 解析 "bytes 0-499/1000"
+- (NSArray<NSNumber *> *)parseContentRange:(NSString *)range {
+    if (![range hasPrefix:@"bytes "]) return nil;
+    NSString *body = [range substringFromIndex:6];
+    NSArray<NSString *> *parts = [body componentsSeparatedByString:@"/"];
+    if (parts.count != 2) return nil;
+
+    NSArray<NSString *> *se = [parts[0] componentsSeparatedByString:@"-"];
+    if (se.count != 2) return nil;
+
+    NSNumber *start = @(se[0].longLongValue);
+    NSNumber *end = @(se[1].longLongValue);
+    NSNumber *total = @(parts[1].longLongValue);
+    return @[start, end, total];
+}
+
+/// 从 200 响应里记录续传所需的校验信息
+- (void)captureResumeInfoFromResponse:(NSHTTPURLResponse *)http {
+    self.contentLength = http.expectedContentLength;
+    self.resolvedURL = http.URL;
+
+    NSString *acceptRanges = http.allHeaderFields[@"Accept-Ranges"];
+    BOOL supportsRange = [acceptRanges.lowercaseString isEqualToString:@"bytes"];
+
+    NSString *etag = http.allHeaderFields[@"ETag"];
+    // 弱 ETag（W/ 开头）不做续传依据 —— 它允许内容有微妙差异
+    if (etag.length > 0 && ![etag hasPrefix:@"W/"] && ![etag hasPrefix:@"w/"]) {
+        self.strongETag = etag;
+    } else {
+        self.strongETag = nil;
+    }
+    self.lastModified = http.allHeaderFields[@"Last-Modified"];
+
+    // 服务端不支持 Range 时清掉校验器，后续不做续传尝试
+    if (!supportsRange) {
+        self.strongETag = nil;
+        self.lastModified = nil;
+    }
+}
+
+#pragma mark 数据接收
 
 - (void)URLSession:(NSURLSession *)session
           dataTask:(NSURLSessionDataTask *)dataTask
     didReceiveData:(NSData *)data {
 
-    NSMutableDictionary *info = _tasks[@(dataTask.taskIdentifier)];
-    if (!info) return;
+    if (data.length == 0) return;
 
-    long long start = [info[@"start"] longLongValue];
-    NSMutableData *buffer = info[@"buffer"];
+    dispatch_async(self.queue, ^{
+        if (self.finished) return;
 
-    // 分片模式：先攒够一片再一次性写，减少磁盘操作
-    if (buffer) {
-        [buffer appendData:data];
-        if (buffer.length >= [info[@"length"] longLongValue]) {
-            [self writeChunk:buffer at:start];
-            info[@"buffer"] = [NSMutableData data];
-            info[@"start"] = @(start + buffer.length);
-            info[@"length"] = @(MAX(0, [info[@"length"] longLongValue] - buffer.length));
+        [self ensureFileHandleOpen];
+
+        [self.writeBuffer appendData:data];
+        if (self.writeBuffer.length >= kWriteBufferSize) {
+            [self flushBuffer];
         }
-    } else {
-        // 单连接模式：按顺序追加
-        long long offset = [_ledger writtenBytes];
-        [self writeChunk:data at:offset];
-    }
 
-    _lastActivity = [NSDate date];
-    if (self.progressBlock) {
-        self.progressBlock(_ledger.writtenBytes, self.totalSize);
-    }
+        self.receivedBytes += (int64_t)data.length;
+        self.bytesSinceLastTick += (int64_t)data.length;
+
+        // 进度回调：正增量
+        if (self.progressHandler) {
+            self.progressHandler((int64_t)data.length,
+                                 self.contentLength > 0 ? self.contentLength : self.request.expectedSize);
+        }
+    });
 }
 
-- (void)writeChunk:(NSData *)data at:(long long)offset {
-    if (data.length == 0) return;
-    @synchronized (_fileHandle) {
-        @try {
-            [_fileHandle seekToFileOffset:(unsigned long long)offset];
-            [_fileHandle writeData:data];
-        } @catch (NSException *e) {
-            // 磁盘写入失败，交由完成回调统一处理
-        }
+- (void)ensureFileHandleOpen {
+    if (self.fileHandle) return;
+    NSString *partPath = [self partFilePath];
+    NSFileManager *fm = NSFileManager.defaultManager;
+    [fm createDirectoryAtPath:[partPath stringByDeletingLastPathComponent]
+  withIntermediateDirectories:YES attributes:nil error:nil];
+    if (![fm fileExistsAtPath:partPath]) {
+        [fm createFileAtPath:partPath contents:nil attributes:nil];
     }
-    [_ledger record:offset length:(long long)data.length];
+    self.fileHandle = [NSFileHandle fileHandleForWritingAtPath:partPath];
+    [self.fileHandle seekToEndOfFile];
+}
+
+- (void)flushBuffer {
+    if (self.writeBuffer.length == 0 || !self.fileHandle) return;
+    @try {
+        [self.fileHandle writeData:self.writeBuffer];
+    } @catch (NSException *e) {
+        // 磁盘写失败
+    }
+    [self.writeBuffer setLength:0];
 }
 
 - (void)URLSession:(NSURLSession *)session
               task:(NSURLSessionTask *)task
 didCompleteWithError:(NSError *)error {
 
-    NSMutableDictionary *info = _tasks[@(task.taskIdentifier)];
+    dispatch_async(self.queue, ^{
+        if (self.finished) return;
+        [self flushBuffer];
 
-    // 把没写满的最后一片补上
-    if (info[@"buffer"] && [(NSData *)info[@"buffer"] length] > 0) {
-        [self writeChunk:info[@"buffer"] at:[info[@"start"] longLongValue]];
-        info[@"buffer"] = [NSMutableData data];
-    }
-    [_tasks removeObjectForKey:@(task.taskIdentifier)];
-
-    if (self.finished) return;
-
-    if (error) {
-        // 单片失败不等于整体失败 —— 记录缺口后重新排队
-        if (_retryCount < kMaxRetries) {
-            _retryCount++;
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
-                           dispatch_get_main_queue(), ^{
-                if (!self.finished) [self scheduleChunksFromGaps];
-            });
+        if (error) {
+            if (error.code == NSURLErrorCancelled) return;   // 主动取消，不处理
+            [self handleCandidateFailure:error];
             return;
         }
-        [self finishWithError:error];
+
+        // 下完了：校验完整性
+        [self closeFileHandle];
+        [self verifyAndFinish];
+    });
+}
+
+#pragma mark 完成校验
+
+- (void)verifyAndFinish {
+    NSString *partPath = [self partFilePath];
+    NSString *destPath = self.request.destinationPath;
+
+    // SHA1 校验
+    if (self.request.expectedSHA1.length > 0) {
+        NSString *actual = [self sha1OfFile:partPath];
+        if (!actual || [actual caseInsensitiveCompare:self.request.expectedSHA1] != NSOrderedSame) {
+            [[NSFileManager defaultManager] removeItemAtPath:partPath error:nil];
+            NSError *err = [self errorWithCode:A2DownloadErrorChecksumMismatch
+                                       message:@"SHA1 校验失败"];
+            [self handleCandidateFailure:err];
+            return;
+        }
+    }
+
+    // zip 兜底校验
+    if (self.request.expectedSHA1.length == 0 && self.request.allowZipFallbackCheck) {
+        NSString *ext = destPath.pathExtension.lowercaseString;
+        if (([ext isEqualToString:@"zip"] || [ext isEqualToString:@"jar"])
+            && ![self hasValidZipEOCD:partPath]) {
+            [[NSFileManager defaultManager] removeItemAtPath:partPath error:nil];
+            NSError *err = [self errorWithCode:A2DownloadErrorChecksumMismatch
+                                       message:@"压缩包结构损坏"];
+            [self handleCandidateFailure:err];
+            return;
+        }
+    }
+
+    // 大小校验（有期望值时）
+    if (self.request.expectedSize > 0) {
+        NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:partPath error:nil];
+        if ([attrs[NSFileSize] longLongValue] != self.request.expectedSize) {
+            [[NSFileManager defaultManager] removeItemAtPath:partPath error:nil];
+            [self handleCandidateFailure:[self errorWithCode:A2DownloadErrorChecksumMismatch
+                                                     message:@"文件大小不符"]];
+            return;
+        }
+    }
+
+    // 原子替换到目标路径
+    NSFileManager *fm = NSFileManager.defaultManager;
+    [fm removeItemAtPath:destPath error:nil];
+    NSError *moveErr = nil;
+    if (![fm moveItemAtPath:partPath toPath:destPath error:&moveErr]) {
+        [self finishWithError:[self errorWithCode:A2DownloadErrorFileWriteFailure
+                                          message:moveErr.localizedDescription ?: @"移动文件失败"]];
         return;
     }
 
-    // 检查是否下完
-    if ([_ledger isComplete] || (_totalSize <= 0 && _tasks.count == 0)) {
-        [self finishWithError:nil];
-    } else if (_tasks.count == 0) {
-        // 还有缺口，继续排队
-        [self scheduleChunksFromGaps];
+    [self cleanupResumeData];
+    [self finishSuccess];
+}
+
+#pragma mark 失败与换源
+
+/// 当前候选失败 —— 先退避重试，重试耗尽再换下一个候选
+- (void)handleCandidateFailure:(NSError *)error {
+    if (self.finished) return;
+    [self closeFileHandle];
+    [self.session invalidateAndCancel];
+    self.session = nil;
+
+    if (self.retryCount < kBackoffCount) {
+        NSTimeInterval delay = kBackoffSeconds[self.retryCount];
+        self.retryCount++;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
+                       self.queue, ^{
+            if (!self.finished) [self startCurrentCandidate];
+        });
+        return;
     }
+
+    // 该候选耗尽，记下错误并换源
+    [self.candidateErrors addObject:error];
+    self.retryCount = 0;
+    self.candidateIndex++;
+
+    // 换源时进度回退（新源从头下）
+    if (self.receivedBytes > 0 && self.progressHandler) {
+        self.progressHandler(-self.receivedBytes, -1);
+    }
+    [self discardPartialDownload];
+    self.receivedBytes = 0;
+    self.strongETag = nil;
+    self.lastModified = nil;
+
+    [self startCurrentCandidate];
+}
+
+- (void)restartCurrentCandidateFromScratch {
+    [self discardPartialDownload];
+    self.receivedBytes = 0;
+    self.strongETag = nil;
+    self.lastModified = nil;
+    self.retryCount = 0;
+    if (!self.finished) [self startCurrentCandidate];
+}
+
+- (void)discardPartialDownload {
+    [self closeFileHandle];
+    [[NSFileManager defaultManager] removeItemAtPath:[self partFilePath] error:nil];
+    [self.writeBuffer setLength:0];
+}
+
+- (void)finishAllCandidatesExhausted {
+    NSString *msg = [NSString stringWithFormat:@"全部 %lu 个源均失败",
+                     (unsigned long)self.request.candidateURLs.count];
+    NSError *err = [NSError errorWithDomain:A2DownloadErrorDomain
+                                       code:A2DownloadErrorAllCandidatesExhausted
+                                   userInfo:@{
+        NSLocalizedDescriptionKey: msg,
+        A2DownloadUnderlyingErrorsKey: [self.candidateErrors copy],
+    }];
+    [self finishWithError:err];
+}
+
+- (void)finishSuccess {
+    if (self.finished) return;
+    self.finished = YES;
+    self.operation.state = A2DownloadStateCompleted;
+    [self stopSpeedTimer];
+    [self.session invalidateAndCancel];
+
+    A2DownloadCompletion cb = self.completion;
+    if (cb) cb(YES, nil);
 }
 
 - (void)finishWithError:(NSError *)error {
     if (self.finished) return;
     self.finished = YES;
-    [_watchdog invalidate];
-    [_fileHandle closeFile];
-    [_session invalidateAndCancel];
+    [self closeFileHandle];
+    [self stopSpeedTimer];
+    [self.session invalidateAndCancel];
+    self.operation.state = A2DownloadStateFailed;
 
-    // 失败时删掉半成品，避免下次误判为已完成
-    if (error) {
-        [NSFileManager.defaultManager removeItemAtPath:_path error:nil];
+    A2DownloadCompletion cb = self.completion;
+    if (cb) cb(NO, error);
+}
+
+#pragma mark 测速
+
+/// 逐秒采样，不平滑不外推 —— 报出来的数字永远对应真实落盘流量
+- (void)startSpeedTimer {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        self.speedTimer = [NSTimer scheduledTimerWithTimeInterval:1.0
+                                                          repeats:YES
+                                                            block:^(NSTimer *timer) {
+            int64_t bytes = self.bytesSinceLastTick;
+            self.bytesSinceLastTick = 0;
+            // ZL2 的做法：回滚增量可能让单秒采样为负，速率不应为负
+            if (bytes < 0) bytes = 0;
+            if (self.speedHandler) self.speedHandler(bytes);
+        }];
+    });
+}
+
+- (void)stopSpeedTimer {
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self.speedTimer invalidate];
+        self.speedTimer = nil;
+        if (self.speedHandler) self.speedHandler(0);
+    });
+}
+
+#pragma mark 工具
+
+- (NSString *)partFilePath {
+    return [self.request.destinationPath stringByAppendingString:kPartSuffix];
+}
+
+- (void)closeFileHandle {
+    if (!self.fileHandle) return;
+    @try { [self.fileHandle closeFile]; } @catch (NSException *e) {}
+    self.fileHandle = nil;
+}
+
+- (NSError *)errorWithCode:(A2DownloadErrorCode)code message:(NSString *)msg {
+    return [NSError errorWithDomain:A2DownloadErrorDomain code:code
+                           userInfo:@{NSLocalizedDescriptionKey: msg ?: @"下载失败"}];
+}
+
+/// 流式算 SHA1，避免把大文件整个读进内存
+- (nullable NSString *)sha1OfFile:(NSString *)path {
+    NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath:path];
+    if (!fh) return nil;
+
+    CC_SHA1_CTX ctx;
+    CC_SHA1_Init(&ctx);
+
+    while (YES) {
+        @autoreleasepool {
+            NSData *chunk = nil;
+            @try { chunk = [fh readDataOfLength:256 * 1024]; } @catch (NSException *e) { break; }
+            if (chunk.length == 0) break;
+            CC_SHA1_Update(&ctx, chunk.bytes, (CC_LONG)chunk.length);
+        }
     }
+    [fh closeFile];
 
-    if (self.completionBlock) self.completionBlock(error);
+    unsigned char digest[CC_SHA1_DIGEST_LENGTH];
+    CC_SHA1_Final(digest, &ctx);
+
+    NSMutableString *hex = [NSMutableString stringWithCapacity:CC_SHA1_DIGEST_LENGTH * 2];
+    for (int i = 0; i < CC_SHA1_DIGEST_LENGTH; i++) {
+        [hex appendFormat:@"%02x", digest[i]];
+    }
+    return hex;
+}
+
+/// 从文件尾扫 EOCD 签名（PK\x05\x06）做 zip 完整性兜底
+- (BOOL)hasValidZipEOCD:(NSString *)path {
+    NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath:path];
+    if (!fh) return NO;
+
+    unsigned long long size = [fh seekToEndOfFile];
+    if (size < 22) { [fh closeFile]; return NO; }   // EOCD 至少 22 字节
+
+    // EOCD 在最后 64KB 内（可能带注释）
+    unsigned long long scanLen = MIN(size, (unsigned long long)65557);
+    [fh seekToFileOffset:size - scanLen];
+    NSData *tail = [fh readDataToEndOfFile];
+    [fh closeFile];
+
+    const uint8_t sig[4] = {0x50, 0x4B, 0x05, 0x06};
+    const uint8_t *bytes = tail.bytes;
+    NSUInteger n = tail.length;
+    if (n < 22) return NO;
+
+    for (NSInteger i = (NSInteger)n - 22; i >= 0; i--) {
+        if (memcmp(bytes + i, sig, 4) == 0) return YES;
+    }
+    return NO;
+}
+
+#pragma mark 续传数据
+
+- (NSString *)resumeDataPath {
+    NSString *tmp = NSTemporaryDirectory();
+    NSString *dir = [tmp stringByAppendingPathComponent:kResumeDirName];
+    [[NSFileManager defaultManager] createDirectoryAtPath:dir
+                              withIntermediateDirectories:YES attributes:nil error:nil];
+    return [dir stringByAppendingPathComponent:
+            [self.operation.resumeKey stringByAppendingPathExtension:@"data"]];
+}
+
+- (void)cleanupResumeData {
+    NSString *p = [self resumeDataPath];
+    [[NSFileManager defaultManager] removeItemAtPath:p error:nil];
+}
+
+#pragma mark 暂停 / 恢复 / 取消
+
+- (void)pause {
+    dispatch_async(self.queue, ^{
+        if (self.finished) return;
+        [self flushBuffer];
+        [self closeFileHandle];
+
+        __weak typeof(self) weakSelf = self;
+        [self.currentTask cancelByProducingResumeData:^(NSData *resumeData) {
+            __strong typeof(weakSelf) self = weakSelf;
+            dispatch_async(self.queue, ^{
+                if (resumeData) {
+                    self.operation.resumeData = resumeData;
+                    [resumeData writeToFile:[self resumeDataPath] atomically:YES];
+                }
+                self.operation.state = A2DownloadStatePaused;
+                [self stopSpeedTimer];
+                [self.session invalidateAndCancel];
+                self.session = nil;
+            });
+        }];
+    });
+}
+
+- (void)resume {
+    dispatch_async(self.queue, ^{
+        if (self.finished) return;
+        self.operation.state = A2DownloadStateRunning;
+
+        NSData *data = self.operation.resumeData;
+        if (!data) {
+            data = [NSData dataWithContentsOfFile:[self resumeDataPath]];
+        }
+
+        if (data.length > 0) {
+            NSURLSessionConfiguration *cfg = NSURLSessionConfiguration.defaultSessionConfiguration;
+            cfg.timeoutIntervalForRequest = 60;
+            cfg.timeoutIntervalForResource = 3600;
+            self.session = [NSURLSession sessionWithConfiguration:cfg
+                                                         delegate:self
+                                                    delegateQueue:nil];
+            self.currentTask = [self.session downloadTaskWithResumeData:data];
+            // downloadTask 与 dataTask 的 delegate 回调不同，这里退回普通请求更可控
+            [self.session invalidateAndCancel];
+            self.session = nil;
+            [self.operation setResumeData:nil];
+        }
+
+        // 用普通请求续传：从 part 文件已有长度继续
+        NSDictionary *attrs = [[NSFileManager defaultManager]
+                               attributesOfItemAtPath:[self partFilePath] error:nil];
+        self.receivedBytes = [attrs[NSFileSize] longLongValue];
+        [self startCurrentCandidate];
+    });
+}
+
+- (void)cancel {
+    dispatch_async(self.queue, ^{
+        if (self.finished) return;
+        self.finished = YES;
+        [self closeFileHandle];
+        [self stopSpeedTimer];
+        [self.session invalidateAndCancel];
+        [self discardPartialDownload];
+        [self cleanupResumeData];
+
+        self.operation.state = A2DownloadStateCancelled;
+        A2DownloadCompletion cb = self.completion;
+        if (cb) {
+            cb(NO, [NSError errorWithDomain:NSURLErrorDomain
+                                       code:NSURLErrorCancelled
+                                   userInfo:@{NSLocalizedDescriptionKey: @"已取消"}]);
+        }
+    });
 }
 
 @end
 
-#pragma mark - A2DownloadEngine
+#pragma mark - 客户端
 
 @interface A2DownloadEngine ()
-@property (nonatomic, strong) NSMutableDictionary<NSString *, A2FileDownloader *> *active;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, A2FileFetcher *> *active;
 @property (nonatomic, strong) dispatch_queue_t queue;
 @end
 
 @implementation A2DownloadEngine
 
-+ (instancetype)shared {
++ (instancetype)sharedClient {
     static A2DownloadEngine *shared = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
@@ -471,58 +754,104 @@ didCompleteWithError:(NSError *)error {
 }
 
 - (instancetype)init {
+    return [self initWithSessionConfiguration:nil];
+}
+
+- (instancetype)initWithSessionConfiguration:(NSURLSessionConfiguration *)configuration {
     self = [super init];
     if (!self) return nil;
+    (void)configuration;
     _active = [NSMutableDictionary dictionary];
-    _queue = dispatch_queue_create("dev.airdevs.air2.download", DISPATCH_QUEUE_CONCURRENT);
-    _maxConcurrentConnections = 8;
-    _enableChunking = YES;
+    _queue = dispatch_queue_create("dev.airdevs.air2.download", DISPATCH_QUEUE_SERIAL);
     return self;
 }
 
-- (void)downloadItem:(A2DownloadItem *)item
-                task:(A2DownloadTask *)task
-            progress:(void (^)(long long, long long))progress
-          completion:(void (^)(NSError *))completion {
-
-    if (!item.url.length || !item.destinationPath.length) {
-        if (completion) {
-            completion([NSError errorWithDomain:@"A2Download" code:1
-                                       userInfo:@{NSLocalizedDescriptionKey: @"URL 或目标路径为空"}]);
-        }
-        return;
+- (A2DownloadOperation *)startRequest:(A2DownloadRequest *)request
+                             progress:(A2DownloadProgressHandler)progress
+                                speed:(A2DownloadSpeedHandler)speed
+                           completion:(A2DownloadCompletion)completion {
+    // 参数校验：出错也要异步回调，调用方不必区分同步/异步
+    if (!request || request.candidateURLs.count == 0 || request.destinationPath.length == 0) {
+        NSError *err = [NSError errorWithDomain:A2DownloadErrorDomain
+                                           code:A2DownloadErrorInvalidParameter
+                                       userInfo:@{NSLocalizedDescriptionKey: @"参数不完整"}];
+        dispatch_async(dispatch_get_main_queue(), ^{ if (completion) completion(NO, err); });
+        return nil;
     }
 
-    A2FileDownloader *downloader = [A2FileDownloader new];
-    downloader.url = item.url;
-    downloader.path = item.destinationPath;
-
-    __weak typeof(self) weakSelf = self;
-    downloader.progressBlock = ^(long long received, long long total) {
-        if (progress) progress(received, total);
-    };
-    downloader.completionBlock = ^(NSError *error) {
-        __strong typeof(weakSelf) self = weakSelf;
-        [self.active removeObjectForKey:item.destinationPath];
-        if (completion) completion(error);
-    };
-
-    self.active[item.destinationPath] = downloader;
-    [downloader start];
-}
-
-- (void)cancelDownloadForPath:(NSString *)path {
-    A2FileDownloader *d = self.active[path];
-    if (!d) return;
-    [d finishWithError:[NSError errorWithDomain:@"A2Download" code:3
-                                       userInfo:@{NSLocalizedDescriptionKey: @"用户取消"}]];
-    [self.active removeObjectForKey:path];
-}
-
-- (void)cancelAll {
-    for (NSString *key in self.active.allKeys) {
-        [self cancelDownloadForPath:key];
+    // 断点续传的存取键：没给就按「目标路径 + 首个 URL」稳定派生，
+    // 这样同一文件重复下载能复用断点
+    NSString *key = request.taskIdentifier;
+    if (key.length == 0) {
+        key = [NSString stringWithFormat:@"%08lx",
+               (unsigned long)[[request.destinationPath stringByAppendingString:
+                                request.candidateURLs.firstObject.absoluteString] hash]];
     }
+
+    A2DownloadOperation *op = [[A2DownloadOperation alloc] initInternalWithRequest:request key:key];
+
+    A2FileFetcher *fetcher = [A2FileFetcher new];
+    fetcher.request = request;
+    fetcher.operation = op;
+    fetcher.progressHandler = progress;
+    fetcher.speedHandler = speed;
+    fetcher.completion = completion;
+    op.owner = fetcher;
+
+    self.active[key] = fetcher;
+    [fetcher start];
+
+    return op;
+}
+
+- (void)pauseOperation:(A2DownloadOperation *)operation {
+    A2FileFetcher *f = [self fetcherForOperation:operation];
+    [f pause];
+}
+
+- (void)resumeOperation:(A2DownloadOperation *)operation {
+    A2FileFetcher *f = [self fetcherForOperation:operation];
+    [f resume];
+}
+
+- (void)cancelOperation:(A2DownloadOperation *)operation {
+    A2FileFetcher *f = [self fetcherForOperation:operation];
+    [f cancel];
+    if (operation.resumeKey) [self.active removeObjectForKey:operation.resumeKey];
+}
+
+- (nullable A2FileFetcher *)fetcherForOperation:(A2DownloadOperation *)op {
+    if (!op.resumeKey) return nil;
+    return self.active[op.resumeKey];
+}
+
+#pragma mark 便捷方法
+
+- (void)downloadURL:(NSString *)url
+             toPath:(NSString *)path
+       expectedSize:(int64_t)size
+           progress:(void (^)(int64_t, int64_t))progress
+         completion:(void (^)(NSError *))completion {
+
+    A2DownloadRequest *req = [A2DownloadRequest new];
+    NSURL *u = [NSURL URLWithString:url];
+    req.candidateURLs = u ? @[u] : @[];
+    req.destinationPath = path;
+    req.expectedSize = size;
+    req.allowZipFallbackCheck = YES;
+
+    [self startRequest:req
+              progress:^(int64_t delta, int64_t total) {
+        // 转成累计值给调用方（内部用增量是为了支持回退）
+        static int64_t accumulated = 0;
+        accumulated += delta;
+        if (accumulated < 0) accumulated = 0;
+        if (progress) progress(accumulated, total);
+    }
+                 speed:nil
+            completion:^(BOOL success, NSError *error) {
+        if (completion) completion(success ? nil : error);
+    }];
 }
 
 @end

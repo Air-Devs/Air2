@@ -142,12 +142,12 @@
         // meta 文案：加载器 + 隔离状态
         NSMutableArray<NSString *> *parts = [NSMutableArray array];
         if (v.loaderInfo.length) [parts addObject:v.loaderInfo];
-        if (v.isolation.isolationType == A2SettingStateEnable) {
-            [parts addObject:@"隔离开启"];
-        } else if (v.isolation.isolationType == A2SettingStateDisable) {
-            [parts addObject:@"隔离关闭"];
+        // 用解析后的实际状态，而不是原始的 SettingState ——
+        // FOLLOW_GLOBAL 时要显示「全局设置决定的结果」
+        if (v.isolation.isolationType == A2SettingStateFollowGlobal) {
+            [parts addObject:(v.isIsolationEnabled ? @"隔离·跟随全局" : @"共用·跟随全局")];
         } else {
-            [parts addObject:@"跟随全局"];
+            [parts addObject:(v.isIsolationEnabled ? @"隔离开启" : @"共用目录")];
         }
 
         [out addObject:@{

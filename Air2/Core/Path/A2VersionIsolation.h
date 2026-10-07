@@ -2,18 +2,26 @@
 //  A2VersionIsolation.h
 //  Air2
 //
-//  版本隔离 —— 逻辑与 ZL2 对齐。
+//  版本隔离 —— 逻辑与 ZL2 完全对齐。
 //
-//  ZL2 的规则（已核对源码 game/version/installed/VersionConfig.kt、Version.kt）：
+//  ZL2 的规则（已核对 GamePathManager.kt / VersionConfig.kt / Version.kt）：
 //
-//    isolationType: FOLLOW_GLOBAL | ENABLE | DISABLE   —— 每个版本可覆盖全局设置
+//    isIsolation() = isolationType.toBoolean(全局的 versionIsolation)
+//      其中 toBoolean:
+//        FOLLOW_GLOBAL → 全局设置的值      ← 关键，之前漏了
+//        ENABLE        → true
+//        DISABLE       → false
 //
-//    游戏目录 =
-//      ENABLE  → {gameHome}/versions/{版本名}/
-//      DISABLE → customPath 非空 ? customPath : {gameHome}/
+//    getGameDir():
+//        isIsolation()                → {gameHome}/versions/{版本名}/
+//        customPath 非空              → customPath
+//        否则                         → {gameHome}/
 //
-//  隔离开启时，mods / saves / resourcepacks / shaderpacks / screenshots
-//  都落在版本文件夹内，各版本互不干扰；libraries / assets 始终共用。
+//    各隔离目录 = getGameDir() + 文件夹名
+//      （ModsManagerScreen 里就是 VersionFolders.MOD.getDir(version.getGameDir())）
+//
+//  也就是说 mods / saves / resourcepacks / shaderpacks / screenshots
+//  全部从「版本的游戏目录」派生；libraries 与 assets 始终共用。
 //
 
 #import <Foundation/Foundation.h>
@@ -37,104 +45,113 @@ typedef NS_ENUM(NSInteger, A2VersionFolder) {
     A2VersionFolderCount
 };
 
-/// 文件夹枚举 → 实际目录名
 FOUNDATION_EXPORT NSString *A2VersionFolderName(A2VersionFolder folder);
-
-/// 文件夹枚举 → 本地化显示名
 FOUNDATION_EXPORT NSString *A2VersionFolderDisplayName(A2VersionFolder folder);
 
+#pragma mark - 全局设置
+
 /**
- * 版本隔离配置。挂在每个版本上，字段与 ZL2 的 VersionConfig 一一对应。
+ * 全局的游戏设置。
+ *
+ * ZL2 里对应 AllSettings，版本配置里的 FOLLOW_GLOBAL
+ * 会读这里的值。没有这个，FOLLOW_GLOBAL 就无从解析。
+ */
+@interface A2GlobalGameSettings : NSObject
+
++ (instancetype)shared;
+
+/// 全局的版本隔离开关
+@property (nonatomic, assign) BOOL defaultVersionIsolation;
+/// 全局的跳过完整性检查
+@property (nonatomic, assign) BOOL defaultSkipIntegrityCheck;
+/// 全局内存分配（MB）
+@property (nonatomic, assign) NSInteger defaultRAMAllocation;
+/// 全局渲染器标识
+@property (nonatomic, copy, nullable) NSString *defaultRenderer;
+
+@end
+
+#pragma mark - 版本隔离配置
+
+/**
+ * 版本隔离配置。挂在每个版本上，字段与 ZL2 的 VersionConfig 对应。
  */
 @interface A2VersionIsolation : NSObject <NSCopying>
 
 /// 是否开启版本隔离
 @property (nonatomic, assign) A2SettingState isolationType;
-
 /// 是否跳过游戏完整性检查
 @property (nonatomic, assign) A2SettingState skipGameIntegrityCheck;
-
-/// 未开启隔离时的自定义游戏目录。为空表示使用默认 .minecraft。
+/// 未开启隔离时的自定义游戏目录
 @property (nonatomic, copy, nullable) NSString *customPath;
-
 /// 是否置顶
 @property (nonatomic, assign, getter=isPinned) BOOL pinned;
-
 /// 内存分配（MB），-1 表示跟随全局
 @property (nonatomic, assign) NSInteger ramAllocation;
 
-/// 渲染器标识，空串表示跟随全局
+// ---- 版本级覆盖项（对应 ZL2 的 VersionConfig 字段）----
 @property (nonatomic, copy, nullable) NSString *renderer;
-
-/// Java 运行时标识
+@property (nonatomic, copy, nullable) NSString *driver;
 @property (nonatomic, copy, nullable) NSString *javaRuntime;
-
-/// JVM 参数
 @property (nonatomic, copy, nullable) NSString *jvmArgs;
-
-/// 游戏参数
 @property (nonatomic, copy, nullable) NSString *gameArgs;
+@property (nonatomic, copy, nullable) NSString *controlLayout;
+@property (nonatomic, copy, nullable) NSString *serverIp;
+@property (nonatomic, copy, nullable) NSString *versionSummary;
 
-/// 从字典还原（磁盘格式）
+/// 把 SettingState 解析为布尔值（FOLLOW_GLOBAL 时取 global）
++ (BOOL)resolveState:(A2SettingState)state globalValue:(BOOL)global;
+
+/// 该版本是否开启隔离（FOLLOW_GLOBAL 会落到全局设置）
+- (BOOL)isIsolationEnabledWithGlobal:(BOOL)globalIsolation;
+/// 是否跳过完整性检查
+- (BOOL)shouldSkipIntegrityCheckWithGlobal:(BOOL)globalSkip;
+
 + (instancetype)fromDictionary:(NSDictionary *)dict;
-/// 序列化为字典
 - (NSDictionary *)toDictionary;
 
 @end
 
+#pragma mark - 路径解析
+
 /**
  * 路径解析器 —— 所有游戏路径的唯一出口。
  *
- * 硬性约束：项目内任何地方要拼游戏路径，都必须走这里。
- * 禁止在业务代码里手写 [NSString stringWithFormat:@"%@/versions/..."]。
- *
- * 对应 ZL2 的 game/path/GamePathHome.kt。
+ * 硬性约束：业务代码禁止手写 [NSString stringWithFormat:@"%@/versions/..."]。
  */
 @interface A2GamePath : NSObject
 
-/// 游戏根目录（.minecraft）
 @property (nonatomic, copy, readonly) NSString *gameHome;
 
 + (instancetype)pathWithGameHome:(NSString *)gameHome;
 
-/// versions 目录
 - (NSString *)versionsHome;
-/// libraries 目录
 - (NSString *)librariesHome;
-/// assets 目录
 - (NSString *)assetsHome;
-/// 某个版本的文件夹  {gameHome}/versions/{name}
 - (NSString *)versionPath:(NSString *)versionName;
-/// 版本 JSON  {versions}/{name}/{name}.json
 - (NSString *)versionJSONPath:(NSString *)versionName;
-/// 版本客户端 jar  {versions}/{name}/{name}.jar
 - (NSString *)versionJarPath:(NSString *)versionName;
-/// 启动器私有数据目录  {versions}/{name}/.air_version
 - (NSString *)launcherDataPath:(NSString *)versionName;
-/// 版本图标  {versions}/{name}/.air_version/VersionIcon.png
 - (NSString *)versionIconPath:(NSString *)versionName;
 
-/**
- * 该版本实际使用的游戏目录 —— 隔离逻辑的核心。
- *
- * @param versionName 版本名
- * @param isolation   该版本的隔离配置
- * @return 游戏目录。隔离开启返回版本文件夹，否则返回 customPath 或 gameHome。
- */
+/// 该版本实际使用的游戏目录（隔离逻辑的核心）
 - (NSString *)gameDirectoryForVersion:(NSString *)versionName
                             isolation:(A2VersionIsolation *)isolation;
 
-/**
- * 某个可隔离模块的实际目录。
- *
- * @param folder      模块
- * @param versionName 版本名
- * @param isolation   隔离配置
- * @return mods / saves / ... 的实际绝对路径
- */
+/// 指定全局隔离值（便于测试与批量计算）
+- (NSString *)gameDirectoryForVersion:(NSString *)versionName
+                            isolation:(A2VersionIsolation *)isolation
+                      globalIsolation:(BOOL)globalIsolation;
+
+/// 某个可隔离模块的实际目录 = getGameDir() + 文件夹名
 - (NSString *)directoryForFolder:(A2VersionFolder)folder
                      versionName:(NSString *)versionName
                        isolation:(A2VersionIsolation *)isolation;
+
+- (NSString *)directoryForFolder:(A2VersionFolder)folder
+                     versionName:(NSString *)versionName
+                       isolation:(A2VersionIsolation *)isolation
+                 globalIsolation:(BOOL)globalIsolation;
 
 @end
 

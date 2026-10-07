@@ -27,7 +27,7 @@ NSString *A2VersionFolderDisplayName(A2VersionFolder folder) {
     }
 }
 
-/// 解析 SettingState 的字符串表示（磁盘格式与 ZL2 保持一致，便于后续互操作）
+/// 解析 SettingState 的字符串（与 ZL2 的 SerializedName 一致，便于互操作）
 static A2SettingState A2SettingStateFromString(NSString *s) {
     if ([s isEqualToString:@"ENABLE"])  return A2SettingStateEnable;
     if ([s isEqualToString:@"DISABLE"]) return A2SettingStateDisable;
@@ -56,6 +56,34 @@ static NSString *A2SettingStateToString(A2SettingState state) {
     return self;
 }
 
+/// 把 SettingState 解析为布尔值。
+///
+/// 对应 ZL2 的 SettingState.toBoolean(global)：
+///   FOLLOW_GLOBAL → 用全局设置的值
+///   ENABLE        → true
+///   DISABLE       → false
++ (BOOL)resolveState:(A2SettingState)state globalValue:(BOOL)global {
+    switch (state) {
+        case A2SettingStateEnable:  return YES;
+        case A2SettingStateDisable: return NO;
+        case A2SettingStateFollowGlobal:
+        default:                    return global;
+    }
+}
+
+/// 该版本是否开启隔离。
+///
+/// 注意 FOLLOW_GLOBAL 要落到全局设置上 ——
+/// 这是之前漏掉的：我只把 FOLLOW_GLOBAL 当成「不隔离」，
+/// 导致全局开了隔离但版本没设置时，实际没有隔离。
+- (BOOL)isIsolationEnabledWithGlobal:(BOOL)globalIsolation {
+    return [A2VersionIsolation resolveState:self.isolationType globalValue:globalIsolation];
+}
+
+- (BOOL)shouldSkipIntegrityCheckWithGlobal:(BOOL)globalSkip {
+    return [A2VersionIsolation resolveState:self.skipGameIntegrityCheck globalValue:globalSkip];
+}
+
 - (id)copyWithZone:(NSZone *)zone {
     A2VersionIsolation *c = [[A2VersionIsolation allocWithZone:zone] init];
     c.isolationType = self.isolationType;
@@ -64,9 +92,13 @@ static NSString *A2SettingStateToString(A2SettingState state) {
     c.pinned = self.pinned;
     c.ramAllocation = self.ramAllocation;
     c.renderer = self.renderer;
+    c.driver = self.driver;
     c.javaRuntime = self.javaRuntime;
     c.jvmArgs = self.jvmArgs;
     c.gameArgs = self.gameArgs;
+    c.controlLayout = self.controlLayout;
+    c.serverIp = self.serverIp;
+    c.versionSummary = self.versionSummary;
     return c;
 }
 
@@ -80,9 +112,13 @@ static NSString *A2SettingStateToString(A2SettingState state) {
     iso.pinned = [dict[@"pinned"] boolValue];
     iso.ramAllocation = [dict[@"ramAllocation"] integerValue] ?: -1;
     iso.renderer = [dict[@"renderer"] isKindOfClass:NSString.class] ? dict[@"renderer"] : nil;
+    iso.driver = [dict[@"driver"] isKindOfClass:NSString.class] ? dict[@"driver"] : nil;
     iso.javaRuntime = [dict[@"javaRuntime"] isKindOfClass:NSString.class] ? dict[@"javaRuntime"] : nil;
     iso.jvmArgs = [dict[@"jvmArgs"] isKindOfClass:NSString.class] ? dict[@"jvmArgs"] : nil;
     iso.gameArgs = [dict[@"gameArgs"] isKindOfClass:NSString.class] ? dict[@"gameArgs"] : nil;
+    iso.controlLayout = [dict[@"control"] isKindOfClass:NSString.class] ? dict[@"control"] : nil;
+    iso.serverIp = [dict[@"serverIp"] isKindOfClass:NSString.class] ? dict[@"serverIp"] : nil;
+    iso.versionSummary = [dict[@"versionSummary"] isKindOfClass:NSString.class] ? dict[@"versionSummary"] : nil;
     return iso;
 }
 
@@ -92,11 +128,15 @@ static NSString *A2SettingStateToString(A2SettingState state) {
     d[@"skipGameIntegrityCheck"] = A2SettingStateToString(self.skipGameIntegrityCheck);
     d[@"pinned"] = @(self.pinned);
     d[@"ramAllocation"] = @(self.ramAllocation);
-    if (self.customPath)   d[@"customPath"]   = self.customPath;
-    if (self.renderer)     d[@"renderer"]     = self.renderer;
-    if (self.javaRuntime)  d[@"javaRuntime"]  = self.javaRuntime;
-    if (self.jvmArgs)      d[@"jvmArgs"]      = self.jvmArgs;
-    if (self.gameArgs)     d[@"gameArgs"]     = self.gameArgs;
+    if (self.customPath)      d[@"customPath"]      = self.customPath;
+    if (self.renderer)        d[@"renderer"]        = self.renderer;
+    if (self.driver)          d[@"driver"]          = self.driver;
+    if (self.javaRuntime)     d[@"javaRuntime"]     = self.javaRuntime;
+    if (self.jvmArgs)         d[@"jvmArgs"]         = self.jvmArgs;
+    if (self.gameArgs)        d[@"gameArgs"]        = self.gameArgs;
+    if (self.controlLayout)   d[@"control"]         = self.controlLayout;
+    if (self.serverIp)        d[@"serverIp"]        = self.serverIp;
+    if (self.versionSummary)  d[@"versionSummary"]  = self.versionSummary;
     return d;
 }
 
@@ -105,6 +145,53 @@ static NSString *A2SettingStateToString(A2SettingState state) {
             A2SettingStateToString(self.isolationType),
             self.pinned ? @"Y" : @"N",
             self.customPath ?: @"(default)"];
+}
+
+@end
+
+#pragma mark - 全局设置
+
+/// 全局的版本隔离设置。
+///
+/// ZL2 里这是 AllSettings.versionIsolation，
+/// 版本配置的 FOLLOW_GLOBAL 会读它。
+@implementation A2GlobalGameSettings
+
++ (instancetype)shared {
+    static A2GlobalGameSettings *shared = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        shared = [[A2GlobalGameSettings alloc] init];
+    });
+    return shared;
+}
+
+- (instancetype)init {
+    self = [super init];
+    if (!self) return nil;
+    NSUserDefaults *d = NSUserDefaults.standardUserDefaults;
+    _defaultVersionIsolation = [d objectForKey:@"A2GlobalVersionIsolation"]
+        ? [d boolForKey:@"A2GlobalVersionIsolation"] : NO;
+    _defaultSkipIntegrityCheck = [d boolForKey:@"A2GlobalSkipIntegrityCheck"];
+    _defaultRAMAllocation = [d objectForKey:@"A2GlobalRAM"]
+        ? (NSInteger)[d integerForKey:@"A2GlobalRAM"] : 2048;
+    _defaultRenderer = [d stringForKey:@"A2GlobalRenderer"];
+    return self;
+}
+
+- (void)setDefaultVersionIsolation:(BOOL)v {
+    _defaultVersionIsolation = v;
+    [NSUserDefaults.standardUserDefaults setBool:v forKey:@"A2GlobalVersionIsolation"];
+}
+
+- (void)setDefaultSkipIntegrityCheck:(BOOL)v {
+    _defaultSkipIntegrityCheck = v;
+    [NSUserDefaults.standardUserDefaults setBool:v forKey:@"A2GlobalSkipIntegrityCheck"];
+}
+
+- (void)setDefaultRAMAllocation:(NSInteger)v {
+    _defaultRAMAllocation = v;
+    [NSUserDefaults.standardUserDefaults setInteger:v forKey:@"A2GlobalRAM"];
 }
 
 @end
@@ -159,8 +246,26 @@ static NSString *const kLauncherDataDirName = @".air_version";
 
 - (NSString *)gameDirectoryForVersion:(NSString *)versionName
                             isolation:(A2VersionIsolation *)isolation {
+    return [self gameDirectoryForVersion:versionName
+                               isolation:isolation
+                        globalIsolation:A2GlobalGameSettings.shared.defaultVersionIsolation];
+}
+
+/// 该版本实际使用的游戏目录 —— 隔离逻辑的核心。
+///
+/// 完全对应 ZL2 的 Version.getGameDir()：
+///   if (versionConfig.isIsolation()) getVersionPath()
+///   else if (customPath.isNotEmpty()) File(customPath)
+///   else File(gameHome)
+///
+/// 其中 isIsolation() 会把 FOLLOW_GLOBAL 解析为全局设置的值。
+- (NSString *)gameDirectoryForVersion:(NSString *)versionName
+                            isolation:(A2VersionIsolation *)isolation
+                      globalIsolation:(BOOL)globalIsolation {
+    BOOL enabled = [isolation isIsolationEnabledWithGlobal:globalIsolation];
+
     // 隔离开启 → 版本文件夹独立成家
-    if (isolation.isolationType == A2SettingStateEnable) {
+    if (enabled) {
         return [self versionPath:versionName];
     }
 
@@ -174,7 +279,19 @@ static NSString *const kLauncherDataDirName = @".air_version";
 - (NSString *)directoryForFolder:(A2VersionFolder)folder
                      versionName:(NSString *)versionName
                        isolation:(A2VersionIsolation *)isolation {
-    NSString *gameDir = [self gameDirectoryForVersion:versionName isolation:isolation];
+    return [self directoryForFolder:folder
+                        versionName:versionName
+                          isolation:isolation
+                    globalIsolation:A2GlobalGameSettings.shared.defaultVersionIsolation];
+}
+
+- (NSString *)directoryForFolder:(A2VersionFolder)folder
+                     versionName:(NSString *)versionName
+                       isolation:(A2VersionIsolation *)isolation
+                 globalIsolation:(BOOL)globalIsolation {
+    NSString *gameDir = [self gameDirectoryForVersion:versionName
+                                            isolation:isolation
+                                      globalIsolation:globalIsolation];
     return [gameDir stringByAppendingPathComponent:A2VersionFolderName(folder)];
 }
 

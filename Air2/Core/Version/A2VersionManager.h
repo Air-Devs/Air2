@@ -53,6 +53,10 @@ typedef NS_ENUM(NSInteger, A2VersionType) {
 - (NSString *)launcherDataPath;
 /// 该版本实际使用的游戏目录（隔离逻辑在这里生效）
 - (NSString *)gameDirectory;
+/// 某个可隔离模块的实际目录（mods / saves / ...）
+- (NSString *)directoryForFolder:(A2VersionFolder)folder;
+/// 是否开启隔离（已解析 FOLLOW_GLOBAL）
+- (BOOL)isIsolationEnabled;
 
 - (void)loadConfig;
 - (void)saveConfig;

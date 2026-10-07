@@ -53,7 +53,21 @@ static NSString *const kCurrentVersionKey = @"A2CurrentVersionName";
 }
 
 - (NSString *)gameDirectory {
+    // FOLLOW_GLOBAL 会在这里落到全局设置上
     return [_gamePath gameDirectoryForVersion:_name isolation:_isolation];
+}
+
+/// 某个可隔离模块的实际目录
+- (NSString *)directoryForFolder:(A2VersionFolder)folder {
+    return [_gamePath directoryForFolder:folder
+                             versionName:_name
+                               isolation:_isolation];
+}
+
+/// 是否开启隔离（已解析 FOLLOW_GLOBAL）
+- (BOOL)isIsolationEnabled {
+    return [_isolation isIsolationEnabledWithGlobal:
+            A2GlobalGameSettings.shared.defaultVersionIsolation];
 }
 
 /// 读取版本私有配置
