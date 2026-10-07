@@ -48,21 +48,84 @@ def check_file(path, defined_classes):
     src = open(path).read()
 
     # ---------- 花括号平衡 ----------
-    stripped = re.sub(r'//[^\n]*', '', src)
-    stripped = re.sub(r'/\*.*?\*/', '', stripped, flags=re.S)
-    stripped = re.sub(r'"(?:[^"\\]|\\.)*"', '""', stripped)
-    stripped = re.sub(r"'(?:[^'\\]|\\.)*'", "''", stripped)
+    # 用状态机逐字符扫描，而不是正则去注释 ——
+    # 正则很容易把字符串里的 /* 或 // 当成注释起点，
+    # 导致后续内容被整段吃掉、括号统计失准（踩过这个坑）。
     depth = 0
-    for ch in stripped:
-        if ch == "{":
+    i = 0
+    n = len(src)
+    in_line_comment = False
+    in_block_comment = False
+    in_string = False
+    in_char = False
+    while i < n:
+        c = src[i]
+        nxt = src[i + 1] if i + 1 < n else ''
+
+        if in_line_comment:
+            if c == '\n':
+                in_line_comment = False
+            i += 1
+            continue
+
+        if in_block_comment:
+            if c == '*' and nxt == '/':
+                in_block_comment = False
+                i += 2
+                continue
+            i += 1
+            continue
+
+        if in_string:
+            if c == '\\':
+                i += 2
+                continue
+            if c == '"':
+                in_string = False
+            i += 1
+            continue
+
+        if in_char:
+            if c == '\\':
+                i += 2
+                continue
+            if c == "'":
+                in_char = False
+            i += 1
+            continue
+
+        # 正常代码态
+        if c == '/' and nxt == '/':
+            in_line_comment = True
+            i += 2
+            continue
+        if c == '/' and nxt == '*':
+            in_block_comment = True
+            i += 2
+            continue
+        if c == '"':
+            in_string = True
+            i += 1
+            continue
+        if c == "'":
+            in_char = True
+            i += 1
+            continue
+
+        if c == '{':
             depth += 1
-        elif ch == "}":
+        elif c == '}':
             depth -= 1
             if depth < 0:
                 errors.append("花括号提前闭合")
+                depth = 0
                 break
+        i += 1
+
     if depth != 0:
         errors.append(f"花括号不平衡，差值 {depth}")
+
+    stripped = src
 
     if stripped.count("(") != stripped.count(")"):
         errors.append(f"圆括号不平衡: {stripped.count('(')} vs {stripped.count(')')}")

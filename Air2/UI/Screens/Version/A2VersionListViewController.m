@@ -19,6 +19,7 @@
 
 #import "A2VersionListViewController.h"
 #import "A2VersionSettingsViewController.h"
+#import "A2VersionManager.h"
 #import "A2VersionRowView.h"
 #import "A2GlassCard.h"
 #import "A2PrimaryButton.h"
@@ -131,13 +132,35 @@
     [self buildVersionList];
 }
 
+/// 从 A2VersionManager 读真实数据。
+/// 之前这里是硬编码的示例数据 —— 现在接上了真实的版本扫描。
 - (void)loadVersions {
-    _versions = @[
-        @{@"name": @"1.21.5-fabric", @"meta": @"Fabric 0.16.10 · Java 21", @"current": @YES, @"pinned": @YES},
-        @{@"name": @"1.20.1-forge",  @"meta": @"Forge 47.2.0 · Java 17",   @"current": @NO,  @"pinned": @NO},
-        @{@"name": @"1.21.5",        @"meta": @"原版 · Java 21",            @"current": @NO,  @"pinned": @NO},
-        @{@"name": @"1.7.10-forge",  @"meta": @"Forge 10.13.4.1614",        @"current": @NO,  @"pinned": @NO},
-    ];
+    A2VersionManager *mgr = A2VersionManager.shared;
+    NSMutableArray<NSDictionary<NSString *, id> *> *out = [NSMutableArray array];
+
+    for (A2Version *v in mgr.versions) {
+        // meta 文案：加载器 + 隔离状态
+        NSMutableArray<NSString *> *parts = [NSMutableArray array];
+        if (v.loaderInfo.length) [parts addObject:v.loaderInfo];
+        if (v.isolation.isolationType == A2SettingStateEnable) {
+            [parts addObject:@"隔离开启"];
+        } else if (v.isolation.isolationType == A2SettingStateDisable) {
+            [parts addObject:@"隔离关闭"];
+        } else {
+            [parts addObject:@"跟随全局"];
+        }
+
+        [out addObject:@{
+            @"name": v.name,
+            @"meta": [parts componentsJoinedByString:@" · "],
+            @"current": @(mgr.currentVersion == v),
+            @"pinned": @(v.isolation.isPinned),
+            @"valid": @(v.isValid),
+            @"model": v,
+        }];
+    }
+
+    _versions = out;
 }
 
 - (void)setupLayout {
@@ -255,6 +278,7 @@
                                                                         meta:v[@"meta"]];
         row.current = [v[@"current"] boolValue];
         row.pinned = [v[@"pinned"] boolValue];
+        row.valid = [v[@"valid"] boolValue];
 
         __weak typeof(self) weakSelf = self;
         __weak A2VersionRowView *weakRow = row;
@@ -265,10 +289,17 @@
             __strong typeof(weakSelf) self = weakSelf;
             [self selectVersion:weakRow];
         };
+        A2Version *model = v[@"model"];
         row.onPin = ^{
             __strong typeof(weakSelf) self = weakSelf;
-            weakRow.pinned = !weakRow.isPinned;
-            [A2Toast show:(weakRow.isPinned ? @"已置顶" : @"已取消置顶") inView:self.view];
+            BOOL newValue = !weakRow.isPinned;
+            weakRow.pinned = newValue;
+
+            // 真实写入版本的隔离配置
+            model.isolation.pinned = newValue;
+            [model saveConfig];
+
+            [A2Toast show:(newValue ? @"已置顶" : @"已取消置顶") inView:self.view];
         };
         row.onSettings = ^{
             __strong typeof(weakSelf) self = weakSelf;
@@ -290,11 +321,24 @@
     }
 }
 
+/// 切换当前版本。
+/// 无效版本不允许选中（缺 jar 或 json 的版本启动必然失败）。
 - (void)selectVersion:(A2VersionRowView *)selected {
+    NSInteger index = [_rowViews indexOfObject:selected];
+    if (index == NSNotFound || index >= (NSInteger)_versions.count) return;
+
+    A2Version *model = _versions[index][@"model"];
+    if (!model.isValid) {
+        [A2Toast show:@"此版本文件不完整，无法选择" inView:self.view];
+        return;
+    }
+
+    if (![A2VersionManager.shared setCurrentVersion:model]) return;
+
     for (A2VersionRowView *r in _rowViews) {
         r.current = (r == selected);
     }
-    [A2Toast show:[NSString stringWithFormat:@"已切换到 %@", selected.versionName] inView:self.view];
+    [A2Toast show:[NSString stringWithFormat:@"已切换到 %@", model.name] inView:self.view];
 }
 
 - (void)showMoreMenuForName:(NSString *)name meta:(NSString *)meta fromView:(UIView *)source {
