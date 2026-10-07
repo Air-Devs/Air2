@@ -363,8 +363,7 @@ NSArray<NSNumber *> *A2AllContentClasses(void) {
     } else {
         [[A2CurseForgeAPI shared] projectWithID:projectID.integerValue
                                      completion:^(A2CFProject *p, NSError *error) {
-            __strong typeof(weakSelf) self = weakSelf;
-            (void)self;
+            (void)weakSelf;   // 这个分支不需要 self，但保留 weak 捕获以防将来扩展
             if (error) { if (completion) completion(nil, error); return; }
             A2ContentItem *item = [A2ContentItem new];
             item.platform = A2ContentPlatformCurseForge;

@@ -52,8 +52,10 @@ extern NSNotificationName const A2AccountsDidChangeNotification;
 
 + (instancetype)shared;
 
+/// 所有已保存的账号（只读，增删请用 addAccount: / removeAccount:）
 @property (nonatomic, copy, readonly) NSArray<A2Account *> *accounts;
-@property (nonatomic, strong, nullable) A2Account *currentAccount;
+/// 当前账号（只读，切换请用 selectCurrentAccount:）
+@property (nonatomic, strong, readonly, nullable) A2Account *currentAccount;
 
 /// 从磁盘重新加载
 - (void)reload;

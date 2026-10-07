@@ -134,6 +134,60 @@ def check_declarations_vs_implementation():
     return issues
 
 
+
+
+def check_property_readonly():
+    """
+    检查 .h 与 .m 里同名属性的修饰符是否冲突。
+
+    规则：如果 .h 里的属性【没有】标 readonly，
+    而 .m 的类扩展里又声明了同名属性，会报 illegal redeclaration。
+    正确做法是 .h 标 readonly、.m 重声明为可写。
+    """
+    import os, re
+    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    issues = []
+
+    for dirpath, _, files in os.walk(os.path.join(ROOT, "Air2")):
+        for f in files:
+            if not f.endswith(".m"):
+                continue
+            m_path = os.path.join(dirpath, f)
+            h_path = m_path[:-2] + ".h"
+            if not os.path.exists(h_path):
+                continue
+
+            h_src = strip_comments(open(h_path).read())
+            m_src = strip_comments(open(m_path).read())
+
+            # 头文件里的属性 → 是否 readonly
+            header_props = {}
+            for pm in re.finditer(
+                    r'@property\s*\(([^)]*)\)[^;]*?\b(\w+)\s*;', h_src):
+                header_props[pm.group(2)] = 'readonly' in pm.group(1)
+
+            # .m 的类扩展里的属性
+            for em in re.finditer(r'@interface\s+\w+\s*\(\)(.*?)@end', m_src, re.S):
+                ext = em.group(1)
+                for pm in re.finditer(
+                        r'@property\s*\(([^)]*)\)[^;]*?\b(\w+)\s*;', ext):
+                    attrs, name = pm.group(1), pm.group(2)
+                    if name not in header_props:
+                        continue
+                    header_readonly = header_props[name]
+                    ext_readonly = 'readonly' in attrs
+
+                    # 头文件可写 + 扩展也存在 = 重复声明
+                    if not header_readonly and not ext_readonly:
+                        issues.append(
+                            f"{os.path.relpath(h_path, ROOT)} 的属性 {name} "
+                            f"未标 readonly，但 {f} 的类扩展里又声明了一遍 "
+                            f"→ 会报 illegal redeclaration。"
+                            f"应把头文件标 readonly、扩展里重声明为可写")
+
+    return issues
+
+
 def main():
     problems = []
     total_imports = 0
@@ -184,6 +238,20 @@ def main():
         return 1
 
     print("✓ 头文件声明与实现一致")
+
+    # ---------- 属性修饰符跨文件一致性 ----------
+    # 常见错误：头文件里 .h 声明了非 readonly 的属性，
+    # 而 .m 的类扩展里又声明了一遍 —— 报 illegal redeclaration。
+    # 或者反过来：头文件标 readonly 但 .m 扩展里没重声明为可写，
+    # 导致内部无法赋值。
+    prop_issues = check_property_readonly()
+    if prop_issues:
+        print(f"\n发现 {len(prop_issues)} 处属性修饰符问题：")
+        for msg in prop_issues:
+            print(f"  {msg}")
+        return 1
+
+    print("✓ 属性修饰符一致")
     return 0
     return 0
 

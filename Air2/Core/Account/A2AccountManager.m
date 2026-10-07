@@ -181,6 +181,7 @@ static void A2Main(dispatch_block_t b) {
 #pragma mark - 账号管理器
 
 @interface A2AccountManager ()
+// 头文件标 readonly，这里重声明为可写 —— 标准的「对外只读、对内可写」
 @property (nonatomic, copy) NSArray<A2Account *> *accounts;
 @property (nonatomic, strong, nullable) A2Account *currentAccount;
 @property (nonatomic, strong) A2YggdrasilAuth *yggdrasil;
@@ -340,8 +341,16 @@ static void A2Main(dispatch_block_t b) {
     NSString *input = [NSString stringWithFormat:@"OfflinePlayer:%@", name];
     NSData *data = [input dataUsingEncoding:NSUTF8StringEncoding];
 
+    // MD5 已被标记弃用，但这里【必须】用 MD5 ——
+    // 离线 UUID 的算法就是 Java 的 UUID.nameUUIDFromBytes，
+    // 它内部固定用 MD5。换成 SHA256 会导致生成的 UUID 与
+    // 服务端、与其他启动器都不一致，联机时被识别成不同玩家。
+    // 这是协议兼容性要求，不是安全用途。
     unsigned char digest[CC_MD5_DIGEST_LENGTH];
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
     CC_MD5(data.bytes, (CC_LONG)data.length, digest);
+#pragma clang diagnostic pop
 
     NSMutableString *hex = [NSMutableString stringWithCapacity:32];
     for (int i = 0; i < CC_MD5_DIGEST_LENGTH; i++) [hex appendFormat:@"%02x", digest[i]];

@@ -70,8 +70,8 @@ extern NSNotificationName const A2VersionsDidChangeNotification;
 
 + (instancetype)shared;
 
-/// 当前游戏根目录
-@property (nonatomic, copy) NSString *gameHome;
+/// 当前游戏根目录（只读，切换用 setGameHome: —— 它会触发重新扫描）
+@property (nonatomic, copy, readonly) NSString *gameHome;
 /// 所有已安装版本
 @property (nonatomic, copy, readonly) NSArray<A2Version *> *versions;
 /// 当前选中的版本（只读，切换请用 selectCurrentVersion:）
