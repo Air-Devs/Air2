@@ -136,6 +136,43 @@ def check_file(path, defined_classes):
                         f"不能直接放进 activateConstraints:@[...]，"
                         f"应改用 addObjectsFromArray 展开")
 
+    # ---------- 变量声明顺序检查 ----------
+    # 批量重构时容易把声明插错位置（插到使用之后），
+    # 这会导致 "use of undeclared identifier"。编译器能报，
+    # 但等 CI 跑一轮要几分钟，本地先拦掉。
+    #
+    # 做法：找出每个方法体，检查 A2ColorScheme *t 这类声明的
+    # 首次使用位置是否早于声明位置。
+    decl_pattern = re.compile(
+        r'^\s*(A2ColorScheme|A2ColorTheme|A2GlassCard|NSMutableArray<[^>]+>)\s*\*(\w+)\s*=',
+        re.M)
+    for m in decl_pattern.finditer(src):
+        var = m.group(2)
+        decl_pos = m.start()
+        # 找到该声明所在的方法体范围
+        body_start = src.rfind('\n- (', 0, decl_pos)
+        if body_start == -1:
+            body_start = src.rfind('\n+ (', 0, decl_pos)
+        if body_start == -1:
+            continue
+        # 方法体结束：下一个方法或 @end
+        nxt = re.search(r'\n[-+] \(|\n@end', src[decl_pos:])
+        body_end = decl_pos + (nxt.start() if nxt else len(src) - decl_pos)
+
+        body = src[body_start:body_end]
+        # 在体里找该变量的使用（排除声明行自身）
+        used_before = False
+        local_decl = decl_pos - body_start
+        for um in re.finditer(rf'\b{var}\.', body):
+            if um.start() < local_decl:
+                used_before = True
+                break
+        if used_before:
+            line = src[:decl_pos].count('\n') + 1
+            errors.append(
+                f"第 {line} 行: 变量 {var} 的声明位置在使用之后，"
+                f"会导致 use of undeclared identifier")
+
     return errors
 
 def main():

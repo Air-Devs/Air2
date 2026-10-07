@@ -227,6 +227,8 @@
 }
 
 - (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+
     UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"cell" forIndexPath:indexPath];
     cell.backgroundColor = UIColor.clearColor;
     cell.selectionStyle = UITableViewCellSelectionStyleNone;
@@ -262,7 +264,6 @@
     textStack.axis = UILayoutConstraintAxisVertical;
     textStack.spacing = 3;
 
-    A2ColorScheme *t = A2ThemeManager.shared.scheme;
     UILabel *tag = [[UILabel alloc] initWithFrame:CGRectZero];
     tag.translatesAutoresizingMaskIntoConstraints = NO;
     tag.text = item[@"tag"];
