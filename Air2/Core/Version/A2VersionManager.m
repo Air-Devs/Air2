@@ -238,7 +238,7 @@ static NSString *const kCurrentVersionKey = @"A2CurrentVersionName";
 
 #pragma mark 操作
 
-- (BOOL)setCurrentVersion:(A2Version *)version {
+- (BOOL)selectCurrentVersion:(A2Version *)version {
     if (!version || !version.isValid) return NO;
     _currentVersion = version;
     [NSUserDefaults.standardUserDefaults setObject:version.name forKey:kCurrentVersionKey];

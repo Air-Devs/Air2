@@ -117,7 +117,7 @@
 
         row.onSelect = ^{
             __strong typeof(weakSelf) self = weakSelf;
-            if ([A2AccountManager.shared setCurrentAccount:acc]) {
+            if ([A2AccountManager.shared selectCurrentAccount:acc]) {
                 for (A2AccountRowView *r in self.rows) r.current = (r == weakRow);
                 [A2Toast show:[NSString stringWithFormat:@"已切换到 %@", acc.username]
                        inView:self.view];

@@ -333,7 +333,7 @@
         return;
     }
 
-    if (![A2VersionManager.shared setCurrentVersion:model]) return;
+    if (![A2VersionManager.shared selectCurrentVersion:model]) return;
 
     for (A2VersionRowView *r in _rowViews) {
         r.current = (r == selected);

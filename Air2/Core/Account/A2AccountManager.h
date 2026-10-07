@@ -64,8 +64,10 @@ extern NSNotificationName const A2AccountsDidChangeNotification;
 /// 移除账号
 - (void)removeAccount:(A2Account *)account;
 
-/// 设为当前账号
-- (BOOL)setCurrentAccount:(A2Account *)account;
+/// 切换当前账号。
+/// 命名同 selectCurrentVersion: —— 不用 set 开头，
+/// 因为它可能失败且返回 BOOL，而 setter 必须返回 void。
+- (BOOL)selectCurrentAccount:(A2Account *)account;
 
 /// 创建离线账号（仅需用户名）
 - (A2Account *)createOfflineAccountWithName:(NSString *)name;

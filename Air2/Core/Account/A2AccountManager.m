@@ -290,7 +290,7 @@ static void A2Main(dispatch_block_t b) {
     _accounts = [list copy];
     [self save];
 
-    if (!_currentAccount) [self setCurrentAccount:account];
+    if (!_currentAccount) [self selectCurrentAccount:account];
     [self notify];
 }
 
@@ -314,7 +314,7 @@ static void A2Main(dispatch_block_t b) {
     [self notify];
 }
 
-- (BOOL)setCurrentAccount:(A2Account *)account {
+- (BOOL)selectCurrentAccount:(A2Account *)account {
     if (!account) return NO;
     _currentAccount = account;
     [NSUserDefaults.standardUserDefaults setObject:account.uniqueID

@@ -238,6 +238,39 @@ def check_file(path, defined_classes):
                 f"第 {line} 行: 变量 {var} 的声明位置在使用之后，"
                 f"会导致 use of undeclared identifier")
 
+    # ---------- setter 命名检查 ----------
+    # 形如 - (非void) setXxx:(T)v; 的方法会被编译器当成属性 setter，
+    # 而 ObjC 要求 setter 必须返回 void，否则报
+    # "type of setter must be void"。
+    # 这类方法应改用动词命名（如 selectXxx: / applyXxx:）。
+    for m in re.finditer(r'^\s*-\s*\(\s*(?!void)\w[\w\s\*<>]*\)\s*(set[A-Z]\w*)\s*:', src, re.M):
+        line = src[:m.start()].count('\n') + 1
+        errors.append(
+            f"第 {line} 行: {m.group(1)}: 是 setter 形式但返回非 void，"
+            f"编译器会报 type of setter must be void，"
+            f"建议改用动词命名（如 select/apply/update）")
+
+    # ---------- readonly 属性重声明检查 ----------
+    # 头文件里 readonly 的属性，类扩展里才能重声明为 readwrite。
+    # 只在【同一文件】内同时出现两种情况时报 —— 头文件在别的文件时
+    # 无法在本文件判断，强行报会产生大量误报。
+    if path.endswith('.m'):
+        for m in re.finditer(r'@interface\s+\w+\s*\(\)(.*?)@end', src, re.S):
+            ext = m.group(1)
+            for pm in re.finditer(
+                    r'@property\s*\(([^)]*)\)[^;]*?\b(\w+)\s*;', ext):
+                attrs, name = pm.group(1), pm.group(2)
+                if 'readonly' in attrs:
+                    continue
+                # 检查同一文件里是否有该属性的 readonly 声明
+                decl = re.search(
+                    rf'@property\s*\(([^)]*readonly[^)]*)\)[^;]*?\b{name}\s*;', src)
+                if decl:
+                    line = src[:m.start() + pm.start()].count('\n') + 1
+                    errors.append(
+                        f"第 {line} 行: 属性 {name} 在同一文件里已声明为 readonly，"
+                        f"类扩展里重声明为可写会报 illegal redeclaration")
+
     return errors
 
 def main():

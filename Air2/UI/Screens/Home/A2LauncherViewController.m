@@ -677,7 +677,7 @@
     A2Version *capturedVersion = version;
     [chip addAction:[UIAction actionWithHandler:^(UIAction *action) {
         __strong typeof(weakSelf) self = weakSelf;
-        if ([A2VersionManager.shared setCurrentVersion:capturedVersion]) {
+        if ([A2VersionManager.shared selectCurrentVersion:capturedVersion]) {
             [self refreshCurrentVersionUI];
             [A2Toast show:[NSString stringWithFormat:@"已切换到 %@", capturedVersion.name]
                    inView:self.view];

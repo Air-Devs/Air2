@@ -74,14 +74,18 @@ extern NSNotificationName const A2VersionsDidChangeNotification;
 @property (nonatomic, copy) NSString *gameHome;
 /// 所有已安装版本
 @property (nonatomic, copy, readonly) NSArray<A2Version *> *versions;
-/// 当前选中的版本
-@property (nonatomic, strong, nullable) A2Version *currentVersion;
+/// 当前选中的版本（只读，切换请用 selectCurrentVersion:）
+@property (nonatomic, strong, readonly, nullable) A2Version *currentVersion;
 
 /// 重新扫描版本目录
 - (void)reload;
 
-/// 设置当前版本
-- (BOOL)setCurrentVersion:(A2Version *)version;
+/// 切换当前版本。
+///
+/// 用动词命名而不是 setCurrentVersion: —— 后者会被编译器当成
+/// currentVersion 属性的 setter，而 setter 必须返回 void。
+/// 这个方法可能失败（版本无效），所以要能返回 BOOL。
+- (BOOL)selectCurrentVersion:(A2Version *)version;
 
 /// 删除版本
 - (BOOL)deleteVersion:(A2Version *)version error:(NSError **)error;
