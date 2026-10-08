@@ -28,7 +28,7 @@
 @interface A2NavItemButton : UIControl
 @property (nonatomic, strong) UIImageView *iconView;
 @property (nonatomic, strong) UILabel *label;
-@property (nonatomic, assign, getter=isSelected) BOOL selected;
+// selected 沿用 UIControl 自带的，不重声明
 - (instancetype)initWithCategory:(A2NavCategory *)category;
 - (void)applyTheme;
 @end
@@ -88,7 +88,7 @@
 }
 
 - (void)setSelected:(BOOL)selected {
-    _selected = selected;
+    [super setSelected:selected];
     [self applyTheme];
 }
 
