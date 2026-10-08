@@ -34,16 +34,11 @@
 #import "A2Metrics.h"
 #import "A2Typography.h"
 
-typedef NS_ENUM(NSInteger, A2ContentSource) {
-    A2ContentSourceModrinth = 0,
-    A2ContentSourceCurseForge,
-};
-
 @interface A2DownloadViewController ()
 @property (nonatomic, strong) A2CategoryNavView *nav;
 @property (nonatomic, strong) UIScrollView *detailScroll;
 @property (nonatomic, strong) UIStackView *detailStack;
-@property (nonatomic, assign) A2ContentSource source;
+@property (nonatomic, assign) A2ContentPlatform source;
 @property (nonatomic, strong) UISegmentedControl *sourceSwitch;
 @property (nonatomic, strong) UILabel *sourceHint;
 @end
@@ -54,7 +49,7 @@ typedef NS_ENUM(NSInteger, A2ContentSource) {
     [super viewDidLoad];
     self.usesScrollContent = NO;
     self.pageTitle = @"下载";
-    self.source = A2ContentSourceModrinth;
+    self.source = A2ContentPlatformModrinth;
 
     NSArray<A2NavCategory *> *cats = @[
         [A2NavCategory title:@"游戏"   symbol:@"sports.esports"],
@@ -175,14 +170,14 @@ typedef NS_ENUM(NSInteger, A2ContentSource) {
     return card;
 }
 
-- (NSString *)hintForSource:(A2ContentSource)source {
-    return (source == A2ContentSourceModrinth)
+- (NSString *)hintForSource:(A2ContentPlatform)source {
+    return (source == A2ContentPlatformModrinth)
         ? @"Modrinth 免费开放，无需额外配置。"
         : @"CurseForge 需要在设置中填入 API Key。";
 }
 
 - (void)sourceChanged {
-    self.source = (A2ContentSource)_sourceSwitch.selectedSegmentIndex;
+    self.source = (A2ContentPlatform)_sourceSwitch.selectedSegmentIndex;
     _sourceHint.text = [self hintForSource:self.source];
 }
 

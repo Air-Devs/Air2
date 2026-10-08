@@ -53,6 +53,10 @@
 @property (nonatomic, strong) UILabel *versionMetaLabel;
 @property (nonatomic, strong) A2PrimaryButton *launchButton;
 
+/// 最近游玩
+@property (nonatomic, strong) A2GlassCard *recentCard;
+@property (nonatomic, strong) UIStackView *recentStack;
+
 @property (nonatomic, assign) BOOL didSetupConstraints;
 @property (nonatomic, assign) BOOL didPlayEntrance;
 @end
