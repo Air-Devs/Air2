@@ -2,6 +2,9 @@
 //  A2AppearanceSettings.m
 //  Air2
 //
+//  Copyright (C) 2026 Air-Devs and contributors.
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
 //  外观分组 —— 主题配色、外观模式、自定义背景。
 //
 //  主题配色用「大色盘弹窗」选择（对应 ZL2 的颜色主题对话框）：

@@ -2,6 +2,9 @@
 //  A2LauncherViewController.m
 //  Air2
 //
+//  Copyright (C) 2026 Air-Devs and contributors.
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
 //  主界面装配。布局细节委托给各卡片，本文件只负责：
 //    1. 三区骨架与约束
 //    2. 顶栏

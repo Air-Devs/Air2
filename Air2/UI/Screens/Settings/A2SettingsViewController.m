@@ -2,6 +2,9 @@
 //  A2SettingsViewController.m
 //  Air2
 //
+//  Copyright (C) 2026 Air-Devs and contributors.
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
 //  设置页 —— 左侧分类导航 + 右侧内容。
 //
 //  结构对齐 ZL2 的 SettingsScreen，左侧导航用共用的 A2CategoryNavView。

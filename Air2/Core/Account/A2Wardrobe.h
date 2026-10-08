@@ -2,6 +2,9 @@
 //  A2Wardrobe.h
 //  Air2
 //
+//  Copyright (C) 2026 Air-Devs and contributors.
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
 //  皮肤/披风获取 —— 纯 Foundation，不碰 UIKit。
 //
 //  设计决策（参考 ZL2 wardrobe，不照抄实现）：

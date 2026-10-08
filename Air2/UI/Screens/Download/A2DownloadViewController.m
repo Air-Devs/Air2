@@ -2,6 +2,9 @@
 //  A2DownloadViewController.m
 //  Air2
 //
+//  Copyright (C) 2026 Air-Devs and contributors.
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
 //  下载中心 —— 左侧分类导航 + 右侧内容。
 //
 //  结构对齐 ZL2 的 DownloadScreen：

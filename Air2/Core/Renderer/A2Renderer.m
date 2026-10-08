@@ -2,6 +2,9 @@
 //  A2Renderer.m
 //  Air2
 //
+//  Copyright (C) 2026 Air-Devs and contributors.
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
 //  见头文件：机制与决策收敛，加载归 Natives。
 //  只用 Foundation；可空字符串一律按“未设置”处理，避免上层传 @"" 时误判。
 //

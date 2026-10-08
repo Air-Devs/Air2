@@ -2,6 +2,9 @@
 //  A2GameInstaller.m
 //  Air2
 //
+//  Copyright (C) 2026 Air-Devs and contributors.
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
 
 #import "A2GameInstaller.h"
 #import "A2VersionIsolation.h"

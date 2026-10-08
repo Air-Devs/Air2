@@ -2,6 +2,9 @@
 //  A2Wardrobe.m
 //  Air2
 //
+//  Copyright (C) 2026 Air-Devs and contributors.
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
 //  见头文件：会话 profile 获取 + 非致命下载 + 单点落盘。
 //  只用 Foundation + NSURLSession；PNG 只存 data，不解成 UIImage（Core 禁 UIKit）。
 //

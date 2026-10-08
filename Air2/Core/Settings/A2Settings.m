@@ -2,6 +2,9 @@
 //  A2Settings.m
 //  Air2
 //
+//  Copyright (C) 2026 Air-Devs and contributors.
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
 //  见头文件注释：收敛散落的 NSUserDefaults key，不新增任何外部依赖。
 //  通知在写入线程直接 post，UI 侧收到后自行切主线程（与 ThemeManager 一致）。
 //

@@ -2,6 +2,9 @@
 //  A2DownloadListViewController.m
 //  Air2
 //
+//  Copyright (C) 2026 Air-Devs and contributors.
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
 //  资源列表 —— 接真实 Modrinth API。
 //
 //  搜索 + 筛选 + 分页，结果项显示项目名、说明、下载量、加载器标签。

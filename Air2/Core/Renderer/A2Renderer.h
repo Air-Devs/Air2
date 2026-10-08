@@ -2,6 +2,9 @@
 //  A2Renderer.h
 //  Air2
 //
+//  Copyright (C) 2026 Air-Devs and contributors.
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
 //  渲染后端描述 —— 纯数据，不含加载逻辑。
 //
 //  为什么是纯数据：

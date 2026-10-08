@@ -2,6 +2,9 @@
 //  A2ColorThemeDialog.m
 //  Air2
 //
+//  Copyright (C) 2026 Air-Devs and contributors.
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
 
 #import "A2ColorThemeDialog.h"
 #import "A2ColorWheel.h"

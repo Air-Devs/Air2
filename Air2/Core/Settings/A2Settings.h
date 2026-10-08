@@ -2,6 +2,9 @@
 //  A2Settings.h
 //  Air2
 //
+//  Copyright (C) 2026 Air-Devs and contributors.
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
 //  全局设置注册表 —— Core 层唯一允许直接读写 NSUserDefaults 的地方。
 //
 //  为什么需要：

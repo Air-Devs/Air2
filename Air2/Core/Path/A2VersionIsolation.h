@@ -2,6 +2,9 @@
 //  A2VersionIsolation.h
 //  Air2
 //
+//  Copyright (C) 2026 Air-Devs and contributors.
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
 //  版本隔离 —— 逻辑与 ZL2 完全对齐。
 //
 //  ZL2 的规则（已核对 GamePathManager.kt / VersionConfig.kt / Version.kt）：

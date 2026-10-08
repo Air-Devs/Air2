@@ -2,6 +2,9 @@
 //  A2AccountManager.m
 //  Air2
 //
+//  Copyright (C) 2026 Air-Devs and contributors.
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
 
 #import "A2AccountManager.h"
 #import "A2MicrosoftAuth.h"
