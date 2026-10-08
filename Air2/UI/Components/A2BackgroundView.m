@@ -165,6 +165,7 @@
     _dimOverlay.frame = self.bounds;
 
     CGFloat w = self.bounds.size.width;
+    CGFloat h = self.bounds.size.height;
 
     // 右侧渐隐：从透明过渡到当前表面色，让操作栏一侧有稳定的底色
     CGFloat fadeW = w * MAX(0.0, MIN(1.0, _fadeRatio));
