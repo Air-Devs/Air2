@@ -27,7 +27,8 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
 @property (nonatomic, strong) UILabel *descLabel;
 @property (nonatomic, strong) UIView *radioOuter;
 @property (nonatomic, strong) UIView *radioInner;
-@property (nonatomic, assign, getter=isSelected) BOOL selected;
+// selected 沿用 UIControl 自带的（不要重声明 BOOL selected，
+// 否则子类不会自动合成 _selected，见 CI 报错根因）
 @end
 
 @implementation A2StyleOptionRow
@@ -99,7 +100,7 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
 }
 
 - (void)setSelected:(BOOL)selected {
-    _selected = selected;
+    [super setSelected:selected];
     _radioInner.hidden = !selected;
     [self applyTheme];
 }
