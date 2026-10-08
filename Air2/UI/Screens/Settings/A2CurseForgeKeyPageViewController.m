@@ -34,6 +34,7 @@
 #import "A2Toast.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
+#import <SafariServices/SafariServices.h>
 
 @interface A2CurseForgeKeyPageViewController ()
 @property (nonatomic, strong) A2TextField *keyField;
@@ -61,6 +62,24 @@
     };
     [inputSection addCustomView:_keyField];
     [self addSection:inputSection];
+
+    // ---- 申请链接 ----
+    A2SettingsSection *applySection = [[A2SettingsSection alloc] initWithTitle:nil];
+    A2SettingsRow *applyRow = [[A2SettingsRow alloc] init];
+    applyRow.symbolName = @"link";
+    applyRow.title = @"去申请 API Key";
+    applyRow.subtitle = @"console.curseforge.com，免费";
+    applyRow.accessory = A2SettingsRowAccessoryDisclosure;
+    applyRow.onTap = ^{
+        NSURL *url = [NSURL URLWithString:@"https://console.curseforge.com/"];
+        if (!url) return;
+        // 应用内 Safari：申请完直接关掉回来，不用手动切 App（登录页同款做法）。
+        SFSafariViewController *safari = [[SFSafariViewController alloc] initWithURL:url];
+        safari.preferredControlTintColor = A2ThemeManager.shared.scheme.cPrimary;
+        [self presentViewController:safari animated:YES completion:nil];
+    };
+    [applySection addRow:applyRow];
+    [self addSection:applySection];
 
     // ---- 状态 ----
     A2SettingsSection *statusSection = [[A2SettingsSection alloc] initWithTitle:@"状态"];
