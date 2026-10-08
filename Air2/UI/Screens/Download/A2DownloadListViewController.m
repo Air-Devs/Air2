@@ -26,12 +26,12 @@
 
 #import "A2DownloadListViewController.h"
 #import "A2GlassCard.h"
+#import "A2ProjectDetailViewController.h"
 #import "A2Toast.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
 #import "A2ContentSource.h"
-#import "A2DownloadEngine.h"
 
 static NSString *const kCellID = @"A2DownloadCell";
 
@@ -607,98 +607,11 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     A2ContentItem *p = _items[indexPath.row];
-
-    if (!p.downloadable) {
-        [A2Toast show:@"该作者禁止第三方分发，请前往官网下载" inView:self.view];
-        return;
-    }
-
-    // 显示可下载的版本列表
-    __weak typeof(self) weakSelf = self;
-    [[A2ContentSource sourceForPlatform:p.platform] versionsForProject:p.projectID
-                                                          gameVersion:_gameVersionFilter
-                                                               loader:_loaderFilter
-                                                           completion:^(NSArray<A2ContentVersion *> *versions, NSError *error) {
-        __strong typeof(weakSelf) self = weakSelf;
-        if (!self) return;
-        if (error || versions.count == 0) {
-            [A2Toast show:@"没有可用的版本" inView:self.view];
-            return;
-        }
-        [self showVersionPicker:versions project:p];
-    }];
-}
-
-- (void)showVersionPicker:(NSArray<A2ContentVersion *> *)versions project:(A2ContentItem *)project {
-    UIAlertController *sheet =
-        [UIAlertController alertControllerWithTitle:project.title
-                                            message:@"选择要下载的版本"
-                                     preferredStyle:UIAlertControllerStyleActionSheet];
-
-    NSInteger max = MIN(10, (NSInteger)versions.count);
-    for (NSInteger i = 0; i < max; i++) {
-        A2ContentVersion *v = versions[i];
-        NSString *title = [NSString stringWithFormat:@"%@%@", v.versionNumber,
-                           v.loaders.count ? [NSString stringWithFormat:@" · %@", v.loaders.firstObject] : @""];
-        [sheet addAction:[UIAlertAction actionWithTitle:title
-                                                 style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *action) {
-            [self downloadVersion:v project:project];
-        }]];
-    }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    sheet.popoverPresentationController.sourceView = self.view;
-    sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds),
-                                                                CGRectGetMidY(self.view.bounds), 1, 1);
-    [self presentViewController:sheet animated:YES completion:nil];
-}
-
-- (void)downloadVersion:(A2ContentVersion *)version project:(A2ContentItem *)project {
-    if (version.candidateURLs.count == 0) {
-        [A2Toast show:@"此版本没有可下载的文件（可能作者禁止第三方分发）"
-               inView:self.view];
-        return;
-    }
-
-    // 目标目录：按资源类型落盘
-    NSString *subdir = [self directoryNameForCategory];
-    NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
-    NSString *dir = [[[docs stringByAppendingPathComponent:@".minecraft"]
-                      stringByAppendingPathComponent:subdir] copy];
-    [NSFileManager.defaultManager createDirectoryAtPath:dir
-                            withIntermediateDirectories:YES attributes:nil error:nil];
-
-    NSString *fileName = version.fileName.length ? version.fileName
-        : [NSString stringWithFormat:@"%@-%@.jar", project.projectID, version.versionNumber];
-    NSString *dest = [dir stringByAppendingPathComponent:fileName];
-
-    [A2Toast show:[NSString stringWithFormat:@"开始下载 %@", fileName] inView:self.view];
-
-    A2DownloadRequest *req = [A2DownloadRequest new];
-    // candidateURLs 里已含镜像候选（按设置排序），下载引擎会依次尝试
-    NSMutableArray<NSURL *> *urls = [NSMutableArray array];
-    for (NSString *u in version.candidateURLs) {
-        NSURL *url = [NSURL URLWithString:u];
-        if (url) [urls addObject:url];
-    }
-    req.candidateURLs = urls;
-    req.destinationPath = dest;
-    req.expectedSize = version.fileSize;
-    req.allowZipFallbackCheck = YES;
-
-    [[A2DownloadEngine sharedClient] startRequest:req
-        progress:nil
-           speed:nil
-      completion:^(BOOL success, NSError *error) {
-        dispatch_async(dispatch_get_main_queue(), ^{
-            if (success) {
-                [A2Toast show:[NSString stringWithFormat:@"已下载 %@", fileName] inView:self.view];
-            } else {
-                [A2Toast show:[NSString stringWithFormat:@"下载失败：%@", error.localizedDescription]
-                       inView:self.view];
-            }
-        });
-    }];
+    // 详情页负责禁分发空态与版本下载，列表只路由。
+    A2ProjectDetailViewController *vc = [[A2ProjectDetailViewController alloc]
+                                         initWithProject:p
+                                         targetSubdir:[self directoryNameForCategory]];
+    [self.navigationController pushViewController:vc animated:YES];
 }
 
 /// 目标目录用统一映射，避免各处硬编码字符串
