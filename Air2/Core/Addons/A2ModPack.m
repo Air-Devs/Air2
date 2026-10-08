@@ -99,7 +99,7 @@ static NSString *const kMRIndexName = @"modrinth.index.json";
 
 + (A2ModPackPlan *)parseModrinth:(A2ZipReader *)z error:(NSError **)error {
     NSData *data = [z dataForEntry:kMRIndexName];
-    NSDictionary *json = [selfJSONObject:data error:error];
+    NSDictionary *json = [self selfJSONObject:data error:error];
     if (!json) return nil;
     // game 必须为 minecraft，其他游戏的包（如 Bedrock 插件包）明确拒绝。
     if (![[json[@"game"] isKindOfClass:NSString.class] ? json[@"game"] : @"" isEqualToString:@"minecraft"]) {
@@ -148,7 +148,7 @@ static NSString *const kMRIndexName = @"modrinth.index.json";
 
 + (A2ModPackPlan *)parseCurseForge:(A2ZipReader *)z error:(NSError **)error {
     NSData *data = [z dataForEntry:kCFManifestName];
-    NSDictionary *json = [selfJSONObject:data error:error];
+    NSDictionary *json = [self selfJSONObject:data error:error];
     if (!json) return nil;
     NSString *type = [json[@"manifestType"] isKindOfClass:NSString.class] ? json[@"manifestType"] : @"";
     if (![type isEqualToString:@"minecraftModpack"]) {
