@@ -29,6 +29,9 @@ static void A2Main(dispatch_block_t block) {
 @property (nonatomic, copy, nullable) void (^completionBlock)(BOOL, NSError *);
 @end
 
+@implementation A2InstallRequest
+@end
+
 @implementation A2GameInstaller
 
 - (instancetype)init {
