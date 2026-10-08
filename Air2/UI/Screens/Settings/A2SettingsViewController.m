@@ -51,10 +51,10 @@
     [super viewDidLoad];
     self.pageTitle = @"设置";
 
-    // 外观之后是诊断 —— 其余等对应功能实现后再加。
-    // 见 A2SettingsSections.h 的说明。
+    // Key 输入独立成“资源下载”顶级分类，不再藏在外观下。
     NSArray<A2NavCategory *> *cats = @[
         [A2NavCategory title:@"外观" symbol:@"paintpalette.fill"],
+        [A2NavCategory title:@"资源下载" symbol:@"arrow.down.circle"],
         [A2NavCategory title:@"诊断" symbol:@"stethoscope"],
     ];
 
@@ -110,8 +110,9 @@
 
     if (index == 0) {
         [_detailStack addArrangedSubview:[A2AppearanceSettings buildWithHost:self]];
-        [_detailStack addArrangedSubview:[A2AppearanceSettings buildSourceSectionWithHost:self]];
     } else if (index == 1) {
+        [_detailStack addArrangedSubview:[A2AppearanceSettings buildSourceSectionWithHost:self]];
+    } else if (index == 2) {
         [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildWithHost:self]];
     }
 
