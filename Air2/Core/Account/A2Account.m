@@ -54,7 +54,7 @@
 
 - (NSString *)typeDisplayName {
     switch (_type) {
-        case A2AccountTypeMicrosoft:  return @"Microsoft 正版账号";
+        case A2AccountTypeMicrosoft:  return @"正版账号";
         case A2AccountTypeOffline:    return @"离线登录";
         case A2AccountTypeThirdParty: return _authServerURL.length
             ? [NSString stringWithFormat:@"第三方（%@）", [self hostOf:_authServerURL]]

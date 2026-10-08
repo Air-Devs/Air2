@@ -27,6 +27,8 @@
 //  A2AccountManager）并自动切换为当前账号。
 //
 
+#import <SafariServices/SafariServices.h>
+
 #import "A2LoginViewController.h"
 #import "A2MicrosoftAuth.h"
 #import "A2AccountManager.h"
@@ -88,7 +90,7 @@
     _modeStack.axis = UILayoutConstraintAxisVertical;
     _modeStack.spacing = A2SpaceL;
 
-    _segmented = [[A2SegmentedControl alloc] initWithTitles:@[@"Microsoft", @"离线", @"第三方"]];
+    _segmented = [[A2SegmentedControl alloc] initWithTitles:@[@"正版", @"离线", @"第三方"]];
     __weak typeof(self) weakSelf = self;
     _segmented.onSegmentChange = ^(NSInteger index) {
         __strong typeof(weakSelf) self = weakSelf;
@@ -131,7 +133,7 @@
 
     switch (mode) {
         case A2LoginModeMicrosoft:
-            self.pageTitle = @"Microsoft 登录";
+            self.pageTitle = @"正版账号登录";
             [self buildMicrosoftUI];
             [self beginMicrosoftLogin];
             break;
@@ -239,8 +241,10 @@
         [A2Log log:@"Login: 拿到设备码，开始轮询授权结果"];
         self.deviceInfo = info;
         self.codeLabel.text = info.userCode;
+        // 自动复制：用户接下来要切到浏览器粘贴，省掉手动点「复制代码」这一步
+        UIPasteboard.generalPasteboard.string = info.userCode;
         self.hintLabel.text = [NSString stringWithFormat:
-            @"访问 %@\n输入上方代码完成登录", info.verificationURI];
+            @"代码已复制到剪贴板\n访问 %@ 输入上方代码完成登录", info.verificationURI];
         self.codeCopyButton.enabled = YES;
         self.codeCopyButton.alpha = 1.0;
         self.openButton.enabled = YES;
@@ -287,9 +291,16 @@
 }
 
 - (void)openVerificationPage {
-    if (!_deviceInfo.verificationURI) return;
+    if (_deviceInfo.verificationURI.length == 0) return;
     NSURL *url = [NSURL URLWithString:_deviceInfo.verificationURI];
-    if (url) [UIApplication.sharedApplication openURL:url options:@{} completionHandler:nil];
+    if (!url) return;
+
+    // 用应用内 Safari 而不是跳出去：授权页盖在启动器上，
+    // 用户输完码可以直接关掉回来，不用靠手动切 App。
+    [A2Log log:@"Login: 打开微软授权页"];
+    SFSafariViewController *safari = [[SFSafariViewController alloc] initWithURL:url];
+    safari.preferredControlTintColor = A2ThemeManager.shared.scheme.cPrimary;
+    [self presentViewController:safari animated:YES completion:nil];
 }
 
 #pragma mark - 表单（离线 / 第三方）

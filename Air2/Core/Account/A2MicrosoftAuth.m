@@ -22,10 +22,17 @@
 //
 
 #import "A2MicrosoftAuth.h"
+#import "A2Log.h"
 
-/// 微软 OAuth 端点
-static NSString *const kDeviceCodeURL   = @"https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
-static NSString *const kTokenURL        = @"https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
+/// 微软 OAuth 端点。
+///
+/// 必须走 Live Connect（login.live.com），不能换成 AAD 的
+/// login.microsoftonline.com/consumers：客户端 ID 00000000402b5328 是
+/// 注册在 Live Connect 上的应用，AAD 目录里不存在它，请求会直接被拒：
+///   AADSTS700016: Application with identifier '00000000402b5328'
+///   was not found in the directory ...
+static NSString *const kDeviceCodeURL   = @"https://login.live.com/oauth20_connect.srf";
+static NSString *const kTokenURL        = @"https://login.live.com/oauth20_token.srf";
 /// Xbox Live 认证
 static NSString *const kXboxAuthURL     = @"https://user.auth.xboxlive.com/user/authenticate";
 static NSString *const kXstsAuthURL     = @"https://xsts.auth.xboxlive.com/xsts/authorize";
@@ -33,8 +40,10 @@ static NSString *const kXstsAuthURL     = @"https://xsts.auth.xboxlive.com/xsts/
 static NSString *const kMCLoginURL      = @"https://api.minecraftservices.com/authentication/login_with_xbox";
 static NSString *const kMCProfileURL    = @"https://api.minecraftservices.com/minecraft/profile";
 
-/// scope 必须带 offline_access 才有 refresh token
-static NSString *const kScope = @"XboxLive.signin offline_access";
+/// Live Connect 的 Xbox Live 委托 scope。
+/// 这个值对应服务端 user.auth.xboxlive.com，是 Live Connect 这套流程的取值；
+/// AAD 那套（XboxLive.signin offline_access）在这里会被拒。
+static NSString *const kScope = @"service::user.auth.xboxlive.com::MBI_SSL";
 
 /// XSTS 的依赖方标识（Minecraft 专用）
 static NSString *const kRelyingParty = @"rp://api.minecraftservices.com/";
@@ -61,7 +70,9 @@ static void A2Main(dispatch_block_t b) {
 - (instancetype)init {
     self = [super init];
     if (!self) return nil;
-    // 这是微软公开的、供第三方启动器使用的客户端 ID（Minecraft 官方启动器同款）
+    // 微软公开的、供第三方启动器使用的 Minecraft 客户端 ID。
+    // 它注册在 Live Connect 上，所以只能配 login.live.com 的端点用 ——
+    // 换成 AAD 端点会直接报 AADSTS700016（见文件顶部 kDeviceCodeURL 注释）。
     _clientID = @"00000000402b5328";
     _session = [NSURLSession sessionWithConfiguration:
                 NSURLSessionConfiguration.defaultSessionConfiguration];
@@ -82,7 +93,8 @@ static void A2Main(dispatch_block_t b) {
     req.HTTPMethod = @"POST";
     [req setValue:@"application/x-www-form-urlencoded" forHTTPHeaderField:@"Content-Type"];
 
-    NSString *body = [NSString stringWithFormat:@"client_id=%@&scope=%@",
+    NSString *body = [NSString stringWithFormat:
+                      @"client_id=%@&scope=%@&response_type=device_code",
                       [self urlEncode:_clientID], [self urlEncode:kScope]];
     req.HTTPBody = [body dataUsingEncoding:NSUTF8StringEncoding];
 
@@ -207,11 +219,13 @@ static void A2Main(dispatch_block_t b) {
     if (progress) progress(@"正在获取 Xbox 凭据…");
 
     // ---- Xbox Live ----
+    // RpsTicket 直接用 token 原文。加 "d=" 前缀是 AAD 那套
+    // XboxLive.signin 流程的写法，配 MBI_SSL 的 token 会认证失败。
     NSDictionary *xblBody = @{
         @"Properties": @{
             @"AuthMethod": @"RPS",
             @"SiteName": @"user.auth.xboxlive.com",
-            @"RpsTicket": [NSString stringWithFormat:@"d=%@", msToken],
+            @"RpsTicket": msToken,
         },
         @"RelyingParty": @"http://auth.xboxlive.com",
         @"TokenType": @"JWT",
@@ -233,23 +247,27 @@ static void A2Main(dispatch_block_t b) {
         // ---- XSTS ----
         if (progress) progress(@"正在验证 Xbox 账号…");
         NSDictionary *xstsBody = @{
-            @"Properties": @{ @"UserTokens": @[xblToken] },
+            @"Properties": @{
+                @"SandboxId": @"RETAIL",
+                @"UserTokens": @[xblToken],
+            },
             @"RelyingParty": kRelyingParty,
             @"TokenType": @"JWT",
         };
 
         [self postJSON:kXstsAuthURL body:xstsBody completion:^(NSDictionary *json2, NSError *error2) {
             if (error2) {
-                // XSTS 有专门的错误码，翻译成人话
-                A2Main(^{
-                    if (completion) completion(nil, [self translateXSTSError:error2]);
-                });
+                // 网络层错误原样透传（XSTS 的业务拒绝不走这里，见下）
+                A2Main(^{ if (completion) completion(nil, error2); });
                 return;
             }
 
             NSString *xstsToken = json2[@"Token"];
             if (xstsToken.length == 0) {
-                A2Main(^{ if (completion) completion(nil, [self err:@"XSTS 令牌获取失败"]); });
+                // XSTS 的业务拒绝是 HTTP 401 + XErr 数字码，翻译成人话再抛给 UI
+                NSError *xstsErr = [self xstsErrorFromResponse:json2];
+                [A2Log log:@"MSAuth: XSTS 被拒 %@", xstsErr.localizedDescription];
+                A2Main(^{ if (completion) completion(nil, xstsErr); });
                 return;
             }
 
@@ -332,11 +350,13 @@ static void A2Main(dispatch_block_t b) {
             completion:(void (^)(A2Account *, NSError *))completion {
 
     if (!account.canRefresh) {
+        [A2Log log:@"MSAuth: 续期中止，账号 %@ 不支持续期", account.username];
         if (completion) {
             completion(nil, [self err:@"此账号不支持自动续期，请重新登录"]);
         }
         return;
     }
+    [A2Log log:@"MSAuth: 开始续期 %@", account.username];
 
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
                                [NSURL URLWithString:kTokenURL]];
@@ -352,16 +372,22 @@ static void A2Main(dispatch_block_t b) {
 
     NSURLSessionDataTask *t = [_session dataTaskWithRequest:req
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
-        if (error) { A2Main(^{ if (completion) completion(nil, error); }); return; }
+        if (error) {
+            [A2Log log:@"MSAuth: 续期请求失败 %@", error.localizedDescription];
+            A2Main(^{ if (completion) completion(nil, error); });
+            return;
+        }
 
         NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
         NSString *msToken = json[@"access_token"];
         if (msToken.length == 0) {
             NSString *desc = json[@"error_description"] ?: @"续期失败，请重新登录";
+            [A2Log log:@"MSAuth: 续期未拿到 token %@", desc];
             A2Main(^{ if (completion) completion(nil, [self err:desc]); });
             return;
         }
 
+        [A2Log log:@"MSAuth: 续期拿到新 token，继续换取 MC 令牌"];
         NSString *newRefresh = json[@"refresh_token"] ?: account.refreshToken;
 
         // 重新走一遍换取流程（新 token 需要重新换 MC 令牌）
@@ -401,10 +427,36 @@ static void A2Main(dispatch_block_t b) {
     [t resume];
 }
 
-/// XSTS 的错误码有特定含义，翻译成人能看懂的话
-- (NSError *)translateXSTSError:(NSError *)error {
-    // 网络层错误直接透传
-    return error;
+/// XSTS 用 401 + `XErr` 数字码说明拒绝原因，翻成用户能看懂的说明。
+/// 只挑玩家最可能撞到的几个；其余的把错误码一起回显，
+/// 用户报障时能直接从日志里抄下来。
+- (NSError *)xstsErrorFromResponse:(NSDictionary *)json {
+    NSInteger code = [json[@"XErr"] integerValue];
+    if (code == 0) return [self err:@"XSTS 令牌获取失败"];
+
+    NSString *msg = nil;
+    switch (code) {
+        case 2148916227:
+            msg = @"此微软账号已被 Xbox Live 封禁";
+            break;
+        case 2148916233:
+            msg = @"此微软账号还没有 Xbox 档案，请先在 xbox.com 登录一次创建";
+            break;
+        case 2148916235:
+            msg = @"Xbox Live 在你所在的国家/地区不可用";
+            break;
+        case 2148916236:
+        case 2148916237:
+            msg = @"此账号需要先完成成人验证";
+            break;
+        case 2148916238:
+            msg = @"未成年账号需由家长账号加入家庭组后才能登录";
+            break;
+        default:
+            msg = [NSString stringWithFormat:@"Xbox 验证失败（错误码 %ld）", (long)code];
+            break;
+    }
+    return [self err:msg];
 }
 
 - (NSString *)urlEncode:(NSString *)s {
