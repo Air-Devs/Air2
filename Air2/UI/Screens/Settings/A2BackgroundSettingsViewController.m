@@ -99,7 +99,7 @@
     clearRow.title = @"恢复默认渐变";
     clearRow.subtitle = @"使用当前主题的配色";
     clearRow.accessory = A2SettingsRowAccessoryDisclosure;
-    clearRow.showsBottomSeparator = NO;
+    clearRow.showsSeparator = NO;
     clearRow.onTap = ^{
         [A2ThemeManager.shared clearBackgroundImage];
         [self refreshPreview];
@@ -153,7 +153,7 @@
     _fadeRow.title = @"操作栏渐隐宽度";
     _fadeRow.subtitle = @"背景向操作栏过渡的遮罩范围";
     _fadeRow.valueText = [NSString stringWithFormat:@"%.0f%%", tm.backgroundFadeRatio * 100];
-    _fadeRow.showsBottomSeparator = NO;
+    _fadeRow.showsSeparator = NO;
     UISlider *fadeSlider = [self makeSlider:0 max:70 value:tm.backgroundFadeRatio * 100];
     [fadeSlider addAction:[UIAction actionWithHandler:^(UIAction *action) {
         UISlider *s = action.sender;
