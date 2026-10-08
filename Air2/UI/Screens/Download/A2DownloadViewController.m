@@ -63,8 +63,10 @@
 @implementation A2DownloadViewController
 
 - (void)viewDidLoad {
-    [super viewDidLoad];
+    // 必须写在 super 之前：基类在 [super viewDidLoad] 里就按它决定建 scroll 还是
+    // plain 内容容器。晚设会让 plainContentView 一直是 nil。
     self.usesScrollContent = NO;
+    [super viewDidLoad];
     self.pageTitle = @"下载";
     self.source = A2ContentPlatformModrinth;
 

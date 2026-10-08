@@ -44,8 +44,11 @@
 @implementation A2SettingsViewController
 
 - (void)viewDidLoad {
-    [super viewDidLoad];
+    // 必须写在 super 之前：基类在 [super viewDidLoad] 里就按它决定建 scroll 还是
+    // plain 内容容器。晚设会让 plainContentView 一直是 nil，后面的约束拿到 nil
+    // 锚点，直接抛 NSInvalidArgumentException。
     self.usesScrollContent = NO;
+    [super viewDidLoad];
     self.pageTitle = @"设置";
 
     // 外观之后是诊断 —— 其余等对应功能实现后再加。

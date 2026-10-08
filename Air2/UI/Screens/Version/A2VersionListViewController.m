@@ -135,8 +135,10 @@
 @implementation A2VersionListViewController
 
 - (void)viewDidLoad {
-    [super viewDidLoad];
+    // 必须写在 super 之前：基类在 [super viewDidLoad] 里就按它决定建 scroll 还是
+    // plain 内容容器。晚设会让 plainContentView 一直是 nil。
     self.usesScrollContent = NO;   // 自己管布局
+    [super viewDidLoad];
     self.pageTitle = @"版本管理";
     _rowViews = [NSMutableArray array];
 
