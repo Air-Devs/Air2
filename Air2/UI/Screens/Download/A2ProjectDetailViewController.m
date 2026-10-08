@@ -27,6 +27,7 @@
 #import "A2ProjectDetailViewController.h"
 #import "A2ContentSource.h"
 #import "A2DownloadManifest.h"
+#import "A2VersionIsolation.h"
 #import "A2GlassCard.h"
 #import "A2PrimaryButton.h"
 #import "A2Toast.h"
@@ -272,15 +273,18 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
         return;
     }
 
-    NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
-    NSString *dir = [[[docs stringByAppendingPathComponent:@".minecraft"]
-                      stringByAppendingPathComponent:_targetSubdir] copy];
-    [NSFileManager.defaultManager createDirectoryAtPath:dir
-                            withIntermediateDirectories:YES attributes:nil error:nil];
-
     NSString *fileName = version.fileName.length ? version.fileName
         : [NSString stringWithFormat:@"%@-%@.jar", _project.projectID, version.versionNumber];
-    NSString *dest = [dir stringByAppendingPathComponent:fileName];
+    // 落盘路径走唯一出口（A2GamePath），View 不手拼 Documents 路径。
+    A2GamePath *path = [A2GamePath pathWithGameHome:A2GamePath.defaultGameHome];
+    NSError *pathErr = nil;
+    NSString *dest = [path downloadDestinationInSubdir:_targetSubdir
+                                              fileName:fileName
+                                                 error:&pathErr];
+    if (!dest) {
+        [A2Toast show:(pathErr.localizedDescription ?: @"目标目录不可用") inView:self.view];
+        return;
+    }
 
     [A2Toast show:[NSString stringWithFormat:@"开始下载 %@", fileName] inView:self.view];
 

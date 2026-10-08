@@ -24,6 +24,7 @@
 //
 
 #import "A2DownloadManifest.h"
+#import "A2VersionIsolation.h"
 
 @implementation A2DownloadManifest {
     dispatch_queue_t _queue;
@@ -136,10 +137,10 @@
     NSString *fileName = r[@"fileName"];
     NSString *subdir = r[@"subdir"];
     if (![fileName isKindOfClass:NSString.class] || fileName.length == 0) return NO;
-    NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
-                                                        NSUserDomainMask, YES).firstObject;
-    NSString *path = [[[docs stringByAppendingPathComponent:@".minecraft"]
-                       stringByAppendingPathComponent:([subdir isKindOfClass:NSString.class] ? subdir : @"")]
+    if (![subdir isKindOfClass:NSString.class]) subdir = @"";
+    // 拼路径走唯一出口，不手写 Documents 拼接。
+    A2GamePath *p = [A2GamePath pathWithGameHome:A2GamePath.defaultGameHome];
+    NSString *path = [[p.gameHome stringByAppendingPathComponent:subdir]
                       stringByAppendingPathComponent:fileName];
     return [NSFileManager.defaultManager fileExistsAtPath:path];
 }
