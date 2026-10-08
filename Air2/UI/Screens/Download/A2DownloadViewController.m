@@ -41,6 +41,8 @@
 
 #import "A2DownloadViewController.h"
 #import "A2CategoryNavView.h"
+#import "A2CurseForgeAPI.h"
+#import "A2CurseForgeKeyPrompt.h"
 #import "A2DownloadListViewController.h"
 #import "A2GameVersionListViewController.h"
 #import "A2ContentSource.h"
@@ -197,7 +199,21 @@
 }
 
 - (void)sourceChanged {
-    self.source = (A2ContentPlatform)_sourceSwitch.selectedSegmentIndex;
+    A2ContentPlatform picked = (A2ContentPlatform)_sourceSwitch.selectedSegmentIndex;
+    // 切 CurseForge 但无 Key：弹框要 Key，取消则回退 Modrinth，不留不可用态。
+    if (picked == A2ContentPlatformCurseForge && ![A2CurseForgeAPI hasAPIKey]) {
+        [A2CurseForgeKeyPrompt promptFrom:self completion:^(BOOL saved) {
+            if (saved) {
+                self.source = A2ContentPlatformCurseForge;
+            } else {
+                self.sourceSwitch.selectedSegmentIndex = 0;
+                self.source = A2ContentPlatformModrinth;
+            }
+            self.sourceHint.text = [self hintForSource:self.source];
+        }];
+        return;
+    }
+    self.source = picked;
     _sourceHint.text = [self hintForSource:self.source];
 }
 
