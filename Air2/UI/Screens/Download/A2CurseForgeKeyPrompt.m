@@ -30,6 +30,30 @@
 
 @implementation A2CurseForgeKeyPrompt
 
++ (void)saveValidatedKey:(NSString *)key
+             completion:(void (^)(BOOL, NSError *))completion {
+    void (^done)(BOOL, NSError *) = ^(BOOL valid, NSError *err) {
+        if ([NSThread isMainThread]) completion(valid, err);
+        else dispatch_async(dispatch_get_main_queue(), ^{ completion(valid, err); });
+    };
+    if (key.length == 0) {
+        done(NO, [NSError errorWithDomain:@"A2CurseForgeKey" code:1
+                                 userInfo:@{NSLocalizedDescriptionKey: @"Key 不能为空"}]);
+        return;
+    }
+    // 先暂存旧 Key：新 Key 无效时恢复，不把用户原有可用 Key 洗掉。
+    NSString *oldKey = [A2CurseForgeAPI shared].apiKey;
+    [A2CurseForgeAPI setAPIKey:key];
+    [[A2CurseForgeAPI shared] validateKeyWithCompletion:^(BOOL valid, NSError *error) {
+        if (valid) {
+            done(YES, nil);
+        } else {
+            [A2CurseForgeAPI setAPIKey:oldKey];
+            done(NO, error);
+        }
+    }];
+}
+
 + (void)promptFrom:(UIViewController *)host
         completion:(void (^)(BOOL))completion {
     void (^done)(BOOL) = ^(BOOL saved) {
@@ -62,22 +86,16 @@
             done(NO);
             return;
         }
-        // 先暂存旧 Key：新 Key 无效时恢复，不把用户原有可用 Key洗掉。
-        NSString *oldKey = [A2CurseForgeAPI shared].apiKey;
-        [A2CurseForgeAPI setAPIKey:key];
         [A2Toast show:@"正在验证…" inView:host.view];
-        [[A2CurseForgeAPI shared] validateKeyWithCompletion:^(BOOL valid, NSError *error) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if (valid) {
-                    [A2Toast show:@"已保存到钥匙串" inView:host.view];
-                    done(YES);
-                } else {
-                    [A2CurseForgeAPI setAPIKey:oldKey];
-                    [A2Toast show:(error.localizedDescription ?: @"Key 无效，未保存")
-                           inView:host.view];
-                    done(NO);
-                }
-            });
+        [self saveValidatedKey:key completion:^(BOOL valid, NSError *error) {
+            if (valid) {
+                [A2Toast show:@"已保存到钥匙串" inView:host.view];
+                done(YES);
+            } else {
+                [A2Toast show:(error.localizedDescription ?: @"Key 无效，未保存")
+                       inView:host.view];
+                done(NO);
+            }
         }];
     }]];
     [host presentViewController:alert animated:YES completion:nil];
