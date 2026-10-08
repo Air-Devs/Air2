@@ -37,6 +37,7 @@
 #import "A2BackgroundSettingsViewController.h"
 #import "A2ColorThemeDialog.h"
 #import "A2CurseForgeAPI.h"
+#import "A2CurseForgeKeyPageViewController.h"
 #import "A2MirrorResolver.h"
 #import "A2Toast.h"
 
@@ -164,9 +165,12 @@
     cfRow.subtitle = hasKey ? @"已配置" : @"未配置，无法使用 CurseForge 资源";
     cfRow.valueText = hasKey ? @"已设置" : @"未设置";
     cfRow.accessory = A2SettingsRowAccessoryDisclosure;
+    // 弱引用供下方清除行刷新状态用。
     __weak A2SettingsRow *weakCfRow = cfRow;
     cfRow.onTap = ^{
-        [self showKeyEditorFrom:host row:weakCfRow];
+        // 独立输入页承接填写/验证/清除；下载页拦截仍走共享弹窗。
+        A2CurseForgeKeyPageViewController *vc = [[A2CurseForgeKeyPageViewController alloc] init];
+        [host.navigationController pushViewController:vc animated:YES];
     };
     [section addRow:cfRow];
 
@@ -252,38 +256,6 @@
     [section addRow:clearRow];
 
     return section;
-}
-
-+ (void)showKeyEditorFrom:(UIViewController *)host row:(A2SettingsRow *)row {
-    UIAlertController *alert =
-        [UIAlertController alertControllerWithTitle:@"CurseForge API Key"
-                                            message:@"粘贴从 console.curseforge.com 获取的 Key"
-                                     preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-        tf.placeholder = @"$2a$10$...";
-        tf.autocapitalizationType = UITextAutocapitalizationTypeNone;
-        tf.autocorrectionType = UITextAutocorrectionTypeNo;
-        tf.clearButtonMode = UITextFieldViewModeWhileEditing;
-        // Key 是凭据，输入时不显示明文
-        tf.secureTextEntry = YES;
-    }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消"
-                                             style:UIAlertActionStyleCancel
-                                           handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"保存"
-                                             style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *a) {
-        NSString *key = alert.textFields.firstObject.text;
-        if (key.length == 0) {
-            [A2Toast show:@"Key 不能为空" inView:host.view];
-            return;
-        }
-        [A2CurseForgeAPI setAPIKey:key];
-        row.subtitle = @"已配置";
-        row.valueText = @"已设置";
-        [A2Toast show:@"已保存到钥匙串" inView:host.view];
-    }]];
-    [host presentViewController:alert animated:YES completion:nil];
 }
 
 @end
