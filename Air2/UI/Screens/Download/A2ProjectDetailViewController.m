@@ -232,8 +232,26 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
             [self.tableView reloadData];
             self.emptyLabel.hidden = YES;
             self.downloadButton.enabled = YES;
+            [self refreshUpdateState];
         });
     }];
+}
+
+// 更新提示：装过该项目、且最新版没装 → 主按钮改“更新到 x”。
+// 不在列表页做行级提示：那需要每行一次版本请求（N+1），
+// 又贵又抖；详情页版本已拉到手，对比零成本。
+- (void)refreshUpdateState {
+    A2ContentVersion *latest = _versions.firstObject;
+    if (!latest) return;
+    BOOL installedProject = [[A2DownloadManifest shared] isProjectInstalled:_project.projectID];
+    BOOL latestInstalled = [[A2DownloadManifest shared] isVersionInstalled:_project.projectID
+                                                                versionID:latest.versionID];
+    if (installedProject && !latestInstalled) {
+        _downloadButton.title = [NSString stringWithFormat:@"更新到 %@",
+                                 latest.versionNumber];
+    } else {
+        _downloadButton.title = @"下载最新版";
+    }
 }
 
 #pragma mark - 下载（从列表页搬家，逻辑逐行未改）
@@ -315,6 +333,7 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
     cell.textLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
     cell.textLabel.textColor = A2ThemeManager.shared.scheme.cOnSurface;
     NSMutableArray<NSString *> *bits = [NSMutableArray array];
+    if (indexPath.row == 0) [bits addObject:@"最新"];
     if (v.loaders.count) [bits addObject:v.loaders.firstObject];
     if (v.fileSize > 0) [bits addObject:[self displaySize:v.fileSize]];
     if (v.gameVersions.count) [bits addObject:[v.gameVersions componentsJoinedByString:@", "]];
