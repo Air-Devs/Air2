@@ -22,14 +22,12 @@
 //
 //  版本管理 —— 左侧游戏目录 + 右侧版本列表。
 //
-//  结构对齐 ZL2 的 VersionsManageScreen：
+//  布局（左侧目录 + 右侧列表）：
 //    ┌──────────┬──────────────────────────────────────┐
-//    │ 默认目录  │  ○ [1] 1.21.5-fabric    📌 ⚙️ ⋯      │
-//    │ 自定义目录│     Fabric 0.16.10 · Java 21          │
+//    │ 游戏目录  │  ○ [1] 1.21.5-fabric    📌 ⚙️ ⋯      │
+//    │ (当前)   │     Fabric 0.16.10 · 隔离·仅 Mod       │
 //    │          │  ○ [1] 1.20.1-forge     📌 ⚙️ ⋯      │
-//    │          │     Forge 47.2.0                      │
-//    │ [+ 添加] │                                       │
-//    │ [清理]   │                                       │
+//    │          │     Forge 47.2.0 · 隔离·仅 Mod         │
 //    └──────────┴──────────────────────────────────────┘
 //
 //  列表行间距 12，页面内边距 12。
@@ -37,6 +35,7 @@
 
 #import "A2VersionListViewController.h"
 #import "A2VersionSettingsViewController.h"
+#import "A2InstallingViewController.h"
 #import "A2VersionManager.h"
 #import "A2VersionRowView.h"
 #import "A2GlassCard.h"
@@ -130,6 +129,8 @@
 @property (nonatomic, strong) UIStackView *listStack;
 @property (nonatomic, strong) NSArray<NSDictionary<NSString *, id> *> *versions;
 @property (nonatomic, strong) NSMutableArray<A2VersionRowView *> *rowViews;
+@property (nonatomic, weak, nullable) UILabel *emptyTitleLabel;
+@property (nonatomic, weak, nullable) UILabel *emptySubtitleLabel;
 @end
 
 @implementation A2VersionListViewController
@@ -145,27 +146,45 @@
     __weak typeof(self) weakSelf = self;
     [self addTrailingButtonWithSymbol:@"plus" action:^{
         __strong typeof(weakSelf) self = weakSelf;
-        [A2Toast show:@"安装新版本" inView:self.view];
+        [self showInstallDialog];
     }];
 
-    [self loadVersions];
     [self setupLayout];
     [self buildPathList];
-    [self buildVersionList];
+
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                           selector:@selector(refreshEmptyStateTheme)
+                                               name:A2ThemeDidChangeNotification
+                                             object:nil];
 }
 
-/// 从 A2VersionManager 读真实数据。
-/// 之前这里是硬编码的示例数据 —— 现在接上了真实的版本扫描。
+/// 主题通知常驻，退出时摘掉（与行组件的 dealloc 摘除同理）。
+- (void)dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+/// 每次回到本页都重刷（设置页改名/删除、安装页装完回来时列表不能是旧的）。
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    [self reloadVersionList];
+}
+
+/// 从 A2VersionManager 读真实数据拼行。
 - (void)loadVersions {
     A2VersionManager *mgr = A2VersionManager.shared;
     NSMutableArray<NSDictionary<NSString *, id> *> *out = [NSMutableArray array];
 
     for (A2Version *v in mgr.versions) {
-        // meta 文案：加载器 + 隔离档位（档位是全局的，所有版本一致）
+        // meta 文案：加载器 + 隔离档位（档位是全局的，所有版本一致）。
+        // 无效版本直接给原因（缺 json / 缺 jar / 解析失败），比档位更有用。
         NSMutableArray<NSString *> *parts = [NSMutableArray array];
         if (v.loaderInfo.length) [parts addObject:v.loaderInfo];
-        [parts addObject:[NSString stringWithFormat:@"隔离·%@",
-                          A2IsolationModeDisplayName(v.isolationMode)]];
+        if (v.isValid) {
+            [parts addObject:[NSString stringWithFormat:@"隔离·%@",
+                              A2IsolationModeDisplayName(v.isolationMode)]];
+        } else {
+            [parts addObject:(v.invalidReason ?: @"文件不完整")];
+        }
 
         [out addObject:@{
             @"name": v.name,
@@ -237,35 +256,12 @@
 }
 
 - (void)buildPathList {
-    NSArray<NSArray<NSString *> *> *paths = @[
-        @[@"默认目录", @"Documents/.minecraft"],
-        @[@"外置存储", @"/var/mobile/Air2/games"],
-    ];
-
-    for (NSUInteger i = 0; i < paths.count; i++) {
-        A2GamePathRow *row = [[A2GamePathRow alloc] initWithTitle:paths[i][0] path:paths[i][1]];
-        row.current = (i == 0);
-        __weak typeof(self) weakSelf = self;
-        [row addAction:[UIAction actionWithHandler:^(UIAction *action) {
-            [weakSelf refreshPathSelection:action.sender];
-        }] forControlEvents:UIControlEventTouchUpInside];
-        [_pathStack addArrangedSubview:row];
-    }
-
-    // 底部两个操作按钮
-    [_pathStack addArrangedSubview:[self makeSpacer:A2SpaceL]];
-
-    A2PrimaryButton *addBtn = [[A2PrimaryButton alloc] initWithTitle:@"添加目录"
-                                                             style:A2ButtonStyleSecondary];
-    addBtn.minHeight = 44;
-    [addBtn addTarget:self action:@selector(addPath) forControlEvents:UIControlEventTouchUpInside];
-    [_pathStack addArrangedSubview:addBtn];
-
-    A2PrimaryButton *cleanBtn = [[A2PrimaryButton alloc] initWithTitle:@"清理缓存"
-                                                               style:A2ButtonStyleSecondary];
-    cleanBtn.minHeight = 44;
-    [cleanBtn addTarget:self action:@selector(cleanup) forControlEvents:UIControlEventTouchUpInside];
-    [_pathStack addArrangedSubview:cleanBtn];
+    // 只显示真实的游戏目录。目录切换没有实现，不放假条目。
+    NSString *home = A2VersionManager.shared.gameHome;
+    A2GamePathRow *row = [[A2GamePathRow alloc] initWithTitle:@"游戏目录" path:home];
+    row.current = YES;
+    row.userInteractionEnabled = NO;
+    [_pathStack addArrangedSubview:row];
 
     // 撑起剩余空间
     UIView *filler = [[UIView alloc] initWithFrame:CGRectZero];
@@ -274,22 +270,11 @@
     [_pathStack addArrangedSubview:filler];
 }
 
-- (UIView *)makeSpacer:(CGFloat)height {
-    UIView *v = [[UIView alloc] initWithFrame:CGRectZero];
-    v.translatesAutoresizingMaskIntoConstraints = NO;
-    [v.heightAnchor constraintEqualToConstant:height].active = YES;
-    return v;
-}
-
-- (void)refreshPathSelection:(UIView *)sender {
-    for (UIView *v in _pathStack.arrangedSubviews) {
-        if ([v isKindOfClass:A2GamePathRow.class]) {
-            ((A2GamePathRow *)v).current = (v == sender);
-        }
-    }
-}
-
 - (void)buildVersionList {
+    if (_versions.count == 0) {
+        [self buildEmptyState];
+        return;
+    }
     for (NSDictionary<NSString *, id> *v in _versions) {
         A2VersionRowView *row = [[A2VersionRowView alloc] initWithVersionName:v[@"name"]
                                                                         meta:v[@"meta"]];
@@ -310,11 +295,13 @@
         row.onPin = ^{
             __strong typeof(weakSelf) self = weakSelf;
             BOOL newValue = !weakRow.isPinned;
-            weakRow.pinned = newValue;
 
-            // 真实写入版本的隔离配置
-            model.isolation.pinned = newValue;
-            [model saveConfig];
+            // 落盘失败时回滚，行状态不动（applyPinnedAndSave 内已恢复 model）。
+            if (![model applyPinnedAndSave:newValue]) {
+                [A2Toast show:@"置顶保存失败" inView:self.view];
+                return;
+            }
+            weakRow.pinned = newValue;
 
             [A2Toast show:(newValue ? @"已置顶" : @"已取消置顶") inView:self.view];
         };
@@ -326,7 +313,7 @@
         };
         row.onMore = ^{
             __strong typeof(weakSelf) self = weakSelf;
-            [self showMoreMenuForName:name meta:meta fromView:weakRow];
+            [self showMoreMenuForVersion:model meta:meta fromView:weakRow];
         };
 
         [_rowViews addObject:row];
@@ -338,6 +325,61 @@
     }
 }
 
+/// 空列表：给一句话 + 一个真入口，不留白屏。
+- (void)buildEmptyState {
+    A2GlassCard *card = [[A2GlassCard alloc] initWithFrame:CGRectZero];
+    card.cornerRadius = A2RadiusM;
+    card.elevation = A2CardElevationLow;
+
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectZero];
+    title.translatesAutoresizingMaskIntoConstraints = NO;
+    title.font = [A2Typography titleCard];
+    title.textAlignment = NSTextAlignmentCenter;
+    title.text = @"还没有安装任何版本";
+
+    UILabel *subtitle = [[UILabel alloc] initWithFrame:CGRectZero];
+    subtitle.translatesAutoresizingMaskIntoConstraints = NO;
+    subtitle.font = [A2Typography subtitleCard];
+    subtitle.textAlignment = NSTextAlignmentCenter;
+    subtitle.numberOfLines = 0;
+    subtitle.text = @"点下方按钮安装第一个版本";
+
+    A2PrimaryButton *installBtn = [[A2PrimaryButton alloc] initWithTitle:@"安装新版本"
+                                                                   style:A2ButtonStylePrimary];
+    installBtn.minHeight = 44;
+    [installBtn addTarget:self action:@selector(showInstallDialog) forControlEvents:UIControlEventTouchUpInside];
+
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[title, subtitle, installBtn]];
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = A2SpaceM;
+    stack.alignment = UIStackViewAlignmentFill;
+
+    [card.contentView addSubview:stack];
+    [NSLayoutConstraint activateConstraints:@[
+        [stack.topAnchor constraintEqualToAnchor:card.contentView.topAnchor],
+        [stack.bottomAnchor constraintEqualToAnchor:card.contentView.bottomAnchor],
+        [stack.leadingAnchor constraintEqualToAnchor:card.contentView.leadingAnchor],
+        [stack.trailingAnchor constraintEqualToAnchor:card.contentView.trailingAnchor],
+    ]];
+
+    [_listStack addArrangedSubview:card];
+    [NSLayoutConstraint activateConstraints:@[
+        [card.leadingAnchor constraintEqualToAnchor:_listStack.leadingAnchor],
+        [card.trailingAnchor constraintEqualToAnchor:_listStack.trailingAnchor],
+    ]];
+
+    _emptyTitleLabel = title;
+    _emptySubtitleLabel = subtitle;
+    [self refreshEmptyStateTheme];
+}
+
+/// 空态文案跟主题走（注册一次，常驻观察；标签重建后刷新一次即可）。
+- (void)refreshEmptyStateTheme {
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+    _emptyTitleLabel.textColor = t.cOnSurface;
+    _emptySubtitleLabel.textColor = t.cOnSurfaceVariant;
+}
 /// 切换当前版本。
 /// 无效版本不允许选中（缺 jar 或 json 的版本启动必然失败）。
 - (void)selectVersion:(A2VersionRowView *)selected {
@@ -346,7 +388,8 @@
 
     A2Version *model = _versions[index][@"model"];
     if (!model.isValid) {
-        [A2Toast show:@"此版本文件不完整，无法选择" inView:self.view];
+        [A2Toast show:[NSString stringWithFormat:@"无法选择：%@",
+                       model.invalidReason ?: @"版本文件不完整"] inView:self.view];
         return;
     }
 
@@ -358,42 +401,161 @@
     [A2Toast show:[NSString stringWithFormat:@"已切换到 %@", model.name] inView:self.view];
 }
 
-- (void)showMoreMenuForName:(NSString *)name meta:(NSString *)meta fromView:(UIView *)source {
+/// 改名/复制/删除后重建列表（管理器内部已 reload，这里只重刷 UI）。
+- (void)reloadVersionList {
+    for (UIView *v in _listStack.arrangedSubviews) {
+        [v removeFromSuperview];
+    }
+    [_rowViews removeAllObjects];
+    _emptyTitleLabel = nil;
+    _emptySubtitleLabel = nil;
+    [self loadVersions];
+    [self buildVersionList];
+}
+
+- (void)showMoreMenuForVersion:(A2Version *)version meta:(NSString *)meta fromView:(UIView *)source {
     UIAlertController *sheet =
-        [UIAlertController alertControllerWithTitle:name
+        [UIAlertController alertControllerWithTitle:version.name
                                             message:meta
                                      preferredStyle:UIAlertControllerStyleActionSheet];
-    NSArray<NSArray<NSString *> *> *actions = @[
-        @[@"重命名", @"square.and.pencil"],
-        @[@"复制", @"doc.on.doc"],
-        @[@"导出为整合包", @"square.and.arrow.up"],
-        @[@"删除", @"trash"],
-    ];
-    for (NSArray<NSString *> *a in actions) {
-        BOOL destructive = [a[0] isEqualToString:@"删除"];
-        [sheet addAction:[UIAlertAction actionWithTitle:a[0]
-                                                 style:(destructive ? UIAlertActionStyleDestructive
-                                                                    : UIAlertActionStyleDefault)
-                                               handler:^(UIAlertAction *action) {
-            [A2Toast show:[NSString stringWithFormat:@"%@：%@", a[0], name] inView:self.view];
-        }]];
-    }
+    __weak typeof(self) weakSelf = self;
+    [sheet addAction:[UIAlertAction actionWithTitle:@"重命名"
+                                              style:UIAlertActionStyleDefault
+                                            handler:^(UIAlertAction *action) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self showRenameDialogForVersion:version];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"复制"
+                                              style:UIAlertActionStyleDefault
+                                            handler:^(UIAlertAction *action) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self showCopyDialogForVersion:version];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"删除"
+                                              style:UIAlertActionStyleDestructive
+                                            handler:^(UIAlertAction *action) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self showDeleteConfirmForVersion:version];
+    }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
-                                             style:UIAlertActionStyleCancel
-                                           handler:nil]];
+                                              style:UIAlertActionStyleCancel
+                                            handler:nil]];
     sheet.popoverPresentationController.sourceView = source;
     sheet.popoverPresentationController.sourceRect = source.bounds;
     [self presentViewController:sheet animated:YES completion:nil];
 }
 
-#pragma mark - 动作
-
-- (void)addPath {
-    [A2Toast show:@"选择游戏目录" inView:self.view];
+/// 重命名弹窗：非法名由管理器校验，这里只透出错误文案。
+- (void)showRenameDialogForVersion:(A2Version *)version {
+    __weak typeof(self) weakSelf = self;
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"重命名版本"
+                                            message:nil
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
+        tf.text = version.name;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault
+                                           handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        NSString *text = alert.textFields.firstObject.text;
+        NSError *err = nil;
+        if ([A2VersionManager.shared renameVersion:version to:text error:&err]) {
+            [self reloadVersionList];
+            [A2Toast show:@"已重命名" inView:self.view];
+        } else {
+            [A2Toast show:(err.localizedDescription ?: @"重命名失败") inView:self.view];
+        }
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
-- (void)cleanup {
-    [A2Toast show:@"清理未使用的游戏文件" inView:self.view];
+/// 复制弹窗：两种粒度二选一，新版本不继承置顶。
+- (void)showCopyDialogForVersion:(A2Version *)version {
+    __weak typeof(self) weakSelf = self;
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"复制版本"
+                                            message:@"仅版本文件只拷 json 与 jar；全部文件连存档模组一起拷"
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
+        tf.text = [version.name stringByAppendingString:@" 副本"];
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"仅版本文件" style:UIAlertActionStyleDefault
+                                           handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self copyVersion:version withName:alert.textFields.firstObject.text full:NO];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"全部文件" style:UIAlertActionStyleDefault
+                                           handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self copyVersion:version withName:alert.textFields.firstObject.text full:YES];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)copyVersion:(A2Version *)version withName:(NSString *)name full:(BOOL)full {
+    NSError *err = nil;
+    if ([A2VersionManager.shared copyVersion:version to:name copyAllFiles:full error:&err]) {
+        [self reloadVersionList];
+        [A2Toast show:@"已复制" inView:self.view];
+    } else {
+        [A2Toast show:(err.localizedDescription ?: @"复制失败") inView:self.view];
+    }
+}
+
+/// 删除二次确认：版本目录含用户存档模组，不可撤销。
+- (void)showDeleteConfirmForVersion:(A2Version *)version {
+    __weak typeof(self) weakSelf = self;
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"删除版本"
+                                            message:[NSString stringWithFormat:
+                @"将删除 %@ 及其所有文件，不可撤销。", version.name]
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"删除" style:UIAlertActionStyleDestructive
+                                           handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        NSError *err = nil;
+        if ([A2VersionManager.shared deleteVersion:version error:&err]) {
+            [self reloadVersionList];
+            [A2Toast show:@"已删除" inView:self.view];
+        } else {
+            [A2Toast show:(err.localizedDescription ?: @"删除失败") inView:self.view];
+        }
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+#pragma mark - 安装入口
+
+/// 版本号输入框 → 真实的安装页（安装页会驱动完整安装流程，不是占位）。
+- (void)showInstallDialog {
+    __weak typeof(self) weakSelf = self;
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"安装新版本"
+                                            message:@"输入 Minecraft 版本号"
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
+        tf.placeholder = @"如 1.21.5";
+        tf.clearButtonMode = UITextFieldViewModeWhileEditing;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"开始安装" style:UIAlertActionStyleDefault
+                                           handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        NSString *text = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:
+                          NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (text.length == 0) {
+            [A2Toast show:@"版本号不能为空" inView:self.view];
+            return;
+        }
+        A2InstallingViewController *vc =
+            [[A2InstallingViewController alloc] initWithVersionName:text loader:nil];
+        [self.navigationController pushViewController:vc animated:YES];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 @end

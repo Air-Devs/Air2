@@ -205,13 +205,16 @@
         row.title = A2VersionFolderDisplayName((A2VersionFolder)i);
         row.accessory = A2SettingsRowAccessoryDisclosure;
 
-        NSString *folderName = A2VersionFolderDisplayName((A2VersionFolder)i);
-        NSString *dir = [_version directoryForFolder:(A2VersionFolder)i];
+        // 目录随隔离档位变化，点击时现算，不拿旧值。
+        NSUInteger captured = i;
+        __weak typeof(self) weakSelf = self;
         row.onTap = ^{
-            NSURL *url = [NSURL fileURLWithPath:dir];
-            (void)url;
-            [A2Toast show:[NSString stringWithFormat:@"%@：%@", folderName, dir]
-                   inView:self.view];
+            __strong typeof(weakSelf) self = weakSelf;
+            NSString *dir = [self.version directoryForFolder:(A2VersionFolder)captured];
+            NSString *folderName = A2VersionFolderDisplayName((A2VersionFolder)captured);
+            A2FilesViewController *vc = [[A2FilesViewController alloc] initWithRootPath:dir
+                                                                           displayName:folderName];
+            [self.navigationController pushViewController:vc animated:YES];
         };
 
         [_folderRows addObject:row];
