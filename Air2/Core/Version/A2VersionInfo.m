@@ -65,12 +65,6 @@ static NSInteger A2LoaderPriority(A2VersionLoaderKind kind) {
     return self;
 }
 
-- (id)copyWithZone:(NSZone *)zone {
-    A2VersionLoaderInfo *c = [[A2VersionLoaderInfo allocWithZone:zone] initWithKind:self.kind
-                                                                            version:self.version];
-    return c;
-}
-
 @end
 
 #pragma mark - 解析辅助
@@ -334,12 +328,6 @@ static NSArray<A2VersionLoaderInfo *> *A2DetectModLoaders(NSDictionary *json) {
                           : name)];
     }
     return [parts componentsJoinedByString:@", "];
-}
-
-- (id)copyWithZone:(NSZone *)zone {
-    A2VersionInfo *c = [[A2VersionInfo allocWithZone:zone] initWithMinecraftVersion:self.minecraftVersion
-                                                                       loaderInfos:self.loaderInfos];
-    return c;
 }
 
 @end

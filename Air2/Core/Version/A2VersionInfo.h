@@ -56,7 +56,7 @@ typedef NS_ENUM(NSInteger, A2VersionLoaderKind) {
 FOUNDATION_EXPORT NSString *A2VersionLoaderDisplayName(A2VersionLoaderKind kind);
 
 /// 单个加载器及其版本
-@interface A2VersionLoaderInfo : NSObject <NSCopying>
+@interface A2VersionLoaderInfo : NSObject
 
 @property (nonatomic, assign, readonly) A2VersionLoaderKind kind;
 /// 加载器版本，未知时为空串（不用 nil，避免展示层到处判空）。
@@ -67,7 +67,7 @@ FOUNDATION_EXPORT NSString *A2VersionLoaderDisplayName(A2VersionLoaderKind kind)
 @end
 
 /// 版本身份：MC 版本 + 加载器列表
-@interface A2VersionInfo : NSObject <NSCopying>
+@interface A2VersionInfo : NSObject
 
 /// MC 版本（如 1.21.5），解析不到时回落到版本文件夹名。
 @property (nonatomic, copy, readonly) NSString *minecraftVersion;
