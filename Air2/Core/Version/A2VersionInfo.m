@@ -99,7 +99,7 @@ static NSString *A2FirstCapture(NSString *text, NSString *pattern) {
     return [text substringWithRange:r];
 }
 
-/// Forge 新旧版号格式不同（新版 1.21.4-54.0.26，旧版 1.7.10-10.13.4.1614-1.7.10），
+/// Forge 新旧版号格式不同（新版形如 1.20.1-47.2.0，旧版形如 1.7.2-10.12.2.1161-mc172），
 /// 按横杠数切分取段，格式对不上就原样返回，不猜。
 static NSString *A2ParseForgeVersion(NSString *raw) {
     if (raw.length == 0) return @"";
