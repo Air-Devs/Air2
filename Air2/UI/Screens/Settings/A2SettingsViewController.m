@@ -19,8 +19,8 @@
 
 @interface A2SettingsViewController ()
 @property (nonatomic, strong) A2CategoryNavView *nav;
-@property (nonatomic, strong) UIScrollView *contentScroll;
-@property (nonatomic, strong) UIStackView *contentStack;
+@property (nonatomic, strong) UIScrollView *detailScroll;
+@property (nonatomic, strong) UIStackView *detailStack;
 @end
 
 @implementation A2SettingsViewController
@@ -44,17 +44,17 @@
     };
     [self.plainContentView addSubview:_nav];
 
-    _contentScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
-    _contentScroll.translatesAutoresizingMaskIntoConstraints = NO;
-    _contentScroll.showsVerticalScrollIndicator = NO;
-    _contentScroll.alwaysBounceVertical = YES;
-    [self.plainContentView addSubview:_contentScroll];
+    _detailScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    _detailScroll.translatesAutoresizingMaskIntoConstraints = NO;
+    _detailScroll.showsVerticalScrollIndicator = NO;
+    _detailScroll.alwaysBounceVertical = YES;
+    [self.plainContentView addSubview:_detailScroll];
 
-    _contentStack = [[UIStackView alloc] initWithFrame:CGRectZero];
-    _contentStack.translatesAutoresizingMaskIntoConstraints = NO;
-    _contentStack.axis = UILayoutConstraintAxisVertical;
-    _contentStack.spacing = A2SpaceXL;
-    [_contentScroll addSubview:_contentStack];
+    _detailStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _detailStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _detailStack.axis = UILayoutConstraintAxisVertical;
+    _detailStack.spacing = A2SpaceXL;
+    [_detailScroll addSubview:_detailStack];
 
     [NSLayoutConstraint activateConstraints:@[
         [_nav.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
@@ -62,18 +62,18 @@
         [_nav.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
                                            constant:A2SpaceS],
 
-        [_contentScroll.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
-        [_contentScroll.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
-        [_contentScroll.leadingAnchor constraintEqualToAnchor:_nav.trailingAnchor
+        [_detailScroll.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_detailScroll.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
+        [_detailScroll.leadingAnchor constraintEqualToAnchor:_nav.trailingAnchor
                                                     constant:A2SpaceM],
-        [_contentScroll.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
+        [_detailScroll.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
 
-        [_contentStack.topAnchor constraintEqualToAnchor:_contentScroll.topAnchor constant:A2SpaceS],
-        [_contentStack.bottomAnchor constraintEqualToAnchor:_contentScroll.bottomAnchor
+        [_detailStack.topAnchor constraintEqualToAnchor:_detailScroll.topAnchor constant:A2SpaceS],
+        [_detailStack.bottomAnchor constraintEqualToAnchor:_detailScroll.bottomAnchor
                                                    constant:-A2SpaceXXL],
-        [_contentStack.leadingAnchor constraintEqualToAnchor:_contentScroll.leadingAnchor
+        [_detailStack.leadingAnchor constraintEqualToAnchor:_detailScroll.leadingAnchor
                                                     constant:A2SpaceM],
-        [_contentStack.trailingAnchor constraintEqualToAnchor:_contentScroll.trailingAnchor
+        [_detailStack.trailingAnchor constraintEqualToAnchor:_detailScroll.trailingAnchor
                                                      constant:-A2SpaceXL],
     ]];
 
@@ -81,23 +81,23 @@
 }
 
 - (void)rebuildContentForIndex:(NSInteger)index {
-    for (UIView *v in _contentStack.arrangedSubviews) {
-        [_contentStack removeArrangedSubview:v];
+    for (UIView *v in _detailStack.arrangedSubviews) {
+        [_detailStack removeArrangedSubview:v];
         [v removeFromSuperview];
     }
 
     if (index == 0) {
-        [_contentStack addArrangedSubview:[A2AppearanceSettings buildWithHost:self]];
-        [_contentStack addArrangedSubview:[A2AppearanceSettings buildSourceSectionWithHost:self]];
+        [_detailStack addArrangedSubview:[A2AppearanceSettings buildWithHost:self]];
+        [_detailStack addArrangedSubview:[A2AppearanceSettings buildSourceSectionWithHost:self]];
     }
 
     // 内容切换时淡入上浮
-    _contentStack.alpha = 0;
-    _contentStack.transform = CGAffineTransformMakeTranslation(0, 8);
+    _detailStack.alpha = 0;
+    _detailStack.transform = CGAffineTransformMakeTranslation(0, 8);
     UIViewPropertyAnimator *a = A2SpringAnimator(A2AnimDurationCard);
     [a addAnimations:^{
-        self.contentStack.alpha = 1;
-        self.contentStack.transform = CGAffineTransformIdentity;
+        self.detailStack.alpha = 1;
+        self.detailStack.transform = CGAffineTransformIdentity;
     }];
     [a startAnimation];
 }

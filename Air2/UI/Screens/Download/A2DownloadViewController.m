@@ -41,8 +41,8 @@ typedef NS_ENUM(NSInteger, A2ContentSource) {
 
 @interface A2DownloadViewController ()
 @property (nonatomic, strong) A2CategoryNavView *nav;
-@property (nonatomic, strong) UIScrollView *contentScroll;
-@property (nonatomic, strong) UIStackView *contentStack;
+@property (nonatomic, strong) UIScrollView *detailScroll;
+@property (nonatomic, strong) UIStackView *detailStack;
 @property (nonatomic, assign) A2ContentSource source;
 @property (nonatomic, strong) UISegmentedControl *sourceSwitch;
 @property (nonatomic, strong) UILabel *sourceHint;
@@ -75,17 +75,17 @@ typedef NS_ENUM(NSInteger, A2ContentSource) {
     };
     [self.plainContentView addSubview:_nav];
 
-    _contentScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
-    _contentScroll.translatesAutoresizingMaskIntoConstraints = NO;
-    _contentScroll.showsVerticalScrollIndicator = NO;
-    _contentScroll.alwaysBounceVertical = YES;
-    [self.plainContentView addSubview:_contentScroll];
+    _detailScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    _detailScroll.translatesAutoresizingMaskIntoConstraints = NO;
+    _detailScroll.showsVerticalScrollIndicator = NO;
+    _detailScroll.alwaysBounceVertical = YES;
+    [self.plainContentView addSubview:_detailScroll];
 
-    _contentStack = [[UIStackView alloc] initWithFrame:CGRectZero];
-    _contentStack.translatesAutoresizingMaskIntoConstraints = NO;
-    _contentStack.axis = UILayoutConstraintAxisVertical;
-    _contentStack.spacing = A2SpaceL;
-    [_contentScroll addSubview:_contentStack];
+    _detailStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _detailStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _detailStack.axis = UILayoutConstraintAxisVertical;
+    _detailStack.spacing = A2SpaceL;
+    [_detailScroll addSubview:_detailStack];
 
     [NSLayoutConstraint activateConstraints:@[
         [_nav.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
@@ -93,18 +93,18 @@ typedef NS_ENUM(NSInteger, A2ContentSource) {
         [_nav.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
                                            constant:A2SpaceS],
 
-        [_contentScroll.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
-        [_contentScroll.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
-        [_contentScroll.leadingAnchor constraintEqualToAnchor:_nav.trailingAnchor
+        [_detailScroll.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_detailScroll.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
+        [_detailScroll.leadingAnchor constraintEqualToAnchor:_nav.trailingAnchor
                                                     constant:A2SpaceM],
-        [_contentScroll.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
+        [_detailScroll.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
 
-        [_contentStack.topAnchor constraintEqualToAnchor:_contentScroll.topAnchor constant:A2SpaceS],
-        [_contentStack.bottomAnchor constraintEqualToAnchor:_contentScroll.bottomAnchor
+        [_detailStack.topAnchor constraintEqualToAnchor:_detailScroll.topAnchor constant:A2SpaceS],
+        [_detailStack.bottomAnchor constraintEqualToAnchor:_detailScroll.bottomAnchor
                                                    constant:-A2SpaceXXL],
-        [_contentStack.leadingAnchor constraintEqualToAnchor:_contentScroll.leadingAnchor
+        [_detailStack.leadingAnchor constraintEqualToAnchor:_detailScroll.leadingAnchor
                                                     constant:A2SpaceM],
-        [_contentStack.trailingAnchor constraintEqualToAnchor:_contentScroll.trailingAnchor
+        [_detailStack.trailingAnchor constraintEqualToAnchor:_detailScroll.trailingAnchor
                                                      constant:-A2SpaceXL],
     ]];
 
@@ -112,30 +112,30 @@ typedef NS_ENUM(NSInteger, A2ContentSource) {
 }
 
 - (void)rebuildContentForIndex:(NSInteger)index {
-    for (UIView *v in _contentStack.arrangedSubviews) {
-        [_contentStack removeArrangedSubview:v];
+    for (UIView *v in _detailStack.arrangedSubviews) {
+        [_detailStack removeArrangedSubview:v];
         [v removeFromSuperview];
     }
 
     // 资源来源选择（仅 Modrinth / CurseForge 类分类需要）
     BOOL needsSource = (index != 0);   // 「游戏」分类不需要
     if (needsSource) {
-        [_contentStack addArrangedSubview:[self buildSourceRow]];
+        [_detailStack addArrangedSubview:[self buildSourceRow]];
     }
 
     // 「游戏」分类：安装新版本 + 模组加载器
     if (index == 0) {
-        [_contentStack addArrangedSubview:[self buildGameSection]];
+        [_detailStack addArrangedSubview:[self buildGameSection]];
     } else {
-        [_contentStack addArrangedSubview:[self buildResourceHint:index]];
+        [_detailStack addArrangedSubview:[self buildResourceHint:index]];
     }
 
-    _contentStack.alpha = 0;
-    _contentStack.transform = CGAffineTransformMakeTranslation(0, 8);
+    _detailStack.alpha = 0;
+    _detailStack.transform = CGAffineTransformMakeTranslation(0, 8);
     UIViewPropertyAnimator *a = A2SpringAnimator(A2AnimDurationCard);
     [a addAnimations:^{
-        self.contentStack.alpha = 1;
-        self.contentStack.transform = CGAffineTransformIdentity;
+        self.detailStack.alpha = 1;
+        self.detailStack.transform = CGAffineTransformIdentity;
     }];
     [a startAnimation];
 }
