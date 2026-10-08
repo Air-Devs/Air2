@@ -7,7 +7,11 @@ $(VERBOSE).SILENT:
 # 用法：make help
 # ============================================================
 
-SOURCEDIR   := $(shell printf "%q\n" "$(shell pwd)")
+# 用 make 内建的 CURDIR，不要用 printf %q 转义路径：
+# %q 会把空格写成 `\ `，于是 "Application\ Support/..." 变成一个字面
+# 文件名，下面 `bash "$(SOURCEDIR)/scripts/..."` 会因为找不到文件而失败。
+# 工作目录一旦含空格，make lint / make package 全部跑不起来。
+SOURCEDIR   := $(CURDIR)
 OUTPUTDIR   := $(SOURCEDIR)/artifacts
 NATIVESDIR  := $(SOURCEDIR)/Natives
 JAVADIR     := $(SOURCEDIR)/JavaApp
