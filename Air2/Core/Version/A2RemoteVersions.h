@@ -36,8 +36,11 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, readonly) NSString *versionID;
 /// 清单原 type：release / snapshot / old_beta / old_alpha
 @property (nonatomic, copy, readonly) NSString *type;
+/// 发布时间（清单 releaseTime 解析而来；解析失败为 nil，不影响该条目可用）
+@property (nonatomic, strong, readonly, nullable) NSDate *releaseTime;
 - (instancetype)initWithVersionID:(NSString *)versionID
-                             type:(NSString *)type NS_DESIGNATED_INITIALIZER;
+                             type:(NSString *)type
+                      releaseTime:(nullable NSDate *)releaseTime NS_DESIGNATED_INITIALIZER;
 - (instancetype)init NS_UNAVAILABLE;
 @end
 

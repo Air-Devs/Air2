@@ -30,11 +30,14 @@ static NSString *const kVersionManifestURL = @"https://piston-meta.mojang.com/mc
 
 @implementation A2RemoteVersion
 
-- (instancetype)initWithVersionID:(NSString *)versionID type:(NSString *)type {
+- (instancetype)initWithVersionID:(NSString *)versionID
+                             type:(NSString *)type
+                      releaseTime:(NSDate *)releaseTime {
     self = [super init];
     if (!self) return nil;
     _versionID = [versionID copy];
     _type = [type copy];
+    _releaseTime = releaseTime;
     return self;
 }
 
@@ -64,6 +67,8 @@ static NSString *const kVersionManifestURL = @"https://piston-meta.mojang.com/mc
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
     req.timeoutInterval = 30;
     [req setValue:@"Air-Devs/Air2/0.1.0 (github.com/Air-Devs/Air2)" forHTTPHeaderField:@"User-Agent"];
+    // 一次拉取复用同一个解析器：清单近千条，避免逐条新建。
+    NSISO8601DateFormatter *iso = [NSISO8601DateFormatter new];
     [[NSURLSession.sharedSession dataTaskWithRequest:req
                                    completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
         if (error) { done(nil, error); return; }
@@ -90,7 +95,13 @@ static NSString *const kVersionManifestURL = @"https://piston-meta.mojang.com/mc
             NSString *vid = [d[@"id"] isKindOfClass:NSString.class] ? d[@"id"] : nil;
             NSString *type = [d[@"type"] isKindOfClass:NSString.class] ? d[@"type"] : nil;
             if (!vid.length || !type.length) continue;
-            [out addObject:[[A2RemoteVersion alloc] initWithVersionID:vid type:type]];
+            // releaseTime 形如 2024-11-13T10:12:14+00:00。
+            // 解析失败只置 nil，不因此丢掉整个版本条目。
+            NSString *rt = [d[@"releaseTime"] isKindOfClass:NSString.class] ? d[@"releaseTime"] : nil;
+            NSDate *releaseTime = rt.length ? [iso dateFromString:rt] : nil;
+            [out addObject:[[A2RemoteVersion alloc] initWithVersionID:vid
+                                                                 type:type
+                                                          releaseTime:releaseTime]];
         }
         done([out copy], nil);
     }] resume];
