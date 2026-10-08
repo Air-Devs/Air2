@@ -1,5 +1,5 @@
 //
-//  A2GameInstallOptionsViewController.h
+//  A2FavoritesViewController.h
 //  Air2
 //
 //  Copyright (C) 2026 Air-Devs and contributors.
@@ -19,15 +19,15 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
-//  游戏安装选项（第二步）—— 自定义版本名 + 选加载器与加载器版本，然后进安装进度页。
+//  收藏列表 —— 展示已收藏项目，支持左滑删除。
 //
 
 #import "A2BaseViewController.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface A2GameInstallOptionsViewController : A2BaseViewController
-- (instancetype)initWithVersionID:(NSString *)versionID;
+@interface A2FavoritesViewController : A2BaseViewController
+
 @end
 
 NS_ASSUME_NONNULL_END

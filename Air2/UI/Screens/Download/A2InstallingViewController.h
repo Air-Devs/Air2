@@ -22,20 +22,26 @@
 //
 //  安装进度页 —— 从一个版本开始安装到完成的全过程展示。
 //
-//  视觉核心是环形进度 + 分步清单：
+//  视觉核心是环形进度 + 线性进度 + 分步清单：
 //    环形进度给一个"整体完成度"的直觉
-//    下面按步骤列出（下载清单 / 校验 / 下载 jar / 下载依赖库 / 下载资源 / 完成）
-//    每步有独立状态点，让用户知道卡在哪一步
+//    线性进度条给当前阶段的细致反馈
+//    分步清单按阶段列出，让用户知道卡在哪一步
+//
+//  参数由上游（安装选项页）算好传入：MC 原始版本号、目标版本名、
+//  可选加载器类型（A2ModLoaderType 的 NSNumber）与加载器版本。
+//  不做名称推断 —— 那是上游的职责，这里只负责把请求跑起来。
 //
 
 #import "A2BaseViewController.h"
-#import "A2ProgressView.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
 @interface A2InstallingViewController : A2BaseViewController
 
-- (instancetype)initWithVersionName:(NSString *)versionName loader:(nullable NSString *)loader;
+- (instancetype)initWithMCVersion:(NSString *)mcVersion
+                      versionName:(NSString *)versionName
+                       loaderType:(nullable NSNumber *)loaderType
+                    loaderVersion:(nullable NSString *)loaderVersion;
 
 @end
 

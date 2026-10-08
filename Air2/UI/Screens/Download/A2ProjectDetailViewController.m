@@ -27,6 +27,7 @@
 #import "A2ProjectDetailViewController.h"
 #import "A2ContentSource.h"
 #import "A2DownloadManifest.h"
+#import "A2DownloadFavorites.h"
 #import "A2VersionIsolation.h"
 #import "A2GlassCard.h"
 #import "A2PrimaryButton.h"
@@ -35,6 +36,7 @@
 #import "A2Typography.h"
 #import "A2Metrics.h"
 #import "A2DownloadEngine.h"
+#import "A2Log.h"
 
 static NSString *const kVersionCellID = @"A2ProjectVersionCell";
 
@@ -45,6 +47,7 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
 @property (nonatomic, strong) UILabel *emptyLabel;
 @property (nonatomic, strong) UIActivityIndicatorView *spinner;
 @property (nonatomic, strong) A2PrimaryButton *downloadButton;
+@property (nonatomic, strong) UIButton *favoriteButton;
 @property (nonatomic, strong) NSArray<A2ContentVersion *> *versions;
 @end
 
@@ -64,9 +67,55 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
     [super viewDidLoad];
     self.pageTitle = _project.title;
 
+    [self setupFavoriteButton];
     [self setupHeader];
     [self setupTable];
     [self reloadVersions];
+}
+
+#pragma mark - 收藏
+
+- (void)setupFavoriteButton {
+    __weak typeof(self) weakSelf = self;
+    _favoriteButton = [self addTrailingButtonWithSymbol:@"star" action:^{
+        __strong typeof(weakSelf) self = weakSelf;
+        [self toggleFavorite];
+    }];
+    [self refreshFavoriteButton];
+
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                          selector:@selector(handleFavoritesChanged:)
+                                              name:A2FavoritesDidChangeNotification
+                                            object:nil];
+}
+
+- (void)toggleFavorite {
+    A2DownloadFavorites *store = [A2DownloadFavorites shared];
+    BOOL nowFavorite;
+    if ([store isFavorite:_project.projectID]) {
+        [store removeFavoriteWithID:_project.projectID];
+        nowFavorite = NO;
+    } else {
+        [store addFavorite:[A2FavoriteItem itemWithContentItem:_project]];
+        nowFavorite = YES;
+    }
+    [A2Log log:@"download: %@收藏 %@", nowFavorite ? @"加入" : @"取消", _project.projectID];
+    [self refreshFavoriteButton];
+    [A2Toast show:(nowFavorite ? @"已加入收藏" : @"已取消收藏") inView:self.view];
+}
+
+- (void)refreshFavoriteButton {
+    BOOL favorite = [[A2DownloadFavorites shared] isFavorite:_project.projectID];
+    UIImageSymbolConfiguration *cfg =
+        [UIImageSymbolConfiguration configurationWithPointSize:18 weight:UIImageSymbolWeightMedium];
+    UIImage *image = [UIImage systemImageNamed:(favorite ? @"star.fill" : @"star")
+                             withConfiguration:cfg];
+    [_favoriteButton setImage:image forState:UIControlStateNormal];
+    _favoriteButton.accessibilityLabel = favorite ? @"已收藏" : @"收藏";
+}
+
+- (void)handleFavoritesChanged:(NSNotification *)note {
+    [self refreshFavoriteButton];
 }
 
 #pragma mark - 头信息

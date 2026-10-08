@@ -19,24 +19,15 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
-//  下载中心 —— 左侧分类导航 + 右侧内容。
+//  下载中心 —— 左侧分类导航 + 右侧内容；按 ID 与收藏接真实入口。
 //
-//  结构对齐 ZL2 的 DownloadScreen：
-//    ┌──────────┬──────────────────────────────────┐
-//    │ 🎮 游戏   │                                  │
-//    │ 📦 整合包 │  当前分类的内容                    │
-//    │ 🧩 模组   │                                  │
-//    │ ───────  │                                  │
-//    │ 🎨 资源包 │                                  │
-//    │ 🗺 存档   │                                  │
-//    │ 💡 光影   │                                  │
-//    │ ───────  │                                  │
-//    │ # 按 ID   │                                  │
-//    │ ⭐ 收藏   │                                  │
-//    └──────────┴──────────────────────────────────┘
+//  分类：
+//    · 游戏          安装新版本（唯一入口，进入版本清单）
+//    · 整合包/模组/资源包/存档/光影   资源搜索（Modrinth / CurseForge）
+//    · 按 ID         按项目 ID 直接定位
+//    · 收藏          已收藏的项目
 //
-//  资源来源（Modrinth / CurseForge）放在内容区顶部，
-//  不再占一整块卡片。
+//  资源来源（Modrinth / CurseForge）放在内容区顶部，不再占一整块卡片。
 //
 
 #import "A2DownloadViewController.h"
@@ -45,6 +36,8 @@
 #import "A2CurseForgeKeyPrompt.h"
 #import "A2DownloadListViewController.h"
 #import "A2GameVersionListViewController.h"
+#import "A2SearchByIdViewController.h"
+#import "A2FavoritesViewController.h"
 #import "A2ContentSource.h"
 #import "A2SettingsSection.h"
 #import "A2SettingsRow.h"
@@ -53,6 +46,7 @@
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
+#import "A2Log.h"
 
 @interface A2DownloadViewController ()
 @property (nonatomic, strong) A2CategoryNavView *nav;
@@ -71,7 +65,7 @@
     self.usesScrollContent = NO;
     [super viewDidLoad];
     self.pageTitle = @"下载";
-    self.source = A2ContentPlatformModrinth;
+    self.source = [A2ContentSource preferredPlatform];
 
     NSArray<A2NavCategory *> *cats = @[
         [A2NavCategory title:@"游戏"   symbol:@"sports.esports"],
@@ -128,23 +122,76 @@
     [_nav selectIndex:0 animated:NO];
 }
 
+#pragma mark - 分类元信息
+
+- (A2DownloadCategory)categoryForIndex:(NSInteger)index {
+    switch (index) {
+        case 1: return A2DownloadCategoryModpack;
+        case 2: return A2DownloadCategoryMod;
+        case 3: return A2DownloadCategoryResourcePack;
+        case 4: return A2DownloadCategoryWorld;
+        case 5: return A2DownloadCategoryShader;
+        default: return A2DownloadCategoryMod;
+    }
+}
+
+- (NSString *)titleForIndex:(NSInteger)index {
+    switch (index) {
+        case 1: return @"整合包";
+        case 2: return @"模组";
+        case 3: return @"资源包";
+        case 4: return @"存档";
+        case 5: return @"光影";
+        default: return @"资源";
+    }
+}
+
+- (NSString *)subtitleForIndex:(NSInteger)index {
+    switch (index) {
+        case 1: return @"一键安装完整整合包";
+        case 2: return @"单模组安装";
+        case 3: return @"材质与音效包";
+        case 4: return @"世界存档";
+        case 5: return @"光影效果";
+        default: return @"搜索资源";
+    }
+}
+
+- (NSString *)symbolForIndex:(NSInteger)index {
+    switch (index) {
+        case 1: return @"shippingbox.fill";
+        case 2: return @"puzzlepiece.extension.fill";
+        case 3: return @"photo.stack.fill";
+        case 4: return @"map.fill";
+        case 5: return @"sun.max.fill";
+        default: return @"cube.fill";
+    }
+}
+
+#pragma mark - 内容重建
+
 - (void)rebuildContentForIndex:(NSInteger)index {
+    [A2Log log:@"download: 切换分类 index=%ld", (long)index];
+
     for (UIView *v in _detailStack.arrangedSubviews) {
         [_detailStack removeArrangedSubview:v];
         [v removeFromSuperview];
     }
 
-    // 资源来源选择（仅 Modrinth / CurseForge 类分类需要）
-    BOOL needsSource = (index != 0);   // 「游戏」分类不需要
+    // 资源来源选择：仅资源类分类需要（整合包/模组/资源包/存档/光影）。
+    BOOL needsSource = (index >= 1 && index <= 5);
     if (needsSource) {
         [_detailStack addArrangedSubview:[self buildSourceRow]];
     }
 
-    // 「游戏」分类：安装新版本 + 模组加载器
     if (index == 0) {
         [_detailStack addArrangedSubview:[self buildGameSection]];
+    } else if (index >= 1 && index <= 5) {
+        [_detailStack addArrangedSubview:[self buildResourceSectionForIndex:index]];
+    } else if (index == 6) {
+        [_detailStack addArrangedSubview:[self buildSearchByIdSection]];
     } else {
-        [_detailStack addArrangedSubview:[self buildResourceHint:index]];
+        [_detailStack addArrangedSubview:[self buildFavoritesSection]];
     }
 
     _detailStack.alpha = 0;
@@ -210,14 +257,16 @@
                 self.source = A2ContentPlatformModrinth;
             }
             self.sourceHint.text = [self hintForSource:self.source];
+            [A2ContentSource setPreferredPlatform:self.source];
         }];
         return;
     }
     self.source = picked;
     _sourceHint.text = [self hintForSource:self.source];
+    [A2ContentSource setPreferredPlatform:self.source];
 }
 
-/// 游戏分类：安装新版本 + 模组加载器
+/// 游戏分类：唯一入口「安装新版本」
 - (UIView *)buildGameSection {
     A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:nil];
     section.footerText = @"安装时可同时选择模组加载器，会自动匹配对应的游戏版本。";
@@ -227,66 +276,107 @@
     gameRow.title = @"安装新版本";
     gameRow.subtitle = @"选择游戏版本与模组加载器";
     gameRow.accessory = A2SettingsRowAccessoryDisclosure;
-    gameRow.onTap = ^{ [self openListWithCategory:A2DownloadCategoryGame]; };
+    __weak typeof(self) weakSelf = self;
+    gameRow.onTap = ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        [self openGameVersions];
+    };
     [section addRow:gameRow];
 
     return section;
 }
 
-/// 资源分类：直接给搜索入口
-- (UIView *)buildResourceHint:(NSInteger)index {
+/// 资源分类：搜索入口
+- (UIView *)buildResourceSectionForIndex:(NSInteger)index {
     A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:nil];
-
-    NSArray<NSArray<NSString *> *> *names = @[
-        @[@"安装新版本", @"游戏版本与加载器"],
-        @[@"整合包", @"一键安装完整整合包"],
-        @[@"模组", @"单模组安装"],
-        @[@"资源包", @"材质与音效包"],
-        @[@"存档", @"世界存档"],
-        @[@"光影包", @"光影效果"],
-        @[@"按 ID 下载", @"已知项目 ID 直接定位"],
-        @[@"收藏夹", @"已收藏的项目"],
-    ];
-    NSArray<NSString *> *symbols = @[@"cube.fill", @"shippingbox.fill", @"puzzlepiece.extension.fill",
-                                     @"photo.stack.fill", @"map.fill", @"sun.max.fill",
-                                     @"number", @"star.fill"];
-
-    NSUInteger i = (NSUInteger)index;
-    if (i >= names.count) i = 0;
-
-    // 按 ID（6）与收藏夹（7）尚无实现：不进列表，避免挂着羊头卖模组搜索。
-    // 有实现后再把对应分支改回 openListWithCategory。
-    BOOL implemented = (index >= 0 && index <= 5);
+    section.footerText = @"资源来自 Modrinth / CurseForge 公共仓库。";
 
     A2SettingsRow *row = [[A2SettingsRow alloc] init];
-    row.symbolName = symbols[i];
-    row.title = names[i][0];
-    row.subtitle = names[i][1];
-    row.accessory = implemented ? A2SettingsRowAccessoryDisclosure : A2SettingsRowAccessoryNone;
-    NSInteger captured = index;
-    NSString *title = names[i][0];
+    row.symbolName = [self symbolForIndex:index];
+    row.title = [self titleForIndex:index];
+    row.subtitle = [self subtitleForIndex:index];
+    row.accessory = A2SettingsRowAccessoryDisclosure;
+
+    A2DownloadCategory category = [self categoryForIndex:index];
+    __weak typeof(self) weakSelf = self;
     row.onTap = ^{
-        __strong typeof(self) self = self;
-        if (!implemented) {
-            [A2Toast show:[NSString stringWithFormat:@"%@尚未实现", title] inView:self.view];
-            return;
-        }
-        [self openListWithCategory:(A2DownloadCategory)captured];
+        __strong typeof(weakSelf) self = weakSelf;
+        [self openListWithCategory:category];
     };
     [section addRow:row];
 
     return section;
 }
 
+/// 按 ID：进入 ID 直查页
+- (UIView *)buildSearchByIdSection {
+    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:nil];
+    section.footerText = @"粘贴 Modrinth 项目 ID / slug，或 CurseForge 的 mod ID。";
+
+    A2SettingsRow *row = [[A2SettingsRow alloc] init];
+    row.symbolName = @"number";
+    row.title = @"按 ID 查询";
+    row.subtitle = @"已知项目 ID 直接定位";
+    row.accessory = A2SettingsRowAccessoryDisclosure;
+    __weak typeof(self) weakSelf = self;
+    row.onTap = ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        [self openSearchById];
+    };
+    [section addRow:row];
+
+    return section;
+}
+
+/// 收藏：进入收藏列表
+- (UIView *)buildFavoritesSection {
+    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:nil];
+    section.footerText = @"在资源详情页点「收藏」即可加入这里。";
+
+    A2SettingsRow *row = [[A2SettingsRow alloc] init];
+    row.symbolName = @"star.fill";
+    row.title = @"我的收藏";
+    row.subtitle = @"已收藏的项目";
+    row.accessory = A2SettingsRowAccessoryDisclosure;
+    __weak typeof(self) weakSelf = self;
+    row.onTap = ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        [self openFavorites];
+    };
+    [section addRow:row];
+
+    return section;
+}
+
+#pragma mark - 路由
+
+- (void)openGameVersions {
+    [A2Log log:@"download: 打开版本清单（安装新版本）"];
+    A2GameVersionListViewController *vc = [[A2GameVersionListViewController alloc] init];
+    [self.navigationController pushViewController:vc animated:YES];
+}
+
 - (void)openListWithCategory:(A2DownloadCategory)category {
-    // 游戏走版本清单+安装器链路，不进资源搜索（此前错进 Modrinth 搜模组）。
+    // 游戏走版本清单+安装器链路，不进资源搜索。
     if (category == A2DownloadCategoryGame) {
-        A2GameVersionListViewController *vc = [[A2GameVersionListViewController alloc] init];
-        [self.navigationController pushViewController:vc animated:YES];
+        [self openGameVersions];
         return;
     }
+    [A2Log log:@"download: 打开资源搜索 category=%ld", (long)category];
     A2DownloadListViewController *vc = [[A2DownloadListViewController alloc] init];
     vc.category = category;
+    [self.navigationController pushViewController:vc animated:YES];
+}
+
+- (void)openSearchById {
+    [A2Log log:@"download: 打开按 ID 查询"];
+    A2SearchByIdViewController *vc = [[A2SearchByIdViewController alloc] init];
+    [self.navigationController pushViewController:vc animated:YES];
+}
+
+- (void)openFavorites {
+    [A2Log log:@"download: 打开收藏列表"];
+    A2FavoritesViewController *vc = [[A2FavoritesViewController alloc] init];
     [self.navigationController pushViewController:vc animated:YES];
 }
 
