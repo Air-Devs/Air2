@@ -239,6 +239,12 @@ static NSString *A2SettingStateToString(A2SettingState state) {
     return p;
 }
 
++ (NSString *)defaultGameHome {
+    NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
+                                                        NSUserDomainMask, YES).firstObject;
+    return [docs stringByAppendingPathComponent:@".minecraft"];
+}
+
 - (NSString *)versionsHome   { return [self.gameHome stringByAppendingPathComponent:@"versions"]; }
 - (NSString *)librariesHome  { return [self.gameHome stringByAppendingPathComponent:@"libraries"]; }
 - (NSString *)assetsHome     { return [self.gameHome stringByAppendingPathComponent:@"assets"]; }
@@ -266,6 +272,27 @@ static NSString *const kLauncherDataDirName = @".air_version";
 
 - (NSString *)versionIconPath:(NSString *)versionName {
     return [[self launcherDataPath:versionName] stringByAppendingPathComponent:@"VersionIcon.png"];
+}
+
+- (NSString *)downloadDestinationInSubdir:(NSString *)subdir
+                                 fileName:(NSString *)fileName
+                                    error:(NSError **)error {
+    if (!subdir.length || !fileName.length) {
+        if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain
+                                                code:NSFileNoSuchFileError
+                                            userInfo:@{NSLocalizedDescriptionKey: @"目标路径不完整"}];
+        return nil;
+    }
+    NSString *dir = [[self.gameHome stringByAppendingPathComponent:subdir] copy];
+    NSError *ioErr = nil;
+    if (![NSFileManager.defaultManager createDirectoryAtPath:dir
+                                 withIntermediateDirectories:YES
+                                                  attributes:nil
+                                                       error:&ioErr]) {
+        if (error) *error = ioErr;
+        return nil;
+    }
+    return [dir stringByAppendingPathComponent:fileName];
 }
 
 - (NSString *)gameDirectoryForVersion:(NSString *)versionName
