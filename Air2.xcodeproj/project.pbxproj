@@ -26,6 +26,7 @@
 		9F125686BA18A3A79AC3C941 /* A2DownloadEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = 1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */; };
 		9B094A240FBA6A3C1821F88C /* A2DownloadTask.m in Sources */ = {isa = PBXBuildFile; fileRef = AE757274F8E1E206F093F68A /* A2DownloadTask.m */; };
 		6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */ = {isa = PBXBuildFile; fileRef = 074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */; };
+		8B0D65271C85EAABC46B0226 /* A2Renderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 47106E1A43667C70F671BED2 /* A2Renderer.m */; };
 		E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */ = {isa = PBXBuildFile; fileRef = 035FB3CC4FE4018F44632AD5 /* A2Settings.m */; };
 		15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */; };
 		7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 643B820206971C227F265607 /* A2VersionManager.m */; };
@@ -91,6 +92,7 @@
 		1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadEngine.m"; sourceTree = "<group>"; };
 		AE757274F8E1E206F093F68A /* A2DownloadTask.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadTask.m"; sourceTree = "<group>"; };
 		074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionIsolation.m"; sourceTree = "<group>"; };
+		47106E1A43667C70F671BED2 /* A2Renderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Renderer.m"; sourceTree = "<group>"; };
 		035FB3CC4FE4018F44632AD5 /* A2Settings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Settings.m"; sourceTree = "<group>"; };
 		044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameInstaller.m"; sourceTree = "<group>"; };
 		643B820206971C227F265607 /* A2VersionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionManager.m"; sourceTree = "<group>"; };
@@ -150,6 +152,7 @@
 		DE956596465BDFF25E578448 /* A2DownloadEngine.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadEngine.h"; sourceTree = "<group>"; };
 		0F59C20AA19682790BF7251E /* A2DownloadTask.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTask.h"; sourceTree = "<group>"; };
 		CDB8C000E2777EB953C462DD /* A2VersionIsolation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionIsolation.h"; sourceTree = "<group>"; };
+		12B70B0E6FB31B7E75D61633 /* A2Renderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Renderer.h"; sourceTree = "<group>"; };
 		8D9149596220C9F4F49C460D /* A2Settings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Settings.h"; sourceTree = "<group>"; };
 		8407C36C2C93136130B9F07E /* A2GameInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameInstaller.h"; sourceTree = "<group>"; };
 		8566CA5C1C5F50A603ACC370 /* A2VersionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionManager.h"; sourceTree = "<group>"; };
@@ -261,6 +264,7 @@
 				184E0966D040B090B9F76405 /* Addons */,
 				6D1D1D1337AE93B0607365A8 /* Download */,
 				3C208AC8788CF22B0CC6CF18 /* Path */,
+				7BE232A3F169182CC82ED438 /* Renderer */,
 				836F8EEA81C821DAF5B999B4 /* Settings */,
 				1A5C09A9A5278A534417CCF0 /* Version */,
 			);
@@ -334,6 +338,16 @@
 				CDB8C000E2777EB953C462DD /* A2VersionIsolation.h */,
 			);
 			path = Path;
+			sourceTree = "<group>";
+		};
+
+		7BE232A3F169182CC82ED438 /* Renderer */ = {
+			isa = PBXGroup;
+			children = (
+				47106E1A43667C70F671BED2 /* A2Renderer.m */,
+				12B70B0E6FB31B7E75D61633 /* A2Renderer.h */,
+			);
+			path = Renderer;
 			sourceTree = "<group>";
 		};
 
@@ -592,6 +606,7 @@
 				9F125686BA18A3A79AC3C941 /* A2DownloadEngine.m in Sources */,
 				9B094A240FBA6A3C1821F88C /* A2DownloadTask.m in Sources */,
 				6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */,
+				8B0D65271C85EAABC46B0226 /* A2Renderer.m in Sources */,
 				E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */,
 				15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */,
 				7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */,
