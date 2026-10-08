@@ -25,13 +25,13 @@
 #import "A2ThemeManager.h"
 #import "A2Typography.h"
 #import "A2Metrics.h"
+#import "A2SkinHeadView.h"
 
 @interface A2AccountRowView ()
 @property (nonatomic, strong) UIView *fillView;
 @property (nonatomic, strong) UIView *radioOuter;
 @property (nonatomic, strong) UIView *radioInner;
-@property (nonatomic, strong) UIView *avatarView;
-@property (nonatomic, strong) UILabel *initialLabel;
+@property (nonatomic, strong) A2SkinHeadView *avatarView;
 @property (nonatomic, strong) UILabel *nameLabel;
 @property (nonatomic, strong) UILabel *typeLabel;
 @property (nonatomic, strong) UIButton *refreshButton;
@@ -79,19 +79,10 @@
     [_radioOuter addSubview:_radioInner];
 
     // ---- 头像 46 ----
-    _avatarView = [[UIView alloc] initWithFrame:CGRectZero];
+    _avatarView = [[A2SkinHeadView alloc] initWithFrame:CGRectZero];
     _avatarView.translatesAutoresizingMaskIntoConstraints = NO;
-    _avatarView.layer.cornerRadius = 23;   // 46 / 2
-    _avatarView.layer.cornerCurve = kCACornerCurveContinuous;
-    _avatarView.clipsToBounds = YES;
+    _avatarView.fallbackText = _accountName;
     [self addSubview:_avatarView];
-
-    _initialLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _initialLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _initialLabel.font = [UIFont systemFontOfSize:19 weight:UIFontWeightSemibold];
-    _initialLabel.textAlignment = NSTextAlignmentCenter;
-    _initialLabel.text = _accountName.length ? [[_accountName substringToIndex:1] uppercaseString] : @"?";
-    [_avatarView addSubview:_initialLabel];
 
     // ---- 文字 ----
     _nameLabel = [[UILabel alloc] initWithFrame:CGRectZero];
@@ -145,8 +136,6 @@
         [_avatarView.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
         [_avatarView.widthAnchor constraintEqualToConstant:46],
         [_avatarView.heightAnchor constraintEqualToConstant:46],
-        [_initialLabel.centerXAnchor constraintEqualToAnchor:_avatarView.centerXAnchor],
-        [_initialLabel.centerYAnchor constraintEqualToAnchor:_avatarView.centerYAnchor],
 
         // ZL2 用 18 的间距
         [textStack.leadingAnchor constraintEqualToAnchor:_avatarView.trailingAnchor constant:18],
@@ -198,6 +187,11 @@
     _refreshButton.alpha = refreshable ? 1.0 : 0.35;
 }
 
+- (void)setSkinPath:(NSString *)skinPath {
+    _skinPath = [skinPath copy];
+    _avatarView.skinPath = _skinPath;
+}
+
 #pragma mark - 交互
 
 - (void)handleRefresh {
@@ -229,9 +223,7 @@
     _radioOuter.layer.borderColor = (self.isCurrent ? t.cPrimary : t.cOutline).CGColor;
     _radioInner.backgroundColor = t.cPrimary;
 
-    _avatarView.backgroundColor = t.cPrimaryContainer;
-    _initialLabel.textColor = t.cOnPrimaryContainer;
-
+    // 头像底色与占位文字色由 A2SkinHeadView 自己跟随主题，这里不再代管。
     _nameLabel.textColor = t.cOnSurface;
     _typeLabel.textColor = t.cOnSurfaceVariant;
 

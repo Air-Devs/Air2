@@ -40,6 +40,7 @@
 #import "A2Account.h"
 #import "A2QuickActionCard.h"
 #import "A2PrimaryButton.h"
+#import "A2SkinHeadView.h"
 
 #import "A2AccountViewController.h"
 #import "A2SettingsViewController.h"
@@ -59,8 +60,7 @@
 
 /// 账户条
 @property (nonatomic, strong) A2GlassCard *accountCard;
-@property (nonatomic, strong) UIView *avatarView;
-@property (nonatomic, strong) UILabel *avatarInitial;
+@property (nonatomic, strong) A2SkinHeadView *avatarView;
 @property (nonatomic, strong) UILabel *accountNameLabel;
 @property (nonatomic, strong) UILabel *accountTypeLabel;
 
@@ -347,8 +347,6 @@
     }
 
     // ---- 账户条 ----
-    _avatarView.backgroundColor = s.cPrimaryContainer;
-    _avatarInitial.textColor = s.cOnPrimaryContainer;
     _accountNameLabel.textColor = s.cOnSurface;
     _accountTypeLabel.textColor = s.cOnSurfaceVariant;
 
@@ -430,18 +428,8 @@
                                                   A2CardPadding + 4, A2CardPadding);
 
     // ---- 头像 ----
-    _avatarView = [[UIView alloc] initWithFrame:CGRectZero];
+    _avatarView = [[A2SkinHeadView alloc] initWithFrame:CGRectZero];
     _avatarView.translatesAutoresizingMaskIntoConstraints = NO;
-    _avatarView.layer.cornerRadius = A2AvatarSizeLarge / 2;
-    _avatarView.layer.cornerCurve = kCACornerCurveContinuous;
-    _avatarView.clipsToBounds = YES;
-
-    _avatarInitial = [[UILabel alloc] initWithFrame:CGRectZero];
-    _avatarInitial.translatesAutoresizingMaskIntoConstraints = NO;
-    _avatarInitial.font = [UIFont systemFontOfSize:26 weight:UIFontWeightSemibold];
-    _avatarInitial.textAlignment = NSTextAlignmentCenter;
-    _avatarInitial.text = @"?";
-    [_avatarView addSubview:_avatarInitial];
 
     // ---- 名字与类型 ----
     _accountNameLabel = [[UILabel alloc] initWithFrame:CGRectZero];
@@ -475,8 +463,6 @@
     [NSLayoutConstraint activateConstraints:@[
         [_avatarView.widthAnchor constraintEqualToConstant:A2AvatarSizeLarge],
         [_avatarView.heightAnchor constraintEqualToConstant:A2AvatarSizeLarge],
-        [_avatarInitial.centerXAnchor constraintEqualToAnchor:_avatarView.centerXAnchor],
-        [_avatarInitial.centerYAnchor constraintEqualToAnchor:_avatarView.centerYAnchor],
 
         [textStack.leadingAnchor constraintEqualToAnchor:_accountCard.contentView.leadingAnchor],
         [textStack.trailingAnchor constraintEqualToAnchor:_accountCard.contentView.trailingAnchor],
@@ -746,14 +732,25 @@
 - (void)refreshAccountUI {
     A2Account *acc = A2AccountManager.shared.currentAccount;
     if (!acc) {
-        _avatarInitial.text = @"+";
+        _avatarView.skinPath = nil;
+        _avatarView.fallbackText = @"+";
         _accountNameLabel.text = @"未登录";
         _accountTypeLabel.text = @"点击添加账号";
         return;
     }
-    _avatarInitial.text = acc.username.length ? [[acc.username substringToIndex:1] uppercaseString] : @"?";
+    _avatarView.skinPath = acc.skinPath;
+    _avatarView.fallbackText = acc.username;
     _accountNameLabel.text = acc.username;
     _accountTypeLabel.text = acc.typeDisplayName;
+
+    // 本地没有皮肤时按需拉一次；拉到后只更新头像，不整块重刷（避免递归）。
+    if (acc.skinPath.length == 0) {
+        __weak typeof(self) weakSelf = self;
+        [A2AccountManager.shared ensureSkinForAccount:acc completion:^(A2Account *a) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (a.skinPath.length) self->_avatarView.skinPath = a.skinPath;
+        }];
+    }
 }
 
 #pragma mark 文字链接

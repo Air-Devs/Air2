@@ -46,6 +46,7 @@
 		11A6C38842401D6C12DD4597 /* A2SegmentedControl.m in Sources */ = {isa = PBXBuildFile; fileRef = FB7BA68822FCB0D14D580939 /* A2SegmentedControl.m */; };
 		41CF931E6887AD8AF73E145F /* A2SettingsRow.m in Sources */ = {isa = PBXBuildFile; fileRef = 235D2D4A2ABFFA39AEDB334D /* A2SettingsRow.m */; };
 		2AF28D616C17109E5DDEB2E6 /* A2SettingsSection.m in Sources */ = {isa = PBXBuildFile; fileRef = EE215D4473E1887376B33E1E /* A2SettingsSection.m */; };
+		7E84349CB65DC97070E0BD74 /* A2SkinHeadView.m in Sources */ = {isa = PBXBuildFile; fileRef = 84CCDDC48E40B58090F702AC /* A2SkinHeadView.m */; };
 		5B82BB5F439B75DE2AE64C6A /* A2TaskDrawer.m in Sources */ = {isa = PBXBuildFile; fileRef = DA139E80AEDB846DE5191C14 /* A2TaskDrawer.m */; };
 		464FCB1D2C9D4FA080A24820 /* A2TaskProgressView.m in Sources */ = {isa = PBXBuildFile; fileRef = ADC4C42CB382EAFDCA556C09 /* A2TaskProgressView.m */; };
 		FD82F8F78F3C230BEBAE1F4B /* A2TextField.m in Sources */ = {isa = PBXBuildFile; fileRef = B498358055FFAD0453CC27C7 /* A2TextField.m */; };
@@ -121,6 +122,7 @@
 		FB7BA68822FCB0D14D580939 /* A2SegmentedControl.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SegmentedControl.m"; sourceTree = "<group>"; };
 		235D2D4A2ABFFA39AEDB334D /* A2SettingsRow.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsRow.m"; sourceTree = "<group>"; };
 		EE215D4473E1887376B33E1E /* A2SettingsSection.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsSection.m"; sourceTree = "<group>"; };
+		84CCDDC48E40B58090F702AC /* A2SkinHeadView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SkinHeadView.m"; sourceTree = "<group>"; };
 		DA139E80AEDB846DE5191C14 /* A2TaskDrawer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskDrawer.m"; sourceTree = "<group>"; };
 		ADC4C42CB382EAFDCA556C09 /* A2TaskProgressView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskProgressView.m"; sourceTree = "<group>"; };
 		B498358055FFAD0453CC27C7 /* A2TextField.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TextField.m"; sourceTree = "<group>"; };
@@ -191,6 +193,7 @@
 		06BF25C201A9B83666E117F1 /* A2SegmentedControl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SegmentedControl.h"; sourceTree = "<group>"; };
 		32854779149E0E29A0EC1CE2 /* A2SettingsRow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsRow.h"; sourceTree = "<group>"; };
 		96423A07FE49DD9B2383632F /* A2SettingsSection.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsSection.h"; sourceTree = "<group>"; };
+		443AE8E5ACDC8A02D5AD1308 /* A2SkinHeadView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SkinHeadView.h"; sourceTree = "<group>"; };
 		86BA725A974D441AEC4C7082 /* A2TaskDrawer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskDrawer.h"; sourceTree = "<group>"; };
 		1D0B896EEB924745CE5C4038 /* A2TaskProgressView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskProgressView.h"; sourceTree = "<group>"; };
 		46EB509F1EF9D56C1DD81B78 /* A2TextField.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TextField.h"; sourceTree = "<group>"; };
@@ -435,6 +438,7 @@
 				FB7BA68822FCB0D14D580939 /* A2SegmentedControl.m */,
 				235D2D4A2ABFFA39AEDB334D /* A2SettingsRow.m */,
 				EE215D4473E1887376B33E1E /* A2SettingsSection.m */,
+				84CCDDC48E40B58090F702AC /* A2SkinHeadView.m */,
 				DA139E80AEDB846DE5191C14 /* A2TaskDrawer.m */,
 				ADC4C42CB382EAFDCA556C09 /* A2TaskProgressView.m */,
 				B498358055FFAD0453CC27C7 /* A2TextField.m */,
@@ -454,6 +458,7 @@
 				06BF25C201A9B83666E117F1 /* A2SegmentedControl.h */,
 				32854779149E0E29A0EC1CE2 /* A2SettingsRow.h */,
 				96423A07FE49DD9B2383632F /* A2SettingsSection.h */,
+				443AE8E5ACDC8A02D5AD1308 /* A2SkinHeadView.h */,
 				86BA725A974D441AEC4C7082 /* A2TaskDrawer.h */,
 				1D0B896EEB924745CE5C4038 /* A2TaskProgressView.h */,
 				46EB509F1EF9D56C1DD81B78 /* A2TextField.h */,
@@ -689,6 +694,7 @@
 				11A6C38842401D6C12DD4597 /* A2SegmentedControl.m in Sources */,
 				41CF931E6887AD8AF73E145F /* A2SettingsRow.m in Sources */,
 				2AF28D616C17109E5DDEB2E6 /* A2SettingsSection.m in Sources */,
+				7E84349CB65DC97070E0BD74 /* A2SkinHeadView.m in Sources */,
 				5B82BB5F439B75DE2AE64C6A /* A2TaskDrawer.m in Sources */,
 				464FCB1D2C9D4FA080A24820 /* A2TaskProgressView.m in Sources */,
 				FD82F8F78F3C230BEBAE1F4B /* A2TextField.m in Sources */,
