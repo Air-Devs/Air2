@@ -82,6 +82,11 @@
     _fillView = [[UIView alloc] initWithFrame:CGRectZero];
     _fillView.translatesAutoresizingMaskIntoConstraints = NO;
     _fillView.userInteractionEnabled = NO;
+    // 卡片自身不能裁剪（会切掉阴影），所以填充层得自己圆角，
+    // 否则方角会伸到圆角边框之外，在四角露出方形毛刺。
+    _fillView.clipsToBounds = YES;
+    _fillView.layer.cornerRadius = _cornerRadius;
+    _fillView.layer.cornerCurve = kCACornerCurveContinuous;
     [self addSubview:_fillView];
 
     _borderView = [[UIView alloc] initWithFrame:CGRectZero];
@@ -144,6 +149,7 @@
 - (void)setCornerRadius:(CGFloat)cornerRadius {
     _cornerRadius = cornerRadius;
     self.layer.cornerRadius = cornerRadius;
+    _fillView.layer.cornerRadius = cornerRadius;
     _blurView.layer.cornerRadius = cornerRadius;
     _borderView.layer.cornerRadius = cornerRadius;
 }
