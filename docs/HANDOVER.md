@@ -90,27 +90,25 @@ App → UI → Player → Core → Bridge → Natives
 
 **`A2GamePath` 是游戏路径的唯一出口**，业务代码禁止手写路径拼接。
 
-版本隔离规则（**逐条对照 ZL2 的 `VersionConfig.kt` / `Version.kt`**）：
+版本隔离是**全局三档**（「设置 → 游戏 → 隔离档位」里选，对所有版本统一生效），
+语义**逐条对照 Punch-air 的 `PLProfiles.m`**（`PLIsolationMode`）：
 
-```kotlin
-isIsolation() = isolationType.toBoolean(全局的 versionIsolation)
-  其中 toBoolean:
-    FOLLOW_GLOBAL → 全局设置的值      ← 最容易漏，务必确认
-    ENABLE        → true
-    DISABLE       → false
+| 档位 | 游戏目录 gameDir | mods 目录 |
+|---|---|---|
+| `none` 关闭 | `{gameHome}` | `{gameHome}/mods` |
+| `mod` 仅 Mod | `{gameHome}` | `{gameHome}/versions/{版本名}/mods` |
+| `full` 全部 | `{gameHome}/versions/{版本名}` | `{gameHome}/versions/{版本名}/mods` |
 
-getGameDir():
-    isIsolation()    → {gameHome}/versions/{版本名}/
-    customPath 非空  → customPath
-    否则             → {gameHome}/
+- 仅 Mod 档还会把 `{gameHome}/mods` 换成指向**当前版本** mods 的符号链接；
+  建链前先把已有 mod 迁进版本目录，迁不干净或同名冲突就放弃建链（绝不删用户文件）。
+- 全部档在版本目录下建 9 个标准子目录：
+  `mods / saves / config / resourcepacks / shaderpacks / logs / crash-reports / datapacks / screenshots`。
+- 其余可隔离目录（`resourcepacks` / `saves` / `shaderpacks` / `screenshots`）跟随 gameDir。
+- **`libraries` 与 `assets` 始终共用**，不随档位变化。
+- 档位默认「仅 Mod」；旧版本的布尔开关 `A2GlobalVersionIsolation` 读取时自动迁移
+  （开过 → 全部，其余 → 仅 Mod）。
 
-各隔离目录 = getGameDir() + 文件夹名
-```
-
-可隔离的五个目录：`mods` / `resourcepacks` / `saves` / `shaderpacks` / `screenshots`
-**`libraries` 与 `assets` 始终共用**。
-
-`tests/Core/test_version_isolation.py` 有 22 项验证，改隔离逻辑必须跑。
+`tests/Core/test_version_isolation.py` 覆盖三档路径解析、标准目录与迁移规则，改隔离逻辑必须跑。
 
 ## 2.4 设计边界：参考 ZL2 的什么、不参考什么
 
@@ -528,7 +526,7 @@ https://media.forgecdn.net →  同上
 | 内存分配 | `A2VersionIsolation.ramAllocation`（-1 表示跟随全局） |
 | JVM 参数 | `A2VersionIsolation.jvmArgs` |
 | 游戏参数 | `A2VersionIsolation.gameArgs` |
-| 隔离开关 | `A2Version.isIsolationEnabled` |
+| 隔离档位 | `A2Version.isolationMode`（全局，见 `A2Settings.versionIsolationMode`） |
 
 ### 6.2.2 进度回传（启动流程 → UI）
 

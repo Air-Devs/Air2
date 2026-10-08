@@ -22,10 +22,9 @@
 //  全局设置注册表 —— Core 层唯一允许直接读写 NSUserDefaults 的地方。
 //
 //  为什么需要：
-//    设置曾散在 A2GlobalGameSettings 与各处的裸 NSUserDefaults key 里，
-//    每加一个设置要改三处，且默认值/类型无人收敛（ZL2 用 AllSettings +
-//    SettingsRegistry 收敛了同一问题，这里学它的设计决策，用 ObjC 重写，
-//    不照抄实现）。
+//    设置曾散在各处的裸 NSUserDefaults key 里，每加一个设置要改多处，
+//    且默认值/类型无人收敛（ZL2 用 AllSettings + SettingsRegistry 收敛了
+//    同一问题，这里学它的设计决策，用 ObjC 重写，不照抄实现）。
 //
 //  约束：
 //    · 只 import Foundation，保持 Core 不依赖 UIKit（CI 会查）。
@@ -43,7 +42,9 @@ FOUNDATION_EXPORT NSNotificationName const A2SettingsDidChangeNotification;
 FOUNDATION_EXPORT NSString *const A2SettingsChangedKeyKey;
 
 /// 全部托管 key（与历史 key 一致，保证迁移无损）。
+/// A2SettingsKeyVersionIsolation 是旧的布尔开关，仅用于迁移，不再写入新值。
 FOUNDATION_EXPORT NSString *const A2SettingsKeyVersionIsolation;
+FOUNDATION_EXPORT NSString *const A2SettingsKeyVersionIsolationMode;
 FOUNDATION_EXPORT NSString *const A2SettingsKeySkipIntegrityCheck;
 FOUNDATION_EXPORT NSString *const A2SettingsKeyRAMAllocationMB;
 FOUNDATION_EXPORT NSString *const A2SettingsKeyRenderer;
@@ -57,6 +58,11 @@ FOUNDATION_EXPORT NSString *const A2SettingsKeyAutoLogin;
 /// 内容平台取值（对应 A2ContentPlatform，存 NSInteger 避免跨层 import）。
 static const NSInteger A2SettingsPlatformModrinth = 0;
 static const NSInteger A2SettingsPlatformCurseForge = 1;
+
+/// 版本隔离档位取值（对应 A2IsolationMode，存 NSInteger 避免跨层 import）。
+static const NSInteger A2SettingsIsolationNone = 0;
+static const NSInteger A2SettingsIsolationMod  = 1;
+static const NSInteger A2SettingsIsolationFull = 2;
 
 /// 镜像优先级取值（对应 A2MirrorPriority）。
 static const NSInteger A2SettingsMirrorOfficialFirst = 0;
@@ -75,9 +81,10 @@ static const NSInteger A2SettingsMinRAMMB = 256;
 /// 清掉全部托管 key，回到默认值（注销/恢复默认用）。
 - (void)resetAllToDefaults;
 
-/// 全局版本隔离开关。历史默认 NO（ZL2 默认 YES，但 Air2 已发布行为是 NO，
-/// 改默认值会改变老用户隔离目录，保持 NO，仅注释说明差异）。
-@property (nonatomic, assign) BOOL versionIsolation;
+/// 全局版本隔离档位（见上方取值常量）。默认「仅 Mod」。
+/// 旧版本用的是布尔开关 A2SettingsKeyVersionIsolation，读取时自动迁移：
+/// 开过隔离 → 全部，其余 → 仅 Mod。
+@property (nonatomic, assign) NSInteger versionIsolationMode;
 
 /// 全局跳过完整性检查。默认 NO。
 @property (nonatomic, assign) BOOL skipIntegrityCheck;

@@ -69,12 +69,16 @@ typedef NS_ENUM(NSInteger, A2VersionType) {
 - (NSString *)jsonPath;
 /// 启动器私有数据目录
 - (NSString *)launcherDataPath;
-/// 该版本实际使用的游戏目录（隔离逻辑在这里生效）
+/// 该版本实际使用的游戏目录（隔离档位在这里生效）
 - (NSString *)gameDirectory;
+/// 模组目录（仅 Mod / 全部档在版本目录下，关闭档在游戏根目录）
+- (NSString *)modsDirectory;
 /// 某个可隔离模块的实际目录（mods / saves / ...）
 - (NSString *)directoryForFolder:(A2VersionFolder)folder;
-/// 是否开启隔离（已解析 FOLLOW_GLOBAL）
-- (BOOL)isIsolationEnabled;
+/// 当前全局隔离档位（所有版本统一，取自设置）
+- (A2IsolationMode)isolationMode;
+/// 按当前档位建好该版本需要的目录
+- (void)ensureIsolationDirectories;
 
 - (void)loadConfig;
 - (void)saveConfig;
@@ -97,6 +101,10 @@ extern NSNotificationName const A2VersionsDidChangeNotification;
 
 /// 重新扫描版本目录
 - (void)reload;
+
+/// 按当前全局档位建好各版本目录，并对齐当前版本的共享 mods 符号链接。
+/// 全局档位改动、切换当前版本、扫描完成时都要调一次。
+- (void)applyIsolation;
 
 /// 切换当前版本。
 ///

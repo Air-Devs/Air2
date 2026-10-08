@@ -29,6 +29,7 @@ NSNotificationName const A2SettingsDidChangeNotification = @"A2SettingsDidChange
 NSString *const A2SettingsChangedKeyKey = @"key";
 
 NSString *const A2SettingsKeyVersionIsolation = @"A2GlobalVersionIsolation";
+NSString *const A2SettingsKeyVersionIsolationMode = @"A2VersionIsolationMode";
 NSString *const A2SettingsKeySkipIntegrityCheck = @"A2GlobalSkipIntegrityCheck";
 NSString *const A2SettingsKeyRAMAllocationMB = @"A2GlobalRAM";
 NSString *const A2SettingsKeyRenderer = @"A2GlobalRenderer";
@@ -70,7 +71,7 @@ NSString *const A2SettingsKeyAutoLogin = @"A2AutoLogin";
 - (void)reloadAll {
     // 直接读底层，让内存值与磁盘一致；触发 KVO 式的全量刷新由调用方决定，
     // 这里不 post 通知，避免初始化时刷屏。
-    _versionIsolation = [self boolForKey:A2SettingsKeyVersionIsolation defaultValue:NO];
+    _versionIsolationMode = [self isolationModeFromDefaults];
     _skipIntegrityCheck = [self boolForKey:A2SettingsKeySkipIntegrityCheck defaultValue:NO];
     _ramAllocationMB = [self ramFromDefaults];
     _renderer = [self.defaults stringForKey:A2SettingsKeyRenderer];
@@ -87,6 +88,7 @@ NSString *const A2SettingsKeyAutoLogin = @"A2AutoLogin";
 - (void)resetAllToDefaults {
     NSArray<NSString *> *keys = @[
         A2SettingsKeyVersionIsolation,
+        A2SettingsKeyVersionIsolationMode,
         A2SettingsKeySkipIntegrityCheck,
         A2SettingsKeyRAMAllocationMB,
         A2SettingsKeyRenderer,
@@ -126,6 +128,21 @@ NSString *const A2SettingsKeyAutoLogin = @"A2AutoLogin";
     return MAX(v, A2SettingsMinRAMMB);
 }
 
+- (NSInteger)isolationModeFromDefaults {
+    // 新 key 优先。脏数据（越界值）回落到「仅 Mod」，避免解析出非法档位。
+    if ([self.defaults objectForKey:A2SettingsKeyVersionIsolationMode] != nil) {
+        NSInteger v = [self.defaults integerForKey:A2SettingsKeyVersionIsolationMode];
+        return (v == A2SettingsIsolationNone || v == A2SettingsIsolationFull)
+            ? v : A2SettingsIsolationMod;
+    }
+    // 老用户迁移：开过隔离的按「全部」处理，其余（含从未设置）按默认「仅 Mod」。
+    if ([self.defaults objectForKey:A2SettingsKeyVersionIsolation] != nil &&
+        [self.defaults boolForKey:A2SettingsKeyVersionIsolation]) {
+        return A2SettingsIsolationFull;
+    }
+    return A2SettingsIsolationMod;
+}
+
 - (void)notifyKey:(NSString *)key {
     [[NSNotificationCenter defaultCenter] postNotificationName:A2SettingsDidChangeNotification
                                                         object:self
@@ -134,10 +151,14 @@ NSString *const A2SettingsKeyAutoLogin = @"A2AutoLogin";
 
 #pragma mark - 属性存取（写穿透到 NSUserDefaults，保证进程重启不丢）
 
-- (void)setVersionIsolation:(BOOL)v {
-    _versionIsolation = v;
-    [self.defaults setBool:v forKey:A2SettingsKeyVersionIsolation];
-    [self notifyKey:A2SettingsKeyVersionIsolation];
+- (void)setVersionIsolationMode:(NSInteger)v {
+    // 只接受三个合法取值，脏数据回落到「仅 Mod」，避免越界档位传到路径解析。
+    if (v != A2SettingsIsolationNone && v != A2SettingsIsolationFull) {
+        v = A2SettingsIsolationMod;
+    }
+    _versionIsolationMode = v;
+    [self.defaults setInteger:v forKey:A2SettingsKeyVersionIsolationMode];
+    [self notifyKey:A2SettingsKeyVersionIsolationMode];
 }
 
 - (void)setSkipIntegrityCheck:(BOOL)v {

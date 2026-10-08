@@ -22,6 +22,7 @@
 
 #import "A2VersionManager.h"
 #import "A2Settings.h"
+#import "A2Log.h"
 
 NSNotificationName const A2VersionsDidChangeNotification = @"A2VersionsDidChangeNotification";
 
@@ -70,21 +71,28 @@ static NSString *const kConfigFileName = @"config.json";
 }
 
 - (NSString *)gameDirectory {
-    // FOLLOW_GLOBAL 会在这里落到全局设置上
-    return [_gamePath gameDirectoryForVersion:_name isolation:_isolation];
+    return [_gamePath gameDirectoryForVersion:_name mode:self.isolationMode];
+}
+
+/// 模组目录
+- (NSString *)modsDirectory {
+    return [_gamePath modsDirectoryForVersion:_name mode:self.isolationMode];
 }
 
 /// 某个可隔离模块的实际目录
 - (NSString *)directoryForFolder:(A2VersionFolder)folder {
     return [_gamePath directoryForFolder:folder
                              versionName:_name
-                               isolation:_isolation];
+                                    mode:self.isolationMode];
 }
 
-/// 是否开启隔离（已解析 FOLLOW_GLOBAL）
-- (BOOL)isIsolationEnabled {
-    return [_isolation isIsolationEnabledWithGlobal:
-            A2GlobalGameSettings.shared.defaultVersionIsolation];
+/// 当前全局隔离档位。所有版本统一，取自设置。
+- (A2IsolationMode)isolationMode {
+    return (A2IsolationMode)A2Settings.shared.versionIsolationMode;
+}
+
+- (void)ensureIsolationDirectories {
+    [_gamePath ensureIsolationDirectoriesForVersion:_name mode:self.isolationMode];
 }
 
 /// 读取版本私有配置
@@ -257,11 +265,29 @@ static NSString *const kConfigFileName = @"config.json";
         }
     }
     _currentVersion = restored;
+    // 扫描完就把隔离目录落好，避免首次游玩时目录还没建。
+    [self applyIsolation];
 }
 
 - (void)notify {
     [NSNotificationCenter.defaultCenter postNotificationName:A2VersionsDidChangeNotification
                                                       object:self];
+}
+
+- (void)applyIsolation {
+    A2IsolationMode mode = (A2IsolationMode)A2Settings.shared.versionIsolationMode;
+
+    // 每个版本各自的隔离目录都要建好（关闭档不建）。
+    for (A2Version *v in _versions) {
+        [v ensureIsolationDirectories];
+    }
+
+    // 共享 mods 只和「当前版本」相关：仅 Mod 档指向当前版本，其余档恢复成真实目录。
+    A2GamePath *path = [A2GamePath pathWithGameHome:_gameHome];
+    NSString *currentName = _currentVersion ? _currentVersion.name : nil;
+    [path alignSharedModsDirectoryForVersion:currentName mode:mode];
+    [A2Log log:@"isolation: 应用档位 %@（当前版本 %@）",
+          A2IsolationModeToString(mode), currentName ?: @"(无)"];
 }
 
 #pragma mark 操作
@@ -270,6 +296,8 @@ static NSString *const kConfigFileName = @"config.json";
     if (!version || !version.isValid) return NO;
     _currentVersion = version;
     A2Settings.shared.currentVersionName = version.name;
+    // 切换版本要重新对齐共享 mods（仅 Mod 档下它指向当前版本）。
+    [self applyIsolation];
     [self notify];
     return YES;
 }
