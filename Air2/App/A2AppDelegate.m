@@ -24,14 +24,17 @@
 #import "A2AppDelegate.h"
 #import "A2SceneDelegate.h"
 #import "A2ThemeManager.h"
+#import "A2Log.h"
 
 @implementation A2AppDelegate
 
 - (BOOL)application:(UIApplication *)application
 didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *)launchOptions {
+    [A2Log log:@"AppDelegate: didFinishLaunching 开始"];
     // 提前实例化主题管理器。它第一次访问会读 UserDefaults 与沙盒里的
     // 背景图，放在启动早期做，避免首次渲染时在布局过程中触发磁盘 IO。
     (void)A2ThemeManager.shared;
+    [A2Log log:@"AppDelegate: didFinishLaunching 完成"];
     return YES;
 }
 

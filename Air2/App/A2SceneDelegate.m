@@ -24,6 +24,7 @@
 #import "A2SceneDelegate.h"
 #import "A2RootViewController.h"
 #import "A2ThemeManager.h"
+#import "A2Log.h"
 
 @implementation A2SceneDelegate
 
@@ -31,11 +32,15 @@
 willConnectToSession:(UISceneSession *)session
       options:(UISceneConnectionOptions *)connectionOptions {
 
+    [A2Log log:@"SceneDelegate: willConnect 开始"];
+
     // scene 必须是 UIWindowScene 才能建窗口。
     // 如果不是（理论上不会发生），记录下来而不是静默返回 ——
     // 静默返回的表现是「启动了什么都没有」，极难排查。
     if (![scene isKindOfClass:UIWindowScene.class]) {
         NSLog(@"[Air2] 意外的 scene 类型: %@", NSStringFromClass(scene.class));
+        [A2Log log:@"SceneDelegate: 意外的 scene 类型 %@，放弃建窗",
+                     NSStringFromClass(scene.class)];
         return;
     }
 
@@ -56,6 +61,8 @@ willConnectToSession:(UISceneSession *)session
 
     // 窗口上屏后再刷一次，兜底覆盖 viewDidLoad 阶段可能取错的颜色
     [A2ThemeManager.shared notifyThemeChanged];
+
+    [A2Log log:@"SceneDelegate: 根视图已上屏，启动流程完成"];
 }
 
 /// 主题变更时同步窗口外观

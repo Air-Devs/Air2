@@ -848,3 +848,20 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
 - `ThemeManager` 仍直写 `NSUserDefaults`（UI 层有意保留）
 - `A2GlobalGameSettings` 垫片、旧指纹字符串存根保留兼容
 - CI 残留警告：未用变量/强捕获/未声明 selector/废弃 API各一处
+
+## 10.4 统一日志系统（2026-10-08）
+
+> 背景：有闪退无法定位，需要一份用户能自己取出、导出的日志。
+
+- [x] `Utils/A2Log`：`Documents/lastlog.txt`（本次）/ `lastlog.old.txt`（上次）。
+      每次启动轮转：删 old → 当前改名 old → 新建当前，只保留两代。
+      写入串行化到一条队列，行不交错；崩溃兜底前的日志用同步派发保证已落内核缓冲。
+- [x] `A2CrashGuard` 崩溃信息并入同一日志（异常处理器走 `A2Log`，
+      信号处理器用纯 C 访问器 `a2_log_current_path` + 低层 `open/write`，
+      避开信号上下文里的 ObjC 调用）；删除独立 `air2_crash.log` 与三个废接口。
+- [x] 启动链路埋点：`main` / `AppDelegate.didFinishLaunching` / `SceneDelegate.willConnect`，
+      用于判断闪退卡在哪一步。
+- [x] 诊断设置页改读统一日志（本次 / 上次两行），去掉写不进的旧崩溃文件逻辑。
+- [x] `CONTRIBUTING.md` 增「日志规范」：有必要的关键节点必须写日志，成熟后再放宽。
+- Info.plist 早已开 `UIFileSharingEnabled` + `LSSupportsOpeningDocumentsInPlace`，
+  日志放在 Documents 下即可被「文件」App 打开 / 导出，本次未改。

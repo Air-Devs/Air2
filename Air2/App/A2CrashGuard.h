@@ -19,12 +19,11 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
+//  崩溃兜底 —— 把异常信息写进统一日志（见 A2Log），便于在没有 Xcode 的
+//  环境里定位闪退。崩溃发生在本次会话，所以它会被追加到 lastlog.txt；
+//  下次启动轮转后即变成 lastlog.old.txt，用户可在「文件」App 里取走。
 //
-//  崩溃兜底 —— 把异常信息落盘，便于在没有 Xcode 的情况下定位问题。
-//
-//  为什么需要：这个环境里没有调试器，用户拿到的是直接闪退。
-//  装上前先注册异常处理器，崩溃时把原因写到 Documents/air2_crash.log，
-//  用户可以通过「文件」App 取出来，或者下次启动时自动显示。
+//  不另开崩溃文件：一个日志系统就够，多了只会让人不知道看哪个。
 //
 
 #import <Foundation/Foundation.h>
@@ -35,15 +34,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// 注册异常与信号处理器。应在 main() 最早期调用。
 + (void)install;
-
-/// 读取上一次崩溃日志，没有则返回 nil
-+ (nullable NSString *)lastCrashLog;
-
-/// 清除崩溃日志
-+ (void)clearCrashLog;
-
-/// 崩溃日志文件路径
-+ (NSString *)crashLogPath;
 
 @end
 

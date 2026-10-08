@@ -19,42 +19,41 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
-//
 
 #import "A2CrashGuard.h"
+#import "A2Log.h"
 #include <execinfo.h>
 #include <signal.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <string.h>
-
-static NSString *const kCrashFileName = @"air2_crash.log";
+#include <stdio.h>
+#include <time.h>
 
 /// ObjC 未捕获异常处理器（前置声明，install 里要用）
 static void A2HandleException(NSException *exception);
 
 /// 信号处理器里能安全调用的东西很有限（必须异步信号安全），
-/// 所以只把最少的信息写进去，栈回溯交给 backtrace_symbols_fd。
+/// 所以这里只用 open / write / close / snprintf / backtrace_symbols_fd，
+/// 不碰 ObjC —— 路径从 A2Log 的纯 C 访问器取，也不再拼时间字符串。
 static void A2SignalHandler(int sig) {
-    NSString *dir = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
-    if (!dir) { _exit(sig); }
-
-    // 构造一条简短记录
-    NSString *path = [dir stringByAppendingPathComponent:kCrashFileName];
-    NSString *head = [NSString stringWithFormat:
-        @"\n=== 信号崩溃 ===\n信号: %d\n时间: %@\n\n栈:\n",
-        sig, [NSDate date]];
-
-    // 用低级 IO 写入，避免在信号上下文里调用复杂方法
-    const char *cpath = path.UTF8String;
-    int fd = open(cpath, O_WRONLY | O_CREAT | O_APPEND, 0644);
-    if (fd >= 0) {
-        const char *c = head.UTF8String;
-        if (c) { ssize_t _ = write(fd, c, strlen(c)); (void)_; }
-        void *callstack[64];
-        int frames = backtrace(callstack, 64);
-        backtrace_symbols_fd(callstack, frames, fd);
-        close(fd);
+    const char *path = a2_log_current_path();
+    if (path && path[0] != '\0') {
+        int fd = open(path, O_WRONLY | O_CREAT | O_APPEND, 0644);
+        if (fd >= 0) {
+            char head[160];
+            int n = snprintf(head, sizeof(head),
+                             "\n=== 信号崩溃 ===\n信号: %d\n时间戳: %ld\n\n栈:\n",
+                             sig, (long)time(NULL));
+            if (n > 0) {
+                size_t len = (size_t)n < sizeof(head) ? (size_t)n : sizeof(head) - 1;
+                ssize_t ignored = write(fd, head, len);
+                (void)ignored;
+            }
+            void *callstack[64];
+            int frames = backtrace(callstack, 64);
+            backtrace_symbols_fd(callstack, frames, fd);
+            close(fd);
+        }
     }
 
     // 恢复默认处理器后重新触发，让系统也记录一份
@@ -80,49 +79,17 @@ static void A2SignalHandler(int sig) {
 /// ObjC 未捕获异常处理器
 static void A2HandleException(NSException *exception) {
     NSMutableString *log = [NSMutableString string];
-    [log appendString:@"\n=== 未捕获异常 ===\n"];
-    [log appendFormat:@"名称: %@\n", exception.name];
-    [log appendFormat:@"原因: %@\n", exception.reason];
-    [log appendFormat:@"时间: %@\n", [NSDate date]];
-    [log appendString:@"\n调用栈:\n"];
+    [log appendString:@"=== 未捕获异常 ==="];
+    [log appendFormat:@"\n名称: %@", exception.name];
+    [log appendFormat:@"\n原因: %@", exception.reason];
+    [log appendString:@"\n调用栈:"];
     for (NSString *frame in exception.callStackSymbols) {
-        [log appendFormat:@"  %@\n", frame];
+        [log appendFormat:@"\n  %@", frame];
     }
-    [log appendString:@"\n用户信息:\n"];
-    [log appendFormat:@"  %@\n", exception.userInfo];
+    [log appendFormat:@"\n用户信息: %@", exception.userInfo];
 
-    NSString *dir = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
-    if (dir) {
-        NSString *path = [dir stringByAppendingPathComponent:kCrashFileName];
-        NSData *data = [log dataUsingEncoding:NSUTF8StringEncoding];
-        NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:path];
-        if (!fh) {
-            [data writeToFile:path atomically:YES];
-        } else {
-            [fh seekToEndOfFile];
-            [fh writeData:data];
-            [fh closeFile];
-        }
-    }
-}
-
-+ (NSString *)crashLogPath {
-    NSString *dir = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
-    if (!dir) return @"";
-    return [dir stringByAppendingPathComponent:kCrashFileName];
-}
-
-+ (NSString *)lastCrashLog {
-    NSString *path = [self crashLogPath];
-    if (path.length == 0) return nil;
-    if (![NSFileManager.defaultManager fileExistsAtPath:path]) return nil;
-    return [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:nil];
-}
-
-+ (void)clearCrashLog {
-    NSString *path = [self crashLogPath];
-    if (path.length == 0) return;
-    [NSFileManager.defaultManager removeItemAtPath:path error:nil];
+    // 用 %@ 透传，避免堆栈里的 % 被当成格式符
+    [A2Log log:@"%@", log];
 }
 
 @end
