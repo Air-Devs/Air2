@@ -189,7 +189,9 @@ static NSString *const kConfigFileName = @"config.json";
     _gameHome = [docs stringByAppendingPathComponent:@".minecraft"];
     _versions = @[];
 
-    [self reload];
+    // 构造期只扫描、不发通知：此刻 shared 的 dispatch_once 还没返回，
+    // 观察者在回调里再取一次 shared 会重入同一个 dispatch_once 而死锁（SIGTRAP）。
+    [self loadVersionsFromDisk];
     return self;
 }
 
@@ -202,6 +204,13 @@ static NSString *const kConfigFileName = @"config.json";
 #pragma mark 扫描
 
 - (void)reload {
+    [self loadVersionsFromDisk];
+    [self notify];
+}
+
+/// 扫描版本目录并恢复当前版本。与 reload 分开是因为 init 必须在
+/// dispatch_once 内完成，期间不能发通知（见 init 处说明）。
+- (void)loadVersionsFromDisk {
     A2GamePath *path = [A2GamePath pathWithGameHome:_gameHome];
     NSString *versionsDir = [path versionsHome];
 
@@ -248,7 +257,9 @@ static NSString *const kConfigFileName = @"config.json";
         }
     }
     _currentVersion = restored;
+}
 
+- (void)notify {
     [NSNotificationCenter.defaultCenter postNotificationName:A2VersionsDidChangeNotification
                                                       object:self];
 }
@@ -259,8 +270,7 @@ static NSString *const kConfigFileName = @"config.json";
     if (!version || !version.isValid) return NO;
     _currentVersion = version;
     A2Settings.shared.currentVersionName = version.name;
-    [NSNotificationCenter.defaultCenter postNotificationName:A2VersionsDidChangeNotification
-                                                      object:self];
+    [self notify];
     return YES;
 }
 

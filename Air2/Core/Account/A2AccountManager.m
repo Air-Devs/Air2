@@ -223,7 +223,9 @@ static void A2Main(dispatch_block_t b) {
     _accounts = @[];
     _yggdrasil = [A2YggdrasilAuth new];
     _microsoft = [A2MicrosoftAuth new];
-    [self reload];
+    // 构造期只读盘、不发通知：此刻 shared 的 dispatch_once 还没返回，
+    // 观察者在回调里再取一次 shared 会重入同一个 dispatch_once 而死锁（SIGTRAP）。
+    [self loadAccountsFromDisk];
     return self;
 }
 
@@ -236,6 +238,13 @@ static void A2Main(dispatch_block_t b) {
 }
 
 - (void)reload {
+    [self loadAccountsFromDisk];
+    [self notify];
+}
+
+/// 读盘并恢复当前账号。与 reload 分开是因为 init 必须在 dispatch_once 内完成，
+/// 期间不能发通知（见 init 处说明）。
+- (void)loadAccountsFromDisk {
     NSData *data = [NSData dataWithContentsOfFile:[self accountsFilePath]];
     NSArray *raw = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
 
@@ -256,8 +265,6 @@ static void A2Main(dispatch_block_t b) {
         }
     }
     if (!_currentAccount && _accounts.count > 0) _currentAccount = _accounts.firstObject;
-
-    [self notify];
 }
 
 - (void)save {
