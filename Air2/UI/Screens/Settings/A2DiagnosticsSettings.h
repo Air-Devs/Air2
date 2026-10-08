@@ -19,7 +19,7 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
-//  诊断分组构建器（崩溃日志查看与清除）。
+//  诊断分组构建器（运行日志查看）。
 //
 //  与 A2AppearanceSettings 同款 buildWithHost 模式。
 //
