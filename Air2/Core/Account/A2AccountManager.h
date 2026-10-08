@@ -96,6 +96,14 @@ extern NSNotificationName const A2AccountsDidChangeNotification;
 - (void)refreshCurrentAccountIfNeeded:(nullable void (^)(BOOL success,
                                                          NSError * _Nullable error))completion;
 
+/// 按需获取账号皮肤 —— 供头像展示调用。
+///
+/// 已有本地皮肤文件时直接回调，不联网；否则拉取远端材质并写回账号
+/// （无需调用方再保存）。离线账号无远端材质，直接回调。
+/// 完成块在主线程回调，参数即传入的 account（skinPath 可能已更新）。
+- (void)ensureSkinForAccount:(A2Account *)account
+                  completion:(nullable void (^)(A2Account *account))completion;
+
 /// 生成离线模式下的玩家 UUID（基于用户名，与官方算法一致）
 + (NSString *)offlineUUIDForName:(NSString *)name;
 

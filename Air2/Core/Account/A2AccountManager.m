@@ -22,6 +22,7 @@
 
 #import "A2AccountManager.h"
 #import "A2MicrosoftAuth.h"
+#import "A2Wardrobe.h"
 #import "A2Settings.h"
 #import "A2Log.h"
 #import <CommonCrypto/CommonDigest.h>
@@ -208,6 +209,7 @@ static void A2Main(dispatch_block_t b) {
 @property (nonatomic, strong, nullable) A2Account *currentAccount;
 @property (nonatomic, strong) A2YggdrasilAuth *yggdrasil;
 @property (nonatomic, strong) A2MicrosoftAuth *microsoft;
+@property (nonatomic, strong) A2Wardrobe *wardrobe;
 @end
 
 @implementation A2AccountManager
@@ -227,6 +229,7 @@ static void A2Main(dispatch_block_t b) {
     _accounts = @[];
     _yggdrasil = [A2YggdrasilAuth new];
     _microsoft = [A2MicrosoftAuth new];
+    _wardrobe = [A2Wardrobe new];
     // 构造期只读盘、不发通知：此刻 shared 的 dispatch_once 还没返回，
     // 观察者在回调里再取一次 shared 会重入同一个 dispatch_once 而死锁（SIGTRAP）。
     [self loadAccountsFromDisk];
@@ -480,6 +483,43 @@ static void A2Main(dispatch_block_t b) {
     } else {
         if (completion) completion(YES, nil);   // 离线账号无需续期
     }
+}
+
+#pragma mark 皮肤
+
+- (void)ensureSkinForAccount:(A2Account *)account
+                  completion:(void (^)(A2Account *))completion {
+    if (!account) {
+        if (completion) completion(account);
+        return;
+    }
+    // 已有皮肤且文件还在 —— 不联网，直接返回。
+    if (account.skinPath.length &&
+        [NSFileManager.defaultManager fileExistsAtPath:account.skinPath]) {
+        if (completion) completion(account);
+        return;
+    }
+    // 离线账号没有远端材质，交给 UI 用占位文字。
+    if (account.type == A2AccountTypeOffline) {
+        if (completion) completion(account);
+        return;
+    }
+
+    NSString *previous = account.skinPath;
+    [A2Log log:@"AccountManager: 拉取账号 %@ 的皮肤", account.username];
+    __weak typeof(self) weakSelf = self;
+    [_wardrobe refreshWardrobeForAccount:account
+                              completion:^(BOOL success, NSError *error) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (account.skinPath.length && ![account.skinPath isEqualToString:previous ?: @""]) {
+            // 拉到新皮肤，顺手落盘 —— 下次启动就有本地文件，不必再联网。
+            [self persistAccount:account];
+            [A2Log log:@"AccountManager: 账号 %@ 的皮肤已缓存", account.username];
+        } else {
+            [A2Log log:@"AccountManager: 账号 %@ 未取到皮肤，用占位显示", account.username];
+        }
+        if (completion) completion(account);
+    }];
 }
 
 @end
