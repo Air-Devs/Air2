@@ -33,6 +33,7 @@
 #import "A2Metrics.h"
 
 #import "A2SettingsSections.h"
+#import "A2DiagnosticsSettings.h"
 
 @interface A2SettingsViewController ()
 @property (nonatomic, strong) A2CategoryNavView *nav;
@@ -47,10 +48,11 @@
     self.usesScrollContent = NO;
     self.pageTitle = @"设置";
 
-    // 目前只有「外观」一个分类 —— 其余等对应功能实现后再加。
+    // 外观之后是诊断 —— 其余等对应功能实现后再加。
     // 见 A2SettingsSections.h 的说明。
     NSArray<A2NavCategory *> *cats = @[
         [A2NavCategory title:@"外观" symbol:@"paintpalette.fill"],
+        [A2NavCategory title:@"诊断" symbol:@"stethoscope"],
     ];
 
     __weak typeof(self) weakSelf = self;
@@ -106,6 +108,8 @@
     if (index == 0) {
         [_detailStack addArrangedSubview:[A2AppearanceSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2AppearanceSettings buildSourceSectionWithHost:self]];
+    } else if (index == 1) {
+        [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildWithHost:self]];
     }
 
     // 内容切换时淡入上浮

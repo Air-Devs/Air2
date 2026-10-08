@@ -61,6 +61,7 @@
 		8DF920441794A778BEFD9DD0 /* A2AppearanceSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */; };
 		28E0E9F04A06993B01FFC1D8 /* A2BackgroundSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */; };
 		231BA8D647ED52A70C2A644B /* A2ColorThemeDialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */; };
+		1E7FB60017717A3BE32B9A3C /* A2DiagnosticsSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */; };
 		1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */; };
 		5C3C3472B73A413C081E753F /* A2VersionListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */; };
 		7635F6BA870CB67CA1FBFDF4 /* A2VersionRowView.m in Sources */ = {isa = PBXBuildFile; fileRef = 8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */; };
@@ -132,6 +133,7 @@
 		CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AppearanceSettings.m"; sourceTree = "<group>"; };
 		976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BackgroundSettingsViewController.m"; sourceTree = "<group>"; };
 		5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorThemeDialog.m"; sourceTree = "<group>"; };
+		D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DiagnosticsSettings.m"; sourceTree = "<group>"; };
 		9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsViewController.m"; sourceTree = "<group>"; };
 		ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionListViewController.m"; sourceTree = "<group>"; };
 		8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionRowView.m"; sourceTree = "<group>"; };
@@ -197,6 +199,7 @@
 		39421C371A5FDC787D490323 /* A2LauncherViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LauncherViewController.h"; sourceTree = "<group>"; };
 		8A8A69E0C0117AD2228117A1 /* A2BackgroundSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundSettingsViewController.h"; sourceTree = "<group>"; };
 		137E26C858B461DBC6F3AB93 /* A2ColorThemeDialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorThemeDialog.h"; sourceTree = "<group>"; };
+		9CE1BE0BB775D12731066330 /* A2DiagnosticsSettings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DiagnosticsSettings.h"; sourceTree = "<group>"; };
 		A309D45ADA810213043EDE96 /* A2SettingsSections.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsSections.h"; sourceTree = "<group>"; };
 		F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsViewController.h"; sourceTree = "<group>"; };
 		271E6A92F0F655D2A7EA5627 /* A2VersionListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionListViewController.h"; sourceTree = "<group>"; };
@@ -538,9 +541,11 @@
 				CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */,
 				976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */,
 				5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */,
+				D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */,
 				9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */,
 				8A8A69E0C0117AD2228117A1 /* A2BackgroundSettingsViewController.h */,
 				137E26C858B461DBC6F3AB93 /* A2ColorThemeDialog.h */,
+				9CE1BE0BB775D12731066330 /* A2DiagnosticsSettings.h */,
 				A309D45ADA810213043EDE96 /* A2SettingsSections.h */,
 				F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */,
 			);
@@ -684,6 +689,7 @@
 				8DF920441794A778BEFD9DD0 /* A2AppearanceSettings.m in Sources */,
 				28E0E9F04A06993B01FFC1D8 /* A2BackgroundSettingsViewController.m in Sources */,
 				231BA8D647ED52A70C2A644B /* A2ColorThemeDialog.m in Sources */,
+				1E7FB60017717A3BE32B9A3C /* A2DiagnosticsSettings.m in Sources */,
 				1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */,
 				5C3C3472B73A413C081E753F /* A2VersionListViewController.m in Sources */,
 				7635F6BA870CB67CA1FBFDF4 /* A2VersionRowView.m in Sources */,
