@@ -14,7 +14,6 @@
 #import "A2Metrics.h"
 #import "A2Typography.h"
 #import "A2ContentSource.h"
-#import "A2ModrinthAPI.h"
 #import "A2DownloadEngine.h"
 
 static NSString *const kCellID = @"A2DownloadCell";
@@ -27,7 +26,7 @@ static NSString *const kCellID = @"A2DownloadCell";
 @property (nonatomic, strong) UILabel *subtitleLabel;
 @property (nonatomic, strong) UILabel *tagLabel;
 @property (nonatomic, strong) UILabel *statsLabel;
-- (void)configureWithProject:(A2ModrinthProject *)project;
+- (void)configureWithProject:(A2ContentItem *)project;
 @end
 
 @implementation A2DownloadListCell
@@ -106,12 +105,12 @@ static NSString *const kCellID = @"A2DownloadCell";
 
 - (void)configureWithProject:(A2ContentItem *)project {
     _titleLabel.text = project.title;
-    _subtitleLabel.text = project.projectDescription;
+    _subtitleLabel.text = project.summary;
 
     // 下载量用易读格式
     _statsLabel.text = [NSString stringWithFormat:@"%@ 次下载 · %@ 关注",
-                        [self formatCount:project.downloads],
-                        [self formatCount:project.followers]];
+                        [self formatCount:project.downloadCount],
+                        [self formatCount:project.followCount]];
 
     // 标签取前两个分类
     NSArray *cats = project.categories;
@@ -203,18 +202,6 @@ static NSString *const kCellID = @"A2DownloadCell";
         case A2DownloadCategoryMod:
         case A2DownloadCategoryGame:
         default:                             return A2ContentClassMod;
-    }
-}
-
-- (A2ModrinthProjectType)projectType {
-    switch (self.category) {
-        case A2DownloadCategoryShader:       return A2ModrinthProjectTypeShader;
-        case A2DownloadCategoryResourcePack: return A2ModrinthProjectTypeResourcePack;
-        case A2DownloadCategoryModpack:      return A2ModrinthProjectTypeModpack;
-        case A2DownloadCategoryWorld:        return A2ModrinthProjectTypeDatapack;
-        case A2DownloadCategoryMod:          return A2ModrinthProjectTypeMod;
-        case A2DownloadCategoryGame:
-        default:                             return A2ModrinthProjectTypeMod;
     }
 }
 
@@ -331,7 +318,7 @@ static NSString *const kCellID = @"A2DownloadCell";
                                                       constant:A2PageMargin],
         [_platformSwitch.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
                                                        constant:-A2PageMargin],
-        [_platformSwitch.heightAnchor constraintEqualToConstant:32];
+        [_platformSwitch.heightAnchor constraintEqualToConstant:32]
     ]];
 }
 
@@ -665,7 +652,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
                             withIntermediateDirectories:YES attributes:nil error:nil];
 
     NSString *fileName = version.fileName.length ? version.fileName
-        : [NSString stringWithFormat:@"%@-%@.jar", project.slug, version.versionNumber];
+        : [NSString stringWithFormat:@"%@-%@.jar", project.projectID, version.versionNumber];
     NSString *dest = [dir stringByAppendingPathComponent:fileName];
 
     [A2Toast show:[NSString stringWithFormat:@"开始下载 %@", fileName] inView:self.view];
