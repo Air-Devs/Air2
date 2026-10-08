@@ -63,8 +63,9 @@ static NSString *const kBackgroundFileName = @"air2_background.jpg";
     _backgroundFadeRatio = [d objectForKey:kKeyBgFade] ? [d doubleForKey:kKeyBgFade] : 0.35;
     _appearanceMode = (A2AppearanceMode)[d integerForKey:kKeyAppearance];
 
-    NSInteger kind = [d objectForKey:kKeyThemeKind] ? [d integerForKey:kKeyThemeKind] : A2ThemeKindEmbermire;
-    if (kind < 0 || kind >= A2ThemeKindCount) kind = A2ThemeKindEmbermire;
+    // 新用户默认冰川蓝（清爽取向；已存选择不受影响，只改缺省）。
+    NSInteger kind = [d objectForKey:kKeyThemeKind] ? [d integerForKey:kKeyThemeKind] : A2ThemeKindGlacier;
+    if (kind < 0 || kind >= A2ThemeKindCount) kind = A2ThemeKindGlacier;
     _selectedKind = (A2ThemeKind)kind;
 
     _paletteStyle = [d objectForKey:kKeyPaletteStyle] ? [d integerForKey:kKeyPaletteStyle] : 0;
@@ -121,7 +122,7 @@ static NSString *const kBackgroundFileName = @"air2_background.jpg";
         _theme = [A2ColorTheme themeFromImage:_backgroundImage];
     } else if (_selectedKind == A2ThemeKindDynamic) {
         // 选了动态取色但还没设背景图，回退到默认主题，避免界面出现随机配色
-        _theme = [A2ColorTheme themeForKind:A2ThemeKindEmbermire];
+        _theme = [A2ColorTheme themeForKind:A2ThemeKindGlacier];
     } else {
         _theme = [A2ColorTheme themeForKind:_selectedKind];
     }

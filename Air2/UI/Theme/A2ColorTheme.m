@@ -312,14 +312,14 @@ void A2PairSchemePublic(A2ColorScheme *out, A2RawScheme *light, A2RawScheme *dar
         default:
             // Dynamic / Custom 都需要外部提供种子色或背景图，
             // 单靠 kind 无法构造 —— 回落到默认主题，由 ThemeManager 覆盖
-            return [self embermire];
+            return [self glacier];
     }
 }
 
 #pragma mark 从图片取色
 
 + (instancetype)themeFromImage:(UIImage *)image {
-    if (!image) return [self embermire];
+    if (!image) return [self glacier];
 
     // 缩到 1x1 取平均色：比逐像素遍历快几个数量级，且天然抗噪
     UIGraphicsBeginImageContextWithOptions(CGSizeMake(1, 1), YES, 1.0);
@@ -328,15 +328,15 @@ void A2PairSchemePublic(A2ColorScheme *out, A2RawScheme *light, A2RawScheme *dar
     UIGraphicsEndImageContext();
 
     CGImageRef cg = averaged.CGImage;
-    if (!cg) return [self embermire];
+    if (!cg) return [self glacier];
 
     CFDataRef data = CGDataProviderCopyData(CGImageGetDataProvider(cg));
-    if (!data) return [self embermire];
+    if (!data) return [self glacier];
 
     const UInt8 *bytes = CFDataGetBytePtr(data);
     if (CFDataGetLength(data) < 4) {
         CFRelease(data);
-        return [self embermire];
+        return [self glacier];
     }
 
     CGFloat r = bytes[0] / 255.0;

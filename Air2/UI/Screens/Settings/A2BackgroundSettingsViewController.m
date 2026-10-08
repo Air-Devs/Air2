@@ -113,8 +113,8 @@
 
     A2SettingsRow *clearRow = [[A2SettingsRow alloc] init];
     clearRow.symbolName = @"arrow.counterclockwise";
-    clearRow.title = @"恢复默认渐变";
-    clearRow.subtitle = @"使用当前主题的配色";
+    clearRow.title = @"恢复默认外观";
+    clearRow.subtitle = @"清除自定义图片，回到主题纯色";
     clearRow.accessory = A2SettingsRowAccessoryDisclosure;
     clearRow.showsSeparator = NO;
     clearRow.onTap = ^{
@@ -137,7 +137,7 @@
     _blurRow = [[A2SettingsRow alloc] init];
     _blurRow.symbolName = @"drop.halffull";
     _blurRow.title = @"背景模糊";
-    _blurRow.subtitle = @"让背景更柔和，也让卡片文字更清晰";
+    _blurRow.subtitle = @"仅自定义图片生效，让图片更柔和";
     _blurRow.valueText = [NSString stringWithFormat:@"%ld%%", (long)tm.backgroundBlur];
     UISlider *blurSlider = [self makeSlider:0 max:100 value:tm.backgroundBlur];
     __weak typeof(self) weakSelf = self;

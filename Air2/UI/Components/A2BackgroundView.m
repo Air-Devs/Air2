@@ -25,11 +25,6 @@
 #import "A2ThemeManager.h"
 
 @interface A2BackgroundView ()
-/// 主题渐变层（无图片时可见）
-@property (nonatomic, strong) CAGradientLayer *gradientLayer;
-/// 三个径向光斑 —— 纯渐变太平，光斑提供明暗层次
-@property (nonatomic, strong) UIView *glowTop;
-@property (nonatomic, strong) UIView *glowBottom;
 /// 用户图片
 @property (nonatomic, strong) UIImageView *imageView;
 /// 图片的模糊层（用 UIVisualEffectView 而非预模糊图片，切换强度时不用重算）
@@ -50,15 +45,9 @@
     self.userInteractionEnabled = NO;
     _fadeRatio = 0.35;
 
-    // ---- 渐变底 ----
-    _gradientLayer = [CAGradientLayer layer];
-    _gradientLayer.startPoint = CGPointMake(0.05, 0.0);
-    _gradientLayer.endPoint = CGPointMake(0.95, 1.0);
-    _gradientLayer.locations = @[@0.0, @0.5, @1.0];
-    [self.layer addSublayer:_gradientLayer];
-
-    _glowTop = [self makeGlow];
-    _glowBottom = [self makeGlow];
+    // 无图即纯色（MD3 surface），装饰渐变与光斑已移除：
+    // 背景隐身、靠卡片 tonal 层级表达深度（ZL2 同款克制，色值自研不照抄）。
+    self.backgroundColor = UIColor.clearColor;
 
     // ---- 图片 ----
     _imageView = [[UIImageView alloc] initWithFrame:CGRectZero];
@@ -100,14 +89,6 @@
     [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
-- (UIView *)makeGlow {
-    UIView *v = [[UIView alloc] initWithFrame:CGRectZero];
-    v.userInteractionEnabled = NO;
-    v.alpha = 0.5;
-    [self addSubview:v];
-    return v;
-}
-
 #pragma mark - 应用背景
 
 - (void)handleThemeChanged:(NSNotification *)note      { [self applyBackgroundAnimated:YES]; }
@@ -119,23 +100,17 @@
 
 - (void)applyBackgroundAnimated:(BOOL)animated {
     A2ThemeManager *tm = A2ThemeManager.shared;
-    A2ColorTheme *theme = tm.theme;
     BOOL dark = tm.isDark;
 
-    // ---- 渐变与光斑：始终更新（图片可能半透明，底下要有色） ----
-    _gradientLayer.colors = @[
-        (__bridge id)theme.backgroundGradient[0].CGColor,
-        (__bridge id)theme.backgroundGradient[1].CGColor,
-        (__bridge id)theme.backgroundGradient[2].CGColor,
-    ];
-    [self renderGlow:_glowTop color:tm.scheme.cTertiary];
-    [self renderGlow:_glowBottom color:tm.scheme.cPrimary];
+    // 纯色底：无图时即 MD3 surface，有图时垫在图下（图半透明过渡时不露白）。
+    UIColor *surface = tm.scheme.cSurface;
 
     // ---- 图片 ----
     UIImage *image = tm.backgroundImage;
     BOOL hasImage = (image != nil);
 
     void (^changes)(void) = ^{
+        self.backgroundColor = surface;
         self.imageView.image = image;
         self.imageView.alpha = hasImage ? 1.0 : 0.0;
 
@@ -161,8 +136,6 @@
         }
 
         self.imageView.alpha = hasImage ? 1.0 : 0.0;
-        self.glowTop.alpha = hasImage ? 0.22 : 0.5;
-        self.glowBottom.alpha = hasImage ? 0.22 : 0.5;
     };
 
     if (animated) {
@@ -178,21 +151,6 @@
     [self setNeedsLayout];
 }
 
-- (void)renderGlow:(UIView *)glow color:(UIColor *)color {
-    for (CALayer *l in glow.layer.sublayers) { [l removeFromSuperlayer]; }
-
-    CAGradientLayer *g = [CAGradientLayer layer];
-    g.type = kCAGradientLayerRadial;
-    g.colors = @[
-        (__bridge id)[color colorWithAlphaComponent:0.5].CGColor,
-        (__bridge id)[color colorWithAlphaComponent:0.0].CGColor,
-    ];
-    g.locations = @[@0.0, @1.0];
-    g.startPoint = CGPointMake(0.5, 0.5);
-    g.endPoint = CGPointMake(1.0, 1.0);
-    [glow.layer addSublayer:g];
-}
-
 #pragma mark - 布局
 
 - (void)layoutSubviews {
@@ -202,20 +160,11 @@
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
 
-    _gradientLayer.frame = self.bounds;
     _imageView.frame = self.bounds;
     _blurView.frame = self.bounds;
     _dimOverlay.frame = self.bounds;
 
     CGFloat w = self.bounds.size.width;
-    CGFloat h = self.bounds.size.height;
-
-    _glowTop.frame = CGRectMake(-w * 0.18, -h * 0.25, w * 0.75, h * 0.9);
-    _glowBottom.frame = CGRectMake(w * 0.35, h * 0.45, w * 0.8, h * 0.9);
-
-    for (UIView *g in @[_glowTop, _glowBottom]) {
-        for (CALayer *l in g.layer.sublayers) { l.frame = g.bounds; }
-    }
 
     // 右侧渐隐：从透明过渡到当前表面色，让操作栏一侧有稳定的底色
     CGFloat fadeW = w * MAX(0.0, MIN(1.0, _fadeRatio));
