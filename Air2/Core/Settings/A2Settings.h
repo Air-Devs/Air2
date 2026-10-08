@@ -19,10 +19,10 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
-//  全局设置注册表 —— Core 层唯一允许直接读写 NSUserDefaults 的地方。
+//  全局设置注册表 —— 启动器设置存 Documents/config.json，唯一读写点。
 //
 //  为什么需要：
-//    设置曾散在 A2GlobalGameSettings 与各处的裸 NSUserDefaults key 里，
+//    设置曾散在 A2GlobalGameSettings 与各处的裸 key 里，
 //    每加一个设置要改三处，且默认值/类型无人收敛（ZL2 用 AllSettings +
 //    SettingsRegistry 收敛了同一问题，这里学它的设计决策，用 ObjC 重写，
 //    不照抄实现）。
@@ -69,7 +69,7 @@ static const NSInteger A2SettingsMinRAMMB = 256;
 
 + (instancetype)shared;
 
-/// 重读 NSUserDefaults（多进程/测试改完 defaults 后同步内存值）。
+/// 重读 config.json（文件被外部改动后同步内存值）。
 - (void)reloadAll;
 
 /// 清掉全部托管 key，回到默认值（注销/恢复默认用）。
