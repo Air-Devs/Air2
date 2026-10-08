@@ -29,6 +29,7 @@
 #import "A2ThemeManager.h"
 #import "A2Typography.h"
 #import "A2Metrics.h"
+#import "A2Log.h"
 
 static NSString *const kCellID = @"A2GameVersionCell";
 
@@ -124,6 +125,7 @@ static NSString *const kCellID = @"A2GameVersionCell";
     [A2RemoteVersions fetchVersionsWithCompletion:^(NSArray<A2RemoteVersion *> *versions, NSError *error) {
         [self.spinner stopAnimating];
         if (error || versions.count == 0) {
+            [A2Log log:@"download: 版本清单拉取失败：%@", error.localizedDescription ?: @"空清单"];
             [A2Toast show:[NSString stringWithFormat:@"版本清单拉取失败：%@",
                            error.localizedDescription ?: @"空清单"]
                    inView:self.view];
@@ -167,6 +169,7 @@ static NSString *const kCellID = @"A2GameVersionCell";
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     A2RemoteVersion *v = self.visibleVersions[indexPath.row];
+    [A2Log log:@"download: 选中版本 %@（%@）", v.versionID, v.type];
     A2GameInstallOptionsViewController *vc =
         [[A2GameInstallOptionsViewController alloc] initWithVersionID:v.versionID];
     [self.navigationController pushViewController:vc animated:YES];

@@ -32,6 +32,7 @@
 #import "A2Toast.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
+#import "A2Log.h"
 
 @interface A2GameInstallOptionsViewController ()
 @property (nonatomic, copy) NSString *versionID;
@@ -110,6 +111,7 @@
 
 - (void)startInstall {
     NSString *loader = [A2GameInstallOptionsViewController loaderStringForIndex:_selectedLoader];
+    [A2Log log:@"download: 选择安装 %@（加载器 %@）", _versionID, loader ?: @"原版"];
     A2InstallingViewController *vc = [[A2InstallingViewController alloc] initWithVersionName:_versionID
                                                                                      loader:loader];
     [self.navigationController pushViewController:vc animated:YES];

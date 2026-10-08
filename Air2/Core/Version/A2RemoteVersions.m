@@ -23,6 +23,7 @@
 //
 
 #import "A2RemoteVersions.h"
+#import "A2Log.h"
 
 /// 与 A2GameInstaller.m 的 kVersionManifestURL 同值，改地址两处一起改。
 static NSString *const kVersionManifestURL = @"https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
@@ -49,9 +50,12 @@ static NSString *const kVersionManifestURL = @"https://piston-meta.mojang.com/mc
 
 + (void)fetchVersionsWithCompletion:(void (^)(NSArray<A2RemoteVersion *> *, NSError *))completion {
     void (^done)(NSArray<A2RemoteVersion *> *, NSError *) = ^(NSArray<A2RemoteVersion *> *v, NSError *e) {
+        if (e) [A2Log log:@"remote-versions: 拉取失败：%@", e.localizedDescription];
+        else [A2Log log:@"remote-versions: 拉取到 %lu 个版本", (unsigned long)v.count];
         if ([NSThread isMainThread]) completion(v, e);
         else dispatch_async(dispatch_get_main_queue(), ^{ completion(v, e); });
     };
+    [A2Log log:@"remote-versions: 拉取版本清单"];
     NSURL *url = [NSURL URLWithString:kVersionManifestURL];
     if (!url) {
         done(nil, [self err:@"清单地址非法"]);
