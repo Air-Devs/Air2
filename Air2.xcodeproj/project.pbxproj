@@ -69,6 +69,7 @@
 		4BE5F7816DB3CEF6CBE3809A /* A2PaletteStyle.m in Sources */ = {isa = PBXBuildFile; fileRef = E6F6FA4C47FD771177075404 /* A2PaletteStyle.m */; };
 		7B7A47F5F8AA510170F1A159 /* A2ThemeManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */; };
 		0771576A647FFB4348CEC538 /* A2Typography.m in Sources */ = {isa = PBXBuildFile; fileRef = 42B68771E09EA8BB40AC83D7 /* A2Typography.m */; };
+		6B1CD1AC96CD93B7EE0847A4 /* A2MurmurHash2.m in Sources */ = {isa = PBXBuildFile; fileRef = 70E537F57063CE783BE3A38B /* A2MurmurHash2.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -136,6 +137,7 @@
 		E6F6FA4C47FD771177075404 /* A2PaletteStyle.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PaletteStyle.m"; sourceTree = "<group>"; };
 		5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ThemeManager.m"; sourceTree = "<group>"; };
 		42B68771E09EA8BB40AC83D7 /* A2Typography.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Typography.m"; sourceTree = "<group>"; };
+		70E537F57063CE783BE3A38B /* A2MurmurHash2.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MurmurHash2.m"; sourceTree = "<group>"; };
 		52E0A8862124FBDB57E8C690 /* A2AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AppDelegate.h"; sourceTree = "<group>"; };
 		6A39662C0840C98AB5D33038 /* A2CrashGuard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CrashGuard.h"; sourceTree = "<group>"; };
 		FFF83F1A982D07C7CBBF5C78 /* A2NavigationController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2NavigationController.h"; sourceTree = "<group>"; };
@@ -198,6 +200,7 @@
 		812104F4721E701E0A31697D /* A2PaletteStyle.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PaletteStyle.h"; sourceTree = "<group>"; };
 		789AF4E406F5B8122812523E /* A2ThemeManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ThemeManager.h"; sourceTree = "<group>"; };
 		2146F61DDD3A2234BEDF108A /* A2Typography.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Typography.h"; sourceTree = "<group>"; };
+		089E9C0B1F10F5FF4BE351B0 /* A2MurmurHash2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MurmurHash2.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -236,6 +239,7 @@
 				7B4F16DD90D9362E0A2BDBD1 /* App */,
 				E5BA60354B4EC37E480783EA /* Core */,
 				B33E61FAD84ACA6142548585 /* UI */,
+				07456E46BBC30DF8EE54F44C /* Utils */,
 			);
 			path = Air2;
 			sourceTree = "<group>";
@@ -283,6 +287,16 @@
 				ED89BE603E6F0B8503DCD530 /* Theme */,
 			);
 			path = UI;
+			sourceTree = "<group>";
+		};
+
+		07456E46BBC30DF8EE54F44C /* Utils */ = {
+			isa = PBXGroup;
+			children = (
+				70E537F57063CE783BE3A38B /* A2MurmurHash2.m */,
+				089E9C0B1F10F5FF4BE351B0 /* A2MurmurHash2.h */,
+			);
+			path = Utils;
 			sourceTree = "<group>";
 		};
 
@@ -654,6 +668,7 @@
 				4BE5F7816DB3CEF6CBE3809A /* A2PaletteStyle.m in Sources */,
 				7B7A47F5F8AA510170F1A159 /* A2ThemeManager.m in Sources */,
 				0771576A647FFB4348CEC538 /* A2Typography.m in Sources */,
+				6B1CD1AC96CD93B7EE0847A4 /* A2MurmurHash2.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

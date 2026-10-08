@@ -106,10 +106,25 @@ extern const NSInteger A2CFMinecraftGameID;
 
 /// 按文件的 murmur2 哈希反查版本。
 /// CurseForge 用 MurmurHash2 而不是 SHA1 —— 这是它自己的指纹体系。
+/// @param murmur 本地按指纹规则算好的 murmur2（见 A2MurmurHash2 + 指纹剔除集）。
+- (void)versionByMurmur:(uint32_t)murmur
+             completion:(void (^)(A2CFFile * _Nullable file,
+                                  NSError * _Nullable error))completion;
+
+/// 按本地文件反查版本：本地算 murmur2 后调指纹接口。
+/// 旧的 versionByMurmurHash:sha1 拿 SHA1 字符串查 CurseForge 是查不出的
+/// （两种哈希体系不同），保留仅作兼容，始终返回 nil；新代码走本方法。
+- (void)versionByLocalFileAtPath:(NSString *)path
+                      completion:(void (^)(A2CFFile * _Nullable file,
+                                           NSError * _Nullable error))completion;
+
+/// CurseForge 指纹剔除的空白字节：\t \n \r 空格（与 ZL2 一致）。
++ (NSSet<NSNumber *> *)fingerprintSkipBytes;
+
 - (void)versionByMurmurHash:(NSString *)sha1
-                       size:(long long)size
-                 completion:(void (^)(A2CFFile * _Nullable file,
-                                      NSError * _Nullable error))completion;
+                      size:(long long)size
+                completion:(void (^)(A2CFFile * _Nullable file,
+                                     NSError * _Nullable error))completion;
 
 /// 取项目的文件列表
 - (void)filesForProject:(NSInteger)projectID

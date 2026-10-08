@@ -22,6 +22,7 @@
 //
 
 #import "A2CurseForgeAPI.h"
+#import "A2MurmurHash2.h"
 #import <Security/Security.h>
 
 const NSInteger A2CFMinecraftGameID = 432;
@@ -239,6 +240,45 @@ static void A2Main(dispatch_block_t b) {
                            userInfo:@{NSLocalizedDescriptionKey: msg}];
 }
 
+// POST JSON（指纹接口用；GET 保持不动）。
+// 与 GET 共用一套鉴权头，超时与错误语义一致。
+- (void)POST:(NSString *)path
+        body:(NSDictionary *)body
+  completion:(void (^)(id _Nullable data, NSError * _Nullable error))completion {
+    NSMutableURLRequest *req = [self requestWithPath:path query:nil];
+    if (!req) {
+        A2Main(^{
+            if (completion) completion(nil, [self err:@"未设置 CurseForge API Key"]);
+        });
+        return;
+    }
+    req.HTTPMethod = @"POST";
+    [req setValue:@"application/json" forHTTPHeaderField:@"Content-Type"];
+    req.HTTPBody = [NSJSONSerialization dataWithJSONObject:body options:0 error:nil];
+
+    NSURLSessionDataTask *t = [NSURLSession.sharedSession dataTaskWithRequest:req
+        completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
+        NSHTTPURLResponse *http = (NSHTTPURLResponse *)resp;
+        if (error) { A2Main(^{ if (completion) completion(nil, error); }); return; }
+        if (http.statusCode == 403) {
+            A2Main(^{ if (completion) completion(nil, [self err:@"API Key 无效或已过期"]); });
+            return;
+        }
+        if (http.statusCode < 200 || http.statusCode >= 300) {
+            A2Main(^{
+                if (completion) {
+                    completion(nil, [self err:[NSString stringWithFormat:
+                        @"服务返回 HTTP %ld", (long)http.statusCode]]);
+                }
+            });
+            return;
+        }
+        id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        A2Main(^{ if (completion) completion(json, nil); });
+    }];
+    [t resume];
+}
+
 #pragma mark 接口
 
 - (void)validateKeyWithCompletion:(void (^)(BOOL, NSError *))completion {
@@ -341,11 +381,59 @@ static void A2Main(dispatch_block_t b) {
 
 #pragma mark - MurmurHash 反查
 
++ (NSSet<NSNumber *> *)fingerprintSkipBytes {
+    // CurseForge 指纹剔除 \t \n \r 空格（与 ZL2 CURSEFORGE_FINGERPRINT_SKIP_BYTES 一致）。
+    static NSSet<NSNumber *> *skip = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        skip = [NSSet setWithObjects:@(0x09), @(0x0A), @(0x0D), @(0x20), nil];
+    });
+    return skip;
+}
+
 /// CurseForge 用 MurmurHash2 做文件指纹，不是 SHA1。
-/// 接口：POST /v1/fingerprints 带 fingerprints 数组。
-///
-/// 注意：这里传进来的 sha1 参数实际没用到 —— CurseForge 只认它自己的
-/// murmur2 值。要查 CurseForge 必须先本地算 murmur2。
+/// 接口：POST /v1/fingerprints 带 fingerprints 数组，取 data.exactMatches[0].file。
+- (void)versionByMurmur:(uint32_t)murmur
+            completion:(void (^)(A2CFFile *, NSError *))completion {
+    [self POST:@"/fingerprints"
+          body:@{@"fingerprints": @[@(murmur)]}
+    completion:^(id json, NSError *error) {
+        if (error) { if (completion) completion(nil, error); return; }
+        NSDictionary *dict = [json isKindOfClass:NSDictionary.class] ? json : nil;
+        NSDictionary *data = [dict[@"data"] isKindOfClass:NSDictionary.class] ? dict[@"data"] : nil;
+        NSArray *matches = [data[@"exactMatches"] isKindOfClass:NSArray.class] ? data[@"exactMatches"] : @[];
+        NSDictionary *first = [matches.firstObject isKindOfClass:NSDictionary.class] ? matches.firstObject : nil;
+        NSDictionary *fileJSON = [first[@"file"] isKindOfClass:NSDictionary.class] ? first[@"file"] : nil;
+        A2CFFile *f = [A2CFFile fromJSON:fileJSON];
+        // 无精确匹配不算错：调用方回退或提示“无更新”即可（与旧 stub 的 nil 语义兼容）。
+        if (completion) completion(f, nil);
+    }];
+}
+
+/// 按本地文件反查：先本地算 murmur2（seed=1），再调指纹接口。
+/// 哈希是 CPU 密集，两次全文件扫描放后台队列，不堵调用线程。
+- (void)versionByLocalFileAtPath:(NSString *)path
+                     completion:(void (^)(A2CFFile *, NSError *))completion {
+    if (path.length == 0) {
+        A2Main(^{ if (completion) completion(nil, nil); });
+        return;
+    }
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        NSError *hashErr = nil;
+        uint32_t murmur = [A2MurmurHash2 hash32OfFileAtPath:path
+                                                 skipBytes:A2CurseForgeAPI.fingerprintSkipBytes
+                                                      seed:1
+                                                     error:&hashErr];
+        if (hashErr) {
+            A2Main(^{ if (completion) completion(nil, hashErr); });
+            return;
+        }
+        [self versionByMurmur:murmur completion:completion];
+    });
+}
+
+/// 旧入口：拿 SHA1 字符串查 CurseForge 是查不出的（两种哈希体系不同）。
+/// 保留仅作兼容，始终返回 nil；新代码走 versionByLocalFileAtPath:。
 /// 当前实现为「尽力而为」：没有 murmur2 实现时返回 nil，
 /// 调用方应回退到 Modrinth 查询或直接提示无法检查更新。
 - (void)versionByMurmurHash:(NSString *)sha1
