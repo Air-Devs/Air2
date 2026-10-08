@@ -54,6 +54,7 @@
 #import "A2MicrosoftAuth.h"
 #import "A2LoginViewController.h"
 #import "A2Settings.h"
+#import "A2Log.h"
 
 @interface A2AccountViewController ()
 @property (nonatomic, strong) A2GlassCard *listCard;
@@ -139,6 +140,7 @@
         row.onSelect = ^{
             __strong typeof(weakSelf) self = weakSelf;
             if ([A2AccountManager.shared selectCurrentAccount:acc]) {
+                [A2Log log:@"AccountVC: 切换到账号 %@", acc.username];
                 for (A2AccountRowView *r in self.rows) r.current = (r == weakRow);
                 [A2Toast show:[NSString stringWithFormat:@"已切换到 %@", acc.username]
                        inView:self.view];
@@ -164,6 +166,7 @@
 
 /// 手动刷新凭据
 - (void)refreshAccount:(A2Account *)acc {
+    [A2Log log:@"AccountVC: 手动刷新账号 %@", acc.username];
     [A2Toast show:[NSString stringWithFormat:@"正在刷新 %@…", acc.username] inView:self.view];
     __weak typeof(self) weakSelf = self;
     if (acc.type == A2AccountTypeMicrosoft) {
@@ -173,13 +176,17 @@
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (newAcc) {
                     [A2AccountManager.shared addAccount:newAcc];
+                    [A2Log log:@"AccountVC: 账号 %@ 凭据刷新成功", acc.username];
                     [A2Toast show:@"凭据已刷新" inView:self.view];
                 } else {
+                    [A2Log log:@"AccountVC: 账号 %@ 凭据刷新失败 %@",
+                                acc.username, error.localizedDescription ?: @"未知错误"];
                     [A2Toast show:(error.localizedDescription ?: @"刷新失败") inView:self.view];
                 }
             });
         }];
     } else {
+        [A2Log log:@"AccountVC: 账号 %@ 无需刷新", acc.username];
         [A2Toast show:@"此账号无需刷新" inView:self.view];
     }
 }
@@ -204,6 +211,7 @@
     [sheet addAction:[UIAlertAction actionWithTitle:@"移除账号"
                                              style:UIAlertActionStyleDestructive
                                            handler:^(UIAlertAction *a) {
+        [A2Log log:@"AccountVC: 移除账号 %@", acc.username];
         [A2AccountManager.shared removeAccount:acc];
         [self buildAccounts];
         [A2Toast show:@"已移除" inView:self.view];

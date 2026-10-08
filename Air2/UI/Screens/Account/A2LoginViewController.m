@@ -31,6 +31,7 @@
 #import "A2MicrosoftAuth.h"
 #import "A2AccountManager.h"
 #import "A2Account.h"
+#import "A2Log.h"
 #import "A2GlassCard.h"
 #import "A2PrimaryButton.h"
 #import "A2SettingsSection.h"
@@ -124,6 +125,7 @@
 
     _mode = mode;
     _segmented.selectedIndex = mode;
+    [A2Log log:@"Login: 切换到登录方式 %ld", (long)mode];
 
     switch (mode) {
         case A2LoginModeMicrosoft:
@@ -219,16 +221,19 @@
 
 - (void)beginMicrosoftLogin {
     __weak typeof(self) weakSelf = self;
+    [A2Log log:@"Login: 开始请求微软设备码"];
     [_msAuth requestDeviceCode:^(A2DeviceCodeInfo *info, NSError *error) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
 
         if (error) {
+            [A2Log log:@"Login: 获取设备码失败 %@", error.localizedDescription ?: @"未知错误"];
             self.hintLabel.text = error.localizedDescription ?: @"获取设备码失败";
             [A2Toast show:@"获取设备码失败" inView:self.view];
             return;
         }
 
+        [A2Log log:@"Login: 拿到设备码，开始轮询授权结果"];
         self.deviceInfo = info;
         self.codeLabel.text = info.userCode;
         self.hintLabel.text = [NSString stringWithFormat:
@@ -264,6 +269,7 @@
                                  message:[NSString stringWithFormat:@"已登录：%@", account.username]];
         } else {
             NSString *msg = error.localizedDescription ?: @"登录失败";
+            [A2Log log:@"Login: 微软轮询结束但未拿到账号 %@", msg];
             self.hintLabel.text = msg;
             [A2Toast show:msg inView:self.view];
         }
@@ -360,11 +366,13 @@
     if (_mode == A2LoginModeOffline) {
         NSString *offlineError = [self validateOfflineName:_nameField.text];
         if (offlineError) {
+            [A2Log log:@"Login: 离线用户名校验失败 %@", offlineError];
             _nameField.errorText = offlineError;
             [A2Toast show:offlineError inView:self.view];
             return;
         }
         A2Account *acc = [[A2AccountManager shared] createOfflineAccountWithName:_nameField.text];
+        [A2Log log:@"Login: 创建离线账号 %@", _nameField.text];
         [self finishLoginWithAccount:acc
                              message:[NSString stringWithFormat:@"已创建离线账号：%@", _nameField.text]];
         return;
@@ -376,10 +384,13 @@
     _nameField.errorText = _nameField.text.length == 0 ? @"请输入用户名或邮箱" : nil;
     _passField.errorText = _passField.text.length == 0 ? @"请输入密码" : nil;
     if (serverError || _nameField.errorText.length > 0 || _passField.errorText.length > 0) {
+        [A2Log log:@"Login: 第三方表单校验失败 %@",
+                    serverError ?: @"账号或密码为空"];
         [A2Toast show:@"请检查填写内容" inView:self.view];
         return;
     }
 
+    [A2Log log:@"Login: 开始第三方认证 %@", _serverField.text];
     [self setLoggingIn:YES];
     __weak typeof(self) weakSelf = self;
     A2YggdrasilAuth *auth = [A2YggdrasilAuth new];
@@ -396,6 +407,7 @@
                                  message:[NSString stringWithFormat:@"已登录：%@", account.username]];
         } else {
             NSString *msg = error.localizedDescription ?: @"登录失败";
+            [A2Log log:@"Login: 第三方认证失败 %@", msg];
             self.passField.errorText = msg;
             [A2Toast show:msg inView:self.view];
         }
@@ -408,6 +420,7 @@
     [manager addAccount:account];
     // 登录完就把新账号设为当前账号，而不是留在列表里让用户再点一次
     (void)[manager selectCurrentAccount:account];
+    [A2Log log:@"Login: 登录成功并已切换为当前账号 %@", account.username];
 
     [A2Toast show:message inView:self.view];
     UINotificationFeedbackGenerator *fb = [UINotificationFeedbackGenerator new];
