@@ -88,7 +88,7 @@
     _modeStack.axis = UILayoutConstraintAxisVertical;
     _modeStack.spacing = A2SpaceL;
 
-    _segmented = [[A2SegmentedControl alloc] initWithTitles:@[@"Microsoft", @"离线", @"第三方"]];
+    _segmented = [[A2SegmentedControl alloc] initWithTitles:@[@"正版", @"离线", @"第三方"]];
     __weak typeof(self) weakSelf = self;
     _segmented.onSegmentChange = ^(NSInteger index) {
         __strong typeof(weakSelf) self = weakSelf;
@@ -131,7 +131,7 @@
 
     switch (mode) {
         case A2LoginModeMicrosoft:
-            self.pageTitle = @"Microsoft 登录";
+            self.pageTitle = @"正版账号登录";
             [self buildMicrosoftUI];
             [self beginMicrosoftLogin];
             break;

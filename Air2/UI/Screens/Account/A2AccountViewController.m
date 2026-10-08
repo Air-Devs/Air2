@@ -229,12 +229,12 @@
 
 - (void)setupAddSection {
     A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"添加账号"];
-    section.footerText = @"支持 Microsoft 正版、离线与第三方认证服务器（Yggdrasil）；进入后可切换登录方式。";
+    section.footerText = @"支持正版账号、离线与第三方认证服务器（Yggdrasil）；进入后可切换登录方式。";
 
     A2SettingsRow *row = [[A2SettingsRow alloc] init];
     row.symbolName = @"person.badge.plus";
     row.title = @"添加账号";
-    row.subtitle = @"Microsoft、离线或第三方登录";
+    row.subtitle = @"正版、离线或第三方登录";
     row.accessory = A2SettingsRowAccessoryDisclosure;
 
     __weak typeof(self) weakSelf = self;
