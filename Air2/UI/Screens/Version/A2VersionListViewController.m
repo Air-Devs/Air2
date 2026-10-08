@@ -161,16 +161,11 @@
     NSMutableArray<NSDictionary<NSString *, id> *> *out = [NSMutableArray array];
 
     for (A2Version *v in mgr.versions) {
-        // meta 文案：加载器 + 隔离状态
+        // meta 文案：加载器 + 隔离档位（档位是全局的，所有版本一致）
         NSMutableArray<NSString *> *parts = [NSMutableArray array];
         if (v.loaderInfo.length) [parts addObject:v.loaderInfo];
-        // 用解析后的实际状态，而不是原始的 SettingState ——
-        // FOLLOW_GLOBAL 时要显示「全局设置决定的结果」
-        if (v.isolation.isolationType == A2SettingStateFollowGlobal) {
-            [parts addObject:(v.isIsolationEnabled ? @"隔离·跟随全局" : @"共用·跟随全局")];
-        } else {
-            [parts addObject:(v.isIsolationEnabled ? @"隔离开启" : @"共用目录")];
-        }
+        [parts addObject:[NSString stringWithFormat:@"隔离·%@",
+                          A2IsolationModeDisplayName(v.isolationMode)]];
 
         [out addObject:@{
             @"name": v.name,

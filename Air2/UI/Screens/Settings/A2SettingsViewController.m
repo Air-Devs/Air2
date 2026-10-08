@@ -51,10 +51,10 @@
     [super viewDidLoad];
     self.pageTitle = @"设置";
 
-    // 外观之后是诊断 —— 其余等对应功能实现后再加。
-    // 见 A2SettingsSections.h 的说明。
+    // 其余等对应功能实现后再加。见 A2SettingsSections.h 的说明。
     NSArray<A2NavCategory *> *cats = @[
         [A2NavCategory title:@"外观" symbol:@"paintpalette.fill"],
+        [A2NavCategory title:@"游戏" symbol:@"gamecontroller.fill"],
         [A2NavCategory title:@"诊断" symbol:@"stethoscope"],
     ];
 
@@ -112,6 +112,8 @@
         [_detailStack addArrangedSubview:[A2AppearanceSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2AppearanceSettings buildSourceSectionWithHost:self]];
     } else if (index == 1) {
+        [_detailStack addArrangedSubview:[A2GameSettings buildWithHost:self]];
+    } else if (index == 2) {
         [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildWithHost:self]];
     }
 
