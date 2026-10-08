@@ -24,6 +24,8 @@
 #import "A2AppDelegate.h"
 #import "A2SceneDelegate.h"
 #import "A2ThemeManager.h"
+#import "A2Settings.h"
+#import "A2AccountManager.h"
 #import "A2Log.h"
 
 @implementation A2AppDelegate
@@ -34,6 +36,29 @@ didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *
     // 提前实例化主题管理器。它第一次访问会读 UserDefaults 与沙盒里的
     // 背景图，放在启动早期做，避免首次渲染时在布局过程中触发磁盘 IO。
     (void)A2ThemeManager.shared;
+
+    // 启动自动登录：仅在开关打开且有当前账号时，刷新其凭据。
+    // 这里只做「续期」——离线账号无需网络，Microsoft / 第三方账号
+    // 只有在令牌过期时才会真正发请求，未过期时立即返回。
+    // 不阻塞启动：回调里只写日志，UI 由账号页自己按需重读。
+    if (A2Settings.shared.autoLogin) {
+        A2AccountManager *mgr = A2AccountManager.shared;
+        if (mgr.currentAccount) {
+            [A2Log log:@"AppDelegate: 自动登录开始（当前账号 %@）", mgr.currentAccount.username];
+            [mgr refreshCurrentAccountIfNeeded:^(BOOL success, NSError *error) {
+                if (success) {
+                    [A2Log log:@"AppDelegate: 自动登录成功"];
+                } else {
+                    [A2Log log:@"AppDelegate: 自动登录失败 %@", error.localizedDescription ?: @"未知错误"];
+                }
+            }];
+        } else {
+            [A2Log log:@"AppDelegate: 自动登录跳过（无当前账号）"];
+        }
+    } else {
+        [A2Log log:@"AppDelegate: 自动登录已关闭"];
+    }
+
     [A2Log log:@"AppDelegate: didFinishLaunching 完成"];
     return YES;
 }

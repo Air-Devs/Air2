@@ -23,11 +23,15 @@
 #import "A2AccountManager.h"
 #import "A2MicrosoftAuth.h"
 #import "A2Settings.h"
+#import "A2Log.h"
 #import <CommonCrypto/CommonDigest.h>
 
 NSNotificationName const A2AccountsDidChangeNotification = @"A2AccountsDidChangeNotification";
 
-static NSString *const kAccountsFile = @"accounts.json";
+// 账号落盘目录：Documents/account/，一个账号一个 JSON 文件。
+// 文件名用账号的 uniqueID（随机串），不用账号名 —— 从文件名看不出是谁。
+static NSString *const kAccountsDirName = @"account";
+static NSString *const kAccountFileExtension = @"json";
 // 当前账号 key 收敛到 A2Settings，不再本地定义。
 
 static void A2Main(dispatch_block_t b) {
@@ -231,10 +235,23 @@ static void A2Main(dispatch_block_t b) {
 
 #pragma mark 持久化
 
-- (NSString *)accountsFilePath {
+/// 账号目录：Documents/account/。不存在时创建。
+- (NSString *)accountsDirectory {
     NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
                                                          NSUserDomainMask, YES).firstObject;
-    return [docs stringByAppendingPathComponent:kAccountsFile];
+    NSString *dir = [docs stringByAppendingPathComponent:kAccountsDirName];
+    [[NSFileManager defaultManager] createDirectoryAtPath:dir
+                             withIntermediateDirectories:YES
+                                              attributes:nil
+                                                   error:nil];
+    return dir;
+}
+
+/// 账号对应的文件路径。文件名就是账号的随机 uniqueID，与账号名无关。
+- (NSString *)filePathForAccount:(A2Account *)account {
+    NSString *name = [NSString stringWithFormat:@"%@.%@",
+                      account.uniqueID, kAccountFileExtension];
+    return [[self accountsDirectory] stringByAppendingPathComponent:name];
 }
 
 - (void)reload {
@@ -242,20 +259,40 @@ static void A2Main(dispatch_block_t b) {
     [self notify];
 }
 
-/// 读盘并恢复当前账号。与 reload 分开是因为 init 必须在 dispatch_once 内完成，
-/// 期间不能发通知（见 init 处说明）。
+/// 扫描账号目录并恢复当前账号。与 reload 分开是因为 init 必须在
+/// dispatch_once 内完成，期间不能发通知（见 init 处的说明）。
 - (void)loadAccountsFromDisk {
-    NSData *data = [NSData dataWithContentsOfFile:[self accountsFilePath]];
-    NSArray *raw = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [self accountsDirectory];
+    NSArray<NSString *> *entries = [fm contentsOfDirectoryAtPath:dir error:nil] ?: @[];
 
     NSMutableArray<A2Account *> *list = [NSMutableArray array];
-    if ([raw isKindOfClass:NSArray.class]) {
-        for (NSDictionary *d in raw) {
-            A2Account *a = [A2Account fromDictionary:d];
-            if (a) [list addObject:a];
-        }
+    for (NSString *name in entries) {
+        if (![name.pathExtension isEqualToString:kAccountFileExtension]) continue;
+
+        NSString *path = [dir stringByAppendingPathComponent:name];
+        BOOL isDir = NO;
+        if (![fm fileExistsAtPath:path isDirectory:&isDir] || isDir) continue;
+
+        NSData *data = [NSData dataWithContentsOfFile:path];
+        NSDictionary *dict = data
+            ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+        A2Account *a = [A2Account fromDictionary:dict];
+        if (!a) continue;
+
+        // 文件名即账号 ID：内容里缺 uniqueID 时用它兜底。
+        if (a.uniqueID.length == 0) a.uniqueID = name.stringByDeletingPathExtension;
+        [list addObject:a];
     }
+
+    // 目录枚举顺序不保证稳定，按创建时间排回「添加顺序」。
+    [list sortUsingComparator:^NSComparisonResult(A2Account *x, A2Account *y) {
+        return [x.createdAt compare:y.createdAt];
+    }];
+
     _accounts = [list copy];
+    [A2Log log:@"AccountManager: 从 %@ 目录载入 %lu 个账号",
+                kAccountsDirName, (unsigned long)_accounts.count];
 
     NSString *savedID = A2Settings.shared.currentAccountID;
     _currentAccount = nil;
@@ -267,19 +304,32 @@ static void A2Main(dispatch_block_t b) {
     if (!_currentAccount && _accounts.count > 0) _currentAccount = _accounts.firstObject;
 }
 
-- (void)save {
-    NSMutableArray *raw = [NSMutableArray array];
-    for (A2Account *a in _accounts) [raw addObject:[a toDictionary]];
+/// 把单个账号写成独立 JSON 文件。
+- (void)persistAccount:(A2Account *)account {
+    if (account.uniqueID.length == 0) return;
 
-    NSData *data = [NSJSONSerialization dataWithJSONObject:raw
+    NSData *data = [NSJSONSerialization dataWithJSONObject:[account toDictionary]
                                                    options:NSJSONWritingPrettyPrinted
                                                      error:nil];
-    NSString *path = [self accountsFilePath];
+    NSString *path = [self filePathForAccount:account];
     [data writeToFile:path atomically:YES];
 
     // 账号文件含 access token，收紧权限到 0600
     [[NSFileManager defaultManager] setAttributes:@{NSFilePosixPermissions: @0600}
                                      ofItemAtPath:path error:nil];
+
+    [A2Log log:@"AccountManager: 写入账号文件 %@.%@",
+                account.uniqueID, kAccountFileExtension];
+}
+
+/// 删除账号对应的文件。
+- (void)deleteFileForAccount:(A2Account *)account {
+    if (account.uniqueID.length == 0) return;
+
+    [[NSFileManager defaultManager] removeItemAtPath:[self filePathForAccount:account]
+                                              error:nil];
+    [A2Log log:@"AccountManager: 删除账号文件 %@.%@",
+                account.uniqueID, kAccountFileExtension];
 }
 
 - (void)notify {
@@ -306,15 +356,17 @@ static void A2Main(dispatch_block_t b) {
     }
 
     if (existing != NSNotFound) {
-        // 保留原有唯一 ID，不影响「当前账号」的记录
+        // 保留原有唯一 ID，这样文件名不变，也不影响「当前账号」的记录
         account.uniqueID = list[existing].uniqueID;
+        if (!account.createdAt) account.createdAt = list[existing].createdAt;
         list[existing] = account;
     } else {
+        if (!account.createdAt) account.createdAt = [NSDate date];
         [list addObject:account];
     }
 
     _accounts = [list copy];
-    [self save];
+    [self persistAccount:account];
 
     if (!_currentAccount) [self selectCurrentAccount:account];
     [self notify];
@@ -331,12 +383,14 @@ static void A2Main(dispatch_block_t b) {
 
     [list removeObject:found];
     _accounts = [list copy];
+    [self deleteFileForAccount:found];
 
     if (_currentAccount && [_currentAccount.uniqueID isEqualToString:account.uniqueID]) {
         _currentAccount = _accounts.count > 0 ? _accounts.firstObject : nil;
+        // 同步「当前账号」记录，否则下次启动会指向已被删掉的 ID。
+        A2Settings.shared.currentAccountID = _currentAccount.uniqueID;
     }
 
-    [self save];
     [self notify];
 }
 

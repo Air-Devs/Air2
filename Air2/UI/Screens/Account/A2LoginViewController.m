@@ -20,6 +20,12 @@
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
 //
+//  三种登录方式共用一个页面：顶部 MD3 分段控件切换，下方内容随模式重建。
+//  微软是「展示设备码 + 轮询」，离线 / 第三方是「表单输入」。
+//
+//  登录成功后统一走 finishLoginWithAccount:，会写入账号目录（见
+//  A2AccountManager）并自动切换为当前账号。
+//
 
 #import "A2LoginViewController.h"
 #import "A2MicrosoftAuth.h"
@@ -28,7 +34,8 @@
 #import "A2GlassCard.h"
 #import "A2PrimaryButton.h"
 #import "A2SettingsSection.h"
-#import "A2SettingsRow.h"
+#import "A2TextField.h"
+#import "A2SegmentedControl.h"
 #import "A2Toast.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
@@ -37,17 +44,24 @@
 @interface A2LoginViewController ()
 @property (nonatomic, assign) A2LoginMode mode;
 @property (nonatomic, strong) A2MicrosoftAuth *msAuth;
+@property (nonatomic, strong) A2SegmentedControl *segmented;
+/// 当前模式的内容容器，切换模式时整体重建
+@property (nonatomic, strong) UIStackView *modeStack;
 
-// 微软登录
+// ---- 微软设备码 ----
 @property (nonatomic, strong, nullable) A2DeviceCodeInfo *deviceInfo;
 @property (nonatomic, strong, nullable) UILabel *codeLabel;
 @property (nonatomic, strong, nullable) UILabel *hintLabel;
+@property (nonatomic, strong, nullable) A2PrimaryButton *copyButton;
 @property (nonatomic, strong, nullable) A2PrimaryButton *openButton;
 
-// 表单登录
-@property (nonatomic, strong, nullable) UITextField *nameField;
-@property (nonatomic, strong, nullable) UITextField *passField;
-@property (nonatomic, strong, nullable) UITextField *serverField;
+// ---- 表单（离线 / 第三方）----
+@property (nonatomic, strong, nullable) A2TextField *serverField;
+@property (nonatomic, strong, nullable) A2TextField *nameField;
+@property (nonatomic, strong, nullable) A2TextField *passField;
+@property (nonatomic, strong, nullable) A2PrimaryButton *loginButton;
+
+@property (nonatomic, assign) BOOL loggingIn;
 @end
 
 @implementation A2LoginViewController
@@ -67,23 +81,70 @@
 - (void)viewDidLoad {
     [super viewDidLoad];
 
-    switch (_mode) {
-        case A2LoginModeMicrosoft:  self.pageTitle = @"Microsoft 登录"; break;
-        case A2LoginModeOffline:    self.pageTitle = @"离线登录"; break;
-        case A2LoginModeThirdParty: self.pageTitle = @"第三方认证服务器"; break;
+    _modeStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _modeStack.axis = UILayoutConstraintAxisVertical;
+    _modeStack.spacing = A2SpaceL;
+
+    _segmented = [[A2SegmentedControl alloc] initWithTitles:@[@"Microsoft", @"离线", @"第三方"]];
+    __weak typeof(self) weakSelf = self;
+    _segmented.onSegmentChange = ^(NSInteger index) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        [self applyMode:(A2LoginMode)index];
+    };
+
+    [self addSection:_segmented];
+    [self addSection:_modeStack];
+
+    [self applyMode:_mode];
+}
+
+#pragma mark - 模式切换
+
+- (void)applyMode:(A2LoginMode)mode {
+    // 切换前先停掉上一个模式可能还在跑的轮询
+    [_msAuth cancel];
+
+    NSArray<UIView *> *oldViews = [_modeStack.arrangedSubviews copy];
+    for (UIView *v in oldViews) {
+        [_modeStack removeArrangedSubview:v];
+        [v removeFromSuperview];
     }
 
-    if (_mode == A2LoginModeMicrosoft) {
-        [self setupMicrosoftUI];
-        [self beginMicrosoftLogin];
-    } else {
-        [self setupFormUI];
+    _deviceInfo = nil;
+    _codeLabel = nil;
+    _hintLabel = nil;
+    _copyButton = nil;
+    _openButton = nil;
+    _serverField = nil;
+    _nameField = nil;
+    _passField = nil;
+    _loginButton = nil;
+    _loggingIn = NO;
+
+    _mode = mode;
+    _segmented.selectedIndex = mode;
+
+    switch (mode) {
+        case A2LoginModeMicrosoft:
+            self.pageTitle = @"Microsoft 登录";
+            [self buildMicrosoftUI];
+            [self beginMicrosoftLogin];
+            break;
+        case A2LoginModeOffline:
+            self.pageTitle = @"离线登录";
+            [self buildFormUI];
+            break;
+        case A2LoginModeThirdParty:
+            self.pageTitle = @"第三方认证服务器";
+            [self buildFormUI];
+            break;
     }
 }
 
 #pragma mark - 微软：设备码
 
-- (void)setupMicrosoftUI {
+- (void)buildMicrosoftUI {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
 
     A2GlassCard *card = [[A2GlassCard alloc] initWithFrame:CGRectZero];
@@ -97,9 +158,11 @@
     title.textAlignment = NSTextAlignmentCenter;
 
     _codeLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _codeLabel.font = [UIFont monospacedSystemFontOfSize:32 weight:UIFontWeightBold];
+    _codeLabel.font = [UIFont monospacedSystemFontOfSize:34 weight:UIFontWeightBold];
     _codeLabel.textColor = t.cPrimary;
     _codeLabel.textAlignment = NSTextAlignmentCenter;
+    _codeLabel.adjustsFontSizeToFitWidth = YES;
+    _codeLabel.minimumScaleFactor = 0.5;
     _codeLabel.text = @"————";
 
     _hintLabel = [[UILabel alloc] initWithFrame:CGRectZero];
@@ -109,6 +172,14 @@
     _hintLabel.numberOfLines = 3;
     _hintLabel.text = @"正在获取设备码…";
 
+    _copyButton = [[A2PrimaryButton alloc] initWithTitle:@"复制代码"
+                                                   style:A2ButtonStyleSecondary];
+    _copyButton.icon = [UIImage systemImageNamed:@"doc.on.doc"];
+    [_copyButton addTarget:self action:@selector(copyDeviceCode)
+          forControlEvents:UIControlEventTouchUpInside];
+    _copyButton.enabled = NO;
+    _copyButton.alpha = 0.5;
+
     _openButton = [[A2PrimaryButton alloc] initWithTitle:@"打开授权页面"
                                                    style:A2ButtonStylePrimary];
     _openButton.icon = [UIImage systemImageNamed:@"safari"];
@@ -117,8 +188,13 @@
     _openButton.enabled = NO;
     _openButton.alpha = 0.5;
 
+    UIStackView *buttons = [[UIStackView alloc] initWithArrangedSubviews:@[_copyButton, _openButton]];
+    buttons.axis = UILayoutConstraintAxisHorizontal;
+    buttons.spacing = A2SpaceM;
+    buttons.distribution = UIStackViewDistributionFillEqually;
+
     UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:
-                          @[title, _codeLabel, _hintLabel, _openButton]];
+                          @[title, _codeLabel, _hintLabel, buttons]];
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     stack.axis = UILayoutConstraintAxisVertical;
     stack.spacing = A2SpaceL;
@@ -133,13 +209,12 @@
         [stack.trailingAnchor constraintEqualToAnchor:card.contentView.trailingAnchor],
     ]];
 
-    [self addSection:card];
+    [_modeStack addArrangedSubview:card];
 
-    // 说明
     A2SettingsSection *tips = [[A2SettingsSection alloc] initWithTitle:nil];
     tips.footerText = @"设备码登录不需要在启动器里输入密码，"
                        "所有账号信息都由微软官方页面收集，本应用无法接触你的密码。";
-    [self addSection:tips];
+    [_modeStack addArrangedSubview:tips];
 }
 
 - (void)beginMicrosoftLogin {
@@ -149,7 +224,7 @@
         if (!self) return;
 
         if (error) {
-            self.hintLabel.text = error.localizedDescription;
+            self.hintLabel.text = error.localizedDescription ?: @"获取设备码失败";
             [A2Toast show:@"获取设备码失败" inView:self.view];
             return;
         }
@@ -158,6 +233,8 @@
         self.codeLabel.text = info.userCode;
         self.hintLabel.text = [NSString stringWithFormat:
             @"访问 %@\n输入上方代码完成登录", info.verificationURI];
+        self.copyButton.enabled = YES;
+        self.copyButton.alpha = 1.0;
         self.openButton.enabled = YES;
         self.openButton.alpha = 1.0;
 
@@ -183,22 +260,21 @@
         if (!self) return;
 
         if (account) {
-            [[A2AccountManager shared] addAccount:account];
-            [A2Toast show:[NSString stringWithFormat:@"已登录：%@", account.username]
-                   inView:self.view];
-            UINotificationFeedbackGenerator *fb = [UINotificationFeedbackGenerator new];
-            [fb notificationOccurred:UINotificationFeedbackTypeSuccess];
-
-            if (self.onSuccess) self.onSuccess(account);
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)),
-                           dispatch_get_main_queue(), ^{
-                [self.navigationController popViewControllerAnimated:YES];
-            });
+            [self finishLoginWithAccount:account
+                                 message:[NSString stringWithFormat:@"已登录：%@", account.username]];
         } else {
-            self.hintLabel.text = error.localizedDescription ?: @"登录失败";
-            [A2Toast show:@"登录失败" inView:self.view];
+            NSString *msg = error.localizedDescription ?: @"登录失败";
+            self.hintLabel.text = msg;
+            [A2Toast show:msg inView:self.view];
         }
     }];
+}
+
+- (void)copyDeviceCode {
+    NSString *code = _deviceInfo.userCode;
+    if (code.length == 0) return;
+    UIPasteboard.generalPasteboard.string = code;
+    [A2Toast show:@"代码已复制" inView:self.view];
 }
 
 - (void)openVerificationPage {
@@ -209,115 +285,172 @@
 
 #pragma mark - 表单（离线 / 第三方）
 
-- (void)setupFormUI {
-    A2ColorScheme *t = A2ThemeManager.shared.scheme;
-
+- (void)buildFormUI {
     A2GlassCard *card = [[A2GlassCard alloc] initWithFrame:CGRectZero];
     card.cornerRadius = A2RadiusXL;
     card.elevation = A2CardElevationLow;
 
-    _nameField = [self makeField:@"用户名" secure:NO];
-    _passField = [self makeField:@"密码" secure:YES];
-
-    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[_nameField]];
-    stack.translatesAutoresizingMaskIntoConstraints = NO;
-    stack.axis = UILayoutConstraintAxisVertical;
-    stack.spacing = A2SpaceM;
+    NSMutableArray<UIView *> *fields = [NSMutableArray array];
 
     if (_mode == A2LoginModeThirdParty) {
-        _serverField = [self makeField:@"认证服务器地址" secure:NO];
+        _serverField = [[A2TextField alloc] initWithLabel:@"认证服务器地址"];
         _serverField.text = @"https://littleskin.cn/api/yggdrasil";
         _serverField.keyboardType = UIKeyboardTypeURL;
-        [stack insertArrangedSubview:_serverField atIndex:0];
-        [stack addArrangedSubview:_passField];
+        _serverField.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        _serverField.supportText = @"兼容 Yggdrasil 协议，如 LittleSkin、Blessing Skin";
+        [fields addObject:_serverField];
+
+        _nameField = [[A2TextField alloc] initWithLabel:@"用户名或邮箱"];
+    } else {
+        _nameField = [[A2TextField alloc] initWithLabel:@"用户名"];
+        _nameField.supportText = @"3-16 个字符，仅字母、数字与下划线";
+    }
+    _nameField.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    [fields addObject:_nameField];
+
+    if (_mode == A2LoginModeThirdParty) {
+        _passField = [[A2TextField alloc] initWithLabel:@"密码"];
+        _passField.secure = YES;
+        [fields addObject:_passField];
     }
 
-    [card.contentView addSubview:stack];
-    [NSLayoutConstraint activateConstraints:@[
-        [stack.topAnchor constraintEqualToAnchor:card.contentView.topAnchor],
-        [stack.bottomAnchor constraintEqualToAnchor:card.contentView.bottomAnchor],
-        [stack.leadingAnchor constraintEqualToAnchor:card.contentView.leadingAnchor],
-        [stack.trailingAnchor constraintEqualToAnchor:card.contentView.trailingAnchor],
-    ]];
-    [self addSection:card];
+    UIStackView *fieldStack = [[UIStackView alloc] initWithArrangedSubviews:fields];
+    fieldStack.translatesAutoresizingMaskIntoConstraints = NO;
+    fieldStack.axis = UILayoutConstraintAxisVertical;
+    fieldStack.spacing = A2SpaceL;
 
-    A2PrimaryButton *loginBtn = [[A2PrimaryButton alloc] initWithTitle:@"登录"
-                                                                 style:A2ButtonStylePrimary];
-    loginBtn.icon = [UIImage systemImageNamed:@"person.badge.key.fill"];
-    [loginBtn addTarget:self action:@selector(performLogin) forControlEvents:UIControlEventTouchUpInside];
-    [self addSection:loginBtn];
+    [card.contentView addSubview:fieldStack];
+    [NSLayoutConstraint activateConstraints:@[
+        [fieldStack.topAnchor constraintEqualToAnchor:card.contentView.topAnchor],
+        [fieldStack.bottomAnchor constraintEqualToAnchor:card.contentView.bottomAnchor],
+        [fieldStack.leadingAnchor constraintEqualToAnchor:card.contentView.leadingAnchor],
+        [fieldStack.trailingAnchor constraintEqualToAnchor:card.contentView.trailingAnchor],
+    ]];
+
+    [_modeStack addArrangedSubview:card];
+
+    _loginButton = [[A2PrimaryButton alloc] initWithTitle:@"登录"
+                                                    style:A2ButtonStylePrimary];
+    _loginButton.icon = [UIImage systemImageNamed:@"person.badge.key.fill"];
+    [_loginButton addTarget:self action:@selector(performLogin)
+           forControlEvents:UIControlEventTouchUpInside];
+    [_modeStack addArrangedSubview:_loginButton];
+
+    // 回车直接提交
+    __weak typeof(self) weakSelf = self;
+    A2TextField *lastField = _passField ?: _nameField;
+    lastField.onReturn = ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        [self performLogin];
+    };
 
     A2SettingsSection *tips = [[A2SettingsSection alloc] initWithTitle:nil];
     tips.footerText = (_mode == A2LoginModeOffline)
         ? @"离线模式仅需用户名。可用于单机游戏与离线服务器，无法加入正版验证服务器。"
         : @"支持任何兼容 Yggdrasil 协议的认证服务器，如 LittleSkin、Blessing Skin。";
-    [self addSection:tips];
+    [_modeStack addArrangedSubview:tips];
 }
 
-- (UITextField *)makeField:(NSString *)placeholder secure:(BOOL)secure {
-    UITextField *f = [[UITextField alloc] initWithFrame:CGRectZero];
-    f.translatesAutoresizingMaskIntoConstraints = NO;
-    f.placeholder = placeholder;
-    f.secureTextEntry = secure;
-    f.font = [UIFont systemFontOfSize:15 weight:UIFontWeightRegular];
-    f.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    f.autocorrectionType = UITextAutocorrectionTypeNo;
-    f.clearButtonMode = UITextFieldViewModeWhileEditing;
-
-    A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    f.textColor = t.cOnSurface;
-    f.attributedPlaceholder = [[NSAttributedString alloc]
-        initWithString:placeholder
-            attributes:@{NSForegroundColorAttributeName: t.cOnSurfaceVariant}];
-
-    [f.heightAnchor constraintEqualToConstant:44].active = YES;
-    return f;
-}
+#pragma mark - 登录
 
 - (void)performLogin {
-    NSString *name = _nameField.text;
-    if (name.length == 0) {
-        [A2Toast show:@"请输入用户名" inView:self.view];
-        return;
-    }
+    if (_loggingIn) return;
 
     if (_mode == A2LoginModeOffline) {
-        A2Account *acc = [[A2AccountManager shared] createOfflineAccountWithName:name];
-        [[A2AccountManager shared] addAccount:acc];
-        [A2Toast show:[NSString stringWithFormat:@"已创建离线账号：%@", name] inView:self.view];
-        UINotificationFeedbackGenerator *fb = [UINotificationFeedbackGenerator new];
-        [fb notificationOccurred:UINotificationFeedbackTypeSuccess];
-        if (self.onSuccess) self.onSuccess(acc);
-        [self.navigationController popViewControllerAnimated:YES];
+        NSString *offlineError = [self validateOfflineName:_nameField.text];
+        if (offlineError) {
+            _nameField.errorText = offlineError;
+            [A2Toast show:offlineError inView:self.view];
+            return;
+        }
+        A2Account *acc = [[A2AccountManager shared] createOfflineAccountWithName:_nameField.text];
+        [self finishLoginWithAccount:acc
+                             message:[NSString stringWithFormat:@"已创建离线账号：%@", _nameField.text]];
         return;
     }
 
-    // 第三方
-    if (_passField.text.length == 0) {
-        [A2Toast show:@"请输入密码" inView:self.view];
+    // 第三方：服务器地址需要能解析出 http/https，账号密码不能为空
+    NSString *serverError = [self validateServerURL:_serverField.text];
+    _serverField.errorText = serverError;
+    _nameField.errorText = _nameField.text.length == 0 ? @"请输入用户名或邮箱" : nil;
+    _passField.errorText = _passField.text.length == 0 ? @"请输入密码" : nil;
+    if (serverError || _nameField.errorText.length > 0 || _passField.errorText.length > 0) {
+        [A2Toast show:@"请检查填写内容" inView:self.view];
         return;
     }
 
-    [A2Toast show:@"正在登录…" inView:self.view];
+    [self setLoggingIn:YES];
     __weak typeof(self) weakSelf = self;
     A2YggdrasilAuth *auth = [A2YggdrasilAuth new];
     [auth authenticateWithServer:_serverField.text
-                        username:name
+                        username:_nameField.text
                         password:_passField.text
                       completion:^(A2Account *account, NSError *error) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
 
+        [self setLoggingIn:NO];
         if (account) {
-            [[A2AccountManager shared] addAccount:account];
-            [A2Toast show:[NSString stringWithFormat:@"已登录：%@", account.username]
-                   inView:self.view];
-            if (self.onSuccess) self.onSuccess(account);
-            [self.navigationController popViewControllerAnimated:YES];
+            [self finishLoginWithAccount:account
+                                 message:[NSString stringWithFormat:@"已登录：%@", account.username]];
         } else {
-            [A2Toast show:(error.localizedDescription ?: @"登录失败") inView:self.view];
+            NSString *msg = error.localizedDescription ?: @"登录失败";
+            self.passField.errorText = msg;
+            [A2Toast show:msg inView:self.view];
         }
     }];
+}
+
+/// 登录成功：写盘 + 自动切换为当前账号 + 回调 + 返回上一页。
+- (void)finishLoginWithAccount:(A2Account *)account message:(NSString *)message {
+    A2AccountManager *manager = A2AccountManager.shared;
+    [manager addAccount:account];
+    // 登录完就把新账号设为当前账号，而不是留在列表里让用户再点一次
+    (void)[manager selectCurrentAccount:account];
+
+    [A2Toast show:message inView:self.view];
+    UINotificationFeedbackGenerator *fb = [UINotificationFeedbackGenerator new];
+    [fb notificationOccurred:UINotificationFeedbackTypeSuccess];
+
+    if (self.onSuccess) self.onSuccess(account);
+
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.6 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [weakSelf.navigationController popViewControllerAnimated:YES];
+    });
+}
+
+- (void)setLoggingIn:(BOOL)loggingIn {
+    _loggingIn = loggingIn;
+    _loginButton.loading = loggingIn;
+    _serverField.textField.enabled = !loggingIn;
+    _nameField.textField.enabled = !loggingIn;
+    _passField.textField.enabled = !loggingIn;
+}
+
+#pragma mark - 校验
+
+/// 离线用户名会同时作为游戏内名字，按官方规则限制。
+- (NSString *)validateOfflineName:(NSString *)name {
+    if (name.length == 0) return @"请输入用户名";
+    if (name.length < 3 || name.length > 16) return @"用户名长度为 3-16 个字符";
+
+    NSCharacterSet *allowed = [NSCharacterSet characterSetWithCharactersInString:
+        @"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_"];
+    NSCharacterSet *input = [NSCharacterSet characterSetWithCharactersInString:name];
+    if (![allowed isSupersetOfSet:input]) return @"只能包含字母、数字与下划线";
+    return nil;
+}
+
+- (NSString *)validateServerURL:(NSString *)urlString {
+    if (urlString.length == 0) return @"请输入服务器地址";
+
+    NSURL *url = [NSURL URLWithString:urlString];
+    BOOL schemeOK = [url.scheme isEqualToString:@"http"] || [url.scheme isEqualToString:@"https"];
+    if (url.host.length == 0 || !schemeOK) return @"地址需以 http:// 或 https:// 开头";
+    return nil;
 }
 
 @end

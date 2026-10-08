@@ -38,8 +38,11 @@ typedef NS_ENUM(NSInteger, A2AccountType) {
 
 @interface A2Account : NSObject <NSCopying>
 
-/// 唯一标识（用于去重与选中记录）
+/// 唯一标识。同时用作落盘文件名（Documents/account/<uniqueID>.json），
+/// 因此必须是「不含路径分隔符的随机串」，不能是账号名 —— 见 A2AccountManager。
 @property (nonatomic, copy) NSString *uniqueID;
+/// 创建时间。落盘后用于恢复列表顺序（目录枚举顺序不保证稳定）。
+@property (nonatomic, strong, nullable) NSDate *createdAt;
 @property (nonatomic, assign) A2AccountType type;
 /// 游戏内显示的用户名
 @property (nonatomic, copy) NSString *username;
