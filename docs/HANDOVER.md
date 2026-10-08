@@ -865,3 +865,17 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
 - [x] `CONTRIBUTING.md` 增「日志规范」：有必要的关键节点必须写日志，成熟后再放宽。
 - Info.plist 早已开 `UIFileSharingEnabled` + `LSSupportsOpeningDocumentsInPlace`，
   日志放在 Documents 下即可被「文件」App 打开 / 导出，本次未改。
+
+## 10.5 下载重写（分支 `feat/download-game`，待合入）
+
+- [x] 游戏链路打通：`Core/Version/A2RemoteVersions` 拉 Mojang 清单；
+      两步页（选版本 → 选加载器 → 7 阶段安装）；中心游戏入口改走新链路。
+     此前游戏入口错进 Modrinth 搜模组、安装页零调用。
+- [x] 项目详情页：头信息 + 版本列表 + 下载；下载逻辑由列表页剪切过来，
+      列表只搜列与路由；禁分发/空版本各独立空态。
+- [x] 已装清单 `Core/Download/A2DownloadManifest`（成功才记、手删视为未装），
+      列表“已安装”角标、详情版本打勾、主按钮“更新到 x”提示。
+- [x] 删假入口：下载中心假加载器行、按 ID/收藏夹假列表入口改诚实提示；
+      主页零调用死方法（`openFiles/openMultiplayer`）删除。
+- [x] 背景去渐变改纯色、默认冰川蓝（`UI-DESIGN.md` 第四节已同步）。
+- 剩下：发 PR 合入 `main`（分支 CI 全绿）。

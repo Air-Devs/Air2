@@ -238,14 +238,23 @@
     NSUInteger i = (NSUInteger)index;
     if (i >= names.count) i = 0;
 
+    // 按 ID（6）与收藏夹（7）尚无实现：不进列表，避免挂着羊头卖模组搜索。
+    // 有实现后再把对应分支改回 openListWithCategory。
+    BOOL implemented = (index >= 0 && index <= 5);
+
     A2SettingsRow *row = [[A2SettingsRow alloc] init];
     row.symbolName = symbols[i];
     row.title = names[i][0];
     row.subtitle = names[i][1];
-    row.accessory = A2SettingsRowAccessoryDisclosure;
+    row.accessory = implemented ? A2SettingsRowAccessoryDisclosure : A2SettingsRowAccessoryNone;
     NSInteger captured = index;
+    NSString *title = names[i][0];
     row.onTap = ^{
         __strong typeof(self) self = self;
+        if (!implemented) {
+            [A2Toast show:[NSString stringWithFormat:@"%@尚未实现", title] inView:self.view];
+            return;
+        }
         [self openListWithCategory:(A2DownloadCategory)captured];
     };
     [section addRow:row];
