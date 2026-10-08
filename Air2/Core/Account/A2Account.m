@@ -32,14 +32,15 @@
     _type = type;
     _username = [username copy];
     _uniqueID = [A2Account generateUniqueID];
+    _createdAt = [NSDate date];
     _clientToken = [A2Account randomToken];
     return self;
 }
 
-/// 唯一 ID：时间戳 + 随机数，避免依赖 UUID 库
+/// 唯一 ID：随机串。之所以不用账号名（也不用可预测的时间戳），
+/// 是因为它直接当落盘文件名用 —— 不能从文件名反推出是哪个账号。
 + (NSString *)generateUniqueID {
-    return [NSString stringWithFormat:@"%.0f%u",
-            [NSDate date].timeIntervalSince1970 * 1000, arc4random_uniform(100000)];
+    return [[NSUUID UUID].UUIDString stringByReplacingOccurrencesOfString:@"-" withString:@""].lowercaseString;
 }
 
 /// 随机 token（Yggdrasil 用得上）
@@ -79,6 +80,7 @@
 - (id)copyWithZone:(NSZone *)zone {
     A2Account *c = [[A2Account allocWithZone:zone] init];
     c.uniqueID = self.uniqueID;
+    c.createdAt = self.createdAt;
     c.type = self.type;
     c.username = self.username;
     c.profileID = self.profileID;
@@ -97,6 +99,8 @@
     if (![dict isKindOfClass:NSDictionary.class]) return nil;
     A2Account *a = [A2Account new];
     a.uniqueID = dict[@"uniqueID"] ?: [self generateUniqueID];
+    NSNumber *created = dict[@"createdAt"];
+    a.createdAt = created ? [NSDate dateWithTimeIntervalSince1970:created.doubleValue] : [NSDate date];
     a.type = (A2AccountType)[dict[@"type"] integerValue];
     a.username = dict[@"username"] ?: @"";
     a.profileID = dict[@"profileID"];
@@ -116,6 +120,7 @@
 - (NSDictionary *)toDictionary {
     NSMutableDictionary *d = [NSMutableDictionary dictionary];
     d[@"uniqueID"] = self.uniqueID;
+    if (self.createdAt)     d[@"createdAt"]     = @(self.createdAt.timeIntervalSince1970);
     d[@"type"] = @(self.type);
     d[@"username"] = self.username;
     if (self.profileID)     d[@"profileID"]     = self.profileID;

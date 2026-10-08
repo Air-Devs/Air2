@@ -53,6 +53,8 @@
 #import "A2Account.h"
 #import "A2MicrosoftAuth.h"
 #import "A2LoginViewController.h"
+#import "A2Settings.h"
+#import "A2Log.h"
 
 @interface A2AccountViewController ()
 @property (nonatomic, strong) A2GlassCard *listCard;
@@ -138,6 +140,7 @@
         row.onSelect = ^{
             __strong typeof(weakSelf) self = weakSelf;
             if ([A2AccountManager.shared selectCurrentAccount:acc]) {
+                [A2Log log:@"AccountVC: 切换到账号 %@", acc.username];
                 for (A2AccountRowView *r in self.rows) r.current = (r == weakRow);
                 [A2Toast show:[NSString stringWithFormat:@"已切换到 %@", acc.username]
                        inView:self.view];
@@ -163,6 +166,7 @@
 
 /// 手动刷新凭据
 - (void)refreshAccount:(A2Account *)acc {
+    [A2Log log:@"AccountVC: 手动刷新账号 %@", acc.username];
     [A2Toast show:[NSString stringWithFormat:@"正在刷新 %@…", acc.username] inView:self.view];
     __weak typeof(self) weakSelf = self;
     if (acc.type == A2AccountTypeMicrosoft) {
@@ -172,13 +176,17 @@
             dispatch_async(dispatch_get_main_queue(), ^{
                 if (newAcc) {
                     [A2AccountManager.shared addAccount:newAcc];
+                    [A2Log log:@"AccountVC: 账号 %@ 凭据刷新成功", acc.username];
                     [A2Toast show:@"凭据已刷新" inView:self.view];
                 } else {
+                    [A2Log log:@"AccountVC: 账号 %@ 凭据刷新失败 %@",
+                                acc.username, error.localizedDescription ?: @"未知错误"];
                     [A2Toast show:(error.localizedDescription ?: @"刷新失败") inView:self.view];
                 }
             });
         }];
     } else {
+        [A2Log log:@"AccountVC: 账号 %@ 无需刷新", acc.username];
         [A2Toast show:@"此账号无需刷新" inView:self.view];
     }
 }
@@ -203,6 +211,7 @@
     [sheet addAction:[UIAlertAction actionWithTitle:@"移除账号"
                                              style:UIAlertActionStyleDestructive
                                            handler:^(UIAlertAction *a) {
+        [A2Log log:@"AccountVC: 移除账号 %@", acc.username];
         [A2AccountManager.shared removeAccount:acc];
         [self buildAccounts];
         [A2Toast show:@"已移除" inView:self.view];
@@ -220,35 +229,24 @@
 
 - (void)setupAddSection {
     A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"添加账号"];
-    section.footerText = @"Microsoft 正版账号可加入正版服务器；离线账号仅用于单机与离线服务器。";
+    section.footerText = @"支持 Microsoft 正版、离线与第三方认证服务器（Yggdrasil）；进入后可切换登录方式。";
 
-    NSArray<NSArray<NSString *> *> *options = @[
-        @[@"Microsoft 登录", @"使用正版账号，支持皮肤与正版服务器", @"person.badge.key.fill"],
-        @[@"离线登录", @"仅输入用户名，无需密码", @"person.fill"],
-        @[@"第三方认证服务器", @"Yggdrasil 协议，如 LittleSkin", @"server.rack"],
-    ];
+    A2SettingsRow *row = [[A2SettingsRow alloc] init];
+    row.symbolName = @"person.badge.plus";
+    row.title = @"添加账号";
+    row.subtitle = @"Microsoft、离线或第三方登录";
+    row.accessory = A2SettingsRowAccessoryDisclosure;
 
-    for (NSUInteger i = 0; i < options.count; i++) {
-        A2SettingsRow *row = [[A2SettingsRow alloc] init];
-        row.symbolName = options[i][2];
-        row.title = options[i][0];
-        row.subtitle = options[i][1];
-        row.accessory = A2SettingsRowAccessoryDisclosure;
-        A2LoginMode mode = A2LoginModeMicrosoft;
-        if (i == 1) mode = A2LoginModeOffline;
-        else if (i == 2) mode = A2LoginModeThirdParty;
-
-        __weak typeof(self) weakSelf = self;
-        row.onTap = ^{
-            __strong typeof(weakSelf) self = weakSelf;
-            A2LoginViewController *vc = [[A2LoginViewController alloc] initWithMode:mode];
-            vc.onSuccess = ^(A2Account *account) {
-                [self buildAccounts];
-            };
-            [self.navigationController pushViewController:vc animated:YES];
+    __weak typeof(self) weakSelf = self;
+    row.onTap = ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        A2LoginViewController *vc = [[A2LoginViewController alloc] initWithMode:A2LoginModeMicrosoft];
+        vc.onSuccess = ^(A2Account *account) {
+            [self buildAccounts];
         };
-        [section addRow:row];
-    }
+        [self.navigationController pushViewController:vc animated:YES];
+    };
+    [section addRow:row];
 
     [self addSection:section];
 }
@@ -261,9 +259,12 @@
     A2SettingsRow *autoRow = [[A2SettingsRow alloc] init];
     autoRow.symbolName = @"checkmark.seal";
     autoRow.title = @"启动时自动登录";
+    autoRow.subtitle = @"启动时刷新当前账号的登录凭据";
     autoRow.accessory = A2SettingsRowAccessorySwitch;
-    autoRow.on = YES;
-    autoRow.onToggle = ^(BOOL isOn) {};
+    autoRow.on = A2Settings.shared.autoLogin;
+    autoRow.onToggle = ^(BOOL isOn) {
+        A2Settings.shared.autoLogin = isOn;
+    };
     [section addRow:autoRow];
 
     [self addSection:section];

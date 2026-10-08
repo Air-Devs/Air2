@@ -52,6 +52,7 @@ FOUNDATION_EXPORT NSString *const A2SettingsKeyMirrorPriority;
 FOUNDATION_EXPORT NSString *const A2SettingsKeyMirrorEnabled;
 FOUNDATION_EXPORT NSString *const A2SettingsKeyCurrentAccountID;
 FOUNDATION_EXPORT NSString *const A2SettingsKeyCurrentVersionName;
+FOUNDATION_EXPORT NSString *const A2SettingsKeyAutoLogin;
 
 /// 内容平台取值（对应 A2ContentPlatform，存 NSInteger 避免跨层 import）。
 static const NSInteger A2SettingsPlatformModrinth = 0;
@@ -101,6 +102,9 @@ static const NSInteger A2SettingsMinRAMMB = 256;
 
 /// 当前版本名。默认 nil。
 @property (nonatomic, copy, nullable) NSString *currentVersionName;
+
+/// 启动时自动登录（校验/续期当前账号凭据）。默认 YES。
+@property (nonatomic, assign) BOOL autoLogin;
 
 @end
 

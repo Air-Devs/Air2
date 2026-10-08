@@ -37,6 +37,7 @@ NSString *const A2SettingsKeyMirrorPriority = @"A2MirrorPriority";
 NSString *const A2SettingsKeyMirrorEnabled = @"A2MirrorEnabled";
 NSString *const A2SettingsKeyCurrentAccountID = @"A2CurrentAccountID";
 NSString *const A2SettingsKeyCurrentVersionName = @"A2CurrentVersionName";
+NSString *const A2SettingsKeyAutoLogin = @"A2AutoLogin";
 
 @interface A2Settings ()
 @property (nonatomic, strong) NSUserDefaults *defaults;
@@ -80,6 +81,7 @@ NSString *const A2SettingsKeyCurrentVersionName = @"A2CurrentVersionName";
     _mirrorEnabled = [self boolForKey:A2SettingsKeyMirrorEnabled defaultValue:YES];
     _currentAccountID = [self.defaults stringForKey:A2SettingsKeyCurrentAccountID];
     _currentVersionName = [self.defaults stringForKey:A2SettingsKeyCurrentVersionName];
+    _autoLogin = [self boolForKey:A2SettingsKeyAutoLogin defaultValue:YES];
 }
 
 - (void)resetAllToDefaults {
@@ -93,6 +95,7 @@ NSString *const A2SettingsKeyCurrentVersionName = @"A2CurrentVersionName";
         A2SettingsKeyMirrorEnabled,
         A2SettingsKeyCurrentAccountID,
         A2SettingsKeyCurrentVersionName,
+        A2SettingsKeyAutoLogin,
     ];
     for (NSString *k in keys) {
         [self.defaults removeObjectForKey:k];
@@ -200,6 +203,12 @@ NSString *const A2SettingsKeyCurrentVersionName = @"A2CurrentVersionName";
         [self.defaults removeObjectForKey:A2SettingsKeyCurrentVersionName];
     }
     [self notifyKey:A2SettingsKeyCurrentVersionName];
+}
+
+- (void)setAutoLogin:(BOOL)v {
+    _autoLogin = v;
+    [self.defaults setBool:v forKey:A2SettingsKeyAutoLogin];
+    [self notifyKey:A2SettingsKeyAutoLogin];
 }
 
 @end
