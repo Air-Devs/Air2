@@ -22,6 +22,7 @@
 //
 
 #import "A2MicrosoftAuth.h"
+#import "A2Log.h"
 
 /// 微软 OAuth 端点。
 ///
@@ -256,16 +257,17 @@ static void A2Main(dispatch_block_t b) {
 
         [self postJSON:kXstsAuthURL body:xstsBody completion:^(NSDictionary *json2, NSError *error2) {
             if (error2) {
-                // XSTS 有专门的错误码，翻译成人话
-                A2Main(^{
-                    if (completion) completion(nil, [self translateXSTSError:error2]);
-                });
+                // 网络层错误原样透传（XSTS 的业务拒绝不走这里，见下）
+                A2Main(^{ if (completion) completion(nil, error2); });
                 return;
             }
 
             NSString *xstsToken = json2[@"Token"];
             if (xstsToken.length == 0) {
-                A2Main(^{ if (completion) completion(nil, [self err:@"XSTS 令牌获取失败"]); });
+                // XSTS 的业务拒绝是 HTTP 401 + XErr 数字码，翻译成人话再抛给 UI
+                NSError *xstsErr = [self xstsErrorFromResponse:json2];
+                [A2Log log:@"MSAuth: XSTS 被拒 %@", xstsErr.localizedDescription];
+                A2Main(^{ if (completion) completion(nil, xstsErr); });
                 return;
             }
 
@@ -348,11 +350,13 @@ static void A2Main(dispatch_block_t b) {
             completion:(void (^)(A2Account *, NSError *))completion {
 
     if (!account.canRefresh) {
+        [A2Log log:@"MSAuth: 续期中止，账号 %@ 不支持续期", account.username];
         if (completion) {
             completion(nil, [self err:@"此账号不支持自动续期，请重新登录"]);
         }
         return;
     }
+    [A2Log log:@"MSAuth: 开始续期 %@", account.username];
 
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
                                [NSURL URLWithString:kTokenURL]];
@@ -368,16 +372,22 @@ static void A2Main(dispatch_block_t b) {
 
     NSURLSessionDataTask *t = [_session dataTaskWithRequest:req
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
-        if (error) { A2Main(^{ if (completion) completion(nil, error); }); return; }
+        if (error) {
+            [A2Log log:@"MSAuth: 续期请求失败 %@", error.localizedDescription];
+            A2Main(^{ if (completion) completion(nil, error); });
+            return;
+        }
 
         NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
         NSString *msToken = json[@"access_token"];
         if (msToken.length == 0) {
             NSString *desc = json[@"error_description"] ?: @"续期失败，请重新登录";
+            [A2Log log:@"MSAuth: 续期未拿到 token %@", desc];
             A2Main(^{ if (completion) completion(nil, [self err:desc]); });
             return;
         }
 
+        [A2Log log:@"MSAuth: 续期拿到新 token，继续换取 MC 令牌"];
         NSString *newRefresh = json[@"refresh_token"] ?: account.refreshToken;
 
         // 重新走一遍换取流程（新 token 需要重新换 MC 令牌）
@@ -417,10 +427,36 @@ static void A2Main(dispatch_block_t b) {
     [t resume];
 }
 
-/// XSTS 的错误码有特定含义，翻译成人能看懂的话
-- (NSError *)translateXSTSError:(NSError *)error {
-    // 网络层错误直接透传
-    return error;
+/// XSTS 用 401 + `XErr` 数字码说明拒绝原因，翻成用户能看懂的说明。
+/// 只挑玩家最可能撞到的几个；其余的把错误码一起回显，
+/// 用户报障时能直接从日志里抄下来。
+- (NSError *)xstsErrorFromResponse:(NSDictionary *)json {
+    NSInteger code = [json[@"XErr"] integerValue];
+    if (code == 0) return [self err:@"XSTS 令牌获取失败"];
+
+    NSString *msg = nil;
+    switch (code) {
+        case 2148916227:
+            msg = @"此微软账号已被 Xbox Live 封禁";
+            break;
+        case 2148916233:
+            msg = @"此微软账号还没有 Xbox 档案，请先在 xbox.com 登录一次创建";
+            break;
+        case 2148916235:
+            msg = @"Xbox Live 在你所在的国家/地区不可用";
+            break;
+        case 2148916236:
+        case 2148916237:
+            msg = @"此账号需要先完成成人验证";
+            break;
+        case 2148916238:
+            msg = @"未成年账号需由家长账号加入家庭组后才能登录";
+            break;
+        default:
+            msg = [NSString stringWithFormat:@"Xbox 验证失败（错误码 %ld）", (long)code];
+            break;
+    }
+    return [self err:msg];
 }
 
 - (NSString *)urlEncode:(NSString *)s {
