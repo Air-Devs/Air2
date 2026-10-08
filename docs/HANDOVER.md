@@ -1,7 +1,7 @@
 # Air2 项目交接文档
 
-> **最后更新**：2026-10-07
-> **当前进度**：UI 层完成度约 85%，Core 层完成度约 60%
+> **最后更新**：2026-10-08（见文末“第十章 本次交接后进展”，原文保留备查）
+> **当前进度**：CI 已绿；P1（Settings/Renderer/皮肤获取）与 P2（MurmurHash2/文件管理/整合包解析）及诊断入口均已落地，详见第十章
 > **接手须知**：先读「第二章 硬性约束」，那里写了不能违反的规则
 >
 > ⚠️ **注意：1.游戏启动流程（Bridge / Natives / Player / JavaApp）已由其他人负责，不要重复开发。**
@@ -808,3 +808,43 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
 反而增加复杂度 —— 已废弃该规则。）
 
 **当前最大文件**：`A2LauncherViewController.m` 约 760 行。
+
+---
+
+# 第十章 本次交接后进展（2026-10-08，会话记录）
+
+> 记法：只追加不改前文（前文进度数字不可全信，见第八章自述）。
+> 全部改动经 `lint_structure + verify_pbxproj + tests/Core` 本地全绿后推送，
+> CI `Build IPA` 连续 success。
+
+## 10.1 CI 修绿（此前 main 连续 27 次 failure）
+
+- [x] 子类 shadow 基类 `readonly contentStack`（Settings/Download）→ 改名 `detailScroll/detailStack`
+- [x] `_recentCard/_recentStack` 有用无声明 → 补声明
+- [x] UI 重定义 Core 类型 `A2ContentSource` 枚举 → 删重复定义，改用 `A2ContentPlatform`
+- [x] 下载列表沿用旧 Modrinth 字段 → 改用统一 `A2ContentItem`，删死代码 `projectType`
+- [x] `UIControl.selected` 被重声明两处 → 删重声明、setter 调 super
+- [x] `showsBottomSeparator` 改名残留三处 → 统一 `showsSeparator`
+- [x] `A2InstallRequest` 有声明无实现（链接失败）→ 补实现
+- [x] 类方法自调用笔误（`selfJSONObject`）→ 修正
+
+## 10.2 接手人任务（对照第六章 6.4）
+
+- [x] P1 `Core/Settings/` 注册表：`A2Settings`（类型安全/默认值/持久化/通知），
+      同 key 无损迁移 Account/ContentSource/Mirror/Version，`A2GlobalGameSettings` 转兼容转发
+- [x] P1 `Core/Renderer/`：`A2Renderer` 注册与解析（版本覆盖>全局>首个），只收机制不虚构后端、不加 UI
+- [x] P1 皮肤/披风：`A2Wardrobe`（会话 profile 解析、slim/classic、Caches 落盘、失败非致命），暂不加 UI
+- [x] P2 CurseForge 更新检查：`Utils/A2MurmurHash2`（内存/文件流式）+ 指纹 POST 与按文件反查，附向量测试
+- [x] P2 文件管理页：`A2GameFiles`（作用域守卫/校验/排序）+ 版本级浏览页，已接版本设置入口
+- [x] P2 整合包：`A2ModPack` 双格式清单解析（CF/MR 建模，只出计划不执行），附离线测试
+- [x] P3 崩溃上报（读侧）：设置诊断分类查看/清除 `air2_crash.log`（只写不读等于没有）
+- [x] 版权：124 个 `.h/.m` 补详细 GPL 头（生成文件跳过）
+- [ ] P2 `UI/Control`：归启动侧，不做（避免与他人重复开发）
+- [ ] P3 图标/本地化：缺设计资源与迁移策略，未做（硬做即新石山）
+- [ ] 整合包执行层、更新检查 UI：待另起任务，先有真实需求再做
+
+## 10.3 残留（非阻塞）
+
+- `ThemeManager` 仍直写 `NSUserDefaults`（UI 层有意保留）
+- `A2GlobalGameSettings` 垫片、旧指纹字符串存根保留兼容
+- CI 残留警告：未用变量/强捕获/未声明 selector/废弃 API各一处
