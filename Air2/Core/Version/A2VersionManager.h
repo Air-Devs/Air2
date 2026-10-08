@@ -20,9 +20,8 @@
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
 //
-//  已安装版本的管理 —— 扫描、选择、删除、重命名。
+//  已安装版本的管理 —— 扫描、选择、删除、重命名、复制。
 //
-//  与 ZL2 的 VersionsManager 对应。
 //  职责：
 //    · 扫描 {gameHome}/versions/ 下的所有版本
 //    · 读取每个版本的 {name}.json 与 .air_version/config.json
@@ -32,6 +31,7 @@
 
 #import <Foundation/Foundation.h>
 #import "A2VersionIsolation.h"
+#import "A2VersionInfo.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -58,8 +58,12 @@ typedef NS_ENUM(NSInteger, A2VersionType) {
 @property (nonatomic, assign, readonly, getter=isValid) BOOL valid;
 /// 上次游玩时间（用于排序）
 @property (nonatomic, strong, nullable) NSDate *lastPlayed;
-/// 加载器信息（从 json 里解析出来的展示文本）
+/// 加载器信息（兼容转发，取自 versionInfo.loaderDisplayString）
 @property (nonatomic, copy, nullable) NSString *loaderInfo;
+/// 版本身份（MC 版本 + 加载器列表，解析失败时为 nil）
+@property (nonatomic, strong, readonly, nullable) A2VersionInfo *versionInfo;
+/// 无效原因（有效时为 nil；缺 json / 缺 jar / json 解析失败三选一）
+@property (nonatomic, copy, readonly, nullable) NSString *invalidReason;
 
 - (instancetype)initWithName:(NSString *)name gameHome:(NSString *)gameHome;
 
@@ -82,6 +86,9 @@ typedef NS_ENUM(NSInteger, A2VersionType) {
 
 - (void)loadConfig;
 - (void)saveConfig;
+
+/// 置顶并落盘，失败时回滚为旧值并返回 NO（调用方据此决定是否回滚 UI）。
+- (BOOL)applyPinnedAndSave:(BOOL)pinned;
 
 @end
 
@@ -117,6 +124,8 @@ extern NSNotificationName const A2VersionsDidChangeNotification;
 - (BOOL)deleteVersion:(A2Version *)version error:(NSError **)error;
 /// 重命名版本
 - (BOOL)renameVersion:(A2Version *)version to:(NSString *)newName error:(NSError **)error;
+/// 复制版本。copyAllFiles=YES 拷整个目录，NO 只拷 json+jar；新版本不继承置顶。
+- (BOOL)copyVersion:(A2Version *)version to:(NSString *)newName copyAllFiles:(BOOL)copyAll error:(NSError **)error;
 
 @end
 

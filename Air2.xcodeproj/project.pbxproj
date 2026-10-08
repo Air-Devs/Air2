@@ -32,6 +32,7 @@
 		8B0D65271C85EAABC46B0226 /* A2Renderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 47106E1A43667C70F671BED2 /* A2Renderer.m */; };
 		E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */ = {isa = PBXBuildFile; fileRef = 035FB3CC4FE4018F44632AD5 /* A2Settings.m */; };
 		15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */; };
+		2BC4E80EA8F83E9426E4BA2E /* A2VersionInfo.m in Sources */ = {isa = PBXBuildFile; fileRef = 3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */; };
 		7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 643B820206971C227F265607 /* A2VersionManager.m */; };
 		B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */ = {isa = PBXBuildFile; fileRef = 872075DCD0F565557A6554D2 /* A2BackgroundView.m */; };
 		BAF1CF7998AAC1E178EC66D0 /* A2CardPosition.m in Sources */ = {isa = PBXBuildFile; fileRef = C733462374B52500F6D83649 /* A2CardPosition.m */; };
@@ -111,6 +112,7 @@
 		47106E1A43667C70F671BED2 /* A2Renderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Renderer.m"; sourceTree = "<group>"; };
 		035FB3CC4FE4018F44632AD5 /* A2Settings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Settings.m"; sourceTree = "<group>"; };
 		044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameInstaller.m"; sourceTree = "<group>"; };
+		3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionInfo.m"; sourceTree = "<group>"; };
 		643B820206971C227F265607 /* A2VersionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionManager.m"; sourceTree = "<group>"; };
 		872075DCD0F565557A6554D2 /* A2BackgroundView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BackgroundView.m"; sourceTree = "<group>"; };
 		C733462374B52500F6D83649 /* A2CardPosition.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CardPosition.m"; sourceTree = "<group>"; };
@@ -184,6 +186,7 @@
 		12B70B0E6FB31B7E75D61633 /* A2Renderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Renderer.h"; sourceTree = "<group>"; };
 		8D9149596220C9F4F49C460D /* A2Settings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Settings.h"; sourceTree = "<group>"; };
 		8407C36C2C93136130B9F07E /* A2GameInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameInstaller.h"; sourceTree = "<group>"; };
+		CE5120FF6E52910A07272F53 /* A2VersionInfo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionInfo.h"; sourceTree = "<group>"; };
 		8566CA5C1C5F50A603ACC370 /* A2VersionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionManager.h"; sourceTree = "<group>"; };
 		930418C55810BF7B65B85AE9 /* A2BackgroundView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundView.h"; sourceTree = "<group>"; };
 		EB440E13AD4A8BB54186F381 /* A2CardPosition.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CardPosition.h"; sourceTree = "<group>"; };
@@ -422,8 +425,10 @@
 			isa = PBXGroup;
 			children = (
 				044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */,
+				3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */,
 				643B820206971C227F265607 /* A2VersionManager.m */,
 				8407C36C2C93136130B9F07E /* A2GameInstaller.h */,
+				CE5120FF6E52910A07272F53 /* A2VersionInfo.h */,
 				8566CA5C1C5F50A603ACC370 /* A2VersionManager.h */,
 			);
 			path = Version;
@@ -693,6 +698,7 @@
 				8B0D65271C85EAABC46B0226 /* A2Renderer.m in Sources */,
 				E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */,
 				15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */,
+				2BC4E80EA8F83E9426E4BA2E /* A2VersionInfo.m in Sources */,
 				7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */,
 				B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */,
 				BAF1CF7998AAC1E178EC66D0 /* A2CardPosition.m in Sources */,
