@@ -877,3 +877,28 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
       主页零调用死方法（`openFiles/openMultiplayer`）删除。
 - [x] 背景去渐变改纯色、默认冰川蓝（`UI-DESIGN.md` 第四节已同步）。
 - 剩下：发 PR 合入 `main`（分支 CI 全绿）。
+
+## 10.6 下载重写·第二轮：整条链路重写（分支 `feat/download-game`）
+
+> 背景：10.5 落地后三页仍是「能跑就行」——加载器只有写死的四个选项，按 ID 与收藏只剩诚实提示。
+> 本轮照 ZL2 的交互规格把「游戏版本下载」整条链路重写一遍。
+> 记法同上：**不回头改 10.5**，本节只覆盖其中已过期的条目。
+
+- [x] `Core/Version/A2RemoteVersions`：清单解析补 `releaseTime`（ISO8601，解析失败置 nil），
+      选版页据此排序并显示发布时间。
+- [x] 选版页重写：正式版 / 快照 / 旧版 Beta / 旧版 Alpha 四类多选筛选 + 版本号搜索 + 刷新，
+      按发布时间倒序；失败与空态都给「点击重试」，不进空页面。
+- [x] 加载器选择页重写：版本名输入与重名校验；加载器单选后异步拉**真实**版本列表
+      （走 `A2ModLoaderAPI`），默认选最新稳定版；OptiFine 明确标注官方无自动安装接口；
+      用户未手动改过时，版本名按所选加载器自动建议。
+- [x] 安装进度页重写：改为接收明确的 `loaderType` / `loaderVersion`，不再靠版本名反推；
+      环形整体进度 + 分阶段线性进度条 + 7 项阶段清单，含取消确认、失败重试、完成返回。
+- [x] 下载中心：游戏分类只留「安装新版本」一个入口；**按 ID 与收藏由诚实提示改为真实入口**
+      （新增 `A2SearchByIdViewController` / `A2FavoritesViewController`），
+      收藏落盘在新增的 `Core/Download/A2DownloadFavorites`（纯 Foundation，JSON + 变更通知），
+      项目详情页支持收藏切换。
+      —— **本条取代 10.5 的「按 ID/收藏夹假列表入口改诚实提示」**。
+- [x] 本地 `make lint`（451 处 import / 163 文件）与 `tests/Core` 6 个脚本全绿；
+      CI `Build IPA` run `37763729306`（规范检查 + 编译打包）success。
+- 未做：真机端到端安装验证（本机无 Xcode，需用 CI 的未签名 IPA 自行签名）；
+  本轮按要求不出 PR，等指令后再合 `main`。
