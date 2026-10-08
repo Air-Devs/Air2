@@ -165,9 +165,10 @@
     cfRow.subtitle = hasKey ? @"已配置" : @"未配置，无法使用 CurseForge 资源";
     cfRow.valueText = hasKey ? @"已设置" : @"未设置";
     cfRow.accessory = A2SettingsRowAccessoryDisclosure;
+    // 弱引用供下方清除行刷新状态用。
+    __weak A2SettingsRow *weakCfRow = cfRow;
     cfRow.onTap = ^{
         // 独立输入页承接填写/验证/清除；下载页拦截仍走共享弹窗。
-        // 返回后切分类即重建刷新行态，无需在此持有弱引用。
         A2CurseForgeKeyPageViewController *vc = [[A2CurseForgeKeyPageViewController alloc] init];
         [host.navigationController pushViewController:vc animated:YES];
     };
