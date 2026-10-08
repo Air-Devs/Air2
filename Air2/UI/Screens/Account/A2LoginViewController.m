@@ -53,7 +53,9 @@
 @property (nonatomic, strong, nullable) A2DeviceCodeInfo *deviceInfo;
 @property (nonatomic, strong, nullable) UILabel *codeLabel;
 @property (nonatomic, strong, nullable) UILabel *hintLabel;
-@property (nonatomic, strong, nullable) A2PrimaryButton *copyButton;
+// 不叫 copyButton：以 copy 开头的属性会被 clang 判为 Cocoa 的 copy 族
+// （约定返回 +1 对象），直接报 property follows Cocoa naming convention 编译失败。
+@property (nonatomic, strong, nullable) A2PrimaryButton *codeCopyButton;
 @property (nonatomic, strong, nullable) A2PrimaryButton *openButton;
 
 // ---- 表单（离线 / 第三方）----
@@ -115,7 +117,7 @@
     _deviceInfo = nil;
     _codeLabel = nil;
     _hintLabel = nil;
-    _copyButton = nil;
+    _codeCopyButton = nil;
     _openButton = nil;
     _serverField = nil;
     _nameField = nil;
@@ -174,13 +176,13 @@
     _hintLabel.numberOfLines = 3;
     _hintLabel.text = @"正在获取设备码…";
 
-    _copyButton = [[A2PrimaryButton alloc] initWithTitle:@"复制代码"
-                                                   style:A2ButtonStyleSecondary];
-    _copyButton.icon = [UIImage systemImageNamed:@"doc.on.doc"];
-    [_copyButton addTarget:self action:@selector(copyDeviceCode)
-          forControlEvents:UIControlEventTouchUpInside];
-    _copyButton.enabled = NO;
-    _copyButton.alpha = 0.5;
+    _codeCopyButton = [[A2PrimaryButton alloc] initWithTitle:@"复制代码"
+                                                       style:A2ButtonStyleSecondary];
+    _codeCopyButton.icon = [UIImage systemImageNamed:@"doc.on.doc"];
+    [_codeCopyButton addTarget:self action:@selector(copyDeviceCode)
+              forControlEvents:UIControlEventTouchUpInside];
+    _codeCopyButton.enabled = NO;
+    _codeCopyButton.alpha = 0.5;
 
     _openButton = [[A2PrimaryButton alloc] initWithTitle:@"打开授权页面"
                                                    style:A2ButtonStylePrimary];
@@ -190,7 +192,8 @@
     _openButton.enabled = NO;
     _openButton.alpha = 0.5;
 
-    UIStackView *buttons = [[UIStackView alloc] initWithArrangedSubviews:@[_copyButton, _openButton]];
+    UIStackView *buttons = [[UIStackView alloc] initWithArrangedSubviews:
+                            @[_codeCopyButton, _openButton]];
     buttons.axis = UILayoutConstraintAxisHorizontal;
     buttons.spacing = A2SpaceM;
     buttons.distribution = UIStackViewDistributionFillEqually;
@@ -238,8 +241,8 @@
         self.codeLabel.text = info.userCode;
         self.hintLabel.text = [NSString stringWithFormat:
             @"访问 %@\n输入上方代码完成登录", info.verificationURI];
-        self.copyButton.enabled = YES;
-        self.copyButton.alpha = 1.0;
+        self.codeCopyButton.enabled = YES;
+        self.codeCopyButton.alpha = 1.0;
         self.openButton.enabled = YES;
         self.openButton.alpha = 1.0;
 
