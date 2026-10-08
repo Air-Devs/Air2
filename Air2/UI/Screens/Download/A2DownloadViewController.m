@@ -42,6 +42,7 @@
 #import "A2DownloadViewController.h"
 #import "A2CategoryNavView.h"
 #import "A2DownloadListViewController.h"
+#import "A2GameVersionListViewController.h"
 #import "A2ContentSource.h"
 #import "A2SettingsSection.h"
 #import "A2SettingsRow.h"
@@ -213,15 +214,6 @@
     gameRow.onTap = ^{ [self openListWithCategory:A2DownloadCategoryGame]; };
     [section addRow:gameRow];
 
-    A2SettingsRow *loaderRow = [[A2SettingsRow alloc] init];
-    loaderRow.symbolName = @"shippingbox.fill";
-    loaderRow.title = @"模组加载器";
-    loaderRow.subtitle = @"Fabric / Forge / NeoForge / Quilt / OptiFine";
-    loaderRow.valueText = @"Fabric";
-    loaderRow.accessory = A2SettingsRowAccessoryDisclosure;
-    loaderRow.onTap = ^{ [A2Toast show:@"加载器选择" inView:self.view]; };
-    [section addRow:loaderRow];
-
     return section;
 }
 
@@ -262,6 +254,12 @@
 }
 
 - (void)openListWithCategory:(A2DownloadCategory)category {
+    // 游戏走版本清单+安装器链路，不进资源搜索（此前错进 Modrinth 搜模组）。
+    if (category == A2DownloadCategoryGame) {
+        A2GameVersionListViewController *vc = [[A2GameVersionListViewController alloc] init];
+        [self.navigationController pushViewController:vc animated:YES];
+        return;
+    }
     A2DownloadListViewController *vc = [[A2DownloadListViewController alloc] init];
     vc.category = category;
     [self.navigationController pushViewController:vc animated:YES];
