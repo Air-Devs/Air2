@@ -354,6 +354,31 @@ def check_file(path, defined_classes):
     if path.endswith('A2ColorScheme.h') or path.endswith('A2ColorScheme.m'):
         pass   # 这两个文件是定义方，自身不做校验
 
+    # ---------- Cocoa 命名族检查 ----------
+    # 属性名以 copy / new / alloc / init / mutableCopy 开头时，clang 按
+    # Cocoa 命名约定把它归入对应的「方法族」——族内约定返回 +1（owned）
+    # 对象。属性不具备这个语义，于是直接编译失败：
+    #   error: property follows Cocoa naming convention for returning
+    #          'owned' objects
+    # 这条是纯语法规则、不依赖运行环境，却要等真编译才暴露（踩过一次：
+    # copyButton），本地先拦掉。
+    #
+    # 只查对象指针类型：族的判定要求返回类型是对象，标量属性
+    # （如 BOOL newFlag）不触发该规则，报了就是误报。
+    #
+    # 族前缀后面必须跟「非小写字母」或结束才算入族：
+    # copyButton 入族，copyright / newton / initialValue 不入族。
+    for m in re.finditer(r'@property\s*\([^)]*\)[^;{]*?\*\s*(\w+)\s*;', src):
+        name = m.group(1)
+        fam = re.match(r'(copy|new|alloc|init|mutableCopy)([^a-z].*)?$', name)
+        if fam:
+            line = src[:m.start()].count('\n') + 1
+            errors.append(
+                f"第 {line} 行: 属性 {name} 以 {fam.group(1)} 开头，"
+                f"会被 clang 判为 Cocoa 的 {fam.group(1)} 族（约定返回 +1 对象），"
+                f"报 property follows Cocoa naming convention 编译失败。"
+                f"请改名，把族前缀挪到后面（如 copyButton → codeCopyButton）")
+
     return errors
 
 def main():
