@@ -111,7 +111,7 @@
     bgRow.title = @"自定义背景";
     bgRow.subtitle = tm.backgroundImage ? @"已设置" : @"当前使用主题渐变";
     bgRow.accessory = A2SettingsRowAccessoryDisclosure;
-    bgRow.showsBottomSeparator = NO;
+    bgRow.showsSeparator = NO;
     bgRow.onTap = ^{
         A2BackgroundSettingsViewController *vc = [[A2BackgroundSettingsViewController alloc] init];
         [host.navigationController pushViewController:vc animated:YES];
