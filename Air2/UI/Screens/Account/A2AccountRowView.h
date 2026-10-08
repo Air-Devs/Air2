@@ -40,6 +40,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) NSString *accountName;
 @property (nonatomic, copy) NSString *accountType;
 
+/// 账号皮肤文件路径；有值时头像显示皮肤头，无值时显示账号名首字母
+@property (nonatomic, copy, nullable) NSString *skinPath;
+
 /// 是否为当前账号
 @property (nonatomic, assign, getter=isCurrent) BOOL current;
 

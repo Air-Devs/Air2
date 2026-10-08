@@ -137,6 +137,15 @@
         __weak typeof(self) weakSelf = self;
         __weak A2AccountRowView *weakRow = row;
 
+        // 头像优先显示皮肤：本地已有就直接用，没有则按需拉一次后回填。
+        row.skinPath = acc.skinPath;
+        if (acc.skinPath.length == 0) {
+            [A2AccountManager.shared ensureSkinForAccount:acc
+                                               completion:^(A2Account *a) {
+                if (a.skinPath.length) weakRow.skinPath = a.skinPath;
+            }];
+        }
+
         row.onSelect = ^{
             __strong typeof(weakSelf) self = weakSelf;
             if ([A2AccountManager.shared selectCurrentAccount:acc]) {
