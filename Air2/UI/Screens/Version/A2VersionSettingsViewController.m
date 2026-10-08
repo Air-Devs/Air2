@@ -20,13 +20,12 @@
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
 //
-//  单版本设置 —— 真实读写版本的隔离配置。
+//  单版本设置 —— 隔离档位是全局的，这里只做展示。
 //
-//  隔离规则（与 ZL2 一致）：
-//    开启隔离 → 游戏目录 = {gameHome}/versions/{版本名}/
-//    未开启   → 自定义路径非空则用它，否则用 {gameHome}/
+//  隔离档位在「设置 → 游戏」里选（关闭 / 仅 Mod / 全部），对所有版本统一生效。
+//  本页只显示当前档位与它推导出的实际目录，避免两处设置互相打架。
 //
-//  配置持久化在 {版本目录}/.air_version/config.json。
+//  版本的启动配置仍存在 {版本目录}/.air_version/config.json。
 //
 
 #import "A2VersionSettingsViewController.h"
@@ -45,8 +44,7 @@
 /// 版本名（在 init 里赋值，后续只读）
 @property (nonatomic, copy) NSString *versionName;
 @property (nonatomic, strong) A2Version *version;
-@property (nonatomic, strong) A2SettingsRow *isolationRow;
-@property (nonatomic, strong) A2SettingsRow *customPathRow;
+@property (nonatomic, strong) A2SettingsRow *modeRow;
 @property (nonatomic, strong) A2SettingsRow *pathRow;
 @property (nonatomic, strong) A2SettingsSection *folderSection;
 @property (nonatomic, strong) NSMutableArray<A2SettingsRow *> *folderRows;
@@ -134,29 +132,14 @@
 
 - (void)setupIsolationSection {
     A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"版本隔离"];
-    section.footerText = @"开启后，模组、存档、资源包、光影、截图都会放进这个版本自己的文件夹，"
-                          "与其他版本互不影响。依赖库与资源文件始终共用，不会重复占用空间。";
+    section.footerText = @"隔离档位是全局设置，在「设置 → 游戏」里修改。"
+                          "依赖库与资源文件始终共用，不会重复占用空间。";
 
-    _isolationRow = [[A2SettingsRow alloc] init];
-    _isolationRow.symbolName = @"square.split.2x1.fill";
-    _isolationRow.title = @"隔离状态";
-    _isolationRow.accessory = A2SettingsRowAccessoryDisclosure;
-    __weak typeof(self) weakSelf = self;
-    _isolationRow.onTap = ^{
-        __strong typeof(weakSelf) self = weakSelf;
-        [self showIsolationPicker];
-    };
-    [section addRow:_isolationRow];
-
-    _customPathRow = [[A2SettingsRow alloc] init];
-    _customPathRow.symbolName = @"folder.badge.questionmark";
-    _customPathRow.title = @"自定义游戏目录";
-    _customPathRow.accessory = A2SettingsRowAccessoryDisclosure;
-    _customPathRow.onTap = ^{
-        __strong typeof(weakSelf) self = weakSelf;
-        [A2Toast show:@"目录选择器" inView:self.view];
-    };
-    [section addRow:_customPathRow];
+    _modeRow = [[A2SettingsRow alloc] init];
+    _modeRow.symbolName = @"square.split.2x1.fill";
+    _modeRow.title = @"隔离档位";
+    _modeRow.accessory = A2SettingsRowAccessoryNone;
+    [section addRow:_modeRow];
 
     _pathRow = [[A2SettingsRow alloc] init];
     _pathRow.symbolName = @"folder.fill";
@@ -167,43 +150,36 @@
     [self addSection:section];
 }
 
-/// 实时刷新隔离相关文案 —— 每次改动都要重算路径
+/// 实时刷新隔离相关文案 —— 档位或版本变化都要重算路径
 - (void)refreshIsolationUI {
-    A2VersionIsolation *iso = _version.isolation;
+    A2IsolationMode mode = _version.isolationMode;
 
-    switch (iso.isolationType) {
-        case A2SettingStateEnable:  _isolationRow.valueText = @"已开启"; break;
-        case A2SettingStateDisable: _isolationRow.valueText = @"已关闭"; break;
-        default:                    _isolationRow.valueText = @"跟随全局"; break;
+    _modeRow.valueText = A2IsolationModeDisplayName(mode);
+    switch (mode) {
+        case A2IsolationModeMod:  _modeRow.subtitle = @"游戏数据共用，只隔离模组"; break;
+        case A2IsolationModeFull: _modeRow.subtitle = @"整个游戏目录按版本隔离"; break;
+        default:                  _modeRow.subtitle = @"所有数据共用，不隔离"; break;
     }
 
-    BOOL customEnabled = (iso.isolationType != A2SettingStateEnable);
-    _customPathRow.alpha = customEnabled ? 1.0 : 0.45;
-    _customPathRow.subtitle = customEnabled
-        ? @"仅在未开启隔离时生效"
-        : @"已开启隔离，此设置不生效";
-    _customPathRow.valueText = iso.customPath.length ? @"已设置" : @"未设置";
-
-    // 显示实际生效的游戏目录
-    NSString *dir = [_version gameDirectory];
-    _pathRow.subtitle = dir;
+    _pathRow.subtitle = [_version gameDirectory];
 
     // 各可隔离目录的实际路径
-    A2GamePath *path = [A2GamePath pathWithGameHome:A2VersionManager.shared.gameHome];
     for (NSUInteger i = 0; i < _folderRows.count && i < A2VersionFolderCount; i++) {
-        NSString *d = [path directoryForFolder:(A2VersionFolder)i
-                                   versionName:_version.name
-                                     isolation:iso];
-        _folderRows[i].valueText = [self shortenPath:d];
+        NSString *dir = [_version directoryForFolder:(A2VersionFolder)i];
+        _folderRows[i].valueText = [self shortenPath:dir];
     }
 
-    if (iso.isolationType == A2SettingStateEnable) {
-        _folderSection.footerText = [NSString stringWithFormat:
-            @"这些目录当前位于 versions/%@/ 下。", _version.name];
-    } else if (iso.isolationType == A2SettingStateDisable) {
-        _folderSection.footerText = @"这些目录当前位于游戏根目录下，与其他版本共用。";
-    } else {
-        _folderSection.footerText = @"实际位置取决于全局的版本隔离设置。";
+    switch (mode) {
+        case A2IsolationModeFull:
+            _folderSection.footerText = [NSString stringWithFormat:
+                @"这些目录当前位于 versions/%@/ 下。", _version.name];
+            break;
+        case A2IsolationModeMod:
+            _folderSection.footerText = @"只有模组位于版本目录下，其余目录在游戏根目录共用。";
+            break;
+        default:
+            _folderSection.footerText = @"这些目录当前位于游戏根目录下，与其他版本共用。";
+            break;
     }
 }
 
@@ -215,45 +191,10 @@
             parts[parts.count - 2], parts[parts.count - 1]];
 }
 
-- (void)showIsolationPicker {
-    UIAlertController *sheet =
-        [UIAlertController alertControllerWithTitle:@"版本隔离"
-                                            message:@"选择这个版本使用的隔离策略"
-                                     preferredStyle:UIAlertControllerStyleActionSheet];
-
-    NSArray<NSArray<NSString *> *> *options = @[
-        @[@"跟随全局设置", @"使用启动器的全局隔离设置"],
-        @[@"开启隔离",     @"此版本使用独立目录"],
-        @[@"关闭隔离",     @"与其他版本共用目录"],
-    ];
-
-    for (NSInteger i = 0; i < (NSInteger)options.count; i++) {
-        __weak typeof(self) weakSelf = self;
-        NSInteger state = i;
-        [sheet addAction:[UIAlertAction actionWithTitle:options[i][0]
-                                                 style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *action) {
-            __strong typeof(weakSelf) self = weakSelf;
-            self.version.isolation.isolationType = (A2SettingState)state;
-            [self.version saveConfig];
-            [self refreshIsolationUI];
-            [A2Toast show:[NSString stringWithFormat:@"已设置为「%@」", options[state][0]]
-                   inView:self.view];
-        }]];
-    }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-
-    sheet.popoverPresentationController.sourceView = _isolationRow;
-    sheet.popoverPresentationController.sourceRect = _isolationRow.bounds;
-    [self presentViewController:sheet animated:YES completion:nil];
-}
-
 #pragma mark - 可隔离目录
 
 - (void)setupFolderSection {
     _folderSection = [[A2SettingsSection alloc] initWithTitle:@"版本内容"];
-    A2VersionIsolation *iso = _version.isolation;
-    A2GamePath *path = [A2GamePath pathWithGameHome:A2VersionManager.shared.gameHome];
 
     NSArray<NSString *> *symbols = @[@"puzzlepiece.extension.fill", @"photo.stack.fill",
                                      @"map.fill", @"sun.max.fill", @"photo.fill"];
@@ -265,9 +206,7 @@
         row.accessory = A2SettingsRowAccessoryDisclosure;
 
         NSString *folderName = A2VersionFolderDisplayName((A2VersionFolder)i);
-        NSString *dir = [path directoryForFolder:(A2VersionFolder)i
-                                     versionName:_version.name
-                                       isolation:iso];
+        NSString *dir = [_version directoryForFolder:(A2VersionFolder)i];
         row.onTap = ^{
             NSURL *url = [NSURL fileURLWithPath:dir];
             (void)url;
@@ -285,8 +224,7 @@
     browseRow.title = @"浏览版本文件";
     browseRow.accessory = A2SettingsRowAccessoryDisclosure;
     browseRow.onTap = ^{
-        A2GamePath *p = [A2GamePath pathWithGameHome:A2VersionManager.shared.gameHome];
-        NSString *dir = [p gameDirectoryForVersion:self.version.name isolation:self.version.isolation];
+        NSString *dir = self.version.gameDirectory;
         A2FilesViewController *vc = [[A2FilesViewController alloc] initWithRootPath:dir
                                                                         displayName:self.version.name];
         [self.navigationController pushViewController:vc animated:YES];

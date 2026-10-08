@@ -43,4 +43,9 @@ NS_ASSUME_NONNULL_BEGIN
 + (A2SettingsSection *)buildSourceSectionWithHost:(UIViewController *)host;
 @end
 
+/// 游戏 —— 版本隔离档位
+@interface A2GameSettings : NSObject
++ (A2SettingsSection *)buildWithHost:(UIViewController *)host;
+@end
+
 NS_ASSUME_NONNULL_END

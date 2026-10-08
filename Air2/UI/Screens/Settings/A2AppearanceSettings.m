@@ -37,7 +37,7 @@
 #import "A2BackgroundSettingsViewController.h"
 #import "A2ColorThemeDialog.h"
 #import "A2CurseForgeAPI.h"
-#import "A2CurseForgeKeyPrompt.h"
+#import "A2CurseForgeKeyPageViewController.h"
 #import "A2MirrorResolver.h"
 #import "A2Toast.h"
 
@@ -165,14 +165,12 @@
     cfRow.subtitle = hasKey ? @"已配置" : @"未配置，无法使用 CurseForge 资源";
     cfRow.valueText = hasKey ? @"已设置" : @"未设置";
     cfRow.accessory = A2SettingsRowAccessoryDisclosure;
+    // 弱引用供下方清除行刷新状态用。
     __weak A2SettingsRow *weakCfRow = cfRow;
     cfRow.onTap = ^{
-        // 输入框只有共享实现这一处（旧实现已删），行状态按保存结果刷新。
-        [A2CurseForgeKeyPrompt promptFrom:host completion:^(BOOL saved) {
-            if (!saved) return;
-            weakCfRow.subtitle = @"已配置";
-            weakCfRow.valueText = @"已设置";
-        }];
+        // 独立输入页承接填写/验证/清除；下载页拦截仍走共享弹窗。
+        A2CurseForgeKeyPageViewController *vc = [[A2CurseForgeKeyPageViewController alloc] init];
+        [host.navigationController pushViewController:vc animated:YES];
     };
     [section addRow:cfRow];
 

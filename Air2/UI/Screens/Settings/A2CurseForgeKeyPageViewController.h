@@ -1,5 +1,5 @@
 //
-//  A2CurseForgeKeyPrompt.h
+//  A2CurseForgeKeyPageViewController.h
 //  Air2
 //
 //  Copyright (C) 2026 Air-Devs and contributors.
@@ -19,26 +19,15 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
-//  CurseForge Key 请求框 —— 三处共用唯一实现（设置行、下载中心切换、
-//  下载列表切换）。调用方只传 host 与完成回调，不各写一份 alert。
+//  Key 输入页 —— 设置 → 资源下载 → 首行进入。
+//  下载页的弹窗只做拦截，完整的填写/验证/清除收敛在这里。
 //
 
-#import <UIKit/UIKit.h>
+#import "A2BaseViewController.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface A2CurseForgeKeyPrompt : NSObject
-
-/// 弹出输入框。保存并验证通过调 completion(YES)，取消/无效调 completion(NO)。
-/// 无效 Key 不存（避免存坏 Key 后处处 403），调用方自行回退状态。
-+ (void)promptFrom:(UIViewController *)host
-        completion:(void (^)(BOOL saved))completion;
-
-/// 校验并保存：有效进钥匙串，无效恢复旧 Key，均不弹任何 UI。
-/// 空 Key 直接失败。回调切主线程。
-+ (void)saveValidatedKey:(NSString *)key
-             completion:(void (^)(BOOL valid, NSError * _Nullable error))completion;
-
+@interface A2CurseForgeKeyPageViewController : A2BaseViewController
 @end
 
 NS_ASSUME_NONNULL_END

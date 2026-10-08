@@ -21,7 +21,23 @@
 //
 
 #import "A2VersionIsolation.h"
-#import "A2Settings.h"
+#import "A2Log.h"
+
+NSString *A2IsolationModeToString(A2IsolationMode mode) {
+    switch (mode) {
+        case A2IsolationModeMod:  return @"mod";
+        case A2IsolationModeFull: return @"full";
+        default:                  return @"none";
+    }
+}
+
+NSString *A2IsolationModeDisplayName(A2IsolationMode mode) {
+    switch (mode) {
+        case A2IsolationModeMod:  return @"仅 Mod";
+        case A2IsolationModeFull: return @"全部";
+        default:                  return @"关闭";
+    }
+}
 
 NSString *A2VersionFolderName(A2VersionFolder folder) {
     switch (folder) {
@@ -67,7 +83,6 @@ static NSString *A2SettingStateToString(A2SettingState state) {
 - (instancetype)init {
     self = [super init];
     if (!self) return nil;
-    _isolationType = A2SettingStateFollowGlobal;
     _skipGameIntegrityCheck = A2SettingStateFollowGlobal;
     _pinned = NO;
     _ramAllocation = -1;
@@ -89,24 +104,13 @@ static NSString *A2SettingStateToString(A2SettingState state) {
     }
 }
 
-/// 该版本是否开启隔离。
-///
-/// 注意 FOLLOW_GLOBAL 要落到全局设置上 ——
-/// 这是之前漏掉的：我只把 FOLLOW_GLOBAL 当成「不隔离」，
-/// 导致全局开了隔离但版本没设置时，实际没有隔离。
-- (BOOL)isIsolationEnabledWithGlobal:(BOOL)globalIsolation {
-    return [A2VersionIsolation resolveState:self.isolationType globalValue:globalIsolation];
-}
-
 - (BOOL)shouldSkipIntegrityCheckWithGlobal:(BOOL)globalSkip {
     return [A2VersionIsolation resolveState:self.skipGameIntegrityCheck globalValue:globalSkip];
 }
 
 - (id)copyWithZone:(NSZone *)zone {
     A2VersionIsolation *c = [[A2VersionIsolation allocWithZone:zone] init];
-    c.isolationType = self.isolationType;
     c.skipGameIntegrityCheck = self.skipGameIntegrityCheck;
-    c.customPath = self.customPath;
     c.pinned = self.pinned;
     c.ramAllocation = self.ramAllocation;
     c.renderer = self.renderer;
@@ -124,9 +128,7 @@ static NSString *A2SettingStateToString(A2SettingState state) {
     A2VersionIsolation *iso = [A2VersionIsolation new];
     if (![dict isKindOfClass:NSDictionary.class]) return iso;
 
-    iso.isolationType = A2SettingStateFromString(dict[@"isolationType"]);
     iso.skipGameIntegrityCheck = A2SettingStateFromString(dict[@"skipGameIntegrityCheck"]);
-    iso.customPath = [dict[@"customPath"] isKindOfClass:NSString.class] ? dict[@"customPath"] : nil;
     iso.pinned = [dict[@"pinned"] boolValue];
     iso.ramAllocation = [dict[@"ramAllocation"] integerValue] ?: -1;
     iso.renderer = [dict[@"renderer"] isKindOfClass:NSString.class] ? dict[@"renderer"] : nil;
@@ -142,11 +144,9 @@ static NSString *A2SettingStateToString(A2SettingState state) {
 
 - (NSDictionary *)toDictionary {
     NSMutableDictionary *d = [NSMutableDictionary dictionary];
-    d[@"isolationType"] = A2SettingStateToString(self.isolationType);
     d[@"skipGameIntegrityCheck"] = A2SettingStateToString(self.skipGameIntegrityCheck);
     d[@"pinned"] = @(self.pinned);
     d[@"ramAllocation"] = @(self.ramAllocation);
-    if (self.customPath)      d[@"customPath"]      = self.customPath;
     if (self.renderer)        d[@"renderer"]        = self.renderer;
     if (self.driver)          d[@"driver"]          = self.driver;
     if (self.javaRuntime)     d[@"javaRuntime"]     = self.javaRuntime;
@@ -159,68 +159,24 @@ static NSString *A2SettingStateToString(A2SettingState state) {
 }
 
 - (NSString *)description {
-    return [NSString stringWithFormat:@"<A2VersionIsolation isolation=%@ pinned=%@ customPath=%@>",
-            A2SettingStateToString(self.isolationType),
-            self.pinned ? @"Y" : @"N",
-            self.customPath ?: @"(default)"];
-}
-
-@end
-
-#pragma mark - 全局设置
-
-/// 全局的版本隔离设置。
-///
-/// ZL2 里这是 AllSettings.versionIsolation，
-/// 版本配置的 FOLLOW_GLOBAL 会读它。
-@implementation A2GlobalGameSettings
-
-+ (instancetype)shared {
-    static A2GlobalGameSettings *shared = nil;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        shared = [[A2GlobalGameSettings alloc] init];
-    });
-    return shared;
-}
-
-- (instancetype)init {
-    self = [super init];
-    if (!self) return nil;
-    // 薄转发：真实存储已收敛到 A2Settings，这里只做兼容，避免改调用方行为。
-    A2Settings *s = A2Settings.shared;
-    _defaultVersionIsolation = s.versionIsolation;
-    _defaultSkipIntegrityCheck = s.skipIntegrityCheck;
-    _defaultRAMAllocation = s.ramAllocationMB;
-    _defaultRenderer = s.renderer;
-    return self;
-}
-
-- (void)setDefaultVersionIsolation:(BOOL)v {
-    _defaultVersionIsolation = v;
-    A2Settings.shared.versionIsolation = v;
-}
-
-- (void)setDefaultSkipIntegrityCheck:(BOOL)v {
-    _defaultSkipIntegrityCheck = v;
-    A2Settings.shared.skipIntegrityCheck = v;
-}
-
-- (void)setDefaultRAMAllocation:(NSInteger)v {
-    // 钳制逻辑收敛到 A2Settings 一处，这里同步钳后值，避免两处不一致。
-    A2Settings.shared.ramAllocationMB = v;
-    _defaultRAMAllocation = A2Settings.shared.ramAllocationMB;
-}
-
-- (void)setDefaultRenderer:(NSString *)v {
-    // 历史实现漏了持久化（只写 ivar 不落盘），这里补上并收敛到注册表。
-    _defaultRenderer = [v copy];
-    A2Settings.shared.renderer = v;
+    return [NSString stringWithFormat:@"<A2VersionIsolation pinned=%@ jvmArgs=%@>",
+            self.pinned ? @"Y" : @"N", self.jvmArgs ?: @"(default)"];
 }
 
 @end
 
 #pragma mark - A2GamePath
+
+/// 「全部」档在版本目录里建的标准结构（对齐 PCL2 / HMCL）。
+static NSArray<NSString *> *A2IsolationStandardSubdirectories(void) {
+    static NSArray<NSString *> *dirs;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        dirs = @[@"mods", @"saves", @"config", @"resourcepacks", @"shaderpacks",
+                 @"logs", @"crash-reports", @"datapacks", @"screenshots"];
+    });
+    return dirs;
+}
 
 @interface A2GamePath ()
 @property (nonatomic, copy) NSString *gameHome;
@@ -295,55 +251,127 @@ static NSString *const kLauncherDataDirName = @".air_version";
     return [dir stringByAppendingPathComponent:fileName];
 }
 
-- (NSString *)gameDirectoryForVersion:(NSString *)versionName
-                            isolation:(A2VersionIsolation *)isolation {
-    return [self gameDirectoryForVersion:versionName
-                               isolation:isolation
-                        globalIsolation:A2GlobalGameSettings.shared.defaultVersionIsolation];
-}
+#pragma mark - 隔离路径
 
-/// 该版本实际使用的游戏目录 —— 隔离逻辑的核心。
-///
-/// 完全对应 ZL2 的 Version.getGameDir()：
-///   if (versionConfig.isIsolation()) getVersionPath()
-///   else if (customPath.isNotEmpty()) File(customPath)
-///   else File(gameHome)
-///
-/// 其中 isIsolation() 会把 FOLLOW_GLOBAL 解析为全局设置的值。
 - (NSString *)gameDirectoryForVersion:(NSString *)versionName
-                            isolation:(A2VersionIsolation *)isolation
-                      globalIsolation:(BOOL)globalIsolation {
-    BOOL enabled = [isolation isIsolationEnabledWithGlobal:globalIsolation];
-
-    // 隔离开启 → 版本文件夹独立成家
-    if (enabled) {
+                                 mode:(A2IsolationMode)mode {
+    // 只有「全部」档才把游戏目录搬进版本文件夹；关闭与仅 Mod 都在根目录。
+    if (mode == A2IsolationModeFull) {
         return [self versionPath:versionName];
-    }
-
-    // 未开启隔离 → 可用自定义路径，否则回落到默认游戏根目录
-    if (isolation.customPath.length > 0) {
-        return isolation.customPath;
     }
     return self.gameHome;
 }
 
-- (NSString *)directoryForFolder:(A2VersionFolder)folder
-                     versionName:(NSString *)versionName
-                       isolation:(A2VersionIsolation *)isolation {
-    return [self directoryForFolder:folder
-                        versionName:versionName
-                          isolation:isolation
-                    globalIsolation:A2GlobalGameSettings.shared.defaultVersionIsolation];
+- (NSString *)modsDirectoryForVersion:(NSString *)versionName
+                                 mode:(A2IsolationMode)mode {
+    // 仅 Mod / 全部：mods 固定落在版本目录下。关闭档才用根目录的共享 mods。
+    if (mode == A2IsolationModeMod || mode == A2IsolationModeFull) {
+        return [[self versionPath:versionName] stringByAppendingPathComponent:@"mods"];
+    }
+    return [[self gameDirectoryForVersion:versionName mode:mode]
+            stringByAppendingPathComponent:@"mods"];
 }
 
 - (NSString *)directoryForFolder:(A2VersionFolder)folder
                      versionName:(NSString *)versionName
-                       isolation:(A2VersionIsolation *)isolation
-                 globalIsolation:(BOOL)globalIsolation {
-    NSString *gameDir = [self gameDirectoryForVersion:versionName
-                                            isolation:isolation
-                                      globalIsolation:globalIsolation];
-    return [gameDir stringByAppendingPathComponent:A2VersionFolderName(folder)];
+                            mode:(A2IsolationMode)mode {
+    if (folder == A2VersionFolderMods) {
+        return [self modsDirectoryForVersion:versionName mode:mode];
+    }
+    return [[self gameDirectoryForVersion:versionName mode:mode]
+            stringByAppendingPathComponent:A2VersionFolderName(folder)];
+}
+
+- (void)ensureIsolationDirectoriesForVersion:(NSString *)versionName
+                                        mode:(A2IsolationMode)mode {
+    // 关闭档不预建目录：游戏会自己在根目录创建，建了反而留下空目录。
+    if (mode == A2IsolationModeNone) return;
+
+    NSFileManager *fm = NSFileManager.defaultManager;
+    if (mode == A2IsolationModeMod) {
+        [fm createDirectoryAtPath:[self modsDirectoryForVersion:versionName mode:mode]
+      withIntermediateDirectories:YES attributes:nil error:nil];
+        return;
+    }
+
+    NSString *root = [self gameDirectoryForVersion:versionName mode:mode];
+    [fm createDirectoryAtPath:root withIntermediateDirectories:YES attributes:nil error:nil];
+    for (NSString *sub in A2IsolationStandardSubdirectories()) {
+        [fm createDirectoryAtPath:[root stringByAppendingPathComponent:sub]
+      withIntermediateDirectories:YES attributes:nil error:nil];
+    }
+}
+
+- (void)alignSharedModsDirectoryForVersion:(NSString *)versionName
+                                      mode:(A2IsolationMode)mode {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSString *sharedMods = [self.gameHome stringByAppendingPathComponent:@"mods"];
+    NSDictionary *attrs = [fm attributesOfItemAtPath:sharedMods error:nil];
+    BOOL isLink = [attrs[NSFileType] isEqualToString:NSFileTypeSymbolicLink];
+
+    // 非「仅 Mod」档：共享 mods 必须是真实目录（此前可能被换成过符号链接）。
+    if (mode != A2IsolationModeMod) {
+        if (isLink) {
+            [fm removeItemAtPath:sharedMods error:nil];
+            [fm createDirectoryAtPath:sharedMods
+          withIntermediateDirectories:YES attributes:nil error:nil];
+            [A2Log log:@"isolation: 共享 mods 恢复为真实目录 (%@)", sharedMods];
+        }
+        return;
+    }
+
+    // 没有当前版本可指（比如版本被删光）：把可能悬空的链接恢复成真实目录。
+    if (versionName.length == 0) {
+        if (isLink) {
+            [fm removeItemAtPath:sharedMods error:nil];
+            [fm createDirectoryAtPath:sharedMods
+          withIntermediateDirectories:YES attributes:nil error:nil];
+            [A2Log log:@"isolation: 无当前版本，共享 mods 恢复为真实目录"];
+        }
+        return;
+    }
+    NSString *isolatedMods = [self modsDirectoryForVersion:versionName mode:mode];
+    [fm createDirectoryAtPath:isolatedMods
+  withIntermediateDirectories:YES attributes:nil error:nil];
+
+    if (attrs) {
+        if (isLink) {
+            NSString *dest = [fm destinationOfSymbolicLinkAtPath:sharedMods error:nil];
+            if ([dest isEqualToString:isolatedMods]) return;  // 已指向本版本
+            [fm removeItemAtPath:sharedMods error:nil];        // 只删链接，不动目标
+        } else {
+            // 真实目录：把已有 mod 迁进版本目录，避免「开启仅 Mod 隔离后 mod 消失」。
+            NSError *err = nil;
+            NSArray<NSString *> *items = [fm contentsOfDirectoryAtPath:sharedMods error:&err];
+            if (err) {
+                [A2Log log:@"isolation: 读取共享 mods 失败，保持原状：%@", err.localizedDescription];
+                return;
+            }
+            for (NSString *item in items) {
+                NSString *from = [sharedMods stringByAppendingPathComponent:item];
+                NSString *to = [isolatedMods stringByAppendingPathComponent:item];
+                if ([fm fileExistsAtPath:to]) continue;  // 版本目录已有同名文件，保留版本目录的
+                if (![fm moveItemAtPath:from toPath:to error:&err]) {
+                    [A2Log log:@"isolation: 迁移 %@ 失败，取消符号链接以免丢文件：%@",
+                           item, err.localizedDescription];
+                    return;
+                }
+            }
+            if ([fm contentsOfDirectoryAtPath:sharedMods error:nil].count > 0) {
+                [A2Log log:@"isolation: 共享 mods 未清空，取消符号链接以免丢文件"];
+                return;
+            }
+            [fm removeItemAtPath:sharedMods error:nil];
+        }
+    }
+
+    NSError *linkErr = nil;
+    if ([fm createSymbolicLinkAtPath:sharedMods
+                 withDestinationPath:isolatedMods error:&linkErr]) {
+        [A2Log log:@"isolation: 仅 Mod —— 共享 mods → %@", isolatedMods];
+    } else {
+        [A2Log log:@"isolation: 创建 mods 符号链接失败：%@", linkErr.localizedDescription];
+    }
 }
 
 @end

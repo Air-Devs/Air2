@@ -722,9 +722,9 @@
     _versionNameLabel.text = current.name;
 
     NSMutableArray<NSString *> *parts = [NSMutableArray array];
-    if (current.loaderInfo.length) [parts addObject:current.loaderInfo];
-    if (current.isIsolationEnabled) [parts addObject:@"隔离开启"];
-    parts.count > 0 ?: [parts addObject:@"原版"];
+    [parts addObject:current.loaderInfo.length ? current.loaderInfo : @"原版"];
+    [parts addObject:[NSString stringWithFormat:@"隔离·%@",
+                      A2IsolationModeDisplayName(current.isolationMode)]];
     _versionMetaLabel.text = [parts componentsJoinedByString:@" · "];
 }
 

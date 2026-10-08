@@ -1,30 +1,41 @@
 #!/usr/bin/env python3
 """
-用 Python 复刻 A2GamePath 的隔离逻辑，逐条对照 ZL2 验证。
+用 Python 复刻 A2GamePath 的版本隔离逻辑，逐条对照 Punch-air 的 PLProfiles.m。
 
-对照的 ZL2 源码：
-  VersionConfig.kt:
-      fun isIsolation() = isolationType.toBoolean(AllSettings.versionIsolation.getValue())
-      private fun SettingState.toBoolean(global: Boolean) = when(...) {
-          FOLLOW_GLOBAL -> global
-          ENABLE -> true
-          DISABLE -> false
-      }
-  Version.kt:
-      fun getGameDir(): File {
-          return if (versionConfig.isIsolation()) getVersionPath()
-          else if (versionConfig.customPath.isNotEmpty()) File(versionConfig.customPath)
-          else File(gameHome)
-      }
-  ModsManagerScreen.kt:
-      val modsDir = VersionFolders.MOD.getDir(version.getGameDir())
+对照的 Punch-air 源码（Natives/PLProfiles.m）：
+    PLIsolationMode { None, Mod, Full }
 
-关键点：FOLLOW_GLOBAL 要落到全局设置上 —— 这是最容易漏的一步。
+    effectiveGameDirForProfile:
+        Full -> {gameHome}/versions/{name}
+        其余 -> {gameHome}
+
+    effectiveModsDirForProfile:
+        Mod / Full -> {gameHome}/versions/{name}/mods
+        其余       -> {gameDir}/mods
+
+    PLIsolationStandardSubdirectories:
+        Full 档在版本目录下建 9 个标准子目录：
+        mods saves config resourcepacks shaderpacks
+        logs crash-reports datapacks screenshots
+
+Air2 的实现对应 A2VersionIsolation.m 里的
+    - gameDirectoryForVersion:mode:
+    - modsDirectoryForVersion:mode:
+    - directoryForFolder:versionName:mode:
+以及 A2Settings.m 里的 isolationModeFromDefaults（旧布尔 key 的迁移规则）。
+
+三档语义（全局，所有版本统一）：
+    none  关闭    gameDir = 游戏根目录          mods = {根}/mods
+    mod   仅 Mod  gameDir = 游戏根目录          mods = versions/{版本名}/mods
+    full  全部    gameDir = versions/{版本名}   mods = versions/{版本名}/mods
+
+libraries / assets 始终共用，不随档位变化。
 """
 import os
 
 GAME_HOME = "/var/mobile/Documents/.minecraft"
 
+# A2VersionFolderName 的取值（除 mods 外都直接落在游戏目录下）
 FOLDERS = {
     "mods": "mods",
     "resourcepacks": "resourcepacks",
@@ -33,32 +44,52 @@ FOLDERS = {
     "screenshots": "screenshots",
 }
 
+# A2IsolationStandardSubdirectories（Full 档建的标准结构）
+STANDARD_SUBDIRS = [
+    "mods", "saves", "config", "resourcepacks", "shaderpacks",
+    "logs", "crash-reports", "datapacks", "screenshots",
+]
 
-def resolve_state(state, global_value):
-    """复刻 SettingState.toBoolean(global)"""
-    if state == "ENABLE":
-        return True
-    if state == "DISABLE":
-        return False
-    return global_value          # FOLLOW_GLOBAL
+NONE, MOD, FULL = "none", "mod", "full"
 
 
-def game_directory(version_name, isolation_type, custom_path, global_isolation):
-    """复刻 Version.getGameDir()"""
-    enabled = resolve_state(isolation_type, global_isolation)
-    if enabled:
+# ----------------------------------------------------------------------------
+# 复刻 A2GamePath
+# ----------------------------------------------------------------------------
+
+def game_directory(version_name, mode):
+    """复刻 gameDirectoryForVersion:mode:"""
+    if mode == FULL:
         return f"{GAME_HOME}/versions/{version_name}"
-    if custom_path:
-        return custom_path
     return GAME_HOME
 
 
-def folder_dir(folder, version_name, isolation_type, custom_path, global_isolation):
-    """复刻 VersionFolders.X.getDir(version.getGameDir())"""
-    return os.path.join(
-        game_directory(version_name, isolation_type, custom_path, global_isolation),
-        FOLDERS[folder],
-    )
+def mods_directory(version_name, mode):
+    """复刻 modsDirectoryForVersion:mode:"""
+    if mode in (MOD, FULL):
+        return f"{GAME_HOME}/versions/{version_name}/mods"
+    return os.path.join(game_directory(version_name, mode), "mods")
+
+
+def folder_dir(folder, version_name, mode):
+    """复刻 directoryForFolder:versionName:mode:"""
+    if folder == "mods":
+        return mods_directory(version_name, mode)
+    return os.path.join(game_directory(version_name, mode), FOLDERS[folder])
+
+
+# ----------------------------------------------------------------------------
+# 复刻 A2Settings.isolationModeFromDefaults
+# ----------------------------------------------------------------------------
+
+def resolve_isolation_mode(new_key_value, old_bool_value):
+    """new_key_value: 新 key 的值（None 表示没写过）；
+       old_bool_value: 旧布尔 key 的值（None 表示没写过）。"""
+    if new_key_value is not None:
+        return new_key_value if new_key_value in (NONE, FULL) else MOD
+    if old_bool_value is not None and old_bool_value:
+        return FULL
+    return MOD
 
 
 def check(name, got, want):
@@ -74,73 +105,91 @@ all_ok = True
 V = "1.21.5-fabric"
 
 print("=" * 66)
-print("版本隔离逻辑验证（逐条对照 ZL2 源码）")
+print("版本隔离逻辑验证（逐条对照 Punch-air PLProfiles.m）")
 print("=" * 66)
 print(f"游戏根目录: {GAME_HOME}\n")
 
-# ---- 1. 明确关闭隔离 ----
-print("[1] DISABLE + 无自定义路径 → 共用 .minecraft")
-got = folder_dir("mods", V, "DISABLE", None, global_isolation=False)
-all_ok &= check("mods 目录", got, f"{GAME_HOME}/mods")
-# 全局开着也一样，因为版本明确 DISABLE
-got = folder_dir("mods", V, "DISABLE", None, global_isolation=True)
-all_ok &= check("全局开启时仍不隔离（版本优先）", got, f"{GAME_HOME}/mods")
+# ---- 1. 关闭档：全部共用 ----
+print("[1] none 关闭 → 所有数据在游戏根目录共用")
+all_ok &= check("gameDir", game_directory(V, NONE), GAME_HOME)
+all_ok &= check("mods", mods_directory(V, NONE), f"{GAME_HOME}/mods")
+all_ok &= check("saves", folder_dir("saves", V, NONE), f"{GAME_HOME}/saves")
 
-# ---- 2. 明确开启隔离 ----
-print("\n[2] ENABLE → 版本文件夹独立成家")
-got = folder_dir("mods", V, "ENABLE", None, global_isolation=False)
-all_ok &= check("mods 目录", got, f"{GAME_HOME}/versions/{V}/mods")
-all_ok &= check("全局关闭时仍隔离（版本优先）", got,
+# ---- 2. 仅 Mod 档：只隔离 mods ----
+print("\n[2] mod 仅 Mod → 游戏数据共用，只把 mods 隔离到版本目录")
+all_ok &= check("gameDir 仍在根目录", game_directory(V, MOD), GAME_HOME)
+all_ok &= check("mods 进版本目录", mods_directory(V, MOD),
                 f"{GAME_HOME}/versions/{V}/mods")
+all_ok &= check("saves 仍在根目录共用", folder_dir("saves", V, MOD),
+                f"{GAME_HOME}/saves")
+all_ok &= check("resourcepacks 仍在根目录共用", folder_dir("resourcepacks", V, MOD),
+                f"{GAME_HOME}/resourcepacks")
 
-# ---- 3. 关键：FOLLOW_GLOBAL 落到全局设置 ----
-print("\n[3] FOLLOW_GLOBAL → 必须读全局设置（这是之前漏掉的）")
-got = folder_dir("mods", V, "FOLLOW_GLOBAL", None, global_isolation=True)
-all_ok &= check("全局开启 → 实际隔离", got, f"{GAME_HOME}/versions/{V}/mods")
-got = folder_dir("mods", V, "FOLLOW_GLOBAL", None, global_isolation=False)
-all_ok &= check("全局关闭 → 实际不隔离", got, f"{GAME_HOME}/mods")
+# ---- 3. 全部档：整个游戏目录进版本 ----
+print("\n[3] full 全部 → 整个游戏目录搬进版本文件夹")
+all_ok &= check("gameDir", game_directory(V, FULL), f"{GAME_HOME}/versions/{V}")
+all_ok &= check("mods", mods_directory(V, FULL), f"{GAME_HOME}/versions/{V}/mods")
+all_ok &= check("saves", folder_dir("saves", V, FULL),
+                f"{GAME_HOME}/versions/{V}/saves")
 
-# ---- 4. 自定义路径（未隔离时生效）----
-print("\n[4] DISABLE + 自定义路径 → 用自定义路径")
-CUSTOM = "/var/mobile/MyGames"
-got = folder_dir("saves", V, "DISABLE", CUSTOM, global_isolation=False)
-all_ok &= check("saves 目录", got, f"{CUSTOM}/saves")
+# ---- 4. 关键：mod 与 none 的 mods 目录必须不同 ----
+print("\n[4] mod 与 none 的 mods 目录不重叠（隔离真正生效）")
+all_ok &= check("两者不同", mods_directory(V, MOD) != mods_directory(V, NONE), True)
 
-# ---- 5. 隔离优先于自定义路径 ----
-print("\n[5] ENABLE + 自定义路径 → 自定义路径被忽略")
-got = folder_dir("mods", V, "ENABLE", CUSTOM, global_isolation=False)
-all_ok &= check("隔离优先", got, f"{GAME_HOME}/versions/{V}/mods")
+# ---- 5. 五个可隔离模块全覆盖 ----
+print("\n[5] 五个可隔离模块（各档布局）")
+for f in FOLDERS:
+    all_ok &= check(f"{f:14s} none", folder_dir(f, V, NONE), f"{GAME_HOME}/{f}")
+for f in FOLDERS:
+    want_gd = f"{GAME_HOME}/versions/{V}/mods" if f == "mods" else f"{GAME_HOME}/{f}"
+    all_ok &= check(f"{f:14s} mod ", folder_dir(f, V, MOD), want_gd)
+for f in FOLDERS:
+    all_ok &= check(f"{f:14s} full", folder_dir(f, V, FULL),
+                    f"{GAME_HOME}/versions/{V}/{f}")
 
-# ---- 6. FOLLOW_GLOBAL + 全局开 + 自定义路径 ----
-print("\n[6] FOLLOW_GLOBAL(全局开) + 自定义路径 → 隔离优先")
-got = folder_dir("mods", V, "FOLLOW_GLOBAL", CUSTOM, global_isolation=True)
-all_ok &= check("隔离优先于自定义", got, f"{GAME_HOME}/versions/{V}/mods")
+# ---- 6. 全部档的标准目录结构 ----
+print("\n[6] full 档在版本目录下建 9 个标准子目录")
+for sub in STANDARD_SUBDIRS:
+    all_ok &= check(f"{sub:16s}", f"{GAME_HOME}/versions/{V}/{sub}"
+                    == os.path.join(f"{GAME_HOME}/versions/{V}", sub), True)
+all_ok &= check("子目录数量 = 9", len(STANDARD_SUBDIRS), 9)
+all_ok &= check("mods 在标准目录里", "mods" in STANDARD_SUBDIRS, True)
 
-# ---- 7. FOLLOW_GLOBAL + 全局关 + 自定义路径 ----
-print("\n[7] FOLLOW_GLOBAL(全局关) + 自定义路径 → 用自定义")
-got = folder_dir("mods", V, "FOLLOW_GLOBAL", CUSTOM, global_isolation=False)
-all_ok &= check("用自定义路径", got, f"{CUSTOM}/mods")
-
-# ---- 8. 两个版本同时隔离，互不干扰 ----
-print("\n[8] 两个版本同时隔离 → 目录不重叠")
-a = folder_dir("saves", "1.20.1-vanilla", "ENABLE", None, False)
-b = folder_dir("saves", "1.21.5-fabric", "ENABLE", None, False)
+# ---- 7. 两个版本同时隔离，互不干扰 ----
+print("\n[7] 两个版本同时隔离 → 目录不重叠")
+a = folder_dir("saves", "1.20.1-vanilla", FULL)
+b = folder_dir("saves", "1.21.5-fabric", FULL)
 all_ok &= check("目录不同", a != b, True)
 all_ok &= check("A 路径", a, f"{GAME_HOME}/versions/1.20.1-vanilla/saves")
 all_ok &= check("B 路径", b, f"{GAME_HOME}/versions/1.21.5-fabric/saves")
+# 仅 Mod 档下，mods 也随版本不同
+all_ok &= check("mod 档 mods 也随版本不同",
+                mods_directory("1.20.1-vanilla", MOD)
+                != mods_directory("1.21.5-fabric", MOD), True)
 
-# ---- 9. 五个可隔离模块全覆盖 ----
-print("\n[9] 五个可隔离模块（隔离模式下的完整布局）")
-for f in FOLDERS:
-    got = folder_dir(f, V, "ENABLE", None, False)
-    all_ok &= check(f"{f:16s}", got, f"{GAME_HOME}/versions/{V}/{f}")
+# ---- 8. libraries / assets 始终共用 ----
+print("\n[8] libraries / assets 始终共用（不随档位变化）")
+for mode in (NONE, MOD, FULL):
+    all_ok &= check(f"{mode:4s} libraries 固定",
+                    f"{GAME_HOME}/libraries", f"{GAME_HOME}/libraries")
+    all_ok &= check(f"{mode:4s} assets 固定",
+                    f"{GAME_HOME}/assets", f"{GAME_HOME}/assets")
 
-# ---- 10. libraries / assets 始终共用 ----
-print("\n[10] libraries / assets 始终共用（不随隔离变化）")
-libs_isolated = f"{GAME_HOME}/libraries"
-libs_shared = f"{GAME_HOME}/libraries"
-all_ok &= check("libraries 路径固定", libs_isolated, libs_shared)
-all_ok &= check("assets 路径固定", f"{GAME_HOME}/assets", f"{GAME_HOME}/assets")
+# ---- 9. 默认档 = 仅 Mod ----
+print("\n[9] 档位解析与旧 key 迁移（默认 = 仅 Mod）")
+all_ok &= check("全新安装（两个 key 都没写）→ mod",
+                resolve_isolation_mode(None, None), MOD)
+all_ok &= check("新 key = none", resolve_isolation_mode(NONE, None), NONE)
+all_ok &= check("新 key = mod", resolve_isolation_mode(MOD, None), MOD)
+all_ok &= check("新 key = full", resolve_isolation_mode(FULL, None), FULL)
+all_ok &= check("新 key 脏数据（越界）→ 回落 mod",
+                resolve_isolation_mode(99, None), MOD)
+all_ok &= check("旧布尔 key = true → full（老用户迁移）",
+                resolve_isolation_mode(None, True), FULL)
+all_ok &= check("旧布尔 key = false → mod",
+                resolve_isolation_mode(None, False), MOD)
+all_ok &= check("新 key 优先于旧 key",
+                resolve_isolation_mode(NONE, True), NONE)
 
 print("\n" + "=" * 66)
 if all_ok:
@@ -148,3 +197,5 @@ if all_ok:
 else:
     print("有失败项")
 print("=" * 66)
+
+raise SystemExit(0 if all_ok else 1)
