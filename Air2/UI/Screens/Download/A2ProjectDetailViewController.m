@@ -26,6 +26,7 @@
 
 #import "A2ProjectDetailViewController.h"
 #import "A2ContentSource.h"
+#import "A2DownloadManifest.h"
 #import "A2GlassCard.h"
 #import "A2PrimaryButton.h"
 #import "A2Toast.h"
@@ -281,6 +282,13 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
         progress:nil
            speed:nil
       completion:^(BOOL success, NSError *error) {
+        // 落盘成功才记清单（失败不记，避免角标撒谎）。
+        if (success) {
+            [[A2DownloadManifest shared] recordDownloadWithProjectID:self->_project.projectID
+                                                           versionID:version.versionID
+                                                            fileName:fileName
+                                                              subdir:self->_targetSubdir];
+        }
         dispatch_async(dispatch_get_main_queue(), ^{
             if (success) {
                 [A2Toast show:[NSString stringWithFormat:@"已下载 %@", fileName] inView:self.view];
@@ -313,7 +321,11 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
     cell.detailTextLabel.text = [bits componentsJoinedByString:@" · "];
     cell.detailTextLabel.font = [A2Typography caption];
     cell.detailTextLabel.textColor = A2ThemeManager.shared.scheme.cOnSurfaceVariant;
-    cell.accessoryType = UITableViewCellAccessoryDisclosureIndicator;
+    // 装过的版本打勾（按 versionID 查清单，文件被手删则不算装过）。
+    BOOL installed = [[A2DownloadManifest shared] isVersionInstalled:_project.projectID
+                                                           versionID:v.versionID];
+    cell.accessoryType = installed ? UITableViewCellAccessoryCheckmark
+                                   : UITableViewCellAccessoryDisclosureIndicator;
     return cell;
 }
 

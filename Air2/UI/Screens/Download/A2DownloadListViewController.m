@@ -25,6 +25,7 @@
 //
 
 #import "A2DownloadListViewController.h"
+#import "A2DownloadManifest.h"
 #import "A2GlassCard.h"
 #import "A2ProjectDetailViewController.h"
 #import "A2Toast.h"
@@ -129,14 +130,20 @@ static NSString *const kCellID = @"A2DownloadCell";
                         [self formatCount:project.downloadCount],
                         [self formatCount:project.followCount]];
 
-    // 标签取前两个分类
-    NSArray *cats = project.categories;
-    if (cats.count > 0) {
-        NSString *tag = cats.firstObject;
-        _tagLabel.text = [tag capitalizedString];
+    // 已装优先于分类标签（用户先看自己装没装，再看它属哪类）。
+    if ([A2DownloadManifest.shared isProjectInstalled:project.projectID]) {
+        _tagLabel.text = @"已安装";
         _tagLabel.hidden = NO;
     } else {
-        _tagLabel.hidden = YES;
+        // 标签取前两个分类
+        NSArray *cats = project.categories;
+        if (cats.count > 0) {
+            NSString *tag = cats.firstObject;
+            _tagLabel.text = [tag capitalizedString];
+            _tagLabel.hidden = NO;
+        } else {
+            _tagLabel.hidden = YES;
+        }
     }
     [self applyTheme];
 }

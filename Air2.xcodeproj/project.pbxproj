@@ -26,6 +26,7 @@
 		FAE87882A16451C5E2E43DDE /* A2ModrinthAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */; };
 		006F90647E36FA45B54D7B39 /* A2ZipReader.m in Sources */ = {isa = PBXBuildFile; fileRef = C7F15DE318744485CEE00538 /* A2ZipReader.m */; };
 		9F125686BA18A3A79AC3C941 /* A2DownloadEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = 1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */; };
+		E6679E2C4F527A9777EA6CEC /* A2DownloadManifest.m in Sources */ = {isa = PBXBuildFile; fileRef = 2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */; };
 		9B094A240FBA6A3C1821F88C /* A2DownloadTask.m in Sources */ = {isa = PBXBuildFile; fileRef = AE757274F8E1E206F093F68A /* A2DownloadTask.m */; };
 		B084543A044A1B44B18F5627 /* A2GameFiles.m in Sources */ = {isa = PBXBuildFile; fileRef = D0693B31AD2EAB6A0328732E /* A2GameFiles.m */; };
 		6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */ = {isa = PBXBuildFile; fileRef = 074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */; };
@@ -102,6 +103,7 @@
 		B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModrinthAPI.m"; sourceTree = "<group>"; };
 		C7F15DE318744485CEE00538 /* A2ZipReader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ZipReader.m"; sourceTree = "<group>"; };
 		1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadEngine.m"; sourceTree = "<group>"; };
+		2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadManifest.m"; sourceTree = "<group>"; };
 		AE757274F8E1E206F093F68A /* A2DownloadTask.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadTask.m"; sourceTree = "<group>"; };
 		D0693B31AD2EAB6A0328732E /* A2GameFiles.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameFiles.m"; sourceTree = "<group>"; };
 		074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionIsolation.m"; sourceTree = "<group>"; };
@@ -172,6 +174,7 @@
 		BEB699597AD1A56E18E868F6 /* A2ModrinthAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModrinthAPI.h"; sourceTree = "<group>"; };
 		AFAF6FCA941790ECF1D16844 /* A2ZipReader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ZipReader.h"; sourceTree = "<group>"; };
 		DE956596465BDFF25E578448 /* A2DownloadEngine.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadEngine.h"; sourceTree = "<group>"; };
+		D3ABD890B860FD03E77A2B0C /* A2DownloadManifest.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadManifest.h"; sourceTree = "<group>"; };
 		0F59C20AA19682790BF7251E /* A2DownloadTask.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTask.h"; sourceTree = "<group>"; };
 		0B3D6D1B16A31DBED39334EE /* A2GameFiles.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameFiles.h"; sourceTree = "<group>"; };
 		CDB8C000E2777EB953C462DD /* A2VersionIsolation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionIsolation.h"; sourceTree = "<group>"; };
@@ -370,8 +373,10 @@
 			isa = PBXGroup;
 			children = (
 				1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */,
+				2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */,
 				AE757274F8E1E206F093F68A /* A2DownloadTask.m */,
 				DE956596465BDFF25E578448 /* A2DownloadEngine.h */,
+				D3ABD890B860FD03E77A2B0C /* A2DownloadManifest.h */,
 				0F59C20AA19682790BF7251E /* A2DownloadTask.h */,
 			);
 			path = Download;
@@ -674,6 +679,7 @@
 				FAE87882A16451C5E2E43DDE /* A2ModrinthAPI.m in Sources */,
 				006F90647E36FA45B54D7B39 /* A2ZipReader.m in Sources */,
 				9F125686BA18A3A79AC3C941 /* A2DownloadEngine.m in Sources */,
+				E6679E2C4F527A9777EA6CEC /* A2DownloadManifest.m in Sources */,
 				9B094A240FBA6A3C1821F88C /* A2DownloadTask.m in Sources */,
 				B084543A044A1B44B18F5627 /* A2GameFiles.m in Sources */,
 				6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */,
