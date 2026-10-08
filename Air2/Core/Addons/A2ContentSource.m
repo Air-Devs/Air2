@@ -7,8 +7,9 @@
 #import "A2ModrinthAPI.h"
 #import "A2CurseForgeAPI.h"
 #import "A2MirrorResolver.h"
+#import "A2Settings.h"
 
-static NSString *const kPreferredPlatformKey = @"A2PreferredContentPlatform";
+// 首选平台 key 收敛到 A2Settings，不再本地定义。
 
 #pragma mark - 排序字段映射
 
@@ -155,12 +156,12 @@ NSArray<NSNumber *> *A2AllContentClasses(void) {
 }
 
 + (A2ContentPlatform)preferredPlatform {
-    NSInteger v = [NSUserDefaults.standardUserDefaults integerForKey:kPreferredPlatformKey];
+    NSInteger v = A2Settings.shared.preferredContentPlatform;
     return (v == 1) ? A2ContentPlatformCurseForge : A2ContentPlatformModrinth;
 }
 
 + (void)setPreferredPlatform:(A2ContentPlatform)platform {
-    [NSUserDefaults.standardUserDefaults setInteger:platform forKey:kPreferredPlatformKey];
+    A2Settings.shared.preferredContentPlatform = (NSInteger)platform;
 }
 
 - (NSString *)displayName {

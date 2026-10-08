@@ -4,6 +4,7 @@
 //
 
 #import "A2VersionIsolation.h"
+#import "A2Settings.h"
 
 NSString *A2VersionFolderName(A2VersionFolder folder) {
     switch (folder) {
@@ -169,29 +170,35 @@ static NSString *A2SettingStateToString(A2SettingState state) {
 - (instancetype)init {
     self = [super init];
     if (!self) return nil;
-    NSUserDefaults *d = NSUserDefaults.standardUserDefaults;
-    _defaultVersionIsolation = [d objectForKey:@"A2GlobalVersionIsolation"]
-        ? [d boolForKey:@"A2GlobalVersionIsolation"] : NO;
-    _defaultSkipIntegrityCheck = [d boolForKey:@"A2GlobalSkipIntegrityCheck"];
-    _defaultRAMAllocation = [d objectForKey:@"A2GlobalRAM"]
-        ? (NSInteger)[d integerForKey:@"A2GlobalRAM"] : 2048;
-    _defaultRenderer = [d stringForKey:@"A2GlobalRenderer"];
+    // 薄转发：真实存储已收敛到 A2Settings，这里只做兼容，避免改调用方行为。
+    A2Settings *s = A2Settings.shared;
+    _defaultVersionIsolation = s.versionIsolation;
+    _defaultSkipIntegrityCheck = s.skipIntegrityCheck;
+    _defaultRAMAllocation = s.ramAllocationMB;
+    _defaultRenderer = s.renderer;
     return self;
 }
 
 - (void)setDefaultVersionIsolation:(BOOL)v {
     _defaultVersionIsolation = v;
-    [NSUserDefaults.standardUserDefaults setBool:v forKey:@"A2GlobalVersionIsolation"];
+    A2Settings.shared.versionIsolation = v;
 }
 
 - (void)setDefaultSkipIntegrityCheck:(BOOL)v {
     _defaultSkipIntegrityCheck = v;
-    [NSUserDefaults.standardUserDefaults setBool:v forKey:@"A2GlobalSkipIntegrityCheck"];
+    A2Settings.shared.skipIntegrityCheck = v;
 }
 
 - (void)setDefaultRAMAllocation:(NSInteger)v {
-    _defaultRAMAllocation = v;
-    [NSUserDefaults.standardUserDefaults setInteger:v forKey:@"A2GlobalRAM"];
+    // 钳制逻辑收敛到 A2Settings 一处，这里同步钳后值，避免两处不一致。
+    A2Settings.shared.ramAllocationMB = v;
+    _defaultRAMAllocation = A2Settings.shared.ramAllocationMB;
+}
+
+- (void)setDefaultRenderer:(NSString *)v {
+    // 历史实现漏了持久化（只写 ivar 不落盘），这里补上并收敛到注册表。
+    _defaultRenderer = [v copy];
+    A2Settings.shared.renderer = v;
 }
 
 @end

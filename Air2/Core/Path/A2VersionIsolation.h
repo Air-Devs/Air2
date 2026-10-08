@@ -55,6 +55,9 @@ FOUNDATION_EXPORT NSString *A2VersionFolderDisplayName(A2VersionFolder folder);
  *
  * ZL2 里对应 AllSettings，版本配置里的 FOLLOW_GLOBAL
  * 会读这里的值。没有这个，FOLLOW_GLOBAL 就无从解析。
+ *
+ * 注意：真实存储已收敛到 Core/Settings/A2Settings，
+ * 本类仅作兼容转发，新代码请直接用 A2Settings。
  */
 @interface A2GlobalGameSettings : NSObject
 

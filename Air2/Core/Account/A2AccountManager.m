@@ -5,12 +5,13 @@
 
 #import "A2AccountManager.h"
 #import "A2MicrosoftAuth.h"
+#import "A2Settings.h"
 #import <CommonCrypto/CommonDigest.h>
 
 NSNotificationName const A2AccountsDidChangeNotification = @"A2AccountsDidChangeNotification";
 
 static NSString *const kAccountsFile = @"accounts.json";
-static NSString *const kCurrentAccountKey = @"A2CurrentAccountID";
+// 当前账号 key 收敛到 A2Settings，不再本地定义。
 
 static void A2Main(dispatch_block_t b) {
     if ([NSThread isMainThread]) b();
@@ -230,7 +231,7 @@ static void A2Main(dispatch_block_t b) {
     }
     _accounts = [list copy];
 
-    NSString *savedID = [NSUserDefaults.standardUserDefaults stringForKey:kCurrentAccountKey];
+    NSString *savedID = A2Settings.shared.currentAccountID;
     _currentAccount = nil;
     if (savedID) {
         for (A2Account *a in _accounts) {
@@ -318,8 +319,7 @@ static void A2Main(dispatch_block_t b) {
 - (BOOL)selectCurrentAccount:(A2Account *)account {
     if (!account) return NO;
     _currentAccount = account;
-    [NSUserDefaults.standardUserDefaults setObject:account.uniqueID
-                                            forKey:kCurrentAccountKey];
+    A2Settings.shared.currentAccountID = account.uniqueID;
     [self notify];
     return YES;
 }

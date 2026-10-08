@@ -4,6 +4,7 @@
 //
 
 #import "A2VersionManager.h"
+#import "A2Settings.h"
 
 NSNotificationName const A2VersionsDidChangeNotification = @"A2VersionsDidChangeNotification";
 
@@ -11,8 +12,7 @@ NSNotificationName const A2VersionsDidChangeNotification = @"A2VersionsDidChange
 static NSString *const kLauncherDataDir = @".air_version";
 /// 版本配置文件名
 static NSString *const kConfigFileName = @"config.json";
-/// 记录当前选中版本的键
-static NSString *const kCurrentVersionKey = @"A2CurrentVersionName";
+// 当前版本 key 收敛到 A2Settings，不再本地定义。
 
 #pragma mark - A2Version
 
@@ -217,7 +217,7 @@ static NSString *const kCurrentVersionKey = @"A2CurrentVersionName";
     _versions = [found copy];
 
     // 恢复上次选择的版本
-    NSString *savedName = [NSUserDefaults.standardUserDefaults stringForKey:kCurrentVersionKey];
+    NSString *savedName = A2Settings.shared.currentVersionName;
     A2Version *restored = nil;
     if (savedName) {
         for (A2Version *v in _versions) {
@@ -241,7 +241,7 @@ static NSString *const kCurrentVersionKey = @"A2CurrentVersionName";
 - (BOOL)selectCurrentVersion:(A2Version *)version {
     if (!version || !version.isValid) return NO;
     _currentVersion = version;
-    [NSUserDefaults.standardUserDefaults setObject:version.name forKey:kCurrentVersionKey];
+    A2Settings.shared.currentVersionName = version.name;
     [NSNotificationCenter.defaultCenter postNotificationName:A2VersionsDidChangeNotification
                                                       object:self];
     return YES;
@@ -257,7 +257,7 @@ static NSString *const kCurrentVersionKey = @"A2CurrentVersionName";
     if (ok) {
         if ([_currentVersion.name isEqualToString:version.name]) {
             _currentVersion = nil;
-            [NSUserDefaults.standardUserDefaults removeObjectForKey:kCurrentVersionKey];
+            A2Settings.shared.currentVersionName = nil;
         }
         [self reload];
     }

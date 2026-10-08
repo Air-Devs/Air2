@@ -4,6 +4,7 @@
 //
 
 #import "A2MirrorResolver.h"
+#import "A2Settings.h"
 
 /// MCIM 镜像根（与 ZL2 用同一个）
 static NSString *const kMCIMMirrorRoot = @"https://mod.mcimirror.top";
@@ -40,25 +41,21 @@ static NSArray<NSString *> *MirrorableHolders(void) {
     self = [super init];
     if (!self) return nil;
 
-    NSUserDefaults *d = NSUserDefaults.standardUserDefaults;
-    _priority = [d objectForKey:@"A2MirrorPriority"]
-        ? (A2MirrorPriority)[d integerForKey:@"A2MirrorPriority"]
-        : A2MirrorPriorityOfficialFirst;
-
-    // 默认开启，但 enabled 只是「允许」——
-    // 真正是否生效还看 isChinaMainland 检测
-    _enabled = [d objectForKey:@"A2MirrorEnabled"] ? [d boolForKey:@"A2MirrorEnabled"] : YES;
+    // 存储收敛到 A2Settings（同 key，无损迁移）。
+    A2Settings *s = A2Settings.shared;
+    _priority = (A2MirrorPriority)s.mirrorPriority;
+    _enabled = s.mirrorEnabled;
     return self;
 }
 
 - (void)setPriority:(A2MirrorPriority)priority {
     _priority = priority;
-    [NSUserDefaults.standardUserDefaults setInteger:priority forKey:@"A2MirrorPriority"];
+    A2Settings.shared.mirrorPriority = (NSInteger)priority;
 }
 
 - (void)setEnabled:(BOOL)enabled {
     _enabled = enabled;
-    [NSUserDefaults.standardUserDefaults setBool:enabled forKey:@"A2MirrorEnabled"];
+    A2Settings.shared.mirrorEnabled = enabled;
 }
 
 #pragma mark - 网络环境检测
