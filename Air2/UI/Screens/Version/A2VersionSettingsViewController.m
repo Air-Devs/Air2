@@ -39,6 +39,7 @@
 #import "A2Metrics.h"
 #import "A2Typography.h"
 #import "A2VersionManager.h"
+#import "A2FilesViewController.h"
 
 @interface A2VersionSettingsViewController ()
 /// 版本名（在 init 里赋值，后续只读）
@@ -277,6 +278,20 @@
         [_folderRows addObject:row];
         [_folderSection addRow:row];
     }
+
+    // 版本文件浏览（Core 浏览后端真实可用才给入口）。
+    A2SettingsRow *browseRow = [[A2SettingsRow alloc] init];
+    browseRow.symbolName = @"folder.fill";
+    browseRow.title = @"浏览版本文件";
+    browseRow.accessory = A2SettingsRowAccessoryDisclosure;
+    browseRow.onTap = ^{
+        A2GamePath *p = [A2GamePath pathWithGameHome:A2VersionManager.shared.gameHome];
+        NSString *dir = [p gameDirectoryForVersion:self.version.name isolation:self.version.isolation];
+        A2FilesViewController *vc = [[A2FilesViewController alloc] initWithRootPath:dir
+                                                                        displayName:self.version.name];
+        [self.navigationController pushViewController:vc animated:YES];
+    };
+    [_folderSection addRow:browseRow];
 
     [self addSection:_folderSection];
 }
