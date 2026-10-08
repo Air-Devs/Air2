@@ -318,9 +318,11 @@
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
     _titleLabel.textColor = t.cOnSurface;
-    _backButton.tintColor = UIColor.whiteColor;
+    // 顶栏控件跟随背景深浅：亮底用深色、暗底用浅色（onSurface 已按模式解析），
+    // 写死白色在亮色纯色背景下会看不见。
+    _backButton.tintColor = t.cOnSurface;
     for (UIButton *b in _trailingButtons) {
-        b.tintColor = UIColor.whiteColor;
+        b.tintColor = t.cOnSurface;
     }
 }
 

@@ -215,7 +215,7 @@
         [_statusDot.layer removeAllAnimations];
     }
 
-    _toggleButton.tintColor = UIColor.whiteColor;
+    _toggleButton.tintColor = t.cOnSurfaceVariant;
 }
 
 @end

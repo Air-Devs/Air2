@@ -197,6 +197,7 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
 
     // ---- 标题 ----
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectZero];
+    title.translatesAutoresizingMaskIntoConstraints = NO;
     title.font = [UIFont systemFontOfSize:19 weight:UIFontWeightBold];
     title.text = @"颜色主题";
     title.textAlignment = NSTextAlignmentCenter;
@@ -273,11 +274,16 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
     [_card addSubview:buttonRow];
 
     [NSLayoutConstraint activateConstraints:@[
-        // 卡片：居中，宽度自适应但不超屏宽 92%
+        // 卡片：居中，定宽 540（小屏被 92% 上限压住时内容等比压缩）。
         [_card.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
         [_card.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor],
+        ({
+            NSLayoutConstraint *w = [_card.widthAnchor constraintEqualToConstant:540];
+            w.priority = UILayoutPriorityDefaultHigh;
+            w;
+        }),
         [_card.widthAnchor constraintLessThanOrEqualToAnchor:self.view.widthAnchor
-                                                   multiplier:0.92],
+                                                  multiplier:0.92],
         [_card.heightAnchor constraintLessThanOrEqualToAnchor:self.view.heightAnchor
                                                    multiplier:0.92],
 
@@ -289,9 +295,9 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
         [bodyStack.leadingAnchor constraintEqualToAnchor:_card.leadingAnchor constant:A2SpaceXL],
         [bodyStack.trailingAnchor constraintEqualToAnchor:_card.trailingAnchor constant:-A2SpaceXL],
 
-        // 左列固定 220，右列吃掉剩余
-        [leftColumn.widthAnchor constraintEqualToConstant:220],
-        [_wheel.widthAnchor constraintGreaterThanOrEqualToConstant:260],
+        // 左列固定 200，右列吃掉剩余（最小屏横屏也能排下）
+        [leftColumn.widthAnchor constraintEqualToConstant:200],
+        [_wheel.widthAnchor constraintGreaterThanOrEqualToConstant:220],
         [_wheel.heightAnchor constraintEqualToConstant:200],
 
         [divider.topAnchor constraintEqualToAnchor:bodyStack.bottomAnchor constant:A2SpaceXL],
