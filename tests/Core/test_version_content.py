@@ -260,6 +260,38 @@ def assemble_toml(table, top_authors, jar_version):
             "summary": non_empty(table.get("description"))}
 
 
+def pack_description(value):
+    if isinstance(value, str):
+        return value if value else None
+    if isinstance(value, dict):
+        v = value.get("text")
+        return v if isinstance(v, str) and v else None
+    return None
+
+
+def assemble_pack(meta):
+    # 与实现一致：NSNumber（含布尔）即收，不做类型侦探；
+    # pack_format 下游暂无消费，错判方向选宽容（实现与镜像同行为准）。
+    pack = meta.get("pack") if isinstance(meta, dict) else None
+    if not isinstance(pack, dict):
+        return {"format": -1, "summary": None, "valid": False}
+    raw = pack.get("pack_format")
+    if not isinstance(raw, int):
+        return {"format": -1, "summary": pack_description(pack.get("description")),
+                "valid": False}
+    return {"format": raw, "summary": pack_description(pack.get("description")),
+            "valid": True}
+
+
+def pack_display(filename, is_dir, summary):
+    if summary:
+        return summary
+    if is_dir:
+        return filename if filename else "?"
+    base = filename.rsplit(".", 1)[0] if "." in filename else filename
+    return base if base else filename
+
+
 def check(name, got, want):
     ok = got == want
     print(f"  [{'ok' if ok else 'FAIL'}] {name}: got {got!r}, want {want!r}")
@@ -367,6 +399,23 @@ def main() -> int:
     ok &= check("asm-toml-nojarver",
                 assemble_toml({"modId": "m", "version": "${file.jarVersion}",
                                "displayName": "M"}, None, None)["version"], "")
+
+    ok &= check("pack-str",
+                assemble_pack({"pack": {"pack_format": 6, "description": "Hi"}}),
+                {"format": 6, "summary": "Hi", "valid": True})
+    ok &= check("pack-obj",
+                assemble_pack({"pack": {"pack_format": 8,
+                                        "description": {"text": "Hey"}}})["summary"], "Hey")
+    ok &= check("pack-obj-notext",
+                assemble_pack({"pack": {"pack_format": 8,
+                                        "description": {"translate": "k"}}})["summary"], None)
+    ok &= check("pack-nopack", assemble_pack({})["valid"], False)
+    ok &= check("pack-nometa", assemble_pack(None)["valid"], False)
+    ok &= check("pack-nofmt",
+                assemble_pack({"pack": {"description": "Hi"}})["valid"], False)
+    ok &= check("pack-display-desc", pack_display("x.zip", False, "Hi"), "Hi")
+    ok &= check("pack-display-file", pack_display("Faithful.zip", False, None), "Faithful")
+    ok &= check("pack-display-dir", pack_display("My Pack", True, None), "My Pack")
 
     print("==================================================================")
     print("全部通过" if ok else "有失败")
