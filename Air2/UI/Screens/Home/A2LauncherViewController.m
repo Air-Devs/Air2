@@ -724,7 +724,7 @@
     NSMutableArray<NSString *> *parts = [NSMutableArray array];
     [parts addObject:current.loaderInfo.length ? current.loaderInfo : @"原版"];
     [parts addObject:[NSString stringWithFormat:@"隔离·%@",
-                      A2IsolationModeDisplayName(current.isolationMode)]];
+                      A2IsolationModeDisplayName(current.effectiveIsolationMode)]];
     _versionMetaLabel.text = [parts componentsJoinedByString:@" · "];
 }
 

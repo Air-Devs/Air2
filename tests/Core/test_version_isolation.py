@@ -24,10 +24,14 @@ Air2 的实现对应 A2VersionIsolation.m 里的
     - directoryForFolder:versionName:mode:
 以及 A2Settings.m 里的 isolationModeFromDefaults（旧布尔 key 的迁移规则）。
 
-三档语义（全局，所有版本统一）：
+三档语义（全局档位；「仅 Mod」只作用于能装模组的版本）：
     none  关闭    gameDir = 游戏根目录          mods = {根}/mods
-    mod   仅 Mod  gameDir = 游戏根目录          mods = versions/{版本名}/mods
+    mod   仅 Mod  gameDir = 游戏根目录          mods = versions/{版本名}/mods（仅能装模组的版本）
     full  全部    gameDir = versions/{版本名}   mods = versions/{版本名}/mods
+
+A2GamePath 只按传入的档位解析路径；「仅 Mod 对某个版本是否生效」由 Version 层
+（A2Version.effectiveIsolationMode）判定：全局档位为 mod 但该版本不能装模组
+（原版 / 仅装 OptiFine）时降级为 none。下面的 effective_mode 复刻这条规则。
 
 libraries / assets 始终共用，不随档位变化。
 """
@@ -90,6 +94,21 @@ def resolve_isolation_mode(new_key_value, old_bool_value):
     if old_bool_value is not None and old_bool_value:
         return FULL
     return MOD
+
+
+# ----------------------------------------------------------------------------
+# 复刻 A2Version.effectiveIsolationMode
+# ----------------------------------------------------------------------------
+
+def effective_mode(mode, can_install_mods):
+    """全局档位 + 该版本能否装模组 → 该版本的实际生效档位。
+
+    复刻 A2Version.effectiveIsolationMode：「仅 Mod」只隔离能装模组的版本，
+    不能装模组（原版 / 仅 OptiFine）就按关闭处理。
+    """
+    if mode == MOD and not can_install_mods:
+        return NONE
+    return mode
 
 
 def check(name, got, want):
@@ -190,6 +209,32 @@ all_ok &= check("旧布尔 key = false → mod",
                 resolve_isolation_mode(None, False), MOD)
 all_ok &= check("新 key 优先于旧 key",
                 resolve_isolation_mode(NONE, True), NONE)
+
+# ---- 10. 「仅 Mod」只作用于能装模组的版本 ----
+print("\n[10] effective_mode：仅 Mod 只隔离能装模组的版本")
+all_ok &= check("可装模组 + mod → mod", effective_mode(MOD, True), MOD)
+all_ok &= check("不能装模组 + mod → none（降级）",
+                effective_mode(MOD, False), NONE)
+# 其余档位不受版本能否装模组影响
+all_ok &= check("不能装模组 + full → full", effective_mode(FULL, False), FULL)
+all_ok &= check("可装模组 + full → full", effective_mode(FULL, True), FULL)
+all_ok &= check("不能装模组 + none → none", effective_mode(NONE, False), NONE)
+
+# 生效档位决定实际路径：原版在全局 mod 档下 mods 仍留在根目录共用
+V_VANILLA = "1.21.5"          # 原版（无加载器）
+V_FABRIC = "1.21.5-fabric"    # 装了 Fabric
+all_ok &= check("原版 + 全局 mod：mods 仍在根目录",
+                mods_directory(V_VANILLA, effective_mode(MOD, False)),
+                f"{GAME_HOME}/mods")
+all_ok &= check("Fabric + 全局 mod：mods 进版本目录",
+                mods_directory(V_FABRIC, effective_mode(MOD, True)),
+                f"{GAME_HOME}/versions/{V_FABRIC}/mods")
+all_ok &= check("原版 + 全局 full：整目录仍隔离",
+                folder_dir("saves", V_VANILLA, effective_mode(FULL, False)),
+                f"{GAME_HOME}/versions/{V_VANILLA}/saves")
+all_ok &= check("原版 + 全局 none：全部共用",
+                folder_dir("saves", V_VANILLA, effective_mode(NONE, False)),
+                f"{GAME_HOME}/saves")
 
 print("\n" + "=" * 66)
 if all_ok:

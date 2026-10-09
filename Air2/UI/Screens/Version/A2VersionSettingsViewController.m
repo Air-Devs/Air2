@@ -22,8 +22,10 @@
 //
 //  单版本设置 —— 隔离档位是全局的，这里只做展示。
 //
-//  隔离档位在「设置 → 游戏」里选（关闭 / 仅 Mod / 全部），对所有版本统一生效。
-//  本页只显示当前档位与它推导出的实际目录，避免两处设置互相打架。
+//  隔离档位在「设置 → 游戏」里选（关闭 / 仅 Mod / 全部）。
+//  本页显示的是「本版本的生效档位」：全局选「仅 Mod」时，只有能装模组的版本
+//  才会隔离，原版与仅装 OptiFine 的版本按「关闭」处理。
+//  只展示、不提供修改入口，避免两处设置互相打架。
 //
 //  版本的启动配置仍存在 {版本目录}/.air_version/config.json。
 //
@@ -152,13 +154,18 @@
 
 /// 实时刷新隔离相关文案 —— 档位或版本变化都要重算路径
 - (void)refreshIsolationUI {
-    A2IsolationMode mode = _version.isolationMode;
+    A2IsolationMode mode = _version.effectiveIsolationMode;
 
     _modeRow.valueText = A2IsolationModeDisplayName(mode);
-    switch (mode) {
-        case A2IsolationModeMod:  _modeRow.subtitle = @"游戏数据共用，只隔离模组"; break;
-        case A2IsolationModeFull: _modeRow.subtitle = @"整个游戏目录按版本隔离"; break;
-        default:                  _modeRow.subtitle = @"所有数据共用，不隔离"; break;
+    if (mode == A2IsolationModeMod) {
+        _modeRow.subtitle = @"只隔离本版本的模组，其余目录共用";
+    } else if (mode == A2IsolationModeFull) {
+        _modeRow.subtitle = @"整个游戏目录按版本隔离";
+    } else if (_version.isolationMode == A2IsolationModeMod) {
+        // 全局档位是「仅 Mod」，但本版本不能装模组，实际按关闭处理。
+        _modeRow.subtitle = @"本版本不能装模组，不隔离";
+    } else {
+        _modeRow.subtitle = @"所有数据共用，不隔离";
     }
 
     _pathRow.subtitle = [_version gameDirectory];
