@@ -60,6 +60,11 @@ typedef NS_ENUM(NSInteger, A2VersionType) {
 @property (nonatomic, strong, nullable) NSDate *lastPlayed;
 /// 加载器信息（从 json 里解析出来的展示文本）
 @property (nonatomic, copy, nullable) NSString *loaderInfo;
+/// 该版本能否安装模组。
+///
+/// 取决于版本自带的加载器：Fabric / Quilt / LegacyFabric / Forge / NeoForge
+/// 可以装，原版与只装 OptiFine 的版本不能（OptiFine 只是优化模组，不加载其它 Mod）。
+@property (nonatomic, assign, readonly) BOOL canInstallMods;
 
 - (instancetype)initWithName:(NSString *)name gameHome:(NSString *)gameHome;
 
@@ -71,13 +76,19 @@ typedef NS_ENUM(NSInteger, A2VersionType) {
 - (NSString *)launcherDataPath;
 /// 该版本实际使用的游戏目录（隔离档位在这里生效）
 - (NSString *)gameDirectory;
-/// 模组目录（仅 Mod / 全部档在版本目录下，关闭档在游戏根目录）
+/// 模组目录（生效档位为仅 Mod / 全部时在版本目录下，关闭档在游戏根目录）
 - (NSString *)modsDirectory;
 /// 某个可隔离模块的实际目录（mods / saves / ...）
 - (NSString *)directoryForFolder:(A2VersionFolder)folder;
 /// 当前全局隔离档位（所有版本统一，取自设置）
 - (A2IsolationMode)isolationMode;
-/// 按当前档位建好该版本需要的目录
+/// 本版本实际生效的隔离档位。
+///
+/// 与 isolationMode 的区别：全局档位是「仅 Mod」时，只有能装模组的版本才会隔离，
+/// 不能装模组的版本（原版 / 仅 OptiFine）实际按「关闭」处理 —— 隔离 mods 没有意义。
+/// 其余档位与全局一致。
+- (A2IsolationMode)effectiveIsolationMode;
+/// 按生效档位建好该版本需要的目录
 - (void)ensureIsolationDirectories;
 
 - (void)loadConfig;
