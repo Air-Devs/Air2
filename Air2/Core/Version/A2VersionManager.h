@@ -105,6 +105,10 @@ extern NSNotificationName const A2VersionsDidChangeNotification;
 
 + (instancetype)shared;
 
+/// 校验版本名并返回去空白后的名字；空名或非法名返回 nil。
+/// 安装/改名/复制共用同一份规则（名字必须是单路径段），不各写一遍。
++ (nullable NSString *)validatedVersionName:(NSString *)name error:(NSError **)error;
+
 /// 当前游戏根目录（只读，切换用 setGameHome: —— 它会触发重新扫描）
 @property (nonatomic, copy, readonly) NSString *gameHome;
 /// 所有已安装版本

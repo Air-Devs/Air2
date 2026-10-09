@@ -26,36 +26,9 @@
 
 NSNotificationName const A2VersionsDidChangeNotification = @"A2VersionsDidChangeNotification";
 
-/// 启动器私有数据目录名
-static NSString *const kLauncherDataDir = @".air_version";
 /// 版本配置文件名
 static NSString *const kConfigFileName = @"config.json";
 // 当前版本 key 收敛到 A2Settings，不再本地定义。
-
-/// 校验新版本名：去首尾空白，空名或非法名返回 nil 并填 error。
-/// 重名不在这里判 —— 改名遇到重名是失败，复制遇到重名也是失败，
-/// 但改名遇到同名是成功（无操作），语义不同，各自处理。
-static NSString *A2TrimmedVersionName(NSString *name, NSError **error) {
-    NSString *trimmed = [name stringByTrimmingCharactersInSet:
-                         NSCharacterSet.whitespaceAndNewlineCharacterSet];
-    if (trimmed.length == 0) {
-        if (error) {
-            *error = [NSError errorWithDomain:@"A2Version" code:2
-                                     userInfo:@{NSLocalizedDescriptionKey: @"版本名不能为空"}];
-        }
-        return nil;
-    }
-    if ([trimmed containsString:@"/"] || [trimmed containsString:@"\\"] ||
-        [trimmed isEqualToString:@"."] || [trimmed isEqualToString:@".."] ||
-        [trimmed hasPrefix:@"."]) {
-        if (error) {
-            *error = [NSError errorWithDomain:@"A2Version" code:3
-                                     userInfo:@{NSLocalizedDescriptionKey: @"版本名包含非法字符"}];
-        }
-        return nil;
-    }
-    return trimmed;
-}
 
 /// 把目录里的 {old}.json / {old}.jar 改名为 {new}（不存在则跳过）。
 static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *newName) {
@@ -369,6 +342,29 @@ static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *n
 
 #pragma mark 操作
 
+/// 校验版本名并返回去空白后的名字（安装/改名/复制共用，见头文件说明）。
++ (NSString *)validatedVersionName:(NSString *)name error:(NSError **)error {
+    NSString *trimmed = [name stringByTrimmingCharactersInSet:
+                         NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (trimmed.length == 0) {
+        if (error) {
+            *error = [NSError errorWithDomain:@"A2Version" code:2
+                                     userInfo:@{NSLocalizedDescriptionKey: @"版本名不能为空"}];
+        }
+        return nil;
+    }
+    if ([trimmed containsString:@"/"] || [trimmed containsString:@"\\"] ||
+        [trimmed isEqualToString:@"."] || [trimmed isEqualToString:@".."] ||
+        [trimmed hasPrefix:@"."]) {
+        if (error) {
+            *error = [NSError errorWithDomain:@"A2Version" code:3
+                                     userInfo:@{NSLocalizedDescriptionKey: @"版本名包含非法字符"}];
+        }
+        return nil;
+    }
+    return trimmed;
+}
+
 - (BOOL)selectCurrentVersion:(A2Version *)version {
     if (!version || !version.isValid) return NO;
     _currentVersion = version;
@@ -407,7 +403,7 @@ static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *n
 - (BOOL)renameVersion:(A2Version *)version to:(NSString *)newName error:(NSError **)error {
     if (!version) return NO;
 
-    NSString *trimmed = A2TrimmedVersionName(newName, error);
+    NSString *trimmed = [A2VersionManager validatedVersionName:newName error:error];
     if (!trimmed) {
         NSString *reason = (error && *error) ? (*error).localizedDescription : @"非法名";
         [A2Log log:@"version: 改名拒绝 %@ → %@（%@）", version.name, newName, reason];
@@ -493,7 +489,7 @@ static BOOL A2CopyVersionPayloadFiles(NSString *srcPath, NSString *dstPath,
                mode:(A2VersionCopyMode)mode error:(NSError **)error {
     if (!version) return NO;
 
-    NSString *trimmed = A2TrimmedVersionName(newName, error);
+    NSString *trimmed = [A2VersionManager validatedVersionName:newName error:error];
     if (!trimmed) {
         NSString *reason = (error && *error) ? (*error).localizedDescription : @"非法名";
         [A2Log log:@"version: 复制拒绝 %@ → %@（%@）", version.name, newName, reason];

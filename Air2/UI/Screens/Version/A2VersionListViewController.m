@@ -553,10 +553,12 @@
     [alert addAction:[UIAlertAction actionWithTitle:@"开始安装" style:UIAlertActionStyleDefault
                                            handler:^(UIAlertAction *a) {
         __strong typeof(weakSelf) self = weakSelf;
-        NSString *text = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:
-                          NSCharacterSet.whitespaceAndNewlineCharacterSet];
-        if (text.length == 0) {
-            [A2Toast show:@"版本号不能为空" inView:self.view];
+        NSError *verr = nil;
+        // 版本名直送安装器拼路径，先过同一份校验，否则 ../../ 之类的名字会逃出版本目录。
+        NSString *text = [A2VersionManager validatedVersionName:alert.textFields.firstObject.text
+                                                          error:&verr];
+        if (!text) {
+            [A2Toast show:(verr.localizedDescription ?: @"版本号无效") inView:self.view];
             return;
         }
         A2InstallingViewController *vc =
