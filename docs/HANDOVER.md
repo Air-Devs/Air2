@@ -928,3 +928,33 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
 - [x] 本轮完全没动的共享组件：`A2CategoryNavView`、`A2NavigationController`。
 - [x] 本地 `make lint`（457 处 import / 165 文件）与 `tests/Core` 6 个脚本全绿。
 - 未做：真机端到端验证（本机无 Xcode）；本轮按要求不出 PR，等指令后再合 `main`。
+
+## 10.8 加载器选择改为单页可展开卡片（分支 `feat/download-game`）
+
+> 背景：10.6 的加载器选择是「同一页用 `A2SettingsRow` 做单选、再另起一个
+> 「加载器版本」分组」，与下载区其它页面的卡片风格不一致，且「请求版本列表」与
+> 「选版本」被拆在两处。本轮按 ZL2 的 `AddonListLayout` 形态合并为单页可展开卡片。
+> 记法同上：**不回头改 10.5 / 10.6 / 10.7**，本节只记录本轮新增的结构性改动。
+
+- [x] **新增组件 `A2LoaderCard`（`UI/Components/`）**：一张卡 = 一个加载器（或原版）。
+      卡头常驻（34pt 语义色图标方块 + 名称 + 状态摘要 + 尾部指示），点卡头就地展开
+      内嵌 `UITableView` 版本列表，选中某个版本后自动收起 —— 「请求版本列表」与
+      「选择版本」都发生在同一张卡里，不另开页面。版本列表首次展开才拉取，避免一进
+      安装页就并发打六家 meta 服务；加载中 / 失败可重试 / 空（置 `unavailableReason`
+      收起灰显）三态齐备。原版卡复用同一类，退化为可选、不可展开的纯选项。
+      delegate 两个回调：`loaderCardSelectionDidChange:`（调用方做单选互斥 + 联动版本名）
+      与可选的 `loaderCardDidExpand:`（调用方保证同一时刻只展开一张）。
+- [x] **重写 `A2GameInstallOptionsViewController` 的加载器部分**：删除原
+      `A2SettingsSection`/`A2SettingsRow` 内联单选与独立的「加载器版本」分组，改为
+      一个「模组加载器」分组内的垂直卡片栈（原版卡 + `allLoaderTypes` 各一张）；
+      OptiFine 等不支持自动安装的走 `unavailableReason` 灰显。`startInstall` 改从
+      选中卡的 `selectedVersion` 取加载器版本，版本名随加载器自动改名逻辑保留
+      （未手动改过时才自动改）。
+- [x] **修一处自检发现的 Auto Layout 冲突（根因修，非表面补丁）**：内嵌
+      `UITableView` 的定高约束在卡片收起后仍为 required，而 `UIStackView` 会为隐藏的
+      arrangedSubview 补一条 required 的 0 高约束，两者互斥 —— 在「已拉到版本(Loaded)
+      且卡片收起」时（即选完版本的那一刻）会刷 Autolayout 冲突日志。改为收起 / 未就绪
+      时把内嵌列表高度归零，冲突消失。
+- [x] 校验：`gen_xcodeproj.py`（编译单元 84）+ `verify_pbxproj.py` 通过；
+      `make lint`（464 处 import / 167 文件）通过；`tests/Core` 6 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）；本轮按要求不出 PR，等指令后再合 `main`。

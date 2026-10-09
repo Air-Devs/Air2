@@ -21,26 +21,26 @@
 //
 //  见头文件：加载器候选覆盖安装器能自动装的全部类型；OptiFine 无公开安装接口，
 //  给出入口但置灰，副标题说明原因，不假装能装。
+//  「请求加载器版本列表」与「选择加载器版本」都收在同一张可展开卡里完成
+//  （见 A2LoaderCard）：点卡头就地展开、选完自动收起，不另开页面。
 //  版本名默认取 MC 版本号，未手动改过时随加载器选择自动改成 {mc}-{loader}。
 //
 
 #import "A2GameInstallOptionsViewController.h"
 #import "A2InstallingViewController.h"
+#import "A2LoaderCard.h"
 #import "A2SettingsSection.h"
-#import "A2SettingsRow.h"
 #import "A2TextField.h"
 #import "A2PrimaryButton.h"
 #import "A2Toast.h"
 #import "A2ThemeManager.h"
-#import "A2ColorScheme.h"
-#import "A2Typography.h"
 #import "A2Metrics.h"
 #import "A2ModLoaderAPI.h"
 #import "A2ModLoaderInstaller.h"
 #import "A2VersionManager.h"
 #import "A2Log.h"
 
-@interface A2GameInstallOptionsViewController ()
+@interface A2GameInstallOptionsViewController () <A2LoaderCardDelegate>
 
 @property (nonatomic, copy) NSString *versionID;
 
@@ -50,16 +50,11 @@
 @property (nonatomic, assign) BOOL userEditedName;
 
 @property (nonatomic, strong) A2SettingsSection *loaderSection;
-@property (nonatomic, strong) NSMutableArray<A2SettingsRow *> *loaderRows;
-/// 与 loaderRows 的第 1 行起一一对应的加载器类型（第 0 行是「原版」）
-@property (nonatomic, strong) NSArray<NSNumber *> *loaderTypeList;
-/// nil 表示原版
-@property (nonatomic, strong, nullable) NSNumber *selectedLoaderType;
-
-@property (nonatomic, strong, nullable) A2SettingsSection *loaderVersionSection;
-@property (nonatomic, strong) NSMutableArray<A2SettingsRow *> *loaderVersionRows;
-@property (nonatomic, strong) NSArray<A2ModLoaderVersion *> *loaderVersions;
-@property (nonatomic, assign) NSInteger selectedLoaderVersionIndex;
+@property (nonatomic, strong) UIStackView *loaderStack;
+/// 全部加载器卡（含原版卡）
+@property (nonatomic, strong) NSMutableArray<A2LoaderCard *> *loaderCards;
+/// 当前选中的卡。原版卡默认选中，因此不为 nil。
+@property (nonatomic, strong, nullable) A2LoaderCard *chosenLoaderCard;
 
 @property (nonatomic, strong) A2SettingsSection *actionSection;
 @property (nonatomic, strong) A2PrimaryButton *installButton;
@@ -72,11 +67,7 @@
     self = [super init];
     if (!self) return nil;
     _versionID = [versionID copy];
-    _loaderRows = [NSMutableArray array];
-    _loaderVersionRows = [NSMutableArray array];
-    _loaderVersions = @[];
-    _selectedLoaderType = nil;
-    _selectedLoaderVersionIndex = -1;
+    _loaderCards = [NSMutableArray array];
     _nameValid = YES;
     return self;
 }
@@ -131,54 +122,35 @@
 
 - (void)setupLoaderSection {
     _loaderSection = [[A2SettingsSection alloc] initWithTitle:@"模组加载器"];
+    _loaderSection.footerText =
+        @"不选择加载器即为原版。OptiFine 官方无自动安装接口，需自行手动安装。";
 
-    // 第 0 行是「原版」，其余与 loaderTypeList 对齐。
-    _loaderTypeList = @[
-        @(A2ModLoaderTypeFabric),
-        @(A2ModLoaderTypeQuilt),
-        @(A2ModLoaderTypeLegacyFabric),
-        @(A2ModLoaderTypeForge),
-        @(A2ModLoaderTypeNeoForge),
-        @(A2ModLoaderTypeOptiFine),
-    ];
+    _loaderStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _loaderStack.axis = UILayoutConstraintAxisVertical;
+    _loaderStack.spacing = A2CardSpacing;
 
-    NSMutableArray<NSString *> *titles = [NSMutableArray arrayWithObject:@"原版"];
-    for (NSNumber *n in _loaderTypeList) {
-        [titles addObject:[A2ModLoaderAPI displayNameForType:(A2ModLoaderType)n.integerValue]];
+    // 原版排第一：它就是「不装加载器」，是默认态，放最前符合阅读顺序。
+    A2LoaderCard *vanilla = [[A2LoaderCard alloc] initAsVanilla];
+    vanilla.delegate = self;
+    vanilla.chosen = YES;
+    _chosenLoaderCard = vanilla;
+    [_loaderCards addObject:vanilla];
+    [_loaderStack addArrangedSubview:vanilla];
+
+    for (NSNumber *n in [A2ModLoaderAPI allLoaderTypes]) {
+        A2ModLoaderType type = (A2ModLoaderType)n.integerValue;
+        A2LoaderCard *card = [[A2LoaderCard alloc] initWithLoaderType:type mcVersion:_versionID];
+        card.delegate = self;
+        // 官方没有稳定自动化接口的加载器只给入口、不给假希望。
+        if (![A2ModLoaderInstaller supportsAutoInstall:type]) {
+            card.unavailableReason = @"官方无自动安装接口";
+        }
+        [_loaderCards addObject:card];
+        [_loaderStack addArrangedSubview:card];
     }
 
-    for (NSUInteger i = 0; i < titles.count; i++) {
-        A2SettingsRow *row = [[A2SettingsRow alloc] init];
-        row.title = titles[i];
-
-        BOOL isVanilla = (i == 0);
-        BOOL autoInstallable = YES;
-        if (!isVanilla) {
-            A2ModLoaderType type = (A2ModLoaderType)_loaderTypeList[i - 1].integerValue;
-            autoInstallable = [A2ModLoaderInstaller supportsAutoInstall:type];
-        }
-
-        if (isVanilla) {
-            row.subtitle = @"不安装任何加载器";
-        } else if (!autoInstallable) {
-            row.subtitle = @"官方无自动安装接口";
-            row.enabled = NO;
-            row.alpha = 0.45;
-        }
-        row.accessory = A2SettingsRowAccessoryNone;
-
-        NSInteger captured = (NSInteger)i;
-        __weak typeof(self) weakSelf = self;
-        row.onTap = ^{
-            [weakSelf selectLoaderAtIndex:captured];
-        };
-
-        [_loaderRows addObject:row];
-        [_loaderSection addRow:row];
-    }
-
+    [_loaderSection addCustomView:_loaderStack];
     [self addSection:_loaderSection];
-    [self refreshLoaderCheckmarks];
 }
 
 - (void)setupActionSection {
@@ -197,145 +169,43 @@
 
 #pragma mark - 加载器选择
 
-- (void)selectLoaderAtIndex:(NSInteger)index {
-    if (index < 0 || index >= (NSInteger)_loaderRows.count) return;
-    A2SettingsRow *row = _loaderRows[index];
-    if (!row.enabled) return;   // 置灰项不可选
+- (void)loaderCardSelectionDidChange:(A2LoaderCard *)card {
+    _chosenLoaderCard = card;
 
-    NSNumber *type = (index == 0) ? nil : _loaderTypeList[index - 1];
-    _selectedLoaderType = type;
-    [self refreshLoaderCheckmarks];
-
-    // 未手动改过版本名时，跟随加载器自动改名（原版则还原为 MC 版本号）。
-    if (!_userEditedName) {
-        if (type) {
-            NSString *ident = [A2ModLoaderAPI identifierForType:(A2ModLoaderType)type.integerValue];
-            _nameField.text = [NSString stringWithFormat:@"%@-%@", _versionID, ident];
-        } else {
-            _nameField.text = _versionID;
-        }
+    for (A2LoaderCard *c in _loaderCards) {
+        if (c == card) continue;
+        c.chosen = NO;      // 置 NO 会一并清掉它已选的版本
+        [c collapse];
     }
-    [self validateName];
 
-    if (!type) {
+    if (card.isVanilla) {
         [A2Log log:@"download: 选择加载器 原版"];
-        [self clearLoaderVersionSection];
+        [self syncNameForLoaderType:nil];
         return;
     }
 
-    A2ModLoaderType loaderType = (A2ModLoaderType)type.integerValue;
     [A2Log log:@"download: 选择加载器 %@（%@）",
-        [A2ModLoaderAPI displayNameForType:loaderType], _versionID];
-    [self fetchLoaderVersionsForType:loaderType];
+        [A2ModLoaderAPI displayNameForType:card.loaderType], _versionID];
+    [self syncNameForLoaderType:@(card.loaderType)];
 }
 
-- (void)refreshLoaderCheckmarks {
-    for (NSUInteger i = 0; i < _loaderRows.count; i++) {
-        A2SettingsRow *row = _loaderRows[i];
-        NSNumber *type = (i == 0) ? nil : _loaderTypeList[i - 1];
-        BOOL selected = (type == _selectedLoaderType) ||
-                        (type && _selectedLoaderType && [type isEqualToNumber:_selectedLoaderType]);
-        row.accessory = selected ? A2SettingsRowAccessoryCheckmark : A2SettingsRowAccessoryNone;
+- (void)loaderCardDidExpand:(A2LoaderCard *)card {
+    // 同时只允许一张卡展开，免得全部打开后页面被拉得很长。
+    for (A2LoaderCard *c in _loaderCards) {
+        if (c != card) [c collapse];
     }
 }
 
-#pragma mark - 加载器版本
-
-- (void)fetchLoaderVersionsForType:(A2ModLoaderType)type {
-    [self clearLoaderVersionSection];
-    __weak typeof(self) weakSelf = self;
-    [[A2ModLoaderAPI shared] versionsForLoader:type
-                                     mcVersion:_versionID
-                                    completion:^(NSArray<A2ModLoaderVersion *> *versions,
-                                                 NSError *error) {
-        __strong typeof(weakSelf) self = weakSelf;
-        if (!self) return;
-        // 期间又切了加载器就丢弃过期结果
-        if (!self.selectedLoaderType ||
-            self.selectedLoaderType.integerValue != type) {
-            return;
-        }
-        NSString *name = [A2ModLoaderAPI displayNameForType:type];
-        if (error) {
-            [A2Toast show:[NSString stringWithFormat:@"%@ 版本获取失败", name] inView:self.view];
-            [A2Log log:@"download: %@ 版本获取失败：%@", name, error.localizedDescription];
-            [self selectLoaderAtIndex:0];
-            return;
-        }
-        if (versions.count == 0) {
-            [A2Toast show:[NSString stringWithFormat:@"该版本不支持 %@", name] inView:self.view];
-            [A2Log log:@"download: 该版本不支持 %@（%@）", name, self.versionID];
-            [self selectLoaderAtIndex:0];
-            return;
-        }
-        [A2Log log:@"download: %@ 可用版本 %lu 个",
-            name, (unsigned long)versions.count];
-        [self showLoaderVersions:versions];
-    }];
-}
-
-- (void)showLoaderVersions:(NSArray<A2ModLoaderVersion *> *)versions {
-    _loaderVersions = [versions copy];
-    // 默认选最新稳定版；没有稳定版就取第一个。
-    _selectedLoaderVersionIndex = 0;
-    for (NSUInteger i = 0; i < _loaderVersions.count; i++) {
-        if (_loaderVersions[i].stable) {
-            _selectedLoaderVersionIndex = (NSInteger)i;
-            break;
-        }
+/// 未手动改过版本名时，跟随加载器自动改名（原版还原为 MC 版本号）。
+- (void)syncNameForLoaderType:(nullable NSNumber *)type {
+    if (_userEditedName) return;
+    if (type) {
+        NSString *ident = [A2ModLoaderAPI identifierForType:(A2ModLoaderType)type.integerValue];
+        _nameField.text = [NSString stringWithFormat:@"%@-%@", _versionID, ident];
+    } else {
+        _nameField.text = _versionID;
     }
-    [self rebuildLoaderVersionSection];
-}
-
-- (void)rebuildLoaderVersionSection {
-    [self clearLoaderVersionSection];
-    if (_loaderVersions.count == 0) return;
-
-    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"加载器版本"];
-
-    for (NSUInteger i = 0; i < _loaderVersions.count; i++) {
-        A2ModLoaderVersion *lv = _loaderVersions[i];
-        A2SettingsRow *row = [[A2SettingsRow alloc] init];
-        row.title = lv.version;
-        row.subtitle = lv.stable ? @"稳定版" : @"预览版";
-        row.accessory = ((NSInteger)i == _selectedLoaderVersionIndex)
-            ? A2SettingsRowAccessoryCheckmark : A2SettingsRowAccessoryNone;
-
-        NSInteger captured = (NSInteger)i;
-        __weak typeof(self) weakSelf = self;
-        row.onTap = ^{
-            [weakSelf selectLoaderVersionAtIndex:captured];
-        };
-
-        [_loaderVersionRows addObject:row];
-        [section addRow:row];
-    }
-
-    _loaderVersionSection = section;
-    // 插到「安装」按钮之前，保证顺序稳定。
-    NSUInteger idx = [self.contentStack.arrangedSubviews indexOfObject:_actionSection];
-    if (idx == NSNotFound) idx = self.contentStack.arrangedSubviews.count;
-    [self.contentStack insertArrangedSubview:section atIndex:idx];
-}
-
-- (void)clearLoaderVersionSection {
-    if (_loaderVersionSection) {
-        [_loaderVersionSection removeFromSuperview];
-        _loaderVersionSection = nil;
-    }
-    [_loaderVersionRows removeAllObjects];
-    _loaderVersions = @[];
-    _selectedLoaderVersionIndex = -1;
-}
-
-- (void)selectLoaderVersionAtIndex:(NSInteger)index {
-    if (index < 0 || index >= (NSInteger)_loaderVersionRows.count) return;
-    _selectedLoaderVersionIndex = index;
-    for (NSUInteger i = 0; i < _loaderVersionRows.count; i++) {
-        _loaderVersionRows[i].accessory = ((NSInteger)i == index)
-            ? A2SettingsRowAccessoryCheckmark : A2SettingsRowAccessoryNone;
-    }
-    [A2Log log:@"download: 选择加载器版本 %@", _loaderVersions[index].version];
+    [self validateName];
 }
 
 #pragma mark - 校验
@@ -367,15 +237,19 @@
         return;
     }
 
-    NSNumber *loaderType = _selectedLoaderType;
+    NSNumber *loaderType = nil;
     NSString *loaderVersion = nil;
-    if (loaderType) {
-        if (_selectedLoaderVersionIndex < 0 ||
-            _selectedLoaderVersionIndex >= (NSInteger)_loaderVersions.count) {
-            [A2Toast show:@"加载器版本尚未就绪，请稍候" inView:self.view];
+    A2LoaderCard *card = _chosenLoaderCard;
+    if (card && !card.isVanilla) {
+        A2ModLoaderVersion *picked = card.selectedVersion;
+        if (!picked) {
+            [A2Toast show:[NSString stringWithFormat:@"请先选择 %@ 的版本",
+                           [A2ModLoaderAPI displayNameForType:card.loaderType]]
+                   inView:self.view];
             return;
         }
-        loaderVersion = _loaderVersions[_selectedLoaderVersionIndex].version;
+        loaderType = @(card.loaderType);
+        loaderVersion = picked.version;
     }
 
     [A2Log log:@"download: 开始安装 mc=%@ 版本名=%@ 加载器=%@ 加载器版本=%@",
@@ -390,13 +264,6 @@
                                                    loaderType:loaderType
                                                 loaderVersion:loaderVersion];
     [self.navigationController pushViewController:vc animated:YES];
-}
-
-#pragma mark - 主题
-
-- (void)applyTheme {
-    [super applyTheme];
-    [self refreshLoaderCheckmarks];
 }
 
 @end
