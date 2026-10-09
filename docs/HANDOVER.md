@@ -983,3 +983,31 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
 - [x] 校验：`gen_xcodeproj.py`（编译单元 85）+ `verify_pbxproj.py` 通过；`make lint`
       （469 处 import / 169 文件）通过；`tests/Core` 7 个脚本全绿。
 - 未做：真机端到端验证（本机无 Xcode）。
+
+## 10.10 版本隔离「仅 Mod」只隔离能装模组的版本（分支 `feat/isolation-mod-only`）
+
+> 背景：原实现里「仅 Mod」档对所有版本一律把 `mods` 隔离到版本目录，但原版与仅装
+> OptiFine 的版本本就装不了模组，隔离它们的 `mods` 没有意义。本轮把该档对齐为
+> PCL2/HMCL 式语义。记法同上：**不回头改 10.5–10.9**。
+
+- **三档最终语义**：关闭 = 全部不隔离；仅 Mod = **只隔离能装模组的版本**；
+  全部 = 所有版本都隔离。`libraries` / `assets` 仍始终共用。
+- [x] **新增版本级判定**：`A2Version.canInstallMods` —— 加载器为 Fabric / Quilt /
+      LegacyFabric / Forge / NeoForge 才算；OptiFine 只做优化、不加载其它模组，不算。
+      判定集中在 `loaderInfoFromVersionID:`（OptiFine 名收敛为常量 `kOptiFineLoaderName`）。
+- [x] **新增生效档位**：`A2Version.effectiveIsolationMode` —— 全局档位为「仅 Mod」且本版本
+      不能装模组时降级为「关闭」，其余档位与全局一致。
+- [x] **接入**：`gameDirectory` / `modsDirectory` / `directoryForFolder:` /
+      `ensureIsolationDirectories` 四个目录方法全部改用 `effectiveIsolationMode`；
+      `A2VersionManager.applyIsolation` 的共享 `mods` 符号链接对齐也按当前版本的生效档位决定
+      （原版/OptiFine 版本在「仅 Mod」下不再建链，已建的会恢复为真实目录），日志同时输出
+      全局档位与生效档位。
+- [x] **注释与文案同步**：`A2VersionIsolation.h` 头部/枚举/方法注释说明「Path 层只按传入的
+      生效档位解析路径」；设置页（`A2GameSettings`）、单版本设置页
+      （`A2VersionSettingsViewController`）、版本列表与主页元信息的展示改用生效档位，设置页
+      「仅 Mod」副标题改为「只隔离能装模组的版本」。
+- [x] **测试**：`tests/Core/test_version_isolation.py` 新增 `effective_mode` 复刻与第 10 组
+      断言（可装/不可装 × 三档，以及原版在全局「仅 Mod」下 `mods` 仍留在根目录）。
+- [x] 校验：`verify_pbxproj.py` 通过（无新增文件，工程文件未变）；`make lint`（169 文件）
+      通过；`tests/Core` 7 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）。
