@@ -485,23 +485,31 @@
     [alert addAction:[UIAlertAction actionWithTitle:@"仅版本文件" style:UIAlertActionStyleDefault
                                            handler:^(UIAlertAction *a) {
         __strong typeof(weakSelf) self = weakSelf;
-        [self copyVersion:version withName:alert.textFields.firstObject.text full:NO];
+        NSError *err = nil;
+        [A2VersionManager.shared copyVersionMinimal:version
+                                                 to:alert.textFields.firstObject.text
+                                              error:&err];
+        [self completeCopyWithError:err];
     }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"全部文件" style:UIAlertActionStyleDefault
                                            handler:^(UIAlertAction *a) {
         __strong typeof(weakSelf) self = weakSelf;
-        [self copyVersion:version withName:alert.textFields.firstObject.text full:YES];
+        NSError *err = nil;
+        [A2VersionManager.shared copyVersionFully:version
+                                               to:alert.textFields.firstObject.text
+                                            error:&err];
+        [self completeCopyWithError:err];
     }]];
     [self presentViewController:alert animated:YES completion:nil];
 }
 
-- (void)copyVersion:(A2Version *)version withName:(NSString *)name full:(BOOL)full {
-    NSError *err = nil;
-    if ([A2VersionManager.shared copyVersion:version to:name copyAllFiles:full error:&err]) {
+/// 复制收尾：成功重刷列表，失败透出原因（Cocoa 的 error 惯例，nil 即成功）。
+- (void)completeCopyWithError:(nullable NSError *)error {
+    if (!error) {
         [self reloadVersionList];
         [A2Toast show:@"已复制" inView:self.view];
     } else {
-        [A2Toast show:(err.localizedDescription ?: @"复制失败") inView:self.view];
+        [A2Toast show:(error.localizedDescription ?: @"复制失败") inView:self.view];
     }
 }
 

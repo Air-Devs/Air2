@@ -450,8 +450,47 @@ static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *n
     return YES;
 }
 
+/// 最小复制的载荷：只拷 json + jar。失败返回 NO 并填 error，
+/// 目录是调用方新建的，清理由调用方负责（这里不删，避免职责不清）。
+static BOOL A2CopyVersionPayloadFiles(NSString *srcPath, NSString *dstPath,
+                                      NSString *oldName, NSString *newName,
+                                      NSError **error) {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSError *opErr = nil;
+    NSString *srcJson = [srcPath stringByAppendingPathComponent:
+                         [oldName stringByAppendingPathExtension:@"json"]];
+    NSString *dstJson = [dstPath stringByAppendingPathComponent:
+                         [newName stringByAppendingPathExtension:@"json"]];
+    if ([fm fileExistsAtPath:srcJson] &&
+        ![fm copyItemAtPath:srcJson toPath:dstJson error:&opErr]) {
+        if (error) *error = opErr;
+        return NO;
+    }
+    NSString *srcJar = [srcPath stringByAppendingPathComponent:
+                        [oldName stringByAppendingPathExtension:@"jar"]];
+    NSString *dstJar = [dstPath stringByAppendingPathComponent:
+                        [newName stringByAppendingPathExtension:@"jar"]];
+    if ([fm fileExistsAtPath:srcJar] &&
+        ![fm copyItemAtPath:srcJar toPath:dstJar error:&opErr]) {
+        if (error) *error = opErr;
+        return NO;
+    }
+    return YES;
+}
+
 /// 复制版本。目标已存在直接失败，不覆盖用户文件；中途失败删掉新建一半的目标。
-- (BOOL)copyVersion:(A2Version *)version to:(NSString *)newName copyAllFiles:(BOOL)copyAll error:(NSError **)error {
+- (BOOL)copyVersionFully:(A2Version *)version to:(NSString *)newName error:(NSError **)error {
+    return [self copyVersion:version toName:newName mode:A2VersionCopyModeFull error:error];
+}
+
+/// 复制版本（最小）。入口与全量分开，菜单上各对一个按钮，不共用开关。
+- (BOOL)copyVersionMinimal:(A2Version *)version to:(NSString *)newName error:(NSError **)error {
+    return [self copyVersion:version toName:newName mode:A2VersionCopyModeMinimal error:error];
+}
+
+/// 复制的公共流程（非公开，mode 显式传，不用布尔开关）。
+- (BOOL)copyVersion:(A2Version *)version toName:(NSString *)newName
+               mode:(A2VersionCopyMode)mode error:(NSError **)error {
     if (!version) return NO;
 
     NSString *trimmed = A2TrimmedVersionName(newName, error);
@@ -482,10 +521,11 @@ static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *n
         return NO;
     }
 
+    BOOL full = (mode == A2VersionCopyModeFull);
     [A2Log log:@"version: 复制 %@ → %@（%@）",
-             version.name, trimmed, copyAll ? @"全部文件" : @"仅版本文件"];
+             version.name, trimmed, full ? @"全部文件" : @"仅版本文件"];
 
-    if (copyAll) {
+    if (full) {
         NSError *opErr = nil;
         if (![fm copyItemAtPath:srcPath toPath:dstPath error:&opErr]) {
             if (error) *error = opErr;
@@ -501,23 +541,7 @@ static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *n
             if (error) *error = opErr;
             return NO;
         }
-        NSString *srcJson = [srcPath stringByAppendingPathComponent:
-                             [version.name stringByAppendingPathExtension:@"json"]];
-        NSString *dstJson = [dstPath stringByAppendingPathComponent:
-                             [trimmed stringByAppendingPathExtension:@"json"]];
-        if ([fm fileExistsAtPath:srcJson] &&
-            ![fm copyItemAtPath:srcJson toPath:dstJson error:&opErr]) {
-            if (error) *error = opErr;
-            [fm removeItemAtPath:dstPath error:nil];
-            return NO;
-        }
-        NSString *srcJar = [srcPath stringByAppendingPathComponent:
-                            [version.name stringByAppendingPathExtension:@"jar"]];
-        NSString *dstJar = [dstPath stringByAppendingPathComponent:
-                            [trimmed stringByAppendingPathExtension:@"jar"]];
-        if ([fm fileExistsAtPath:srcJar] &&
-            ![fm copyItemAtPath:srcJar toPath:dstJar error:&opErr]) {
-            if (error) *error = opErr;
+        if (!A2CopyVersionPayloadFiles(srcPath, dstPath, version.name, trimmed, error)) {
             [fm removeItemAtPath:dstPath error:nil];
             return NO;
         }

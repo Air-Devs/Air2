@@ -35,6 +35,12 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// 版本复制粒度。两种是不同的用户意图，不是一个开关的两面。
+typedef NS_ENUM(NSInteger, A2VersionCopyMode) {
+    A2VersionCopyModeMinimal = 0,  ///< 只拷 json + jar（干净的新版本）
+    A2VersionCopyModeFull,         ///< 拷整个目录（含存档模组）
+};
+
 /// 版本类型
 typedef NS_ENUM(NSInteger, A2VersionType) {
     A2VersionTypeUnknown = 0,
@@ -124,8 +130,10 @@ extern NSNotificationName const A2VersionsDidChangeNotification;
 - (BOOL)deleteVersion:(A2Version *)version error:(NSError **)error;
 /// 重命名版本
 - (BOOL)renameVersion:(A2Version *)version to:(NSString *)newName error:(NSError **)error;
-/// 复制版本。copyAllFiles=YES 拷整个目录，NO 只拷 json+jar；新版本不继承置顶。
-- (BOOL)copyVersion:(A2Version *)version to:(NSString *)newName copyAllFiles:(BOOL)copyAll error:(NSError **)error;
+/// 复制版本。目标已存在直接失败，不覆盖用户文件；中途失败删掉新建一半的目标。
+/// 全量与最小是两个入口（各自对应菜单上一个按钮），不共用布尔开关。
+- (BOOL)copyVersionFully:(A2Version *)version to:(NSString *)newName error:(NSError **)error;
+- (BOOL)copyVersionMinimal:(A2Version *)version to:(NSString *)newName error:(NSError **)error;
 
 @end
 
