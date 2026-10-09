@@ -62,7 +62,6 @@
 		AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */; };
 		FB68423E2789A6F0A08E6E54 /* A2LoginViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */; };
 		E9CDC809C5E3AD84272E1B26 /* A2CurseForgeKeyPrompt.m in Sources */ = {isa = PBXBuildFile; fileRef = 9C6B3720B9A3DD4535D686F1 /* A2CurseForgeKeyPrompt.m */; };
-		2A198491CA6B003BDC631499 /* A2DownloadHomeViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6BD5B5E88F004055F7FD4B0E /* A2DownloadHomeViewController.m */; };
 		417DB6BA2038F2AFE425AB2B /* A2DownloadListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */; };
 		AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */; };
 		EBFE6778C18900FDF0942172 /* A2FavoritesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 82DAFF5D1DF928F825EA8452 /* A2FavoritesViewController.m */; };
@@ -152,7 +151,6 @@
 		CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountViewController.m"; sourceTree = "<group>"; };
 		1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoginViewController.m"; sourceTree = "<group>"; };
 		9C6B3720B9A3DD4535D686F1 /* A2CurseForgeKeyPrompt.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CurseForgeKeyPrompt.m"; sourceTree = "<group>"; };
-		6BD5B5E88F004055F7FD4B0E /* A2DownloadHomeViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadHomeViewController.m"; sourceTree = "<group>"; };
 		904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadListViewController.m"; sourceTree = "<group>"; };
 		58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadViewController.m"; sourceTree = "<group>"; };
 		82DAFF5D1DF928F825EA8452 /* A2FavoritesViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2FavoritesViewController.m"; sourceTree = "<group>"; };
@@ -237,7 +235,6 @@
 		6D2B976BBD0701B19B6533DD /* A2AccountViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountViewController.h"; sourceTree = "<group>"; };
 		52F4C13395826CC0FD71F073 /* A2LoginViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoginViewController.h"; sourceTree = "<group>"; };
 		9AB5CD42A663FD555714F649 /* A2CurseForgeKeyPrompt.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CurseForgeKeyPrompt.h"; sourceTree = "<group>"; };
-		72E65FE9114002E5C6F41167 /* A2DownloadHomeViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadHomeViewController.h"; sourceTree = "<group>"; };
 		03B2D97D5F4CDEEC6A69B6D0 /* A2DownloadListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadListViewController.h"; sourceTree = "<group>"; };
 		A7D45435EB1780C938976BA4 /* A2DownloadViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadViewController.h"; sourceTree = "<group>"; };
 		E9C2A18759AEABAB3EAE0B16 /* A2FavoritesViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2FavoritesViewController.h"; sourceTree = "<group>"; };
@@ -576,7 +573,6 @@
 			isa = PBXGroup;
 			children = (
 				9C6B3720B9A3DD4535D686F1 /* A2CurseForgeKeyPrompt.m */,
-				6BD5B5E88F004055F7FD4B0E /* A2DownloadHomeViewController.m */,
 				904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */,
 				58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */,
 				82DAFF5D1DF928F825EA8452 /* A2FavoritesViewController.m */,
@@ -586,7 +582,6 @@
 				D02B95F885FA2BEC74B793AA /* A2ProjectDetailViewController.m */,
 				C769776AF3D8703861D81699 /* A2SearchByIdViewController.m */,
 				9AB5CD42A663FD555714F649 /* A2CurseForgeKeyPrompt.h */,
-				72E65FE9114002E5C6F41167 /* A2DownloadHomeViewController.h */,
 				03B2D97D5F4CDEEC6A69B6D0 /* A2DownloadListViewController.h */,
 				A7D45435EB1780C938976BA4 /* A2DownloadViewController.h */,
 				E9C2A18759AEABAB3EAE0B16 /* A2FavoritesViewController.h */,
@@ -778,7 +773,6 @@
 				AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */,
 				FB68423E2789A6F0A08E6E54 /* A2LoginViewController.m in Sources */,
 				E9CDC809C5E3AD84272E1B26 /* A2CurseForgeKeyPrompt.m in Sources */,
-				2A198491CA6B003BDC631499 /* A2DownloadHomeViewController.m in Sources */,
 				417DB6BA2038F2AFE425AB2B /* A2DownloadListViewController.m in Sources */,
 				AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */,
 				EBFE6778C18900FDF0942172 /* A2FavoritesViewController.m in Sources */,

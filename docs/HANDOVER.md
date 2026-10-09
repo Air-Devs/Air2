@@ -983,3 +983,52 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
 - [x] 校验：`gen_xcodeproj.py`（编译单元 85）+ `verify_pbxproj.py` 通过；`make lint`
       （469 处 import / 169 文件）通过；`tests/Core` 7 个脚本全绿。
 - 未做：真机端到端验证（本机无 Xcode）。
+
+## 10.10 下载区直达 + 真实筛选 + 带加载器安装链路修复（分支 `feat/download-direct`）
+
+> 背景：验收要求三件事——下载页除整合包外功能完善、去掉「点分类后还要再点一次」的中间
+> 落地页、修好带 mod 加载器版本的安装（此前必失败）。记法同上：**不回头改 10.5–10.9**。
+
+**1) 去掉中间落地页（分类直达）**
+
+- [x] **删除 `UI/Screens/Download/A2DownloadHomeViewController.h/.m`**：它每个分类只放
+      一个入口按钮，点进去才出内容，纯多余一跳。删除后同步 `gen_xcodeproj.py` 重建工程。
+- [x] **`A2DownloadViewController` 改为「选中分类即直达内容页」**：新增
+      `contentCache`（分类索引 → 内容页）与 `contentViewControllerForIndex:` /
+      `makeContentViewControllerForIndex:` / `resourceCategoryForIndex:`；切换分类时
+      `setViewControllers:@[vc] animated:NO` 直接把内容页设为内层栈底，切走再切回保留
+      搜索词与已拉清单。内容页的 `onBack` 改为退**外层**栈（它是内层栈底）。
+- [x] **`A2InstallingViewController.backToDownloadCenter`** 不再依赖已删的 Home 页，
+      改为回退到内层栈底（`nav.viewControllers.firstObject`）。
+
+**2) 资源列表筛选改真实数据（`A2DownloadListViewController`）**
+
+- [x] **删除硬编码**：`filtersForCategory`（假加载器表 / 假版本号表）与 `makeChip:` 一并删除。
+- [x] **新增私有 `A2FilterChip`（`filterValue`）**：筛选值不再靠展示文案反推
+      （旧代码 `"Legacy Fabric".lowercaseString` = `legacy fabric`，与接口要的
+      `legacy-fabric` 不符）。
+- [x] **加载器维度**用 `A2ModLoaderAPI.allLoaderTypes` 真实枚举（`identifierForType:` 取
+      fabric/quilt/legacy-fabric/forge/neoforge/optifine；已核对 Modrinth 官方 loader 标签
+      列表，六者皆为合法 facet 值）。
+- [x] **游戏版本维度**用 `A2RemoteVersions` 从 Mojang 清单动态拉取最新 8 个正式版
+      （`recentReleaseVersionIDsFrom:`），拉取失败只记日志并维持「全部」，不阻塞列表。
+- [x] 筛选条改为「维度子栈 + 分隔线 + 排序子栈」，三处 `alignment` 设为 Center。
+
+**3) 修好带加载器版本的安装链路（`A2GameInstaller`）**
+
+- [x] **根因**：旧逻辑把原版下到 `versions/<versionName>/`（带加载器后缀，如
+      `1.21.5-fabric`），而 `A2ModLoaderInstaller` 只认 `versions/<mcVersion>/` 的原版，
+      于是「需要先安装原版」必失败。新增 `baseVersionName`：带加载器时 = `mcVersion`，
+      原版 json/jar 一律落到基底目录。
+- [x] **已有原版则复用**：`vanillaInstalled:` 以「版本 json + 客户端 jar 都在」为判据
+      （与 `A2VersionManager.validate` 的「版本可用」定义一致）；命中则
+      `reuseVanilla=YES`，`skipVanillaStagesAndInstallLoader` 把原版各阶段标记为
+      「已复用」后直接进入加载器安装，**不删除、不覆盖**已有原版（加载器版 json 靠
+      `inheritsFrom` 引用原版，删了起不来）。
+- [x] **不存两份**：加载器版与基底版共用同一份 libraries/assets（本就按目录去重），
+      客户端 jar 由 `A2ModLoaderInstaller.mergeProfile` 以**硬链接**复用，不产生第二份大文件。
+- [x] 删除死方法 `saveLoaderSelection:`（全仓无调用点）。
+
+- [x] 校验：`gen_xcodeproj.py`（编译单元 84）+ `verify_pbxproj.py` 通过；`make lint` 通过；
+      `tests/Core` 7 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）；版本隔离落盘、整合包 `.mrpack` 解析安装（本轮范围外）。

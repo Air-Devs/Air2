@@ -26,7 +26,8 @@
 //    · 左侧分类边栏常驻（游戏 / 整合包 / 模组 / 资源包 / 存档 / 光影 / 按 ID / 收藏）
 //    · 右侧挂一条内层导航栈，下载区内的所有子页面都活在它上面
 //
-//  具体分类展示什么、点进去跳到哪，归 A2DownloadHomeViewController。
+//  选中分类即把该分类的内容页设为栈底（直达，无中间落地页）；
+//  分类 → 内容页的映射写在实现里的 makeContentViewControllerForIndex:。
 //
 
 #import "A2BaseViewController.h"

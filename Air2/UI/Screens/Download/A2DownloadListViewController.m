@@ -29,7 +29,10 @@
 #import "A2CurseForgeKeyPrompt.h"
 #import "A2DownloadManifest.h"
 #import "A2GlassCard.h"
+#import "A2Log.h"
+#import "A2ModLoaderAPI.h"
 #import "A2ProjectDetailViewController.h"
+#import "A2RemoteVersions.h"
 #import "A2Toast.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
@@ -37,6 +40,17 @@
 #import "A2ContentSource.h"
 
 static NSString *const kCellID = @"A2DownloadCell";
+
+/// 主筛选维度的胶囊。
+///
+/// 用 filterValue 携带**真实筛选值**（加载器标识如 legacy-fabric、游戏版本号如 1.21.5），
+/// 不再靠展示文案反推 —— 「Legacy Fabric」小写化后是「legacy fabric」，与接口要的值不符。
+@interface A2FilterChip : UIButton
+@property (nonatomic, copy) NSString *filterValue;
+@end
+
+@implementation A2FilterChip
+@end
 
 #pragma mark - 列表项
 
@@ -172,6 +186,12 @@ static NSString *const kCellID = @"A2DownloadCell";
 @interface A2DownloadListViewController () <UITableViewDataSource, UITableViewDelegate, UISearchBarDelegate>
 @property (nonatomic, strong) UISearchBar *searchBar;
 @property (nonatomic, strong) UIView *filterBar;
+/// 主筛选维度（加载器 / 游戏版本）的胶囊容器，数据异步到达后可整体重建
+@property (nonatomic, strong) UIStackView *dimensionStack;
+/// 动态拉取到的游戏版本号（最新在前）；加载器维度用不到
+@property (nonatomic, copy) NSArray<NSString *> *gameVersionOptions;
+/// 当前选中的主维度筛选值（@"" 表示「全部」）
+@property (nonatomic, copy) NSString *selectedDimensionValue;
 @property (nonatomic, strong) UITableView *tableView;
 @property (nonatomic, strong) UILabel *countLabel;
 @property (nonatomic, strong) UIActivityIndicatorView *spinner;
@@ -197,11 +217,16 @@ static NSString *const kCellID = @"A2DownloadCell";
 
     _items = [NSMutableArray array];
     _offset = 0;
+    _gameVersionOptions = @[];
+    _selectedDimensionValue = @"";
     self.pageTitle = [self titleForCategory];
 
     [self setupSearchBar];
     [self setupFilterBar];
     [self setupTable];
+
+    // 游戏版本维度要真实版本号，拉清单是异步的；加载器维度 meanwhile 已有真实枚举。
+    [self loadGameVersionOptions];
 
     [self reload];
 }
@@ -272,14 +297,15 @@ static NSString *const kCellID = @"A2DownloadCell";
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     stack.axis = UILayoutConstraintAxisHorizontal;
     stack.spacing = A2SpaceS;
+    stack.alignment = UIStackViewAlignmentCenter;
     [scroll addSubview:stack];
 
-    // 第一组：该分类的主筛选维度
-    NSArray<NSString *> *filters = [self filtersForCategory];
-    for (NSUInteger i = 0; i < filters.count; i++) {
-        UIButton *chip = [self makeChip:filters[i] selected:(i == 0) tag:i];
-        [stack addArrangedSubview:chip];
-    }
+    // 第一组：该分类的主筛选维度（加载器或游戏版本），内容由 rebuildDimensionChips 填
+    _dimensionStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _dimensionStack.axis = UILayoutConstraintAxisHorizontal;
+    _dimensionStack.spacing = A2SpaceS;
+    _dimensionStack.alignment = UIStackViewAlignmentCenter;
+    [stack addArrangedSubview:_dimensionStack];
 
     // 分组分隔线
     UIView *sep = [[UIView alloc] initWithFrame:CGRectZero];
@@ -292,11 +318,18 @@ static NSString *const kCellID = @"A2DownloadCell";
     [stack addArrangedSubview:sep];
 
     // 第二组：排序方式（用 A2ContentSortField 统一映射）
+    UIStackView *sortStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    sortStack.axis = UILayoutConstraintAxisHorizontal;
+    sortStack.spacing = A2SpaceS;
+    sortStack.alignment = UIStackViewAlignmentCenter;
     for (NSNumber *n in A2AllSortFields()) {
         A2ContentSortField f = (A2ContentSortField)n.integerValue;
         UIButton *chip = [self makeSortChip:f];
-        [stack addArrangedSubview:chip];
+        [sortStack addArrangedSubview:chip];
     }
+    [stack addArrangedSubview:sortStack];
+
+    [self rebuildDimensionChips];
 
     [NSLayoutConstraint activateConstraints:@[
         [scroll.topAnchor constraintEqualToAnchor:_filterBar.topAnchor constant:18],
@@ -394,48 +427,99 @@ static NSString *const kCellID = @"A2DownloadCell";
     [self reload];
 }
 
-/// 筛选条：加载器 + 游戏版本
-- (NSArray<NSString *> *)filtersForCategory {
-    switch (self.category) {
-        case A2DownloadCategoryMod:
-        case A2DownloadCategoryModpack:
-            return @[@"全部", @"Fabric", @"Forge", @"NeoForge", @"Quilt"];
-        case A2DownloadCategoryShader:
-        case A2DownloadCategoryResourcePack:
-        case A2DownloadCategoryWorld:
-        default:
-            return @[@"全部", @"1.21.5", @"1.21.1", @"1.20.1", @"1.19.2"];
-    }
+/// 该分类的主筛选维度是否为加载器（模组 / 整合包）
+- (BOOL)dimensionIsLoader {
+    return self.category == A2DownloadCategoryMod || self.category == A2DownloadCategoryModpack;
 }
 
 /// 该分类的筛选维度说明
 - (NSString *)filterDimensionName {
-    switch (self.category) {
-        case A2DownloadCategoryMod:
-        case A2DownloadCategoryModpack:
-            return @"加载器";
-        default:
-            return @"游戏版本";
-    }
+    return [self dimensionIsLoader] ? @"加载器" : @"游戏版本";
 }
 
-- (UIButton *)makeChip:(NSString *)title selected:(BOOL)selected tag:(NSInteger)tag {
-    UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
+/// 重建主维度胶囊。加载器用真实枚举，其它分类用动态拉取到的游戏版本；
+/// 数据异步到达后调用它会保留当前选中项。
+- (void)rebuildDimensionChips {
+    for (UIView *v in [_dimensionStack.arrangedSubviews copy]) {
+        [_dimensionStack removeArrangedSubview:v];
+        [v removeFromSuperview];
+    }
+
+    [self.dimensionStack addArrangedSubview:[self makeDimensionChip:@"全部" value:@""]];
+    if ([self dimensionIsLoader]) {
+        for (NSNumber *n in [A2ModLoaderAPI allLoaderTypes]) {
+            A2ModLoaderType type = (A2ModLoaderType)n.integerValue;
+            [self.dimensionStack addArrangedSubview:
+                [self makeDimensionChip:[A2ModLoaderAPI displayNameForType:type]
+                                  value:[A2ModLoaderAPI identifierForType:type]]];
+        }
+    } else {
+        for (NSString *v in self.gameVersionOptions) {
+            [self.dimensionStack addArrangedSubview:[self makeDimensionChip:v value:v]];
+        }
+    }
+    [self styleDimensionChipsSelected:self.selectedDimensionValue];
+}
+
+/// 主维度胶囊。filterValue 存真实筛选值（@"" = 全部）。
+- (A2FilterChip *)makeDimensionChip:(NSString *)title value:(NSString *)value {
+    A2FilterChip *b = [A2FilterChip buttonWithType:UIButtonTypeSystem];
     b.translatesAutoresizingMaskIntoConstraints = NO;
+    b.filterValue = value;
     [b setTitle:title forState:UIControlStateNormal];
     b.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
     b.layer.cornerRadius = 15;
     b.layer.cornerCurve = kCACornerCurveContinuous;
     b.contentEdgeInsets = UIEdgeInsetsMake(0, 14, 0, 14);
-    b.tag = tag;
     [NSLayoutConstraint activateConstraints:@[
         [b.heightAnchor constraintEqualToConstant:30],
     ]];
-    [self styleChip:b selected:selected];
+    [self styleChip:b selected:[value isEqualToString:self.selectedDimensionValue]];
     [b addAction:[UIAction actionWithHandler:^(UIAction *action) {
         [self chipTapped:(UIButton *)action.sender];
     }] forControlEvents:UIControlEventTouchUpInside];
     return b;
+}
+
+/// 把维度胶囊的选中态刷成 value 对应项（重建后恢复选中用）
+- (void)styleDimensionChipsSelected:(NSString *)value {
+    for (UIView *v in self.dimensionStack.arrangedSubviews) {
+        if (![v isKindOfClass:A2FilterChip.class]) continue;
+        A2FilterChip *chip = (A2FilterChip *)v;
+        [self styleChip:chip selected:[chip.filterValue isEqualToString:value]];
+    }
+}
+
+#pragma mark - 游戏版本维度（动态拉取）
+
+/// 游戏版本维度不用硬编码版本号，改从 Mojang 清单动态拉取最新若干正式版。
+/// 拉取失败时维持「全部」，不阻塞列表本身。
+- (void)loadGameVersionOptions {
+    if ([self dimensionIsLoader]) return;   // 加载器维度不需要版本清单
+
+    __weak typeof(self) weakSelf = self;
+    [A2RemoteVersions fetchVersionsWithCompletion:^(NSArray<A2RemoteVersion *> *versions,
+                                                    NSError *error) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        if (error) {
+            [A2Log log:@"download-list: 游戏版本维度拉取失败：%@", error.localizedDescription];
+            return;
+        }
+        self.gameVersionOptions = [self recentReleaseVersionIDsFrom:versions];
+        [self rebuildDimensionChips];
+    }];
+}
+
+/// 取清单里最新若干正式版（清单已按新版在前）。
+- (NSArray<NSString *> *)recentReleaseVersionIDsFrom:(NSArray<A2RemoteVersion *> *)versions {
+    NSMutableArray<NSString *> *out = [NSMutableArray array];
+    for (A2RemoteVersion *v in versions) {
+        if (![v.type isEqualToString:@"release"]) continue;
+        [out addObject:v.versionID];
+        if (out.count >= 8) break;
+    }
+    return [out copy];
 }
 
 /// 排序 chip。tag 存排序枚举值，点击走 sortTapped:
@@ -467,24 +551,17 @@ static NSString *const kCellID = @"A2DownloadCell";
 }
 
 - (void)chipTapped:(UIButton *)sender {
-    UIView *stack = sender.superview;
-    for (UIView *v in stack.subviews) {
-        if (![v isKindOfClass:UIButton.class]) continue;
-        [self styleChip:(UIButton *)v selected:((UIButton *)v == sender)];
-    }
+    A2FilterChip *chip = (A2FilterChip *)sender;
+    // 用胶囊携带的真实筛选值，而不是展示文案
+    NSString *value = chip.filterValue ?: @"";
+    self.selectedDimensionValue = value;
+    [self styleDimensionChipsSelected:value];
 
-    // 按分类更新对应维度的筛选条件
-    NSString *title = [sender titleForState:UIControlStateNormal];
-    BOOL isAll = [title isEqualToString:@"全部"];
-
-    switch (self.category) {
-        case A2DownloadCategoryMod:
-        case A2DownloadCategoryModpack:
-            self.loaderFilter = isAll ? nil : title.lowercaseString;
-            break;
-        default:
-            self.gameVersionFilter = isAll ? nil : title;
-            break;
+    // 按分类更新对应维度的筛选条件（@"" 即「全部」）
+    if ([self dimensionIsLoader]) {
+        self.loaderFilter = value.length ? value : nil;
+    } else {
+        self.gameVersionFilter = value.length ? value : nil;
     }
     [self reload];
 
