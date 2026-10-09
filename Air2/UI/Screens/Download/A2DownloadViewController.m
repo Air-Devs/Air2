@@ -19,47 +19,31 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
-//  下载中心 —— 左侧分类导航 + 右侧内容。
+//  下载中心容器 —— 左侧分类边栏常驻 + 右侧内层导航栈。
 //
-//  结构对齐 ZL2 的 DownloadScreen：
-//    ┌──────────┬──────────────────────────────────┐
-//    │ 🎮 游戏   │                                  │
-//    │ 📦 整合包 │  当前分类的内容                    │
-//    │ 🧩 模组   │                                  │
-//    │ ───────  │                                  │
-//    │ 🎨 资源包 │                                  │
-//    │ 🗺 存档   │                                  │
-//    │ 💡 光影   │                                  │
-//    │ ───────  │                                  │
-//    │ # 按 ID   │                                  │
-//    │ ⭐ 收藏   │                                  │
-//    └──────────┴──────────────────────────────────┘
+//  为什么要有这一层：
+//  以前下载的分类边栏长在「下载」这一页里，一旦跳进选版页/资源搜索，
+//  整页被替换，边栏就跟着消失了，用户得先退回来才能换分类。
+//  把边栏提到容器层、右侧塞一条独立导航栈之后，下载区内的任何子页面
+//  都活在右边这条栈上，边栏始终在，且只有下载区（及其子页面）能看到它。
 //
-//  资源来源（Modrinth / CurseForge）放在内容区顶部，
-//  不再占一整块卡片。
+//  子页面之所以一行代码都不用改：它们跳转时用的是 self.navigationController，
+//  这个属性会自动解析到离自己最近的那条栈 —— 也就是这里的 _contentNav。
+//
+//  容器自身不画顶栏：标题与返回交给右侧当前页，边栏因此能从顶部贯到底。
 //
 
 #import "A2DownloadViewController.h"
+#import "A2DownloadHomeViewController.h"
 #import "A2CategoryNavView.h"
-#import "A2CurseForgeAPI.h"
-#import "A2CurseForgeKeyPrompt.h"
-#import "A2DownloadListViewController.h"
-#import "A2ContentSource.h"
-#import "A2SettingsSection.h"
-#import "A2SettingsRow.h"
-#import "A2GlassCard.h"
-#import "A2Toast.h"
-#import "A2ThemeManager.h"
+#import "A2NavigationController.h"
 #import "A2Metrics.h"
-#import "A2Typography.h"
+#import "A2Log.h"
 
 @interface A2DownloadViewController ()
 @property (nonatomic, strong) A2CategoryNavView *nav;
-@property (nonatomic, strong) UIScrollView *detailScroll;
-@property (nonatomic, strong) UIStackView *detailStack;
-@property (nonatomic, assign) A2ContentPlatform source;
-@property (nonatomic, strong) UISegmentedControl *sourceSwitch;
-@property (nonatomic, strong) UILabel *sourceHint;
+@property (nonatomic, strong) A2NavigationController *contentNav;
+@property (nonatomic, strong) A2DownloadHomeViewController *home;
 @end
 
 @implementation A2DownloadViewController
@@ -69,9 +53,42 @@
     // plain 内容容器。晚设会让 plainContentView 一直是 nil。
     self.usesScrollContent = NO;
     [super viewDidLoad];
-    self.pageTitle = @"下载";
-    self.source = A2ContentPlatformModrinth;
+    self.hidesTopBar = YES;
 
+    __weak typeof(self) weakSelf = self;
+
+    _home = [[A2DownloadHomeViewController alloc] init];
+    // 栈底页再返回就是出下载区了，所以要退外层栈，而不是在内层栈里 pop。
+    _home.onBack = ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        [self.navigationController popViewControllerAnimated:YES];
+    };
+
+    [self setupCategoryNav];
+    [self setupContentNav];
+
+    UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
+    [NSLayoutConstraint activateConstraints:@[
+        // 边栏贴安全区上沿，避免横屏刘海压住第一项
+        [_nav.topAnchor constraintEqualToAnchor:safe.topAnchor],
+        [_nav.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        [_nav.leadingAnchor constraintEqualToAnchor:safe.leadingAnchor constant:A2SpaceS],
+
+        // 右侧内容区贯满高度：子页面自己会把顶栏贴到安全区上沿，
+        // 于是内层顶栏与边栏顶部在视觉上对齐。
+        [_contentNav.view.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [_contentNav.view.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        [_contentNav.view.leadingAnchor constraintEqualToAnchor:_nav.trailingAnchor
+                                                      constant:A2SpaceM],
+        [_contentNav.view.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+    ]];
+
+    [_nav selectIndex:0 animated:NO];
+}
+
+#pragma mark - 装配
+
+- (void)setupCategoryNav {
     NSArray<A2NavCategory *> *cats = @[
         [A2NavCategory title:@"游戏"   symbol:@"sports.esports"],
         [A2NavCategory title:@"整合包" symbol:@"shippingbox.fill"],
@@ -87,200 +104,31 @@
     _nav = [[A2CategoryNavView alloc] initWithCategories:cats];
     _nav.onSelect = ^(NSInteger index) {
         __strong typeof(weakSelf) self = weakSelf;
-        [self rebuildContentForIndex:index];
+        [self selectCategoryAtIndex:index];
     };
-    [self.plainContentView addSubview:_nav];
-
-    _detailScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
-    _detailScroll.translatesAutoresizingMaskIntoConstraints = NO;
-    _detailScroll.showsVerticalScrollIndicator = NO;
-    _detailScroll.alwaysBounceVertical = YES;
-    [self.plainContentView addSubview:_detailScroll];
-
-    _detailStack = [[UIStackView alloc] initWithFrame:CGRectZero];
-    _detailStack.translatesAutoresizingMaskIntoConstraints = NO;
-    _detailStack.axis = UILayoutConstraintAxisVertical;
-    _detailStack.spacing = A2SpaceL;
-    [_detailScroll addSubview:_detailStack];
-
-    [NSLayoutConstraint activateConstraints:@[
-        [_nav.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
-        [_nav.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
-        [_nav.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
-                                           constant:A2SpaceS],
-
-        [_detailScroll.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
-        [_detailScroll.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
-        [_detailScroll.leadingAnchor constraintEqualToAnchor:_nav.trailingAnchor
-                                                    constant:A2SpaceM],
-        [_detailScroll.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
-
-        [_detailStack.topAnchor constraintEqualToAnchor:_detailScroll.topAnchor constant:A2SpaceS],
-        [_detailStack.bottomAnchor constraintEqualToAnchor:_detailScroll.bottomAnchor
-                                                   constant:-A2SpaceXXL],
-        [_detailStack.leadingAnchor constraintEqualToAnchor:_detailScroll.leadingAnchor
-                                                    constant:A2SpaceM],
-        [_detailStack.trailingAnchor constraintEqualToAnchor:_detailScroll.trailingAnchor
-                                                     constant:-A2SpaceXL],
-    ]];
-
-    [_nav selectIndex:0 animated:NO];
+    [self.view addSubview:_nav];
 }
 
-- (void)rebuildContentForIndex:(NSInteger)index {
-    for (UIView *v in _detailStack.arrangedSubviews) {
-        [_detailStack removeArrangedSubview:v];
-        [v removeFromSuperview];
+- (void)setupContentNav {
+    _contentNav = [[A2NavigationController alloc] initWithRootViewController:_home];
+    _contentNav.view.translatesAutoresizingMaskIntoConstraints = NO;
+    // 背景透出去，让子页面自己的背景图/渐变与整体连成一片
+    _contentNav.view.backgroundColor = UIColor.clearColor;
+    [self addChildViewController:_contentNav];
+    [self.view addSubview:_contentNav.view];
+    [_contentNav didMoveToParentViewController:self];
+}
+
+#pragma mark - 分类切换
+
+- (void)selectCategoryAtIndex:(NSInteger)index {
+    [A2Log log:@"download: 切换分类 index=%ld", (long)index];
+    // 先退回栈底再换内容：否则上一个分类的二级页面会继续压在栈上，
+    // 与边栏的选中项对不上，用户看到的内容和点亮的分类是两回事。
+    if (_contentNav.viewControllers.count > 1) {
+        [_contentNav popToRootViewControllerAnimated:NO];
     }
-
-    // 资源来源选择（仅 Modrinth / CurseForge 类分类需要）
-    BOOL needsSource = (index != 0);   // 「游戏」分类不需要
-    if (needsSource) {
-        [_detailStack addArrangedSubview:[self buildSourceRow]];
-    }
-
-    // 「游戏」分类：安装新版本 + 模组加载器
-    if (index == 0) {
-        [_detailStack addArrangedSubview:[self buildGameSection]];
-    } else {
-        [_detailStack addArrangedSubview:[self buildResourceHint:index]];
-    }
-
-    _detailStack.alpha = 0;
-    _detailStack.transform = CGAffineTransformMakeTranslation(0, 8);
-    UIViewPropertyAnimator *a = A2SpringAnimator(A2AnimDurationCard);
-    [a addAnimations:^{
-        self.detailStack.alpha = 1;
-        self.detailStack.transform = CGAffineTransformIdentity;
-    }];
-    [a startAnimation];
-}
-
-/// 资源来源：一行分段控件 + 说明，不再占整块卡片
-- (UIView *)buildSourceRow {
-    A2GlassCard *card = [[A2GlassCard alloc] initWithFrame:CGRectZero];
-    card.cornerRadius = A2RadiusL;
-    card.elevation = A2CardElevationLow;
-    card.contentInsets = UIEdgeInsetsMake(A2CardPadding + 4, A2CardPadding,
-                                          A2CardPadding + 4, A2CardPadding);
-
-    _sourceSwitch = [[UISegmentedControl alloc] initWithItems:@[@"Modrinth", @"CurseForge"]];
-    _sourceSwitch.translatesAutoresizingMaskIntoConstraints = NO;
-    _sourceSwitch.selectedSegmentIndex = self.source;
-    [_sourceSwitch addTarget:self action:@selector(sourceChanged)
-            forControlEvents:UIControlEventValueChanged];
-
-    _sourceHint = [[UILabel alloc] initWithFrame:CGRectZero];
-    _sourceHint.translatesAutoresizingMaskIntoConstraints = NO;
-    _sourceHint.font = [A2Typography caption];
-    _sourceHint.numberOfLines = 0;
-    _sourceHint.text = [self hintForSource:self.source];
-
-    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[_sourceSwitch, _sourceHint]];
-    stack.translatesAutoresizingMaskIntoConstraints = NO;
-    stack.axis = UILayoutConstraintAxisVertical;
-    stack.spacing = A2SpaceM;
-
-    [card.contentView addSubview:stack];
-    [NSLayoutConstraint activateConstraints:@[
-        [stack.topAnchor constraintEqualToAnchor:card.contentView.topAnchor],
-        [stack.bottomAnchor constraintEqualToAnchor:card.contentView.bottomAnchor],
-        [stack.leadingAnchor constraintEqualToAnchor:card.contentView.leadingAnchor],
-        [stack.trailingAnchor constraintEqualToAnchor:card.contentView.trailingAnchor],
-    ]];
-    return card;
-}
-
-- (NSString *)hintForSource:(A2ContentPlatform)source {
-    return (source == A2ContentPlatformModrinth)
-        ? @"Modrinth 免费开放，无需额外配置。"
-        : @"CurseForge 需要在设置中填入 API Key。";
-}
-
-- (void)sourceChanged {
-    A2ContentPlatform picked = (A2ContentPlatform)_sourceSwitch.selectedSegmentIndex;
-    // 切 CurseForge 但无 Key：弹框要 Key，取消则回退 Modrinth，不留不可用态。
-    if (picked == A2ContentPlatformCurseForge && ![A2CurseForgeAPI hasAPIKey]) {
-        [A2CurseForgeKeyPrompt promptFrom:self completion:^(BOOL saved) {
-            if (saved) {
-                self.source = A2ContentPlatformCurseForge;
-            } else {
-                self.sourceSwitch.selectedSegmentIndex = 0;
-                self.source = A2ContentPlatformModrinth;
-            }
-            self.sourceHint.text = [self hintForSource:self.source];
-        }];
-        return;
-    }
-    self.source = picked;
-    _sourceHint.text = [self hintForSource:self.source];
-}
-
-/// 游戏分类：安装新版本 + 模组加载器
-- (UIView *)buildGameSection {
-    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:nil];
-    section.footerText = @"安装时可同时选择模组加载器，会自动匹配对应的游戏版本。";
-
-    A2SettingsRow *gameRow = [[A2SettingsRow alloc] init];
-    gameRow.symbolName = @"cube.fill";
-    gameRow.title = @"安装新版本";
-    gameRow.subtitle = @"选择游戏版本与模组加载器";
-    gameRow.accessory = A2SettingsRowAccessoryDisclosure;
-    gameRow.onTap = ^{ [self openListWithCategory:A2DownloadCategoryGame]; };
-    [section addRow:gameRow];
-
-    A2SettingsRow *loaderRow = [[A2SettingsRow alloc] init];
-    loaderRow.symbolName = @"shippingbox.fill";
-    loaderRow.title = @"模组加载器";
-    loaderRow.subtitle = @"Fabric / Forge / NeoForge / Quilt / OptiFine";
-    loaderRow.valueText = @"Fabric";
-    loaderRow.accessory = A2SettingsRowAccessoryDisclosure;
-    loaderRow.onTap = ^{ [A2Toast show:@"加载器选择" inView:self.view]; };
-    [section addRow:loaderRow];
-
-    return section;
-}
-
-/// 资源分类：直接给搜索入口
-- (UIView *)buildResourceHint:(NSInteger)index {
-    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:nil];
-
-    NSArray<NSArray<NSString *> *> *names = @[
-        @[@"安装新版本", @"游戏版本与加载器"],
-        @[@"整合包", @"一键安装完整整合包"],
-        @[@"模组", @"单模组安装"],
-        @[@"资源包", @"材质与音效包"],
-        @[@"存档", @"世界存档"],
-        @[@"光影包", @"光影效果"],
-        @[@"按 ID 下载", @"已知项目 ID 直接定位"],
-        @[@"收藏夹", @"已收藏的项目"],
-    ];
-    NSArray<NSString *> *symbols = @[@"cube.fill", @"shippingbox.fill", @"puzzlepiece.extension.fill",
-                                     @"photo.stack.fill", @"map.fill", @"sun.max.fill",
-                                     @"number", @"star.fill"];
-
-    NSUInteger i = (NSUInteger)index;
-    if (i >= names.count) i = 0;
-
-    A2SettingsRow *row = [[A2SettingsRow alloc] init];
-    row.symbolName = symbols[i];
-    row.title = names[i][0];
-    row.subtitle = names[i][1];
-    row.accessory = A2SettingsRowAccessoryDisclosure;
-    NSInteger captured = index;
-    row.onTap = ^{
-        __strong typeof(self) self = self;
-        [self openListWithCategory:(A2DownloadCategory)captured];
-    };
-    [section addRow:row];
-
-    return section;
-}
-
-- (void)openListWithCategory:(A2DownloadCategory)category {
-    A2DownloadListViewController *vc = [[A2DownloadListViewController alloc] init];
-    vc.category = category;
-    [self.navigationController pushViewController:vc animated:YES];
+    [_home showCategoryAtIndex:index];
 }
 
 @end

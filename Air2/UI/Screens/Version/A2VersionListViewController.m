@@ -238,7 +238,7 @@
 
 - (void)buildPathList {
     NSArray<NSArray<NSString *> *> *paths = @[
-        @[@"默认目录", @"Documents/.minecraft"],
+        @[@"默认目录", @"Documents/minecraft"],
         @[@"外置存储", @"/var/mobile/Air2/games"],
     ];
 

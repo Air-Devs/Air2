@@ -1,5 +1,5 @@
 //
-//  A2DownloadViewController.h
+//  A2FavoritesViewController.h
 //  Air2
 //
 //  Copyright (C) 2026 Air-Devs and contributors.
@@ -19,21 +19,14 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
-//
-//  下载中心容器 —— 启动器内容获取的总入口。
-//
-//  只做两件事：
-//    · 左侧分类边栏常驻（游戏 / 整合包 / 模组 / 资源包 / 存档 / 光影 / 按 ID / 收藏）
-//    · 右侧挂一条内层导航栈，下载区内的所有子页面都活在它上面
-//
-//  具体分类展示什么、点进去跳到哪，归 A2DownloadHomeViewController。
+//  收藏列表 —— 展示已收藏项目，支持左滑删除。
 //
 
 #import "A2BaseViewController.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface A2DownloadViewController : A2BaseViewController
+@interface A2FavoritesViewController : A2BaseViewController
 
 @end
 

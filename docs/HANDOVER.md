@@ -863,3 +863,123 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
 - [x] `CONTRIBUTING.md` 增「日志规范」：有必要的关键节点必须写日志，成熟后再放宽。
 - Info.plist 早已开 `UIFileSharingEnabled` + `LSSupportsOpeningDocumentsInPlace`，
   日志放在 Documents 下即可被「文件」App 打开 / 导出，本次未改。
+
+## 10.5 下载重写（分支 `feat/download-game`，待合入）
+
+- [x] 游戏链路打通：`Core/Version/A2RemoteVersions` 拉 Mojang 清单；
+      两步页（选版本 → 选加载器 → 7 阶段安装）；中心游戏入口改走新链路。
+     此前游戏入口错进 Modrinth 搜模组、安装页零调用。
+- [x] 项目详情页：头信息 + 版本列表 + 下载；下载逻辑由列表页剪切过来，
+      列表只搜列与路由；禁分发/空版本各独立空态。
+- [x] 已装清单 `Core/Download/A2DownloadManifest`（成功才记、手删视为未装），
+      列表“已安装”角标、详情版本打勾、主按钮“更新到 x”提示。
+- [x] 删假入口：下载中心假加载器行、按 ID/收藏夹假列表入口改诚实提示；
+      主页零调用死方法（`openFiles/openMultiplayer`）删除。
+- [x] 背景去渐变改纯色、默认冰川蓝（`UI-DESIGN.md` 第四节已同步）。
+- 剩下：发 PR 合入 `main`（分支 CI 全绿）。
+
+## 10.6 下载重写·第二轮：整条链路重写（分支 `feat/download-game`）
+
+> 背景：10.5 落地后三页仍是「能跑就行」——加载器只有写死的四个选项，按 ID 与收藏只剩诚实提示。
+> 本轮照 ZL2 的交互规格把「游戏版本下载」整条链路重写一遍。
+> 记法同上：**不回头改 10.5**，本节只覆盖其中已过期的条目。
+
+- [x] `Core/Version/A2RemoteVersions`：清单解析补 `releaseTime`（ISO8601，解析失败置 nil），
+      选版页据此排序并显示发布时间。
+- [x] 选版页重写：正式版 / 快照 / 旧版 Beta / 旧版 Alpha 四类多选筛选 + 版本号搜索 + 刷新，
+      按发布时间倒序；失败与空态都给「点击重试」，不进空页面。
+- [x] 加载器选择页重写：版本名输入与重名校验；加载器单选后异步拉**真实**版本列表
+      （走 `A2ModLoaderAPI`），默认选最新稳定版；OptiFine 明确标注官方无自动安装接口；
+      用户未手动改过时，版本名按所选加载器自动建议。
+- [x] 安装进度页重写：改为接收明确的 `loaderType` / `loaderVersion`，不再靠版本名反推；
+      环形整体进度 + 分阶段线性进度条 + 7 项阶段清单，含取消确认、失败重试、完成返回。
+- [x] 下载中心：游戏分类只留「安装新版本」一个入口；**按 ID 与收藏由诚实提示改为真实入口**
+      （新增 `A2SearchByIdViewController` / `A2FavoritesViewController`），
+      收藏落盘在新增的 `Core/Download/A2DownloadFavorites`（纯 Foundation，JSON + 变更通知），
+      项目详情页支持收藏切换。
+      —— **本条取代 10.5 的「按 ID/收藏夹假列表入口改诚实提示」**。
+- [x] 本地 `make lint`（451 处 import / 163 文件）与 `tests/Core` 6 个脚本全绿；
+      CI `Build IPA` run `37763729306`（规范检查 + 编译打包）success。
+- 未做：真机端到端安装验证（本机无 Xcode，需用 CI 的未签名 IPA 自行签名）；
+  本轮按要求不出 PR，等指令后再合 `main`。
+
+## 10.7 下载区边栏常驻 + 选版页重写（分支 `feat/download-game`）
+
+> 背景：10.6 之后，一旦跳进选版页，整页被替换，左侧分类边栏跟着消失，
+> 用户得先退回来才能换分类；选版页自身也还是三行头部 + 列表，头部占掉不少高度。
+> 记法同上：**不回头改 10.5 / 10.6**，本节只记录本轮新增的结构性改动。
+
+- [x] **下载区拆成「容器 + 内层导航栈」**：新增 `A2DownloadHomeViewController`
+      承载各分类的落地内容与路由；`A2DownloadViewController` 收窄为容器，只做两件事 ——
+      常驻左侧 `A2CategoryNavView` 边栏、在右侧挂一条内层 `A2NavigationController`。
+      下载区及其所有子页面（选版 / 资源搜索 / 按 ID / 收藏 / 安装）都活在右侧这条栈上，
+      边栏因此不再消失，且只出现在下载区。子页面跳转写的 `self.navigationController`
+      会自动解析到离自己最近的那条栈，所以**子页面的跳转代码一行都没改**。
+      各分类的入口与落地内容本身不变，只是从「下载页内部换内容」变成「右侧栈底换内容」。
+- [x] **修正安装页的返回落点**：`A2InstallingViewController.backToDownloadCenter` 原先按
+      旧下载页的类在栈上找落点，栈改由内层导航器承载后会永远匹配不到、只退一层；
+      改按下载中心首屏的类判定。
+- [x] **选版页重写**：头部三行（筛选 / 搜索+刷新 / 计数）并为一行 —— 左侧类型胶囊限宽
+      六成、超出横向滚动，右侧搜索框 + 刷新图标按钮，下面压一条全宽 1pt 分隔线，
+      剩下的高度整块让给列表；列表行改为卡片（32pt 语义色图标方块 + 版本号 +
+      类型徽标 + 发布时间 + 右侧箭头），并按 ZL2 的做法给首屏列表做了一次性弹簧入场。
+      四类多选筛选、版本号搜索、发布时间倒序、失败与空态重试均保持原逻辑；
+      筛选/搜索/刷新/选中版本等关键节点日志保留。
+- [x] 本轮完全没动的共享组件：`A2CategoryNavView`、`A2NavigationController`。
+- [x] 本地 `make lint`（457 处 import / 165 文件）与 `tests/Core` 6 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）；本轮按要求不出 PR，等指令后再合 `main`。
+
+## 10.8 加载器选择改为单页可展开卡片（分支 `feat/download-game`）
+
+> 背景：10.6 的加载器选择是「同一页用 `A2SettingsRow` 做单选、再另起一个
+> 「加载器版本」分组」，与下载区其它页面的卡片风格不一致，且「请求版本列表」与
+> 「选版本」被拆在两处。本轮按 ZL2 的 `AddonListLayout` 形态合并为单页可展开卡片。
+> 记法同上：**不回头改 10.5 / 10.6 / 10.7**，本节只记录本轮新增的结构性改动。
+
+- [x] **新增组件 `A2LoaderCard`（`UI/Components/`）**：一张卡 = 一个加载器（或原版）。
+      卡头常驻（34pt 语义色图标方块 + 名称 + 状态摘要 + 尾部指示），点卡头就地展开
+      内嵌 `UITableView` 版本列表，选中某个版本后自动收起 —— 「请求版本列表」与
+      「选择版本」都发生在同一张卡里，不另开页面。版本列表首次展开才拉取，避免一进
+      安装页就并发打六家 meta 服务；加载中 / 失败可重试 / 空（置 `unavailableReason`
+      收起灰显）三态齐备。原版卡复用同一类，退化为可选、不可展开的纯选项。
+      delegate 两个回调：`loaderCardSelectionDidChange:`（调用方做单选互斥 + 联动版本名）
+      与可选的 `loaderCardDidExpand:`（调用方保证同一时刻只展开一张）。
+- [x] **重写 `A2GameInstallOptionsViewController` 的加载器部分**：删除原
+      `A2SettingsSection`/`A2SettingsRow` 内联单选与独立的「加载器版本」分组，改为
+      一个「模组加载器」分组内的垂直卡片栈（原版卡 + `allLoaderTypes` 各一张）；
+      OptiFine 等不支持自动安装的走 `unavailableReason` 灰显。`startInstall` 改从
+      选中卡的 `selectedVersion` 取加载器版本，版本名随加载器自动改名逻辑保留
+      （未手动改过时才自动改）。
+- [x] **修一处自检发现的 Auto Layout 冲突（根因修，非表面补丁）**：内嵌
+      `UITableView` 的定高约束在卡片收起后仍为 required，而 `UIStackView` 会为隐藏的
+      arrangedSubview 补一条 required 的 0 高约束，两者互斥 —— 在「已拉到版本(Loaded)
+      且卡片收起」时（即选完版本的那一刻）会刷 Autolayout 冲突日志。改为收起 / 未就绪
+      时把内嵌列表高度归零，冲突消失。
+- [x] 校验：`gen_xcodeproj.py`（编译单元 84）+ `verify_pbxproj.py` 通过；
+      `make lint`（464 处 import / 167 文件）通过；`tests/Core` 6 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）；本轮按要求不出 PR，等指令后再合 `main`。
+
+---
+
+## 10.9 游戏根目录改名 `.minecraft` → `minecraft`（分支 `feat/gamedir-minecraft`）
+
+> 背景：旧版游戏根目录是隐藏目录 `Documents/.minecraft`，「文件」App 里看不到，也不便
+> 用户直接管理数据。本轮把根目录改成可见的 `minecraft`，适配下载等引用，并给老用户做
+> 一次性自动迁移（改名）。记法同上：**不回头改 10.5–10.8**，本节只记录本轮改动。
+
+- [x] **中心出口改名**：`A2GamePath.defaultGameHome` 的根目录名由 `.minecraft` 改为
+      `minecraft`（收敛为常量 `kGameHomeDirName`，`A2VersionIsolation.m/.h` 注释同步）。
+- [x] **适配重复硬编码**：`A2DownloadManifest.manifestPath`、`A2DownloadFavorites.favoritesPath`
+      改为经 `A2GamePath.defaultGameHome` 派生，去掉各自手写的 `.minecraft`；
+      `A2VersionListViewController` 左侧目录展示串改 `Documents/minecraft`。
+- [x] **新增 `Core/Path/A2GameDirMigration`（`+ migrateIfNeeded`）**：启动时一次性把旧的
+      `Documents/.minecraft` 迁成 `Documents/minecraft`。决策矩阵：只有旧目录 → 空则删、
+      非空则改名；只有新目录 → 不动；两者都在 → 旧为空则删旧，新为空则删新再把旧改名过来，
+      两者都非空则按约定丢弃旧目录。幂等（改完再跑只是几次廉价判断），全程 `A2Log`。
+- [x] **挂载点**：在 `A2AppDelegate.didFinishLaunchingWithOptions:` 最早期调用迁移，早于任何
+      读取游戏目录的逻辑（版本扫描是惰性单例，晚于此处）。
+- [x] **测试**：`tests/Core/test_version_isolation.py` 的 `GAME_HOME` 更新；新增
+      `tests/Core/test_game_dir_migration.py`，在临时目录真实建出结构跑决策矩阵。
+- [x] 校验：`gen_xcodeproj.py`（编译单元 85）+ `verify_pbxproj.py` 通过；`make lint`
+      （469 处 import / 169 文件）通过；`tests/Core` 7 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）。
