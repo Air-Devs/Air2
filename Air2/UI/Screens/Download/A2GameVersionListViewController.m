@@ -355,6 +355,9 @@ static NSString *A2VersionSymbolForType(NSString *type) {
 @property (nonatomic, assign) BOOL entranceEnabled;
 @property (nonatomic, strong) NSMutableSet<NSIndexPath *> *entrancePlayed;
 
+/// 上一次诊断日志的几何签名，用来跳过没有变化的帧（定位完这个布局问题就删）。
+@property (nonatomic, copy, nullable) NSString *layoutDiagSignature;
+
 @end
 
 @implementation A2GameVersionListViewController
@@ -397,6 +400,51 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
 
 - (void)handleThemeChanged:(NSNotification *)note {
     [self applyTheme];
+}
+
+#pragma mark - 诊断日志（临时：定位列表压住头部的问题，定位完删除）
+
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    [self logLayoutDiagnosticsIfChanged];
+}
+
+- (void)viewDidAppear:(BOOL)animated {
+    [super viewDidAppear:animated];
+    [self logLayoutDiagnosticsIfChanged];
+}
+
+/// 打印选版页关键视图的几何，用于判断 table.top == divider.bottom 是否在运行期被破坏。
+/// 只在几何签名变化时写，避免每帧刷屏。
+- (void)logLayoutDiagnosticsIfChanged {
+    CGRect plain = self.plainContentView.frame;
+    CGRect header = _headerRow.frame;
+    CGRect divider = _divider.frame;
+    CGRect table = _tableView.frame;
+    CGPoint offset = _tableView.contentOffset;
+
+    NSString *signature = [NSString stringWithFormat:@"%.1f|%.1f|%.1f|%.1f|%.1f|%.1f|%.1f",
+        self.view.bounds.size.width, self.view.bounds.size.height,
+        plain.origin.y, header.origin.y, CGRectGetMaxY(divider),
+        table.origin.y, offset.y];
+    if ([signature isEqualToString:_layoutDiagSignature]) return;
+    _layoutDiagSignature = signature;
+
+    [A2Log log:@"verlist-diag: view=%@ plain=%@", NSStringFromCGRect(self.view.frame),
+        NSStringFromCGRect(plain)];
+    [A2Log log:@"verlist-diag: header=%@ divider=%@ table=%@ spinner=%@",
+        NSStringFromCGRect(header), NSStringFromCGRect(divider), NSStringFromCGRect(table),
+        NSStringFromCGRect(_spinner.frame)];
+    [A2Log log:@"verlist-diag: chips=%@ search=%@ refresh=%@",
+        NSStringFromCGRect(_chipScroll.frame), NSStringFromCGRect(_searchField.frame),
+        NSStringFromCGRect(_refreshButton.frame)];
+    [A2Log log:@"verlist-diag: tableInset=%@ tableOffset=%@ tableSize=%@ plainBounds=%@",
+        NSStringFromUIEdgeInsets(_tableView.contentInset), NSStringFromCGPoint(offset),
+        NSStringFromCGSize(_tableView.contentSize),
+        NSStringFromCGRect(self.plainContentView.bounds)];
+    [A2Log log:@"verlist-diag: 期望 tableTop=%.1f 实际 tableTop=%.1f 偏差=%.1f navTransform=%@",
+        CGRectGetMaxY(divider), CGRectGetMinY(table), CGRectGetMinY(table) - CGRectGetMaxY(divider),
+        NSStringFromCGAffineTransform(self.navigationController.view.transform)];
 }
 
 #pragma mark - 布局
