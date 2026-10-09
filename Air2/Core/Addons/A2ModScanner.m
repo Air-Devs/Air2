@@ -33,12 +33,6 @@
 /// 禁用后缀（大小写不敏感，启用即去掉一层）。
 static NSString *const kDisabledSuffix = @".disabled";
 
-@interface A2ModScanner ()
-
-@property (nonatomic, strong) A2GameFiles *files;
-
-@end
-
 #pragma mark - 文件名规则
 
 /// 是否禁用态（后缀大小写不敏感）。
@@ -173,16 +167,6 @@ static NSString *A2TomlUnescape(NSString *s) {
     return out;
 }
 
-/// 顶层 key = "..."（表头出现前有效；表头后出现的顶层键忽略，从严）。
-static NSString *A2TomlTopValue(NSArray<NSString *> *codeLines, NSString *key) {
-    for (NSString *line in codeLines) {
-        if ([line hasPrefix:@"["]) break;
-        NSString *v = A2TomlKeyValue(line, key);
-        if (v) return v;
-    }
-    return nil;
-}
-
 /// 单行 key = "..."（三引号与裸值不管，缺了上层按缺字段处理）。
 static NSString *A2TomlKeyValue(NSString *line, NSString *key) {
     NSRange eq = [line rangeOfString:@"="];
@@ -194,6 +178,16 @@ static NSString *A2TomlKeyValue(NSString *line, NSString *key) {
                      NSCharacterSet.whitespaceAndNewlineCharacterSet];
     if (rhs.length < 2 || ![rhs hasPrefix:@"\""] || ![rhs hasSuffix:@"\""]) return nil;
     return A2TomlUnescape([rhs substringWithRange:NSMakeRange(1, rhs.length - 2)]);
+}
+
+/// 顶层 key = "..."（表头出现前有效；表头后出现的顶层键忽略，从严）。
+static NSString *A2TomlTopValue(NSArray<NSString *> *codeLines, NSString *key) {
+    for (NSString *line in codeLines) {
+        if ([line hasPrefix:@"["]) break;
+        NSString *v = A2TomlKeyValue(line, key);
+        if (v) return v;
+    }
+    return nil;
 }
 
 /// 取首个 [[mods]] 表（键值对均为原文串）。表头缺失、表为空、歧义即返回 nil。
