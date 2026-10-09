@@ -355,9 +355,6 @@ static NSString *A2VersionSymbolForType(NSString *type) {
 @property (nonatomic, assign) BOOL entranceEnabled;
 @property (nonatomic, strong) NSMutableSet<NSIndexPath *> *entrancePlayed;
 
-/// 上一次诊断日志的几何签名，用来跳过没有变化的帧（定位完这个布局问题就删）。
-@property (nonatomic, copy, nullable) NSString *layoutDiagSignature;
-
 @end
 
 @implementation A2GameVersionListViewController
@@ -400,85 +397,6 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
 
 - (void)handleThemeChanged:(NSNotification *)note {
     [self applyTheme];
-}
-
-#pragma mark - 诊断日志（临时：定位列表压住头部的问题，定位完删除）
-
-- (void)viewDidLayoutSubviews {
-    [super viewDidLayoutSubviews];
-    [self logLayoutDiagnosticsIfChanged];
-}
-
-- (void)viewDidAppear:(BOOL)animated {
-    [super viewDidAppear:animated];
-    [self logLayoutDiagnosticsIfChanged];
-}
-
-/// 打印选版页关键视图的几何，用于判断 table.top == divider.bottom 是否在运行期被破坏。
-/// 只在几何签名变化时写，避免每帧刷屏。
-- (void)logLayoutDiagnosticsIfChanged {
-    CGRect plain = self.plainContentView.frame;
-    CGRect header = _headerRow.frame;
-    CGRect divider = _divider.frame;
-    CGRect table = _tableView.frame;
-    CGPoint offset = _tableView.contentOffset;
-
-    NSString *signature = [NSString stringWithFormat:@"%.1f|%.1f|%.1f|%.1f|%.1f|%.1f|%.1f",
-        self.view.bounds.size.width, self.view.bounds.size.height,
-        plain.origin.y, header.origin.y, CGRectGetMaxY(divider),
-        table.origin.y, offset.y];
-    if ([signature isEqualToString:_layoutDiagSignature]) return;
-    _layoutDiagSignature = signature;
-
-    [A2Log log:@"verlist-diag: view=%@ plain=%@", NSStringFromCGRect(self.view.frame),
-        NSStringFromCGRect(plain)];
-    [A2Log log:@"verlist-diag: header=%@ divider=%@ table=%@ spinner=%@",
-        NSStringFromCGRect(header), NSStringFromCGRect(divider), NSStringFromCGRect(table),
-        NSStringFromCGRect(_spinner.frame)];
-    [A2Log log:@"verlist-diag: chips=%@ search=%@ refresh=%@",
-        NSStringFromCGRect(_chipScroll.frame), NSStringFromCGRect(_searchField.frame),
-        NSStringFromCGRect(_refreshButton.frame)];
-    [A2Log log:@"verlist-diag: tableInset=%@ tableOffset=%@ tableSize=%@ plainBounds=%@",
-        NSStringFromUIEdgeInsets(_tableView.contentInset), NSStringFromCGPoint(offset),
-        NSStringFromCGSize(_tableView.contentSize),
-        NSStringFromCGRect(self.plainContentView.bounds)];
-    [A2Log log:@"verlist-diag: 期望 tableTop=%.1f 实际 tableTop=%.1f 偏差=%.1f navTransform=%@",
-        CGRectGetMaxY(divider), CGRectGetMinY(table), CGRectGetMinY(table) - CGRectGetMaxY(divider),
-        NSStringFromCGAffineTransform(self.navigationController.view.transform)];
-
-    [self logConstraintsAffecting:_headerRow label:@"header"];
-    [self logConstraintsAffecting:_chipScroll label:@"chipScroll"];
-    [self logConstraintsAffecting:_divider label:@"divider"];
-    [self logConstraintsAffecting:_tableView label:@"table"];
-    [self logConstraintsAffecting:_spinner label:@"spinner"];
-    [self logConstraintsAffecting:_stateCard label:@"stateCard"];
-    [self logConstraintsAffecting:self.plainContentView label:@"plain"];
-
-    NSMutableArray<NSString *> *subs = [NSMutableArray array];
-    for (UIView *sv in self.plainContentView.subviews) {
-        [subs addObject:[NSString stringWithFormat:@"%@%@",
-                         NSStringFromClass(sv.class), NSStringFromCGRect(sv.frame)]];
-    }
-    [A2Log log:@"verlist-diag: plain 直接子视图 %lu 个 | %@",
-        (unsigned long)subs.count, [subs componentsJoinedByString:@" || "]];
-}
-
-/// 打印与被查视图相关的约束（含 active / 优先级 / 描述）：视图自身的（如固定高）
-/// 与超视图持有的（如与兄弟的相对位置），用来判断是「多了」「少了」还是「没进引擎」。
-- (void)logConstraintsAffecting:(UIView *)v label:(NSString *)label {
-    NSMutableArray<NSString *> *lines = [NSMutableArray array];
-    for (NSLayoutConstraint *c in v.constraints) {
-        [lines addObject:[NSString stringWithFormat:@"own %d@p%.0f %@",
-                          c.isActive, c.priority, c.description]];
-    }
-    for (NSLayoutConstraint *c in v.superview.constraints) {
-        if (c.firstItem != v && c.secondItem != v) continue;
-        [lines addObject:[NSString stringWithFormat:@"sup %d@p%.0f %@",
-                          c.isActive, c.priority, c.description]];
-    }
-    [A2Log log:@"verlist-diag: %@(%p) ambiguous=%d relatedConstraints=%lu | %@",
-        label, (void *)v, v.hasAmbiguousLayout, (unsigned long)lines.count,
-        [lines componentsJoinedByString:@" || "]];
 }
 
 #pragma mark - 布局
@@ -604,6 +522,8 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
     _tableView.keyboardDismissMode = UIScrollViewKeyboardDismissModeOnDrag;
     [_tableView registerClass:A2GameVersionCell.class forCellReuseIdentifier:kVersionCellID];
     [self.plainContentView addSubview:_tableView];
+    // 列表层级压到顶栏/分隔线之下，任何情况下都不会盖住头部。
+    [self.plainContentView sendSubviewToBack:_tableView];
 
     _spinner = [[UIActivityIndicatorView alloc]
                 initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
@@ -625,6 +545,10 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
 /// 失败/空结果时的提示卡，默认隐藏。
 - (void)setupStateCard {
     _stateCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
+    // 必须关掉自动掩码：否则系统会生成 minX/width/minY/height == 0 四条 required 约束，
+    // 经 stateCard.centerY == tableView.centerY 把列表的 centerY 拖到 0，
+    // 列表被解成 top = -plain.height、height = 2×plain.height，顶部整条移出屏幕。
+    _stateCard.translatesAutoresizingMaskIntoConstraints = NO;
     _stateCard.cornerRadius = A2RadiusL;
     _stateCard.elevation = A2CardElevationLow;
     _stateCard.hidden = YES;
