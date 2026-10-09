@@ -262,6 +262,7 @@ NSArray<NSNumber *> *A2AllContentClasses(void) {
     [[A2CurseForgeAPI shared] searchClassID:A2ClassIDForCurseForge(contentClass)
                                       query:filter.query
                                 gameVersion:filter.gameVersion
+                                     loader:filter.loader
                                   sortField:A2SortValueForCurseForge(filter.sortField)
                                      offset:filter.offset
                                       limit:filter.limit

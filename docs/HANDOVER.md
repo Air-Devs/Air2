@@ -1060,3 +1060,61 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
 - [x] 校验：`gen_xcodeproj.py`（编译单元 84）+ `verify_pbxproj.py` 通过；`make lint` 通过；
       `tests/Core` 7 个脚本全绿。
 - 未做：真机端到端验证（本机无 Xcode）；版本隔离落盘、整合包 `.mrpack` 解析安装（本轮范围外）。
+
+---
+
+## 10.12 禁用系统输入弹窗 + Mod 等资源下载链路补全（分支 `feat/download-direct`）
+
+> 背景：新增硬性规范——**任何地方不得使用系统输入弹窗**（`UIAlertController` +
+> `addTextFieldWithConfigurationHandler:`），文本输入一律走自研 MD3 组件；同时把除「游戏安装、
+> 整合包安装」外的资源下载链路补齐（详情页文件级筛选、CurseForge 加载器筛选）。记法同上：
+> **不回头改 10.5–10.11**。
+
+**1) 规范落地**
+
+- [x] `docs/UI-DESIGN.md` 新增「## 七、交互禁令（硬性）」：禁系统输入弹窗，必须用自研 MD3
+      输入弹窗/内联输入（语义色、8/12/16/20/28 圆角、弹簧动效、触控 ≥44、空/错误校验态）。
+- [x] `docs/DECISIONS.md` 新增 `ADR-006`（已接受，2026-10-09），点名 `A2CurseForgeKeyPrompt`，
+      注明此前无对应 ADR、不推翻任何旧条目。
+- [x] 工作区外 `~/.trae-cn/skills/air2-ui/SKILL.md`「硬性禁止清单」追加同一禁令。
+
+**2) 自研 MD3 输入弹窗（新增 `UI/Components/A2InputDialog.h/.m`）**
+
+- [x] 泛型接口：`title/message/label/initialText/secure/keyboardType/autocapitalizationType/
+      confirmTitle/cancelTitle` + `validator`（同步校验）+ `onCommit`（异步提交，失败可回填
+      错误文案）+ `onFinish`（成功/取消回调）；`+presentFrom:title:label:initialText:onFinish:`
+      为一步式便捷入口。
+- [x] 呈现方式：`overFullScreen` + 0.45 黑 backdrop（点击取消，提交中忽略）+ 卡片
+      `A2RadiusXL` / `cSurfaceContainerHigh`；最大宽 460，另加 ≤0.92 屏宽/高；入场弹簧回弹。
+- [x] 键盘跟随 `UIKeyboardWillChangeFrameNotification` 调卡片中心（含 `minCenterY` 防顶出上沿）；
+      回车即提交；提交中锁定取消键（`userInteractionEnabled=NO` + `alpha=0.4`——注意
+      `A2PrimaryButton` 的触摸处理不读 `enabled`，故不能靠 `enabled` 锁）。
+
+**3) 全仓替换系统输入弹窗（5 处，输入类全清）**
+
+- [x] `A2VersionSettingsViewController`：JVM 参数、游戏参数、重命名版本（重命名走 `onCommit`
+      做空名校验 + `renameVersion:to:error:` 回填失败原因）。
+- [x] `A2FilesViewController`：`askForNameWithTitle:initial:done:` 内部换实现，签名不变。
+- [x] `A2CurseForgeKeyPrompt`：Key 输入（`secure`、确认键「保存并验证」、`onCommit` 内校验并
+      存钥匙串；用 `__weak host` 避免 host→dlg→block→host 保留环）。
+- [x] 剩余 `UIAlertController` 均为 ActionSheet / 确认 Alert（非输入弹窗），按 ADR-006 不替换。
+
+**4) 资源筛选与详情页文件级筛选**
+
+- [x] 新增共享组件 `UI/Components/A2FilterChip.h/.m`：`filterValue` 携带真实筛选值，
+      `+chip` 工厂（走 alloc/init，确保命中 init 里的样式与主题监听），`setSelected:` 触发
+      `applyTheme`；列表页与详情页共用，删除列表页内同名私有类与 `styleChip:`。
+- [x] 详情页 `A2ProjectDetailViewController` 新增「游戏版本 + 加载器」两行 chip 筛选：选项从
+      已拉回的版本聚合（版本号数字感知降序、加载器去重），**客户端过滤**；无关行整行 `hidden`
+      让外层竖直 stack 连高度一起塌陷；「下载最新版」与更新检测以未筛选的 `allVersions` 为准，
+      避免筛了旧版误判有新版本。
+- [x] Core 补齐 CurseForge 加载器筛选：`A2CurseForgeAPI.searchClassID:` 增 `loader:` 形参，
+      内部按平台中立标识换算 `modLoaderType`（forge=1/fabric=4/quilt=5/neoforge=6，其余不加）；
+      `A2ContentSource.searchCurseForge:` 透传 `filter.loader`。此前选加载器会被静默忽略。
+- [x] 更新检测：列表行沿用「已安装」Badge；详情页 `refreshUpdateState` 已装且最新版未装时
+      主按钮改「更新到 x」。
+
+- [x] 校验：`gen_xcodeproj.py`（编译单元 86）+ `verify_pbxproj.py` 通过；`make lint`（171 文件）
+      通过；`tests/Core` 7 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）；游戏安装 / 整合包安装不做改造（本轮范围外）。
+

@@ -95,9 +95,13 @@ extern const NSInteger A2CFMinecraftGameID;
 - (void)validateKeyWithCompletion:(void (^)(BOOL valid, NSError * _Nullable error))completion;
 
 /// 搜索项目
+/// @param loader 平台中立加载器标识（fabric / quilt / forge / neoforge…），
+///               nil 表示不限。CurseForge 的数字码由本类内部换算，
+///               调用方不需要知道 CurseForge 的枚举差异。
 - (void)searchClassID:(A2CFClassID)classID
                 query:(nullable NSString *)query
           gameVersion:(nullable NSString *)gameVersion
+               loader:(nullable NSString *)loader
             sortField:(nullable NSString *)sortField
                offset:(NSInteger)offset
                 limit:(NSInteger)limit

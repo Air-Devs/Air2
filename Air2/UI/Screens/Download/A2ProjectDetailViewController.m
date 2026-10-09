@@ -36,6 +36,7 @@
 #import "A2Typography.h"
 #import "A2Metrics.h"
 #import "A2DownloadEngine.h"
+#import "A2FilterChip.h"
 #import "A2Log.h"
 
 static NSString *const kVersionCellID = @"A2ProjectVersionCell";
@@ -48,7 +49,19 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
 @property (nonatomic, strong) UIActivityIndicatorView *spinner;
 @property (nonatomic, strong) A2PrimaryButton *downloadButton;
 @property (nonatomic, strong) UIButton *favoriteButton;
+@property (nonatomic, strong) A2GlassCard *headerCard;
+/// 远端拉回的全部版本（筛选前），更新检测与「下载最新版」都以它为准。
+@property (nonatomic, strong) NSArray<A2ContentVersion *> *allVersions;
+/// 当前展示（已按筛选条件过滤）的版本。
 @property (nonatomic, strong) NSArray<A2ContentVersion *> *versions;
+/// 文件级筛选：游戏版本 / 加载器。nil 表示不限。
+@property (nonatomic, copy, nullable) NSString *selectedGameVersion;
+@property (nonatomic, copy, nullable) NSString *selectedLoader;
+@property (nonatomic, strong) UIStackView *filterStack;
+@property (nonatomic, strong) UIStackView *gameVersionRow;
+@property (nonatomic, strong) UIStackView *gameVersionChipStack;
+@property (nonatomic, strong) UIStackView *loaderRow;
+@property (nonatomic, strong) UIStackView *loaderChipStack;
 @end
 
 @implementation A2ProjectDetailViewController
@@ -58,6 +71,7 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
     if (!self) return nil;
     _project = project;
     _targetSubdir = [subdir copy] ?: @"downloads";
+    _allVersions = @[];
     _versions = @[];
     return self;
 }
@@ -69,6 +83,7 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
 
     [self setupFavoriteButton];
     [self setupHeader];
+    [self setupFilter];
     [self setupTable];
     [self reloadVersions];
 }
@@ -126,6 +141,7 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
     card.cornerRadius = A2RadiusL;
     card.elevation = A2CardElevationLow;
     [self.plainContentView addSubview:card];
+    _headerCard = card;
 
     // 首字母占位（无图库依赖；有 iconURL 也不拉，列表页同样处理）。
     UILabel *avatar = [[UILabel alloc] initWithFrame:CGRectZero];
@@ -204,13 +220,179 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
     ]];
 }
 
+#pragma mark - 文件级筛选
+
+/// 详情页两行 chip：游戏版本 / 加载器。选项从已拉回的版本聚合，客户端过滤 ——
+/// 版本已全量在手，再发请求是浪费（ZL2 详情页同为本地筛选）。
+- (void)setupFilter {
+    _filterStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _filterStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _filterStack.axis = UILayoutConstraintAxisVertical;
+    _filterStack.spacing = A2SpaceS;
+    [self.plainContentView addSubview:_filterStack];
+
+    // 两行各自可隐藏：整行 hidden 时外层竖直 stack 会连高度一起收掉，
+    // 不占位（不能靠隐藏 _filterStack 本身，那只藏不缩）。
+    _gameVersionChipStack = [self makeChipStack];
+    _gameVersionRow = [self makeFilterRowWithLabel:@"游戏版本" chipsStack:_gameVersionChipStack];
+    _gameVersionRow.hidden = YES;
+    [_filterStack addArrangedSubview:_gameVersionRow];
+
+    _loaderChipStack = [self makeChipStack];
+    _loaderRow = [self makeFilterRowWithLabel:@"加载器" chipsStack:_loaderChipStack];
+    _loaderRow.hidden = YES;
+    [_filterStack addArrangedSubview:_loaderRow];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [_filterStack.topAnchor constraintEqualToAnchor:_headerCard.bottomAnchor
+                                               constant:A2SpaceM],
+        [_filterStack.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
+                                                   constant:A2PageMargin],
+        [_filterStack.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
+                                                    constant:-A2PageMargin],
+    ]];
+}
+
+- (UIStackView *)makeChipStack {
+    UIStackView *s = [[UIStackView alloc] initWithFrame:CGRectZero];
+    s.axis = UILayoutConstraintAxisHorizontal;
+    s.spacing = A2SpaceS;
+    s.alignment = UIStackViewAlignmentCenter;
+    return s;
+}
+
+/// 一行筛选：左边定宽标签，右边横向滚动的一排 chip。
+- (UIStackView *)makeFilterRowWithLabel:(NSString *)text chipsStack:(UIStackView *)chips {
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    label.text = text;
+    label.font = [A2Typography caption];
+    label.textColor = A2ThemeManager.shared.scheme.cOnSurfaceVariant;
+    [label setContentHuggingPriority:UILayoutPriorityRequired
+                             forAxis:UILayoutConstraintAxisHorizontal];
+    [label setContentCompressionResistancePriority:UILayoutPriorityRequired
+                                          forAxis:UILayoutConstraintAxisHorizontal];
+
+    UIScrollView *scroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    scroll.showsHorizontalScrollIndicator = NO;
+    scroll.showsVerticalScrollIndicator = NO;
+    scroll.alwaysBounceVertical = NO;
+    [scroll addSubview:chips];
+
+    chips.translatesAutoresizingMaskIntoConstraints = NO;
+    [NSLayoutConstraint activateConstraints:@[
+        [chips.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor],
+        [chips.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor],
+        [chips.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor],
+        [chips.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor],
+        [chips.heightAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.heightAnchor],
+        [scroll.heightAnchor constraintEqualToConstant:30],
+    ]];
+
+    UIStackView *row = [[UIStackView alloc] initWithFrame:CGRectZero];
+    row.axis = UILayoutConstraintAxisHorizontal;
+    row.alignment = UIStackViewAlignmentCenter;
+    row.spacing = A2SpaceM;
+    [row addArrangedSubview:label];
+    [row addArrangedSubview:scroll];
+    return row;
+}
+
+/// 用已拉回的版本聚合出两行选项，并恢复当前选中态。
+- (void)rebuildFilterChips {
+    NSMutableSet<NSString *> *gvSet = [NSMutableSet set];
+    NSMutableOrderedSet<NSString *> *loaderSet = [NSMutableOrderedSet orderedSet];
+    for (A2ContentVersion *v in _allVersions) {
+        for (NSString *g in v.gameVersions) if (g.length) [gvSet addObject:g];
+        for (NSString *l in v.loaders) if (l.length) [loaderSet addObject:l];
+    }
+    // 版本号降序（新版在前）；数字感知比较，避免 1.9 > 1.21 的字符串误判
+    NSArray<NSString *> *gameVersions =
+        [gvSet.allObjects sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+            return [b compare:a options:NSNumericSearch];
+        }];
+
+    [self clearChipStack:_gameVersionChipStack];
+    [self addChipToStack:_gameVersionChipStack title:@"全部" value:@""
+                selected:(_selectedGameVersion.length == 0)
+                  action:@selector(gameVersionChipTapped:)];
+    for (NSString *g in gameVersions) {
+        [self addChipToStack:_gameVersionChipStack title:g value:g
+                    selected:[g isEqualToString:_selectedGameVersion]
+                      action:@selector(gameVersionChipTapped:)];
+    }
+
+    [self clearChipStack:_loaderChipStack];
+    [self addChipToStack:_loaderChipStack title:@"全部" value:@""
+                selected:(_selectedLoader.length == 0)
+                  action:@selector(loaderChipTapped:)];
+    for (NSString *l in loaderSet) {
+        [self addChipToStack:_loaderChipStack title:l value:l
+                    selected:[l isEqualToString:_selectedLoader]
+                      action:@selector(loaderChipTapped:)];
+    }
+    // 该维度没有任何可选项时整行隐去（资源包/光影/存档一般无加载器）
+    _gameVersionRow.hidden = (gameVersions.count == 0);
+    _loaderRow.hidden = (loaderSet.count == 0);
+}
+
+- (void)clearChipStack:(UIStackView *)stack {
+    for (UIView *v in [stack.arrangedSubviews copy]) {
+        [stack removeArrangedSubview:v];
+        [v removeFromSuperview];
+    }
+}
+
+- (void)addChipToStack:(UIStackView *)stack
+                 title:(NSString *)title
+                 value:(NSString *)value
+              selected:(BOOL)selected
+                action:(SEL)action {
+    A2FilterChip *chip = [A2FilterChip chip];
+    chip.filterValue = value;
+    [chip setTitle:title forState:UIControlStateNormal];
+    chip.selected = selected;
+    [chip addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
+    [stack addArrangedSubview:chip];
+}
+
+- (void)gameVersionChipTapped:(A2FilterChip *)chip {
+    NSString *value = chip.filterValue;
+    _selectedGameVersion = value.length ? value : nil;
+    [self rebuildFilterChips];
+    [self applyFilter];
+}
+
+- (void)loaderChipTapped:(A2FilterChip *)chip {
+    NSString *value = chip.filterValue;
+    _selectedLoader = value.length ? value : nil;
+    [self rebuildFilterChips];
+    [self applyFilter];
+}
+
+/// 按当前筛选条件过滤已拉回的版本。
+- (void)applyFilter {
+    NSMutableArray<A2ContentVersion *> *out = [NSMutableArray array];
+    for (A2ContentVersion *v in _allVersions) {
+        if (_selectedGameVersion.length && ![v.gameVersions containsObject:_selectedGameVersion]) continue;
+        if (_selectedLoader.length && ![v.loaders containsObject:_selectedLoader]) continue;
+        [out addObject:v];
+    }
+    _versions = out;
+    [_tableView reloadData];
+
+    if (out.count == 0) {
+        _emptyLabel.hidden = NO;
+        _emptyLabel.text = @"没有符合筛选条件的版本";
+    } else {
+        _emptyLabel.hidden = YES;
+    }
+}
+
 #pragma mark - 版本列表
 
 - (void)setupTable {
-    // 头卡已在 setupHeader 加到 plainContentView；table 锚到它下面。
-    // 为拿到头卡底部约束，这里按 subviews 顺序取最后一个卡片。
-    UIView *header = self.plainContentView.subviews.lastObject;
-
     _emptyLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _emptyLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _emptyLabel.font = [A2Typography caption];
@@ -238,7 +420,7 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
     [self.plainContentView addSubview:_spinner];
 
     [NSLayoutConstraint activateConstraints:@[
-        [_tableView.topAnchor constraintEqualToAnchor:header.bottomAnchor constant:A2SpaceS],
+        [_tableView.topAnchor constraintEqualToAnchor:_filterStack.bottomAnchor constant:A2SpaceS],
         [_tableView.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor],
         [_tableView.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
         [_tableView.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
@@ -254,8 +436,11 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
 - (void)reloadVersions {
     // 禁分发的项目不请求版本列表，直接给专属空态（计划 P1 四空态之一）。
     if (!_project.downloadable) {
+        _allVersions = @[];
         _versions = @[];
         [_tableView reloadData];
+        _gameVersionRow.hidden = YES;
+        _loaderRow.hidden = YES;
         _emptyLabel.hidden = NO;
         _emptyLabel.text = @"该作者禁止第三方分发，请前往官网下载";
         _downloadButton.enabled = NO;
@@ -270,17 +455,20 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
         dispatch_async(dispatch_get_main_queue(), ^{
             [self.spinner stopAnimating];
             if (error || versions.count == 0) {
+                self.allVersions = @[];
                 self.versions = @[];
                 [self.tableView reloadData];
+                self.gameVersionRow.hidden = YES;
+                self.loaderRow.hidden = YES;
                 self.emptyLabel.hidden = NO;
                 self.emptyLabel.text = error ? [NSString stringWithFormat:@"加载失败：%@",
                                                 error.localizedDescription] : @"没有可用的版本";
                 self.downloadButton.enabled = NO;
                 return;
             }
-            self.versions = versions;
-            [self.tableView reloadData];
-            self.emptyLabel.hidden = YES;
+            self.allVersions = versions;
+            [self rebuildFilterChips];
+            [self applyFilter];
             self.downloadButton.enabled = YES;
             [self refreshUpdateState];
         });
@@ -290,8 +478,9 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
 // 更新提示：装过该项目、且最新版没装 → 主按钮改“更新到 x”。
 // 不在列表页做行级提示：那需要每行一次版本请求（N+1），
 // 又贵又抖；详情页版本已拉到手，对比零成本。
+// 用 allVersions（未筛选）判最新版，避免用户筛了旧版本就误判成「有新版本」。
 - (void)refreshUpdateState {
-    A2ContentVersion *latest = _versions.firstObject;
+    A2ContentVersion *latest = _allVersions.firstObject;
     if (!latest) return;
     BOOL installedProject = [[A2DownloadManifest shared] isProjectInstalled:_project.projectID];
     BOOL latestInstalled = [[A2DownloadManifest shared] isVersionInstalled:_project.projectID
@@ -307,7 +496,8 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
 #pragma mark - 下载（从列表页搬家，逻辑逐行未改）
 
 - (void)downloadLatest {
-    A2ContentVersion *v = _versions.firstObject;
+    // 始终下最新版，与筛选条件无关
+    A2ContentVersion *v = _allVersions.firstObject;
     if (!v) {
         [A2Toast show:@"没有可用的版本" inView:self.view];
         return;

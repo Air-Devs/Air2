@@ -41,6 +41,7 @@
 #import "A2Typography.h"
 #import "A2VersionManager.h"
 #import "A2FilesViewController.h"
+#import "A2InputDialog.h"
 
 @interface A2VersionSettingsViewController ()
 /// 版本名（在 init 里赋值，后续只读）
@@ -259,23 +260,20 @@
     __weak A2SettingsRow *weakJvmRow = jvmRow;
     jvmRow.onTap = ^{
         __weak typeof(self) weakSelf = self;
-        UIAlertController *alert =
-            [UIAlertController alertControllerWithTitle:@"JVM 参数"
-                                                message:@"留空则使用全局设置"
-                                         preferredStyle:UIAlertControllerStyleAlert];
-        [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-            tf.text = weakSelf.version.isolation.jvmArgs;
-            tf.placeholder = @"-Xmx2G -XX:+UseG1GC";
-        }];
-        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-        [alert addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *a) {
-            weakSelf.version.isolation.jvmArgs = alert.textFields.firstObject.text;
+        A2InputDialog *dlg = [A2InputDialog dialogWithTitle:@"JVM 参数"
+                                                    message:@"留空则使用全局设置"
+                                                      label:@"JVM 参数"
+                                                initialText:weakSelf.version.isolation.jvmArgs];
+        dlg.keyboardType = UIKeyboardTypeASCIICapable;
+        dlg.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        dlg.onFinish = ^(BOOL committed, NSString *text) {
+            if (!committed) return;
+            weakSelf.version.isolation.jvmArgs = text;
             [weakSelf.version saveConfig];
             weakJvmRow.valueText = weakSelf.version.isolation.jvmArgs.length
                 ? weakSelf.version.isolation.jvmArgs : @"跟随全局";
-        }]];
-        [weakSelf presentViewController:alert animated:YES completion:nil];
+        };
+        [dlg presentFrom:weakSelf];
     };
     [section addRow:jvmRow];
 
@@ -287,23 +285,20 @@
     __weak A2SettingsRow *weakGameArgsRow = gameArgsRow;
     gameArgsRow.onTap = ^{
         __weak typeof(self) weakSelf = self;
-        UIAlertController *alert =
-            [UIAlertController alertControllerWithTitle:@"游戏参数"
-                                                message:@"留空则使用全局设置"
-                                         preferredStyle:UIAlertControllerStyleAlert];
-        [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-            tf.text = weakSelf.version.isolation.gameArgs;
-            tf.placeholder = @"--width 1920 --height 1080";
-        }];
-        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-        [alert addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *a) {
-            weakSelf.version.isolation.gameArgs = alert.textFields.firstObject.text;
+        A2InputDialog *dlg = [A2InputDialog dialogWithTitle:@"游戏参数"
+                                                    message:@"留空则使用全局设置"
+                                                      label:@"游戏参数"
+                                                initialText:weakSelf.version.isolation.gameArgs];
+        dlg.keyboardType = UIKeyboardTypeASCIICapable;
+        dlg.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        dlg.onFinish = ^(BOOL committed, NSString *text) {
+            if (!committed) return;
+            weakSelf.version.isolation.gameArgs = text;
             [weakSelf.version saveConfig];
             weakGameArgsRow.valueText = weakSelf.version.isolation.gameArgs.length
                 ? weakSelf.version.isolation.gameArgs : @"跟随全局";
-        }]];
-        [weakSelf presentViewController:alert animated:YES completion:nil];
+        };
+        [dlg presentFrom:weakSelf];
     };
     [section addRow:gameArgsRow];
 
@@ -335,27 +330,30 @@
     renameRow.accessory = A2SettingsRowAccessoryDisclosure;
     renameRow.onTap = ^{
         __weak typeof(self) weakSelf = self;
-        UIAlertController *alert =
-            [UIAlertController alertControllerWithTitle:@"重命名版本"
-                                                message:nil
-                                         preferredStyle:UIAlertControllerStyleAlert];
-        [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-            tf.text = weakSelf.version.name;
-        }];
-        [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-        [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *a) {
+        A2InputDialog *dlg = [A2InputDialog dialogWithTitle:@"重命名版本"
+                                                    message:nil
+                                                      label:@"版本名"
+                                                initialText:weakSelf.version.name];
+        dlg.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        // 重名 / 非法名由 A2VersionManager 判定，失败时弹窗内报错并保留
+        dlg.onCommit = ^(NSString *text, void (^done)(BOOL, NSString *)) {
             __strong typeof(weakSelf) self = weakSelf;
-            NSString *newName = alert.textFields.firstObject.text;
+            if (!self) { done(NO, @"操作已取消"); return; }
+            NSString *newName = [text stringByTrimmingCharactersInSet:
+                                 NSCharacterSet.whitespaceAndNewlineCharacterSet];
+            if (newName.length == 0) { done(NO, @"名称不能为空"); return; }
             NSError *err = nil;
             if ([A2VersionManager.shared renameVersion:self.version to:newName error:&err]) {
                 self.pageTitle = newName;
-                [A2Toast show:@"已重命名" inView:self.view];
+                done(YES, nil);
             } else {
-                [A2Toast show:(err.localizedDescription ?: @"重命名失败") inView:self.view];
+                done(NO, err.localizedDescription ?: @"重命名失败");
             }
-        }]];
-        [weakSelf presentViewController:alert animated:YES completion:nil];
+        };
+        dlg.onFinish = ^(BOOL committed, NSString *text) {
+            if (committed) [A2Toast show:@"已重命名" inView:weakSelf.view];
+        };
+        [dlg presentFrom:weakSelf];
     };
     [section addRow:renameRow];
 

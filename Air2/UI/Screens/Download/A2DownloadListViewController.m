@@ -38,19 +38,9 @@
 #import "A2Metrics.h"
 #import "A2Typography.h"
 #import "A2ContentSource.h"
+#import "A2FilterChip.h"
 
 static NSString *const kCellID = @"A2DownloadCell";
-
-/// 主筛选维度的胶囊。
-///
-/// 用 filterValue 携带**真实筛选值**（加载器标识如 legacy-fabric、游戏版本号如 1.21.5），
-/// 不再靠展示文案反推 —— 「Legacy Fabric」小写化后是「legacy fabric」，与接口要的值不符。
-@interface A2FilterChip : UIButton
-@property (nonatomic, copy) NSString *filterValue;
-@end
-
-@implementation A2FilterChip
-@end
 
 #pragma mark - 列表项
 
@@ -420,9 +410,9 @@ static NSString *const kCellID = @"A2DownloadCell";
     self.sortField = field;
 
     for (UIView *v in sender.superview.subviews) {
-        if (![v isKindOfClass:UIButton.class]) continue;
-        UIButton *b = (UIButton *)v;
-        [self styleChip:b selected:(b.tag == (NSInteger)field)];
+        if (![v isKindOfClass:A2FilterChip.class]) continue;
+        A2FilterChip *b = (A2FilterChip *)v;
+        b.selected = (b.tag == (NSInteger)field);
     }
     [self reload];
 }
@@ -463,18 +453,10 @@ static NSString *const kCellID = @"A2DownloadCell";
 
 /// 主维度胶囊。filterValue 存真实筛选值（@"" = 全部）。
 - (A2FilterChip *)makeDimensionChip:(NSString *)title value:(NSString *)value {
-    A2FilterChip *b = [A2FilterChip buttonWithType:UIButtonTypeSystem];
-    b.translatesAutoresizingMaskIntoConstraints = NO;
+    A2FilterChip *b = [A2FilterChip chip];
     b.filterValue = value;
     [b setTitle:title forState:UIControlStateNormal];
-    b.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
-    b.layer.cornerRadius = 15;
-    b.layer.cornerCurve = kCACornerCurveContinuous;
-    b.contentEdgeInsets = UIEdgeInsetsMake(0, 14, 0, 14);
-    [NSLayoutConstraint activateConstraints:@[
-        [b.heightAnchor constraintEqualToConstant:30],
-    ]];
-    [self styleChip:b selected:[value isEqualToString:self.selectedDimensionValue]];
+    b.selected = [value isEqualToString:self.selectedDimensionValue];
     [b addAction:[UIAction actionWithHandler:^(UIAction *action) {
         [self chipTapped:(UIButton *)action.sender];
     }] forControlEvents:UIControlEventTouchUpInside];
@@ -486,7 +468,7 @@ static NSString *const kCellID = @"A2DownloadCell";
     for (UIView *v in self.dimensionStack.arrangedSubviews) {
         if (![v isKindOfClass:A2FilterChip.class]) continue;
         A2FilterChip *chip = (A2FilterChip *)v;
-        [self styleChip:chip selected:[chip.filterValue isEqualToString:value]];
+        chip.selected = [chip.filterValue isEqualToString:value];
     }
 }
 
@@ -523,31 +505,16 @@ static NSString *const kCellID = @"A2DownloadCell";
 }
 
 /// 排序 chip。tag 存排序枚举值，点击走 sortTapped:
-- (UIButton *)makeSortChip:(A2ContentSortField)field {
-    UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
-    b.translatesAutoresizingMaskIntoConstraints = NO;
+- (A2FilterChip *)makeSortChip:(A2ContentSortField)field {
+    A2FilterChip *b = [A2FilterChip chip];
     [b setTitle:A2SortDisplayName(field) forState:UIControlStateNormal];
-    b.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
-    b.layer.cornerRadius = 15;
-    b.layer.cornerCurve = kCACornerCurveContinuous;
-    b.contentEdgeInsets = UIEdgeInsetsMake(0, 14, 0, 14);
     b.tag = field;
-    [NSLayoutConstraint activateConstraints:@[
-        [b.heightAnchor constraintEqualToConstant:30],
-    ]];
     // 默认按相关度，所以只有 RELEVANCE 是选中的
-    [self styleChip:b selected:(field == A2ContentSortFieldRelevance)];
+    b.selected = (field == A2ContentSortFieldRelevance);
     [b addAction:[UIAction actionWithHandler:^(UIAction *action) {
         [self sortTapped:(UIButton *)action.sender];
     }] forControlEvents:UIControlEventTouchUpInside];
     return b;
-}
-
-- (void)styleChip:(UIButton *)chip selected:(BOOL)selected {
-    A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    chip.backgroundColor = selected ? t.cPrimary : t.cSurfaceContainerHigh;
-    [chip setTitleColor:(selected ? t.cOnPrimary : t.cOnSurfaceVariant)
-               forState:UIControlStateNormal];
 }
 
 - (void)chipTapped:(UIButton *)sender {
