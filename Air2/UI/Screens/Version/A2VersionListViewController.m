@@ -561,8 +561,12 @@
             [A2Toast show:(verr.localizedDescription ?: @"版本号无效") inView:self.view];
             return;
         }
+        // 这里用户只填一个 MC 版本号：它既是取 manifest 的版本，也是目标版本目录名。
         A2InstallingViewController *vc =
-            [[A2InstallingViewController alloc] initWithVersionName:text loader:nil];
+            [[A2InstallingViewController alloc] initWithMCVersion:text
+                                                      versionName:text
+                                                       loaderType:nil
+                                                    loaderVersion:nil];
         [self.navigationController pushViewController:vc animated:YES];
     }]];
     [self presentViewController:alert animated:YES completion:nil];
