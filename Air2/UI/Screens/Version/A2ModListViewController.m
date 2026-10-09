@@ -70,7 +70,7 @@ static NSString *A2ModRowMeta(A2LocalMod *mod) {
 @property (nonatomic, strong) UILabel *metaLabel;
 @property (nonatomic, strong) UISwitch *enableSwitch;
 @property (nonatomic, strong) UIButton *deleteButton;
-@property (nonatomic, assign, getter=isEnabled) BOOL enabled;
+@property (nonatomic, assign, getter=isModEnabled) BOOL modEnabled;
 @property (nonatomic, copy, nullable) void (^onToggle)(void);
 @property (nonatomic, copy, nullable) void (^onDelete)(void);
 
@@ -87,7 +87,7 @@ static NSString *A2ModRowMeta(A2LocalMod *mod) {
     self = [super initWithFrame:CGRectZero];
     if (!self) return nil;
     self.translatesAutoresizingMaskIntoConstraints = NO;
-    _enabled = mod.isEnabled;
+    _modEnabled = mod.isEnabled;
     _feedback = [UISelectionFeedbackGenerator new];
 
     UIStackView *textStack = [self setupSubviewsWithMod:mod];
@@ -204,9 +204,9 @@ static NSString *A2ModRowMeta(A2LocalMod *mod) {
     [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
-- (void)setEnabled:(BOOL)enabled {
-    _enabled = enabled;
-    _enableSwitch.on = enabled;
+- (void)setModEnabled:(BOOL)modEnabled {
+    _modEnabled = modEnabled;
+    _enableSwitch.on = modEnabled;
     [self applyTheme];
 }
 
@@ -229,7 +229,7 @@ static NSString *A2ModRowMeta(A2LocalMod *mod) {
     _metaLabel.textColor = t.cOnSurfaceVariant;
     _enableSwitch.onTintColor = t.cPrimary;
     _deleteButton.tintColor = t.cError;
-    self.alpha = self.isEnabled ? 1.0 : 0.55;
+    self.alpha = self.isModEnabled ? 1.0 : 0.55;
 }
 
 @end
@@ -404,7 +404,7 @@ static NSString *A2ModRowMeta(A2LocalMod *mod) {
         [A2Toast show:(target ? @"已启用" : @"已禁用") inView:self.view];
         [self reloadMods];
     } else {
-        row.enabled = mod.isEnabled;
+        row.modEnabled = mod.isEnabled;
         [A2Toast show:(err.localizedDescription ?: @"切换失败") inView:self.view];
     }
 }
