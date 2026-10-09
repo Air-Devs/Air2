@@ -24,7 +24,7 @@
 //  状态推进（入队/暂停/重试/取消/完成）全部在 A2DownloadTaskCenter。
 //
 
-#import "A2DownloadTask+Internal.h"
+#import "A2DownloadTask.h"
 
 @implementation A2DownloadTask
 

@@ -214,7 +214,6 @@
 		DE956596465BDFF25E578448 /* A2DownloadEngine.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadEngine.h"; sourceTree = "<group>"; };
 		1EDE5D2DBCB81396D185C97D /* A2DownloadFavorites.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadFavorites.h"; sourceTree = "<group>"; };
 		D3ABD890B860FD03E77A2B0C /* A2DownloadManifest.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadManifest.h"; sourceTree = "<group>"; };
-		5FA38B86903595A675839F06 /* A2DownloadTask+Internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTask+Internal.h"; sourceTree = "<group>"; };
 		0F59C20AA19682790BF7251E /* A2DownloadTask.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTask.h"; sourceTree = "<group>"; };
 		A9FC62B0E895E90CEEE39D8E /* A2DownloadTaskCenter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTaskCenter.h"; sourceTree = "<group>"; };
 		801FBE3D9BBD2833977FF7A9 /* A2GameDirMigration.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameDirMigration.h"; sourceTree = "<group>"; };
@@ -437,7 +436,6 @@
 				DE956596465BDFF25E578448 /* A2DownloadEngine.h */,
 				1EDE5D2DBCB81396D185C97D /* A2DownloadFavorites.h */,
 				D3ABD890B860FD03E77A2B0C /* A2DownloadManifest.h */,
-				5FA38B86903595A675839F06 /* A2DownloadTask+Internal.h */,
 				0F59C20AA19682790BF7251E /* A2DownloadTask.h */,
 				A9FC62B0E895E90CEEE39D8E /* A2DownloadTaskCenter.h */,
 			);

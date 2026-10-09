@@ -29,7 +29,6 @@
 //
 
 #import "A2DownloadTaskCenter.h"
-#import "A2DownloadTask+Internal.h"
 #import "A2DownloadManifest.h"
 #import "A2Log.h"
 

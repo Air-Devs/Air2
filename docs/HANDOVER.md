@@ -1148,8 +1148,12 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
       成功时按 projectID/versionID/subdir 回写 `A2DownloadManifest`。
 - [x] 任务数组由内部串行队列保护，对外通知/回调一律回主线程；进度广播节流 100ms。
 - [x] `A2DownloadTask` 改造：删除自带的重名 `A2DownloadState` 枚举（与 `A2DownloadEngine.h` 重复，
-      潜在编译隐患）与无人引用的多文件聚合逻辑，改为复用引擎枚举；可变接口移入
-      `A2DownloadTask+Internal.h` 仅供中心使用。`+shared` init 内不发通知（避开 dispatch_once 重入死锁）。
+      潜在编译隐患）与无人引用的多文件聚合逻辑，改为复用引擎枚举；可变接口以类扩展形式并入
+      `A2DownloadTask.h`（标注「内部」，仅供中心使用）。`+shared` init 内不发通知（避开 dispatch_once 重入死锁）。
+- [x] 修复 CI lint 失败（`check_imports.py` 组件依赖检查）：可变接口原计划放独立内部头
+      `A2DownloadTask+Internal.h`，但该校验按「类名 → 头文件」建唯一映射，同一类被两个头文件
+      声明时归属随 `os.walk` 顺序变化（CI 与本地结果相反），且 `+` 无法被其 `(\w+\.h)` 正则解析。
+      根因修法：删除独立内部头，全部并入唯一的 `A2DownloadTask.h`，消除歧义。
 
 **4) 新增共用资源搜索页 `UI/Screens/Download/A2ResourceSearchViewController.h/.m`**
 
