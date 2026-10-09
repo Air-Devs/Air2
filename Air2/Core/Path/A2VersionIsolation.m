@@ -195,10 +195,14 @@ static NSArray<NSString *> *A2IsolationStandardSubdirectories(void) {
     return p;
 }
 
+/// 游戏根目录名。用可见的 minecraft（不再用隐藏的 .minecraft），
+/// 便于用户在「文件」App 里直接找到游戏数据。
+static NSString *const kGameHomeDirName = @"minecraft";
+
 + (NSString *)defaultGameHome {
     NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
                                                         NSUserDomainMask, YES).firstObject;
-    return [docs stringByAppendingPathComponent:@".minecraft"];
+    return [docs stringByAppendingPathComponent:kGameHomeDirName];
 }
 
 - (NSString *)versionsHome   { return [self.gameHome stringByAppendingPathComponent:@"versions"]; }

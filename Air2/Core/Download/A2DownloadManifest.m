@@ -49,11 +49,10 @@
 #pragma mark - 路径（唯一出口）
 
 - (NSString *)manifestPath {
-    NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
-                                                        NSUserDomainMask, YES).firstObject;
-    // 与下载落盘根一致：Documents/.minecraft，下挂启动器私有数据。
-    return [[[docs stringByAppendingPathComponent:@".minecraft"]
-             stringByAppendingPathComponent:@".air_version"]
+    // 与下载落盘根一致：游戏根目录下挂启动器私有数据。
+    // 根目录走唯一出口（A2GamePath.defaultGameHome），不手写目录名。
+    NSString *gameHome = A2GamePath.defaultGameHome;
+    return [[gameHome stringByAppendingPathComponent:@".air_version"]
             stringByAppendingPathComponent:@"downloads.json"];
 }
 

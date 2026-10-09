@@ -958,3 +958,28 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
 - [x] 校验：`gen_xcodeproj.py`（编译单元 84）+ `verify_pbxproj.py` 通过；
       `make lint`（464 处 import / 167 文件）通过；`tests/Core` 6 个脚本全绿。
 - 未做：真机端到端验证（本机无 Xcode）；本轮按要求不出 PR，等指令后再合 `main`。
+
+---
+
+## 10.9 游戏根目录改名 `.minecraft` → `minecraft`（分支 `feat/gamedir-minecraft`）
+
+> 背景：旧版游戏根目录是隐藏目录 `Documents/.minecraft`，「文件」App 里看不到，也不便
+> 用户直接管理数据。本轮把根目录改成可见的 `minecraft`，适配下载等引用，并给老用户做
+> 一次性自动迁移（改名）。记法同上：**不回头改 10.5–10.8**，本节只记录本轮改动。
+
+- [x] **中心出口改名**：`A2GamePath.defaultGameHome` 的根目录名由 `.minecraft` 改为
+      `minecraft`（收敛为常量 `kGameHomeDirName`，`A2VersionIsolation.m/.h` 注释同步）。
+- [x] **适配重复硬编码**：`A2DownloadManifest.manifestPath`、`A2DownloadFavorites.favoritesPath`
+      改为经 `A2GamePath.defaultGameHome` 派生，去掉各自手写的 `.minecraft`；
+      `A2VersionListViewController` 左侧目录展示串改 `Documents/minecraft`。
+- [x] **新增 `Core/Path/A2GameDirMigration`（`+ migrateIfNeeded`）**：启动时一次性把旧的
+      `Documents/.minecraft` 迁成 `Documents/minecraft`。决策矩阵：只有旧目录 → 空则删、
+      非空则改名；只有新目录 → 不动；两者都在 → 旧为空则删旧，新为空则删新再把旧改名过来，
+      两者都非空则按约定丢弃旧目录。幂等（改完再跑只是几次廉价判断），全程 `A2Log`。
+- [x] **挂载点**：在 `A2AppDelegate.didFinishLaunchingWithOptions:` 最早期调用迁移，早于任何
+      读取游戏目录的逻辑（版本扫描是惰性单例，晚于此处）。
+- [x] **测试**：`tests/Core/test_version_isolation.py` 的 `GAME_HOME` 更新；新增
+      `tests/Core/test_game_dir_migration.py`，在临时目录真实建出结构跑决策矩阵。
+- [x] 校验：`gen_xcodeproj.py`（编译单元 85）+ `verify_pbxproj.py` 通过；`make lint`
+      （469 处 import / 169 文件）通过；`tests/Core` 7 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）。
