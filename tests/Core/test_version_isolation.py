@@ -33,7 +33,7 @@ libraries / assets 始终共用，不随档位变化。
 """
 import os
 
-GAME_HOME = "/var/mobile/Documents/.minecraft"
+GAME_HOME = "/var/mobile/Documents/minecraft"
 
 # A2VersionFolderName 的取值（除 mods 外都直接落在游戏目录下）
 FOLDERS = {

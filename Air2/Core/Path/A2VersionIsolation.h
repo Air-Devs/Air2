@@ -120,7 +120,7 @@ FOUNDATION_EXPORT NSString *A2VersionFolderDisplayName(A2VersionFolder folder);
 
 + (instancetype)pathWithGameHome:(NSString *)gameHome;
 
-/// 默认游戏根目录（Documents/.minecraft），与 A2VersionManager 一致。
+/// 默认游戏根目录（Documents/minecraft），与 A2VersionManager 一致。
 + (NSString *)defaultGameHome;
 
 - (NSString *)versionsHome;

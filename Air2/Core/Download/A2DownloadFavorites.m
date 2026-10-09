@@ -23,6 +23,7 @@
 //
 
 #import "A2DownloadFavorites.h"
+#import "A2VersionIsolation.h"
 
 NSNotificationName const A2FavoritesDidChangeNotification = @"A2FavoritesDidChangeNotification";
 
@@ -117,10 +118,9 @@ NSNotificationName const A2FavoritesDidChangeNotification = @"A2FavoritesDidChan
 #pragma mark - 路径（唯一出口）
 
 - (NSString *)favoritesPath {
-    NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
-                                                        NSUserDomainMask, YES).firstObject;
-    return [[[docs stringByAppendingPathComponent:@".minecraft"]
-             stringByAppendingPathComponent:@".air_version"]
+    // 根目录走唯一出口（A2GamePath.defaultGameHome），不手写目录名。
+    NSString *gameHome = A2GamePath.defaultGameHome;
+    return [[gameHome stringByAppendingPathComponent:@".air_version"]
             stringByAppendingPathComponent:@"favorites.json"];
 }
 

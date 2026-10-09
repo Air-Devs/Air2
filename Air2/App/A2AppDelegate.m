@@ -26,6 +26,7 @@
 #import "A2ThemeManager.h"
 #import "A2Settings.h"
 #import "A2AccountManager.h"
+#import "A2GameDirMigration.h"
 #import "A2Log.h"
 
 @implementation A2AppDelegate
@@ -33,6 +34,9 @@
 - (BOOL)application:(UIApplication *)application
 didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *)launchOptions {
     [A2Log log:@"AppDelegate: didFinishLaunching 开始"];
+    // 最早的目录改名迁移：把旧的 Documents/.minecraft 迁成 Documents/minecraft。
+    // 必须早于任何读取游戏目录的逻辑（版本扫描、主题背景等），否则会读到旧路径。
+    [A2GameDirMigration migrateIfNeeded];
     // 提前实例化主题管理器。它第一次访问会读 UserDefaults 与沙盒里的
     // 背景图，放在启动早期做，避免首次渲染时在布局过程中触发磁盘 IO。
     (void)A2ThemeManager.shared;
