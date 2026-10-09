@@ -29,6 +29,6 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// 非空字符串才取值，否则返回 nil。
-FOUNDATION_EXPORT nullable NSString *A2NonEmptyString(id value);
+FOUNDATION_EXPORT NSString * _Nullable A2NonEmptyString(id value);
 
 NS_ASSUME_NONNULL_END
