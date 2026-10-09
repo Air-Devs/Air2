@@ -445,6 +445,40 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
     [A2Log log:@"verlist-diag: 期望 tableTop=%.1f 实际 tableTop=%.1f 偏差=%.1f navTransform=%@",
         CGRectGetMaxY(divider), CGRectGetMinY(table), CGRectGetMinY(table) - CGRectGetMaxY(divider),
         NSStringFromCGAffineTransform(self.navigationController.view.transform)];
+
+    [self logConstraintsAffecting:_headerRow label:@"header"];
+    [self logConstraintsAffecting:_chipScroll label:@"chipScroll"];
+    [self logConstraintsAffecting:_divider label:@"divider"];
+    [self logConstraintsAffecting:_tableView label:@"table"];
+    [self logConstraintsAffecting:_spinner label:@"spinner"];
+    [self logConstraintsAffecting:_stateCard label:@"stateCard"];
+    [self logConstraintsAffecting:self.plainContentView label:@"plain"];
+
+    NSMutableArray<NSString *> *subs = [NSMutableArray array];
+    for (UIView *sv in self.plainContentView.subviews) {
+        [subs addObject:[NSString stringWithFormat:@"%@%@",
+                         NSStringFromClass(sv.class), NSStringFromCGRect(sv.frame)]];
+    }
+    [A2Log log:@"verlist-diag: plain 直接子视图 %lu 个 | %@",
+        (unsigned long)subs.count, [subs componentsJoinedByString:@" || "]];
+}
+
+/// 打印与被查视图相关的约束（含 active / 优先级 / 描述）：视图自身的（如固定高）
+/// 与超视图持有的（如与兄弟的相对位置），用来判断是「多了」「少了」还是「没进引擎」。
+- (void)logConstraintsAffecting:(UIView *)v label:(NSString *)label {
+    NSMutableArray<NSString *> *lines = [NSMutableArray array];
+    for (NSLayoutConstraint *c in v.constraints) {
+        [lines addObject:[NSString stringWithFormat:@"own %d@p%.0f %@",
+                          c.isActive, c.priority, c.description]];
+    }
+    for (NSLayoutConstraint *c in v.superview.constraints) {
+        if (c.firstItem != v && c.secondItem != v) continue;
+        [lines addObject:[NSString stringWithFormat:@"sup %d@p%.0f %@",
+                          c.isActive, c.priority, c.description]];
+    }
+    [A2Log log:@"verlist-diag: %@(%p) ambiguous=%d relatedConstraints=%lu | %@",
+        label, (void *)v, v.hasAmbiguousLayout, (unsigned long)lines.count,
+        [lines componentsJoinedByString:@" || "]];
 }
 
 #pragma mark - 布局
