@@ -23,6 +23,7 @@
 #import "A2GameInstaller.h"
 #import "A2VersionIsolation.h"
 #import "A2ModLoaderInstaller.h"
+#import "A2Log.h"
 
 /// 官方版本清单地址（Mojang piston-meta）
 static NSString *const kVersionManifestURL = @"https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
@@ -61,6 +62,7 @@ static void A2Main(dispatch_block_t block) {
 
 - (void)cancel {
     _cancelled = YES;
+    [A2Log log:@"installer: 取消安装 %@", self.request.versionName ?: @"(未知)"];
     // cancelOperation: 的参数标了 nonnull，传 nil 会警告。
     // 这里改调 cancelAll —— 语义也更对：取消安装就该停掉所有下载。
     [[A2DownloadEngine sharedClient] cancelAll];
@@ -88,6 +90,10 @@ static void A2Main(dispatch_block_t block) {
                [A2ModLoaderAPI identifierForType:(A2ModLoaderType)request.loaderType.integerValue]]
             : request.mcVersion;
     }
+
+    [A2Log log:@"installer: 开始安装 mc=%@ 版本名=%@ 加载器=%@ 目录=%@",
+          request.mcVersion, request.versionName,
+          request.loaderType ?: @"原版", request.gameHome];
 
     [self report:A2InstallStageFetchManifest progress:0 message:@"正在获取版本清单…"];
     [self fetchManifest];
@@ -451,6 +457,7 @@ static void A2Main(dispatch_block_t block) {
     }
 
     [self report:A2InstallStageFinalize progress:1 message:@"安装完成"];
+    [A2Log log:@"installer: 安装完成 %@", self.request.versionName];
     if (self.completionBlock) self.completionBlock(YES, nil);
 }
 
@@ -560,6 +567,8 @@ static void A2Main(dispatch_block_t block) {
 }
 
 - (void)failWithError:(NSError *)error {
+    [A2Log log:@"installer: 安装失败 %@：%@",
+          self.request.versionName ?: @"(未知)", error.localizedDescription];
     A2Main(^{
         if (self.completionBlock) self.completionBlock(NO, error);
     });

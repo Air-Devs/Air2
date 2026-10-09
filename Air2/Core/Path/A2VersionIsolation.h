@@ -120,6 +120,9 @@ FOUNDATION_EXPORT NSString *A2VersionFolderDisplayName(A2VersionFolder folder);
 
 + (instancetype)pathWithGameHome:(NSString *)gameHome;
 
+/// 默认游戏根目录（Documents/.minecraft），与 A2VersionManager 一致。
++ (NSString *)defaultGameHome;
+
 - (NSString *)versionsHome;
 - (NSString *)librariesHome;
 - (NSString *)assetsHome;
@@ -128,6 +131,12 @@ FOUNDATION_EXPORT NSString *A2VersionFolderDisplayName(A2VersionFolder folder);
 - (NSString *)versionJarPath:(NSString *)versionName;
 - (NSString *)launcherDataPath:(NSString *)versionName;
 - (NSString *)versionIconPath:(NSString *)versionName;
+
+/// 下载落盘目标：gameHome/<subdir>/<fileName>，按需建好子目录。
+/// 失败返回 nil（目录建不出，后续写必失败，早报比晚报好）。
+- (nullable NSString *)downloadDestinationInSubdir:(NSString *)subdir
+                                          fileName:(NSString *)fileName
+                                             error:(NSError **)error;
 
 /// 该版本实际使用的游戏目录。
 ///   关闭 / 仅 Mod → 游戏根目录（各版本共用同一份数据）

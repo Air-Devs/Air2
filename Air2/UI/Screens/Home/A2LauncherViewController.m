@@ -804,8 +804,6 @@
     [self pushScreen:[[A2DownloadViewController alloc] init] style:A2TransitionStyleScaleFade];
 }
 
-- (void)openMultiplayer { [A2Toast show:@"联机功能尚未接入" inView:self.view]; }
-- (void)openFiles       { [A2Toast show:@"文件管理尚未接入" inView:self.view]; }
 - (void)openVersionSettings { [A2Toast show:@"版本设置" inView:self.view]; }
 
 @end
