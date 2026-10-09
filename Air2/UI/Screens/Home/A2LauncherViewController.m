@@ -38,7 +38,7 @@
 #import "A2VersionManager.h"
 #import "A2AccountManager.h"
 #import "A2Account.h"
-#import "A2QuickActionCard.h"
+#import "A2VersionSettingsViewController.h"
 #import "A2PrimaryButton.h"
 #import "A2SkinHeadView.h"
 
@@ -806,7 +806,17 @@
 
 - (void)openMultiplayer { [A2Toast show:@"联机功能尚未接入" inView:self.view]; }
 - (void)openFiles       { [A2Toast show:@"文件管理尚未接入" inView:self.view]; }
-- (void)openVersionSettings { [A2Toast show:@"版本设置" inView:self.view]; }
+- (void)openVersionSettings {
+    // 齿轮与「版本设置」进当前版本的单版本设置页（真实页面）。
+    // 无版本时给提示，不进空页面。
+    A2Version *current = A2VersionManager.shared.currentVersion;
+    if (!current) {
+        [A2Toast show:@"还没有安装版本" inView:self.view];
+        return;
+    }
+    [self pushScreen:[[A2VersionSettingsViewController alloc] initWithVersionName:current.name]
+               style:A2TransitionStyleScaleFade];
+}
 
 @end
 

@@ -39,6 +39,7 @@
 #import "A2Typography.h"
 #import "A2VersionManager.h"
 #import "A2FilesViewController.h"
+#import "A2ModListViewController.h"
 
 @interface A2VersionSettingsViewController ()
 /// 版本名（在 init 里赋值，后续只读）
@@ -205,14 +206,25 @@
         row.title = A2VersionFolderDisplayName((A2VersionFolder)i);
         row.accessory = A2SettingsRowAccessoryDisclosure;
 
-        NSString *folderName = A2VersionFolderDisplayName((A2VersionFolder)i);
-        NSString *dir = [_version directoryForFolder:(A2VersionFolder)i];
-        row.onTap = ^{
-            NSURL *url = [NSURL fileURLWithPath:dir];
-            (void)url;
-            [A2Toast show:[NSString stringWithFormat:@"%@：%@", folderName, dir]
-                   inView:self.view];
-        };
+        // 模组行进专用管理页，其余目录维持通用浏览（各管各的，不混）。
+        if ((A2VersionFolder)i == A2VersionFolderMods) {
+            __weak typeof(self) weakSelf = self;
+            row.onTap = ^{
+                __strong typeof(weakSelf) self = weakSelf;
+                A2ModListViewController *vc =
+                    [[A2ModListViewController alloc] initWithVersion:self.version];
+                [self.navigationController pushViewController:vc animated:YES];
+            };
+        } else {
+            NSString *folderName = A2VersionFolderDisplayName((A2VersionFolder)i);
+            NSString *dir = [_version directoryForFolder:(A2VersionFolder)i];
+            row.onTap = ^{
+                NSURL *url = [NSURL fileURLWithPath:dir];
+                (void)url;
+                [A2Toast show:[NSString stringWithFormat:@"%@：%@", folderName, dir]
+                       inView:self.view];
+            };
+        }
 
         [_folderRows addObject:row];
         [_folderSection addRow:row];
