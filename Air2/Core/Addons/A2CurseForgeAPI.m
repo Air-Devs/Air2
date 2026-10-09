@@ -309,6 +309,7 @@ static NSNumber *A2CFModLoaderTypeForIdentifier(NSString *identifier) {
                 query:(NSString *)query
           gameVersion:(NSString *)gameVersion
                loader:(NSString *)loader
+          categoryIDs:(NSArray<NSString *> *)categoryIDs
             sortField:(NSString *)sortField
                offset:(NSInteger)offset
                 limit:(NSInteger)limit
@@ -346,6 +347,17 @@ static NSNumber *A2CFModLoaderTypeForIdentifier(NSString *identifier) {
         [items addObject:[NSURLQueryItem queryItemWithName:@"modLoaderType"
                                                      value:[loaderCode stringValue]]];
     }
+    // 分类多选：CurseForge 用逗号分隔的 id 列表
+    if (categoryIDs.count > 0) {
+        NSMutableArray<NSString *> *ids = [NSMutableArray array];
+        for (NSString *cid in categoryIDs) {
+            if (cid.length > 0) [ids addObject:cid];
+        }
+        if (ids.count > 0) {
+            [items addObject:[NSURLQueryItem queryItemWithName:@"categoryIds"
+                                                         value:[ids componentsJoinedByString:@","]]];
+        }
+    }
 
     [self GET:@"/mods" query:items completion:^(id json, NSError *error) {
         if (error) { if (completion) completion(nil, error); return; }
@@ -357,6 +369,36 @@ static NSNumber *A2CFModLoaderTypeForIdentifier(NSString *identifier) {
             for (NSDictionary *j in raw) {
                 A2CFProject *p = [A2CFProject fromJSON:j];
                 if (p) [out addObject:p];
+            }
+        }
+        if (completion) completion(out, nil);
+    }];
+}
+
+- (void)categoriesForClassID:(NSInteger)classID
+                  completion:(void (^)(NSArray<NSDictionary<NSString *, NSString *> *> *, NSError *))completion {
+
+    NSArray<NSURLQueryItem *> *items = @[
+        [NSURLQueryItem queryItemWithName:@"gameId"
+                                    value:[@(A2CFMinecraftGameID) stringValue]],
+        [NSURLQueryItem queryItemWithName:@"classId"
+                                    value:[@(classID) stringValue]],
+    ];
+
+    [self GET:@"/categories" query:items completion:^(id json, NSError *error) {
+        if (error) { if (completion) completion(nil, error); return; }
+
+        NSDictionary *dict = [json isKindOfClass:NSDictionary.class] ? json : nil;
+        NSArray *raw = dict[@"data"];
+        NSMutableArray<NSDictionary<NSString *, NSString *> *> *out = [NSMutableArray array];
+        if ([raw isKindOfClass:NSArray.class]) {
+            for (NSDictionary *j in raw) {
+                if (![j isKindOfClass:NSDictionary.class]) continue;
+                NSString *name = j[@"name"];
+                if (![name isKindOfClass:NSString.class] || name.length == 0) continue;
+                // id 是数字，统一转成字符串以对齐 A2ContentCategory.identifier
+                NSString *identifier = [NSString stringWithFormat:@"%ld", (long)[j[@"id"] integerValue]];
+                [out addObject:@{ @"identifier": identifier, @"displayName": name }];
             }
         }
         if (completion) completion(out, nil);

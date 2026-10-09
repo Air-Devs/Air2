@@ -92,13 +92,15 @@ NSInteger A2ClassIDForCurseForge(A2ContentClass c) {
 }
 
 /// Modrinth project_type facet
-NSString *A2ProjectTypeForModrinth(A2ContentClass c) {
+/// world 在 Modrinth 没有对应类型，返回 nil；调用方据此拒绝发起搜索，
+/// 而不是退回成 datapack 去搜一堆不相干的结果。
+NSString * _Nullable A2ProjectTypeForModrinth(A2ContentClass c) {
     switch (c) {
         case A2ContentClassMod:          return @"mod";
         case A2ContentClassModPack:      return @"modpack";
         case A2ContentClassResourcePack: return @"resourcepack";
         case A2ContentClassShader:       return @"shader";
-        case A2ContentClassWorld:        return @"datapack";   // Modrinth 无存档分类，用 datapack 兜底
+        case A2ContentClassWorld:        return nil;
         case A2ContentClassDataPack:     return @"datapack";
     }
     return @"mod";
@@ -136,10 +138,14 @@ NSArray<NSNumber *> *A2AllContentClasses(void) {
         @(A2ContentClassResourcePack),
         @(A2ContentClassShader),
         @(A2ContentClassWorld),
+        @(A2ContentClassDataPack),
     ];
 }
 
 #pragma mark - 模型
+
+@implementation A2ContentCategory
+@end
 
 @implementation A2ContentItem
 @end
@@ -199,6 +205,50 @@ NSArray<NSNumber *> *A2AllContentClasses(void) {
     return nil;
 }
 
+- (BOOL)supportsContentClass:(A2ContentClass)c {
+    // Modrinth 没有存档这一资源大类
+    if (self.platform == A2ContentPlatformModrinth && c == A2ContentClassWorld) {
+        return NO;
+    }
+    return YES;
+}
+
+#pragma mark 分类
+
+- (void)categoriesForContentClass:(A2ContentClass)c
+                       completion:(void (^)(NSArray<A2ContentCategory *> *, NSError *))completion {
+
+    if (self.platform == A2ContentPlatformModrinth) {
+        [[A2ModrinthAPI shared] categoryTagsForProjectType:A2ProjectTypeForModrinth(c)
+            completion:^(NSArray<NSDictionary<NSString *, NSString *> *> *tags,
+                         NSError *error) {
+            if (error) { if (completion) completion(nil, error); return; }
+            NSMutableArray<A2ContentCategory *> *out = [NSMutableArray array];
+            for (NSDictionary<NSString *, NSString *> *d in tags) {
+                A2ContentCategory *cat = [A2ContentCategory new];
+                cat.identifier = d[@"identifier"];
+                cat.displayName = d[@"displayName"];
+                [out addObject:cat];
+            }
+            if (completion) completion(out, nil);
+        }];
+    } else {
+        [[A2CurseForgeAPI shared] categoriesForClassID:A2ClassIDForCurseForge(c)
+            completion:^(NSArray<NSDictionary<NSString *, NSString *> *> *categories,
+                         NSError *error) {
+            if (error) { if (completion) completion(nil, error); return; }
+            NSMutableArray<A2ContentCategory *> *out = [NSMutableArray array];
+            for (NSDictionary<NSString *, NSString *> *d in categories) {
+                A2ContentCategory *cat = [A2ContentCategory new];
+                cat.identifier = d[@"identifier"];
+                cat.displayName = d[@"displayName"];
+                [out addObject:cat];
+            }
+            if (completion) completion(out, nil);
+        }];
+    }
+}
+
 #pragma mark 搜索
 
 - (void)searchWithFilter:(A2ContentFilter *)filter
@@ -214,6 +264,15 @@ NSArray<NSNumber *> *A2AllContentClasses(void) {
         return;
     }
 
+    if (![self supportsContentClass:contentClass]) {
+        if (completion) {
+            completion(nil, [NSError errorWithDomain:@"A2ContentSource" code:2
+                                            userInfo:@{NSLocalizedDescriptionKey:
+                                                           @"Modrinth 不提供该资源，请切换到 CurseForge"}]);
+        }
+        return;
+    }
+
     if (self.platform == A2ContentPlatformModrinth) {
         [self searchModrinth:filter contentClass:contentClass completion:completion];
     } else {
@@ -225,10 +284,21 @@ NSArray<NSNumber *> *A2AllContentClasses(void) {
           contentClass:(A2ContentClass)contentClass
             completion:(void (^)(NSArray<A2ContentItem *> *, NSError *))completion {
 
-    [[A2ModrinthAPI shared] searchWithProjectType:A2ProjectTypeForModrinth(contentClass)
+    NSString *projectType = A2ProjectTypeForModrinth(contentClass);
+    if (projectType.length == 0) {
+        if (completion) {
+            completion(nil, [NSError errorWithDomain:@"A2ContentSource" code:2
+                                            userInfo:@{NSLocalizedDescriptionKey:
+                                                           @"Modrinth 不提供该资源，请切换到 CurseForge"}]);
+        }
+        return;
+    }
+
+    [[A2ModrinthAPI shared] searchWithProjectType:projectType
                                             query:filter.query
                                       gameVersion:filter.gameVersion
                                            loader:filter.loader
+                                       categories:filter.categories
                                         sortField:A2SortValueForModrinth(filter.sortField)
                                            offset:filter.offset
                                             limit:filter.limit
@@ -263,6 +333,7 @@ NSArray<NSNumber *> *A2AllContentClasses(void) {
                                       query:filter.query
                                 gameVersion:filter.gameVersion
                                      loader:filter.loader
+                                categoryIDs:filter.categories
                                   sortField:A2SortValueForCurseForge(filter.sortField)
                                      offset:filter.offset
                                       limit:filter.limit

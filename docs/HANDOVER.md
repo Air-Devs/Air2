@@ -1118,3 +1118,75 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
       通过；`tests/Core` 7 个脚本全绿。
 - 未做：真机端到端验证（本机无 Xcode）；游戏安装 / 整合包安装不做改造（本轮范围外）。
 
+---
+
+## 10.13 重写资源下载页：共用搜索/详情/任务列表 + 数据包分类（分支 `feat/download-direct`）
+
+> 背景：验收要求「重写所有资源下载页并保证功能齐全，除游戏版本与整合包外全部重写」。
+> 记法同上：**不回头改 10.5–10.12**。
+
+**1) Core 扩展：资源分类多选 + 平台能力判定**
+
+- [x] `A2ContentFilter` 新增 `categories`（多选，元素为 `A2ContentCategory.identifier`）；
+      `A2ContentSource` 新增 `-supportsContentClass:` 与 `-categoriesForContentClass:completion:`。
+- [x] Modrinth：`searchWithProjectType:` 增 `categories:` 形参，facets 分类组按 **OR** 拼
+      （`[["categories:a","categories:b"]]`）；新增 `categoryTagsForProjectType:`（GET `/tag/category`）。
+- [x] CurseForge：`searchClassID:` 增 `categoryIDs:` 形参（逗号拼接 `categoryIds`）；新增
+      `categoriesForClassID:`（GET `/categories?gameId=432&classId=X`）。
+- [x] 修正历史缺陷：`A2ProjectTypeForModrinth(World)` 原错兜底成 `datapack`，改为返回 `nil`；
+      `A2AllContentClasses()` 补 `A2ContentClassDataPack`。搜索前判空/不支持时回调明确错误。
+
+**2) 新增网络图片组件 `UI/Components/A2RemoteImageView.h/.m`**
+
+- [x] 内存 `NSCache`（64MB，成本按像素×4）+ 磁盘缓存（`Caches/A2RemoteImages`，文件名 = URL 的
+      SHA1）+ `CGImageSourceCreateThumbnailAtIndex` 下采样 + 请求令牌防 cell 复用竞态；
+      接口仅 `setImageURL:placeholder:` / `cancelLoading` / `applyTheme` / `cornerRadius`。
+
+**3) 新增统一下载任务中心 `Core/Download/A2DownloadTaskCenter.h/.m`**
+
+- [x] 全应用唯一入队/暂停/重试/取消入口；真实网络与落盘仍由 `A2DownloadEngine` 完成，中心只做编排，
+      成功时按 projectID/versionID/subdir 回写 `A2DownloadManifest`。
+- [x] 任务数组由内部串行队列保护，对外通知/回调一律回主线程；进度广播节流 100ms。
+- [x] `A2DownloadTask` 改造：删除自带的重名 `A2DownloadState` 枚举（与 `A2DownloadEngine.h` 重复，
+      潜在编译隐患）与无人引用的多文件聚合逻辑，改为复用引擎枚举；可变接口移入
+      `A2DownloadTask+Internal.h` 仅供中心使用。`+shared` init 内不发通知（避开 dispatch_once 重入死锁）。
+
+**4) 新增共用资源搜索页 `UI/Screens/Download/A2ResourceSearchViewController.h/.m`**
+
+- [x] 模组 / 资源包 / 光影 / 存档 / 数据包 **五类共用**，`initWithContentClass:` 区分。
+- [x] 可展开筛选卡（卡头挂手势而非 `card.tappable`，避免抢子控件点击）：平台切换 + **资源分类多选**
+      + 加载器 + 游戏版本**两者并存** + 排序 + 重置；收起态显示摘要。
+- [x] 平台按 `supportsContentClass:` 裁剪（存档只列 CurseForge），默认平台不支持本类时自动回落；
+      切 CurseForge 无 Key 走 `A2CurseForgeKeyPrompt`，取消回退不留坏状态。
+- [x] 结果卡含真实图标（`A2RemoteImageView`）、作者、简介、下载量、分类标签、**已安装**角标与
+      **收藏**星标（订阅 `A2FavoritesDidChangeNotification` 刷新）；分页 `limit=20`；四态独立文案
+      （加载中 / 无结果 / 请求失败 / 平台不支持）。
+
+**5) 新增共用资源详情页 `UI/Screens/Download/A2ResourceDetailViewController.h/.m`**
+
+- [x] 真实图标 + 简介正文 + 游戏版本/加载器两行客户端筛选（数字感知降序）+ 收藏 + 更新检测
+      （已装且最新版未装 → 主按钮改「更新到 x」）+ 禁分发独立空态。
+- [x] 下载改走 `A2DownloadTaskCenter.enqueueWithTitle:subtitle:request:projectID:versionID:subdir:completion:`，
+      不再直接调引擎、不自行记录清单。
+
+**6) 新增任务列表页 `UI/Screens/Download/A2DownloadTasksViewController.h/.m`**
+
+- [x] 「进行中 / 已完成」分组；每行进度条、速度、状态、失败原因；行内 暂停/继续/重试/取消；
+      顶栏清空已完成；订阅 `A2DownloadTasksDidChangeNotification`，结构不变只就地刷新行（避免抖动）。
+      自建 cell 直接消费引擎态（含 Cancelled），不复用无 Cancelled 的 `A2TaskProgressView`。
+
+**7) 容器接线与路由**
+
+- [x] `A2DownloadViewController`：侧栏新增「数据包」「任务」；索引 2–6 走新搜索页，
+      **整合包（索引 1）保持旧 `A2DownloadListViewController`**，游戏（索引 0）仍走选版页。
+- [x] `A2SearchByIdViewController` / `A2FavoritesViewController` 改跳新详情页（按分类猜 `A2ContentClass`，
+      补 datapack 判定）。
+- [x] `A2RootViewController` 把 `A2DownloadTaskCenter` 接入 `A2TaskDrawer`：仅「进行中」任务显示在
+      底部抽屉，完成/失败自动移除；点击可暂停/继续。
+
+- [x] 校验：`gen_xcodeproj.py`（编译单元 91）+ `verify_pbxproj.py` 通过；`make lint`（182 文件）
+      通过；`tests/Core` 7 个脚本全绿。`A2ResourceSearchViewController.m` 1102 行触发规模提示，
+      但按 CONTRIBUTING「行数不作为拆分依据」保留（单一职责：搜索页 + 其私有结果 cell）。
+- 未做：真机端到端验证（本机无 Xcode）；CurseForge `categoryIds` 多选需真机联调确认是否收敛。
+
+

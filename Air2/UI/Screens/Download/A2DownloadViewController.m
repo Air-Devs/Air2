@@ -44,8 +44,10 @@
 #import "A2NavigationController.h"
 #import "A2GameVersionListViewController.h"
 #import "A2DownloadListViewController.h"
+#import "A2ResourceSearchViewController.h"
 #import "A2SearchByIdViewController.h"
 #import "A2FavoritesViewController.h"
+#import "A2DownloadTasksViewController.h"
 #import "A2Metrics.h"
 #import "A2Log.h"
 
@@ -97,10 +99,12 @@
         [A2NavCategory title:@"整合包" symbol:@"shippingbox.fill"],
         [A2NavCategory title:@"模组"   symbol:@"puzzlepiece.extension.fill" division:YES],
         [A2NavCategory title:@"资源包" symbol:@"photo.stack.fill"],
+        [A2NavCategory title:@"数据包" symbol:@"doc.text.fill"],
         [A2NavCategory title:@"存档"   symbol:@"map.fill"],
         [A2NavCategory title:@"光影"   symbol:@"sun.max.fill"],
         [A2NavCategory title:@"按 ID"  symbol:@"number" division:YES],
         [A2NavCategory title:@"收藏"   symbol:@"star.fill"],
+        [A2NavCategory title:@"任务"   symbol:@"arrow.down.circle.fill" division:YES],
     ];
 
     __weak typeof(self) weakSelf = self;
@@ -154,31 +158,41 @@
 }
 
 /// 分类索引 → 内容页。索引与 setupCategoryNav 的顺序一一对应。
+/// 资源类（模组/资源包/数据包/存档/光影）全部走共用的 A2ResourceSearchViewController，
+/// 只有整合包仍用旧的 A2DownloadListViewController（重写范围排除它）。
 - (UIViewController *)makeContentViewControllerForIndex:(NSInteger)index {
     switch (index) {
         case 0:
             return [[A2GameVersionListViewController alloc] init];
-        case 6:
-            return [[A2SearchByIdViewController alloc] init];
-        case 7:
-            return [[A2FavoritesViewController alloc] init];
-        default: {
+        case 1: {
             A2DownloadListViewController *vc = [[A2DownloadListViewController alloc] init];
-            vc.category = [self resourceCategoryForIndex:index];
+            vc.category = A2DownloadCategoryModpack;
             return vc;
         }
-    }
-}
-
-/// 资源类分类（整合包 / 模组 / 资源包 / 存档 / 光影）→ 资源分类枚举。
-- (A2DownloadCategory)resourceCategoryForIndex:(NSInteger)index {
-    switch (index) {
-        case 1: return A2DownloadCategoryModpack;
-        case 2: return A2DownloadCategoryMod;
-        case 3: return A2DownloadCategoryResourcePack;
-        case 4: return A2DownloadCategoryWorld;
-        case 5: return A2DownloadCategoryShader;
-        default: return A2DownloadCategoryMod;
+        case 2:
+            return [[A2ResourceSearchViewController alloc]
+                    initWithContentClass:A2ContentClassMod];
+        case 3:
+            return [[A2ResourceSearchViewController alloc]
+                    initWithContentClass:A2ContentClassResourcePack];
+        case 4:
+            return [[A2ResourceSearchViewController alloc]
+                    initWithContentClass:A2ContentClassDataPack];
+        case 5:
+            return [[A2ResourceSearchViewController alloc]
+                    initWithContentClass:A2ContentClassWorld];
+        case 6:
+            return [[A2ResourceSearchViewController alloc]
+                    initWithContentClass:A2ContentClassShader];
+        case 7:
+            return [[A2SearchByIdViewController alloc] init];
+        case 8:
+            return [[A2FavoritesViewController alloc] init];
+        case 9:
+            return [[A2DownloadTasksViewController alloc] init];
+        default:
+            return [[A2ResourceSearchViewController alloc]
+                    initWithContentClass:A2ContentClassMod];
     }
 }
 

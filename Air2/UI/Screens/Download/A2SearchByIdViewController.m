@@ -24,7 +24,7 @@
 
 #import "A2SearchByIdViewController.h"
 #import "A2ContentSource.h"
-#import "A2ProjectDetailViewController.h"
+#import "A2ResourceDetailViewController.h"
 #import "A2TextField.h"
 #import "A2PrimaryButton.h"
 #import "A2GlassCard.h"
@@ -138,25 +138,26 @@
                 return;
             }
             [A2Log log:@"download: 按 ID 命中 %@（%@）", item.projectID, item.title];
-            A2ProjectDetailViewController *vc = [[A2ProjectDetailViewController alloc]
+            A2ResourceDetailViewController *vc = [[A2ResourceDetailViewController alloc]
                                                  initWithProject:item
-                                                 targetSubdir:[self targetSubdirForItem:item]];
+                                                 contentClass:[self contentClassForItem:item]];
             [self.navigationController pushViewController:vc animated:YES];
         });
     }];
 }
 
-/// 按项目分类猜一个落盘子目录；拿不准时落到 mods。
-- (NSString *)targetSubdirForItem:(A2ContentItem *)item {
+/// 按项目分类猜一个资源大类；拿不准时按模组处理。
+- (A2ContentClass)contentClassForItem:(A2ContentItem *)item {
     A2ContentClass cls = A2ContentClassMod;
     for (NSString *category in item.categories) {
         NSString *lower = category.lowercaseString;
         if ([lower containsString:@"shader"]) { cls = A2ContentClassShader; break; }
         if ([lower containsString:@"resource"]) { cls = A2ContentClassResourcePack; break; }
         if ([lower containsString:@"modpack"]) { cls = A2ContentClassModPack; break; }
+        if ([lower containsString:@"datapack"]) { cls = A2ContentClassDataPack; break; }
         if ([lower containsString:@"world"]) { cls = A2ContentClassWorld; break; }
     }
-    return A2VersionFolderForClass(cls);
+    return cls;
 }
 
 @end

@@ -25,7 +25,7 @@
 #import "A2FavoritesViewController.h"
 #import "A2DownloadFavorites.h"
 #import "A2ContentSource.h"
-#import "A2ProjectDetailViewController.h"
+#import "A2ResourceDetailViewController.h"
 #import "A2GlassCard.h"
 #import "A2Toast.h"
 #import "A2ThemeManager.h"
@@ -244,9 +244,9 @@ static NSString *A2FavoriteFormatCount(long long count) {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     A2FavoriteItem *fav = self.items[indexPath.row];
     A2ContentItem *item = [self contentItemFromFavorite:fav];
-    A2ProjectDetailViewController *vc = [[A2ProjectDetailViewController alloc]
+    A2ResourceDetailViewController *vc = [[A2ResourceDetailViewController alloc]
                                          initWithProject:item
-                                         targetSubdir:[self targetSubdirForFavorite:fav]];
+                                         contentClass:[self contentClassForFavorite:fav]];
     [self.navigationController pushViewController:vc animated:YES];
 }
 
@@ -283,17 +283,18 @@ trailingSwipeActionsConfigurationForRowAtIndexPath:(NSIndexPath *)indexPath {
     return item;
 }
 
-/// 按项目分类猜一个落盘子目录；拿不准时落到 mods。
-- (NSString *)targetSubdirForFavorite:(A2FavoriteItem *)fav {
+/// 按项目分类猜一个资源大类；拿不准时按模组处理。
+- (A2ContentClass)contentClassForFavorite:(A2FavoriteItem *)fav {
     A2ContentClass cls = A2ContentClassMod;
     for (NSString *category in fav.categories) {
         NSString *lower = category.lowercaseString;
         if ([lower containsString:@"shader"]) { cls = A2ContentClassShader; break; }
         if ([lower containsString:@"resource"]) { cls = A2ContentClassResourcePack; break; }
         if ([lower containsString:@"modpack"]) { cls = A2ContentClassModPack; break; }
+        if ([lower containsString:@"datapack"]) { cls = A2ContentClassDataPack; break; }
         if ([lower containsString:@"world"]) { cls = A2ContentClassWorld; break; }
     }
-    return A2VersionFolderForClass(cls);
+    return cls;
 }
 
 @end

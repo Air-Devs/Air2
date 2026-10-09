@@ -102,11 +102,17 @@ extern const NSInteger A2CFMinecraftGameID;
                 query:(nullable NSString *)query
           gameVersion:(nullable NSString *)gameVersion
                loader:(nullable NSString *)loader
+          categoryIDs:(nullable NSArray<NSString *> *)categoryIDs
             sortField:(nullable NSString *)sortField
                offset:(NSInteger)offset
                 limit:(NSInteger)limit
            completion:(void (^)(NSArray<A2CFProject *> * _Nullable results,
                                 NSError * _Nullable error))completion;
+
+/// 拉取某 classId 下的可选分类（CurseForge /categories?gameId=432&classId=X）
+- (void)categoriesForClassID:(NSInteger)classID
+                  completion:(void (^)(NSArray<NSDictionary<NSString *, NSString *> *> * _Nullable categories,
+                                       NSError * _Nullable error))completion;
 
 /// 按文件的 murmur2 哈希反查版本。
 /// CurseForge 用 MurmurHash2 而不是 SHA1 —— 这是它自己的指纹体系。

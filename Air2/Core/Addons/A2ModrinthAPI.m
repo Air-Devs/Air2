@@ -268,6 +268,7 @@ static NSString *const kUserAgent = @"Air-Devs/Air2/0.1.0 (github.com/Air-Devs/A
                         query:(NSString *)query
                   gameVersion:(NSString *)gameVersion
                        loader:(NSString *)loader
+                   categories:(NSArray<NSString *> *)categories
                     sortField:(NSString *)sortField
                        offset:(NSInteger)offset
                         limit:(NSInteger)limit
@@ -290,6 +291,17 @@ static NSString *const kUserAgent = @"Air-Devs/Air2/0.1.0 (github.com/Air-Devs/A
     if (loader.length) {
         [groups addObject:[NSString stringWithFormat:@"[[\"categories:%@\"]]", loader]];
     }
+    // 分类多选是 OR：同一组内并列多个值，命中任一即可
+    if (categories.count) {
+        NSMutableArray<NSString *> *parts = [NSMutableArray array];
+        for (NSString *c in categories) {
+            if (c.length) [parts addObject:[NSString stringWithFormat:@"\"categories:%@\"", c]];
+        }
+        if (parts.count) {
+            [groups addObject:[NSString stringWithFormat:@"[%@]",
+                               [parts componentsJoinedByString:@","]]];
+        }
+    }
     if (groups.count) params[@"facets"] = [groups componentsJoinedByString:@","];
 
     NSURLSessionDataTask *task = [NSURLSession.sharedSession dataTaskWithRequest:
@@ -304,6 +316,36 @@ static NSString *const kUserAgent = @"Air-Devs/Air2/0.1.0 (github.com/Air-Devs/A
             for (NSDictionary *h in hits) {
                 A2ModrinthProject *p = [A2ModrinthProject fromJSON:h];
                 if (p) [out addObject:p];
+            }
+        }
+        dispatch_main_async(^{ if (completion) completion(out, nil); });
+    }];
+    [task resume];
+}
+
+#pragma mark - 分类 tag
+
+- (void)categoryTagsForProjectType:(NSString *)projectType
+                        completion:(void (^)(NSArray<NSDictionary<NSString *, NSString *> *> *, NSError *))completion {
+
+    // /tag/category 一次性返回全部，按 project_type 在前端过滤，省一次请求参数拼接
+    NSURLSessionDataTask *task = [NSURLSession.sharedSession dataTaskWithRequest:
+        [self requestWithPath:@"/tag/category" params:nil]
+        completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
+        if (error) { dispatch_main_async(^{ if (completion) completion(nil, error); }); return; }
+
+        id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        NSMutableArray<NSDictionary<NSString *, NSString *> *> *out = [NSMutableArray array];
+        if ([json isKindOfClass:NSArray.class]) {
+            for (NSDictionary *j in json) {
+                if (![j isKindOfClass:NSDictionary.class]) continue;
+                NSString *name = j[@"name"];
+                if (![name isKindOfClass:NSString.class] || name.length == 0) continue;
+                if (projectType.length) {
+                    NSString *pt = j[@"project_type"];
+                    if (![pt isKindOfClass:NSString.class] || ![pt isEqualToString:projectType]) continue;
+                }
+                [out addObject:@{ @"identifier": name, @"displayName": name }];
             }
         }
         dispatch_main_async(^{ if (completion) completion(out, nil); });
