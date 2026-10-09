@@ -21,9 +21,14 @@
 //
 //  见头文件：只列清单、不安装；无网/坏清单给可重试的错误卡，不进空页面。
 //
-//  为什么用可多选的胶囊筛选而不是 UISegmentedControl：
-//  清单里四类版本量差别极大（正式版数百条，旧版两个档位几乎没人看），
-//  胶囊能横向滚动又允许同时勾选多档，比分段更省地方也更灵活。
+//  头部形态参考 ZalithLauncher2 的 SelectGameVersionScreen：类型筛选、搜索、
+//  刷新收在同一行，下面压一条全宽分隔线，剩下的高度整块让给列表。
+//  之前这里排了三行（筛选 / 搜索+刷新 / 计数），计数行除了占地方没有别的作用，
+//  列表被挤矮了一截，所以去掉。
+//
+//  筛选仍用可多选的胶囊而不是分段控件：清单里四类版本量差别极大
+//  （正式版数百条，旧版两档几乎没人看），胶囊能横向滚动又允许同时勾选多档，
+//  比分段控件更省地方也更灵活。
 //
 
 #import "A2GameVersionListViewController.h"
@@ -40,6 +45,12 @@
 #import "A2Log.h"
 
 static NSString *const kVersionCellID = @"A2GameVersionCell";
+
+/// 图标方块边长。与 ZL2 的版本配图同尺寸，比正文略大一圈，方便一眼扫到。
+static const CGFloat kA2VersionIconBoxSize = 32;
+
+/// 图标方块内符号的点数。
+static const CGFloat kA2VersionIconPointSize = 18;
 
 #pragma mark - 类型筛选胶囊
 
@@ -107,7 +118,19 @@ static NSString *const kVersionCellID = @"A2GameVersionCell";
 
 #pragma mark - 版本行单元
 
-/// 版本列表单元：圆角卡片包住 版本号 + 类型徽标（左）与发布时间（右）。
+/// 类型 → 图标符号。
+/// 参考 ZL2「按版本类型给不同配图」的做法，符号本身用本项目自定的。
+static NSString *A2VersionSymbolForType(NSString *type) {
+    if ([type isEqualToString:@"release"]) return @"cube.fill";
+    if ([type isEqualToString:@"snapshot"]) return @"hammer.fill";
+    if ([type isEqualToString:@"old_beta"]) return @"archivebox.fill";
+    return @"archivebox";
+}
+
+/// 版本行：图标方块 + （版本号 + 类型徽标）/ 发布时间 + 右侧箭头。
+///
+/// 类型语义只由图标方块承载（底色 + 符号），徽标保持中性文字色 ——
+/// 一行里放两处彩色会让整列看起来花，反而分不清哪个是重点。
 @interface A2GameVersionCell : UITableViewCell
 - (void)configureWithVersion:(A2RemoteVersion *)version;
 + (NSString *)displayNameForType:(NSString *)type;
@@ -115,10 +138,13 @@ static NSString *const kVersionCellID = @"A2GameVersionCell";
 
 @implementation A2GameVersionCell {
     A2GlassCard *_card;
+    UIView *_iconBox;
+    UIImageView *_iconView;
     UILabel *_nameLabel;
     UIView *_pill;
     UILabel *_pillLabel;
     UILabel *_timeLabel;
+    UIImageView *_chevron;
     NSDateFormatter *_dateFormatter;
 }
 
@@ -132,38 +158,74 @@ static NSString *const kVersionCellID = @"A2GameVersionCell";
     _card = [[A2GlassCard alloc] initWithFrame:CGRectZero];
     _card.cornerRadius = A2RadiusL;
     _card.elevation = A2CardElevationLow;
-    _card.contentInsets = UIEdgeInsetsMake(A2SpaceM, A2SpaceL, A2SpaceM, A2SpaceL);
+    _card.contentInsets = UIEdgeInsetsMake(A2SpaceM, A2SpaceM, A2SpaceM, A2SpaceM);
     _card.translatesAutoresizingMaskIntoConstraints = NO;
     [self.contentView addSubview:_card];
 
     UIView *cv = _card.contentView;
 
+    _iconBox = [[UIView alloc] initWithFrame:CGRectZero];
+    _iconBox.translatesAutoresizingMaskIntoConstraints = NO;
+    _iconBox.layer.cornerRadius = A2RadiusS;
+    _iconBox.layer.cornerCurve = kCACornerCurveContinuous;
+    _iconBox.clipsToBounds = YES;
+    [cv addSubview:_iconBox];
+
+    _iconView = [[UIImageView alloc] initWithFrame:CGRectZero];
+    _iconView.translatesAutoresizingMaskIntoConstraints = NO;
+    _iconView.contentMode = UIViewContentModeCenter;
+    [_iconBox addSubview:_iconView];
+
     _nameLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _nameLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _nameLabel.font = [A2Typography titleCard];
     _nameLabel.numberOfLines = 1;
-    [cv addSubview:_nameLabel];
+    [_nameLabel setContentCompressionResistancePriority:UILayoutPriorityRequired
+                                               forAxis:UILayoutConstraintAxisHorizontal];
 
     _pill = [[UIView alloc] initWithFrame:CGRectZero];
     _pill.translatesAutoresizingMaskIntoConstraints = NO;
     _pill.layer.cornerRadius = A2RadiusS;
     _pill.layer.cornerCurve = kCACornerCurveContinuous;
     _pill.clipsToBounds = YES;
-    [cv addSubview:_pill];
 
     _pillLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _pillLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _pillLabel.font = [A2Typography caption];
     [_pill addSubview:_pillLabel];
 
+    [NSLayoutConstraint activateConstraints:@[
+        [_pillLabel.topAnchor constraintEqualToAnchor:_pill.topAnchor constant:A2SpaceXS],
+        [_pillLabel.bottomAnchor constraintEqualToAnchor:_pill.bottomAnchor constant:-A2SpaceXS],
+        [_pillLabel.leadingAnchor constraintEqualToAnchor:_pill.leadingAnchor constant:A2SpaceS],
+        [_pillLabel.trailingAnchor constraintEqualToAnchor:_pill.trailingAnchor constant:-A2SpaceS],
+    ]];
+
     _timeLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _timeLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _timeLabel.font = [A2Typography caption];
     _timeLabel.numberOfLines = 1;
-    _timeLabel.textAlignment = NSTextAlignmentRight;
-    [_timeLabel setContentCompressionResistancePriority:UILayoutPriorityRequired
-                                               forAxis:UILayoutConstraintAxisHorizontal];
-    [cv addSubview:_timeLabel];
+
+    // 版本号与类型徽标同一行，发布时间单独一行。
+    UIStackView *titleRow = [[UIStackView alloc] initWithArrangedSubviews:@[_nameLabel, _pill]];
+    titleRow.axis = UILayoutConstraintAxisHorizontal;
+    titleRow.spacing = A2SpaceS;
+    titleRow.alignment = UIStackViewAlignmentCenter;
+
+    UIStackView *textColumn = [[UIStackView alloc] initWithArrangedSubviews:@[titleRow, _timeLabel]];
+    textColumn.translatesAutoresizingMaskIntoConstraints = NO;
+    textColumn.axis = UILayoutConstraintAxisVertical;
+    textColumn.spacing = A2SpaceXS;
+    textColumn.alignment = UIStackViewAlignmentLeading;
+    [cv addSubview:textColumn];
+
+    _chevron = [[UIImageView alloc] initWithFrame:CGRectZero];
+    _chevron.translatesAutoresizingMaskIntoConstraints = NO;
+    _chevron.contentMode = UIViewContentModeCenter;
+    UIImageSymbolConfiguration *chevronCfg =
+        [UIImageSymbolConfiguration configurationWithPointSize:13 weight:UIImageSymbolWeightMedium];
+    _chevron.image = [UIImage systemImageNamed:@"chevron.right" withConfiguration:chevronCfg];
+    [cv addSubview:_chevron];
 
     [NSLayoutConstraint activateConstraints:@[
         [_card.topAnchor constraintEqualToAnchor:self.contentView.topAnchor],
@@ -171,21 +233,24 @@ static NSString *const kVersionCellID = @"A2GameVersionCell";
         [_card.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor constant:-A2PageMargin],
         [_card.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-A2CardSpacing],
 
-        [_nameLabel.leadingAnchor constraintEqualToAnchor:cv.leadingAnchor],
-        [_nameLabel.centerYAnchor constraintEqualToAnchor:cv.centerYAnchor],
+        [_iconBox.leadingAnchor constraintEqualToAnchor:cv.leadingAnchor],
+        [_iconBox.centerYAnchor constraintEqualToAnchor:cv.centerYAnchor],
+        [_iconBox.widthAnchor constraintEqualToConstant:kA2VersionIconBoxSize],
+        [_iconBox.heightAnchor constraintEqualToConstant:kA2VersionIconBoxSize],
 
-        [_pill.leadingAnchor constraintEqualToAnchor:_nameLabel.trailingAnchor constant:A2SpaceS],
-        [_pill.centerYAnchor constraintEqualToAnchor:cv.centerYAnchor],
+        [_iconView.centerXAnchor constraintEqualToAnchor:_iconBox.centerXAnchor],
+        [_iconView.centerYAnchor constraintEqualToAnchor:_iconBox.centerYAnchor],
 
-        [_pillLabel.topAnchor constraintEqualToAnchor:_pill.topAnchor constant:2],
-        [_pillLabel.bottomAnchor constraintEqualToAnchor:_pill.bottomAnchor constant:-2],
-        [_pillLabel.leadingAnchor constraintEqualToAnchor:_pill.leadingAnchor constant:A2SpaceS],
-        [_pillLabel.trailingAnchor constraintEqualToAnchor:_pill.trailingAnchor constant:-A2SpaceS],
+        [textColumn.leadingAnchor constraintEqualToAnchor:_iconBox.trailingAnchor constant:A2SpaceM],
+        [textColumn.topAnchor constraintEqualToAnchor:cv.topAnchor],
+        [textColumn.bottomAnchor constraintEqualToAnchor:cv.bottomAnchor],
+        [textColumn.trailingAnchor constraintLessThanOrEqualToAnchor:_chevron.leadingAnchor
+                                                            constant:-A2SpaceM],
 
-        [_timeLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:_pill.trailingAnchor
-                                                              constant:A2SpaceS],
-        [_timeLabel.trailingAnchor constraintEqualToAnchor:cv.trailingAnchor],
-        [_timeLabel.centerYAnchor constraintEqualToAnchor:cv.centerYAnchor],
+        [_chevron.trailingAnchor constraintEqualToAnchor:cv.trailingAnchor],
+        [_chevron.centerYAnchor constraintEqualToAnchor:cv.centerYAnchor],
+        [_chevron.widthAnchor constraintEqualToConstant:20],
+        [_chevron.heightAnchor constraintEqualToConstant:20],
     ]];
 
     _dateFormatter = [[NSDateFormatter alloc] init];
@@ -194,38 +259,63 @@ static NSString *const kVersionCellID = @"A2GameVersionCell";
     return self;
 }
 
+- (void)prepareForReuse {
+    [super prepareForReuse];
+    // 入场动画会先设 alpha/位移，被复用的单元必须回到静止态，
+    // 否则上一轮的中间状态会被带到新的一行上。
+    self.alpha = 1;
+    self.transform = CGAffineTransformIdentity;
+}
+
 - (void)configureWithVersion:(A2RemoteVersion *)version {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
+
     _nameLabel.text = version.versionID;
     _nameLabel.textColor = t.cOnSurface;
 
-    [self applyPillForType:version.type scheme:t];
+    _pillLabel.text = [A2GameVersionCell displayNameForType:version.type];
+    _pill.backgroundColor = t.cSurfaceVariant;
+    _pillLabel.textColor = t.cOnSurfaceVariant;
 
-    // 发布时间缺失时整段留空，避免"nil"字符串或错位。
+    [self applyIconForType:version.type scheme:t];
+
+    // 发布时间缺失时整行收起，不留空行也不出现 "nil"。
     if (version.releaseTime) {
         _timeLabel.text = [_dateFormatter stringFromDate:version.releaseTime];
+        _timeLabel.hidden = NO;
     } else {
         _timeLabel.text = @"";
+        _timeLabel.hidden = YES;
     }
     _timeLabel.textColor = t.cOnSurfaceVariant;
+
+    _chevron.tintColor = t.cOnSurfaceVariant;
 }
 
-/// 类型徽标配色：
+/// 类型 → 图标方块底色与符号色：
 ///   release            → primary 系
 ///   snapshot           → tertiary 系
 ///   old_beta/old_alpha → surfaceVariant 系
-- (void)applyPillForType:(NSString *)type scheme:(A2ColorScheme *)t {
-    _pillLabel.text = [A2GameVersionCell displayNameForType:type];
+- (void)applyIconForType:(NSString *)type scheme:(A2ColorScheme *)t {
+    UIColor *boxColor;
+    UIColor *symbolColor;
     if ([type isEqualToString:@"release"]) {
-        _pill.backgroundColor = t.cPrimaryContainer;
-        _pillLabel.textColor = t.cPrimary;
+        boxColor = t.cPrimaryContainer;
+        symbolColor = t.cPrimary;
     } else if ([type isEqualToString:@"snapshot"]) {
-        _pill.backgroundColor = t.cTertiaryContainer;
-        _pillLabel.textColor = t.cTertiary;
+        boxColor = t.cTertiaryContainer;
+        symbolColor = t.cTertiary;
     } else {
-        _pill.backgroundColor = t.cSurfaceVariant;
-        _pillLabel.textColor = t.cOnSurfaceVariant;
+        boxColor = t.cSurfaceVariant;
+        symbolColor = t.cOnSurfaceVariant;
     }
+    _iconBox.backgroundColor = boxColor;
+
+    UIImageSymbolConfiguration *cfg =
+        [UIImageSymbolConfiguration configurationWithPointSize:kA2VersionIconPointSize
+                                                        weight:UIImageSymbolWeightMedium];
+    _iconView.image = [UIImage systemImageNamed:A2VersionSymbolForType(type) withConfiguration:cfg];
+    _iconView.tintColor = symbolColor;
 }
 
 + (NSString *)displayNameForType:(NSString *)type {
@@ -242,13 +332,14 @@ static NSString *const kVersionCellID = @"A2GameVersionCell";
 
 @interface A2GameVersionListViewController () <UITableViewDataSource, UITableViewDelegate>
 
+@property (nonatomic, strong) UIView *headerRow;
 @property (nonatomic, strong) UIScrollView *chipScroll;
 @property (nonatomic, strong) UIStackView *chipStack;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, A2VersionTypeChip *> *chipByType;
 @property (nonatomic, strong) NSMutableSet<NSString *> *selectedTypes;
 @property (nonatomic, strong) A2TextField *searchField;
 @property (nonatomic, strong) UIButton *refreshButton;
-@property (nonatomic, strong) UILabel *countLabel;
+@property (nonatomic, strong) UIView *divider;
 @property (nonatomic, strong) UITableView *tableView;
 @property (nonatomic, strong) UIActivityIndicatorView *spinner;
 
@@ -259,11 +350,15 @@ static NSString *const kVersionCellID = @"A2GameVersionCell";
 @property (nonatomic, strong) NSArray<A2RemoteVersion *> *allVersions;
 @property (nonatomic, strong, nullable) NSError *loadError;
 
+/// 入场动画只放一次：新拿到清单时打开，用户一开始滚动或改筛选就关掉，
+/// 否则每敲一个搜索字、每换一次筛选，整列都在抖。
+@property (nonatomic, assign) BOOL entranceEnabled;
+@property (nonatomic, strong) NSMutableSet<NSIndexPath *> *entrancePlayed;
+
 @end
 
 @implementation A2GameVersionListViewController
 
-/// 胶囊顺序即展示顺序，也是计数文案里的拼接顺序。
 static NSArray<NSString *> *A2VersionTypeOrder(void) {
     return @[@"release", @"snapshot", @"old_beta", @"old_alpha"];
 }
@@ -278,8 +373,9 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
     _chipByType = [NSMutableDictionary dictionary];
     _selectedTypes = [NSMutableSet setWithObject:@"release"];
     _allVersions = @[];
+    _entrancePlayed = [NSMutableSet set];
 
-    [self setupFilterArea];
+    [self setupHeader];
     [self setupTable];
     [self setupStateCard];
     [self setupThemeObserver];
@@ -305,14 +401,19 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
 
 #pragma mark - 布局
 
-- (void)setupFilterArea {
+/// 顶部一行：类型胶囊（最多占六成宽，超出横向滚动）+ 搜索框 + 刷新；下面一条全宽分隔线。
+- (void)setupHeader {
     UIView *host = self.plainContentView;
+
+    _headerRow = [[UIView alloc] initWithFrame:CGRectZero];
+    _headerRow.translatesAutoresizingMaskIntoConstraints = NO;
+    [host addSubview:_headerRow];
 
     _chipScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
     _chipScroll.translatesAutoresizingMaskIntoConstraints = NO;
     _chipScroll.showsHorizontalScrollIndicator = NO;
     _chipScroll.alwaysBounceHorizontal = YES;
-    [host addSubview:_chipScroll];
+    [_headerRow addSubview:_chipScroll];
 
     _chipStack = [[UIStackView alloc] initWithFrame:CGRectZero];
     _chipStack.translatesAutoresizingMaskIntoConstraints = NO;
@@ -332,32 +433,55 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
     }
 
     _searchField = [[A2TextField alloc] initWithLabel:@"搜索版本号"];
+    _searchField.translatesAutoresizingMaskIntoConstraints = NO;
     _searchField.autocapitalizationType = UITextAutocapitalizationTypeNone;
     __weak typeof(self) weakSelf = self;
     _searchField.onTextChange = ^(NSString *text) {
-        [weakSelf refreshList];
+        [weakSelf searchTextChanged];
     };
-    [host addSubview:_searchField];
+    [_headerRow addSubview:_searchField];
 
     _refreshButton = [UIButton buttonWithType:UIButtonTypeSystem];
     _refreshButton.translatesAutoresizingMaskIntoConstraints = NO;
-    [_refreshButton setTitle:@"刷新" forState:UIControlStateNormal];
-    [_refreshButton addTarget:self action:@selector(fetchManifest)
+    UIImageSymbolConfiguration *refreshCfg =
+        [UIImageSymbolConfiguration configurationWithPointSize:18 weight:UIImageSymbolWeightMedium];
+    [_refreshButton setImage:[UIImage systemImageNamed:@"arrow.clockwise" withConfiguration:refreshCfg]
+                    forState:UIControlStateNormal];
+    _refreshButton.accessibilityLabel = @"刷新";
+    [_refreshButton addTarget:self action:@selector(refreshTapped)
              forControlEvents:UIControlEventTouchUpInside];
-    [host addSubview:_refreshButton];
+    [_headerRow addSubview:_refreshButton];
 
-    _countLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _countLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _countLabel.font = [A2Typography caption];
-    _countLabel.numberOfLines = 1;
-    [host addSubview:_countLabel];
+    _divider = [[UIView alloc] initWithFrame:CGRectZero];
+    _divider.translatesAutoresizingMaskIntoConstraints = NO;
+    [host addSubview:_divider];
 
     UILayoutGuide *chipContent = _chipScroll.contentLayoutGuide;
+
+    // 胶囊区优先贴合自身内容宽度；放不下时才在六成宽处截断并横向滚动。
+    // 优先级降到 999，避免和下面的「不超过六成」硬约束打架。
+    NSLayoutConstraint *chipsFitWidth =
+        [_chipScroll.widthAnchor constraintEqualToAnchor:_chipStack.widthAnchor];
+    chipsFitWidth.priority = 999;
+
+    // 内容宽度超出上限时 999 那条会被硬约束压掉，宽度就只剩「≤ 六成」一个条件，
+    // 欠约束时 Auto Layout 可能解出 0 宽。再补一条「撑到上限」的约束兜底。
+    NSLayoutConstraint *chipsMaxWidth =
+        [_chipScroll.widthAnchor constraintEqualToAnchor:_headerRow.widthAnchor multiplier:0.6];
+    chipsMaxWidth.priority = 900;
+
     [NSLayoutConstraint activateConstraints:@[
-        [_chipScroll.topAnchor constraintEqualToAnchor:host.topAnchor constant:A2SpaceS],
-        [_chipScroll.leadingAnchor constraintEqualToAnchor:host.leadingAnchor constant:A2PageMargin],
-        [_chipScroll.trailingAnchor constraintEqualToAnchor:host.trailingAnchor constant:-A2PageMargin],
+        [_headerRow.topAnchor constraintEqualToAnchor:host.topAnchor constant:A2SpaceM],
+        [_headerRow.leadingAnchor constraintEqualToAnchor:host.leadingAnchor constant:A2PageMargin],
+        [_headerRow.trailingAnchor constraintEqualToAnchor:host.trailingAnchor constant:-A2PageMargin],
+
+        [_chipScroll.leadingAnchor constraintEqualToAnchor:_headerRow.leadingAnchor],
+        [_chipScroll.centerYAnchor constraintEqualToAnchor:_headerRow.centerYAnchor],
         [_chipScroll.heightAnchor constraintEqualToConstant:36],
+        [_chipScroll.widthAnchor constraintLessThanOrEqualToAnchor:_headerRow.widthAnchor
+                                                        multiplier:0.6],
+        chipsFitWidth,
+        chipsMaxWidth,
 
         [_chipStack.topAnchor constraintEqualToAnchor:chipContent.topAnchor],
         [_chipStack.bottomAnchor constraintEqualToAnchor:chipContent.bottomAnchor],
@@ -365,20 +489,23 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
         [_chipStack.trailingAnchor constraintEqualToAnchor:chipContent.trailingAnchor],
         [_chipStack.heightAnchor constraintEqualToAnchor:_chipScroll.heightAnchor],
 
-        [_searchField.topAnchor constraintEqualToAnchor:_chipScroll.bottomAnchor constant:A2SpaceM],
-        [_searchField.leadingAnchor constraintEqualToAnchor:host.leadingAnchor constant:A2PageMargin],
+        // 搜索框撑满「胶囊区之后到刷新按钮之前」，同时它的高度决定整行高度。
+        [_searchField.topAnchor constraintEqualToAnchor:_headerRow.topAnchor],
+        [_searchField.bottomAnchor constraintEqualToAnchor:_headerRow.bottomAnchor],
+        [_searchField.leadingAnchor constraintEqualToAnchor:_chipScroll.trailingAnchor
+                                                   constant:A2SpaceM],
         [_searchField.trailingAnchor constraintEqualToAnchor:_refreshButton.leadingAnchor
                                                     constant:-A2SpaceS],
 
-        [_refreshButton.centerYAnchor constraintEqualToAnchor:_searchField.centerYAnchor],
-        [_refreshButton.trailingAnchor constraintEqualToAnchor:host.trailingAnchor
-                                                      constant:-A2PageMargin],
-        [_refreshButton.widthAnchor constraintGreaterThanOrEqualToConstant:56],
+        [_refreshButton.centerYAnchor constraintEqualToAnchor:_headerRow.centerYAnchor],
+        [_refreshButton.trailingAnchor constraintEqualToAnchor:_headerRow.trailingAnchor],
+        [_refreshButton.widthAnchor constraintEqualToConstant:A2MinTouchTarget],
         [_refreshButton.heightAnchor constraintEqualToConstant:A2MinTouchTarget],
 
-        [_countLabel.topAnchor constraintEqualToAnchor:_searchField.bottomAnchor constant:A2SpaceS],
-        [_countLabel.leadingAnchor constraintEqualToAnchor:host.leadingAnchor constant:A2PageMargin],
-        [_countLabel.trailingAnchor constraintEqualToAnchor:host.trailingAnchor constant:-A2PageMargin],
+        [_divider.topAnchor constraintEqualToAnchor:_headerRow.bottomAnchor constant:A2SpaceM],
+        [_divider.leadingAnchor constraintEqualToAnchor:host.leadingAnchor],
+        [_divider.trailingAnchor constraintEqualToAnchor:host.trailingAnchor],
+        [_divider.heightAnchor constraintEqualToConstant:1],
     ]];
 }
 
@@ -391,7 +518,7 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
     _tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
     _tableView.rowHeight = UITableViewAutomaticDimension;
     _tableView.estimatedRowHeight = 72;
-    _tableView.contentInset = UIEdgeInsetsMake(0, 0, A2SpaceXXL, 0);
+    _tableView.contentInset = UIEdgeInsetsMake(A2SpaceS, 0, A2SpaceXXL, 0);
     _tableView.keyboardDismissMode = UIScrollViewKeyboardDismissModeOnDrag;
     [_tableView registerClass:A2GameVersionCell.class forCellReuseIdentifier:kVersionCellID];
     [self.plainContentView addSubview:_tableView];
@@ -403,7 +530,7 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
     [self.plainContentView addSubview:_spinner];
 
     [NSLayoutConstraint activateConstraints:@[
-        [_tableView.topAnchor constraintEqualToAnchor:_countLabel.bottomAnchor constant:A2SpaceS],
+        [_tableView.topAnchor constraintEqualToAnchor:_divider.bottomAnchor],
         [_tableView.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor],
         [_tableView.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
         [_tableView.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
@@ -484,6 +611,9 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
         } else {
             self.loadError = nil;
             self.allVersions = versions;
+            // 新清单一律重放一次入场，筛选/搜索造成的重排不重放。
+            self.entranceEnabled = YES;
+            [self.entrancePlayed removeAllObjects];
             [A2Log log:@"download: 版本清单拉取到 %lu 个版本",
                 (unsigned long)versions.count];
         }
@@ -493,7 +623,6 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
 
 - (void)refreshList {
     [self.tableView reloadData];
-    [self updateCountLabel];
     [self updateStateCard];
 }
 
@@ -520,18 +649,6 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
     return [out copy];
 }
 
-- (void)updateCountLabel {
-    NSMutableArray<NSString *> *names = [NSMutableArray array];
-    for (NSString *type in A2VersionTypeOrder()) {
-        if ([_selectedTypes containsObject:type]) {
-            [names addObject:[A2GameVersionCell displayNameForType:type]];
-        }
-    }
-    _countLabel.text = [NSString stringWithFormat:@"%@ · %lu 个版本",
-                        [names componentsJoinedByString:@"、"],
-                        (unsigned long)self.visibleVersions.count];
-}
-
 - (void)updateStateCard {
     // 有数据或加载中就交给列表展示，不弹提示卡。
     if (self.visibleVersions.count > 0 || _spinner.isAnimating) {
@@ -552,6 +669,8 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
 #pragma mark - 交互
 
 - (void)chipTapped:(A2VersionTypeChip *)chip {
+    // 换筛选就是一次重排，不再重放入场动画。
+    _entranceEnabled = NO;
     if (chip.isSelected) {
         // 至少保留一个类型，否则列表会空得莫名其妙。
         if (_selectedTypes.count <= 1) {
@@ -567,6 +686,16 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
         [A2Log log:@"download: 增加筛选类型 %@", chip.typeKey];
     }
     [self refreshList];
+}
+
+- (void)searchTextChanged {
+    _entranceEnabled = NO;
+    [self refreshList];
+}
+
+- (void)refreshTapped {
+    [A2Log log:@"download: 手动刷新版本清单"];
+    [self fetchManifest];
 }
 
 #pragma mark - UITableViewDataSource
@@ -586,6 +715,34 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
 
 #pragma mark - UITableViewDelegate
 
+- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell
+        forRowAtIndexPath:(NSIndexPath *)indexPath {
+    if (!_entranceEnabled || [_entrancePlayed containsObject:indexPath]) return;
+    [_entrancePlayed addObject:indexPath];
+
+    cell.alpha = 0;
+    cell.transform = CGAffineTransformMakeTranslation(0, A2SpaceS);
+    // 延迟按行号错开，但封顶：滚动到很靠后的行时不该等半秒才出现。
+    NSUInteger maxStaggeredRows = 8;
+    NSUInteger staggerIndex = MIN((NSUInteger)indexPath.row, maxStaggeredRows);
+    NSTimeInterval delay = A2CardStaggerDelay * (NSTimeInterval)staggerIndex;
+    [UIView animateWithDuration:A2AnimDurationCard
+                          delay:delay
+         usingSpringWithDamping:A2SpringDamping
+          initialSpringVelocity:A2SpringVelocity
+                        options:UIViewAnimationOptionAllowUserInteraction |
+                                UIViewAnimationOptionBeginFromCurrentState
+                     animations:^{
+        cell.alpha = 1;
+        cell.transform = CGAffineTransformIdentity;
+    } completion:nil];
+}
+
+- (void)scrollViewWillBeginDragging:(UIScrollView *)scrollView {
+    // 用户开始滚动了，后面新进屏的行不必再补入场动画。
+    _entranceEnabled = NO;
+}
+
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     A2RemoteVersion *v = self.visibleVersions[indexPath.row];
@@ -601,17 +758,18 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
     [super applyTheme];
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
 
-    _countLabel.textColor = t.cOnSurfaceVariant;
     _spinner.color = t.cPrimary;
+    _divider.backgroundColor = t.cOutlineVariant;
     _stateTitleLabel.textColor = t.cOnSurface;
     _stateDetailLabel.textColor = t.cOnSurfaceVariant;
 
-    [_refreshButton setTitleColor:t.cPrimary forState:UIControlStateNormal];
-    _refreshButton.titleLabel.font = [A2Typography button];
+    _refreshButton.tintColor = t.cPrimary;
 
     for (A2VersionTypeChip *chip in _chipByType.allValues) {
         [chip refreshTheme];
     }
+    [_searchField applyTheme];
+    // 行内颜色写在 configureWithVersion: 里，重载一次让主题切换落到每张卡片上。
     [self.tableView reloadData];
 }
 
