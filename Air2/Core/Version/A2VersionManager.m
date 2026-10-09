@@ -23,6 +23,7 @@
 #import "A2VersionManager.h"
 #import "A2Settings.h"
 #import "A2Log.h"
+#import "A2VersionIsolation.h"
 
 NSNotificationName const A2VersionsDidChangeNotification = @"A2VersionsDidChangeNotification";
 
@@ -227,10 +228,8 @@ static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *n
     self = [super init];
     if (!self) return nil;
 
-    // 默认游戏目录：沙盒 Documents/.minecraft
-    NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
-                                                         NSUserDomainMask, YES).firstObject;
-    _gameHome = [docs stringByAppendingPathComponent:@".minecraft"];
+    // 默认游戏目录：收敛到 A2GamePath，不手写拼接。
+    _gameHome = [A2GamePath defaultGameHome];
     _versions = @[];
 
     // 构造期只扫描、不发通知：此刻 shared 的 dispatch_once 还没返回，
