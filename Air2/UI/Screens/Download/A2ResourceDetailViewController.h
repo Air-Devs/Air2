@@ -1,5 +1,5 @@
 //
-//  A2DownloadViewController.h
+//  A2ResourceDetailViewController.h
 //  Air2
 //
 //  Copyright (C) 2026 Air-Devs and contributors.
@@ -19,22 +19,20 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
-//
-//  下载中心容器 —— 启动器内容获取的总入口。
-//
-//  只做两件事：
-//    · 左侧分类边栏常驻（游戏 / 整合包 / 模组 / 资源包 / 存档 / 光影 / 按 ID / 收藏）
-//    · 右侧挂一条内层导航栈，下载区内的所有子页面都活在它上面
-//
-//  选中分类即把该分类的内容页设为栈底（直达，无中间落地页）；
-//  分类 → 内容页的映射写在实现里的 makeContentViewControllerForIndex:。
+//  共用资源详情页 —— 模组 / 资源包 / 光影 / 存档 / 数据包 共用。
+//  头卡（图标 + 元信息 + 主按钮）+ 简介卡 + 版本列表，版本下载统一走下载任务中心。
 //
 
 #import "A2BaseViewController.h"
+#import "A2ContentSource.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface A2DownloadViewController : A2BaseViewController
+/// 共用资源详情页。模组 / 资源包 / 光影 / 存档 / 数据包 共用。
+@interface A2ResourceDetailViewController : A2BaseViewController
+
+- (instancetype)initWithProject:(A2ContentItem *)project
+                   contentClass:(A2ContentClass)contentClass;
 
 @end
 

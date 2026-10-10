@@ -29,7 +29,29 @@ NSNotificationName const A2VersionsDidChangeNotification = @"A2VersionsDidChange
 
 /// 版本配置文件名
 static NSString *const kConfigFileName = @"config.json";
+
 // 当前版本 key 收敛到 A2Settings，不再本地定义。
+
+/// 能否安装模组：解析出的加载器里只要有真加载器就算。
+/// 与旧的子串推断规则在其可达范围行为一致；解析覆盖更广的一并计入。
+static BOOL A2VersionCanInstallMods(A2VersionInfo *info) {
+    for (A2VersionLoaderInfo *loader in info.loaderInfos) {
+        switch (loader.kind) {
+            case A2VersionLoaderKindForge:
+            case A2VersionLoaderKindNeoForge:
+            case A2VersionLoaderKindFabric:
+            case A2VersionLoaderKindLegacyFabric:
+            case A2VersionLoaderKindBabric:
+            case A2VersionLoaderKindQuilt:
+            case A2VersionLoaderKindLiteLoader:
+            case A2VersionLoaderKindCleanroom:
+                return YES;
+            default:
+                break;
+        }
+    }
+    return NO;
+}
 
 /// 把目录里的 {old}.json / {old}.jar 改名为 {new}（不存在则跳过）。
 static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *newName) {
@@ -54,6 +76,7 @@ static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *n
 @property (nonatomic, strong) A2VersionIsolation *isolation;
 @property (nonatomic, assign) A2VersionType type;
 @property (nonatomic, assign, getter=isValid) BOOL valid;
+@property (nonatomic, assign) BOOL canInstallMods;
 @property (nonatomic, strong) A2GamePath *gamePath;
 @end
 
@@ -85,19 +108,19 @@ static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *n
 }
 
 - (NSString *)gameDirectory {
-    return [_gamePath gameDirectoryForVersion:_name mode:self.isolationMode];
+    return [_gamePath gameDirectoryForVersion:_name mode:self.effectiveIsolationMode];
 }
 
 /// 模组目录
 - (NSString *)modsDirectory {
-    return [_gamePath modsDirectoryForVersion:_name mode:self.isolationMode];
+    return [_gamePath modsDirectoryForVersion:_name mode:self.effectiveIsolationMode];
 }
 
 /// 某个可隔离模块的实际目录
 - (NSString *)directoryForFolder:(A2VersionFolder)folder {
     return [_gamePath directoryForFolder:folder
                              versionName:_name
-                                    mode:self.isolationMode];
+                                    mode:self.effectiveIsolationMode];
 }
 
 /// 当前全局隔离档位。所有版本统一，取自设置。
@@ -105,8 +128,18 @@ static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *n
     return (A2IsolationMode)A2Settings.shared.versionIsolationMode;
 }
 
+/// 本版本实际生效的隔离档位。
+- (A2IsolationMode)effectiveIsolationMode {
+    A2IsolationMode mode = self.isolationMode;
+    // 「仅 Mod」只隔离能装模组的版本；不能装模组就不隔离（隔离 mods 没有意义）。
+    if (mode == A2IsolationModeMod && !self.canInstallMods) {
+        return A2IsolationModeNone;
+    }
+    return mode;
+}
+
 - (void)ensureIsolationDirectories {
-    [_gamePath ensureIsolationDirectoriesForVersion:_name mode:self.isolationMode];
+    [_gamePath ensureIsolationDirectoriesForVersion:_name mode:self.effectiveIsolationMode];
 }
 
 /// 读取版本私有配置
@@ -183,6 +216,7 @@ static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *n
         } else if ([type isEqualToString:@"old_alpha"]) {
             _type = A2VersionTypeOldAlpha;
         }
+        _canInstallMods = A2VersionCanInstallMods(_versionInfo);
     }
 
     if (!hasJson) {
@@ -324,19 +358,22 @@ static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *n
 }
 
 - (void)applyIsolation {
-    A2IsolationMode mode = (A2IsolationMode)A2Settings.shared.versionIsolationMode;
+    A2IsolationMode globalMode = (A2IsolationMode)A2Settings.shared.versionIsolationMode;
 
-    // 每个版本各自的隔离目录都要建好（关闭档不建）。
+    // 每个版本各自的隔离目录都要建好（各版本按自己的生效档位；关闭档不建）。
     for (A2Version *v in _versions) {
         [v ensureIsolationDirectories];
     }
 
-    // 共享 mods 只和「当前版本」相关：仅 Mod 档指向当前版本，其余档恢复成真实目录。
+    // 共享 mods 只和「当前版本」相关：当前版本生效「仅 Mod」时指向它的 mods 目录，
+    // 其余情况（含原版 / OptiFine 版本落在「仅 Mod」全局档下）恢复成真实目录。
     A2GamePath *path = [A2GamePath pathWithGameHome:_gameHome];
     NSString *currentName = _currentVersion ? _currentVersion.name : nil;
-    [path alignSharedModsDirectoryForVersion:currentName mode:mode];
-    [A2Log log:@"isolation: 应用档位 %@（当前版本 %@）",
-          A2IsolationModeToString(mode), currentName ?: @"(无)"];
+    A2IsolationMode effective = _currentVersion ? _currentVersion.effectiveIsolationMode : globalMode;
+    [path alignSharedModsDirectoryForVersion:currentName mode:effective];
+    [A2Log log:@"isolation: 全局档位 %@，当前版本 %@ 生效档位 %@",
+          A2IsolationModeToString(globalMode), currentName ?: @"(无)",
+          currentName ? A2IsolationModeToString(effective) : @"-"];
 }
 
 #pragma mark 操作

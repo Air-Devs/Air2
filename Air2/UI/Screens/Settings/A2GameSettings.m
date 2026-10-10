@@ -23,6 +23,8 @@
 //
 //  档位是全局的：改一次对所有版本生效。改动后要立刻重算目录，
 //  因为「仅 Mod」还要把共享 mods 换成指向当前版本的符号链接。
+//  注意：「仅 Mod」只作用于能装模组的版本（装了 Fabric / Forge 等加载器的版本），
+//  原版与仅装 OptiFine 的版本在该档位下不隔离。
 //
 
 #import "A2SettingsSections.h"
@@ -38,7 +40,7 @@
 
 + (A2SettingsSection *)buildWithHost:(UIViewController *)host {
     A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"版本隔离"];
-    section.footerText = @"档位对所有版本统一生效。依赖库与资源文件始终共用，不随档位变化。";
+    section.footerText = @"依赖库与资源文件始终共用；「仅 Mod」只隔离能装模组的版本。";
 
     A2SettingsRow *modeRow = [[A2SettingsRow alloc] init];
     modeRow.symbolName = @"square.split.2x1.fill";
@@ -51,9 +53,9 @@
         weakRow.valueText = A2IsolationModeDisplayName(mode);
         switch (mode) {
             case A2IsolationModeMod:
-                weakRow.subtitle = @"游戏数据共用，只隔离模组"; break;
+                weakRow.subtitle = @"只隔离能装模组的版本"; break;
             case A2IsolationModeFull:
-                weakRow.subtitle = @"整个游戏目录按版本隔离"; break;
+                weakRow.subtitle = @"所有版本的整个游戏目录都隔离"; break;
             default:
                 weakRow.subtitle = @"所有数据共用，不隔离"; break;
         }

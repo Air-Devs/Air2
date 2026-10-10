@@ -181,13 +181,13 @@
     NSMutableArray<NSDictionary<NSString *, id> *> *out = [NSMutableArray array];
 
     for (A2Version *v in mgr.versions) {
-        // meta 文案：加载器 + 隔离档位（档位是全局的，所有版本一致）。
+        // meta 文案：加载器 + 生效隔离档位（「仅 Mod」下原版/OptiFine 显示为关闭）。
         // 无效版本直接给原因（缺 json / 缺 jar / 解析失败），比档位更有用。
         NSMutableArray<NSString *> *parts = [NSMutableArray array];
         if (v.loaderInfo.length) [parts addObject:v.loaderInfo];
         if (v.isValid) {
             [parts addObject:[NSString stringWithFormat:@"隔离·%@",
-                              A2IsolationModeDisplayName(v.isolationMode)]];
+                              A2IsolationModeDisplayName(v.effectiveIsolationMode)]];
         } else {
             [parts addObject:(v.invalidReason ?: @"文件不完整")];
         }

@@ -82,10 +82,21 @@ typedef NS_ENUM(NSInteger, A2ContentClass) {
 };
 
 FOUNDATION_EXPORT NSInteger A2ClassIDForCurseForge(A2ContentClass c);
-FOUNDATION_EXPORT NSString *A2ProjectTypeForModrinth(A2ContentClass c);
+/// Modrinth 的 project_type。world 分类在 Modrinth 不存在，返回 nil。
+FOUNDATION_EXPORT NSString * _Nullable A2ProjectTypeForModrinth(A2ContentClass c);
 FOUNDATION_EXPORT NSString *A2VersionFolderForClass(A2ContentClass c);
 FOUNDATION_EXPORT NSString *A2ClassDisplayName(A2ContentClass c);
 FOUNDATION_EXPORT NSArray<NSNumber *> *A2AllContentClasses(void);
+
+#pragma mark - 资源分类项
+
+/// 平台内的资源分类项（用于筛选面板的「资源分类」多选）
+@interface A2ContentCategory : NSObject
+/// 传给 A2ContentFilter.categories 的标识（Modrinth 为分类 tag 名；CurseForge 为 categoryId 字符串）
+@property (nonatomic, copy) NSString *identifier;
+/// 展示名
+@property (nonatomic, copy) NSString *displayName;
+@end
 
 #pragma mark - 数据模型
 
@@ -126,6 +137,8 @@ FOUNDATION_EXPORT NSArray<NSNumber *> *A2AllContentClasses(void);
 @property (nonatomic, copy, nullable) NSString *query;
 @property (nonatomic, copy, nullable) NSString *gameVersion;
 @property (nonatomic, copy, nullable) NSString *loader;
+/// 资源分类多选。元素为 A2ContentCategory.identifier；空数组表示不限。
+@property (nonatomic, copy) NSArray<NSString *> *categories;
 @property (nonatomic, assign) A2ContentSortField sortField;
 @property (nonatomic, assign) NSInteger offset;
 @property (nonatomic, assign) NSInteger limit;
@@ -146,6 +159,14 @@ FOUNDATION_EXPORT NSArray<NSNumber *> *A2AllContentClasses(void);
 @property (nonatomic, copy, readonly) NSString *displayName;
 @property (nonatomic, assign, readonly, getter=isAvailable) BOOL available;
 @property (nonatomic, copy, nullable, readonly) NSString *unavailableReason;
+
+/// 该平台是否支持某资源大类。Modrinth 不提供存档（World），返回 NO；其余 YES。
+- (BOOL)supportsContentClass:(A2ContentClass)c;
+
+/// 拉取某资源大类的可选分类（用于筛选面板）
+- (void)categoriesForContentClass:(A2ContentClass)c
+                       completion:(void (^)(NSArray<A2ContentCategory *> * _Nullable categories,
+                                            NSError * _Nullable error))completion;
 
 /// 搜索
 - (void)searchWithFilter:(A2ContentFilter *)filter

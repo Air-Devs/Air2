@@ -23,7 +23,8 @@
 //  CurseForge API 客户端。
 //
 //  与 Modrinth 的差异：
-//    · 需要 API Key（在 console.curseforge.com 申请）
+//    · 需要 API Key —— 但【已内置】，用户无需申请
+//      （参考 ZL2：Key 在构建期注入为 BuildConfig 常量）
 //    · 请求要带两个头：x-api-key 和 Authorization: Bearer
 //    · Minecraft 的 gameId 固定为 432
 //    · 部分作者禁止第三方分发，能否下载要看项目的 allowModDistribution
@@ -85,24 +86,43 @@ extern const NSInteger A2CFMinecraftGameID;
 
 + (instancetype)shared;
 
-/// API Key。不设置则所有请求都会失败。
-/// 存 Keychain 而不是 UserDefaults —— 它是凭据。
+/// 当前使用的 API Key（只读语义，走 setAPIKey: 修改）
 @property (nonatomic, copy, nullable) NSString *apiKey;
+
+/// 是否可用。Key 内置后恒为 YES。
 + (BOOL)hasAPIKey;
+
+/// 是否在使用用户自定义的 Key（而非内置的）
++ (BOOL)usingCustomKey;
+
+/// 运行期覆盖 Key（存 Keychain）。传 nil 则恢复内置值。
 + (void)setAPIKey:(nullable NSString *)key;
+
+/// 清除用户自定义的 Key，恢复为内置值
++ (void)resetToBuiltinKey;
 
 /// 测试 Key 是否有效
 - (void)validateKeyWithCompletion:(void (^)(BOOL valid, NSError * _Nullable error))completion;
 
 /// 搜索项目
+/// @param loader 平台中立加载器标识（fabric / quilt / forge / neoforge…），
+///               nil 表示不限。CurseForge 的数字码由本类内部换算，
+///               调用方不需要知道 CurseForge 的枚举差异。
 - (void)searchClassID:(A2CFClassID)classID
                 query:(nullable NSString *)query
           gameVersion:(nullable NSString *)gameVersion
+               loader:(nullable NSString *)loader
+          categoryIDs:(nullable NSArray<NSString *> *)categoryIDs
             sortField:(nullable NSString *)sortField
                offset:(NSInteger)offset
                 limit:(NSInteger)limit
            completion:(void (^)(NSArray<A2CFProject *> * _Nullable results,
                                 NSError * _Nullable error))completion;
+
+/// 拉取某 classId 下的可选分类（CurseForge /categories?gameId=432&classId=X）
+- (void)categoriesForClassID:(NSInteger)classID
+                  completion:(void (^)(NSArray<NSDictionary<NSString *, NSString *> *> * _Nullable categories,
+                                       NSError * _Nullable error))completion;
 
 /// 按文件的 murmur2 哈希反查版本。
 /// CurseForge 用 MurmurHash2 而不是 SHA1 —— 这是它自己的指纹体系。

@@ -27,6 +27,11 @@
 //  把边栏提到容器层、右侧塞一条独立导航栈之后，下载区内的任何子页面
 //  都活在右边这条栈上，边栏始终在，且只有下载区（及其子页面）能看到它。
 //
+//  选中分类即直达该分类的内容页（版本清单 / 资源搜索 / 按 ID / 收藏）——
+//  不再经过中间那层「只放一个入口按钮」的落地页，少一次无意义的点击。
+//  内容页按分类缓存：切走再切回时保留搜索词、已拉到的清单，
+//  也避免每次切分类都重新拉一遍版本清单。
+//
 //  子页面之所以一行代码都不用改：它们跳转时用的是 self.navigationController，
 //  这个属性会自动解析到离自己最近的那条栈 —— 也就是这里的 _contentNav。
 //
@@ -34,16 +39,23 @@
 //
 
 #import "A2DownloadViewController.h"
-#import "A2DownloadHomeViewController.h"
+#import "A2BaseViewController.h"
 #import "A2CategoryNavView.h"
 #import "A2NavigationController.h"
+#import "A2GameVersionListViewController.h"
+#import "A2DownloadListViewController.h"
+#import "A2ResourceSearchViewController.h"
+#import "A2SearchByIdViewController.h"
+#import "A2FavoritesViewController.h"
+#import "A2DownloadTasksViewController.h"
 #import "A2Metrics.h"
 #import "A2Log.h"
 
 @interface A2DownloadViewController ()
 @property (nonatomic, strong) A2CategoryNavView *nav;
 @property (nonatomic, strong) A2NavigationController *contentNav;
-@property (nonatomic, strong) A2DownloadHomeViewController *home;
+/// 分类索引 → 内容页。切走再切回时复用，保留状态、避免重复拉网络。
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, UIViewController *> *contentCache;
 @end
 
 @implementation A2DownloadViewController
@@ -55,14 +67,7 @@
     [super viewDidLoad];
     self.hidesTopBar = YES;
 
-    __weak typeof(self) weakSelf = self;
-
-    _home = [[A2DownloadHomeViewController alloc] init];
-    // 栈底页再返回就是出下载区了，所以要退外层栈，而不是在内层栈里 pop。
-    _home.onBack = ^{
-        __strong typeof(weakSelf) self = weakSelf;
-        [self.navigationController popViewControllerAnimated:YES];
-    };
+    _contentCache = [NSMutableDictionary dictionary];
 
     [self setupCategoryNav];
     [self setupContentNav];
@@ -94,10 +99,12 @@
         [A2NavCategory title:@"整合包" symbol:@"shippingbox.fill"],
         [A2NavCategory title:@"模组"   symbol:@"puzzlepiece.extension.fill" division:YES],
         [A2NavCategory title:@"资源包" symbol:@"photo.stack.fill"],
+        [A2NavCategory title:@"数据包" symbol:@"doc.text.fill"],
         [A2NavCategory title:@"存档"   symbol:@"map.fill"],
         [A2NavCategory title:@"光影"   symbol:@"sun.max.fill"],
         [A2NavCategory title:@"按 ID"  symbol:@"number" division:YES],
         [A2NavCategory title:@"收藏"   symbol:@"star.fill"],
+        [A2NavCategory title:@"任务"   symbol:@"arrow.down.circle.fill" division:YES],
     ];
 
     __weak typeof(self) weakSelf = self;
@@ -110,7 +117,9 @@
 }
 
 - (void)setupContentNav {
-    _contentNav = [[A2NavigationController alloc] initWithRootViewController:_home];
+    // 内层栈需要栈底页，直接拿第一个分类的内容页当栈底。
+    UIViewController *first = [self contentViewControllerForIndex:0];
+    _contentNav = [[A2NavigationController alloc] initWithRootViewController:first];
     _contentNav.view.translatesAutoresizingMaskIntoConstraints = NO;
     // 背景透出去，让子页面自己的背景图/渐变与整体连成一片
     _contentNav.view.backgroundColor = UIColor.clearColor;
@@ -123,12 +132,68 @@
 
 - (void)selectCategoryAtIndex:(NSInteger)index {
     [A2Log log:@"download: 切换分类 index=%ld", (long)index];
-    // 先退回栈底再换内容：否则上一个分类的二级页面会继续压在栈上，
-    // 与边栏的选中项对不上，用户看到的内容和点亮的分类是两回事。
-    if (_contentNav.viewControllers.count > 1) {
-        [_contentNav popToRootViewControllerAnimated:NO];
+    UIViewController *vc = [self contentViewControllerForIndex:index];
+    // 直接把该分类的内容页设为栈底：上一个分类的二级页面随栈一并换掉，
+    // 免得看到的内容和点亮的分类对不上。
+    [_contentNav setViewControllers:@[vc] animated:NO];
+}
+
+/// 取（或首次创建）某分类的内容页。
+- (UIViewController *)contentViewControllerForIndex:(NSInteger)index {
+    NSNumber *key = @(index);
+    UIViewController *cached = _contentCache[key];
+    if (cached) return cached;
+
+    UIViewController *vc = [self makeContentViewControllerForIndex:index];
+    // 内容页是内层栈的栈底，再返回就是出下载区了，所以退外层栈，而不是内层 pop。
+    if ([vc isKindOfClass:A2BaseViewController.class]) {
+        __weak typeof(self) weakSelf = self;
+        ((A2BaseViewController *)vc).onBack = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            [self.navigationController popViewControllerAnimated:YES];
+        };
     }
-    [_home showCategoryAtIndex:index];
+    _contentCache[key] = vc;
+    return vc;
+}
+
+/// 分类索引 → 内容页。索引与 setupCategoryNav 的顺序一一对应。
+/// 资源类（模组/资源包/数据包/存档/光影）全部走共用的 A2ResourceSearchViewController，
+/// 只有整合包仍用旧的 A2DownloadListViewController（重写范围排除它）。
+- (UIViewController *)makeContentViewControllerForIndex:(NSInteger)index {
+    switch (index) {
+        case 0:
+            return [[A2GameVersionListViewController alloc] init];
+        case 1: {
+            A2DownloadListViewController *vc = [[A2DownloadListViewController alloc] init];
+            vc.category = A2DownloadCategoryModpack;
+            return vc;
+        }
+        case 2:
+            return [[A2ResourceSearchViewController alloc]
+                    initWithContentClass:A2ContentClassMod];
+        case 3:
+            return [[A2ResourceSearchViewController alloc]
+                    initWithContentClass:A2ContentClassResourcePack];
+        case 4:
+            return [[A2ResourceSearchViewController alloc]
+                    initWithContentClass:A2ContentClassDataPack];
+        case 5:
+            return [[A2ResourceSearchViewController alloc]
+                    initWithContentClass:A2ContentClassWorld];
+        case 6:
+            return [[A2ResourceSearchViewController alloc]
+                    initWithContentClass:A2ContentClassShader];
+        case 7:
+            return [[A2SearchByIdViewController alloc] init];
+        case 8:
+            return [[A2FavoritesViewController alloc] init];
+        case 9:
+            return [[A2DownloadTasksViewController alloc] init];
+        default:
+            return [[A2ResourceSearchViewController alloc]
+                    initWithContentClass:A2ContentClassMod];
+    }
 }
 
 @end

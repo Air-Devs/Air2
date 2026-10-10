@@ -28,13 +28,78 @@
 const NSInteger A2CFMinecraftGameID = 432;
 
 static NSString *const kBaseURL = @"https://api.curseforge.com/v1";
+/// 内置的 CurseForge API Key。
+///
+/// 参考 ZL2 的做法（ZalithLauncher/build.gradle.kts 里的
+/// getKeyFromLocal + BuildConfig.CURSEFORGE_API）：Key 在构建期注入，
+/// 用户开箱即用，不需要自己申请。
+///
+/// 取值优先级：
+///   1. 环境变量 CURSEFORGE_API_KEY   —— 便于 CI 用 secret、本地覆盖
+///   2. 沙盒 Documents/.curseforge_api.txt —— 便于临时替换
+///   3. Keychain（用户在设置里填过自己的 Key）
+///   4. 这个内置值                     —— 兜底，保证开箱可用
+static NSString *const kBuiltinCurseForgeKey =
+    @"$2a$10$VWHUI17c3d5wUKb6eiDDYOMjMrW12An3MstARm5CkuhUeC9.wJWhi";
+
 /// Keychain 里的服务名与账号名
 static NSString *const kKeychainService = @"dev.airdevs.air2.curseforge";
+static NSString *const kKeychainAccount = @"apiKey";
+
+/// 本地覆盖文件名
+static NSString *const kLocalKeyFileName = @".curseforge_api.txt";
+
+/// 解析出实际使用的 Key。
+static NSString *A2ResolveCurseForgeKey(void) {
+    // 1. 环境变量
+    const char *env = getenv("CURSEFORGE_API_KEY");
+    if (env && strlen(env) > 0) {
+        NSString *v = [NSString stringWithUTF8String:env];
+        if (v.length > 0) return v;
+    }
+
+    // 2. 沙盒里的本地文件
+    NSString *docs = NSSearchPathForDirectoriesInDomains(
+        NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    if (docs) {
+        NSString *path = [docs stringByAppendingPathComponent:kLocalKeyFileName];
+        NSString *content = [NSString stringWithContentsOfFile:path
+                                                      encoding:NSUTF8StringEncoding
+                                                         error:nil];
+        if (content) {
+            NSString *trimmed = [content stringByTrimmingCharactersInSet:
+                                 NSCharacterSet.whitespaceAndNewlineCharacterSet];
+            if (trimmed.length > 0) return trimmed;
+        }
+    }
+
+    // 3. Keychain（用户自定义）
+    NSString *stored = [A2CurseForgeAPI loadKeyFromKeychain];
+    if (stored.length > 0) return stored;
+
+    // 4. 内置兜底
+    return kBuiltinCurseForgeKey;
+}
 static NSString *const kKeychainAccount = @"apiKey";
 
 static void A2Main(dispatch_block_t b) {
     if ([NSThread isMainThread]) b();
     else dispatch_async(dispatch_get_main_queue(), b);
+}
+
+/// 平台中立加载器标识 → CurseForge 的 modLoaderType 数字码。
+///
+/// 两家平台的取值体系不同（我们是字符串标识，CurseForge 是数字枚举），
+/// 换算收在这里，调用方只说「要 Fabric」。
+/// 未收录的（如 legacy-fabric，CurseForge 不支持）返回 nil，即不加该筛选。
+static NSNumber *A2CFModLoaderTypeForIdentifier(NSString *identifier) {
+    if (identifier.length == 0) return nil;
+    NSString *key = identifier.lowercaseString;
+    if ([key isEqualToString:@"forge"])    return @1;
+    if ([key isEqualToString:@"fabric"])   return @4;
+    if ([key isEqualToString:@"quilt"])    return @5;
+    if ([key isEqualToString:@"neoforge"]) return @6;
+    return nil;
 }
 
 #pragma mark - 项目
@@ -90,6 +155,8 @@ static void A2Main(dispatch_block_t b) {
 
 @interface A2CurseForgeAPI ()
 @property (nonatomic, copy, nullable) NSString *cachedKey;
+/// 供 A2ResolveCurseForgeKey 调用
++ (nullable NSString *)loadKeyFromKeychain;
 @end
 
 @implementation A2CurseForgeAPI
@@ -106,7 +173,7 @@ static void A2Main(dispatch_block_t b) {
 - (instancetype)init {
     self = [super init];
     if (!self) return nil;
-    _cachedKey = [A2CurseForgeAPI loadKeyFromKeychain];
+    _cachedKey = A2ResolveCurseForgeKey();
     return self;
 }
 
@@ -120,8 +187,25 @@ static void A2Main(dispatch_block_t b) {
     return _cachedKey;
 }
 
+/// 永远返回 YES —— Key 是内置的，开箱即用。
+/// 保留这个方法是为了：
+///   · 调用方代码不用改（否则要删一堆判断）
+///   · 将来如果要加「Key 失效」的检测，在这里改即可
 + (BOOL)hasAPIKey {
+    return A2ResolveCurseForgeKey().length > 0;
+}
+
+/// 是否使用了自己的 Key（非内置）
++ (BOOL)usingCustomKey {
+    const char *env = getenv("CURSEFORGE_API_KEY");
+    if (env && strlen(env) > 0) return YES;
     return [self loadKeyFromKeychain].length > 0;
+}
+
+/// 恢复为内置 Key（清掉用户自定义的）
++ (void)resetToBuiltinKey {
+    [self saveKeyToKeychain:nil];
+    [self shared].apiKey = A2ResolveCurseForgeKey();
 }
 
 + (void)setAPIKey:(NSString *)key {
@@ -293,6 +377,8 @@ static void A2Main(dispatch_block_t b) {
 - (void)searchClassID:(A2CFClassID)classID
                 query:(NSString *)query
           gameVersion:(NSString *)gameVersion
+               loader:(NSString *)loader
+          categoryIDs:(NSArray<NSString *> *)categoryIDs
             sortField:(NSString *)sortField
                offset:(NSInteger)offset
                 limit:(NSInteger)limit
@@ -324,6 +410,23 @@ static void A2Main(dispatch_block_t b) {
     if (gameVersion.length > 0) {
         [items addObject:[NSURLQueryItem queryItemWithName:@"gameVersion" value:gameVersion]];
     }
+    // 加载器筛选：换算失败（CurseForge 不支持该加载器）就不加，避免筛出空结果
+    NSNumber *loaderCode = A2CFModLoaderTypeForIdentifier(loader);
+    if (loaderCode) {
+        [items addObject:[NSURLQueryItem queryItemWithName:@"modLoaderType"
+                                                     value:[loaderCode stringValue]]];
+    }
+    // 分类多选：CurseForge 用逗号分隔的 id 列表
+    if (categoryIDs.count > 0) {
+        NSMutableArray<NSString *> *ids = [NSMutableArray array];
+        for (NSString *cid in categoryIDs) {
+            if (cid.length > 0) [ids addObject:cid];
+        }
+        if (ids.count > 0) {
+            [items addObject:[NSURLQueryItem queryItemWithName:@"categoryIds"
+                                                         value:[ids componentsJoinedByString:@","]]];
+        }
+    }
 
     [self GET:@"/mods" query:items completion:^(id json, NSError *error) {
         if (error) { if (completion) completion(nil, error); return; }
@@ -335,6 +438,36 @@ static void A2Main(dispatch_block_t b) {
             for (NSDictionary *j in raw) {
                 A2CFProject *p = [A2CFProject fromJSON:j];
                 if (p) [out addObject:p];
+            }
+        }
+        if (completion) completion(out, nil);
+    }];
+}
+
+- (void)categoriesForClassID:(NSInteger)classID
+                  completion:(void (^)(NSArray<NSDictionary<NSString *, NSString *> *> *, NSError *))completion {
+
+    NSArray<NSURLQueryItem *> *items = @[
+        [NSURLQueryItem queryItemWithName:@"gameId"
+                                    value:[@(A2CFMinecraftGameID) stringValue]],
+        [NSURLQueryItem queryItemWithName:@"classId"
+                                    value:[@(classID) stringValue]],
+    ];
+
+    [self GET:@"/categories" query:items completion:^(id json, NSError *error) {
+        if (error) { if (completion) completion(nil, error); return; }
+
+        NSDictionary *dict = [json isKindOfClass:NSDictionary.class] ? json : nil;
+        NSArray *raw = dict[@"data"];
+        NSMutableArray<NSDictionary<NSString *, NSString *> *> *out = [NSMutableArray array];
+        if ([raw isKindOfClass:NSArray.class]) {
+            for (NSDictionary *j in raw) {
+                if (![j isKindOfClass:NSDictionary.class]) continue;
+                NSString *name = j[@"name"];
+                if (![name isKindOfClass:NSString.class] || name.length == 0) continue;
+                // id 是数字，统一转成字符串以对齐 A2ContentCategory.identifier
+                NSString *identifier = [NSString stringWithFormat:@"%ld", (long)[j[@"id"] integerValue]];
+                [out addObject:@{ @"identifier": identifier, @"displayName": name }];
             }
         }
         if (completion) completion(out, nil);

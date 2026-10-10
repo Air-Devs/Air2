@@ -269,6 +269,7 @@ static NSString *const kLauncherDataDirName = @".air_version";
 - (NSString *)modsDirectoryForVersion:(NSString *)versionName
                                  mode:(A2IsolationMode)mode {
     // 仅 Mod / 全部：mods 固定落在版本目录下。关闭档才用根目录的共享 mods。
+    // （mode 是调用方算好的生效档位；本层不判断版本能否装模组。）
     if (mode == A2IsolationModeMod || mode == A2IsolationModeFull) {
         return [[self versionPath:versionName] stringByAppendingPathComponent:@"mods"];
     }
