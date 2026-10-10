@@ -79,7 +79,8 @@ public struct CategoryNavView: View {
                                 .minimumScaleFactor(0.75)
                         }
                         .foregroundStyle(index == selectedIndex ? Color.cOnSecondaryContainer : Color.cOnSurfaceVariant)
-                        .frame(width: navWidth - A2SpaceS, minHeight: 62)
+                        .frame(width: navWidth - A2SpaceS)
+                        .frame(minHeight: 62)
                         .padding(.vertical, A2SpaceS)
                         .background(
                             RoundedRectangle(cornerRadius: A2RadiusM, style: .continuous)

@@ -60,21 +60,22 @@ public struct BackgroundView: View {
                         .frame(width: geo.size.width, height: geo.size.height)
                         .clipped()
                         .blur(radius: effectiveBlur)
-                    if colorScheme.isDark {
-                        Color.black.opacity(image != nil ? darkOverlay : 0.18)
-                    }
-                    if fadeRatio > 0 {
-                        LinearGradient(
-                            stops: [
-                                .init(color: Color.cSurface.opacity(0), location: 0),
-                                .init(color: Color.cSurface.opacity(0.45), location: 0.6),
-                                .init(color: Color.cSurface.opacity(colorScheme.isDark ? 0.92 : 0.88), location: 1),
-                            ],
-                            startPoint: .leading, endPoint: .trailing
-                        )
-                        .frame(width: geo.size.width * fadeRatio)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                    }
+                }
+                // 暗色遮罩：有图时按 darkOverlay 压暗；无图时也压一点，让卡片更分明（对齐 A2BackgroundView）。
+                if colorScheme.isDark {
+                    Color.black.opacity(image != nil ? darkOverlay : 0.18)
+                }
+                if fadeRatio > 0 {
+                    LinearGradient(
+                        stops: [
+                            .init(color: Color.cSurface.opacity(0), location: 0),
+                            .init(color: Color.cSurface.opacity(0.45), location: 0.6),
+                            .init(color: Color.cSurface.opacity(colorScheme.isDark ? 0.92 : 0.88), location: 1),
+                        ],
+                        startPoint: .leading, endPoint: .trailing
+                    )
+                    .frame(width: geo.size.width * fadeRatio)
+                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
             .onAppear {
