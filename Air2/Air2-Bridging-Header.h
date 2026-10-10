@@ -15,8 +15,8 @@
 //  注意：A2Log 的 `+log:format,...` 是 C 可变参数，Swift 不可调用；
 //  Swift 调用方一律用 `+logMessage:`（先插值再传整串）。
 
-#import "Air2/Utils/A2Log.h"
-#import "Air2/Core/Settings/A2Settings.h"
-#import "Air2/Core/Account/A2Account.h"
-#import "Air2/Core/Account/A2AccountManager.h"
-#import "Air2/Core/Path/A2GameDirMigration.h"
+#import "Utils/A2Log.h"
+#import "Core/Settings/A2Settings.h"
+#import "Core/Account/A2Account.h"
+#import "Core/Account/A2AccountManager.h"
+#import "Core/Path/A2GameDirMigration.h"
