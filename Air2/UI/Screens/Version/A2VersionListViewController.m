@@ -35,7 +35,8 @@
 
 #import "A2VersionListViewController.h"
 #import "A2VersionSettingsViewController.h"
-#import "A2InstallingViewController.h"
+#import "A2GameVersionListViewController.h"
+#import "A2TextField.h"
 #import "A2VersionManager.h"
 #import "A2VersionRowView.h"
 #import "A2GlassCard.h"
@@ -127,7 +128,9 @@
 @property (nonatomic, strong) UIStackView *pathStack;
 @property (nonatomic, strong) UIScrollView *listScroll;
 @property (nonatomic, strong) UIStackView *listStack;
+@property (nonatomic, strong) A2TextField *searchField;
 @property (nonatomic, strong) NSArray<NSDictionary<NSString *, id> *> *versions;
+@property (nonatomic, copy) NSString *filterText;
 @property (nonatomic, strong) NSMutableArray<A2VersionRowView *> *rowViews;
 @property (nonatomic, weak, nullable) UILabel *emptyTitleLabel;
 @property (nonatomic, weak, nullable) UILabel *emptySubtitleLabel;
@@ -142,11 +145,13 @@
     [super viewDidLoad];
     self.pageTitle = @"版本管理";
     _rowViews = [NSMutableArray array];
+    _filterText = @"";
+    _searchField = [self makeSearchField];
 
     __weak typeof(self) weakSelf = self;
     [self addTrailingButtonWithSymbol:@"plus" action:^{
         __strong typeof(weakSelf) self = weakSelf;
-        [self showInstallDialog];
+        [self openGameVersionList];
     }];
 
     [self setupLayout];
@@ -223,6 +228,7 @@
     [_listScroll addSubview:_listStack];
 
     [self.plainContentView addSubview:_pathScroll];
+    [self.plainContentView addSubview:_searchField];
     [self.plainContentView addSubview:_listScroll];
 
     [NSLayoutConstraint activateConstraints:@[
@@ -239,8 +245,16 @@
         [_pathStack.trailingAnchor constraintEqualToAnchor:_pathScroll.trailingAnchor],
         [_pathStack.widthAnchor constraintEqualToAnchor:_pathScroll.widthAnchor],
 
-        // 右侧列表
-        [_listScroll.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        // 搜索框（固定右上，不随列表滚动）
+        [_searchField.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_searchField.leadingAnchor constraintEqualToAnchor:_pathScroll.trailingAnchor
+                                                   constant:A2SpaceM],
+        [_searchField.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
+                                                    constant:-A2SpaceL],
+
+        // 右侧列表（顶端留给搜索框）
+        [_listScroll.topAnchor constraintEqualToAnchor:_searchField.bottomAnchor
+                                             constant:A2SpaceM],
         [_listScroll.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
         [_listScroll.leadingAnchor constraintEqualToAnchor:_pathScroll.trailingAnchor
                                                   constant:A2SpaceM],
@@ -253,6 +267,23 @@
         [_listStack.trailingAnchor constraintEqualToAnchor:_listScroll.trailingAnchor],
         [_listStack.widthAnchor constraintEqualToAnchor:_listScroll.widthAnchor],
     ]];
+}
+
+/// 搜索框只创建装配，加屏与约束在 setupLayout（它依赖左侧栏定宽）。
+- (A2TextField *)makeSearchField {
+    A2TextField *field = [[A2TextField alloc] initWithLabel:@"搜索版本"];
+    field.translatesAutoresizingMaskIntoConstraints = NO;
+    __weak typeof(self) weakSelf = self;
+    field.onTextChange = ^(NSString *text) {
+        __strong typeof(weakSelf) self = weakSelf;
+        self.filterText = text ?: @"";
+        [self reloadVersionList];
+    };
+    field.onReturn = ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        [self.view endEditing:YES];
+    };
+    return field;
 }
 
 - (void)buildPathList {
@@ -275,7 +306,12 @@
         [self buildEmptyState];
         return;
     }
-    for (NSDictionary<NSString *, id> *v in _versions) {
+    NSArray<NSDictionary<NSString *, id> *> *visible = [self filteredVersions];
+    if (visible.count == 0) {
+        [self buildNoMatchState];
+        return;
+    }
+    for (NSDictionary<NSString *, id> *v in visible) {
         A2VersionRowView *row = [[A2VersionRowView alloc] initWithVersionName:v[@"name"]
                                                                         meta:v[@"meta"]];
         row.current = [v[@"current"] boolValue];
@@ -347,7 +383,7 @@
     A2PrimaryButton *installBtn = [[A2PrimaryButton alloc] initWithTitle:@"安装新版本"
                                                                    style:A2ButtonStylePrimary];
     installBtn.minHeight = 44;
-    [installBtn addTarget:self action:@selector(showInstallDialog) forControlEvents:UIControlEventTouchUpInside];
+    [installBtn addTarget:self action:@selector(openGameVersionList) forControlEvents:UIControlEventTouchUpInside];
 
     UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[title, subtitle, installBtn]];
     stack.translatesAutoresizingMaskIntoConstraints = NO;
@@ -380,13 +416,47 @@
     _emptyTitleLabel.textColor = t.cOnSurface;
     _emptySubtitleLabel.textColor = t.cOnSurfaceVariant;
 }
+/// 关键字过滤（大小写不敏感，空关键字即全部）。行与选中共用同一份可见集。
+- (NSArray<NSDictionary<NSString *, id> *> *)filteredVersions {
+    if (_filterText.length == 0) return _versions;
+    NSMutableArray<NSDictionary<NSString *, id> *> *out = [NSMutableArray array];
+    for (NSDictionary<NSString *, id> *v in _versions) {
+        NSString *name = v[@"name"];
+        if ([name rangeOfString:_filterText options:NSCaseInsensitiveSearch].location != NSNotFound) {
+            [out addObject:v];
+        }
+    }
+    return out;
+}
+
+/// 有版本但关键字无命中：纯提示行，不复用空态卡（那张卡带安装按钮，语义不对）。
+- (void)buildNoMatchState {
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    label.font = [A2Typography subtitleCard];
+    label.textAlignment = NSTextAlignmentCenter;
+    label.numberOfLines = 0;
+    label.text = [NSString stringWithFormat:@"没有匹配“%@”的版本", _filterText];
+    [_listStack addArrangedSubview:label];
+    [NSLayoutConstraint activateConstraints:@[
+        [label.leadingAnchor constraintEqualToAnchor:_listStack.leadingAnchor],
+        [label.trailingAnchor constraintEqualToAnchor:_listStack.trailingAnchor],
+    ]];
+    [self refreshNoMatchTheme:label];
+}
+
+/// 无命中提示跟主题走（只在构建时取一次，随列表重建刷新）。
+- (void)refreshNoMatchTheme:(UILabel *)label {
+    label.textColor = A2ThemeManager.shared.scheme.cOnSurfaceVariant;
+}
 /// 切换当前版本。
 /// 无效版本不允许选中（缺 jar 或 json 的版本启动必然失败）。
 - (void)selectVersion:(A2VersionRowView *)selected {
+    NSArray<NSDictionary<NSString *, id> *> *visible = [self filteredVersions];
     NSInteger index = [_rowViews indexOfObject:selected];
-    if (index == NSNotFound || index >= (NSInteger)_versions.count) return;
+    if (index == NSNotFound || index >= (NSInteger)visible.count) return;
 
-    A2Version *model = _versions[index][@"model"];
+    A2Version *model = visible[index][@"model"];
     if (!model.isValid) {
         [A2Toast show:[NSString stringWithFormat:@"无法选择：%@",
                        model.invalidReason ?: @"版本文件不完整"] inView:self.view];
@@ -538,38 +608,10 @@
 
 #pragma mark - 安装入口
 
-/// 版本号输入框 → 真实的安装页（安装页会驱动完整安装流程，不是占位）。
-- (void)showInstallDialog {
-    __weak typeof(self) weakSelf = self;
-    UIAlertController *alert =
-        [UIAlertController alertControllerWithTitle:@"安装新版本"
-                                            message:@"输入 Minecraft 版本号"
-                                     preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-        tf.placeholder = @"如 1.21.5";
-        tf.clearButtonMode = UITextFieldViewModeWhileEditing;
-    }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"开始安装" style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *a) {
-        __strong typeof(weakSelf) self = weakSelf;
-        NSError *verr = nil;
-        // 版本名直送安装器拼路径，先过同一份校验，否则 ../../ 之类的名字会逃出版本目录。
-        NSString *text = [A2VersionManager validatedVersionName:alert.textFields.firstObject.text
-                                                          error:&verr];
-        if (!text) {
-            [A2Toast show:(verr.localizedDescription ?: @"版本号无效") inView:self.view];
-            return;
-        }
-        // 这里用户只填一个 MC 版本号：它既是取 manifest 的版本，也是目标版本目录名。
-        A2InstallingViewController *vc =
-            [[A2InstallingViewController alloc] initWithMCVersion:text
-                                                      versionName:text
-                                                       loaderType:nil
-                                                    loaderVersion:nil];
-        [self.navigationController pushViewController:vc animated:YES];
-    }]];
-    [self presentViewController:alert animated:YES completion:nil];
+/// 进游戏版本选版页挑版安装（清单里选，不手输版本号）。
+- (void)openGameVersionList {
+    A2GameVersionListViewController *vc = [[A2GameVersionListViewController alloc] init];
+    [self.navigationController pushViewController:vc animated:YES];
 }
 
 @end
