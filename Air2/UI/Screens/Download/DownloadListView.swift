@@ -190,7 +190,7 @@ final class DownloadListViewModel: ObservableObject {
         categoriesFailed = false
         selectedCategories.removeAll()
         let cls = contentClass
-        source.categories(forContentClass: cls) { [weak self] categories, error in
+        source.categories(for: cls) { [weak self] categories, error in
             Task { @MainActor in
                 guard let self else { return }
                 guard let categories, !categories.isEmpty, error == nil else {
@@ -249,7 +249,7 @@ final class DownloadListViewModel: ObservableObject {
         filter.limit = 20
 
         let cls = contentClass
-        source.search(withFilter: filter, contentClass: cls) { [weak self] results, error in
+        source.search(with: filter, contentClass: cls) { [weak self] results, error in
             Task { @MainActor in
                 guard let self else { return }
                 self.loading = false
