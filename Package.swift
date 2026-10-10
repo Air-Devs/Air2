@@ -16,8 +16,12 @@
 //     某子目录落下第一个 .swift 文件时，把该目录移出 exclude，
 //     改为逐个列出其中剩余的 ObjC 文件（登记规则同
 //     docs/ARCHITECTURE.md「新增即登记」）。
-//   - SwiftPM 不允许两个 target 的 path 互相嵌套，所以 UI 层不设
-//     Air2UI 总 target；先迁移的岛（Theme）独立成 target，后续
+//   - SwiftPM 不允许 target 为空（无 .swift 即报错），也不允许两个
+//     target 的 path 互相嵌套。所以只有**盘上有 .swift** 的目录才建
+//     target：Utils/Core 目前零 Swift，先不建，等首个 .swift 落地时
+//     按 docs/ARCHITECTURE.md「新增即登记」加回（届时同步登记
+//     products 与本注释）。UI 层不设 Air2UI 总 target；
+//     先迁移的岛（Theme、App）各自独立成 target，后续
 //     Screens/Components 等按目录各自建 target。
 //
 // iOS .app 打包限制（SwiftPM 做不到的事）：
@@ -39,40 +43,13 @@ let package = Package(
     ],
     products: [
         .library(name: "Air2Theme", targets: ["Air2Theme"]),
-        .library(name: "Air2Utils", targets: ["Air2Utils"]),
     ],
     targets: [
-        // 全层共用的纯工具（无业务语义，必须与 Minecraft 无关）。
-        .target(
-            name: "Air2Utils",
-            path: "Air2/Utils",
-            exclude: [
-                "A2Log.h",
-                "A2Log.m",
-                "A2MurmurHash2.h",
-                "A2MurmurHash2.m",
-            ]
-        ),
         // UI 层最先迁移的岛：MD3 语义色板。
         // 盘上已无 ObjC 残留（全量 Swift），故无 exclude。
         .target(
             name: "Air2Theme",
             path: "Air2/UI/Theme"
-        ),
-        // 无 UI 的业务核心。子目录全是 ObjC，先整目录 exclude，
-        // 首个 .swift 落地时按文件头注释的规则改列文件。
-        .target(
-            name: "Air2Core",
-            path: "Air2/Core",
-            exclude: [
-                "Account",
-                "Addons",
-                "Download",
-                "Path",
-                "Renderer",
-                "Settings",
-                "Version",
-            ]
         ),
         // 应用入口与根装配。
         // 盘上已无 ObjC 残留（全量 Swift），故无 exclude。
