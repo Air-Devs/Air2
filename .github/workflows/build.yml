@@ -76,7 +76,8 @@ jobs:
             || echo "::warning::pbxproj 校验未通过。它是瞬时产物，ios-build 任务会重生成；请确认文件系统 + Package.swift 正确。"
 
   # ============================================================
-  # SwiftPM 校验 —— Package.swift 即真相源，必须可解析、可编译
+  # SwiftPM 校验 —— Package.swift 即真相源，必须可解析、target 非空、
+  # 源码与 target 映射一致。iOS 真机编译证明在 ios-build。
   # ============================================================
   spm-validate:
     name: SwiftPM 校验
@@ -91,26 +92,55 @@ jobs:
       - name: 清单可解析
         run: swift package dump-package > /dev/null
 
-      - name: 编译 Swift 逻辑目标（iOS SDK）
+      - name: target 与源码映射一致
         run: |
           set -e
-          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
-          echo "iOS SDK: $SDK"
-          # target 名与源码目录的映射（与 Package.swift 保持一致）。
-          # 目录下尚无 .swift 文件的 target 跳过——不是失败：
-          # SwiftPM 要求 target 非空，迁移完成前允许空 target 占位。
-          for spec in "Air2Theme:Air2/UI/Theme" "Air2Utils:Air2/Utils" "Air2Core:Air2/Core" "Air2App:Air2/App"; do
-            T=${spec%%:*}
-            D=${spec#*:}
-            if [ -z "$(find "$D" -name '*.swift' -type f 2>/dev/null | head -1)" ]; then
-              echo "跳过 $T：$D 下暂无 .swift 文件"
-              continue
-            fi
-            echo "==> 编译 $T"
-            swift build --target "$T" \
-              -Xswiftc -sdk -Xswiftc "$SDK" \
-              -Xswiftc -target -Xswiftc arm64-apple-ios15.0
-          done
+          # Package.swift 只给已有 .swift 的目录建 target
+          # （SPM 不允许空 target；Utils/Core 等 ObjC 目录等首个
+          # .swift 落地时再加回，见 Package.swift 头注释）。
+          # 本步只做映射校验，不做交叉编译：手写
+          # -Xswiftc -sdk/-target 给 swift build 传 iOS SDK 会让
+          # Clang importer 混用 macOS/iOS 头文件、炸 Darwin 模块
+          # （run 38010322832 根因），真正的 iOS 编译证明在
+          # ios-build（瞬时工程 + xcodebuild）。
+          swift package dump-package > /tmp/pkg.json
+          python3 - <<'EOF'
+          import json, os
+          pkg = json.load(open('/tmp/pkg.json'))
+          targets = {t['name']: t for t in pkg['targets']}
+          # 只看本仓库源码 target（跳过 test/插件等，当前本就只有源码 target）
+          src = {n: t for n, t in targets.items() if (t.get('path') or '').startswith('Air2/')}
+          fail = []
+          for n, t in sorted(src.items()):
+              d = t['path']
+              has = False
+              for dp, _, fs in os.walk(d):
+                  if any(f.endswith('.swift') for f in fs):
+                      has = True
+                      break
+              print(('OK  ' if has else '空  ') + n + ' <- ' + d)
+              if not has:
+                  fail.append(n)
+          if fail:
+              print("::error::以下 SPM target 下无 .swift（SPM 不允许空 target）：" + ', '.join(fail))
+              raise SystemExit(1)
+          # 反向：列出尚未被任何 target 覆盖的 .swift（迁移中允许存在，仅提示）
+          covered = [t['path'] for t in src.values()]
+          orphan = []
+          for dp, _, fs in os.walk('Air2'):
+              for f in fs:
+                  if not f.endswith('.swift'):
+                      continue
+                  p = os.path.join(dp, f).replace(os.sep, '/')
+                  if not any(p == c or p.startswith(c + '/') for c in covered):
+                      orphan.append(p)
+          if orphan:
+              print('::warning::以下 .swift 尚未纳入 SPM target（后续迁移批次加回）：')
+              for p in sorted(orphan):
+                  print('  未覆盖: ' + p)
+          else:
+              print('所有 .swift 均有 SPM target 归属')
+          EOF
 
   # ============================================================
   # 编译并打包 IPA（工程为瞬时生成，不读入库副本）
