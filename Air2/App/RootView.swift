@@ -56,7 +56,7 @@ struct RootView: View {
             theme.applyAppearance(to: keyWindow())
             guard !didLogFirstAppearance else { return }
             didLogFirstAppearance = true
-            A2Log.log("RootView: 根视图已上屏，启动流程完成")
+            A2Log.logMessage("RootView: 根视图已上屏，启动流程完成")
         }
         .onChange(of: scenePhase) { phase in
             guard phase == .active else { return }

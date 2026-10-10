@@ -38,7 +38,7 @@ struct Air2App: App {
     init() {
         CrashGuard.install()
         A2Log.startSession()
-        A2Log.log("Air2App: 进入启动流程")
+        A2Log.logMessage("Air2App: 进入启动流程")
     }
 
     var body: some Scene {

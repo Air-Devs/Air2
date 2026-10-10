@@ -46,17 +46,17 @@ public final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?
     ) -> Bool {
-        A2Log.log("AppDelegate: didFinishLaunching 开始")
+        A2Log.logMessage("AppDelegate: didFinishLaunching 开始")
         container.performLaunchMigration()
         // 首帧前完成主题的磁盘读取，避免首次渲染在布局过程中触发 IO。
         // UIKit 保证生命周期回调在主线程，因此这里同步取用主角隔离的主题是安全的。
         MainActor.assumeIsolated {
             _ = ThemeManager.shared.scheme
-            A2Log.log("AppDelegate: 主题已预热")
+            A2Log.logMessage("AppDelegate: 主题已预热")
         }
         container.refreshAccountForAutoLogin()
         attemptJustInTime(reason: "冷启动")
-        A2Log.log("AppDelegate: didFinishLaunching 完成")
+        A2Log.logMessage("AppDelegate: didFinishLaunching 完成")
         return true
     }
 
@@ -93,41 +93,41 @@ public final class AppDelegate: NSObject, UIApplicationDelegate {
 
     private func attemptJustInTime(reason: String) {
         guard let provider = jitProvider else {
-            A2Log.log("AppDelegate: JIT 未启用（%@；供给层尚未接入，直跑）", reason)
+            A2Log.logMessage("AppDelegate: JIT 未启用（\(reason)；供给层尚未接入，直跑）")
             return
         }
         if provider.enableJustInTime() {
-            A2Log.log("AppDelegate: JIT 已启用（%@）", reason)
+            A2Log.logMessage("AppDelegate: JIT 已启用（\(reason)）")
         } else {
-            A2Log.log("AppDelegate: JIT 启用失败（%@），降级直跑", reason)
+            A2Log.logMessage("AppDelegate: JIT 启用失败（\(reason)），降级直跑")
         }
     }
 
     // MARK: - 前后台
 
     public func applicationDidEnterBackground(_ application: UIApplication) {
-        A2Log.log("AppDelegate: 进入后台开始")
+        A2Log.logMessage("AppDelegate: 进入后台开始")
         // 会话可能正在跑（下载、解压、日志落盘）：申请一段后台时间让收尾完成，
         // 而不是被系统直接挂起导致半截文件。
         backgroundTask = application.beginBackgroundTask(withName: "Air2.session-drain") { [weak self] in
             guard let self else { return }
-            A2Log.log("AppDelegate: 后台时间耗尽，结束收尾（系统回收属正常）")
+            A2Log.logMessage("AppDelegate: 后台时间耗尽，结束收尾（系统回收属正常）")
             application.endBackgroundTask(self.backgroundTask)
             self.backgroundTask = .invalid
         }
         if backgroundTask == .invalid {
-            A2Log.log("AppDelegate: 后台任务申请失败，直接挂起（系统配额不足属正常）")
+            A2Log.logMessage("AppDelegate: 后台任务申请失败，直接挂起（系统配额不足属正常）")
         }
-        A2Log.log("AppDelegate: 进入后台完成")
+        A2Log.logMessage("AppDelegate: 进入后台完成")
     }
 
     public func applicationWillEnterForeground(_ application: UIApplication) {
-        A2Log.log("AppDelegate: 回到前台开始")
+        A2Log.logMessage("AppDelegate: 回到前台开始")
         if backgroundTask != .invalid {
             application.endBackgroundTask(backgroundTask)
             backgroundTask = .invalid
         }
         attemptJustInTime(reason: "回前台")
-        A2Log.log("AppDelegate: 回到前台完成")
+        A2Log.logMessage("AppDelegate: 回到前台完成")
     }
 }

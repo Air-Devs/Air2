@@ -106,7 +106,7 @@ struct PaletteParams {
 // MARK: - 中间结构
 
 /// 推导过程中的单模式色板，最后配对成 ColorSlot。
-struct RawScheme {
+public struct RawScheme {
     var primary = Color.clear
     var onPrimary = Color.clear
     var primaryContainer = Color.clear

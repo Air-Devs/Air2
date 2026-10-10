@@ -50,6 +50,10 @@ const char *a2_log_current_path(void);
 /// 写一条日志，自动带时间戳。线程安全。
 + (void)log:(NSString *)format, ... NS_FORMAT_FUNCTION(1, 2);
 
+/// 写一条已拼好的日志（同 +log: 的落盘路径，不带格式解析）。
+/// 给 Swift 用：C 可变参数在 Swift 里不可调用，调用方先插值再传整串。
++ (void)logMessage:(NSString *)message;
+
 /// 本次会话的日志路径（Documents/lastlog.txt）。
 + (NSString *)currentLogPath;
 

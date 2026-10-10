@@ -186,6 +186,7 @@
 		FA1506795C7D1C848BE80D5C /* Motion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Motion.swift"; sourceTree = "<group>"; };
 		C2463291907C78D76C7A3EB8 /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ThemeManager.swift"; sourceTree = "<group>"; };
 		7E268DB2F793E35FA63006CC /* Typography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Typography.swift"; sourceTree = "<group>"; };
+		B001C176C5D8A5D75A7B7D4C /* Air2-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "Air2-Bridging-Header.h"; sourceTree = "<group>"; };
 		2BC6DC39941A9D25A0D02697 /* A2Account.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Account.h"; sourceTree = "<group>"; };
 		1BFA00DDD0D0A6C8B71BCA7A /* A2AccountManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountManager.h"; sourceTree = "<group>"; };
 		DDBB58DAA35DA37ED86B1E41 /* A2MicrosoftAuth.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MicrosoftAuth.h"; sourceTree = "<group>"; };
@@ -333,6 +334,7 @@
 				FA1506795C7D1C848BE80D5C /* Motion.swift */,
 				C2463291907C78D76C7A3EB8 /* ThemeManager.swift */,
 				7E268DB2F793E35FA63006CC /* Typography.swift */,
+				B001C176C5D8A5D75A7B7D4C /* Air2-Bridging-Header.h */,
 				2BC6DC39941A9D25A0D02697 /* A2Account.h */,
 				1BFA00DDD0D0A6C8B71BCA7A /* A2AccountManager.h */,
 				DDBB58DAA35DA37ED86B1E41 /* A2MicrosoftAuth.h */,
@@ -618,6 +620,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.airdevs.air2";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = "YES";
+				SWIFT_OBJC_BRIDGING_HEADER = "Air2/Air2-Bridging-Header.h";
 				SWIFT_VERSION = "5.0";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -639,6 +642,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.airdevs.air2";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = "YES";
+				SWIFT_OBJC_BRIDGING_HEADER = "Air2/Air2-Bridging-Header.h";
 				SWIFT_VERSION = "5.0";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};

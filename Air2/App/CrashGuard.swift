@@ -95,7 +95,7 @@ private let crashSignalHandler: @convention(c) (Int32) -> Void = { number in
 /// 用 %@ 透传，避免堆栈里的 % 被当成格式符。
 private let uncaughtExceptionHandler: @convention(c) (NSException?) -> Void = { exception in
     guard let exception else {
-        A2Log.log("%@", "=== 未捕获异常 ===（异常对象为空）")
+        A2Log.logMessage("=== 未捕获异常 ===（异常对象为空）")
         return
     }
     var lines = [
@@ -108,7 +108,7 @@ private let uncaughtExceptionHandler: @convention(c) (NSException?) -> Void = { 
         lines.append("  \(frame)")
     }
     lines.append("用户信息: \(exception.userInfo.map(String.init(describing:)) ?? "无")")
-    A2Log.log("%@", lines.joined(separator: "\n"))
+    A2Log.logMessage(lines.joined(separator: "\n"))
 }
 
 // MARK: - 崩溃兜底

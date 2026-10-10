@@ -40,9 +40,9 @@ public final class DependencyContainer {
     /// 启动期目录迁移。
     /// 必须早于任何读取游戏目录的逻辑（版本扫描、主题背景等），否则会读到旧路径。
     public func performLaunchMigration() {
-        A2Log.log("DependencyContainer: 目录迁移开始")
+        A2Log.logMessage("DependencyContainer: 目录迁移开始")
         A2GameDirMigration.migrateIfNeeded()
-        A2Log.log("DependencyContainer: 目录迁移完成")
+        A2Log.logMessage("DependencyContainer: 目录迁移完成")
     }
 
     /// 启动自动登录：仅在开关打开且有当前账号时，刷新其凭据。
@@ -50,19 +50,19 @@ public final class DependencyContainer {
     /// 不阻塞启动：回调里只写日志，界面由账号页自己按需重读。
     public func refreshAccountForAutoLogin() {
         guard settings.autoLogin else {
-            A2Log.log("DependencyContainer: 自动登录已关闭")
+            A2Log.logMessage("DependencyContainer: 自动登录已关闭")
             return
         }
         guard let current = accounts.currentAccount else {
-            A2Log.log("DependencyContainer: 自动登录跳过（无当前账号）")
+            A2Log.logMessage("DependencyContainer: 自动登录跳过（无当前账号）")
             return
         }
-        A2Log.log("DependencyContainer: 自动登录开始（当前账号 %@）", current.username)
+        A2Log.logMessage("DependencyContainer: 自动登录开始（当前账号 \(current.username)）")
         accounts.refreshCurrentAccountIfNeeded { success, error in
             if success {
-                A2Log.log("DependencyContainer: 自动登录成功")
+                A2Log.logMessage("DependencyContainer: 自动登录成功")
             } else {
-                A2Log.log("DependencyContainer: 自动登录失败 %@", error?.localizedDescription ?? "未知错误")
+                A2Log.logMessage("DependencyContainer: 自动登录失败 \(error?.localizedDescription ?? "未知错误")")
             }
         }
     }

@@ -161,6 +161,12 @@ const char *a2_log_current_path(void) {
     });
 }
 
++ (void)logMessage:(NSString *)message {
+    dispatch_sync(a2_log_queue(), ^{
+        a2_log_append(message ?: @"");
+    });
+}
+
 + (NSString *)currentLogPath {
     return a2_log_path_named(kCurrentLogName) ?: @"";
 }

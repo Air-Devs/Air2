@@ -46,7 +46,7 @@ final class VersionSettingsViewModel: ObservableObject {
 struct VersionSettingsView: View {
     @ObservedObject var router: A2Router = A2Router()
     let versionName: String
-    @StateObject private var model = VersionSettingsModel()
+    @StateObject private var model = VersionSettingsViewModel()
     @State private var showingRename = false
     @State private var showingDelete = false
     @State private var draftName = ""
