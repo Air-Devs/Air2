@@ -224,10 +224,11 @@ enum A2Route: Hashable {
     case versionSettings(String)
     case download
     case downloadCategory(DownloadCategory)
+    case downloadTasks
     case gameVersions
     case installOptions(String)
     case installing(InstallSpec)
-    case projectDetail(String)
+    case projectDetail(String, A2ContentClass)
     case searchById
     case favorites
     case files(String)
@@ -276,7 +277,11 @@ final class A2Router: ObservableObject {
         path.append(A2Route.installOptions(versionID))
     }
     func openInstalling(_ spec: InstallSpec) { path.append(A2Route.installing(spec)) }
-    func openProject(_ id: String) { path.append(A2Route.projectDetail(id)) }
+    /// contentClass 决定下载落到哪个隔离目录；只拿到 ID 的入口（收藏 / 按 ID 查）用 .mod 兜底。
+    func openProject(_ id: String, contentClass: A2ContentClass = .mod) {
+        path.append(A2Route.projectDetail(id, contentClass))
+    }
+    func openDownloadTasks() { path.append(A2Route.downloadTasks) }
     func openSearchById() { path.append(A2Route.searchById) }
     func openFavorites() { path.append(A2Route.favorites) }
     func openFiles(_ name: String) { path.append(A2Route.files(name)) }
@@ -329,10 +334,12 @@ struct A2ScreenRoot: View {
         case .versionSettings(let name): VersionSettingsView(router: router, versionName: name)
         case .download: DownloadRootView(router: router)
         case .downloadCategory(let category): DownloadListView(category: category, router: router)
+        case .downloadTasks: DownloadTasksView(router: router)
         case .gameVersions: GameVersionListView(router: router)
         case .installOptions(let id): InstallOptionsView(router: router, versionID: id)
         case .installing(let spec): InstallingView(router: router, spec: spec)
-        case .projectDetail(let id): ProjectDetailView(projectID: id)
+        case .projectDetail(let id, let contentClass):
+            ProjectDetailView(projectID: id, contentClass: contentClass)
         case .searchById: SearchByIdView(router: router)
         case .favorites: FavoritesView(router: router)
         case .files(let name): FilesView(displayName: name)

@@ -25,21 +25,48 @@
 
 import SwiftUI
 
-// TODO-MIGRATION: validate keys through A2CurseForgeAPI in CurseForgePromptModel.
-
 @MainActor
 final class CurseForgePromptModel: ObservableObject {
     @Published var key = ""
     @Published var isValidating = false
     @Published var errorMessage: String?
 
-    func save() async -> Bool { false }
+    /// 先把候选 Key 写进 CurseForge 客户端再探一次真实请求；通过才留下，
+    /// 失败则把旧 Key 写回去，保证「取消 / 校验失败」都不改变现状。
+    func save() async -> Bool {
+        let candidate = key.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !candidate.isEmpty else {
+            errorMessage = "请先粘贴 API Key"
+            return false
+        }
+        let previous = A2CurseForgeAPI.shared().apiKey
+        isValidating = true
+        errorMessage = nil
+        A2CurseForgeAPI.setAPIKey(candidate)
+
+        let result: (valid: Bool, error: Error?) = await withCheckedContinuation { continuation in
+            A2CurseForgeAPI.shared().validateKey(completion: { valid, error in
+                continuation.resume(returning: (valid, error))
+            })
+        }
+        isValidating = false
+
+        if result.valid {
+            A2ComponentLog("curseforge-key: 校验通过并保存")
+            return true
+        }
+        A2CurseForgeAPI.setAPIKey(previous)
+        errorMessage = result.error?.localizedDescription ?? "Key 无效，请到 console.curseforge.com 确认后重试"
+        A2ComponentLog("curseforge-key: 校验失败，已回滚旧 Key（\(errorMessage ?? "")）")
+        return false
+    }
 }
 
 struct CurseForgePromptSheet: View {
     @StateObject private var model = CurseForgePromptModel()
     @Environment(\.dismiss) private var dismiss
     var onSaved: (() -> Void)?
+    var onCancel: (() -> Void)?
 
     var body: some View {
         A2PageScaffold("CurseForge API key") {
@@ -73,8 +100,11 @@ struct CurseForgePromptSheet: View {
         }
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
-                Button("Cancel") { dismiss() }
-                    .frame(minHeight: A2MinTouchTarget)
+                Button("Cancel") {
+                    onCancel?()
+                    dismiss()
+                }
+                .frame(minHeight: A2MinTouchTarget)
             }
         }
     }

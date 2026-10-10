@@ -41,6 +41,7 @@ struct DownloadRootView: View {
     var body: some View {
         ThreeZoneScaffold(
             "Download",
+            trailing: [("arrow.down.circle", { router.openDownloadTasks() })],
             ops: {
                 categoryCard.a2CardEntrance(0)
                 DownloadHomeView(router: router, category: selected)
