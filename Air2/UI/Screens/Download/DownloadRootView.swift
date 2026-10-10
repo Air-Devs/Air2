@@ -62,7 +62,7 @@ struct DownloadRootView: View {
                     Button(action: { selected = item.0 }) {
                         HStack {
                             Image(systemName: item.2)
-                                .foregroundStyle(selected == item.0 ? .accentColor : .secondary)
+                                .foregroundStyle(selected == item.0 ? .cPrimary : .secondary)
                             Text(item.1)
                                 .font(A2Type.subtitleCard)
                                 .foregroundStyle(.cOnSurface)

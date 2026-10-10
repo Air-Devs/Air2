@@ -62,7 +62,7 @@ struct InstallOptionsView: View {
                 TextField("e.g. 1.21.5-fabric", text: $model.versionName)
                     .textFieldStyle(.roundedBorder)
                     .frame(minHeight: A2MinTouchTarget)
-                    .onChange(of: model.versionName) { model.validate() }
+                    .onChange(of: model.versionName) { _ in model.validate() }
                 if let nameError = model.nameError {
                     Text(nameError).font(A2Type.caption).foregroundStyle(.cError)
                 }
