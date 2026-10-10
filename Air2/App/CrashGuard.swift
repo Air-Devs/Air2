@@ -119,7 +119,7 @@ public final class CrashGuard: NSObject {
     /// 注册异常与信号处理器。应在启动流程最早期调用，早于日志轮转。
     /// install 本身不写日志：此时日志会话尚未开始，无处可写。
     @objc public static func install() {
-        A2Log.currentLogPath.withCString { fresh in
+        A2Log.currentLogPath().withCString { fresh in
             if let copy = strdup(fresh) {
                 signalLogPath = UnsafePointer(copy)
             }

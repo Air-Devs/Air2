@@ -154,7 +154,7 @@ public struct GlassCard<Content: View>: View {
             }
             .overlay(shape.stroke(Color.cOutlineVariant.opacity(0.7), lineWidth: 0.5))
             .shadow(
-                color: .black.opacity(colorScheme == .dark ? 0 : level.shadow.opacity),
+                color: .black.opacity(colorScheme.isDark ? 0 : level.shadow.opacity),
                 radius: level.shadow.radius, x: 0, y: level.shadow.y
             )
             .contentShape(shape)

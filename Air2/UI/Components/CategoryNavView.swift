@@ -56,8 +56,8 @@ public struct CategoryNavView: View {
     public var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: A2SpaceS) {
-                ForEach(Array(categories.enumerated()), id: \.element.id) { index, category in
-                    if category.divisionBefore {
+                ForEach(Array(categories.enumerated()), id: \.element.id) { row in
+                    if row.element.divisionBefore {
                         Color.cOnSurface.opacity(0.25)
                             .frame(width: navWidth * 0.4, height: 1)
                             .padding(.vertical, A2SpaceM)
@@ -65,28 +65,28 @@ public struct CategoryNavView: View {
                     Button {
                         let generator = UISelectionFeedbackGenerator()
                         generator.selectionChanged()
-                        withAnimation(.a2Standard) { onSelect?(index) }
+                        withAnimation(.a2Standard) { onSelect?(row.offset) }
                     } label: {
                         VStack(spacing: A2SpaceXS) {
-                            Image(systemName: category.symbol)
+                            Image(systemName: row.element.symbol)
                                 .font(.system(size: 21, weight: .medium))
                                 .frame(width: 24, height: 24)
-                            Text(category.title)
+                            Text(row.element.title)
                                 .font(A2Type.labelSmall)
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
                                 .minimumScaleFactor(0.75)
                         }
-                        .foregroundStyle(index == selectedIndex ? Color.cOnSecondaryContainer : Color.cOnSurfaceVariant)
+                        .foregroundStyle(row.offset == selectedIndex ? Color.cOnSecondaryContainer : Color.cOnSurfaceVariant)
                         .frame(width: navWidth - A2SpaceS, minHeight: 62)
                         .padding(.vertical, A2SpaceS)
                         .background(
                             RoundedRectangle(cornerRadius: A2RadiusM, style: .continuous)
-                                .fill(index == selectedIndex ? Color.cSecondaryContainer : Color.clear)
+                                .fill(row.offset == selectedIndex ? Color.cSecondaryContainer : Color.clear)
                         )
                     }
                     .buttonStyle(A2PressButtonStyle())
-                    .accessibilityAddTraits(index == selectedIndex ? .isSelected : [])
+                    .accessibilityAddTraits(row.offset == selectedIndex ? .isSelected : [])
                 }
             }
             .padding(.vertical, A2SpaceM)
