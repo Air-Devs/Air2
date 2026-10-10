@@ -56,8 +56,9 @@ public struct CategoryNavView: View {
     public var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: A2SpaceS) {
-                ForEach(Array(categories.enumerated()), id: \.element.id) { row in
-                    if row.element.divisionBefore {
+                ForEach(categories.indices, id: \.self) { index in
+                    let category = categories[index]
+                    if category.divisionBefore {
                         Color.cOnSurface.opacity(0.25)
                             .frame(width: navWidth * 0.4, height: 1)
                             .padding(.vertical, A2SpaceM)
@@ -65,28 +66,28 @@ public struct CategoryNavView: View {
                     Button {
                         let generator = UISelectionFeedbackGenerator()
                         generator.selectionChanged()
-                        withAnimation(.a2Standard) { onSelect?(row.offset) }
+                        withAnimation(.a2Standard) { onSelect?(index) }
                     } label: {
                         VStack(spacing: A2SpaceXS) {
-                            Image(systemName: row.element.symbol)
+                            Image(systemName: category.symbol)
                                 .font(.system(size: 21, weight: .medium))
                                 .frame(width: 24, height: 24)
-                            Text(row.element.title)
+                            Text(category.title)
                                 .font(A2Type.labelSmall)
                                 .multilineTextAlignment(.center)
                                 .lineLimit(2)
                                 .minimumScaleFactor(0.75)
                         }
-                        .foregroundStyle(row.offset == selectedIndex ? Color.cOnSecondaryContainer : Color.cOnSurfaceVariant)
+                        .foregroundStyle(index == selectedIndex ? Color.cOnSecondaryContainer : Color.cOnSurfaceVariant)
                         .frame(width: navWidth - A2SpaceS, minHeight: 62)
                         .padding(.vertical, A2SpaceS)
                         .background(
                             RoundedRectangle(cornerRadius: A2RadiusM, style: .continuous)
-                                .fill(row.offset == selectedIndex ? Color.cSecondaryContainer : Color.clear)
+                                .fill(index == selectedIndex ? Color.cSecondaryContainer : Color.clear)
                         )
                     }
                     .buttonStyle(A2PressButtonStyle())
-                    .accessibilityAddTraits(row.offset == selectedIndex ? .isSelected : [])
+                    .accessibilityAddTraits(index == selectedIndex ? .isSelected : [])
                 }
             }
             .padding(.vertical, A2SpaceM)
