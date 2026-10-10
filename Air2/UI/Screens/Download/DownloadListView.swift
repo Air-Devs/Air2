@@ -397,7 +397,7 @@ struct DownloadListView: View {
     @ObservedObject var router: A2Router = A2Router()
     @StateObject private var model: DownloadListViewModel
 
-    init(category: DownloadCategory, router: A2Router = A2Router()) {
+    init(category: DownloadCategory, router: A2Router) {
         self.category = category
         self.router = router
         _model = StateObject(wrappedValue: DownloadListViewModel(contentClass: DownloadListView.contentClass(for: category)))

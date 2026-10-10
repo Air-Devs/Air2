@@ -57,7 +57,7 @@ private let a2VersionRowHeight: CGFloat = 64    // tableView.rowHeight
 
 // MARK: - Version list status (mirrors the original emptyLabel visibility rules)
 
-private enum ProjectVersionStatus {
+enum ProjectVersionStatus {
     case loading
     case error(String)
     case disabled
