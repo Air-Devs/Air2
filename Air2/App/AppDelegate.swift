@@ -70,9 +70,9 @@ public final class AppDelegate: NSObject, UIApplicationDelegate {
     /// 窗口建了却没上屏，省得靠猜。
     private func observeSceneLifecycle() {
         let center = NotificationCenter.default
-        _ = center.addObserver(forName: UIScene.didConnectNotification, object: nil, queue: .main) { note in
+        _ = center.addObserver(forName: UIScene.willConnectNotification, object: nil, queue: .main) { note in
             let role = (note.object as? UIScene)?.session.role.rawValue ?? "-"
-            A2Log.logMessage("Scene: didConnect role=\(role)")
+            A2Log.logMessage("Scene: willConnect role=\(role)")
         }
         _ = center.addObserver(forName: UIScene.didActivateNotification, object: nil, queue: .main) { note in
             let role = (note.object as? UIScene)?.session.role.rawValue ?? "-"
@@ -80,7 +80,8 @@ public final class AppDelegate: NSObject, UIApplicationDelegate {
         }
         _ = center.addObserver(forName: UIWindow.didBecomeVisibleNotification, object: nil, queue: .main) { note in
             guard let window = note.object as? UIWindow else { return }
-            A2Log.logMessage("Window: didBecomeVisible 根控制器=\(type(of: window.rootViewController))")
+            let root = window.rootViewController.map { String(describing: type(of: $0)) } ?? "nil"
+            A2Log.logMessage("Window: didBecomeVisible 根控制器=\(root)")
         }
         _ = center.addObserver(forName: UIWindow.didBecomeKeyNotification, object: nil, queue: .main) { _ in
             A2Log.logMessage("Window: didBecomeKey")
