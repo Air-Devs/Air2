@@ -28,14 +28,19 @@
 #import "A2LauncherViewController.h"
 #import "A2NavigationController.h"
 #import "A2TaskDrawer.h"
+#import "A2TaskProgressView.h"
+#import "A2DownloadTaskCenter.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
+#import "A2Log.h"
 
 @interface A2RootViewController ()
 @property (nonatomic, strong) A2NavigationController *nav;
 @property (nonatomic, strong) A2LauncherViewController *launcher;
 @property (nonatomic, strong) A2TaskDrawer *taskDrawer;
 @property (nonatomic, strong) UIView *surfaceBackdrop;
+/// 抽屉内每个下载任务对应的卡片，按 taskID 索引，用于增量增删改。
+@property (nonatomic, strong) NSMutableDictionary<NSString *, A2TaskProgressView *> *taskViews;
 @end
 
 @implementation A2RootViewController
@@ -67,6 +72,12 @@
                                           selector:@selector(applyTheme)
                                               name:A2ThemeDidChangeNotification
                                             object:nil];
+    // 下载任务变化时刷新抽屉（进度、暂停/完成）
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                          selector:@selector(handleDownloadTasksChanged:)
+                                              name:A2DownloadTasksDidChangeNotification
+                                            object:nil];
+    [self syncDownloadTasks];
     [self setNeedsStatusBarAppearanceUpdate];
 }
 
@@ -99,6 +110,8 @@
 #pragma mark - 任务抽屉
 
 - (void)setupTaskDrawer {
+    _taskViews = [NSMutableDictionary dictionary];
+
     _taskDrawer = [[A2TaskDrawer alloc] initWithFrame:CGRectZero];
     [self.view addSubview:_taskDrawer];
 
@@ -115,6 +128,72 @@
     // 无任务时收起在屏幕外
     _taskDrawer.alpha = 0;
     _taskDrawer.transform = CGAffineTransformMakeTranslation(0, 86);
+}
+
+#pragma mark - 下载任务 → 抽屉
+
+- (void)handleDownloadTasksChanged:(NSNotification *)note {
+    // 通知可能来自后台线程，统一回主线程刷新
+    if (!NSThread.isMainThread) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self syncDownloadTasks]; });
+        return;
+    }
+    [self syncDownloadTasks];
+}
+
+/// 把任务中心的「进行中」任务同步进抽屉：新增补卡、已有更新、消失移除。
+/// 只展示 Running/Paused —— 已结束的任务留在「任务」页，避免浮层越堆越多。
+- (void)syncDownloadTasks {
+    NSArray<A2DownloadTask *> *tasks = [[A2DownloadTaskCenter shared] activeTasks];
+
+    NSMutableSet<NSString *> *liveIDs = [NSMutableSet setWithCapacity:tasks.count];
+    for (A2DownloadTask *task in tasks) {
+        [liveIDs addObject:task.taskID];
+
+        A2TaskProgressView *view = _taskViews[task.taskID];
+        if (!view) {
+            view = [[A2TaskProgressView alloc] initWithTitle:task.title subtitle:task.subtitle];
+            __weak typeof(self) weakSelf = self;
+            NSString *taskID = task.taskID;
+            view.onTogglePause = ^{
+                __strong typeof(weakSelf) self = weakSelf;
+                if (!self) return;
+                [A2Log log:@"download: 抽屉切换暂停 %@", taskID];
+                [[A2DownloadTaskCenter shared] togglePauseTaskWithID:taskID];
+            };
+            _taskViews[taskID] = view;
+            [_taskDrawer addTaskView:view];
+        }
+        view.state = [self uiStateForEngineState:task.state];
+        view.speedText = [task speedText];
+        [view setProgress:(CGFloat)task.progress animated:YES];
+    }
+
+    // 已不在进行中的任务（完成/失败/取消）从抽屉移除
+    for (NSString *taskID in [_taskViews.allKeys copy]) {
+        if ([liveIDs containsObject:taskID]) continue;
+        [_taskDrawer removeTaskView:_taskViews[taskID]];
+        [_taskViews removeObjectForKey:taskID];
+    }
+
+    A2DownloadTask *head = tasks.firstObject;
+    if (head) {
+        [_taskDrawer setSummaryTitle:head.title
+                            progress:(CGFloat)head.progress
+                               speed:[head speedText]];
+    }
+}
+
+/// 引擎态 → 抽屉卡片态。抽屉不展示已取消，这里不会收到 Cancelled。
+- (A2TaskState)uiStateForEngineState:(A2DownloadState)state {
+    switch (state) {
+        case A2DownloadStateRunning:   return A2TaskStateRunning;
+        case A2DownloadStatePaused:    return A2TaskStatePaused;
+        case A2DownloadStateCompleted: return A2TaskStateCompleted;
+        case A2DownloadStateFailed:
+        case A2DownloadStateCancelled:
+        default:                       return A2TaskStateFailed;
+    }
 }
 
 #pragma mark - 主题

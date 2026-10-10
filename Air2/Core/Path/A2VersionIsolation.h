@@ -19,29 +19,36 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
-//  版本隔离 —— 全局三档，语义对齐 PCL2 / HMCL 的三档模型。
+//  版本隔离 —— 三档，语义对齐 PCL2 / HMCL 的三档模型。
 //
-//  三档（设置页选一个，所有版本统一）：
+//  三档（设置页选一个，作为全局档位）：
 //
 //    关闭   gameDir = 游戏根目录          mods = {根}/mods
 //    仅 Mod gameDir = 游戏根目录          mods = versions/{版本名}/mods
-//          根目录的 mods 会被换成指向版本 mods 的符号链接，
+//          只作用于「能装模组的版本」（装了 Fabric / Quilt / LegacyFabric /
+//          Forge / NeoForge 的版本）；原版与仅装 OptiFine 的版本不隔离。
+//          生效版本的根目录 mods 会被换成指向版本 mods 的符号链接，
 //          这样游戏读 {根}/mods 时实际读到的是该版本的模组。
 //    全部   gameDir = versions/{版本名}   mods = versions/{版本名}/mods
-//          存档、资源包、光影、截图等一并搬进版本目录。
+//          所有版本都隔离，存档、资源包、光影、截图等一并搬进版本目录。
 //
 //  libraries 与 assets 始终共用，不随档位变化。
+//
+//  注意：本层只按「传入的档位」解析路径，不判断版本能否装模组。
+//  「仅 Mod 对某个版本是否生效」由 Version 层（A2Version.effectiveIsolationMode）
+//  判定后，把生效档位传进来。
 //
 
 #import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-/// 全局版本隔离档位。字符串取值与 PCL2 / HMCL 的 none / mod / full 一致。
+/// 版本隔离档位。字符串取值与 PCL2 / HMCL 的 none / mod / full 一致。
+/// 「仅 Mod」的实际生效范围由 Version 层决定（只作用于能装模组的版本）。
 typedef NS_ENUM(NSInteger, A2IsolationMode) {
     A2IsolationModeNone = 0,  ///< 关闭：所有数据都在游戏根目录，各版本共用
-    A2IsolationModeMod,       ///< 仅 Mod：游戏数据共用，只把 mods 隔离到版本目录
-    A2IsolationModeFull,      ///< 全部：整个游戏目录隔离到版本目录
+    A2IsolationModeMod,       ///< 仅 Mod：只把「能装模组的版本」的 mods 隔离到版本目录
+    A2IsolationModeFull,      ///< 全部：所有版本的整个游戏目录都隔离到版本目录
 };
 
 /// 档位标识字符串（none / mod / full），用于日志与落盘。
@@ -138,13 +145,13 @@ FOUNDATION_EXPORT NSString *A2VersionFolderDisplayName(A2VersionFolder folder);
                                           fileName:(NSString *)fileName
                                              error:(NSError **)error;
 
-/// 该版本实际使用的游戏目录。
+/// 该版本实际使用的游戏目录。mode 为调用方传进来的「生效档位」。
 ///   关闭 / 仅 Mod → 游戏根目录（各版本共用同一份数据）
 ///   全部          → versions/{版本名}
 - (NSString *)gameDirectoryForVersion:(NSString *)versionName
                                  mode:(A2IsolationMode)mode;
 
-/// 模组目录。
+/// 模组目录。mode 为调用方传进来的「生效档位」。
 ///   仅 Mod / 全部 → versions/{版本名}/mods
 ///   关闭          → {游戏目录}/mods
 - (NSString *)modsDirectoryForVersion:(NSString *)versionName

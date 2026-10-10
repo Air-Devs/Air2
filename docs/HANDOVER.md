@@ -983,3 +983,214 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
 - [x] 校验：`gen_xcodeproj.py`（编译单元 85）+ `verify_pbxproj.py` 通过；`make lint`
       （469 处 import / 169 文件）通过；`tests/Core` 7 个脚本全绿。
 - 未做：真机端到端验证（本机无 Xcode）。
+
+## 10.10 版本隔离「仅 Mod」只隔离能装模组的版本（分支 `feat/isolation-mod-only`）
+
+> 背景：原实现里「仅 Mod」档对所有版本一律把 `mods` 隔离到版本目录，但原版与仅装
+> OptiFine 的版本本就装不了模组，隔离它们的 `mods` 没有意义。本轮把该档对齐为
+> PCL2/HMCL 式语义。记法同上：**不回头改 10.5–10.9**。
+
+- **三档最终语义**：关闭 = 全部不隔离；仅 Mod = **只隔离能装模组的版本**；
+  全部 = 所有版本都隔离。`libraries` / `assets` 仍始终共用。
+- [x] **新增版本级判定**：`A2Version.canInstallMods` —— 加载器为 Fabric / Quilt /
+      LegacyFabric / Forge / NeoForge 才算；OptiFine 只做优化、不加载其它模组，不算。
+      判定集中在 `loaderInfoFromVersionID:`（OptiFine 名收敛为常量 `kOptiFineLoaderName`）。
+- [x] **新增生效档位**：`A2Version.effectiveIsolationMode` —— 全局档位为「仅 Mod」且本版本
+      不能装模组时降级为「关闭」，其余档位与全局一致。
+- [x] **接入**：`gameDirectory` / `modsDirectory` / `directoryForFolder:` /
+      `ensureIsolationDirectories` 四个目录方法全部改用 `effectiveIsolationMode`；
+      `A2VersionManager.applyIsolation` 的共享 `mods` 符号链接对齐也按当前版本的生效档位决定
+      （原版/OptiFine 版本在「仅 Mod」下不再建链，已建的会恢复为真实目录），日志同时输出
+      全局档位与生效档位。
+- [x] **注释与文案同步**：`A2VersionIsolation.h` 头部/枚举/方法注释说明「Path 层只按传入的
+      生效档位解析路径」；设置页（`A2GameSettings`）、单版本设置页
+      （`A2VersionSettingsViewController`）、版本列表与主页元信息的展示改用生效档位，设置页
+      「仅 Mod」副标题改为「只隔离能装模组的版本」。
+- [x] **测试**：`tests/Core/test_version_isolation.py` 新增 `effective_mode` 复刻与第 10 组
+      断言（可装/不可装 × 三档，以及原版在全局「仅 Mod」下 `mods` 仍留在根目录）。
+- [x] 校验：`verify_pbxproj.py` 通过（无新增文件，工程文件未变）；`make lint`（169 文件）
+      通过；`tests/Core` 7 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）。
+
+## 10.11 下载区直达 + 真实筛选 + 带加载器安装链路修复（分支 `feat/download-direct`）
+
+> 背景：验收要求三件事——下载页除整合包外功能完善、去掉「点分类后还要再点一次」的中间
+> 落地页、修好带 mod 加载器版本的安装（此前必失败）。记法同上：**不回头改 10.5–10.10**。
+
+**1) 去掉中间落地页（分类直达）**
+
+- [x] **删除 `UI/Screens/Download/A2DownloadHomeViewController.h/.m`**：它每个分类只放
+      一个入口按钮，点进去才出内容，纯多余一跳。删除后同步 `gen_xcodeproj.py` 重建工程。
+- [x] **`A2DownloadViewController` 改为「选中分类即直达内容页」**：新增
+      `contentCache`（分类索引 → 内容页）与 `contentViewControllerForIndex:` /
+      `makeContentViewControllerForIndex:` / `resourceCategoryForIndex:`；切换分类时
+      `setViewControllers:@[vc] animated:NO` 直接把内容页设为内层栈底，切走再切回保留
+      搜索词与已拉清单。内容页的 `onBack` 改为退**外层**栈（它是内层栈底）。
+- [x] **`A2InstallingViewController.backToDownloadCenter`** 不再依赖已删的 Home 页，
+      改为回退到内层栈底（`nav.viewControllers.firstObject`）。
+
+**2) 资源列表筛选改真实数据（`A2DownloadListViewController`）**
+
+- [x] **删除硬编码**：`filtersForCategory`（假加载器表 / 假版本号表）与 `makeChip:` 一并删除。
+- [x] **新增私有 `A2FilterChip`（`filterValue`）**：筛选值不再靠展示文案反推
+      （旧代码 `"Legacy Fabric".lowercaseString` = `legacy fabric`，与接口要的
+      `legacy-fabric` 不符）。
+- [x] **加载器维度**用 `A2ModLoaderAPI.allLoaderTypes` 真实枚举（`identifierForType:` 取
+      fabric/quilt/legacy-fabric/forge/neoforge/optifine；已核对 Modrinth 官方 loader 标签
+      列表，六者皆为合法 facet 值）。
+- [x] **游戏版本维度**用 `A2RemoteVersions` 从 Mojang 清单动态拉取最新 8 个正式版
+      （`recentReleaseVersionIDsFrom:`），拉取失败只记日志并维持「全部」，不阻塞列表。
+- [x] 筛选条改为「维度子栈 + 分隔线 + 排序子栈」，三处 `alignment` 设为 Center。
+
+**3) 修好带加载器版本的安装链路（`A2GameInstaller`）**
+
+- [x] **根因**：旧逻辑把原版下到 `versions/<versionName>/`（带加载器后缀，如
+      `1.21.5-fabric`），而 `A2ModLoaderInstaller` 只认 `versions/<mcVersion>/` 的原版，
+      于是「需要先安装原版」必失败。新增 `baseVersionName`：带加载器时 = `mcVersion`，
+      原版 json/jar 一律落到基底目录。
+- [x] **已有原版则复用**：`vanillaInstalled:` 以「版本 json + 客户端 jar 都在」为判据
+      （与 `A2VersionManager.validate` 的「版本可用」定义一致）；命中则
+      `reuseVanilla=YES`，`skipVanillaStagesAndInstallLoader` 把原版各阶段标记为
+      「已复用」后直接进入加载器安装，**不删除、不覆盖**已有原版（加载器版 json 靠
+      `inheritsFrom` 引用原版，删了起不来）。
+- [x] **不存两份**：加载器版与基底版共用同一份 libraries/assets（本就按目录去重），
+      客户端 jar 由 `A2ModLoaderInstaller.mergeProfile` 以**硬链接**复用，不产生第二份大文件。
+- [x] 删除死方法 `saveLoaderSelection:`（全仓无调用点）。
+
+- [x] 校验：`gen_xcodeproj.py`（编译单元 84）+ `verify_pbxproj.py` 通过；`make lint` 通过；
+      `tests/Core` 7 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）；版本隔离落盘、整合包 `.mrpack` 解析安装（本轮范围外）。
+
+---
+
+## 10.12 禁用系统输入弹窗 + Mod 等资源下载链路补全（分支 `feat/download-direct`）
+
+> 背景：新增硬性规范——**任何地方不得使用系统输入弹窗**（`UIAlertController` +
+> `addTextFieldWithConfigurationHandler:`），文本输入一律走自研 MD3 组件；同时把除「游戏安装、
+> 整合包安装」外的资源下载链路补齐（详情页文件级筛选、CurseForge 加载器筛选）。记法同上：
+> **不回头改 10.5–10.11**。
+
+**1) 规范落地**
+
+- [x] `docs/UI-DESIGN.md` 新增「## 七、交互禁令（硬性）」：禁系统输入弹窗，必须用自研 MD3
+      输入弹窗/内联输入（语义色、8/12/16/20/28 圆角、弹簧动效、触控 ≥44、空/错误校验态）。
+- [x] `docs/DECISIONS.md` 新增 `ADR-006`（已接受，2026-10-09），点名 `A2CurseForgeKeyPrompt`，
+      注明此前无对应 ADR、不推翻任何旧条目。
+- [x] 工作区外 `~/.trae-cn/skills/air2-ui/SKILL.md`「硬性禁止清单」追加同一禁令。
+
+**2) 自研 MD3 输入弹窗（新增 `UI/Components/A2InputDialog.h/.m`）**
+
+- [x] 泛型接口：`title/message/label/initialText/secure/keyboardType/autocapitalizationType/
+      confirmTitle/cancelTitle` + `validator`（同步校验）+ `onCommit`（异步提交，失败可回填
+      错误文案）+ `onFinish`（成功/取消回调）；`+presentFrom:title:label:initialText:onFinish:`
+      为一步式便捷入口。
+- [x] 呈现方式：`overFullScreen` + 0.45 黑 backdrop（点击取消，提交中忽略）+ 卡片
+      `A2RadiusXL` / `cSurfaceContainerHigh`；最大宽 460，另加 ≤0.92 屏宽/高；入场弹簧回弹。
+- [x] 键盘跟随 `UIKeyboardWillChangeFrameNotification` 调卡片中心（含 `minCenterY` 防顶出上沿）；
+      回车即提交；提交中锁定取消键（`userInteractionEnabled=NO` + `alpha=0.4`——注意
+      `A2PrimaryButton` 的触摸处理不读 `enabled`，故不能靠 `enabled` 锁）。
+
+**3) 全仓替换系统输入弹窗（5 处，输入类全清）**
+
+- [x] `A2VersionSettingsViewController`：JVM 参数、游戏参数、重命名版本（重命名走 `onCommit`
+      做空名校验 + `renameVersion:to:error:` 回填失败原因）。
+- [x] `A2FilesViewController`：`askForNameWithTitle:initial:done:` 内部换实现，签名不变。
+- [x] `A2CurseForgeKeyPrompt`：Key 输入（`secure`、确认键「保存并验证」、`onCommit` 内校验并
+      存钥匙串；用 `__weak host` 避免 host→dlg→block→host 保留环）。
+- [x] 剩余 `UIAlertController` 均为 ActionSheet / 确认 Alert（非输入弹窗），按 ADR-006 不替换。
+
+**4) 资源筛选与详情页文件级筛选**
+
+- [x] 新增共享组件 `UI/Components/A2FilterChip.h/.m`：`filterValue` 携带真实筛选值，
+      `+chip` 工厂（走 alloc/init，确保命中 init 里的样式与主题监听），`setSelected:` 触发
+      `applyTheme`；列表页与详情页共用，删除列表页内同名私有类与 `styleChip:`。
+- [x] 详情页 `A2ProjectDetailViewController` 新增「游戏版本 + 加载器」两行 chip 筛选：选项从
+      已拉回的版本聚合（版本号数字感知降序、加载器去重），**客户端过滤**；无关行整行 `hidden`
+      让外层竖直 stack 连高度一起塌陷；「下载最新版」与更新检测以未筛选的 `allVersions` 为准，
+      避免筛了旧版误判有新版本。
+- [x] Core 补齐 CurseForge 加载器筛选：`A2CurseForgeAPI.searchClassID:` 增 `loader:` 形参，
+      内部按平台中立标识换算 `modLoaderType`（forge=1/fabric=4/quilt=5/neoforge=6，其余不加）；
+      `A2ContentSource.searchCurseForge:` 透传 `filter.loader`。此前选加载器会被静默忽略。
+- [x] 更新检测：列表行沿用「已安装」Badge；详情页 `refreshUpdateState` 已装且最新版未装时
+      主按钮改「更新到 x」。
+
+- [x] 校验：`gen_xcodeproj.py`（编译单元 86）+ `verify_pbxproj.py` 通过；`make lint`（171 文件）
+      通过；`tests/Core` 7 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）；游戏安装 / 整合包安装不做改造（本轮范围外）。
+
+---
+
+## 10.13 重写资源下载页：共用搜索/详情/任务列表 + 数据包分类（分支 `feat/download-direct`）
+
+> 背景：验收要求「重写所有资源下载页并保证功能齐全，除游戏版本与整合包外全部重写」。
+> 记法同上：**不回头改 10.5–10.12**。
+
+**1) Core 扩展：资源分类多选 + 平台能力判定**
+
+- [x] `A2ContentFilter` 新增 `categories`（多选，元素为 `A2ContentCategory.identifier`）；
+      `A2ContentSource` 新增 `-supportsContentClass:` 与 `-categoriesForContentClass:completion:`。
+- [x] Modrinth：`searchWithProjectType:` 增 `categories:` 形参，facets 分类组按 **OR** 拼
+      （`[["categories:a","categories:b"]]`）；新增 `categoryTagsForProjectType:`（GET `/tag/category`）。
+- [x] CurseForge：`searchClassID:` 增 `categoryIDs:` 形参（逗号拼接 `categoryIds`）；新增
+      `categoriesForClassID:`（GET `/categories?gameId=432&classId=X`）。
+- [x] 修正历史缺陷：`A2ProjectTypeForModrinth(World)` 原错兜底成 `datapack`，改为返回 `nil`；
+      `A2AllContentClasses()` 补 `A2ContentClassDataPack`。搜索前判空/不支持时回调明确错误。
+
+**2) 新增网络图片组件 `UI/Components/A2RemoteImageView.h/.m`**
+
+- [x] 内存 `NSCache`（64MB，成本按像素×4）+ 磁盘缓存（`Caches/A2RemoteImages`，文件名 = URL 的
+      SHA1）+ `CGImageSourceCreateThumbnailAtIndex` 下采样 + 请求令牌防 cell 复用竞态；
+      接口仅 `setImageURL:placeholder:` / `cancelLoading` / `applyTheme` / `cornerRadius`。
+
+**3) 新增统一下载任务中心 `Core/Download/A2DownloadTaskCenter.h/.m`**
+
+- [x] 全应用唯一入队/暂停/重试/取消入口；真实网络与落盘仍由 `A2DownloadEngine` 完成，中心只做编排，
+      成功时按 projectID/versionID/subdir 回写 `A2DownloadManifest`。
+- [x] 任务数组由内部串行队列保护，对外通知/回调一律回主线程；进度广播节流 100ms。
+- [x] `A2DownloadTask` 改造：删除自带的重名 `A2DownloadState` 枚举（与 `A2DownloadEngine.h` 重复，
+      潜在编译隐患）与无人引用的多文件聚合逻辑，改为复用引擎枚举；可变接口以类扩展形式并入
+      `A2DownloadTask.h`（标注「内部」，仅供中心使用）。`+shared` init 内不发通知（避开 dispatch_once 重入死锁）。
+- [x] 修复 CI lint 失败（`check_imports.py` 组件依赖检查）：可变接口原计划放独立内部头
+      `A2DownloadTask+Internal.h`，但该校验按「类名 → 头文件」建唯一映射，同一类被两个头文件
+      声明时归属随 `os.walk` 顺序变化（CI 与本地结果相反），且 `+` 无法被其 `(\w+\.h)` 正则解析。
+      根因修法：删除独立内部头，全部并入唯一的 `A2DownloadTask.h`，消除歧义。
+
+**4) 新增共用资源搜索页 `UI/Screens/Download/A2ResourceSearchViewController.h/.m`**
+
+- [x] 模组 / 资源包 / 光影 / 存档 / 数据包 **五类共用**，`initWithContentClass:` 区分。
+- [x] 可展开筛选卡（卡头挂手势而非 `card.tappable`，避免抢子控件点击）：平台切换 + **资源分类多选**
+      + 加载器 + 游戏版本**两者并存** + 排序 + 重置；收起态显示摘要。
+- [x] 平台按 `supportsContentClass:` 裁剪（存档只列 CurseForge），默认平台不支持本类时自动回落；
+      切 CurseForge 无 Key 走 `A2CurseForgeKeyPrompt`，取消回退不留坏状态。
+- [x] 结果卡含真实图标（`A2RemoteImageView`）、作者、简介、下载量、分类标签、**已安装**角标与
+      **收藏**星标（订阅 `A2FavoritesDidChangeNotification` 刷新）；分页 `limit=20`；四态独立文案
+      （加载中 / 无结果 / 请求失败 / 平台不支持）。
+
+**5) 新增共用资源详情页 `UI/Screens/Download/A2ResourceDetailViewController.h/.m`**
+
+- [x] 真实图标 + 简介正文 + 游戏版本/加载器两行客户端筛选（数字感知降序）+ 收藏 + 更新检测
+      （已装且最新版未装 → 主按钮改「更新到 x」）+ 禁分发独立空态。
+- [x] 下载改走 `A2DownloadTaskCenter.enqueueWithTitle:subtitle:request:projectID:versionID:subdir:completion:`，
+      不再直接调引擎、不自行记录清单。
+
+**6) 新增任务列表页 `UI/Screens/Download/A2DownloadTasksViewController.h/.m`**
+
+- [x] 「进行中 / 已完成」分组；每行进度条、速度、状态、失败原因；行内 暂停/继续/重试/取消；
+      顶栏清空已完成；订阅 `A2DownloadTasksDidChangeNotification`，结构不变只就地刷新行（避免抖动）。
+      自建 cell 直接消费引擎态（含 Cancelled），不复用无 Cancelled 的 `A2TaskProgressView`。
+
+**7) 容器接线与路由**
+
+- [x] `A2DownloadViewController`：侧栏新增「数据包」「任务」；索引 2–6 走新搜索页，
+      **整合包（索引 1）保持旧 `A2DownloadListViewController`**，游戏（索引 0）仍走选版页。
+- [x] `A2SearchByIdViewController` / `A2FavoritesViewController` 改跳新详情页（按分类猜 `A2ContentClass`，
+      补 datapack 判定）。
+- [x] `A2RootViewController` 把 `A2DownloadTaskCenter` 接入 `A2TaskDrawer`：仅「进行中」任务显示在
+      底部抽屉，完成/失败自动移除；点击可暂停/继续。
+
+- [x] 校验：`gen_xcodeproj.py`（编译单元 91）+ `verify_pbxproj.py` 通过；`make lint`（182 文件）
+      通过；`tests/Core` 7 个脚本全绿。`A2ResourceSearchViewController.m` 1102 行触发规模提示，
+      但按 CONTRIBUTING「行数不作为拆分依据」保留（单一职责：搜索页 + 其私有结果 cell）。
+- 未做：真机端到端验证（本机无 Xcode）；CurseForge `categoryIds` 多选需真机联调确认是否收敛。
+
+

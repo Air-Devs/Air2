@@ -98,15 +98,22 @@ typedef NS_ENUM(NSInteger, A2ModrinthProjectType) {
                                 NSError * _Nullable error))completion;
 
 /// 按 project_type 字符串搜索（供统一资源源调用）
-- (void)searchWithProjectType:(NSString *)projectType
+/// @param categories 分类 tag 多选，组内为 OR 关系；nil 或空表示不限。
+- (void)searchWithProjectType:(nullable NSString *)projectType
                         query:(nullable NSString *)query
                   gameVersion:(nullable NSString *)gameVersion
                        loader:(nullable NSString *)loader
+                   categories:(nullable NSArray<NSString *> *)categories
                     sortField:(NSString *)sortField
                        offset:(NSInteger)offset
                         limit:(NSInteger)limit
                    completion:(void (^)(NSArray<A2ModrinthProject *> * _Nullable results,
                                         NSError * _Nullable error))completion;
+
+/// 按 project_type 拉取可选分类（Modrinth /tag/category）
+- (void)categoryTagsForProjectType:(nullable NSString *)projectType
+                        completion:(void (^)(NSArray<NSDictionary<NSString *, NSString *> *> * _Nullable tags,
+                                             NSError * _Nullable error))completion;
 
 /// 按文件的 SHA1 反查版本 —— 用于检查已装资源的更新
 - (void)versionBySHA1:(NSString *)sha1

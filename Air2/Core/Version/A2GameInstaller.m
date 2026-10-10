@@ -41,6 +41,13 @@ static void A2Main(dispatch_block_t block) {
 
 @interface A2GameInstaller ()
 @property (nonatomic, strong, nullable) A2InstallRequest *request;
+/// 原版基底的版本名。
+///   原版安装 → 与 versionName 相同；
+///   带加载器 → = mcVersion，因为加载器必须叠在原版之上，
+///   而 A2ModLoaderInstaller 只认 versions/<mcVersion>/ 这一份原版。
+@property (nonatomic, copy, nullable) NSString *baseVersionName;
+/// 原版基底是否已完整存在，可跳过原版下载直接叠加加载器（复用，不删除）
+@property (nonatomic, assign) BOOL reuseVanilla;
 @property (nonatomic, assign) BOOL cancelled;
 @property (nonatomic, strong) NSURLSession *session;
 @property (nonatomic, copy, nullable) void (^progressBlock)(A2InstallStage, double, NSString *);
@@ -91,12 +98,48 @@ static void A2Main(dispatch_block_t block) {
             : request.mcVersion;
     }
 
-    [A2Log log:@"installer: 开始安装 mc=%@ 版本名=%@ 加载器=%@ 目录=%@",
+    // 带加载器时，原版要落到 versions/<mcVersion>/（加载器叠在它之上）；
+    // 纯原版时基底就是 versionName 自己。
+    self.baseVersionName = request.loaderType ? request.mcVersion : request.versionName;
+    self.reuseVanilla = request.loaderType ? [self vanillaInstalled:request.mcVersion] : NO;
+
+    [A2Log log:@"installer: 开始安装 mc=%@ 版本名=%@ 加载器=%@ 基底=%@ 目录=%@",
           request.mcVersion, request.versionName,
-          request.loaderType ?: @"原版", request.gameHome];
+          request.loaderType ?: @"原版", self.baseVersionName, request.gameHome];
+
+    if (self.reuseVanilla) {
+        [A2Log log:@"installer: 原版 %@ 已存在，跳过原版下载直接叠加加载器", request.mcVersion];
+        [self skipVanillaStagesAndInstallLoader];
+        return;
+    }
 
     [self report:A2InstallStageFetchManifest progress:0 message:@"正在获取版本清单…"];
     [self fetchManifest];
+}
+
+/// 原版是否已完整存在（版本 json + 客户端 jar 都齐）。
+///
+/// 加载器要硬链接原版 jar 并读原版 json 合并，缺任何一份都叠不起来，
+/// 所以两个都查；只有都齐才算「可复用」。
+- (BOOL)vanillaInstalled:(NSString *)mcVersion {
+    A2GamePath *path = [A2GamePath pathWithGameHome:self.request.gameHome];
+    NSFileManager *fm = NSFileManager.defaultManager;
+    return [fm fileExistsAtPath:[path versionJSONPath:mcVersion]]
+        && [fm fileExistsAtPath:[path versionJarPath:mcVersion]];
+}
+
+/// 原版已就绪：不做任何原版下载，把原版各阶段直接标记为「已复用」，
+/// 随即进入加载器安装。
+///
+/// 这里绝不删除或覆盖已有原版 —— 加载器版 json 会通过 inheritsFrom
+/// 引用原版，原版删了加载器版也起不来。
+- (void)skipVanillaStagesAndInstallLoader {
+    NSString *reuseMessage = [NSString stringWithFormat:@"已有原版 %@，跳过下载", self.request.mcVersion];
+    for (A2InstallStage stage = A2InstallStageFetchManifest;
+         stage <= A2InstallStageDownloadAssets; stage++) {
+        [self report:stage progress:1 message:reuseMessage];
+    }
+    [self installLoaderIfNeeded];
 }
 
 - (void)fetchManifest {
@@ -140,7 +183,9 @@ static void A2Main(dispatch_block_t block) {
 
 - (void)downloadVersionJSON:(NSString *)url {
     A2GamePath *path = [A2GamePath pathWithGameHome:self.request.gameHome];
-    NSString *dest = [path versionJSONPath:self.request.versionName];
+    // 原版一律落到基底版本目录：带加载器时是 versions/<mcVersion>/，
+    // 加载器后面会读它、并把它的 jar 硬链到自己的版本目录。
+    NSString *dest = [path versionJSONPath:self.baseVersionName];
 
     [self download:[NSArray arrayWithObject:url]
                 to:dest
@@ -167,7 +212,7 @@ static void A2Main(dispatch_block_t block) {
     NSString *jarURL = client[@"url"];
 
     A2GamePath *path = [A2GamePath pathWithGameHome:self.request.gameHome];
-    NSString *jarDest = [path versionJarPath:self.request.versionName];
+    NSString *jarDest = [path versionJarPath:self.baseVersionName];
 
     if (!jarURL.length) {
         [self failWithMessage:@"版本信息里没有客户端下载地址"];
@@ -417,24 +462,6 @@ static void A2Main(dispatch_block_t block) {
             [self endInstallation];
         }];
     }];
-}
-
-- (void)saveLoaderSelection:(A2ModLoaderVersion *)loader {
-    A2GamePath *path = [A2GamePath pathWithGameHome:self.request.gameHome];
-    NSString *dir = [path launcherDataPath:self.request.versionName];
-    [NSFileManager.defaultManager createDirectoryAtPath:dir
-                            withIntermediateDirectories:YES attributes:nil error:nil];
-
-    NSDictionary *info = @{
-        @"loaderType": [A2ModLoaderAPI identifierForType:loader.type],
-        @"loaderVersion": loader.version,
-        @"mcVersion": self.request.mcVersion,
-    };
-    NSData *data = [NSJSONSerialization dataWithJSONObject:info
-                                                   options:NSJSONWritingPrettyPrinted
-                                                     error:nil];
-    NSString *dest = [dir stringByAppendingPathComponent:@"loader.json"];
-    [data writeToFile:dest atomically:YES];
 }
 
 #pragma mark - 收尾
