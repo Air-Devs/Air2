@@ -253,9 +253,10 @@ struct InstallSpec: Hashable {
 
 /// Navigation entry points. Same semantics as the ObjC launcher methods;
 /// other code calls these instead of pushing view controllers directly.
+/// path 是普通数组，由 App 层 NavigationHost 作差分推入 / 弹出（iOS 15 可用，无 SwiftUI 栈）。
 @MainActor
 final class A2Router: ObservableObject {
-    @Published var path = NavigationPath()
+    @Published var path: [A2Route] = []
 
     init() {}
 
@@ -278,6 +279,26 @@ final class A2Router: ObservableObject {
     func openProject(_ id: String) { path.append(A2Route.projectDetail(id)) }
     func openSearchById() { path.append(A2Route.searchById) }
     func openFavorites() { path.append(A2Route.favorites) }
+    func openFiles(_ name: String) { path.append(A2Route.files(name)) }
+    func openBackground() { path.append(A2Route.background) }
+    func openColorTheme() { path.append(A2Route.colorTheme) }
+    func openCurseForgeKey() { path.append(A2Route.curseForgeKey) }
+
+    func pop() {
+        guard !path.isEmpty else {
+            A2Log.logMessage("A2Router: pop 已在根，无路由可弹")
+            return
+        }
+        path.removeLast()
+    }
+
+    func popToRoot() {
+        guard !path.isEmpty else {
+            A2Log.logMessage("A2Router: popToRoot 已在根，无需回退")
+            return
+        }
+        path.removeAll()
+    }
 
     /// Starts the game session; the Player layer owns the actual launch.
     func launchGame() {
@@ -285,25 +306,21 @@ final class A2Router: ObservableObject {
     }
 }
 
-// MARK: - Screen root (NavigationStack bound to the router)
+// MARK: - Screen root (LauncherView + NavigationHost 目的工厂，无 SwiftUI 栈)
 
-/// Hosts every screen. The App layer presents this (via UIHostingController)
-/// once the UIKit bridge retires; until then each screen is hostable alone.
+/// Hosts every screen. App 层 RootView 经 NavigationHost（UINavigationController）
+/// 把 destination(for:router:) 的每个路由包进 UIHostingController 作差分推入 / 弹出；
+/// 这里不持有任何 SwiftUI 导航栈。
 struct A2ScreenRoot: View {
     @StateObject private var router = A2Router()
 
     var body: some View {
-        NavigationStack(path: $router.path) {
-            LauncherView(router: router)
-                .navigationDestination(for: A2Route.self) { route in
-                    destination(route)
-                }
-        }
-        .transition(.a2ScaleFadePush)
+        LauncherView(router: router)
+            .transition(.a2ScaleFadePush)
     }
 
     @ViewBuilder
-    private func destination(_ route: A2Route) -> some View {
+    static func destination(for route: A2Route, router: A2Router) -> some View {
         switch route {
         case .account: AccountView(router: router)
         case .login(let mode): LoginView(mode: mode)
@@ -311,7 +328,7 @@ struct A2ScreenRoot: View {
         case .versions: VersionListView(router: router)
         case .versionSettings(let name): VersionSettingsView(router: router, versionName: name)
         case .download: DownloadRootView(router: router)
-        case .downloadCategory(let category): DownloadListView(category: category)
+        case .downloadCategory(let category): DownloadListView(category: category, router: router)
         case .gameVersions: GameVersionListView(router: router)
         case .installOptions(let id): InstallOptionsView(router: router, versionID: id)
         case .installing(let spec): InstallingView(router: router, spec: spec)

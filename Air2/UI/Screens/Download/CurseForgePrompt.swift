@@ -42,41 +42,39 @@ struct CurseForgePromptSheet: View {
     var onSaved: (() -> Void)?
 
     var body: some View {
-        NavigationStack {
-            A2PageScaffold("CurseForge API key") {
-                GlassCard {
-                    VStack(alignment: .leading, spacing: A2SpaceM) {
-                        Text("CurseForge resources need a personal API key. Paste it once; it stays on this device.")
-                            .font(A2Type.body)
-                            .foregroundStyle(.cOnSurfaceVariant)
-                        SecureField("API key", text: $model.key)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(minHeight: A2MinTouchTarget)
-                        PrimaryButton(title: "Validate & save") {
-                            Task {
-                                let ok = await model.save()
-                                if ok {
-                                    onSaved?()
-                                    dismiss()
-                                }
+        A2PageScaffold("CurseForge API key") {
+            GlassCard {
+                VStack(alignment: .leading, spacing: A2SpaceM) {
+                    Text("CurseForge resources need a personal API key. Paste it once; it stays on this device.")
+                        .font(A2Type.body)
+                        .foregroundStyle(.cOnSurfaceVariant)
+                    SecureField("API key", text: $model.key)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(minHeight: A2MinTouchTarget)
+                    PrimaryButton(title: "Validate & save") {
+                        Task {
+                            let ok = await model.save()
+                            if ok {
+                                onSaved?()
+                                dismiss()
                             }
                         }
-                        .disabled(model.key.isEmpty || model.isValidating)
-                        if model.isValidating { ProgressView().frame(maxWidth: .infinity) }
-                        if let errorMessage = model.errorMessage {
-                            Text(errorMessage)
-                                .font(A2Type.caption)
-                                .foregroundStyle(.cError)
-                        }
+                    }
+                    .disabled(model.key.isEmpty || model.isValidating)
+                    if model.isValidating { ProgressView().frame(maxWidth: .infinity) }
+                    if let errorMessage = model.errorMessage {
+                        Text(errorMessage)
+                            .font(A2Type.caption)
+                            .foregroundStyle(.cError)
                     }
                 }
-                .a2CardEntrance(0)
             }
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                        .frame(minHeight: A2MinTouchTarget)
-                }
+            .a2CardEntrance(0)
+        }
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("Cancel") { dismiss() }
+                    .frame(minHeight: A2MinTouchTarget)
             }
         }
     }

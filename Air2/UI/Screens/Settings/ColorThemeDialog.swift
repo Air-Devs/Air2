@@ -39,49 +39,47 @@ struct ColorThemeDialog: View {
     var onConfirm: ((Color, Int) -> Void)?
 
     var body: some View {
-        NavigationStack {
-            A2PageScaffold("Color theme") {
-                GlassCard {
-                    VStack(alignment: .leading, spacing: A2SpaceS) {
-                        Text("Seed color")
-                            .font(A2Type.caption)
-                            .foregroundStyle(.cOnSurfaceVariant)
-                        ColorPicker("Seed", selection: $model.seed)
-                            .frame(minHeight: A2MinTouchTarget)
-                    }
+        A2PageScaffold("Color theme") {
+            GlassCard {
+                VStack(alignment: .leading, spacing: A2SpaceS) {
+                    Text("Seed color")
+                        .font(A2Type.caption)
+                        .foregroundStyle(.cOnSurfaceVariant)
+                    ColorPicker("Seed", selection: $model.seed)
+                        .frame(minHeight: A2MinTouchTarget)
                 }
-                .a2CardEntrance(0)
-                SettingsSection(title: "Palette style") {
-                    ForEach(model.styles.indices, id: \.self) { i in
-                        Button(action: { model.style = i }) {
-                            HStack {
-                                Text(model.styles[i])
-                                    .font(A2Type.subtitleCard)
-                                    .foregroundStyle(.cOnSurface)
-                                Spacer()
-                                if model.style == i {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(.cPrimary)
-                                }
-                            }
-                            .frame(minHeight: A2MinTouchTarget)
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .a2CardEntrance(1)
-                GlassCard {
-                    HStack(spacing: A2SpaceM) {
-                        PrimaryButton(title: "Cancel", style: .secondary) { dismiss() }
-                        PrimaryButton(title: "Confirm") {
-                            onConfirm?(model.seed, model.style)
-                            dismiss()
-                        }
-                    }
-                }
-                .a2CardEntrance(2)
             }
+            .a2CardEntrance(0)
+            SettingsSection(title: "Palette style") {
+                ForEach(model.styles.indices, id: \.self) { i in
+                    Button(action: { model.style = i }) {
+                        HStack {
+                            Text(model.styles[i])
+                                .font(A2Type.subtitleCard)
+                                .foregroundStyle(.cOnSurface)
+                            Spacer()
+                            if model.style == i {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .foregroundStyle(.cPrimary)
+                            }
+                        }
+                        .frame(minHeight: A2MinTouchTarget)
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .a2CardEntrance(1)
+            GlassCard {
+                HStack(spacing: A2SpaceM) {
+                    PrimaryButton(title: "Cancel", style: .secondary) { dismiss() }
+                    PrimaryButton(title: "Confirm") {
+                        onConfirm?(model.seed, model.style)
+                        dismiss()
+                    }
+                }
+            }
+            .a2CardEntrance(2)
         }
     }
 }

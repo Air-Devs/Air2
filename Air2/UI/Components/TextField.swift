@@ -98,7 +98,7 @@ public struct A2TextField: View {
             }
             .frame(height: 56, alignment: floating ? .top : .center)
             .background(Color.cSurfaceContainerHighest)
-            .clipShape(UnevenRoundedRectangle(topLeadingRadius: A2RadiusXS, topTrailingRadius: A2RadiusXS, style: .continuous))
+            .clipShape(A2TopRoundedShape(radius: A2RadiusXS))
             if let supportMessage, !supportMessage.isEmpty {
                 Text(supportMessage)
                     .font(A2Type.caption)
@@ -106,5 +106,22 @@ public struct A2TextField: View {
                     .padding(.horizontal, A2SpaceM)
             }
         }
+    }
+}
+
+/// MD3 filled-field top corners (iOS 15: UIBezierPath subset rounding
+/// instead of UnevenRoundedRectangle).
+public struct A2TopRoundedShape: Shape {
+    public var radius: CGFloat
+
+    public init(radius: CGFloat) { self.radius = radius }
+
+    public func path(in rect: CGRect) -> Path {
+        let bezier = UIBezierPath(
+            roundedRect: rect,
+            byRoundingCorners: [.topLeft, .topRight],
+            cornerRadii: CGSize(width: radius, height: radius)
+        )
+        return Path(bezier.cgPath)
     }
 }

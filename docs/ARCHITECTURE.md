@@ -51,7 +51,7 @@ App → UI → Player → Core → Bridge → (Natives)
 应用生命周期与根装配。
 - `Air2App.swift` —— SwiftUI 入口
 - `AppDelegate.swift` —— UIKit 生命周期钩子（JIT、后台任务）
-- `RootView.swift` —— 根导航容器
+- `RootView.swift` —— 根导航容器（NavigationHost 驱动，无 SwiftUI 栈）
 - `DependencyContainer.swift` —— 依赖注入装配点（唯一允许的"全局"）
 
 **禁止**：业务逻辑、网络请求、直接引用具体 View。

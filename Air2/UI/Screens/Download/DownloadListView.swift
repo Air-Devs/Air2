@@ -48,6 +48,7 @@ final class DownloadListViewModel: ObservableObject {
 
 struct DownloadListView: View {
     let category: DownloadCategory
+    @ObservedObject var router: A2Router = A2Router()
     @StateObject private var model = DownloadListViewModel()
 
     private var title: String {
@@ -97,7 +98,7 @@ struct DownloadListView: View {
                     firstRunHint: "First run: Modrinth works without any setup."
                 ) { model.reload() }
                 ForEach(model.projects, id: \.self) { project in
-                    NavigationLink(value: A2Route.projectDetail(project.id)) {
+                    Button(action: { router.openProject(project.id) }) {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(project.title)

@@ -19,13 +19,14 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
-//  根导航容器 —— 路由栈 + 主页 + 全部分支页面的装配点。
+//  根导航容器 —— NavigationHost 作差分推入 / 弹出 + 主页装配点。
 //  横屏由 Info.plist 与 AppDelegate 的方向锁定保证，这里不再重复声明。
 //  主题只消费（表面色、窗口外观），色值定义在 Theme 层。
-//  页面转场动效见 NavigationHost（UIKit 宿主）与 AnyTransition.a2ScaleFadePush。
-//
+//  页面转场动效见 NavigationHost（UIKit 宿主，默认缩放淡入）。
+//  不用 NavigationStack：部署目标 iOS 15.0 无该 API。
 
 import SwiftUI
+import UIKit
 
 @MainActor
 struct RootView: View {
@@ -43,26 +44,21 @@ struct RootView: View {
     }
 
     var body: some View {
-        NavigationStack(path: $router.path) {
-            LauncherView(router: router)
-                .navigationDestination(for: A2Route.self) { route in
-                    destination(for: route)
-                }
-        }
-        .background(theme.scheme.surface)
-        .onAppear {
-            // SwiftUI 按主题状态声明式渲染，不存在「先取色后改样式」问题；
-            // 这里只同步窗口外观（亮 / 暗 / 跟随系统）并记录启动完成。
-            theme.applyAppearance(to: keyWindow())
-            guard !didLogFirstAppearance else { return }
-            didLogFirstAppearance = true
-            A2Log.logMessage("RootView: 根视图已上屏，启动流程完成")
-        }
-        .onChange(of: scenePhase) { phase in
-            guard phase == .active else { return }
-            // 回到前台时同步窗口外观，走和「用户手动切主题」同一条路径。
-            theme.applyAppearance(to: keyWindow())
-        }
+        NavigationHostBridge(router: router)
+            .background(theme.scheme.surface)
+            .onAppear {
+                // SwiftUI 按主题状态声明式渲染，不存在「先取色后改样式」问题；
+                // 这里只同步窗口外观（亮 / 暗 / 跟随系统）并记录启动完成。
+                theme.applyAppearance(to: keyWindow())
+                guard !didLogFirstAppearance else { return }
+                didLogFirstAppearance = true
+                A2Log.logMessage("RootView: 根视图已上屏，启动流程完成")
+            }
+            .onChange(of: scenePhase) { phase in
+                guard phase == .active else { return }
+                // 回到前台时同步窗口外观，走和「用户手动切主题」同一条路径。
+                theme.applyAppearance(to: keyWindow())
+            }
     }
 
     private func keyWindow() -> UIWindow? {
@@ -72,46 +68,41 @@ struct RootView: View {
         }
         return scenes.flatMap(\.windows).first
     }
+}
 
-    // MARK: - 路由装配
+// MARK: - NavigationHost 桥接（router.$path 差分同步）
 
-    @ViewBuilder
-    private func destination(for route: A2Route) -> some View {
-        switch route {
-        case .account:
-            AccountView(router: router)
-        case .login(let mode):
-            LoginView(mode: mode)
-        case .settings:
-            SettingsView(router: router)
-        case .versions:
-            VersionListView(router: router)
-        case .versionSettings(let name):
-            VersionSettingsView(router: router, versionName: name)
-        case .download:
-            DownloadRootView(router: router)
-        case .downloadCategory(let category):
-            DownloadListView(category: category)
-        case .gameVersions:
-            GameVersionListView(router: router)
-        case .installOptions(let versionID):
-            InstallOptionsView(router: router, versionID: versionID)
-        case .installing(let spec):
-            InstallingView(router: router, spec: spec)
-        case .projectDetail(let identifier):
-            ProjectDetailView(projectID: identifier)
-        case .searchById:
-            SearchByIdView(router: router)
-        case .favorites:
-            FavoritesView(router: router)
-        case .files(let name):
-            FilesView(displayName: name)
-        case .background:
-            BackgroundSettingsView()
-        case .colorTheme:
-            ColorThemeDialog(onConfirm: nil)
-        case .curseForgeKey:
-            CurseForgeKeyPageView()
+/// 把 router.path（[A2Route]）映射到 NavigationHost 的控制器栈：
+/// path 每多一项就把 A2ScreenRoot.destination 包进 UIHostingController
+/// 以 scaleFade 推入；path 缩短就弹到对应深度。转场样式沿用
+/// NavigationHost 默认的缩放淡入（原 ObjC A2NavigationController 关键帧语义）。
+@MainActor
+private struct NavigationHostBridge: UIViewControllerRepresentable {
+    @ObservedObject var router: A2Router
+
+    func makeUIViewController(context: Context) -> NavigationHost {
+        let host = NavigationHost()
+        let root = UIHostingController(rootView: LauncherView(router: router))
+        host.setViewControllers([root], animated: false)
+        return host
+    }
+
+    func updateUIViewController(_ host: NavigationHost, context: Context) {
+        let wantDepth = router.path.count + 1
+        let haveDepth = host.viewControllers.count
+        guard wantDepth != haveDepth else { return }
+        if wantDepth > haveDepth {
+            // 只推入新增的尾部，避免整栈重建导致动画与状态丢失。
+            for route in router.path.suffix(wantDepth - haveDepth) {
+                let view = A2ScreenRoot.destination(for: route, router: router)
+                let next = UIHostingController(rootView: view)
+                host.pushViewController(next, transition: .scaleFade, animated: true)
+            }
+        } else if wantDepth <= 1 {
+            host.popToRootViewController(animated: true)
+        } else {
+            let target = host.viewControllers[wantDepth - 1]
+            host.popToViewController(target, animated: true)
         }
     }
 }

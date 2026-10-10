@@ -20,7 +20,7 @@
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
 //  Mapping: A2CardPosition (Top/Middle/Bottom/Single) + A2CornerMaskForPosition
-//  -> CardPosition + UnevenRoundedRectangle radii. No UIKit host needed.
+//  -> CardPosition + per-corner radii (iOS 15 shape, no UIKit host needed).
 //
 
 import SwiftUI
@@ -52,13 +52,52 @@ public enum CardPosition: Equatable {
 }
 
 public extension View {
-    /// Clips to per-edge radii for grouped rows.
+    /// Clips to per-edge radii for grouped rows (iOS 15: custom shape
+    /// with separate top/bottom radii instead of UnevenRoundedRectangle).
     func cardPositionClip(_ position: CardPosition) -> some View {
         let r = position.radii
-        return clipShape(UnevenRoundedRectangle(
-            topLeadingRadius: r.top, bottomLeadingRadius: r.bottom,
-            bottomTrailingRadius: r.bottom, topTrailingRadius: r.top,
-            style: .continuous
-        ))
+        return clipShape(A2EdgeRadiiShape(topRadius: r.top, bottomRadius: r.bottom))
+    }
+}
+
+/// Rectangle with independent top / bottom corner radii (continuous feel).
+/// Falls back to RoundedRectangle when both radii match.
+public struct A2EdgeRadiiShape: Shape {
+    public var topRadius: CGFloat
+    public var bottomRadius: CGFloat
+
+    public init(topRadius: CGFloat, bottomRadius: CGFloat) {
+        self.topRadius = topRadius
+        self.bottomRadius = bottomRadius
+    }
+
+    public func path(in rect: CGRect) -> Path {
+        let limit = min(rect.width, rect.height) / 2
+        let top = min(topRadius, limit)
+        let bottom = min(bottomRadius, limit)
+        var p = Path()
+        p.move(to: CGPoint(x: rect.minX + top, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.maxX - top, y: rect.minY))
+        p.addArc(
+            center: CGPoint(x: rect.maxX - top, y: rect.minY + top),
+            radius: top, startAngle: .degrees(-90), endAngle: .degrees(0), clockwise: false
+        )
+        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - bottom))
+        p.addArc(
+            center: CGPoint(x: rect.maxX - bottom, y: rect.maxY - bottom),
+            radius: bottom, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false
+        )
+        p.addLine(to: CGPoint(x: rect.minX + bottom, y: rect.maxY))
+        p.addArc(
+            center: CGPoint(x: rect.minX + bottom, y: rect.maxY - bottom),
+            radius: bottom, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false
+        )
+        p.addLine(to: CGPoint(x: rect.minX, y: rect.minY + top))
+        p.addArc(
+            center: CGPoint(x: rect.minX + top, y: rect.minY + top),
+            radius: top, startAngle: .degrees(180), endAngle: .degrees(270), clockwise: false
+        )
+        p.closeSubpath()
+        return p
     }
 }
