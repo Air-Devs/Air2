@@ -23,7 +23,8 @@
 //  CurseForge API 客户端。
 //
 //  与 Modrinth 的差异：
-//    · 需要 API Key（在 console.curseforge.com 申请）
+//    · 需要 API Key —— 但【已内置】，用户无需申请
+//      （参考 ZL2：Key 在构建期注入为 BuildConfig 常量）
 //    · 请求要带两个头：x-api-key 和 Authorization: Bearer
 //    · Minecraft 的 gameId 固定为 432
 //    · 部分作者禁止第三方分发，能否下载要看项目的 allowModDistribution
@@ -85,11 +86,20 @@ extern const NSInteger A2CFMinecraftGameID;
 
 + (instancetype)shared;
 
-/// API Key。不设置则所有请求都会失败。
-/// 存 Keychain 而不是 UserDefaults —— 它是凭据。
+/// 当前使用的 API Key（只读语义，走 setAPIKey: 修改）
 @property (nonatomic, copy, nullable) NSString *apiKey;
+
+/// 是否可用。Key 内置后恒为 YES。
 + (BOOL)hasAPIKey;
+
+/// 是否在使用用户自定义的 Key（而非内置的）
++ (BOOL)usingCustomKey;
+
+/// 运行期覆盖 Key（存 Keychain）。传 nil 则恢复内置值。
 + (void)setAPIKey:(nullable NSString *)key;
+
+/// 清除用户自定义的 Key，恢复为内置值
++ (void)resetToBuiltinKey;
 
 /// 测试 Key 是否有效
 - (void)validateKeyWithCompletion:(void (^)(BOOL valid, NSError * _Nullable error))completion;

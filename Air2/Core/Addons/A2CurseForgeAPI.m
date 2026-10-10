@@ -28,8 +28,58 @@
 const NSInteger A2CFMinecraftGameID = 432;
 
 static NSString *const kBaseURL = @"https://api.curseforge.com/v1";
+/// 内置的 CurseForge API Key。
+///
+/// 参考 ZL2 的做法（ZalithLauncher/build.gradle.kts 里的
+/// getKeyFromLocal + BuildConfig.CURSEFORGE_API）：Key 在构建期注入，
+/// 用户开箱即用，不需要自己申请。
+///
+/// 取值优先级：
+///   1. 环境变量 CURSEFORGE_API_KEY   —— 便于 CI 用 secret、本地覆盖
+///   2. 沙盒 Documents/.curseforge_api.txt —— 便于临时替换
+///   3. Keychain（用户在设置里填过自己的 Key）
+///   4. 这个内置值                     —— 兜底，保证开箱可用
+static NSString *const kBuiltinCurseForgeKey =
+    @"$2a$10$VWHUI17c3d5wUKb6eiDDYOMjMrW12An3MstARm5CkuhUeC9.wJWhi";
+
 /// Keychain 里的服务名与账号名
 static NSString *const kKeychainService = @"dev.airdevs.air2.curseforge";
+static NSString *const kKeychainAccount = @"apiKey";
+
+/// 本地覆盖文件名
+static NSString *const kLocalKeyFileName = @".curseforge_api.txt";
+
+/// 解析出实际使用的 Key。
+static NSString *A2ResolveCurseForgeKey(void) {
+    // 1. 环境变量
+    const char *env = getenv("CURSEFORGE_API_KEY");
+    if (env && strlen(env) > 0) {
+        NSString *v = [NSString stringWithUTF8String:env];
+        if (v.length > 0) return v;
+    }
+
+    // 2. 沙盒里的本地文件
+    NSString *docs = NSSearchPathForDirectoriesInDomains(
+        NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    if (docs) {
+        NSString *path = [docs stringByAppendingPathComponent:kLocalKeyFileName];
+        NSString *content = [NSString stringWithContentsOfFile:path
+                                                      encoding:NSUTF8StringEncoding
+                                                         error:nil];
+        if (content) {
+            NSString *trimmed = [content stringByTrimmingCharactersInSet:
+                                 NSCharacterSet.whitespaceAndNewlineCharacterSet];
+            if (trimmed.length > 0) return trimmed;
+        }
+    }
+
+    // 3. Keychain（用户自定义）
+    NSString *stored = [A2CurseForgeAPI loadKeyFromKeychain];
+    if (stored.length > 0) return stored;
+
+    // 4. 内置兜底
+    return kBuiltinCurseForgeKey;
+}
 static NSString *const kKeychainAccount = @"apiKey";
 
 static void A2Main(dispatch_block_t b) {
@@ -105,6 +155,8 @@ static NSNumber *A2CFModLoaderTypeForIdentifier(NSString *identifier) {
 
 @interface A2CurseForgeAPI ()
 @property (nonatomic, copy, nullable) NSString *cachedKey;
+/// 供 A2ResolveCurseForgeKey 调用
++ (nullable NSString *)loadKeyFromKeychain;
 @end
 
 @implementation A2CurseForgeAPI
@@ -121,7 +173,7 @@ static NSNumber *A2CFModLoaderTypeForIdentifier(NSString *identifier) {
 - (instancetype)init {
     self = [super init];
     if (!self) return nil;
-    _cachedKey = [A2CurseForgeAPI loadKeyFromKeychain];
+    _cachedKey = A2ResolveCurseForgeKey();
     return self;
 }
 
@@ -135,8 +187,25 @@ static NSNumber *A2CFModLoaderTypeForIdentifier(NSString *identifier) {
     return _cachedKey;
 }
 
+/// 永远返回 YES —— Key 是内置的，开箱即用。
+/// 保留这个方法是为了：
+///   · 调用方代码不用改（否则要删一堆判断）
+///   · 将来如果要加「Key 失效」的检测，在这里改即可
 + (BOOL)hasAPIKey {
+    return A2ResolveCurseForgeKey().length > 0;
+}
+
+/// 是否使用了自己的 Key（非内置）
++ (BOOL)usingCustomKey {
+    const char *env = getenv("CURSEFORGE_API_KEY");
+    if (env && strlen(env) > 0) return YES;
     return [self loadKeyFromKeychain].length > 0;
+}
+
+/// 恢复为内置 Key（清掉用户自定义的）
++ (void)resetToBuiltinKey {
+    [self saveKeyToKeychain:nil];
+    [self shared].apiKey = A2ResolveCurseForgeKey();
 }
 
 + (void)setAPIKey:(NSString *)key {

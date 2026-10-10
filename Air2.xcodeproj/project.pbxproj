@@ -48,6 +48,7 @@
 		0769485BDAD9E62F52C32A8C /* A2CategoryNavView.m in Sources */ = {isa = PBXBuildFile; fileRef = A283C0C24413C706B449C36A /* A2CategoryNavView.m */; };
 		0964A8EE7FBEE0DA072679D2 /* A2ColorWheel.m in Sources */ = {isa = PBXBuildFile; fileRef = 75554051E6AED37FAF518AAF /* A2ColorWheel.m */; };
 		2BF445C4575E8B37E4ED01C4 /* A2FilterChip.m in Sources */ = {isa = PBXBuildFile; fileRef = 86E9A8E1F1CBFB462AEE7811 /* A2FilterChip.m */; };
+		CB87022628B4EEDE9D911585 /* A2FilterPanel.m in Sources */ = {isa = PBXBuildFile; fileRef = 0D6F12D8CC6D2D0C761EECC2 /* A2FilterPanel.m */; };
 		350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */ = {isa = PBXBuildFile; fileRef = A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */; };
 		C5F3C56FAA94C667A202A766 /* A2InputDialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 1AAD1DB8B8E6685A93FA2940 /* A2InputDialog.m */; };
 		2C9CD0FA185D54ECBE085D43 /* A2LoaderCard.m in Sources */ = {isa = PBXBuildFile; fileRef = 139430B14A933139D8C20D5C /* A2LoaderCard.m */; };
@@ -55,6 +56,8 @@
 		8ABD4DA07F7A241239D71053 /* A2ProgressBar.m in Sources */ = {isa = PBXBuildFile; fileRef = EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */; };
 		ED8B276093698A47A8E600CB /* A2QuickActionCard.m in Sources */ = {isa = PBXBuildFile; fileRef = BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */; };
 		EE11839B7BF8F6987F6F88A7 /* A2RemoteImageView.m in Sources */ = {isa = PBXBuildFile; fileRef = 75996837421C7BC519ECA54A /* A2RemoteImageView.m */; };
+		D6D331A29BC51444971D8E7B /* A2ResourceBadge.m in Sources */ = {isa = PBXBuildFile; fileRef = DB4036A9A71DD969DBD0A3A2 /* A2ResourceBadge.m */; };
+		63F938DF3A60909E3702BC97 /* A2ResourceCard.m in Sources */ = {isa = PBXBuildFile; fileRef = 2E56917EAF9417BA50FFE0F3 /* A2ResourceCard.m */; };
 		54F109AC2BE3E147AEEE07FF /* A2RingProgress.m in Sources */ = {isa = PBXBuildFile; fileRef = 65B73468B0B2BABA009E64BC /* A2RingProgress.m */; };
 		11A6C38842401D6C12DD4597 /* A2SegmentedControl.m in Sources */ = {isa = PBXBuildFile; fileRef = FB7BA68822FCB0D14D580939 /* A2SegmentedControl.m */; };
 		41CF931E6887AD8AF73E145F /* A2SettingsRow.m in Sources */ = {isa = PBXBuildFile; fileRef = 235D2D4A2ABFFA39AEDB334D /* A2SettingsRow.m */; };
@@ -150,6 +153,7 @@
 		A283C0C24413C706B449C36A /* A2CategoryNavView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CategoryNavView.m"; sourceTree = "<group>"; };
 		75554051E6AED37FAF518AAF /* A2ColorWheel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorWheel.m"; sourceTree = "<group>"; };
 		86E9A8E1F1CBFB462AEE7811 /* A2FilterChip.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2FilterChip.m"; sourceTree = "<group>"; };
+		0D6F12D8CC6D2D0C761EECC2 /* A2FilterPanel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2FilterPanel.m"; sourceTree = "<group>"; };
 		A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GlassCard.m"; sourceTree = "<group>"; };
 		1AAD1DB8B8E6685A93FA2940 /* A2InputDialog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2InputDialog.m"; sourceTree = "<group>"; };
 		139430B14A933139D8C20D5C /* A2LoaderCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoaderCard.m"; sourceTree = "<group>"; };
@@ -157,6 +161,8 @@
 		EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ProgressBar.m"; sourceTree = "<group>"; };
 		BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2QuickActionCard.m"; sourceTree = "<group>"; };
 		75996837421C7BC519ECA54A /* A2RemoteImageView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RemoteImageView.m"; sourceTree = "<group>"; };
+		DB4036A9A71DD969DBD0A3A2 /* A2ResourceBadge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceBadge.m"; sourceTree = "<group>"; };
+		2E56917EAF9417BA50FFE0F3 /* A2ResourceCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceCard.m"; sourceTree = "<group>"; };
 		65B73468B0B2BABA009E64BC /* A2RingProgress.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RingProgress.m"; sourceTree = "<group>"; };
 		FB7BA68822FCB0D14D580939 /* A2SegmentedControl.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SegmentedControl.m"; sourceTree = "<group>"; };
 		235D2D4A2ABFFA39AEDB334D /* A2SettingsRow.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsRow.m"; sourceTree = "<group>"; };
@@ -246,6 +252,7 @@
 		853858C5BCCD6563D696BCE9 /* A2CategoryNavView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CategoryNavView.h"; sourceTree = "<group>"; };
 		D0D70559C6A4486D1060EC44 /* A2ColorWheel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorWheel.h"; sourceTree = "<group>"; };
 		51821EE36006651D51525519 /* A2FilterChip.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2FilterChip.h"; sourceTree = "<group>"; };
+		7F65D6CE6087B25615A6099F /* A2FilterPanel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2FilterPanel.h"; sourceTree = "<group>"; };
 		011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GlassCard.h"; sourceTree = "<group>"; };
 		51D0A8ACF4410E0B1AC0B915 /* A2InputDialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InputDialog.h"; sourceTree = "<group>"; };
 		0AE3E9A2D83CB6D50AE64979 /* A2LoaderCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoaderCard.h"; sourceTree = "<group>"; };
@@ -254,6 +261,8 @@
 		D771FB41CA40081650206A01 /* A2ProgressView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ProgressView.h"; sourceTree = "<group>"; };
 		6585C7CB91A28A24F014676B /* A2QuickActionCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2QuickActionCard.h"; sourceTree = "<group>"; };
 		3E4D49239E95F02845B43FE8 /* A2RemoteImageView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RemoteImageView.h"; sourceTree = "<group>"; };
+		5BD2FAB5FF20BB633E2E18FE /* A2ResourceBadge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceBadge.h"; sourceTree = "<group>"; };
+		8AD1D670660A4CF44FADDE22 /* A2ResourceCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceCard.h"; sourceTree = "<group>"; };
 		448AFE07A533753F67B61451 /* A2RingProgress.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RingProgress.h"; sourceTree = "<group>"; };
 		06BF25C201A9B83666E117F1 /* A2SegmentedControl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SegmentedControl.h"; sourceTree = "<group>"; };
 		32854779149E0E29A0EC1CE2 /* A2SettingsRow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsRow.h"; sourceTree = "<group>"; };
@@ -528,6 +537,7 @@
 				A283C0C24413C706B449C36A /* A2CategoryNavView.m */,
 				75554051E6AED37FAF518AAF /* A2ColorWheel.m */,
 				86E9A8E1F1CBFB462AEE7811 /* A2FilterChip.m */,
+				0D6F12D8CC6D2D0C761EECC2 /* A2FilterPanel.m */,
 				A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */,
 				1AAD1DB8B8E6685A93FA2940 /* A2InputDialog.m */,
 				139430B14A933139D8C20D5C /* A2LoaderCard.m */,
@@ -535,6 +545,8 @@
 				EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */,
 				BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */,
 				75996837421C7BC519ECA54A /* A2RemoteImageView.m */,
+				DB4036A9A71DD969DBD0A3A2 /* A2ResourceBadge.m */,
+				2E56917EAF9417BA50FFE0F3 /* A2ResourceCard.m */,
 				65B73468B0B2BABA009E64BC /* A2RingProgress.m */,
 				FB7BA68822FCB0D14D580939 /* A2SegmentedControl.m */,
 				235D2D4A2ABFFA39AEDB334D /* A2SettingsRow.m */,
@@ -551,6 +563,7 @@
 				853858C5BCCD6563D696BCE9 /* A2CategoryNavView.h */,
 				D0D70559C6A4486D1060EC44 /* A2ColorWheel.h */,
 				51821EE36006651D51525519 /* A2FilterChip.h */,
+				7F65D6CE6087B25615A6099F /* A2FilterPanel.h */,
 				011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */,
 				51D0A8ACF4410E0B1AC0B915 /* A2InputDialog.h */,
 				0AE3E9A2D83CB6D50AE64979 /* A2LoaderCard.h */,
@@ -559,6 +572,8 @@
 				D771FB41CA40081650206A01 /* A2ProgressView.h */,
 				6585C7CB91A28A24F014676B /* A2QuickActionCard.h */,
 				3E4D49239E95F02845B43FE8 /* A2RemoteImageView.h */,
+				5BD2FAB5FF20BB633E2E18FE /* A2ResourceBadge.h */,
+				8AD1D670660A4CF44FADDE22 /* A2ResourceCard.h */,
 				448AFE07A533753F67B61451 /* A2RingProgress.h */,
 				06BF25C201A9B83666E117F1 /* A2SegmentedControl.h */,
 				32854779149E0E29A0EC1CE2 /* A2SettingsRow.h */,
@@ -824,6 +839,7 @@
 				0769485BDAD9E62F52C32A8C /* A2CategoryNavView.m in Sources */,
 				0964A8EE7FBEE0DA072679D2 /* A2ColorWheel.m in Sources */,
 				2BF445C4575E8B37E4ED01C4 /* A2FilterChip.m in Sources */,
+				CB87022628B4EEDE9D911585 /* A2FilterPanel.m in Sources */,
 				350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */,
 				C5F3C56FAA94C667A202A766 /* A2InputDialog.m in Sources */,
 				2C9CD0FA185D54ECBE085D43 /* A2LoaderCard.m in Sources */,
@@ -831,6 +847,8 @@
 				8ABD4DA07F7A241239D71053 /* A2ProgressBar.m in Sources */,
 				ED8B276093698A47A8E600CB /* A2QuickActionCard.m in Sources */,
 				EE11839B7BF8F6987F6F88A7 /* A2RemoteImageView.m in Sources */,
+				D6D331A29BC51444971D8E7B /* A2ResourceBadge.m in Sources */,
+				63F938DF3A60909E3702BC97 /* A2ResourceCard.m in Sources */,
 				54F109AC2BE3E147AEEE07FF /* A2RingProgress.m in Sources */,
 				11A6C38842401D6C12DD4597 /* A2SegmentedControl.m in Sources */,
 				41CF931E6887AD8AF73E145F /* A2SettingsRow.m in Sources */,
