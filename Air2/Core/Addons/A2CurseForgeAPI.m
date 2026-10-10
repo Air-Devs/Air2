@@ -37,6 +37,21 @@ static void A2Main(dispatch_block_t b) {
     else dispatch_async(dispatch_get_main_queue(), b);
 }
 
+/// 平台中立加载器标识 → CurseForge 的 modLoaderType 数字码。
+///
+/// 两家平台的取值体系不同（我们是字符串标识，CurseForge 是数字枚举），
+/// 换算收在这里，调用方只说「要 Fabric」。
+/// 未收录的（如 legacy-fabric，CurseForge 不支持）返回 nil，即不加该筛选。
+static NSNumber *A2CFModLoaderTypeForIdentifier(NSString *identifier) {
+    if (identifier.length == 0) return nil;
+    NSString *key = identifier.lowercaseString;
+    if ([key isEqualToString:@"forge"])    return @1;
+    if ([key isEqualToString:@"fabric"])   return @4;
+    if ([key isEqualToString:@"quilt"])    return @5;
+    if ([key isEqualToString:@"neoforge"]) return @6;
+    return nil;
+}
+
 #pragma mark - 项目
 
 @implementation A2CFProject
@@ -293,6 +308,8 @@ static void A2Main(dispatch_block_t b) {
 - (void)searchClassID:(A2CFClassID)classID
                 query:(NSString *)query
           gameVersion:(NSString *)gameVersion
+               loader:(NSString *)loader
+          categoryIDs:(NSArray<NSString *> *)categoryIDs
             sortField:(NSString *)sortField
                offset:(NSInteger)offset
                 limit:(NSInteger)limit
@@ -324,6 +341,23 @@ static void A2Main(dispatch_block_t b) {
     if (gameVersion.length > 0) {
         [items addObject:[NSURLQueryItem queryItemWithName:@"gameVersion" value:gameVersion]];
     }
+    // 加载器筛选：换算失败（CurseForge 不支持该加载器）就不加，避免筛出空结果
+    NSNumber *loaderCode = A2CFModLoaderTypeForIdentifier(loader);
+    if (loaderCode) {
+        [items addObject:[NSURLQueryItem queryItemWithName:@"modLoaderType"
+                                                     value:[loaderCode stringValue]]];
+    }
+    // 分类多选：CurseForge 用逗号分隔的 id 列表
+    if (categoryIDs.count > 0) {
+        NSMutableArray<NSString *> *ids = [NSMutableArray array];
+        for (NSString *cid in categoryIDs) {
+            if (cid.length > 0) [ids addObject:cid];
+        }
+        if (ids.count > 0) {
+            [items addObject:[NSURLQueryItem queryItemWithName:@"categoryIds"
+                                                         value:[ids componentsJoinedByString:@","]]];
+        }
+    }
 
     [self GET:@"/mods" query:items completion:^(id json, NSError *error) {
         if (error) { if (completion) completion(nil, error); return; }
@@ -335,6 +369,36 @@ static void A2Main(dispatch_block_t b) {
             for (NSDictionary *j in raw) {
                 A2CFProject *p = [A2CFProject fromJSON:j];
                 if (p) [out addObject:p];
+            }
+        }
+        if (completion) completion(out, nil);
+    }];
+}
+
+- (void)categoriesForClassID:(NSInteger)classID
+                  completion:(void (^)(NSArray<NSDictionary<NSString *, NSString *> *> *, NSError *))completion {
+
+    NSArray<NSURLQueryItem *> *items = @[
+        [NSURLQueryItem queryItemWithName:@"gameId"
+                                    value:[@(A2CFMinecraftGameID) stringValue]],
+        [NSURLQueryItem queryItemWithName:@"classId"
+                                    value:[@(classID) stringValue]],
+    ];
+
+    [self GET:@"/categories" query:items completion:^(id json, NSError *error) {
+        if (error) { if (completion) completion(nil, error); return; }
+
+        NSDictionary *dict = [json isKindOfClass:NSDictionary.class] ? json : nil;
+        NSArray *raw = dict[@"data"];
+        NSMutableArray<NSDictionary<NSString *, NSString *> *> *out = [NSMutableArray array];
+        if ([raw isKindOfClass:NSArray.class]) {
+            for (NSDictionary *j in raw) {
+                if (![j isKindOfClass:NSDictionary.class]) continue;
+                NSString *name = j[@"name"];
+                if (![name isKindOfClass:NSString.class] || name.length == 0) continue;
+                // id 是数字，统一转成字符串以对齐 A2ContentCategory.identifier
+                NSString *identifier = [NSString stringWithFormat:@"%ld", (long)[j[@"id"] integerValue]];
+                [out addObject:@{ @"identifier": identifier, @"displayName": name }];
             }
         }
         if (completion) completion(out, nil);

@@ -23,7 +23,6 @@
 //
 
 #import "A2InstallingViewController.h"
-#import "A2DownloadHomeViewController.h"
 #import "A2GlassCard.h"
 #import "A2PrimaryButton.h"
 #import "A2RingProgress.h"
@@ -603,19 +602,17 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
 
 /// 回到下载中心（链路：下载中心 → 选版 → 选项 → 安装）。
 /// 下载中心现在是「容器 + 内层栈」：本页所在的这条栈由内层导航器承载，
-/// 栈底是下载中心首屏（不是外层那个容器），所以要按首屏的类判定，
-/// 否则永远匹配不到、只会退一层。
+/// 栈底就是当前分类的内容页（选版页），退到栈底即回到下载区首屏。
 - (void)backToDownloadCenter {
     UINavigationController *nav = self.navigationController;
     if (!nav) {
         [self dismissViewControllerAnimated:YES completion:nil];
         return;
     }
-    for (UIViewController *vc in nav.viewControllers) {
-        if ([vc isKindOfClass:A2DownloadHomeViewController.class]) {
-            [nav popToViewController:vc animated:YES];
-            return;
-        }
+    UIViewController *root = nav.viewControllers.firstObject;
+    if (root && root != self) {
+        [nav popToViewController:root animated:YES];
+        return;
     }
     [nav popViewControllerAnimated:YES];
 }

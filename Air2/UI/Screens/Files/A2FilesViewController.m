@@ -26,6 +26,7 @@
 #import "A2FilesViewController.h"
 #import "A2GameFiles.h"
 #import "A2Toast.h"
+#import "A2InputDialog.h"
 #import "A2ThemeManager.h"
 #import "A2Typography.h"
 #import "A2Metrics.h"
@@ -233,29 +234,26 @@ trailingSwipeActionsForRowAtIndexPath:(NSIndexPath *)indexPath {
 - (void)askForNameWithTitle:(NSString *)title
                     initial:(NSString *)initial
                        done:(void (^)(NSString *))done {
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
-                                                                   message:nil
-                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-        tf.text = initial;
-    }];
-    __weak typeof(self) weakSelf = self;
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *a) {
-        __strong typeof(weakSelf) self = weakSelf;
-        NSString *name = [alert.textFields.firstObject.text
-                          stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
+    A2InputDialog *dlg = [A2InputDialog dialogWithTitle:title
+                                                message:nil
+                                                  label:@"名称"
+                                            initialText:initial];
+    dlg.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    dlg.validator = ^NSString *(NSString *text) {
+        NSString *name = [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
         // 校验收敛到 Core：UI 不自己定规则，错因直接展示 Core 给的文案。
         NSError *err = nil;
         if (![A2GameFiles validateFileName:name error:&err]) {
-            [A2Toast show:(err.localizedDescription ?: @"文件名非法") inView:self.view];
-            return;
+            return err.localizedDescription ?: @"文件名非法";
         }
+        return nil;
+    };
+    dlg.onFinish = ^(BOOL committed, NSString *text) {
+        if (!committed) return;
+        NSString *name = [text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
         if (done) done(name);
-        (void)self;
-    }]];
-    [self presentViewController:alert animated:YES completion:nil];
+    };
+    [dlg presentFrom:self];
 }
 
 @end

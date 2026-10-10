@@ -1,5 +1,5 @@
 //
-//  A2DownloadHomeViewController.h
+//  A2ResourceSearchViewController.h
 //  Air2
 //
 //  Copyright (C) 2026 Air-Devs and contributors.
@@ -19,24 +19,20 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
-//
-//  下载中心首屏 —— 某个分类的落地内容与它的入口路由。
-//
-//  为什么与 A2DownloadViewController 分成两个文件：
-//  容器只负责「常驻左侧分类边栏 + 右侧子页面导航栈」这一件事；
-//  本页只负责「某个分类落地显示什么、点进去跳到哪」。
-//  两组关注点不相干，混在一个文件里就变成石山。
+//  共用资源搜索页 —— 搜索栏 + 可展开筛选卡 + 分页结果列表。
+//  模组 / 资源包 / 光影 / 存档 / 数据包 五类共用，靠 contentClass 区分：
+//  平台支持、可选分类、可用筛选维度都据此推导，不各写一份页面。
 //
 
 #import "A2BaseViewController.h"
+#import "A2ContentSource.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface A2DownloadHomeViewController : A2BaseViewController
+/// 共用资源搜索页。模组 / 资源包 / 光影 / 存档 / 数据包 五类共用，靠 contentClass 区分。
+@interface A2ResourceSearchViewController : A2BaseViewController
 
-/// 显示某个分类的落地内容。索引与 A2DownloadViewController 的边栏一致：
-/// 0 游戏 / 1 整合包 / 2 模组 / 3 资源包 / 4 存档 / 5 光影 / 6 按 ID / 7 收藏。
-- (void)showCategoryAtIndex:(NSInteger)index;
+- (instancetype)initWithContentClass:(A2ContentClass)contentClass;
 
 @end
 

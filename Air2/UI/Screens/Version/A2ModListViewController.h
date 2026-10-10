@@ -1,5 +1,5 @@
 //
-//  A2DownloadViewController.h
+//  A2ModListViewController.h
 //  Air2
 //
 //  Copyright (C) 2026 Air-Devs and contributors.
@@ -19,22 +19,22 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
+//  版本模组管理页 —— 某版本的 mods 目录一览。
 //
-//  下载中心容器 —— 启动器内容获取的总入口。
-//
-//  只做两件事：
-//    · 左侧分类边栏常驻（游戏 / 整合包 / 模组 / 资源包 / 存档 / 光影 / 按 ID / 收藏）
-//    · 右侧挂一条内层导航栈，下载区内的所有子页面都活在它上面
-//
-//  选中分类即把该分类的内容页设为栈底（直达，无中间落地页）；
-//  分类 → 内容页的映射写在实现里的 makeContentViewControllerForIndex:。
+//  只做三件事：列出（名/版本/作者/启用态）、开关、删除。
+//  解析与开关逻辑在 Core（A2ModScanner），这里只拼装与刷新。
 //
 
 #import "A2BaseViewController.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface A2DownloadViewController : A2BaseViewController
+@class A2Version;
+
+@interface A2ModListViewController : A2BaseViewController
+
+- (instancetype)initWithVersion:(A2Version *)version;
+- (instancetype)init NS_UNAVAILABLE;
 
 @end
 

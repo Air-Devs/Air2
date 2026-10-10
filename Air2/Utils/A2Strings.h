@@ -1,5 +1,5 @@
 //
-//  A2DownloadViewController.h
+//  A2Strings.h
 //  Air2
 //
 //  Copyright (C) 2026 Air-Devs and contributors.
@@ -19,23 +19,16 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
+//  纯字符串判定 —— Core 共用，与 Minecraft 无关，故放 Utils 叶子。
 //
-//  下载中心容器 —— 启动器内容获取的总入口。
-//
-//  只做两件事：
-//    · 左侧分类边栏常驻（游戏 / 整合包 / 模组 / 资源包 / 存档 / 光影 / 按 ID / 收藏）
-//    · 右侧挂一条内层导航栈，下载区内的所有子页面都活在它上面
-//
-//  选中分类即把该分类的内容页设为栈底（直达，无中间落地页）；
-//  分类 → 内容页的映射写在实现里的 makeContentViewControllerForIndex:。
+//  json 里缺字段是常态：取值前先过这里，不抛异常、不崩。
 //
 
-#import "A2BaseViewController.h"
+#import <Foundation/Foundation.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface A2DownloadViewController : A2BaseViewController
-
-@end
+/// 非空字符串才取值，否则返回 nil。
+FOUNDATION_EXPORT NSString * _Nullable A2NonEmptyString(id value);
 
 NS_ASSUME_NONNULL_END

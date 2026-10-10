@@ -1,5 +1,5 @@
 //
-//  A2DownloadViewController.h
+//  A2FilterChip.h
 //  Air2
 //
 //  Copyright (C) 2026 Air-Devs and contributors.
@@ -20,21 +20,29 @@
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
 //
-//  下载中心容器 —— 启动器内容获取的总入口。
+//  MD3 筛选胶囊 —— 资源列表的筛选/排序维度统一用它。
 //
-//  只做两件事：
-//    · 左侧分类边栏常驻（游戏 / 整合包 / 模组 / 资源包 / 存档 / 光影 / 按 ID / 收藏）
-//    · 右侧挂一条内层导航栈，下载区内的所有子页面都活在它上面
+//  filterValue 携带**真实筛选值**（加载器标识如 legacy-fabric、游戏版本号如 1.21.5，
+//  @"" 表示「全部」），不靠展示文案反推 —— 「Legacy Fabric」小写化后是
+//  「legacy fabric」，与接口要的「legacy-fabric」对不上。
 //
-//  选中分类即把该分类的内容页设为栈底（直达，无中间落地页）；
-//  分类 → 内容页的映射写在实现里的 makeContentViewControllerForIndex:。
+//  状态用 UIControl 自带的 selected，配合语义色自动切换底色与文字色。
 //
 
-#import "A2BaseViewController.h"
+#import <UIKit/UIKit.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface A2DownloadViewController : A2BaseViewController
+@interface A2FilterChip : UIButton
+
+/// 真实筛选值。@"" 表示「全部」。
+@property (nonatomic, copy) NSString *filterValue;
+
+/// 创建一枚胶囊。走 alloc/init 而非 buttonWithType:，
+/// 确保命中我们的初始化（样式与主题监听都挂在 init 里）。
++ (instancetype)chip;
+
+- (void)applyTheme;
 
 @end
 

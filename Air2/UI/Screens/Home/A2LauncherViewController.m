@@ -38,7 +38,7 @@
 #import "A2VersionManager.h"
 #import "A2AccountManager.h"
 #import "A2Account.h"
-#import "A2QuickActionCard.h"
+#import "A2VersionSettingsViewController.h"
 #import "A2PrimaryButton.h"
 #import "A2SkinHeadView.h"
 
@@ -202,7 +202,7 @@
 
     // 操作区只放两张卡：账户 + 版本。
     // 之前我额外加了「版本/下载/联机/文件」快捷网格，但它和顶栏入口
-    // 功能重叠，还把右栏撑得很满。ZL2 的操作区也只有账户卡与版本卡。
+    // 功能重叠，还把右栏撑得很满。
     [self buildAccountCard];
     [self buildVersionCard];
     [self buildRecentCard];
@@ -212,14 +212,14 @@
 
 /// 操作区的垂直布局。
 ///
-/// 对齐 ZL2 的做法（cardHeight = maxHeight - outerPadding * 2）：
 /// **两张卡撑满操作区高度**，而不是内容自适应后居中留白。
+/// 卡高 = 可用最大高度 - 上下外边距 × 2。
 ///
 /// 为什么撑满反而不显得「满」：
-///   ZL2 的卡内是分层的 —— 账户区在上、版本区在下，
-///   中间靠 ConstraintLayout 的 top/bottom 锚点撑开。
+///   卡内是分层的 —— 账户区在上、版本区在下，
+///   中间靠 top/bottom 锚点撑开。
 ///   空间大时中间自然形成呼吸感，而不是把元素堆在顶部。
-///   我之前的做法是内容自适应 + 居中，视觉上像「漂浮的小盒子」。
+///   之前的做法是内容自适应 + 居中，视觉上像「漂浮的小盒子」。
 ///
 /// 这里用两个 spacer 实现同样的分层：
 ///   账户卡（定高） + spacer（弹性） + 版本卡（定高）
@@ -266,7 +266,7 @@
     UILayoutGuide *safe = self.view.safeAreaLayoutGuide;
 
     // 操作区宽度用「比例约束」，交给 Auto Layout 处理。
-    // 比例取自 ZL2 的实测值：操作区 : 内容区 = 3 : 7。
+    // 操作区 : 内容区 = 3 : 7。
     // 用 multiplier 而不是算好的固定值 —— 后者在 updateViewConstraints
     // 首次调用时 bounds 还是 0，兜底值会被固化且旋转后不更新。
     NSLayoutConstraint *panelWidth =
@@ -804,7 +804,19 @@
     [self pushScreen:[[A2DownloadViewController alloc] init] style:A2TransitionStyleScaleFade];
 }
 
-- (void)openVersionSettings { [A2Toast show:@"版本设置" inView:self.view]; }
+- (void)openMultiplayer { [A2Toast show:@"联机功能尚未接入" inView:self.view]; }
+- (void)openFiles       { [A2Toast show:@"文件管理尚未接入" inView:self.view]; }
+- (void)openVersionSettings {
+    // 齿轮与「版本设置」进当前版本的单版本设置页（真实页面）。
+    // 无版本时给提示，不进空页面。
+    A2Version *current = A2VersionManager.shared.currentVersion;
+    if (!current) {
+        [A2Toast show:@"还没有安装版本" inView:self.view];
+        return;
+    }
+    [self pushScreen:[[A2VersionSettingsViewController alloc] initWithVersionName:current.name]
+               style:A2TransitionStyleScaleFade];
+}
 
 @end
 

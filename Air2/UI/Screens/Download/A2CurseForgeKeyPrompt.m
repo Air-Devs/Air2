@@ -27,6 +27,7 @@
 #import "A2CurseForgeKeyPrompt.h"
 #import "A2CurseForgeAPI.h"
 #import "A2Toast.h"
+#import "A2InputDialog.h"
 
 @implementation A2CurseForgeKeyPrompt
 
@@ -56,49 +57,32 @@
 
 + (void)promptFrom:(UIViewController *)host
         completion:(void (^)(BOOL))completion {
-    void (^done)(BOOL) = ^(BOOL saved) {
-        if (completion) completion(saved);
-    };
-
-    UIAlertController *alert =
-        [UIAlertController alertControllerWithTitle:@"CurseForge API Key"
-                                            message:@"选中 CurseForge 需要 Key，可在 console.curseforge.com 免费申请"
-                                     preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-        tf.placeholder = @"$2a$10$...";
-        tf.autocapitalizationType = UITextAutocapitalizationTypeNone;
-        tf.autocorrectionType = UITextAutocorrectionTypeNo;
-        tf.clearButtonMode = UITextFieldViewModeWhileEditing;
-        // Key 是凭据，输入时不显示明文
-        tf.secureTextEntry = YES;
-    }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消"
-                                             style:UIAlertActionStyleCancel
-                                           handler:^(UIAlertAction *a) {
-        done(NO);
-    }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"保存并验证"
-                                             style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *a) {
-        NSString *key = alert.textFields.firstObject.text;
-        if (key.length == 0) {
-            [A2Toast show:@"Key 不能为空" inView:host.view];
-            done(NO);
-            return;
-        }
-        [A2Toast show:@"正在验证…" inView:host.view];
-        [self saveValidatedKey:key completion:^(BOOL valid, NSError *error) {
+    __weak UIViewController *weakHost = host;
+    A2InputDialog *dlg = [A2InputDialog
+        dialogWithTitle:@"CurseForge API Key"
+                message:@"选中 CurseForge 需要 Key，可在 console.curseforge.com 免费申请"
+                  label:@"API Key"
+            initialText:nil];
+    // Key 是凭据，输入时不显示明文
+    dlg.secure = YES;
+    dlg.keyboardType = UIKeyboardTypeASCIICapable;
+    dlg.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    dlg.confirmTitle = @"保存并验证";
+    // 验证要走一次真实请求，交给弹窗的异步提交流程（可停留、可报错）
+    dlg.onCommit = ^(NSString *text, void (^done)(BOOL, NSString *)) {
+        [self saveValidatedKey:text completion:^(BOOL valid, NSError *error) {
             if (valid) {
-                [A2Toast show:@"已保存到钥匙串" inView:host.view];
-                done(YES);
+                done(YES, nil);
             } else {
-                [A2Toast show:(error.localizedDescription ?: @"Key 无效，未保存")
-                       inView:host.view];
-                done(NO);
+                done(NO, error.localizedDescription ?: @"Key 无效，未保存");
             }
         }];
-    }]];
-    [host presentViewController:alert animated:YES completion:nil];
+    };
+    dlg.onFinish = ^(BOOL committed, NSString *text) {
+        if (committed) [A2Toast show:@"已保存到钥匙串" inView:weakHost.view];
+        if (completion) completion(committed);
+    };
+    [dlg presentFrom:host];
 }
 
 @end
