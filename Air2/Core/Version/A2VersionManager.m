@@ -27,13 +27,46 @@
 
 NSNotificationName const A2VersionsDidChangeNotification = @"A2VersionsDidChangeNotification";
 
-/// 启动器私有数据目录名
-static NSString *const kLauncherDataDir = @".air_version";
 /// 版本配置文件名
 static NSString *const kConfigFileName = @"config.json";
-/// OptiFine 的加载器展示名。它只做优化、不加载其它模组，因此不算「能装模组」。
-static NSString *const kOptiFineLoaderName = @"OptiFine";
+
 // 当前版本 key 收敛到 A2Settings，不再本地定义。
+
+/// 能否安装模组：解析出的加载器里只要有真加载器就算。
+/// 与旧的子串推断规则在其可达范围行为一致；解析覆盖更广的一并计入。
+static BOOL A2VersionCanInstallMods(A2VersionInfo *info) {
+    for (A2VersionLoaderInfo *loader in info.loaderInfos) {
+        switch (loader.kind) {
+            case A2VersionLoaderKindForge:
+            case A2VersionLoaderKindNeoForge:
+            case A2VersionLoaderKindFabric:
+            case A2VersionLoaderKindLegacyFabric:
+            case A2VersionLoaderKindBabric:
+            case A2VersionLoaderKindQuilt:
+            case A2VersionLoaderKindLiteLoader:
+            case A2VersionLoaderKindCleanroom:
+                return YES;
+            default:
+                break;
+        }
+    }
+    return NO;
+}
+
+/// 把目录里的 {old}.json / {old}.jar 改名为 {new}（不存在则跳过）。
+static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *newName) {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSString *oldJson = [dir stringByAppendingPathComponent:
+                         [oldName stringByAppendingPathExtension:@"json"]];
+    NSString *newJson = [dir stringByAppendingPathComponent:
+                         [newName stringByAppendingPathExtension:@"json"]];
+    if ([fm fileExistsAtPath:oldJson]) [fm moveItemAtPath:oldJson toPath:newJson error:nil];
+    NSString *oldJar = [dir stringByAppendingPathComponent:
+                        [oldName stringByAppendingPathExtension:@"jar"]];
+    NSString *newJar = [dir stringByAppendingPathComponent:
+                        [newName stringByAppendingPathExtension:@"jar"]];
+    if ([fm fileExistsAtPath:oldJar]) [fm moveItemAtPath:oldJar toPath:newJar error:nil];
+}
 
 #pragma mark - A2Version
 
@@ -120,63 +153,84 @@ static NSString *const kOptiFineLoaderName = @"OptiFine";
 }
 
 - (void)saveConfig {
+    (void)[self writeConfig];
+}
+
+/// 落盘版本配置，返回是否写成功（供 applyPinnedAndSave 判断回滚）。
+- (BOOL)writeConfig {
     NSString *dir = [self launcherDataPath];
     [NSFileManager.defaultManager createDirectoryAtPath:dir
                             withIntermediateDirectories:YES
-                                             attributes:nil
-                                                  error:nil];
+                                              attributes:nil
+                                                   error:nil];
 
     NSData *data = [NSJSONSerialization dataWithJSONObject:[_isolation toDictionary]
                                                    options:NSJSONWritingPrettyPrinted
                                                      error:nil];
-    if (!data) return;
+    if (!data) return NO;
     NSString *path = [dir stringByAppendingPathComponent:kConfigFileName];
-    [data writeToFile:path atomically:YES];
+    return [data writeToFile:path atomically:YES];
 }
 
-/// 检查版本是否可用：必须有 jar 与 json
+/// 置顶并落盘。落盘失败时恢复旧值，由调用方回滚 UI。
+- (BOOL)applyPinnedAndSave:(BOOL)pinned {
+    BOOL old = self.isolation.isPinned;
+    if (old == pinned) return YES;
+    self.isolation.pinned = pinned;
+    if ([self writeConfig]) return YES;
+    self.isolation.pinned = old;
+    [A2Log log:@"version: 置顶保存失败 %@，已回滚", self.name];
+    return NO;
+}
+
+/// 检查版本是否可用：必须有 jar 与 json，且 json 可解析出版本身份。
 - (void)validate {
     NSFileManager *fm = NSFileManager.defaultManager;
     BOOL hasJson = [fm fileExistsAtPath:[self jsonPath]];
     NSString *jar = [_gamePath versionJarPath:_name];
     BOOL hasJar = [fm fileExistsAtPath:jar];
-    _valid = (hasJson && hasJar);
 
+    _versionInfo = nil;
+    _loaderInfo = nil;
+    _invalidReason = nil;
+
+    NSDictionary *json = nil;
     if (hasJson) {
         NSData *d = [NSData dataWithContentsOfFile:[self jsonPath]];
-        NSDictionary *json = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : nil;
-        if ([json isKindOfClass:NSDictionary.class]) {
-            // 从 version json 推断类型
-            NSString *type = json[@"type"];
-            if ([type isEqualToString:@"release"]) {
-                _type = A2VersionTypeRelease;
-            } else if ([type isEqualToString:@"snapshot"]) {
-                _type = A2VersionTypeSnapshot;
-            } else if ([type isEqualToString:@"old_beta"]) {
-                _type = A2VersionTypeOldBeta;
-            } else if ([type isEqualToString:@"old_alpha"]) {
-                _type = A2VersionTypeOldAlpha;
-            }
-            // 加载器信息从 id 里推断（Fabric 版本名通常带后缀）
-            NSString *vid = json[@"id"];
-            if ([vid isKindOfClass:NSString.class]) {
-                _loaderInfo = [self loaderInfoFromVersionID:vid];
-                // 除 OptiFine 外的加载器都能装模组；OptiFine 只做优化，不算。
-                _canInstallMods = (_loaderInfo.length > 0 &&
-                                   ![_loaderInfo isEqualToString:kOptiFineLoaderName]);
-            }
-        }
+        id obj = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : nil;
+        if ([obj isKindOfClass:NSDictionary.class]) json = obj;
     }
-}
 
-- (NSString *)loaderInfoFromVersionID:(NSString *)vid {
-    NSString *lower = vid.lowercaseString;
-    if ([lower containsString:@"fabric"]) return @"Fabric";
-    if ([lower containsString:@"neoforge"]) return @"NeoForge";
-    if ([lower containsString:@"forge"]) return @"Forge";
-    if ([lower containsString:@"quilt"]) return @"Quilt";
-    if ([lower containsString:@"optifine"]) return kOptiFineLoaderName;
-    return nil;
+    if (json) {
+        _versionInfo = [A2VersionInfo infoFromJSONDictionary:json versionID:_name];
+        _loaderInfo = _versionInfo.loaderDisplayString;
+        // type 可能是坏文件里的数字，先判类型再比（直接调 isEqualToString 会崩）。
+        id rawType = json[@"type"];
+        NSString *type = [rawType isKindOfClass:NSString.class] ? rawType : nil;
+        if ([type isEqualToString:@"release"]) {
+            _type = A2VersionTypeRelease;
+        } else if ([type isEqualToString:@"snapshot"]) {
+            _type = A2VersionTypeSnapshot;
+        } else if ([type isEqualToString:@"old_beta"]) {
+            _type = A2VersionTypeOldBeta;
+        } else if ([type isEqualToString:@"old_alpha"]) {
+            _type = A2VersionTypeOldAlpha;
+        }
+        _canInstallMods = A2VersionCanInstallMods(_versionInfo);
+    }
+
+    if (!hasJson) {
+        _valid = NO;
+        _invalidReason = @"缺少版本 json";
+    } else if (!hasJar) {
+        _valid = NO;
+        _invalidReason = @"缺少客户端 jar";
+    } else if (!_versionInfo) {
+        _valid = NO;
+        _invalidReason = @"版本 json 解析失败";
+    } else {
+        _valid = YES;
+    }
 }
 
 - (NSString *)description {
@@ -234,6 +288,7 @@ static NSString *const kOptiFineLoaderName = @"OptiFine";
 /// 扫描版本目录并恢复当前版本。与 reload 分开是因为 init 必须在
 /// dispatch_once 内完成，期间不能发通知（见 init 处说明）。
 - (void)loadVersionsFromDisk {
+    [A2Log log:@"version: 开始扫描 %@", _gameHome];
     A2GamePath *path = [A2GamePath pathWithGameHome:_gameHome];
     NSString *versionsDir = [path versionsHome];
 
@@ -255,12 +310,23 @@ static NSString *const kOptiFineLoaderName = @"OptiFine";
 
         A2Version *v = [[A2Version alloc] initWithName:entry gameHome:_gameHome];
         [found addObject:v];
+        // 识别一行记一行：名 + 路径 + 展示串（无效的记原因），闪退时看这份日志定位。
+        [A2Log log:@"version: 识别 %@（%@，%@）", v.name, [v versionPath],
+                 v.isValid ? [v.versionInfo infoString] : (v.invalidReason ?: @"文件不完整")];
     }
 
-    // 排序：有效的在前，然后按名称倒序（新版本通常在前）
+    // 排序：有效在前；置顶在前；MC 版本语义倒序；
+    // 同版本按名称自然序（数字段按数值比，避免 1.10 排到 1.9 前面）。
     [found sortUsingComparator:^NSComparisonResult(A2Version *a, A2Version *b) {
         if (a.isValid != b.isValid) return a.isValid ? NSOrderedAscending : NSOrderedDescending;
-        return [b.name compare:a.name options:NSNumericSearch];
+        BOOL pinnedA = a.isolation.isPinned;
+        BOOL pinnedB = b.isolation.isPinned;
+        if (pinnedA != pinnedB) return pinnedA ? NSOrderedAscending : NSOrderedDescending;
+        NSString *mcA = a.versionInfo.minecraftVersion ?: a.name;
+        NSString *mcB = b.versionInfo.minecraftVersion ?: b.name;
+        NSComparisonResult mc = [mcB compare:mcA options:NSNumericSearch];
+        if (mc != NSOrderedSame) return mc;
+        return [a.name compare:b.name options:NSNumericSearch];
     }];
 
     _versions = [found copy];
@@ -282,6 +348,8 @@ static NSString *const kOptiFineLoaderName = @"OptiFine";
     _currentVersion = restored;
     // 扫描完就把隔离目录落好，避免首次游玩时目录还没建。
     [self applyIsolation];
+    [A2Log log:@"version: 扫描完成 %lu 个（当前 %@）",
+             (unsigned long)_versions.count, _currentVersion.name ?: @"(无)"];
 }
 
 - (void)notify {
@@ -310,10 +378,34 @@ static NSString *const kOptiFineLoaderName = @"OptiFine";
 
 #pragma mark 操作
 
+/// 校验版本名并返回去空白后的名字（安装/改名/复制共用，见头文件说明）。
++ (NSString *)validatedVersionName:(NSString *)name error:(NSError **)error {
+    NSString *trimmed = [name stringByTrimmingCharactersInSet:
+                         NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    if (trimmed.length == 0) {
+        if (error) {
+            *error = [NSError errorWithDomain:@"A2Version" code:2
+                                     userInfo:@{NSLocalizedDescriptionKey: @"版本名不能为空"}];
+        }
+        return nil;
+    }
+    if ([trimmed containsString:@"/"] || [trimmed containsString:@"\\"] ||
+        [trimmed isEqualToString:@"."] || [trimmed isEqualToString:@".."] ||
+        [trimmed hasPrefix:@"."]) {
+        if (error) {
+            *error = [NSError errorWithDomain:@"A2Version" code:3
+                                     userInfo:@{NSLocalizedDescriptionKey: @"版本名包含非法字符"}];
+        }
+        return nil;
+    }
+    return trimmed;
+}
+
 - (BOOL)selectCurrentVersion:(A2Version *)version {
     if (!version || !version.isValid) return NO;
     _currentVersion = version;
     A2Settings.shared.currentVersionName = version.name;
+    [A2Log log:@"version: 切换当前版本 → %@", version.name];
     // 切换版本要重新对齐共享 mods（仅 Mod 档下它指向当前版本）。
     [self applyIsolation];
     [self notify];
@@ -326,50 +418,185 @@ static NSString *const kOptiFineLoaderName = @"OptiFine";
 
     // 隔离开启时，版本文件夹里有用户的 mods/saves，删除是不可逆的。
     // 这里只删版本本体，用户内容（如果需要保留）应由上层先迁移。
-    BOOL ok = [NSFileManager.defaultManager removeItemAtPath:path error:error];
+    [A2Log log:@"version: 删除 %@", version.name];
+    NSError *opErr = nil;
+    BOOL ok = [NSFileManager.defaultManager removeItemAtPath:path error:&opErr];
     if (ok) {
         if ([_currentVersion.name isEqualToString:version.name]) {
             _currentVersion = nil;
             A2Settings.shared.currentVersionName = nil;
         }
         [self reload];
+        [A2Log log:@"version: 删除完成 %@", version.name];
+    } else {
+        if (error) *error = opErr;
+        [A2Log log:@"version: 删除失败 %@（%@）",
+                 version.name, opErr.localizedDescription ?: @"未知错误"];
     }
     return ok;
 }
 
 - (BOOL)renameVersion:(A2Version *)version to:(NSString *)newName error:(NSError **)error {
-    if (!version || newName.length == 0) return NO;
+    if (!version) return NO;
+
+    NSString *trimmed = [A2VersionManager validatedVersionName:newName error:error];
+    if (!trimmed) {
+        NSString *reason = (error && *error) ? (*error).localizedDescription : @"非法名";
+        [A2Log log:@"version: 改名拒绝 %@ → %@（%@）", version.name, newName, reason];
+        return NO;
+    }
+    if ([trimmed isEqualToString:version.name]) return YES;
 
     A2GamePath *path = [A2GamePath pathWithGameHome:_gameHome];
     NSString *oldPath = [version versionPath];
-    NSString *newPath = [path versionPath:newName];
+    NSString *newPath = [path versionPath:trimmed];
 
     if ([NSFileManager.defaultManager fileExistsAtPath:newPath]) {
         if (error) {
             *error = [NSError errorWithDomain:@"A2Version" code:1
-                                     userInfo:@{NSLocalizedDescriptionKey: @"同名版本已存在"}];
+                                      userInfo:@{NSLocalizedDescriptionKey: @"同名版本已存在"}];
         }
+        [A2Log log:@"version: 改名拒绝 %@ → %@（目标已存在）", version.name, trimmed];
         return NO;
     }
 
-    BOOL ok = [NSFileManager.defaultManager moveItemAtPath:oldPath toPath:newPath error:error];
-    if (!ok) return NO;
+    BOOL wasCurrent = [_currentVersion.name isEqualToString:version.name];
+    [A2Log log:@"version: 改名 %@ → %@", version.name, trimmed];
+    NSError *opErr = nil;
+    BOOL ok = [NSFileManager.defaultManager moveItemAtPath:oldPath toPath:newPath error:&opErr];
+    if (!ok) {
+        if (error) *error = opErr;
+        [A2Log log:@"version: 改名失败 %@ → %@（%@）",
+                 version.name, trimmed, opErr.localizedDescription ?: @"未知错误"];
+        return NO;
+    }
 
     // 版本文件夹里的 json 与 jar 需要同步改名
-    NSFileManager *fm = NSFileManager.defaultManager;
-    NSString *oldJson = [newPath stringByAppendingPathComponent:
-                         [version.name stringByAppendingPathExtension:@"json"]];
-    NSString *newJson = [newPath stringByAppendingPathComponent:
-                         [newName stringByAppendingPathExtension:@"json"]];
-    if ([fm fileExistsAtPath:oldJson]) [fm moveItemAtPath:oldJson toPath:newJson error:nil];
+    A2RenameVersionPayload(newPath, version.name, trimmed);
 
-    NSString *oldJar = [newPath stringByAppendingPathComponent:
-                        [version.name stringByAppendingPathExtension:@"jar"]];
-    NSString *newJar = [newPath stringByAppendingPathComponent:
+    if (wasCurrent) {
+        A2Settings.shared.currentVersionName = trimmed;
+    }
+    [self reload];
+    [A2Log log:@"version: 改名完成 %@ → %@", version.name, trimmed];
+    return YES;
+}
+
+/// 最小复制的载荷：只拷 json + jar。失败返回 NO 并填 error，
+/// 目录是调用方新建的，清理由调用方负责（这里不删，避免职责不清）。
+static BOOL A2CopyVersionPayloadFiles(NSString *srcPath, NSString *dstPath,
+                                      NSString *oldName, NSString *newName,
+                                      NSError **error) {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSError *opErr = nil;
+    NSString *srcJson = [srcPath stringByAppendingPathComponent:
+                         [oldName stringByAppendingPathExtension:@"json"]];
+    NSString *dstJson = [dstPath stringByAppendingPathComponent:
+                         [newName stringByAppendingPathExtension:@"json"]];
+    if ([fm fileExistsAtPath:srcJson] &&
+        ![fm copyItemAtPath:srcJson toPath:dstJson error:&opErr]) {
+        if (error) *error = opErr;
+        return NO;
+    }
+    NSString *srcJar = [srcPath stringByAppendingPathComponent:
+                        [oldName stringByAppendingPathExtension:@"jar"]];
+    NSString *dstJar = [dstPath stringByAppendingPathComponent:
                         [newName stringByAppendingPathExtension:@"jar"]];
-    if ([fm fileExistsAtPath:oldJar]) [fm moveItemAtPath:oldJar toPath:newJar error:nil];
+    if ([fm fileExistsAtPath:srcJar] &&
+        ![fm copyItemAtPath:srcJar toPath:dstJar error:&opErr]) {
+        if (error) *error = opErr;
+        return NO;
+    }
+    return YES;
+}
+
+/// 复制版本。目标已存在直接失败，不覆盖用户文件；中途失败删掉新建一半的目标。
+- (BOOL)copyVersionFully:(A2Version *)version to:(NSString *)newName error:(NSError **)error {
+    return [self copyVersion:version toName:newName mode:A2VersionCopyModeFull error:error];
+}
+
+/// 复制版本（最小）。入口与全量分开，菜单上各对一个按钮，不共用开关。
+- (BOOL)copyVersionMinimal:(A2Version *)version to:(NSString *)newName error:(NSError **)error {
+    return [self copyVersion:version toName:newName mode:A2VersionCopyModeMinimal error:error];
+}
+
+/// 复制的公共流程（非公开，mode 显式传，不用布尔开关）。
+- (BOOL)copyVersion:(A2Version *)version toName:(NSString *)newName
+               mode:(A2VersionCopyMode)mode error:(NSError **)error {
+    if (!version) return NO;
+
+    NSString *trimmed = [A2VersionManager validatedVersionName:newName error:error];
+    if (!trimmed) {
+        NSString *reason = (error && *error) ? (*error).localizedDescription : @"非法名";
+        [A2Log log:@"version: 复制拒绝 %@ → %@（%@）", version.name, newName, reason];
+        return NO;
+    }
+    if (!version.isValid) {
+        if (error) {
+            *error = [NSError errorWithDomain:@"A2Version" code:4
+                                     userInfo:@{NSLocalizedDescriptionKey: @"无法复制文件不完整的版本"}];
+        }
+        [A2Log log:@"version: 复制拒绝 %@（%@）", version.name, version.invalidReason ?: @"文件不完整"];
+        return NO;
+    }
+
+    A2GamePath *path = [A2GamePath pathWithGameHome:_gameHome];
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSString *srcPath = [version versionPath];
+    NSString *dstPath = [path versionPath:trimmed];
+    if ([fm fileExistsAtPath:dstPath]) {
+        if (error) {
+            *error = [NSError errorWithDomain:@"A2Version" code:1
+                                      userInfo:@{NSLocalizedDescriptionKey: @"同名版本已存在"}];
+        }
+        [A2Log log:@"version: 复制拒绝 %@ → %@（目标已存在）", version.name, trimmed];
+        return NO;
+    }
+
+    BOOL full = (mode == A2VersionCopyModeFull);
+    [A2Log log:@"version: 复制 %@ → %@（%@）",
+             version.name, trimmed, full ? @"全部文件" : @"仅版本文件"];
+
+    if (full) {
+        NSError *opErr = nil;
+        if (![fm copyItemAtPath:srcPath toPath:dstPath error:&opErr]) {
+            if (error) *error = opErr;
+            [A2Log log:@"version: 复制失败 %@ → %@（%@）",
+                     version.name, trimmed, opErr.localizedDescription ?: @"未知错误"];
+            return NO;
+        }
+        A2RenameVersionPayload(dstPath, version.name, trimmed);
+    } else {
+        NSError *opErr = nil;
+        if (![fm createDirectoryAtPath:dstPath withIntermediateDirectories:YES
+                            attributes:nil error:&opErr]) {
+            if (error) *error = opErr;
+            return NO;
+        }
+        if (!A2CopyVersionPayloadFiles(srcPath, dstPath, version.name, trimmed, error)) {
+            [fm removeItemAtPath:dstPath error:nil];
+            return NO;
+        }
+    }
+
+    // 新版本不继承置顶，其余配置沿用来源版本。
+    A2VersionIsolation *fresh = [version.isolation copy];
+    fresh.pinned = NO;
+    NSString *dataDir = [path launcherDataPath:trimmed];
+    [fm createDirectoryAtPath:dataDir withIntermediateDirectories:YES attributes:nil error:nil];
+    NSData *data = [NSJSONSerialization dataWithJSONObject:[fresh toDictionary]
+                                                   options:NSJSONWritingPrettyPrinted
+                                                     error:nil];
+    if (data) {
+        NSString *configPath = [dataDir stringByAppendingPathComponent:kConfigFileName];
+        if (![data writeToFile:configPath atomically:YES]) {
+            // 配置丢了不致命：新版本用默认配置进列表，不阻断复制成功。
+            [A2Log log:@"version: 复制 %@ → %@ 配置写回失败（用默认配置）", version.name, trimmed];
+        }
+    }
 
     [self reload];
+    [A2Log log:@"version: 复制完成 %@ → %@", version.name, trimmed];
     return YES;
 }
 

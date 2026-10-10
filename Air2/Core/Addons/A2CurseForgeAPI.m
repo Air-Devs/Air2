@@ -25,6 +25,15 @@
 #import "A2MurmurHash2.h"
 #import <Security/Security.h>
 
+/// 私有 Keychain 接口提前声明：文件顶部静态函数区会调它，
+/// 放实现后面编译器在 C 上下文里看不见（类实现块内的方法是两遍查找，
+/// 不受此限）。挪到这里不是为了好看，是编译要求。
+@interface A2CurseForgeAPI ()
+@property (nonatomic, copy, nullable) NSString *cachedKey;
+/// 供 A2ResolveCurseForgeKey 调用
++ (nullable NSString *)loadKeyFromKeychain;
+@end
+
 const NSInteger A2CFMinecraftGameID = 432;
 
 static NSString *const kBaseURL = @"https://api.curseforge.com/v1";
@@ -80,7 +89,6 @@ static NSString *A2ResolveCurseForgeKey(void) {
     // 4. 内置兜底
     return kBuiltinCurseForgeKey;
 }
-static NSString *const kKeychainAccount = @"apiKey";
 
 static void A2Main(dispatch_block_t b) {
     if ([NSThread isMainThread]) b();
@@ -152,12 +160,6 @@ static NSNumber *A2CFModLoaderTypeForIdentifier(NSString *identifier) {
 @end
 
 #pragma mark - 客户端
-
-@interface A2CurseForgeAPI ()
-@property (nonatomic, copy, nullable) NSString *cachedKey;
-/// 供 A2ResolveCurseForgeKey 调用
-+ (nullable NSString *)loadKeyFromKeychain;
-@end
 
 @implementation A2CurseForgeAPI
 

@@ -20,9 +20,8 @@
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
 //
-//  已安装版本的管理 —— 扫描、选择、删除、重命名。
+//  已安装版本的管理 —— 扫描、选择、删除、重命名、复制。
 //
-//  与 ZL2 的 VersionsManager 对应。
 //  职责：
 //    · 扫描 {gameHome}/versions/ 下的所有版本
 //    · 读取每个版本的 {name}.json 与 .air_version/config.json
@@ -32,8 +31,15 @@
 
 #import <Foundation/Foundation.h>
 #import "A2VersionIsolation.h"
+#import "A2VersionInfo.h"
 
 NS_ASSUME_NONNULL_BEGIN
+
+/// 版本复制粒度。两种是不同的用户意图，不是一个开关的两面。
+typedef NS_ENUM(NSInteger, A2VersionCopyMode) {
+    A2VersionCopyModeMinimal = 0,  ///< 只拷 json + jar（干净的新版本）
+    A2VersionCopyModeFull,         ///< 拷整个目录（含存档模组）
+};
 
 /// 版本类型
 typedef NS_ENUM(NSInteger, A2VersionType) {
@@ -58,8 +64,12 @@ typedef NS_ENUM(NSInteger, A2VersionType) {
 @property (nonatomic, assign, readonly, getter=isValid) BOOL valid;
 /// 上次游玩时间（用于排序）
 @property (nonatomic, strong, nullable) NSDate *lastPlayed;
-/// 加载器信息（从 json 里解析出来的展示文本）
+/// 加载器信息（兼容转发，取自 versionInfo.loaderDisplayString）
 @property (nonatomic, copy, nullable) NSString *loaderInfo;
+/// 版本身份（MC 版本 + 加载器列表，解析失败时为 nil）
+@property (nonatomic, strong, readonly, nullable) A2VersionInfo *versionInfo;
+/// 无效原因（有效时为 nil；缺 json / 缺 jar / json 解析失败三选一）
+@property (nonatomic, copy, readonly, nullable) NSString *invalidReason;
 /// 该版本能否安装模组。
 ///
 /// 取决于版本自带的加载器：Fabric / Quilt / LegacyFabric / Forge / NeoForge
@@ -94,6 +104,9 @@ typedef NS_ENUM(NSInteger, A2VersionType) {
 - (void)loadConfig;
 - (void)saveConfig;
 
+/// 置顶并落盘，失败时回滚为旧值并返回 NO（调用方据此决定是否回滚 UI）。
+- (BOOL)applyPinnedAndSave:(BOOL)pinned;
+
 @end
 
 /// 版本列表变更通知
@@ -102,6 +115,10 @@ extern NSNotificationName const A2VersionsDidChangeNotification;
 @interface A2VersionManager : NSObject
 
 + (instancetype)shared;
+
+/// 校验版本名并返回去空白后的名字；空名或非法名返回 nil。
+/// 安装/改名/复制共用同一份规则（名字必须是单路径段），不各写一遍。
++ (nullable NSString *)validatedVersionName:(NSString *)name error:(NSError **)error;
 
 /// 当前游戏根目录（只读，切换用 setGameHome: —— 它会触发重新扫描）
 @property (nonatomic, copy, readonly) NSString *gameHome;
@@ -128,6 +145,10 @@ extern NSNotificationName const A2VersionsDidChangeNotification;
 - (BOOL)deleteVersion:(A2Version *)version error:(NSError **)error;
 /// 重命名版本
 - (BOOL)renameVersion:(A2Version *)version to:(NSString *)newName error:(NSError **)error;
+/// 复制版本。目标已存在直接失败，不覆盖用户文件；中途失败删掉新建一半的目标。
+/// 全量与最小是两个入口（各自对应菜单上一个按钮），不共用布尔开关。
+- (BOOL)copyVersionFully:(A2Version *)version to:(NSString *)newName error:(NSError **)error;
+- (BOOL)copyVersionMinimal:(A2Version *)version to:(NSString *)newName error:(NSError **)error;
 
 @end
 

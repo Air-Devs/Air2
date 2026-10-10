@@ -533,7 +533,7 @@
     dot.text = @"·";
     dot.font = [A2Typography caption];
     dot.tag = 704;
-    UIButton *folderLink = [self makeTextLink:@"游戏目录" action:@selector(openGameFolder)];
+    UIButton *folderLink = [self makeTextLink:@"游戏目录" action:@selector(openVersions)];
 
     UIStackView *linkRow = [[UIStackView alloc] initWithArrangedSubviews:@[settingsLink, dot, folderLink]];
     linkRow.axis = UILayoutConstraintAxisHorizontal;
@@ -793,10 +793,6 @@
     [self pushScreen:[[A2SettingsViewController alloc] init] style:A2TransitionStyleScaleFade];
 }
 
-- (void)openVersions {
-    [self pushScreen:[[A2VersionListViewController alloc] init] style:A2TransitionStyleScaleFade];
-}
-
 - (void)openDownload {
     // 用标准的缩放淡入，不用从底部滑入。
     // 底部滑入适合模态小面板（比如选择器、确认框），
@@ -808,7 +804,7 @@
 - (void)openFiles       { [A2Toast show:@"文件管理尚未接入" inView:self.view]; }
 - (void)openVersionSettings {
     // 齿轮与「版本设置」进当前版本的单版本设置页（真实页面）。
-    // 无版本时给提示，不进空页面。
+    // 无版本时给提示，不进空页面；只有「游戏目录」进版本管理列表。
     A2Version *current = A2VersionManager.shared.currentVersion;
     if (!current) {
         [A2Toast show:@"还没有安装版本" inView:self.view];
@@ -816,6 +812,10 @@
     }
     [self pushScreen:[[A2VersionSettingsViewController alloc] initWithVersionName:current.name]
                style:A2TransitionStyleScaleFade];
+}
+/// 只有「游戏目录」进这里：版本管理列表。
+- (void)openVersions {
+    [self pushScreen:[[A2VersionListViewController alloc] init] style:A2TransitionStyleScaleFade];
 }
 
 @end
