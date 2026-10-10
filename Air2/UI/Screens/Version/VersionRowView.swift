@@ -48,7 +48,7 @@ struct VersionRowView: View {
         Button(action: { actions.select(version) }) {
             HStack(spacing: A2SpaceM) {
                 Image(systemName: "cube.fill")
-                    .foregroundStyle(version.isValid ? .accentColor : .secondary)
+                    .foregroundStyle(version.isValid ? .cPrimary : .secondary)
                     .frame(width: 32, height: 32)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(version.name)

@@ -44,7 +44,7 @@ public extension Color {
     var rgbValue: UInt32 {
         let ui = UIColor(self)
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
-        guard ui.getRed(&r, green: &g, blue: &b, alpha: &a) else { return Color.gray }
+        guard ui.getRed(&r, green: &g, blue: &b, alpha: &a) else { return 0x808080 }
         return (UInt32(lround(Double(r) * 255)) << 16)
             | (UInt32(lround(Double(g) * 255)) << 8)
             | UInt32(lround(Double(b) * 255))

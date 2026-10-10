@@ -124,11 +124,11 @@ public final class ThemeManager: ObservableObject {
 
     private init() {
         let d = UserDefaults.standard
-        let kindRaw = d.object(forKey: Keys.themeKind).map { d.integer(forKey: Keys.themeKind) }
-            ?? ThemeKind.glacier.rawValue
+        let kindRaw = d.object(forKey: Keys.themeKind) != nil ? d.integer(forKey: Keys.themeKind)
+            : ThemeKind.glacier.rawValue
         let kind = ThemeKind(rawValue: kindRaw) ?? .glacier
         let appearance = AppearanceMode(rawValue: d.integer(forKey: Keys.appearance)) ?? .system
-        let style = PaletteStyle(rawValue: d.object(forKey: Keys.paletteStyle).map { d.integer(forKey: Keys.paletteStyle) } ?? 0)
+        let style = PaletteStyle(rawValue: d.object(forKey: Keys.paletteStyle) != nil ? d.integer(forKey: Keys.paletteStyle) : 0)
             ?? .tonalSpot
 
         selectedKind = kind

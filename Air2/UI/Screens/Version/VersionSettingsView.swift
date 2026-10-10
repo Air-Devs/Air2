@@ -151,8 +151,8 @@ struct VersionSettingsView: View {
             SettingsRow(model: SettingsRowModel(
                 symbolName: "trash",
                 title: "Delete this version",
-                destructive: true,
                 accessory: .disclosure,
+                destructive: true,
                 onTap: { showingDelete = true }
             ))
         }

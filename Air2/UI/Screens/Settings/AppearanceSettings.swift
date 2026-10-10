@@ -95,8 +95,8 @@ struct AppearanceSettingsView: View {
                     SettingsRow(model: SettingsRowModel(
                         symbolName: "trash",
                         title: "Clear key",
-                        destructive: true,
                         accessory: .disclosure,
+                        destructive: true,
                         onTap: { model.clearKey() }
                     ))
                 }

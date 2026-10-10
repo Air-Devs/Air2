@@ -67,7 +67,7 @@ struct SettingsView: View {
         Button(action: { self.tab = tab }) {
             HStack {
                 Image(systemName: symbol)
-                    .foregroundStyle(self.tab == tab ? .accentColor : .secondary)
+                    .foregroundStyle(self.tab == tab ? .cPrimary : .secondary)
                 Text(title)
                     .font(A2Type.subtitleCard)
                     .foregroundStyle(.cOnSurface)

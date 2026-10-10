@@ -98,11 +98,11 @@ struct VersionListView: View {
     private struct RowBridge: VersionRowActions {
         let model: VersionListViewModel
         let router: A2Router
-        func select(_ version: VersionRowData) { model.select(version) }
-        func togglePin(_ version: VersionRowData) { model.togglePin(version) }
+        func select(_ version: VersionRowData) { Task { @MainActor in model.select(version) } }
+        func togglePin(_ version: VersionRowData) { Task { @MainActor in model.togglePin(version) } }
         func openSettings(_ version: VersionRowData) {
-            router.openVersionSettings(version.name)
+            Task { @MainActor in router.openVersionSettings(version.name) }
         }
-        func showMore(_ version: VersionRowData) { model.remove(version) }
+        func showMore(_ version: VersionRowData) { Task { @MainActor in model.remove(version) } }
     }
 }

@@ -74,8 +74,8 @@ struct BackgroundSettingsView: View {
                 SettingsRow(model: SettingsRowModel(
                     symbolName: "trash",
                     title: "Remove wallpaper",
-                    destructive: true,
                     accessory: .disclosure,
+                    destructive: true,
                     onTap: { model.clearImage() }
                 ))
             }
