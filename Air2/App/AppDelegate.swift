@@ -56,8 +56,35 @@ public final class AppDelegate: NSObject, UIApplicationDelegate {
         }
         container.refreshAccountForAutoLogin()
         attemptJustInTime(reason: "冷启动")
+        observeSceneLifecycle()
+        let hasManifest = Bundle.main.object(forInfoDictionaryKey: "UIApplicationSceneManifest") != nil
+        A2Log.logMessage("AppDelegate: SceneManifest 存在=\(hasManifest) 多窗口=\(application.supportsMultipleScenes)")
         A2Log.logMessage("AppDelegate: didFinishLaunching 完成")
         return true
+    }
+
+    // MARK: - Scene / 窗口生命周期探针
+
+    /// 记录 Scene 与窗口的关键节点。
+    /// 白屏时这几条能一刀切开三种成因：Scene 没连上 / Scene 连上但没窗口 /
+    /// 窗口建了却没上屏，省得靠猜。
+    private func observeSceneLifecycle() {
+        let center = NotificationCenter.default
+        _ = center.addObserver(forName: UIScene.didConnectNotification, object: nil, queue: .main) { note in
+            let role = (note.object as? UIScene)?.session.role.rawValue ?? "-"
+            A2Log.logMessage("Scene: didConnect role=\(role)")
+        }
+        _ = center.addObserver(forName: UIScene.didActivateNotification, object: nil, queue: .main) { note in
+            let role = (note.object as? UIScene)?.session.role.rawValue ?? "-"
+            A2Log.logMessage("Scene: didActivate role=\(role)")
+        }
+        _ = center.addObserver(forName: UIWindow.didBecomeVisibleNotification, object: nil, queue: .main) { note in
+            guard let window = note.object as? UIWindow else { return }
+            A2Log.logMessage("Window: didBecomeVisible 根控制器=\(type(of: window.rootViewController))")
+        }
+        _ = center.addObserver(forName: UIWindow.didBecomeKeyNotification, object: nil, queue: .main) { _ in
+            A2Log.logMessage("Window: didBecomeKey")
+        }
     }
 
     // MARK: - 方向锁定
@@ -86,6 +113,7 @@ public final class AppDelegate: NSObject, UIApplicationDelegate {
     ) -> UISceneConfiguration {
         let config = UISceneConfiguration(name: "Default Configuration", sessionRole: connectingSceneSession.role)
         config.delegateClass = nil
+        A2Log.logMessage("AppDelegate: 请求 Scene 配置 role=\(connectingSceneSession.role.rawValue) delegateClass=nil")
         return config
     }
 

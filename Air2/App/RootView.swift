@@ -41,6 +41,8 @@ struct RootView: View {
         self.container = container
         _theme = ObservedObject(wrappedValue: ThemeManager.shared)
         _router = StateObject(wrappedValue: A2Router())
+        // 构造即代表 SwiftUI 已求值 WindowGroup 的内容；若这条不出现，说明窗口压根没建。
+        A2Log.logMessage("RootView: 正在构造根视图")
     }
 
     var body: some View {
