@@ -88,21 +88,21 @@ final class DownloadListViewModel: ObservableObject {
     init(contentClass: A2ContentClass) {
         self.contentClass = contentClass
         let preferred = A2ContentSource.preferredPlatform()
-        let supportsPreferred = A2ContentSource.source(forPlatform: preferred)
+        let supportsPreferred = A2ContentSource(for: preferred)
             .supportsContentClass(contentClass)
         let fallback = Self.allPlatforms.first {
-            A2ContentSource.source(forPlatform: $0).supportsContentClass(contentClass)
+            A2ContentSource(for: $0).supportsContentClass(contentClass)
         } ?? preferred
         let initial = supportsPreferred ? preferred : fallback
         platform = initial
-        source = A2ContentSource.source(forPlatform: initial)
+        source = A2ContentSource(for: initial)
     }
 
     // MARK: Derived
 
     var supportedPlatforms: [A2ContentPlatform] {
         Self.allPlatforms.filter {
-            A2ContentSource.source(forPlatform: $0).supportsContentClass(contentClass)
+            A2ContentSource(for: $0).supportsContentClass(contentClass)
         }
     }
 
@@ -167,7 +167,7 @@ final class DownloadListViewModel: ObservableObject {
 
     private func applyPlatform(_ newPlatform: A2ContentPlatform) {
         platform = newPlatform
-        source = A2ContentSource.source(forPlatform: newPlatform)
+        source = A2ContentSource(for: newPlatform)
         A2ContentSource.setPreferredPlatform(newPlatform)
         A2ComponentLog("resource-search: 平台切换 → \(source.displayName)")
         // 分类标识两家不通用，切换后清空已选分类并重新拉取。
@@ -206,7 +206,7 @@ final class DownloadListViewModel: ObservableObject {
     func loadGameVersions() {
         versionOptions = []
         versionsFailed = false
-        A2RemoteVersions.fetchVersions(completion: { [weak self] versions, error in
+        A2RemoteVersions.fetch(completion: { [weak self] versions, error in
             Task { @MainActor in
                 guard let self else { return }
                 guard let versions, error == nil else {
@@ -238,7 +238,7 @@ final class DownloadListViewModel: ObservableObject {
         guard source.isAvailable, source.supportsContentClass(contentClass) else { return }
 
         loading = true
-        let filter = A2ContentFilter.defaultFilter()
+        let filter = A2ContentFilter.default()
         let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
         filter.query = trimmed.isEmpty ? nil : trimmed
         filter.gameVersion = selectedGameVersion
@@ -426,7 +426,7 @@ struct DownloadListView: View {
         .onAppear {
             if model.items.isEmpty && !model.loading { model.load() }
         }
-        .onReceive(NotificationCenter.default.publisher(for: A2FavoritesDidChangeNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.A2FavoritesDidChange)) { _ in
             model.refreshFavorites()
         }
         .sheet(isPresented: $model.showCurseForgeKeyPrompt) {
@@ -503,7 +503,7 @@ struct DownloadListView: View {
                     set: { model.selectPlatform($0) }
                 )) {
                     ForEach(model.supportedPlatforms, id: \.self) { platform in
-                        Text(A2ContentSource.source(forPlatform: platform).displayName).tag(platform)
+                        Text(A2ContentSource(for: platform).displayName).tag(platform)
                     }
                 }
                 .pickerStyle(.segmented)
@@ -534,9 +534,9 @@ struct DownloadListView: View {
                         model.selectLoader("")
                     }
                     ForEach(model.loaderOptions, id: \.rawValue) { type in
-                        let identifier = A2ModLoaderAPI.identifier(forType: type)
+                        let identifier = A2ModLoaderAPI.identifier(for: type)
                         FilterChip(
-                            title: A2ModLoaderAPI.displayName(forType: type),
+                            title: A2ModLoaderAPI.displayName(for: type),
                             selected: model.selectedLoader == identifier
                         ) {
                             model.selectLoader(identifier)

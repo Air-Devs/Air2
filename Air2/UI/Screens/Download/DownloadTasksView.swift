@@ -156,7 +156,7 @@ struct DownloadTasksView: View {
             .opacity(model.finished.isEmpty ? 0.35 : 1)
         }
         .toast(item: $toast)
-        .onReceive(NotificationCenter.default.publisher(for: A2DownloadTasksDidChangeNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.A2DownloadTasksDidChange)) { _ in
             model.reload()
         }
         .onAppear { model.reload() }

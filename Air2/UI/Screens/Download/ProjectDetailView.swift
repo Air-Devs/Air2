@@ -97,7 +97,7 @@ final class ProjectDetailViewModel: ObservableObject {
         self.contentClass = contentClass
         self.targetSubdir = A2VersionFolderForClass(contentClass)
         // 调用方只透传 projectID / contentClass，平台信息已丢失；用当前首选平台拉详情与版本。
-        self.source = A2ContentSource.source(forPlatform: A2ContentSource.preferredPlatform())
+        self.source = A2ContentSource(for: A2ContentSource.preferredPlatform())
     }
 
     // MARK: Derived
@@ -277,7 +277,7 @@ final class ProjectDetailViewModel: ObservableObject {
             store.removeFavorite(withID: projectID)
             nowFavorite = false
         } else {
-            store.addFavorite(A2FavoriteItem.item(withContentItem: project))
+            store.addFavorite(A2FavoriteItem(contentItem: project))
             nowFavorite = true
         }
         isFavorite = nowFavorite
@@ -310,7 +310,7 @@ final class ProjectDetailViewModel: ObservableObject {
         }
 
         // 落盘路径走唯一出口（A2GamePath），View 不手拼 Documents 路径。
-        let path = A2GamePath.path(withGameHome: A2GamePath.defaultGameHome())
+        let path = A2GamePath(gameHome: A2GamePath.defaultGameHome())
         let dest: String
         do {
             dest = try path.downloadDestination(inSubdir: targetSubdir, fileName: fileName)
@@ -385,7 +385,7 @@ struct ProjectDetailView: View {
             .accessibilityLabel(model.isFavorite ? "已收藏" : "收藏")
         }
         .onAppear { model.load() }
-        .onReceive(NotificationCenter.default.publisher(for: A2FavoritesDidChangeNotification)) { _ in
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name.A2FavoritesDidChange)) { _ in
             model.refreshFavorite()
         }
         .toast(item: $model.toast)
