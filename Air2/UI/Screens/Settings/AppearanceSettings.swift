@@ -49,38 +49,56 @@ struct AppearanceSettingsView: View {
     var body: some View {
         VStack(spacing: A2CardSpacing) {
             SettingsSection(title: "Appearance") {
-                SettingsRow(symbolName: "paintpalette.fill",
+                SettingsRow(model: SettingsRowModel(
+                    symbolName: "paintpalette.fill",
                     title: "Color theme",
                     subtitle: "Seed color drives the whole palette",
-                    valueText: model.themeName
-                , accessory: .disclosure) { router.path.append(A2Route.colorTheme) }
-                SettingsRow(symbolName: "circle.lefthalf.filled",
+                    valueText: model.themeName,
+                    accessory: .disclosure,
+                    onTap: { router.path.append(A2Route.colorTheme) }
+                ))
+                SettingsRow(model: SettingsRowModel(
+                    symbolName: "circle.lefthalf.filled",
                     title: "Appearance mode",
-                    valueText: model.modeName
-                , accessory: .disclosure) { model.cycleMode() }
-                SettingsRow(symbolName: "photo.fill",
+                    valueText: model.modeName,
+                    accessory: .disclosure,
+                    onTap: { model.cycleMode() }
+                ))
+                SettingsRow(model: SettingsRowModel(
+                    symbolName: "photo.fill",
                     title: "Custom background",
-                    subtitle: model.backgroundSummary
-                , accessory: .disclosure) { router.path.append(A2Route.background) }
+                    subtitle: model.backgroundSummary,
+                    accessory: .disclosure,
+                    onTap: { router.path.append(A2Route.background) }
+                ))
             }
             SettingsSection(title: "Content sources", footer: "Modrinth needs no setup. CurseForge needs an API key.") {
-                SettingsRow(symbolName: "flame.fill",
+                SettingsRow(model: SettingsRowModel(
+                    symbolName: "flame.fill",
                     title: "CurseForge API key",
                     subtitle: model.hasCurseForgeKey ? "Set" : "Not set — CurseForge unavailable",
-                    valueText: model.hasCurseForgeKey ? "Set" : "Missing"
-                , accessory: .disclosure) { router.path.append(A2Route.curseForgeKey) }
+                    valueText: model.hasCurseForgeKey ? "Set" : "Missing",
+                    accessory: .disclosure,
+                    onTap: { router.path.append(A2Route.curseForgeKey) }
+                ))
                 Toggle("Use mirror downloads", isOn: $model.mirrorEnabled)
                     .font(A2Type.subtitleCard)
                     .frame(minHeight: A2MinTouchTarget)
-                SettingsRow(symbolName: "arrow.up.arrow.down",
+                SettingsRow(model: SettingsRowModel(
+                    symbolName: "arrow.up.arrow.down",
                     title: "Mirror priority",
-                    valueText: model.priorityName
-                , accessory: .disclosure) { model.cyclePriority() }
+                    valueText: model.priorityName,
+                    accessory: .disclosure,
+                    onTap: { model.cyclePriority() }
+                ))
                 if model.hasCurseForgeKey {
-                    SettingsRow(symbolName: "trash",
+                    SettingsRow(model: SettingsRowModel(
+                        symbolName: "trash",
                         title: "Clear key",
-                        destructive: true
-                    , accessory: .disclosure) { model.clearKey() }
+                        destructive: true,
+                        accessory: .disclosure,
+                        onTap: { model.clearKey() }
+                    ))
                 }
             }
         }

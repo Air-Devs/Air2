@@ -114,17 +114,25 @@ struct DownloadHomeView: View {
 
     private var lookupSection: some View {
         GlassCard {
-            SettingsRow(symbolName: "number", title: "Look up by ID", subtitle: "Jump straight to a project", accessory: .disclosure, accessory: .disclosure) {
-                router.openSearchById()
-            }
+            SettingsRow(model: SettingsRowModel(
+                symbolName: "number",
+                title: "Look up by ID",
+                subtitle: "Jump straight to a project",
+                accessory: .disclosure,
+                onTap: { router.openSearchById() }
+            ))
         }
     }
 
     private var favoritesSection: some View {
         GlassCard {
-            SettingsRow(symbolName: "star.fill", title: "Favorites", subtitle: "Your starred projects", accessory: .disclosure, accessory: .disclosure) {
-                router.openFavorites()
-            }
+            SettingsRow(model: SettingsRowModel(
+                symbolName: "star.fill",
+                title: "Favorites",
+                subtitle: "Your starred projects",
+                accessory: .disclosure,
+                onTap: { router.openFavorites() }
+            ))
         }
     }
 }

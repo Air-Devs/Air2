@@ -64,13 +64,20 @@ struct BackgroundSettingsView: View {
 
     private var sourceCard: some View {
         SettingsSection(title: "Source") {
-            SettingsRow(symbolName: "photo.fill", title: "Choose from library", accessory: .disclosure, accessory: .disclosure) {
-                model.pickImage()
-            }
+            SettingsRow(model: SettingsRowModel(
+                symbolName: "photo.fill",
+                title: "Choose from library",
+                accessory: .disclosure,
+                onTap: { model.pickImage() }
+            ))
             if model.hasImage {
-                SettingsRow(symbolName: "trash", title: "Remove wallpaper", destructive: true, accessory: .disclosure, accessory: .disclosure) {
-                    model.clearImage()
-                }
+                SettingsRow(model: SettingsRowModel(
+                    symbolName: "trash",
+                    title: "Remove wallpaper",
+                    destructive: true,
+                    accessory: .disclosure,
+                    onTap: { model.clearImage() }
+                ))
             }
         }
     }

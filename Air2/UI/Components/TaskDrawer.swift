@@ -90,7 +90,7 @@ public struct TaskDrawer: View {
                         LazyVStack(spacing: A2SpaceL) {
                             ForEach(tasks) { task in
                                 TaskProgressView(task: task, onTogglePause: { onTogglePause?(task) })
-                                    .transition(.opacity.combined(with: .scale(0.96)))
+                                    .transition(.opacity.combined(with: .scale(scale: 0.96)))
                             }
                         }
                         .padding(.horizontal, A2SpaceXL)

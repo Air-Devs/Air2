@@ -89,8 +89,15 @@ public enum A2Type {
 // Every role is semantic and resolves per environment, so dark mode is free.
 // SwiftUI resolves dynamic UIColors per-environment at render time, which is
 // exactly what the ObjC applyTheme timing bug forbade over there.
+//
+// Declared on ShapeStyle (constrained to Color) rather than on Color so the
+// roles resolve BOTH as explicit Color members (Color.cOnSurface, [Color]
+// literals, .background(Color.cX, in:)) AND as leading-dot styles
+// (.foregroundStyle(.cOnSurface)). A plain `extension Color` is invisible to
+// leading-dot lookup against generic ShapeStyle parameters, which is why
+// .foregroundStyle(.cX) failed with "type 'ShapeStyle' has no member".
 
-public extension Color {
+public extension ShapeStyle where Self == Color {
     static var cPrimary: Color { .accentColor }
     static var cOnPrimary: Color { .white }
     static var cPrimaryContainer: Color { .accentColor.opacity(0.18) }

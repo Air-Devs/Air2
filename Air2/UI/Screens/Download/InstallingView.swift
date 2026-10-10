@@ -77,10 +77,10 @@ struct InstallingView: View {
     private var stepsCard: some View {
         GlassCard {
             VStack(alignment: .leading, spacing: A2SpaceXS) {
-                ForEach(model.steps.indices, id: \.self) { i in
+                ForEach(Array(model.steps.indices), id: \.self) { i in
                     HStack {
                         Image(systemName: model.steps[i].1 ? "checkmark.circle.fill" : "circle")
-                            .foregroundStyle(model.steps[i].1 ? .green : .secondary)
+                            .foregroundStyle(model.steps[i].1 ? Color.green : Color.secondary)
                         Text(model.steps[i].0)
                             .font(A2Type.subtitleCard)
                             .foregroundStyle(.cOnSurface)

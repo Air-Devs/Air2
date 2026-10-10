@@ -70,15 +70,24 @@ struct AccountView: View {
             .a2CardEntrance(0)
 
             SettingsSection(title: "Add account") {
-                SettingsRow(symbolName: "person.badge.key.fill", title: "Microsoft login", accessory: .disclosure, accessory: .disclosure) {
-                    router.openLogin(.microsoft)
-                }
-                SettingsRow(symbolName: "person.fill", title: "Offline account", accessory: .disclosure, accessory: .disclosure) {
-                    router.openLogin(.offline)
-                }
-                SettingsRow(symbolName: "server.rack", title: "Auth server (Yggdrasil)") {
-                    router.openLogin(.thirdParty)
-                }
+                SettingsRow(model: SettingsRowModel(
+                    symbolName: "person.badge.key.fill",
+                    title: "Microsoft login",
+                    accessory: .disclosure,
+                    onTap: { router.openLogin(.microsoft) }
+                ))
+                SettingsRow(model: SettingsRowModel(
+                    symbolName: "person.fill",
+                    title: "Offline account",
+                    accessory: .disclosure,
+                    onTap: { router.openLogin(.offline) }
+                ))
+                SettingsRow(model: SettingsRowModel(
+                    symbolName: "server.rack",
+                    title: "Auth server (Yggdrasil)",
+                    accessory: .disclosure,
+                    onTap: { router.openLogin(.thirdParty) }
+                ))
             }
             .a2CardEntrance(1)
 
@@ -95,8 +104,8 @@ struct AccountView: View {
     private struct RowBridge: AccountRowActions {
         let model: AccountViewModel
         let router: A2Router
-        func select(_ account: AccountRowData) { model.select(account) }
-        func refresh(_ account: AccountRowData) { model.refresh(account) }
-        func showMore(_ account: AccountRowData) { model.remove(account) }
+        func select(_ account: AccountRowData) { Task { @MainActor in model.select(account) } }
+        func refresh(_ account: AccountRowData) { Task { @MainActor in model.refresh(account) } }
+        func showMore(_ account: AccountRowData) { Task { @MainActor in model.remove(account) } }
     }
 }

@@ -53,10 +53,13 @@ struct DiagnosticsSettingsView: View {
                         .frame(minHeight: A2MinTouchTarget)
                 }
                 ForEach(model.logs, id: \.self) { log in
-                    SettingsRow(symbolName: "doc.text",
+                    SettingsRow(model: SettingsRowModel(
+                        symbolName: "doc.text",
                         title: log.title,
-                        subtitle: log.subtitle
-                    , accessory: .disclosure) { model.open(log) }
+                        subtitle: log.subtitle,
+                        accessory: .disclosure,
+                        onTap: { model.open(log) }
+                    ))
                 }
             }
             if let preview = model.preview {

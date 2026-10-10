@@ -100,14 +100,20 @@ struct VersionSettingsView: View {
     private var foldersCard: some View {
         SettingsSection(title: "Version folders") {
             ForEach(model.folders.indices, id: \.self) { i in
-                SettingsRow(symbolName: model.folders[i].1,
+                SettingsRow(model: SettingsRowModel(
+                    symbolName: model.folders[i].1,
                     title: model.folders[i].0,
-                    subtitle: model.folders[i].2
-                , accessory: .disclosure) { model.browseFiles() }
+                    subtitle: model.folders[i].2,
+                    accessory: .disclosure,
+                    onTap: { model.browseFiles() }
+                ))
             }
-            SettingsRow(symbolName: "folder.fill", title: "Browse version files", accessory: .disclosure, accessory: .disclosure) {
-                router.path.append(A2Route.files(versionName))
-            }
+            SettingsRow(model: SettingsRowModel(
+                symbolName: "folder.fill",
+                title: "Browse version files",
+                accessory: .disclosure,
+                onTap: { router.path.append(A2Route.files(versionName)) }
+            ))
         }
     }
 
@@ -133,13 +139,22 @@ struct VersionSettingsView: View {
 
     private var dangerCard: some View {
         SettingsSection(title: "Danger zone") {
-            SettingsRow(symbolName: "square.and.pencil", title: "Rename version", accessory: .disclosure, accessory: .disclosure) {
-                draftName = versionName
-                showingRename = true
-            }
-            SettingsRow(symbolName: "trash", title: "Delete this version", destructive: true, accessory: .disclosure, accessory: .disclosure) {
-                showingDelete = true
-            }
+            SettingsRow(model: SettingsRowModel(
+                symbolName: "square.and.pencil",
+                title: "Rename version",
+                accessory: .disclosure,
+                onTap: {
+                    draftName = versionName
+                    showingRename = true
+                }
+            ))
+            SettingsRow(model: SettingsRowModel(
+                symbolName: "trash",
+                title: "Delete this version",
+                destructive: true,
+                accessory: .disclosure,
+                onTap: { showingDelete = true }
+            ))
         }
         .alert("Rename version", isPresented: $showingRename) {
             TextField("Name", text: $draftName)
