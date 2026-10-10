@@ -37,6 +37,7 @@
 
 #import "A2VersionListViewController.h"
 #import "A2VersionSettingsViewController.h"
+#import "A2GameVersionListViewController.h"
 #import "A2VersionManager.h"
 #import "A2VersionRowView.h"
 #import "A2GlassCard.h"
@@ -145,7 +146,9 @@
     __weak typeof(self) weakSelf = self;
     [self addTrailingButtonWithSymbol:@"plus" action:^{
         __strong typeof(weakSelf) self = weakSelf;
-        [A2Toast show:@"安装新版本" inView:self.view];
+        // 直达游戏版本下载页选版安装，不弹手输版本号（版本号应当从清单里选）。
+        A2GameVersionListViewController *vc = [[A2GameVersionListViewController alloc] init];
+        [self.navigationController pushViewController:vc animated:YES];
     }];
 
     [self loadVersions];
