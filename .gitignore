@@ -18,6 +18,11 @@
 *.xcarchive
 
 # ---------- Xcode ----------
+# 真相源 = 文件系统 + Package.swift；project.pbxproj 是瞬时产物，
+# 构建前由 scripts/gen_xcodeproj.py 重生成，不再依赖入库副本。
+# （文件当前仍被 git 跟踪，忽略规则在 untrack 后生效；
+# 删除入库副本是另一次 PR 的决策，本次不动它。）
+/Air2.xcodeproj/project.pbxproj
 xcuserdata/
 *.xcuserstate
 *.xcscmblueprint

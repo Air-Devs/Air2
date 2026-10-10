@@ -87,17 +87,30 @@ fi
 # ------------------------------------------------------------
 # 4. Core 层不得依赖 UI 框架
 # ------------------------------------------------------------
+# Swift 与 ObjC 两边都查：Core 是无 UI 的业务核心，可单测。
+# ObjC 残留目前零 UIKit 引用（仅注释里提到），保持住；
+# Swift 迁移后同样不许 import UIKit/SwiftUI。
 echo "==> 4. 分层检查"
 if [ -d Air2/Core ]; then
     corefiles=$(find Air2/Core -type f -name '*.swift' 2>/dev/null)
     leaked=""
     if [ -n "$corefiles" ]; then
-        leaked=$(grep -lE '^[[:space:]]*import[[:space:]]+(SwiftUI|UIKit)' $corefiles 2>/dev/null || true)
+        leaked=$(grep -lE '^[[:space:]]*(@testable[[:space:]]+)?import[[:space:]]+(SwiftUI|UIKit)' $corefiles 2>/dev/null || true)
     fi
     if [ -n "$leaked" ]; then
         for f in $leaked; do err "Core 层不得依赖 UI 框架: $f"; done
     else
-        ok "Core 层无 UI 依赖"
+        ok "Core 层 Swift 无 UI 依赖"
+    fi
+    objc_core=$(find Air2/Core -type f \( -name '*.m' -o -name '*.mm' -o -name '*.h' \) 2>/dev/null)
+    objc_leaked=""
+    if [ -n "$objc_core" ]; then
+        objc_leaked=$(grep -lE '#[[:space:]]*import[[:space:]]*<(UIKit|SwiftUI)/|@[[:space:]]*import[[:space:]]+(UIKit|SwiftUI)' $objc_core 2>/dev/null || true)
+    fi
+    if [ -n "$objc_leaked" ]; then
+        for f in $objc_leaked; do err "Core 层不得依赖 UI 框架: $f"; done
+    else
+        ok "Core 层 ObjC 无 UI 依赖"
     fi
 else
     ok "Core 层尚未创建，跳过"
@@ -144,6 +157,18 @@ if [ -f "$ROOT/scripts/lint_objc.py" ]; then
     else
         err "ObjC 静态检查未通过"
     fi
+fi
+
+# ------------------------------------------------------------
+# 8. 真相源声明（信息，不阻塞）
+# ------------------------------------------------------------
+# 真相源 = 文件系统 + Package.swift，
+# pbxproj 是瞬时产物（构建前重生成，不依赖入库副本）。
+echo "==> 8. 真相源"
+if [ -f "$ROOT/Package.swift" ]; then
+    ok "Package.swift 存在（SwiftPM 为真相源之一）"
+else
+    warn "缺少 Package.swift（SwiftPM 真相源）"
 fi
 
 echo ""

@@ -8,8 +8,9 @@
 
 | 目录 | 职责 | 允许依赖 |
 |---|---|---|
-| `Air2/` | iOS 应用主体（ObjC） | Natives、Libraries |
-| `Air2.xcodeproj/` | Xcode 工程定义（**由脚本生成，不手工编辑**） | — |
+| `Air2/` | iOS 应用主体（Swift；App + UI 优先迁移，ObjC 共存过渡） | Natives、Libraries |
+| `Package.swift` | SwiftPM 真相源（与文件系统共同构成真相源，见下） | — |
+| `Air2.xcodeproj/` | 瞬时工程定义（构建前由脚本重生成，不手工编辑，不依赖入库副本） | — |
 | `Natives/` | Objective-C / C 原生层 | Libraries |
 | `JavaApp/` | Java 侧启动核心 | Libraries/Jars |
 | `Libraries/` | 预编译二进制（不放源码） | — |
@@ -18,6 +19,16 @@
 | `scripts/` | 构建与辅助脚本 | — |
 | `docs/` | 设计文档、决策记录、依赖清单 | — |
 | `tests/` | 单元测试 | 被测层 |
+
+### 真相源声明
+
+**真相源 = 文件系统 + `Package.swift`。**
+`Air2.xcodeproj/project.pbxproj` 只是瞬时产物：本地 `make package`
+与 CI 的 ios-build 任务都会先跑 `scripts/gen_xcodeproj.py` 重生成，
+绝不读取入库的副本（`.gitignore` 已忽略它；删除入库副本是另一次 PR
+的决策，本次仅停止依赖）。SwiftPM 负责逻辑 target 的编译与单测，
+但产不出可签名的 iOS `.app`（不管 Info.plist / 资源 / 签名），
+最终 `.app`/`.ipa` 仍走瞬时工程 + `xcodebuild -scheme`。
 
 ---
 
@@ -73,6 +84,7 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 | 子目录 | 职责 |
 |---|---|
 | `Screens/` | 页面级视图，一屏一文件 |
+| `Screens/Base/` | 页面共享基础设施：三区脚手架、路由、空/加载/错误三态（只被 Screens 内各屏依赖） |
 | `Components/` | 跨页面复用的小组件（按钮、卡片、弹窗） |
 | `Control/` | 游戏内触控层（虚拟按键、摇杆、布局编辑） |
 | `Theme/` | 配色、字体、间距、动效常量 |

@@ -76,10 +76,10 @@
 
     <!-- ============================================================
          Scene 配置。
-         注意：delegate 类必须在这里声明。A2AppDelegate 里的
-         configurationForConnectingSceneSession: 只是用来「修改」配置，
-         不能用来「创建」—— 如果这里不写 UISceneConfigurations，
-         系统走 Scene 流程但找不到 delegate，会启动即崩。
+         注意：建窗由 SwiftUI 的 WindowGroup 负责，AppDelegate 只用代码
+         返回空 delegate 的配置做显式确认，不再挂 UIKit delegate 类。
+         这里不再声明 UISceneDelegateClassName —— 指向不存在的类会
+         导致启动即崩（Scene 流程找不到 delegate）。
          ============================================================ -->
     <key>UIApplicationSceneManifest</key>
     <dict>
@@ -92,8 +92,6 @@
                 <dict>
                     <key>UISceneConfigurationName</key>
                     <string>Default Configuration</string>
-                    <key>UISceneDelegateClassName</key>
-                    <string>A2SceneDelegate</string>
                 </dict>
             </array>
         </dict>

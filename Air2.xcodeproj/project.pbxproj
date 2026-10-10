@@ -7,265 +7,211 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		5B69779F761A566D166C2342 /* A2AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 8DA45F9AA021EBFBF929A56A /* A2AppDelegate.m */; };
-		59F01512A836702FD0D9F5D9 /* A2CrashGuard.m in Sources */ = {isa = PBXBuildFile; fileRef = EDF360D6C38161620D973AA3 /* A2CrashGuard.m */; };
-		84B4ED65340FEC57222535E6 /* A2NavigationController.m in Sources */ = {isa = PBXBuildFile; fileRef = F6EE6864D5C02736374620A3 /* A2NavigationController.m */; };
-		1D4ED46FBFBF946134C72573 /* A2RootViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E0A962942F56F74CF7617780 /* A2RootViewController.m */; };
-		84C22A76F0D470DBB7E9248C /* A2SceneDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */; };
-		B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 36F3AADE4F4508F86A2F0505 /* main.m */; };
-		434831579F14E55A1DF7A0D1 /* A2Account.m in Sources */ = {isa = PBXBuildFile; fileRef = 88C69537AF21F68A7B1456D3 /* A2Account.m */; };
-		0B32EEA9A11A39AA5D315041 /* A2AccountManager.m in Sources */ = {isa = PBXBuildFile; fileRef = FBBBB4EFA2B5334A45EA3C4E /* A2AccountManager.m */; };
-		3352C680504CA3F9AB6CFD26 /* A2MicrosoftAuth.m in Sources */ = {isa = PBXBuildFile; fileRef = BA94035A25A574575C224EC9 /* A2MicrosoftAuth.m */; };
-		B70F2470805980B206B1EAF8 /* A2Wardrobe.m in Sources */ = {isa = PBXBuildFile; fileRef = 1FCEEB9DA67A103C2B6DBA4A /* A2Wardrobe.m */; };
-		514C73BF78432EFA524E3D87 /* A2ContentSource.m in Sources */ = {isa = PBXBuildFile; fileRef = 1701CD5F8C697E4FB0EA95CC /* A2ContentSource.m */; };
-		0D17D81407F6A22D20B89620 /* A2CurseForgeAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = B9FA6C49037A18A6B1E59FD5 /* A2CurseForgeAPI.m */; };
-		178E4C042E711E4F72FAAAED /* A2MirrorResolver.m in Sources */ = {isa = PBXBuildFile; fileRef = C4D9FC19281C2C7616C83363 /* A2MirrorResolver.m */; };
-		A83EEEB1694635A4E2D8A05C /* A2ModLoaderAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */; };
-		06B9E837FB19EE06FB5B8001 /* A2ModLoaderInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */; };
-		B93BF19B9A5817F070177A3E /* A2ModPack.m in Sources */ = {isa = PBXBuildFile; fileRef = 818837C4F3F9187CAE2C7B85 /* A2ModPack.m */; };
-		FAE87882A16451C5E2E43DDE /* A2ModrinthAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */; };
-		006F90647E36FA45B54D7B39 /* A2ZipReader.m in Sources */ = {isa = PBXBuildFile; fileRef = C7F15DE318744485CEE00538 /* A2ZipReader.m */; };
-		9F125686BA18A3A79AC3C941 /* A2DownloadEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = 1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */; };
-		04806F8C420A200707485301 /* A2DownloadFavorites.m in Sources */ = {isa = PBXBuildFile; fileRef = 3F6494DF9E525C24C5D69098 /* A2DownloadFavorites.m */; };
-		E6679E2C4F527A9777EA6CEC /* A2DownloadManifest.m in Sources */ = {isa = PBXBuildFile; fileRef = 2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */; };
-		9B094A240FBA6A3C1821F88C /* A2DownloadTask.m in Sources */ = {isa = PBXBuildFile; fileRef = AE757274F8E1E206F093F68A /* A2DownloadTask.m */; };
-		186C2F9B8B2FA203E76FC125 /* A2GameDirMigration.m in Sources */ = {isa = PBXBuildFile; fileRef = F03B93794DA818FF2F14D7D0 /* A2GameDirMigration.m */; };
-		B084543A044A1B44B18F5627 /* A2GameFiles.m in Sources */ = {isa = PBXBuildFile; fileRef = D0693B31AD2EAB6A0328732E /* A2GameFiles.m */; };
-		6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */ = {isa = PBXBuildFile; fileRef = 074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */; };
-		8B0D65271C85EAABC46B0226 /* A2Renderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 47106E1A43667C70F671BED2 /* A2Renderer.m */; };
-		E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */ = {isa = PBXBuildFile; fileRef = 035FB3CC4FE4018F44632AD5 /* A2Settings.m */; };
-		15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */; };
-		42E2F81428F01FB2F3F912BC /* A2RemoteVersions.m in Sources */ = {isa = PBXBuildFile; fileRef = C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */; };
-		7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 643B820206971C227F265607 /* A2VersionManager.m */; };
-		B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */ = {isa = PBXBuildFile; fileRef = 872075DCD0F565557A6554D2 /* A2BackgroundView.m */; };
-		BAF1CF7998AAC1E178EC66D0 /* A2CardPosition.m in Sources */ = {isa = PBXBuildFile; fileRef = C733462374B52500F6D83649 /* A2CardPosition.m */; };
-		D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */ = {isa = PBXBuildFile; fileRef = CA1D52969E0783051081B038 /* A2CardTitleBar.m */; };
-		0769485BDAD9E62F52C32A8C /* A2CategoryNavView.m in Sources */ = {isa = PBXBuildFile; fileRef = A283C0C24413C706B449C36A /* A2CategoryNavView.m */; };
-		0964A8EE7FBEE0DA072679D2 /* A2ColorWheel.m in Sources */ = {isa = PBXBuildFile; fileRef = 75554051E6AED37FAF518AAF /* A2ColorWheel.m */; };
-		350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */ = {isa = PBXBuildFile; fileRef = A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */; };
-		2C9CD0FA185D54ECBE085D43 /* A2LoaderCard.m in Sources */ = {isa = PBXBuildFile; fileRef = 139430B14A933139D8C20D5C /* A2LoaderCard.m */; };
-		552EA36099808FC6CF1AF68C /* A2PrimaryButton.m in Sources */ = {isa = PBXBuildFile; fileRef = EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */; };
-		8ABD4DA07F7A241239D71053 /* A2ProgressBar.m in Sources */ = {isa = PBXBuildFile; fileRef = EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */; };
-		ED8B276093698A47A8E600CB /* A2QuickActionCard.m in Sources */ = {isa = PBXBuildFile; fileRef = BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */; };
-		54F109AC2BE3E147AEEE07FF /* A2RingProgress.m in Sources */ = {isa = PBXBuildFile; fileRef = 65B73468B0B2BABA009E64BC /* A2RingProgress.m */; };
-		11A6C38842401D6C12DD4597 /* A2SegmentedControl.m in Sources */ = {isa = PBXBuildFile; fileRef = FB7BA68822FCB0D14D580939 /* A2SegmentedControl.m */; };
-		41CF931E6887AD8AF73E145F /* A2SettingsRow.m in Sources */ = {isa = PBXBuildFile; fileRef = 235D2D4A2ABFFA39AEDB334D /* A2SettingsRow.m */; };
-		2AF28D616C17109E5DDEB2E6 /* A2SettingsSection.m in Sources */ = {isa = PBXBuildFile; fileRef = EE215D4473E1887376B33E1E /* A2SettingsSection.m */; };
-		7E84349CB65DC97070E0BD74 /* A2SkinHeadView.m in Sources */ = {isa = PBXBuildFile; fileRef = 84CCDDC48E40B58090F702AC /* A2SkinHeadView.m */; };
-		5B82BB5F439B75DE2AE64C6A /* A2TaskDrawer.m in Sources */ = {isa = PBXBuildFile; fileRef = DA139E80AEDB846DE5191C14 /* A2TaskDrawer.m */; };
-		464FCB1D2C9D4FA080A24820 /* A2TaskProgressView.m in Sources */ = {isa = PBXBuildFile; fileRef = ADC4C42CB382EAFDCA556C09 /* A2TaskProgressView.m */; };
-		FD82F8F78F3C230BEBAE1F4B /* A2TextField.m in Sources */ = {isa = PBXBuildFile; fileRef = B498358055FFAD0453CC27C7 /* A2TextField.m */; };
-		5A0A0E6AE2BBFCAD8A947CA9 /* A2Toast.m in Sources */ = {isa = PBXBuildFile; fileRef = F3C972A56B473038ED5074FD /* A2Toast.m */; };
-		46BEB683A03C405C1E74C0B2 /* A2VersionCard.m in Sources */ = {isa = PBXBuildFile; fileRef = DCF1F61258EDBCB81698B32B /* A2VersionCard.m */; };
-		5440FDEA95986768641FF753 /* A2BaseViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */; };
-		912C3DEC9D63AE689DA1F2DE /* A2AccountRowView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */; };
-		AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */; };
-		FB68423E2789A6F0A08E6E54 /* A2LoginViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */; };
-		E9CDC809C5E3AD84272E1B26 /* A2CurseForgeKeyPrompt.m in Sources */ = {isa = PBXBuildFile; fileRef = 9C6B3720B9A3DD4535D686F1 /* A2CurseForgeKeyPrompt.m */; };
-		2A198491CA6B003BDC631499 /* A2DownloadHomeViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6BD5B5E88F004055F7FD4B0E /* A2DownloadHomeViewController.m */; };
-		417DB6BA2038F2AFE425AB2B /* A2DownloadListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */; };
-		AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */; };
-		EBFE6778C18900FDF0942172 /* A2FavoritesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 82DAFF5D1DF928F825EA8452 /* A2FavoritesViewController.m */; };
-		B9AF292E811122649CF9FEE6 /* A2GameInstallOptionsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3448695748B18FEC501E0C2F /* A2GameInstallOptionsViewController.m */; };
-		6C998AE9614B2353B8C03DC2 /* A2GameVersionListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = AD5DE88799682F07A3341134 /* A2GameVersionListViewController.m */; };
-		7344000874E6AFAA9489A939 /* A2InstallingViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */; };
-		24382DEA0CF7EDAB682B261B /* A2ProjectDetailViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = D02B95F885FA2BEC74B793AA /* A2ProjectDetailViewController.m */; };
-		4037C5EBDB3F5A02EBD25E87 /* A2SearchByIdViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = C769776AF3D8703861D81699 /* A2SearchByIdViewController.m */; };
-		7300D5E59DE772A9BD66181A /* A2FilesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E10CEEF11893D9C3037031FF /* A2FilesViewController.m */; };
-		F6C91785AE1F856D4C3E08BB /* A2LauncherViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = C8A9221A5FAC2B9E0D63B27A /* A2LauncherViewController.m */; };
-		8DF920441794A778BEFD9DD0 /* A2AppearanceSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */; };
-		28E0E9F04A06993B01FFC1D8 /* A2BackgroundSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */; };
-		231BA8D647ED52A70C2A644B /* A2ColorThemeDialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */; };
-		EEF4A6D7B7ED12797FCBBD77 /* A2CurseForgeKeyPageViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = D26B0D2BE92BE11D88C18FE5 /* A2CurseForgeKeyPageViewController.m */; };
-		1E7FB60017717A3BE32B9A3C /* A2DiagnosticsSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */; };
-		C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB44E450592838BA6F7B061 /* A2GameSettings.m */; };
-		1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */; };
-		5C3C3472B73A413C081E753F /* A2VersionListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */; };
-		7635F6BA870CB67CA1FBFDF4 /* A2VersionRowView.m in Sources */ = {isa = PBXBuildFile; fileRef = 8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */; };
-		D33BBA190C82A6A3205F3A9E /* A2VersionSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */; };
-		27702DAD22876D499AD213EF /* A2ColorScheme.m in Sources */ = {isa = PBXBuildFile; fileRef = 93BF612ED3930C6A33249855 /* A2ColorScheme.m */; };
-		141BC76960489907EC08BDBA /* A2ColorTheme+Seed.m in Sources */ = {isa = PBXBuildFile; fileRef = 25966F1F7F932D2795B0F1A8 /* A2ColorTheme+Seed.m */; };
-		86D43CE5B95D29876BF7D34D /* A2ColorTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = 82FE348CB0D3A5CE4DD665A1 /* A2ColorTheme.m */; };
-		01294C3B04FD73AA638FC63E /* A2Metrics.m in Sources */ = {isa = PBXBuildFile; fileRef = C144BE68C9BFFFAA61A92B1A /* A2Metrics.m */; };
-		4BE5F7816DB3CEF6CBE3809A /* A2PaletteStyle.m in Sources */ = {isa = PBXBuildFile; fileRef = E6F6FA4C47FD771177075404 /* A2PaletteStyle.m */; };
-		7B7A47F5F8AA510170F1A159 /* A2ThemeManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */; };
-		0771576A647FFB4348CEC538 /* A2Typography.m in Sources */ = {isa = PBXBuildFile; fileRef = 42B68771E09EA8BB40AC83D7 /* A2Typography.m */; };
-		C754280DF19913731620CE6A /* A2Log.m in Sources */ = {isa = PBXBuildFile; fileRef = CE8E02818B37C0AFFABF71D5 /* A2Log.m */; };
-		6B1CD1AC96CD93B7EE0847A4 /* A2MurmurHash2.m in Sources */ = {isa = PBXBuildFile; fileRef = 70E537F57063CE783BE3A38B /* A2MurmurHash2.m */; };
+		5F4DFA3FC6B755E5F35925ED /* A2Account.m in Sources */ = {isa = PBXBuildFile; fileRef = 78F20634775387DF6A40221B /* A2Account.m */; };
+		44E9E6648C38322B81720B12 /* A2AccountManager.m in Sources */ = {isa = PBXBuildFile; fileRef = A4C3A5DC4FAA3FB21B3B60E4 /* A2AccountManager.m */; };
+		40B26BD35F808104E7285711 /* A2MicrosoftAuth.m in Sources */ = {isa = PBXBuildFile; fileRef = 035F92B9FD30D1A5B6D4E1D0 /* A2MicrosoftAuth.m */; };
+		A32E6F93250190056F4F5559 /* A2Wardrobe.m in Sources */ = {isa = PBXBuildFile; fileRef = B9F94326062111C842542FB7 /* A2Wardrobe.m */; };
+		D28FE4734ED4E47AE5B16686 /* A2ContentSource.m in Sources */ = {isa = PBXBuildFile; fileRef = C3B207AFCEB81BC7C25E7CD2 /* A2ContentSource.m */; };
+		E5C88EE852A2A24FDA8EB9E5 /* A2CurseForgeAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = 4F70815D112BD78F6AC9D431 /* A2CurseForgeAPI.m */; };
+		59F9575EAE80CA0C1FCA0A95 /* A2MirrorResolver.m in Sources */ = {isa = PBXBuildFile; fileRef = 83BBEEB42EE3B115C1766B35 /* A2MirrorResolver.m */; };
+		CAC4E0C976163211F6A8B195 /* A2ModLoaderAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = FC66445C588B09E9395E4C4B /* A2ModLoaderAPI.m */; };
+		C5CDC6EDDF5461A6C9027B02 /* A2ModLoaderInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = E602504900EFDA0466CF76CF /* A2ModLoaderInstaller.m */; };
+		F5D54C0847FB1BB807845F7A /* A2ModPack.m in Sources */ = {isa = PBXBuildFile; fileRef = D82F227EC7D3A5262BA9B711 /* A2ModPack.m */; };
+		1FA2B171BD505CB7635F1420 /* A2ModrinthAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = 82D203C97EE783665B4FE1A7 /* A2ModrinthAPI.m */; };
+		12479F10BECD491E506A3B1A /* A2ZipReader.m in Sources */ = {isa = PBXBuildFile; fileRef = 861D56DD3C5F66C17FEE2793 /* A2ZipReader.m */; };
+		E30E3600617DCBBA78866167 /* A2DownloadEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = 63072251CD655A006C7F5FC7 /* A2DownloadEngine.m */; };
+		158003481ACC2377D1EE702A /* A2DownloadFavorites.m in Sources */ = {isa = PBXBuildFile; fileRef = C2D95816736EE853198A6556 /* A2DownloadFavorites.m */; };
+		01CD05C0B027EB4BADF133AB /* A2DownloadManifest.m in Sources */ = {isa = PBXBuildFile; fileRef = D2EA550342ADBB9FEE3765F3 /* A2DownloadManifest.m */; };
+		B603326F2C4B5602415E542D /* A2DownloadTask.m in Sources */ = {isa = PBXBuildFile; fileRef = D283C25B889D26DB4CE6673B /* A2DownloadTask.m */; };
+		AC279EBC3F27254F40BC6B43 /* A2GameDirMigration.m in Sources */ = {isa = PBXBuildFile; fileRef = 729D785F3A083CF3F466FB49 /* A2GameDirMigration.m */; };
+		2DD4CF0EBD8173CB7F12CAE0 /* A2GameFiles.m in Sources */ = {isa = PBXBuildFile; fileRef = E7CAD40D06B5B431C058A2B7 /* A2GameFiles.m */; };
+		EEF6AC98DD1DBCE65AEC89E0 /* A2VersionIsolation.m in Sources */ = {isa = PBXBuildFile; fileRef = 5DAB4B8E238377E52D1373E9 /* A2VersionIsolation.m */; };
+		5754172F4D73412B1B804C00 /* A2Renderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 7DB6ECA34AD52401A2E9DF1E /* A2Renderer.m */; };
+		2E2D88E2235889A1ED5080C4 /* A2Settings.m in Sources */ = {isa = PBXBuildFile; fileRef = 83F6A081CE62CDC0DE220F9F /* A2Settings.m */; };
+		725FF2AB9DD656F7AC0E39E2 /* A2GameInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 306A150687720BDE90C95426 /* A2GameInstaller.m */; };
+		86E948353CDEAC5CBE2B5652 /* A2RemoteVersions.m in Sources */ = {isa = PBXBuildFile; fileRef = 3E5A1BE759234BAC15A4BE07 /* A2RemoteVersions.m */; };
+		A68A04BFB6E560F3E6CB6D8D /* A2VersionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 64AAAE205A102FC191710D79 /* A2VersionManager.m */; };
+		4D0AE4E28C4F8580A1E1690A /* A2Log.m in Sources */ = {isa = PBXBuildFile; fileRef = E9ED5E31A889A813B3D4CC4F /* A2Log.m */; };
+		8E5F7B0C4E979CDDEF47047A /* A2MurmurHash2.m in Sources */ = {isa = PBXBuildFile; fileRef = 3F6F61BD6D1BB1ADCEF1B889 /* A2MurmurHash2.m */; };
+		95B5AAE3FC5B20DB8046B054 /* Air2App.swift in Sources */ = {isa = PBXBuildFile; fileRef = 92DEE1FAF75651B2D8365B30 /* Air2App.swift */; };
+		F3753D608D1B88B7198CCC3D /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2E14C9BACD47EE9EE585D8BA /* AppDelegate.swift */; };
+		B3C70AA18F1F43DE2731B989 /* CrashGuard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 823E65F4A9389D802DD13175 /* CrashGuard.swift */; };
+		4C0B84FB5636D4795E7807F4 /* DependencyContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4AFF89EC5C7F0915854F88F /* DependencyContainer.swift */; };
+		63ABC5AEBAF3DEF13F5735B0 /* NavigationHost.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1EA76114E874AA0A9CCB7AAC /* NavigationHost.swift */; };
+		4CF0D5D151640BAE61DCA245 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = ED1B0BF7A95FE8C37C12E680 /* RootView.swift */; };
+		FAD077D2D84886A529229F40 /* BackgroundView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A462F53AB892B5640754D67C /* BackgroundView.swift */; };
+		83CE296EAC1AE24A5132F368 /* CardPosition.swift in Sources */ = {isa = PBXBuildFile; fileRef = 039E61F95C40F4FB6ACB50DD /* CardPosition.swift */; };
+		66E207F9F8B51332833AAFA0 /* CardTitleBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = D061BD1281FEE34F2BC08393 /* CardTitleBar.swift */; };
+		2D3D830B2571657D18FCF5E9 /* CategoryNavView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F73D54BCF428E21F39C99181 /* CategoryNavView.swift */; };
+		B5926354A82F37402D899C1B /* ColorWheel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EF1163D52812FA695BB20D8 /* ColorWheel.swift */; };
+		6D9DDF8D9701D8CD12846E52 /* ComponentTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 12133BA3244941BF224B8388 /* ComponentTheme.swift */; };
+		D78B763A0EC0C24AC0F072FB /* GlassCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9F467C6A9DC322FE39AF64B5 /* GlassCard.swift */; };
+		8766ED79923150D0F084AC4B /* LoaderCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = FFCDE9F6E014A7C1A789ADCB /* LoaderCard.swift */; };
+		C4B5F6973130302BA1FE67EB /* PrimaryButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA25373074C51B69B4799486 /* PrimaryButton.swift */; };
+		195DF7836DF3798E9FA58A73 /* ProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = C9BC4B852F30CA41DD02BB55 /* ProgressBar.swift */; };
+		B854FD05929DA397C9EC0E3F /* ProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2C2B2571D980362DB1F27999 /* ProgressView.swift */; };
+		77EC75BFF688370FB5259F4D /* QuickActionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3AA42129D5E4647773FCD7A2 /* QuickActionCard.swift */; };
+		7C037871744E9B0EC4C696D3 /* RingProgress.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65B1A7F3F37FA88FF33D41EE /* RingProgress.swift */; };
+		4903DABBF4EDCB4B7D4EADE1 /* SegmentedControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7B748A3464C5CF580C4AA287 /* SegmentedControl.swift */; };
+		0DC758660E8629E4C75A03AC /* SettingsRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = AD8734C8EB47ED4F7C539CA1 /* SettingsRow.swift */; };
+		A4A642EC9CBF7C80D53B7B0A /* SettingsSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C257F6745A9FD0EEC82BC16 /* SettingsSection.swift */; };
+		41F4AE2A116025F1DDCEAAD9 /* SkinHeadView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1BDBEE42FA5A80A04270BD47 /* SkinHeadView.swift */; };
+		B1BE25C7DD55BE1D5950E937 /* TaskDrawer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BC93BE4F3AF30B41AF85444 /* TaskDrawer.swift */; };
+		010CAAC4D72808CB0397DCD5 /* TaskProgressView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0EFC60C4B08A93AFF40D62E8 /* TaskProgressView.swift */; };
+		7BDD99BEC9FCF75FAED3DA9A /* TextField.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE1F83C7568C200FBA70A4EC /* TextField.swift */; };
+		722C6E247397912FBF7E1910 /* Toast.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8BB5B15A3C3D21B4D2CA404E /* Toast.swift */; };
+		20F9ACF381FD9732406E47F1 /* VersionCard.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BE726C06EF19FE763CFAEB3 /* VersionCard.swift */; };
+		CDE53BE4FF742EB6F884FEBE /* GameTouchControls.swift in Sources */ = {isa = PBXBuildFile; fileRef = F397F0102FE2168937651C89 /* GameTouchControls.swift */; };
+		4291A80047A1C83E3DDC8D8D /* AccountRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF5C23F80975E29B98780559 /* AccountRowView.swift */; };
+		0E1DDADE109E0C8A22004166 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A17D8FE07E1A80AE22DFBB8F /* AccountView.swift */; };
+		0B3B34805D0367033FEACED8 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4EFF5692816EAF6DEC1ACB3C /* LoginView.swift */; };
+		E30AA7728459D6C259553E9A /* ThreeZoneScaffold.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5088F6309BC11A13EF77B3C1 /* ThreeZoneScaffold.swift */; };
+		CE59363967539B009C0DD55E /* CurseForgePrompt.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9521CB43D0BE7F5880B5875 /* CurseForgePrompt.swift */; };
+		17097DD857A3E186B208A501 /* DownloadHomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5CE8518D0C327670A86591F9 /* DownloadHomeView.swift */; };
+		206E6BD299FC28FE0662F8D1 /* DownloadListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE3702A8265E132811C55DCF /* DownloadListView.swift */; };
+		84DD43DBBA5AFB76A3A0A267 /* DownloadRootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B7844A6C3DAD7EBBE679FDA1 /* DownloadRootView.swift */; };
+		1C4B0170D31FB10D66EB9AFD /* FavoritesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 046C7B08B8E2BAE9ADF05393 /* FavoritesView.swift */; };
+		1D42CC0E4945CC59BB71B885 /* GameVersionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 30A40BF1235FA23261B9BE42 /* GameVersionListView.swift */; };
+		E4E5882DEDDD6B3374506831 /* InstallOptionsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFD21290224766A4A9DEFCFB /* InstallOptionsView.swift */; };
+		F8311647A68D58ABC0A5A15E /* InstallingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10CD75601706FB54660F57CA /* InstallingView.swift */; };
+		136F7DA47D5CCE44F28CF97D /* ProjectDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1AAFE99E5507CDC1D28FEEF /* ProjectDetailView.swift */; };
+		2943F5FD1F6C1721E950C2F2 /* SearchByIdView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A63AC2B4DA9CA7FB161D87EF /* SearchByIdView.swift */; };
+		BED024D454182F835A167903 /* FilesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3E9200B447813D0ED5619D17 /* FilesView.swift */; };
+		4EC45993D6FFAC51D36AFF39 /* LauncherView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 66ACC883E7D8CB609D45739A /* LauncherView.swift */; };
+		F93236082155BDE721039864 /* AppearanceSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 00D2041992547465673B1BA0 /* AppearanceSettings.swift */; };
+		F03D87E84F747CBE6C6C8095 /* BackgroundSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2455546822204543BF0D0C4 /* BackgroundSettingsView.swift */; };
+		006EB952506C80099E052F73 /* ColorThemeDialog.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC9D5634748EF449DDAD72E2 /* ColorThemeDialog.swift */; };
+		319CD659BC91D6A4F10013DF /* CurseForgeKeyPageView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1D2181B9D313282923904168 /* CurseForgeKeyPageView.swift */; };
+		DE0E28A90563CF67FFE7EA37 /* DiagnosticsSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 62CA0B6BC2433EBE08B23343 /* DiagnosticsSettings.swift */; };
+		A447F56484657C18BFDA508E /* GameSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A2B7E8E8FF7049EB6F55A9D /* GameSettings.swift */; };
+		C14D4E5A85BB19E2A68EEE50 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3B44AA93DBA7882725DA68B /* SettingsView.swift */; };
+		199A6A4A6C1A0D6427CF0271 /* VersionListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4FAFDC1E9E1D547C40E1DCFA /* VersionListView.swift */; };
+		F0EED31C7B8FC79BBB836F87 /* VersionRowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6092621076959AC74E71A9D4 /* VersionRowView.swift */; };
+		E3B54E43AB4440A641CA0248 /* VersionSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9DFA064DA9E936C9380500F /* VersionSettingsView.swift */; };
+		A7D53DBD46BABD94CE586009 /* BuiltinThemes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45AFA16B4FD4B25DECCF237C /* BuiltinThemes.swift */; };
+		C9481E71DB3980A8B4C33E46 /* ColorScheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = DB3DB73DB7618FA86EEBD2AA /* ColorScheme.swift */; };
+		BE1594A6558CEE700A11E233 /* Metrics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B138D16C14D498A4EA4D147 /* Metrics.swift */; };
+		C0C7942A563745FBA2F897FF /* Motion.swift in Sources */ = {isa = PBXBuildFile; fileRef = FA1506795C7D1C848BE80D5C /* Motion.swift */; };
+		F44C0AA8E52A60005B2B0CE1 /* ThemeManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = C2463291907C78D76C7A3EB8 /* ThemeManager.swift */; };
+		883E08884F97AC1B2F94F35C /* Typography.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7E268DB2F793E35FA63006CC /* Typography.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		082E22CB657D9948DD22CF5F /* Air2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Air2.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		18FD4D9FAB9B1E1C27AFB511 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		8DA45F9AA021EBFBF929A56A /* A2AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AppDelegate.m"; sourceTree = "<group>"; };
-		EDF360D6C38161620D973AA3 /* A2CrashGuard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CrashGuard.m"; sourceTree = "<group>"; };
-		F6EE6864D5C02736374620A3 /* A2NavigationController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2NavigationController.m"; sourceTree = "<group>"; };
-		E0A962942F56F74CF7617780 /* A2RootViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RootViewController.m"; sourceTree = "<group>"; };
-		B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SceneDelegate.m"; sourceTree = "<group>"; };
-		36F3AADE4F4508F86A2F0505 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "main.m"; sourceTree = "<group>"; };
-		88C69537AF21F68A7B1456D3 /* A2Account.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Account.m"; sourceTree = "<group>"; };
-		FBBBB4EFA2B5334A45EA3C4E /* A2AccountManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountManager.m"; sourceTree = "<group>"; };
-		BA94035A25A574575C224EC9 /* A2MicrosoftAuth.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MicrosoftAuth.m"; sourceTree = "<group>"; };
-		1FCEEB9DA67A103C2B6DBA4A /* A2Wardrobe.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Wardrobe.m"; sourceTree = "<group>"; };
-		1701CD5F8C697E4FB0EA95CC /* A2ContentSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ContentSource.m"; sourceTree = "<group>"; };
-		B9FA6C49037A18A6B1E59FD5 /* A2CurseForgeAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CurseForgeAPI.m"; sourceTree = "<group>"; };
-		C4D9FC19281C2C7616C83363 /* A2MirrorResolver.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MirrorResolver.m"; sourceTree = "<group>"; };
-		A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderAPI.m"; sourceTree = "<group>"; };
-		452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderInstaller.m"; sourceTree = "<group>"; };
-		818837C4F3F9187CAE2C7B85 /* A2ModPack.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPack.m"; sourceTree = "<group>"; };
-		B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModrinthAPI.m"; sourceTree = "<group>"; };
-		C7F15DE318744485CEE00538 /* A2ZipReader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ZipReader.m"; sourceTree = "<group>"; };
-		1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadEngine.m"; sourceTree = "<group>"; };
-		3F6494DF9E525C24C5D69098 /* A2DownloadFavorites.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadFavorites.m"; sourceTree = "<group>"; };
-		2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadManifest.m"; sourceTree = "<group>"; };
-		AE757274F8E1E206F093F68A /* A2DownloadTask.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadTask.m"; sourceTree = "<group>"; };
-		F03B93794DA818FF2F14D7D0 /* A2GameDirMigration.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameDirMigration.m"; sourceTree = "<group>"; };
-		D0693B31AD2EAB6A0328732E /* A2GameFiles.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameFiles.m"; sourceTree = "<group>"; };
-		074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionIsolation.m"; sourceTree = "<group>"; };
-		47106E1A43667C70F671BED2 /* A2Renderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Renderer.m"; sourceTree = "<group>"; };
-		035FB3CC4FE4018F44632AD5 /* A2Settings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Settings.m"; sourceTree = "<group>"; };
-		044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameInstaller.m"; sourceTree = "<group>"; };
-		C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RemoteVersions.m"; sourceTree = "<group>"; };
-		643B820206971C227F265607 /* A2VersionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionManager.m"; sourceTree = "<group>"; };
-		872075DCD0F565557A6554D2 /* A2BackgroundView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BackgroundView.m"; sourceTree = "<group>"; };
-		C733462374B52500F6D83649 /* A2CardPosition.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CardPosition.m"; sourceTree = "<group>"; };
-		CA1D52969E0783051081B038 /* A2CardTitleBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CardTitleBar.m"; sourceTree = "<group>"; };
-		A283C0C24413C706B449C36A /* A2CategoryNavView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CategoryNavView.m"; sourceTree = "<group>"; };
-		75554051E6AED37FAF518AAF /* A2ColorWheel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorWheel.m"; sourceTree = "<group>"; };
-		A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GlassCard.m"; sourceTree = "<group>"; };
-		139430B14A933139D8C20D5C /* A2LoaderCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoaderCard.m"; sourceTree = "<group>"; };
-		EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PrimaryButton.m"; sourceTree = "<group>"; };
-		EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ProgressBar.m"; sourceTree = "<group>"; };
-		BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2QuickActionCard.m"; sourceTree = "<group>"; };
-		65B73468B0B2BABA009E64BC /* A2RingProgress.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RingProgress.m"; sourceTree = "<group>"; };
-		FB7BA68822FCB0D14D580939 /* A2SegmentedControl.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SegmentedControl.m"; sourceTree = "<group>"; };
-		235D2D4A2ABFFA39AEDB334D /* A2SettingsRow.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsRow.m"; sourceTree = "<group>"; };
-		EE215D4473E1887376B33E1E /* A2SettingsSection.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsSection.m"; sourceTree = "<group>"; };
-		84CCDDC48E40B58090F702AC /* A2SkinHeadView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SkinHeadView.m"; sourceTree = "<group>"; };
-		DA139E80AEDB846DE5191C14 /* A2TaskDrawer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskDrawer.m"; sourceTree = "<group>"; };
-		ADC4C42CB382EAFDCA556C09 /* A2TaskProgressView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskProgressView.m"; sourceTree = "<group>"; };
-		B498358055FFAD0453CC27C7 /* A2TextField.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TextField.m"; sourceTree = "<group>"; };
-		F3C972A56B473038ED5074FD /* A2Toast.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Toast.m"; sourceTree = "<group>"; };
-		DCF1F61258EDBCB81698B32B /* A2VersionCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionCard.m"; sourceTree = "<group>"; };
-		BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BaseViewController.m"; sourceTree = "<group>"; };
-		2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountRowView.m"; sourceTree = "<group>"; };
-		CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountViewController.m"; sourceTree = "<group>"; };
-		1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoginViewController.m"; sourceTree = "<group>"; };
-		9C6B3720B9A3DD4535D686F1 /* A2CurseForgeKeyPrompt.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CurseForgeKeyPrompt.m"; sourceTree = "<group>"; };
-		6BD5B5E88F004055F7FD4B0E /* A2DownloadHomeViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadHomeViewController.m"; sourceTree = "<group>"; };
-		904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadListViewController.m"; sourceTree = "<group>"; };
-		58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadViewController.m"; sourceTree = "<group>"; };
-		82DAFF5D1DF928F825EA8452 /* A2FavoritesViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2FavoritesViewController.m"; sourceTree = "<group>"; };
-		3448695748B18FEC501E0C2F /* A2GameInstallOptionsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameInstallOptionsViewController.m"; sourceTree = "<group>"; };
-		AD5DE88799682F07A3341134 /* A2GameVersionListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameVersionListViewController.m"; sourceTree = "<group>"; };
-		6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2InstallingViewController.m"; sourceTree = "<group>"; };
-		D02B95F885FA2BEC74B793AA /* A2ProjectDetailViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ProjectDetailViewController.m"; sourceTree = "<group>"; };
-		C769776AF3D8703861D81699 /* A2SearchByIdViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SearchByIdViewController.m"; sourceTree = "<group>"; };
-		E10CEEF11893D9C3037031FF /* A2FilesViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2FilesViewController.m"; sourceTree = "<group>"; };
-		C8A9221A5FAC2B9E0D63B27A /* A2LauncherViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LauncherViewController.m"; sourceTree = "<group>"; };
-		CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AppearanceSettings.m"; sourceTree = "<group>"; };
-		976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BackgroundSettingsViewController.m"; sourceTree = "<group>"; };
-		5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorThemeDialog.m"; sourceTree = "<group>"; };
-		D26B0D2BE92BE11D88C18FE5 /* A2CurseForgeKeyPageViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CurseForgeKeyPageViewController.m"; sourceTree = "<group>"; };
-		D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DiagnosticsSettings.m"; sourceTree = "<group>"; };
-		0FB44E450592838BA6F7B061 /* A2GameSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameSettings.m"; sourceTree = "<group>"; };
-		9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsViewController.m"; sourceTree = "<group>"; };
-		ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionListViewController.m"; sourceTree = "<group>"; };
-		8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionRowView.m"; sourceTree = "<group>"; };
-		4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionSettingsViewController.m"; sourceTree = "<group>"; };
-		93BF612ED3930C6A33249855 /* A2ColorScheme.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorScheme.m"; sourceTree = "<group>"; };
-		25966F1F7F932D2795B0F1A8 /* A2ColorTheme+Seed.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorTheme+Seed.m"; sourceTree = "<group>"; };
-		82FE348CB0D3A5CE4DD665A1 /* A2ColorTheme.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorTheme.m"; sourceTree = "<group>"; };
-		C144BE68C9BFFFAA61A92B1A /* A2Metrics.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Metrics.m"; sourceTree = "<group>"; };
-		E6F6FA4C47FD771177075404 /* A2PaletteStyle.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PaletteStyle.m"; sourceTree = "<group>"; };
-		5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ThemeManager.m"; sourceTree = "<group>"; };
-		42B68771E09EA8BB40AC83D7 /* A2Typography.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Typography.m"; sourceTree = "<group>"; };
-		CE8E02818B37C0AFFABF71D5 /* A2Log.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Log.m"; sourceTree = "<group>"; };
-		70E537F57063CE783BE3A38B /* A2MurmurHash2.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MurmurHash2.m"; sourceTree = "<group>"; };
-		52E0A8862124FBDB57E8C690 /* A2AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AppDelegate.h"; sourceTree = "<group>"; };
-		6A39662C0840C98AB5D33038 /* A2CrashGuard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CrashGuard.h"; sourceTree = "<group>"; };
-		FFF83F1A982D07C7CBBF5C78 /* A2NavigationController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2NavigationController.h"; sourceTree = "<group>"; };
-		2C58D391DAC32B55049E9809 /* A2RootViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RootViewController.h"; sourceTree = "<group>"; };
-		1185FA48A6FE1AB2F1E312DE /* A2SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SceneDelegate.h"; sourceTree = "<group>"; };
-		748747C748D79B3DAEEDB5CF /* A2Account.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Account.h"; sourceTree = "<group>"; };
-		1EB22C948F38C8AEC14F9AB3 /* A2AccountManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountManager.h"; sourceTree = "<group>"; };
-		845233208F5ECAED2A1B1D6B /* A2MicrosoftAuth.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MicrosoftAuth.h"; sourceTree = "<group>"; };
-		BE140C5384D36CE4A510C926 /* A2Wardrobe.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Wardrobe.h"; sourceTree = "<group>"; };
-		7452A96D7665BFCA516E1759 /* A2ContentSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ContentSource.h"; sourceTree = "<group>"; };
-		732674FFF97FD95863EEEAC7 /* A2CurseForgeAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CurseForgeAPI.h"; sourceTree = "<group>"; };
-		D10B30C91899E9D94389EF4D /* A2MirrorResolver.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MirrorResolver.h"; sourceTree = "<group>"; };
-		2CDA5A9BDC1B71E004D187AD /* A2ModLoaderAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderAPI.h"; sourceTree = "<group>"; };
-		D845B0CEB9AEB5591C34C008 /* A2ModLoaderInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderInstaller.h"; sourceTree = "<group>"; };
-		82C5CA51B322A62C9A8716A5 /* A2ModPack.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPack.h"; sourceTree = "<group>"; };
-		BEB699597AD1A56E18E868F6 /* A2ModrinthAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModrinthAPI.h"; sourceTree = "<group>"; };
-		AFAF6FCA941790ECF1D16844 /* A2ZipReader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ZipReader.h"; sourceTree = "<group>"; };
-		DE956596465BDFF25E578448 /* A2DownloadEngine.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadEngine.h"; sourceTree = "<group>"; };
-		1EDE5D2DBCB81396D185C97D /* A2DownloadFavorites.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadFavorites.h"; sourceTree = "<group>"; };
-		D3ABD890B860FD03E77A2B0C /* A2DownloadManifest.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadManifest.h"; sourceTree = "<group>"; };
-		0F59C20AA19682790BF7251E /* A2DownloadTask.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTask.h"; sourceTree = "<group>"; };
-		801FBE3D9BBD2833977FF7A9 /* A2GameDirMigration.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameDirMigration.h"; sourceTree = "<group>"; };
-		0B3D6D1B16A31DBED39334EE /* A2GameFiles.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameFiles.h"; sourceTree = "<group>"; };
-		CDB8C000E2777EB953C462DD /* A2VersionIsolation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionIsolation.h"; sourceTree = "<group>"; };
-		12B70B0E6FB31B7E75D61633 /* A2Renderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Renderer.h"; sourceTree = "<group>"; };
-		8D9149596220C9F4F49C460D /* A2Settings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Settings.h"; sourceTree = "<group>"; };
-		8407C36C2C93136130B9F07E /* A2GameInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameInstaller.h"; sourceTree = "<group>"; };
-		797843066906C8A344CE1344 /* A2RemoteVersions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RemoteVersions.h"; sourceTree = "<group>"; };
-		8566CA5C1C5F50A603ACC370 /* A2VersionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionManager.h"; sourceTree = "<group>"; };
-		930418C55810BF7B65B85AE9 /* A2BackgroundView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundView.h"; sourceTree = "<group>"; };
-		EB440E13AD4A8BB54186F381 /* A2CardPosition.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CardPosition.h"; sourceTree = "<group>"; };
-		1F985FAD5DEB8D4699A8B5AE /* A2CardTitleBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CardTitleBar.h"; sourceTree = "<group>"; };
-		853858C5BCCD6563D696BCE9 /* A2CategoryNavView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CategoryNavView.h"; sourceTree = "<group>"; };
-		D0D70559C6A4486D1060EC44 /* A2ColorWheel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorWheel.h"; sourceTree = "<group>"; };
-		011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GlassCard.h"; sourceTree = "<group>"; };
-		0AE3E9A2D83CB6D50AE64979 /* A2LoaderCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoaderCard.h"; sourceTree = "<group>"; };
-		F483F847F6597D3BD17BBBA5 /* A2PrimaryButton.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PrimaryButton.h"; sourceTree = "<group>"; };
-		A2C65A10681693BAA019E065 /* A2ProgressBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ProgressBar.h"; sourceTree = "<group>"; };
-		D771FB41CA40081650206A01 /* A2ProgressView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ProgressView.h"; sourceTree = "<group>"; };
-		6585C7CB91A28A24F014676B /* A2QuickActionCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2QuickActionCard.h"; sourceTree = "<group>"; };
-		448AFE07A533753F67B61451 /* A2RingProgress.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RingProgress.h"; sourceTree = "<group>"; };
-		06BF25C201A9B83666E117F1 /* A2SegmentedControl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SegmentedControl.h"; sourceTree = "<group>"; };
-		32854779149E0E29A0EC1CE2 /* A2SettingsRow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsRow.h"; sourceTree = "<group>"; };
-		96423A07FE49DD9B2383632F /* A2SettingsSection.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsSection.h"; sourceTree = "<group>"; };
-		443AE8E5ACDC8A02D5AD1308 /* A2SkinHeadView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SkinHeadView.h"; sourceTree = "<group>"; };
-		86BA725A974D441AEC4C7082 /* A2TaskDrawer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskDrawer.h"; sourceTree = "<group>"; };
-		1D0B896EEB924745CE5C4038 /* A2TaskProgressView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskProgressView.h"; sourceTree = "<group>"; };
-		46EB509F1EF9D56C1DD81B78 /* A2TextField.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TextField.h"; sourceTree = "<group>"; };
-		DBF31C9D8FD1524E6BEB2D62 /* A2Toast.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Toast.h"; sourceTree = "<group>"; };
-		88C9076497160DA45470EFB1 /* A2VersionCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionCard.h"; sourceTree = "<group>"; };
-		346D941B767D969728343CD3 /* A2BaseViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BaseViewController.h"; sourceTree = "<group>"; };
-		0D773FDDDB48AA7436E8FAA5 /* A2AccountRowView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountRowView.h"; sourceTree = "<group>"; };
-		6D2B976BBD0701B19B6533DD /* A2AccountViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountViewController.h"; sourceTree = "<group>"; };
-		52F4C13395826CC0FD71F073 /* A2LoginViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoginViewController.h"; sourceTree = "<group>"; };
-		9AB5CD42A663FD555714F649 /* A2CurseForgeKeyPrompt.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CurseForgeKeyPrompt.h"; sourceTree = "<group>"; };
-		72E65FE9114002E5C6F41167 /* A2DownloadHomeViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadHomeViewController.h"; sourceTree = "<group>"; };
-		03B2D97D5F4CDEEC6A69B6D0 /* A2DownloadListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadListViewController.h"; sourceTree = "<group>"; };
-		A7D45435EB1780C938976BA4 /* A2DownloadViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadViewController.h"; sourceTree = "<group>"; };
-		E9C2A18759AEABAB3EAE0B16 /* A2FavoritesViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2FavoritesViewController.h"; sourceTree = "<group>"; };
-		A9F54FD3EE4B13741768C5AE /* A2GameInstallOptionsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameInstallOptionsViewController.h"; sourceTree = "<group>"; };
-		202A98989688120E4B50688E /* A2GameVersionListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameVersionListViewController.h"; sourceTree = "<group>"; };
-		C7770877217FAF37A3CE2F32 /* A2InstallingViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InstallingViewController.h"; sourceTree = "<group>"; };
-		D625B7A19C581DEB25154EAD /* A2ProjectDetailViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ProjectDetailViewController.h"; sourceTree = "<group>"; };
-		018CB525E29025D7B9C0B237 /* A2SearchByIdViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SearchByIdViewController.h"; sourceTree = "<group>"; };
-		593DBA138961EDD00008892E /* A2FilesViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2FilesViewController.h"; sourceTree = "<group>"; };
-		39421C371A5FDC787D490323 /* A2LauncherViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LauncherViewController.h"; sourceTree = "<group>"; };
-		8A8A69E0C0117AD2228117A1 /* A2BackgroundSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundSettingsViewController.h"; sourceTree = "<group>"; };
-		137E26C858B461DBC6F3AB93 /* A2ColorThemeDialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorThemeDialog.h"; sourceTree = "<group>"; };
-		4FC57D1EADA4E18987F23F52 /* A2CurseForgeKeyPageViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CurseForgeKeyPageViewController.h"; sourceTree = "<group>"; };
-		9CE1BE0BB775D12731066330 /* A2DiagnosticsSettings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DiagnosticsSettings.h"; sourceTree = "<group>"; };
-		A309D45ADA810213043EDE96 /* A2SettingsSections.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsSections.h"; sourceTree = "<group>"; };
-		F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsViewController.h"; sourceTree = "<group>"; };
-		271E6A92F0F655D2A7EA5627 /* A2VersionListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionListViewController.h"; sourceTree = "<group>"; };
-		EF8A5FB174D5923A21B4D162 /* A2VersionRowView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionRowView.h"; sourceTree = "<group>"; };
-		E0C16E70541109926240BD8B /* A2VersionSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionSettingsViewController.h"; sourceTree = "<group>"; };
-		DAC23739A567EAE9F7189258 /* A2ColorScheme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorScheme.h"; sourceTree = "<group>"; };
-		89FE8C9FAF9D157BFC4F8D14 /* A2ColorTheme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorTheme.h"; sourceTree = "<group>"; };
-		7CD8335A45FF442EAEDE63C3 /* A2ColorTheme_Internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorTheme_Internal.h"; sourceTree = "<group>"; };
-		E61D2D443ACA03984F35EFCA /* A2Metrics.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Metrics.h"; sourceTree = "<group>"; };
-		812104F4721E701E0A31697D /* A2PaletteStyle.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PaletteStyle.h"; sourceTree = "<group>"; };
-		789AF4E406F5B8122812523E /* A2ThemeManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ThemeManager.h"; sourceTree = "<group>"; };
-		2146F61DDD3A2234BEDF108A /* A2Typography.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Typography.h"; sourceTree = "<group>"; };
-		A0A4BD66A8E2E70961D106B2 /* A2Log.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Log.h"; sourceTree = "<group>"; };
-		089E9C0B1F10F5FF4BE351B0 /* A2MurmurHash2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MurmurHash2.h"; sourceTree = "<group>"; };
+		78F20634775387DF6A40221B /* A2Account.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Account.m"; sourceTree = "<group>"; };
+		A4C3A5DC4FAA3FB21B3B60E4 /* A2AccountManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountManager.m"; sourceTree = "<group>"; };
+		035F92B9FD30D1A5B6D4E1D0 /* A2MicrosoftAuth.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MicrosoftAuth.m"; sourceTree = "<group>"; };
+		B9F94326062111C842542FB7 /* A2Wardrobe.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Wardrobe.m"; sourceTree = "<group>"; };
+		C3B207AFCEB81BC7C25E7CD2 /* A2ContentSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ContentSource.m"; sourceTree = "<group>"; };
+		4F70815D112BD78F6AC9D431 /* A2CurseForgeAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CurseForgeAPI.m"; sourceTree = "<group>"; };
+		83BBEEB42EE3B115C1766B35 /* A2MirrorResolver.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MirrorResolver.m"; sourceTree = "<group>"; };
+		FC66445C588B09E9395E4C4B /* A2ModLoaderAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderAPI.m"; sourceTree = "<group>"; };
+		E602504900EFDA0466CF76CF /* A2ModLoaderInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderInstaller.m"; sourceTree = "<group>"; };
+		D82F227EC7D3A5262BA9B711 /* A2ModPack.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPack.m"; sourceTree = "<group>"; };
+		82D203C97EE783665B4FE1A7 /* A2ModrinthAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModrinthAPI.m"; sourceTree = "<group>"; };
+		861D56DD3C5F66C17FEE2793 /* A2ZipReader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ZipReader.m"; sourceTree = "<group>"; };
+		63072251CD655A006C7F5FC7 /* A2DownloadEngine.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadEngine.m"; sourceTree = "<group>"; };
+		C2D95816736EE853198A6556 /* A2DownloadFavorites.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadFavorites.m"; sourceTree = "<group>"; };
+		D2EA550342ADBB9FEE3765F3 /* A2DownloadManifest.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadManifest.m"; sourceTree = "<group>"; };
+		D283C25B889D26DB4CE6673B /* A2DownloadTask.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadTask.m"; sourceTree = "<group>"; };
+		729D785F3A083CF3F466FB49 /* A2GameDirMigration.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameDirMigration.m"; sourceTree = "<group>"; };
+		E7CAD40D06B5B431C058A2B7 /* A2GameFiles.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameFiles.m"; sourceTree = "<group>"; };
+		5DAB4B8E238377E52D1373E9 /* A2VersionIsolation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionIsolation.m"; sourceTree = "<group>"; };
+		7DB6ECA34AD52401A2E9DF1E /* A2Renderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Renderer.m"; sourceTree = "<group>"; };
+		83F6A081CE62CDC0DE220F9F /* A2Settings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Settings.m"; sourceTree = "<group>"; };
+		306A150687720BDE90C95426 /* A2GameInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameInstaller.m"; sourceTree = "<group>"; };
+		3E5A1BE759234BAC15A4BE07 /* A2RemoteVersions.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RemoteVersions.m"; sourceTree = "<group>"; };
+		64AAAE205A102FC191710D79 /* A2VersionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionManager.m"; sourceTree = "<group>"; };
+		E9ED5E31A889A813B3D4CC4F /* A2Log.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Log.m"; sourceTree = "<group>"; };
+		3F6F61BD6D1BB1ADCEF1B889 /* A2MurmurHash2.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MurmurHash2.m"; sourceTree = "<group>"; };
+		92DEE1FAF75651B2D8365B30 /* Air2App.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Air2App.swift"; sourceTree = "<group>"; };
+		2E14C9BACD47EE9EE585D8BA /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppDelegate.swift"; sourceTree = "<group>"; };
+		823E65F4A9389D802DD13175 /* CrashGuard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CrashGuard.swift"; sourceTree = "<group>"; };
+		E4AFF89EC5C7F0915854F88F /* DependencyContainer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DependencyContainer.swift"; sourceTree = "<group>"; };
+		1EA76114E874AA0A9CCB7AAC /* NavigationHost.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "NavigationHost.swift"; sourceTree = "<group>"; };
+		ED1B0BF7A95FE8C37C12E680 /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RootView.swift"; sourceTree = "<group>"; };
+		A462F53AB892B5640754D67C /* BackgroundView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BackgroundView.swift"; sourceTree = "<group>"; };
+		039E61F95C40F4FB6ACB50DD /* CardPosition.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CardPosition.swift"; sourceTree = "<group>"; };
+		D061BD1281FEE34F2BC08393 /* CardTitleBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CardTitleBar.swift"; sourceTree = "<group>"; };
+		F73D54BCF428E21F39C99181 /* CategoryNavView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CategoryNavView.swift"; sourceTree = "<group>"; };
+		3EF1163D52812FA695BB20D8 /* ColorWheel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ColorWheel.swift"; sourceTree = "<group>"; };
+		12133BA3244941BF224B8388 /* ComponentTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ComponentTheme.swift"; sourceTree = "<group>"; };
+		9F467C6A9DC322FE39AF64B5 /* GlassCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GlassCard.swift"; sourceTree = "<group>"; };
+		FFCDE9F6E014A7C1A789ADCB /* LoaderCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LoaderCard.swift"; sourceTree = "<group>"; };
+		BA25373074C51B69B4799486 /* PrimaryButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "PrimaryButton.swift"; sourceTree = "<group>"; };
+		C9BC4B852F30CA41DD02BB55 /* ProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProgressBar.swift"; sourceTree = "<group>"; };
+		2C2B2571D980362DB1F27999 /* ProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProgressView.swift"; sourceTree = "<group>"; };
+		3AA42129D5E4647773FCD7A2 /* QuickActionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "QuickActionCard.swift"; sourceTree = "<group>"; };
+		65B1A7F3F37FA88FF33D41EE /* RingProgress.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "RingProgress.swift"; sourceTree = "<group>"; };
+		7B748A3464C5CF580C4AA287 /* SegmentedControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SegmentedControl.swift"; sourceTree = "<group>"; };
+		AD8734C8EB47ED4F7C539CA1 /* SettingsRow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsRow.swift"; sourceTree = "<group>"; };
+		6C257F6745A9FD0EEC82BC16 /* SettingsSection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsSection.swift"; sourceTree = "<group>"; };
+		1BDBEE42FA5A80A04270BD47 /* SkinHeadView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SkinHeadView.swift"; sourceTree = "<group>"; };
+		2BC93BE4F3AF30B41AF85444 /* TaskDrawer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TaskDrawer.swift"; sourceTree = "<group>"; };
+		0EFC60C4B08A93AFF40D62E8 /* TaskProgressView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TaskProgressView.swift"; sourceTree = "<group>"; };
+		EE1F83C7568C200FBA70A4EC /* TextField.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "TextField.swift"; sourceTree = "<group>"; };
+		8BB5B15A3C3D21B4D2CA404E /* Toast.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Toast.swift"; sourceTree = "<group>"; };
+		2BE726C06EF19FE763CFAEB3 /* VersionCard.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VersionCard.swift"; sourceTree = "<group>"; };
+		F397F0102FE2168937651C89 /* GameTouchControls.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GameTouchControls.swift"; sourceTree = "<group>"; };
+		CF5C23F80975E29B98780559 /* AccountRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccountRowView.swift"; sourceTree = "<group>"; };
+		A17D8FE07E1A80AE22DFBB8F /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AccountView.swift"; sourceTree = "<group>"; };
+		4EFF5692816EAF6DEC1ACB3C /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LoginView.swift"; sourceTree = "<group>"; };
+		5088F6309BC11A13EF77B3C1 /* ThreeZoneScaffold.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ThreeZoneScaffold.swift"; sourceTree = "<group>"; };
+		B9521CB43D0BE7F5880B5875 /* CurseForgePrompt.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CurseForgePrompt.swift"; sourceTree = "<group>"; };
+		5CE8518D0C327670A86591F9 /* DownloadHomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DownloadHomeView.swift"; sourceTree = "<group>"; };
+		AE3702A8265E132811C55DCF /* DownloadListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DownloadListView.swift"; sourceTree = "<group>"; };
+		B7844A6C3DAD7EBBE679FDA1 /* DownloadRootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DownloadRootView.swift"; sourceTree = "<group>"; };
+		046C7B08B8E2BAE9ADF05393 /* FavoritesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FavoritesView.swift"; sourceTree = "<group>"; };
+		30A40BF1235FA23261B9BE42 /* GameVersionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GameVersionListView.swift"; sourceTree = "<group>"; };
+		BFD21290224766A4A9DEFCFB /* InstallOptionsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InstallOptionsView.swift"; sourceTree = "<group>"; };
+		10CD75601706FB54660F57CA /* InstallingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "InstallingView.swift"; sourceTree = "<group>"; };
+		C1AAFE99E5507CDC1D28FEEF /* ProjectDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ProjectDetailView.swift"; sourceTree = "<group>"; };
+		A63AC2B4DA9CA7FB161D87EF /* SearchByIdView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SearchByIdView.swift"; sourceTree = "<group>"; };
+		3E9200B447813D0ED5619D17 /* FilesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "FilesView.swift"; sourceTree = "<group>"; };
+		66ACC883E7D8CB609D45739A /* LauncherView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LauncherView.swift"; sourceTree = "<group>"; };
+		00D2041992547465673B1BA0 /* AppearanceSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "AppearanceSettings.swift"; sourceTree = "<group>"; };
+		E2455546822204543BF0D0C4 /* BackgroundSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BackgroundSettingsView.swift"; sourceTree = "<group>"; };
+		CC9D5634748EF449DDAD72E2 /* ColorThemeDialog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ColorThemeDialog.swift"; sourceTree = "<group>"; };
+		1D2181B9D313282923904168 /* CurseForgeKeyPageView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "CurseForgeKeyPageView.swift"; sourceTree = "<group>"; };
+		62CA0B6BC2433EBE08B23343 /* DiagnosticsSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "DiagnosticsSettings.swift"; sourceTree = "<group>"; };
+		6A2B7E8E8FF7049EB6F55A9D /* GameSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "GameSettings.swift"; sourceTree = "<group>"; };
+		C3B44AA93DBA7882725DA68B /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "SettingsView.swift"; sourceTree = "<group>"; };
+		4FAFDC1E9E1D547C40E1DCFA /* VersionListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VersionListView.swift"; sourceTree = "<group>"; };
+		6092621076959AC74E71A9D4 /* VersionRowView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VersionRowView.swift"; sourceTree = "<group>"; };
+		F9DFA064DA9E936C9380500F /* VersionSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "VersionSettingsView.swift"; sourceTree = "<group>"; };
+		45AFA16B4FD4B25DECCF237C /* BuiltinThemes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "BuiltinThemes.swift"; sourceTree = "<group>"; };
+		DB3DB73DB7618FA86EEBD2AA /* ColorScheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ColorScheme.swift"; sourceTree = "<group>"; };
+		6B138D16C14D498A4EA4D147 /* Metrics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Metrics.swift"; sourceTree = "<group>"; };
+		FA1506795C7D1C848BE80D5C /* Motion.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Motion.swift"; sourceTree = "<group>"; };
+		C2463291907C78D76C7A3EB8 /* ThemeManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ThemeManager.swift"; sourceTree = "<group>"; };
+		7E268DB2F793E35FA63006CC /* Typography.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "Typography.swift"; sourceTree = "<group>"; };
+		2BC6DC39941A9D25A0D02697 /* A2Account.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Account.h"; sourceTree = "<group>"; };
+		1BFA00DDD0D0A6C8B71BCA7A /* A2AccountManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountManager.h"; sourceTree = "<group>"; };
+		DDBB58DAA35DA37ED86B1E41 /* A2MicrosoftAuth.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MicrosoftAuth.h"; sourceTree = "<group>"; };
+		F396DB19CBC87EAD63341283 /* A2Wardrobe.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Wardrobe.h"; sourceTree = "<group>"; };
+		B832B7E5B39173D734CAF163 /* A2ContentSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ContentSource.h"; sourceTree = "<group>"; };
+		DB155ABF17DA98773601EFB9 /* A2CurseForgeAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CurseForgeAPI.h"; sourceTree = "<group>"; };
+		B4B5146351F9E8D31D87C13F /* A2MirrorResolver.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MirrorResolver.h"; sourceTree = "<group>"; };
+		801F1F020FF0AC16A45B7C43 /* A2ModLoaderAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderAPI.h"; sourceTree = "<group>"; };
+		A7A1D8FCD59A379BE50628F0 /* A2ModLoaderInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderInstaller.h"; sourceTree = "<group>"; };
+		2DD182F1163E546493F403B9 /* A2ModPack.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPack.h"; sourceTree = "<group>"; };
+		621074767B2A7D355C24A6A8 /* A2ModrinthAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModrinthAPI.h"; sourceTree = "<group>"; };
+		76E15AF8C8D5CC1DAD6757D2 /* A2ZipReader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ZipReader.h"; sourceTree = "<group>"; };
+		080BC7B34996DE1867EDF6DA /* A2DownloadEngine.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadEngine.h"; sourceTree = "<group>"; };
+		2FEECA5F29F2A9638BF55D16 /* A2DownloadFavorites.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadFavorites.h"; sourceTree = "<group>"; };
+		0626D914E1BAC6953A684F08 /* A2DownloadManifest.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadManifest.h"; sourceTree = "<group>"; };
+		53765890211F667E7E0B11EC /* A2DownloadTask.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTask.h"; sourceTree = "<group>"; };
+		4DF690018CD36AD5A0AD2194 /* A2GameDirMigration.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameDirMigration.h"; sourceTree = "<group>"; };
+		03CEA96823DFEF3FFB45DD2D /* A2GameFiles.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameFiles.h"; sourceTree = "<group>"; };
+		FCBF192E61E2ADFA53CD1886 /* A2VersionIsolation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionIsolation.h"; sourceTree = "<group>"; };
+		96FD52F3C1A2084FDF958240 /* A2Renderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Renderer.h"; sourceTree = "<group>"; };
+		32FBB2EF5E4FEFDA16C9CFD4 /* A2Settings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Settings.h"; sourceTree = "<group>"; };
+		601F2AB505DFF6B56A9728CA /* A2GameInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameInstaller.h"; sourceTree = "<group>"; };
+		48114BD783077290D6C1D4F1 /* A2RemoteVersions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RemoteVersions.h"; sourceTree = "<group>"; };
+		2EB2B3D78A57993ECE456202 /* A2VersionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionManager.h"; sourceTree = "<group>"; };
+		2D1C812A511CF2BB3072783C /* A2Log.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Log.h"; sourceTree = "<group>"; };
+		77CB4973751A0B293AFB9EF3 /* A2MurmurHash2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MurmurHash2.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -297,361 +243,133 @@
 			sourceTree = "<group>";
 		};
 
+		3377623B9545A904BDA21F70 /*  */ = {
+			isa = PBXGroup;
+			children = (
+				78F20634775387DF6A40221B /* A2Account.m */,
+				A4C3A5DC4FAA3FB21B3B60E4 /* A2AccountManager.m */,
+				035F92B9FD30D1A5B6D4E1D0 /* A2MicrosoftAuth.m */,
+				B9F94326062111C842542FB7 /* A2Wardrobe.m */,
+				C3B207AFCEB81BC7C25E7CD2 /* A2ContentSource.m */,
+				4F70815D112BD78F6AC9D431 /* A2CurseForgeAPI.m */,
+				83BBEEB42EE3B115C1766B35 /* A2MirrorResolver.m */,
+				FC66445C588B09E9395E4C4B /* A2ModLoaderAPI.m */,
+				E602504900EFDA0466CF76CF /* A2ModLoaderInstaller.m */,
+				D82F227EC7D3A5262BA9B711 /* A2ModPack.m */,
+				82D203C97EE783665B4FE1A7 /* A2ModrinthAPI.m */,
+				861D56DD3C5F66C17FEE2793 /* A2ZipReader.m */,
+				63072251CD655A006C7F5FC7 /* A2DownloadEngine.m */,
+				C2D95816736EE853198A6556 /* A2DownloadFavorites.m */,
+				D2EA550342ADBB9FEE3765F3 /* A2DownloadManifest.m */,
+				D283C25B889D26DB4CE6673B /* A2DownloadTask.m */,
+				729D785F3A083CF3F466FB49 /* A2GameDirMigration.m */,
+				E7CAD40D06B5B431C058A2B7 /* A2GameFiles.m */,
+				5DAB4B8E238377E52D1373E9 /* A2VersionIsolation.m */,
+				7DB6ECA34AD52401A2E9DF1E /* A2Renderer.m */,
+				83F6A081CE62CDC0DE220F9F /* A2Settings.m */,
+				306A150687720BDE90C95426 /* A2GameInstaller.m */,
+				3E5A1BE759234BAC15A4BE07 /* A2RemoteVersions.m */,
+				64AAAE205A102FC191710D79 /* A2VersionManager.m */,
+				E9ED5E31A889A813B3D4CC4F /* A2Log.m */,
+				3F6F61BD6D1BB1ADCEF1B889 /* A2MurmurHash2.m */,
+				92DEE1FAF75651B2D8365B30 /* Air2App.swift */,
+				2E14C9BACD47EE9EE585D8BA /* AppDelegate.swift */,
+				823E65F4A9389D802DD13175 /* CrashGuard.swift */,
+				E4AFF89EC5C7F0915854F88F /* DependencyContainer.swift */,
+				1EA76114E874AA0A9CCB7AAC /* NavigationHost.swift */,
+				ED1B0BF7A95FE8C37C12E680 /* RootView.swift */,
+				A462F53AB892B5640754D67C /* BackgroundView.swift */,
+				039E61F95C40F4FB6ACB50DD /* CardPosition.swift */,
+				D061BD1281FEE34F2BC08393 /* CardTitleBar.swift */,
+				F73D54BCF428E21F39C99181 /* CategoryNavView.swift */,
+				3EF1163D52812FA695BB20D8 /* ColorWheel.swift */,
+				12133BA3244941BF224B8388 /* ComponentTheme.swift */,
+				9F467C6A9DC322FE39AF64B5 /* GlassCard.swift */,
+				FFCDE9F6E014A7C1A789ADCB /* LoaderCard.swift */,
+				BA25373074C51B69B4799486 /* PrimaryButton.swift */,
+				C9BC4B852F30CA41DD02BB55 /* ProgressBar.swift */,
+				2C2B2571D980362DB1F27999 /* ProgressView.swift */,
+				3AA42129D5E4647773FCD7A2 /* QuickActionCard.swift */,
+				65B1A7F3F37FA88FF33D41EE /* RingProgress.swift */,
+				7B748A3464C5CF580C4AA287 /* SegmentedControl.swift */,
+				AD8734C8EB47ED4F7C539CA1 /* SettingsRow.swift */,
+				6C257F6745A9FD0EEC82BC16 /* SettingsSection.swift */,
+				1BDBEE42FA5A80A04270BD47 /* SkinHeadView.swift */,
+				2BC93BE4F3AF30B41AF85444 /* TaskDrawer.swift */,
+				0EFC60C4B08A93AFF40D62E8 /* TaskProgressView.swift */,
+				EE1F83C7568C200FBA70A4EC /* TextField.swift */,
+				8BB5B15A3C3D21B4D2CA404E /* Toast.swift */,
+				2BE726C06EF19FE763CFAEB3 /* VersionCard.swift */,
+				F397F0102FE2168937651C89 /* GameTouchControls.swift */,
+				CF5C23F80975E29B98780559 /* AccountRowView.swift */,
+				A17D8FE07E1A80AE22DFBB8F /* AccountView.swift */,
+				4EFF5692816EAF6DEC1ACB3C /* LoginView.swift */,
+				5088F6309BC11A13EF77B3C1 /* ThreeZoneScaffold.swift */,
+				B9521CB43D0BE7F5880B5875 /* CurseForgePrompt.swift */,
+				5CE8518D0C327670A86591F9 /* DownloadHomeView.swift */,
+				AE3702A8265E132811C55DCF /* DownloadListView.swift */,
+				B7844A6C3DAD7EBBE679FDA1 /* DownloadRootView.swift */,
+				046C7B08B8E2BAE9ADF05393 /* FavoritesView.swift */,
+				30A40BF1235FA23261B9BE42 /* GameVersionListView.swift */,
+				BFD21290224766A4A9DEFCFB /* InstallOptionsView.swift */,
+				10CD75601706FB54660F57CA /* InstallingView.swift */,
+				C1AAFE99E5507CDC1D28FEEF /* ProjectDetailView.swift */,
+				A63AC2B4DA9CA7FB161D87EF /* SearchByIdView.swift */,
+				3E9200B447813D0ED5619D17 /* FilesView.swift */,
+				66ACC883E7D8CB609D45739A /* LauncherView.swift */,
+				00D2041992547465673B1BA0 /* AppearanceSettings.swift */,
+				E2455546822204543BF0D0C4 /* BackgroundSettingsView.swift */,
+				CC9D5634748EF449DDAD72E2 /* ColorThemeDialog.swift */,
+				1D2181B9D313282923904168 /* CurseForgeKeyPageView.swift */,
+				62CA0B6BC2433EBE08B23343 /* DiagnosticsSettings.swift */,
+				6A2B7E8E8FF7049EB6F55A9D /* GameSettings.swift */,
+				C3B44AA93DBA7882725DA68B /* SettingsView.swift */,
+				4FAFDC1E9E1D547C40E1DCFA /* VersionListView.swift */,
+				6092621076959AC74E71A9D4 /* VersionRowView.swift */,
+				F9DFA064DA9E936C9380500F /* VersionSettingsView.swift */,
+				45AFA16B4FD4B25DECCF237C /* BuiltinThemes.swift */,
+				DB3DB73DB7618FA86EEBD2AA /* ColorScheme.swift */,
+				6B138D16C14D498A4EA4D147 /* Metrics.swift */,
+				FA1506795C7D1C848BE80D5C /* Motion.swift */,
+				C2463291907C78D76C7A3EB8 /* ThemeManager.swift */,
+				7E268DB2F793E35FA63006CC /* Typography.swift */,
+				2BC6DC39941A9D25A0D02697 /* A2Account.h */,
+				1BFA00DDD0D0A6C8B71BCA7A /* A2AccountManager.h */,
+				DDBB58DAA35DA37ED86B1E41 /* A2MicrosoftAuth.h */,
+				F396DB19CBC87EAD63341283 /* A2Wardrobe.h */,
+				B832B7E5B39173D734CAF163 /* A2ContentSource.h */,
+				DB155ABF17DA98773601EFB9 /* A2CurseForgeAPI.h */,
+				B4B5146351F9E8D31D87C13F /* A2MirrorResolver.h */,
+				801F1F020FF0AC16A45B7C43 /* A2ModLoaderAPI.h */,
+				A7A1D8FCD59A379BE50628F0 /* A2ModLoaderInstaller.h */,
+				2DD182F1163E546493F403B9 /* A2ModPack.h */,
+				621074767B2A7D355C24A6A8 /* A2ModrinthAPI.h */,
+				76E15AF8C8D5CC1DAD6757D2 /* A2ZipReader.h */,
+				080BC7B34996DE1867EDF6DA /* A2DownloadEngine.h */,
+				2FEECA5F29F2A9638BF55D16 /* A2DownloadFavorites.h */,
+				0626D914E1BAC6953A684F08 /* A2DownloadManifest.h */,
+				53765890211F667E7E0B11EC /* A2DownloadTask.h */,
+				4DF690018CD36AD5A0AD2194 /* A2GameDirMigration.h */,
+				03CEA96823DFEF3FFB45DD2D /* A2GameFiles.h */,
+				FCBF192E61E2ADFA53CD1886 /* A2VersionIsolation.h */,
+				96FD52F3C1A2084FDF958240 /* A2Renderer.h */,
+				32FBB2EF5E4FEFDA16C9CFD4 /* A2Settings.h */,
+				601F2AB505DFF6B56A9728CA /* A2GameInstaller.h */,
+				48114BD783077290D6C1D4F1 /* A2RemoteVersions.h */,
+				2EB2B3D78A57993ECE456202 /* A2VersionManager.h */,
+				2D1C812A511CF2BB3072783C /* A2Log.h */,
+				77CB4973751A0B293AFB9EF3 /* A2MurmurHash2.h */,
+			);
+			path = ;
+			sourceTree = "<group>";
+		};
+
 		0D7DB83B69709B8B97AE4409 /* Air2 */ = {
 			isa = PBXGroup;
 			children = (
 				18FD4D9FAB9B1E1C27AFB511 /* Info.plist */,
-				7B4F16DD90D9362E0A2BDBD1 /* App */,
-				E5BA60354B4EC37E480783EA /* Core */,
-				B33E61FAD84ACA6142548585 /* UI */,
-				07456E46BBC30DF8EE54F44C /* Utils */,
 			);
 			path = Air2;
-			sourceTree = "<group>";
-		};
-
-		7B4F16DD90D9362E0A2BDBD1 /* App */ = {
-			isa = PBXGroup;
-			children = (
-				8DA45F9AA021EBFBF929A56A /* A2AppDelegate.m */,
-				EDF360D6C38161620D973AA3 /* A2CrashGuard.m */,
-				F6EE6864D5C02736374620A3 /* A2NavigationController.m */,
-				E0A962942F56F74CF7617780 /* A2RootViewController.m */,
-				B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */,
-				36F3AADE4F4508F86A2F0505 /* main.m */,
-				52E0A8862124FBDB57E8C690 /* A2AppDelegate.h */,
-				6A39662C0840C98AB5D33038 /* A2CrashGuard.h */,
-				FFF83F1A982D07C7CBBF5C78 /* A2NavigationController.h */,
-				2C58D391DAC32B55049E9809 /* A2RootViewController.h */,
-				1185FA48A6FE1AB2F1E312DE /* A2SceneDelegate.h */,
-			);
-			path = App;
-			sourceTree = "<group>";
-		};
-
-		E5BA60354B4EC37E480783EA /* Core */ = {
-			isa = PBXGroup;
-			children = (
-				B31D400D67779826215CAD33 /* Account */,
-				184E0966D040B090B9F76405 /* Addons */,
-				6D1D1D1337AE93B0607365A8 /* Download */,
-				3C208AC8788CF22B0CC6CF18 /* Path */,
-				7BE232A3F169182CC82ED438 /* Renderer */,
-				836F8EEA81C821DAF5B999B4 /* Settings */,
-				1A5C09A9A5278A534417CCF0 /* Version */,
-			);
-			path = Core;
-			sourceTree = "<group>";
-		};
-
-		B33E61FAD84ACA6142548585 /* UI */ = {
-			isa = PBXGroup;
-			children = (
-				8B89578D010E17535991475E /* Components */,
-				E4F1D82CF180792A5EDFE454 /* Screens */,
-				ED89BE603E6F0B8503DCD530 /* Theme */,
-			);
-			path = UI;
-			sourceTree = "<group>";
-		};
-
-		07456E46BBC30DF8EE54F44C /* Utils */ = {
-			isa = PBXGroup;
-			children = (
-				CE8E02818B37C0AFFABF71D5 /* A2Log.m */,
-				70E537F57063CE783BE3A38B /* A2MurmurHash2.m */,
-				A0A4BD66A8E2E70961D106B2 /* A2Log.h */,
-				089E9C0B1F10F5FF4BE351B0 /* A2MurmurHash2.h */,
-			);
-			path = Utils;
-			sourceTree = "<group>";
-		};
-
-		B31D400D67779826215CAD33 /* Account */ = {
-			isa = PBXGroup;
-			children = (
-				88C69537AF21F68A7B1456D3 /* A2Account.m */,
-				FBBBB4EFA2B5334A45EA3C4E /* A2AccountManager.m */,
-				BA94035A25A574575C224EC9 /* A2MicrosoftAuth.m */,
-				1FCEEB9DA67A103C2B6DBA4A /* A2Wardrobe.m */,
-				748747C748D79B3DAEEDB5CF /* A2Account.h */,
-				1EB22C948F38C8AEC14F9AB3 /* A2AccountManager.h */,
-				845233208F5ECAED2A1B1D6B /* A2MicrosoftAuth.h */,
-				BE140C5384D36CE4A510C926 /* A2Wardrobe.h */,
-			);
-			path = Account;
-			sourceTree = "<group>";
-		};
-
-		184E0966D040B090B9F76405 /* Addons */ = {
-			isa = PBXGroup;
-			children = (
-				1701CD5F8C697E4FB0EA95CC /* A2ContentSource.m */,
-				B9FA6C49037A18A6B1E59FD5 /* A2CurseForgeAPI.m */,
-				C4D9FC19281C2C7616C83363 /* A2MirrorResolver.m */,
-				A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */,
-				452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */,
-				818837C4F3F9187CAE2C7B85 /* A2ModPack.m */,
-				B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */,
-				C7F15DE318744485CEE00538 /* A2ZipReader.m */,
-				7452A96D7665BFCA516E1759 /* A2ContentSource.h */,
-				732674FFF97FD95863EEEAC7 /* A2CurseForgeAPI.h */,
-				D10B30C91899E9D94389EF4D /* A2MirrorResolver.h */,
-				2CDA5A9BDC1B71E004D187AD /* A2ModLoaderAPI.h */,
-				D845B0CEB9AEB5591C34C008 /* A2ModLoaderInstaller.h */,
-				82C5CA51B322A62C9A8716A5 /* A2ModPack.h */,
-				BEB699597AD1A56E18E868F6 /* A2ModrinthAPI.h */,
-				AFAF6FCA941790ECF1D16844 /* A2ZipReader.h */,
-			);
-			path = Addons;
-			sourceTree = "<group>";
-		};
-
-		6D1D1D1337AE93B0607365A8 /* Download */ = {
-			isa = PBXGroup;
-			children = (
-				1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */,
-				3F6494DF9E525C24C5D69098 /* A2DownloadFavorites.m */,
-				2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */,
-				AE757274F8E1E206F093F68A /* A2DownloadTask.m */,
-				DE956596465BDFF25E578448 /* A2DownloadEngine.h */,
-				1EDE5D2DBCB81396D185C97D /* A2DownloadFavorites.h */,
-				D3ABD890B860FD03E77A2B0C /* A2DownloadManifest.h */,
-				0F59C20AA19682790BF7251E /* A2DownloadTask.h */,
-			);
-			path = Download;
-			sourceTree = "<group>";
-		};
-
-		3C208AC8788CF22B0CC6CF18 /* Path */ = {
-			isa = PBXGroup;
-			children = (
-				F03B93794DA818FF2F14D7D0 /* A2GameDirMigration.m */,
-				D0693B31AD2EAB6A0328732E /* A2GameFiles.m */,
-				074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */,
-				801FBE3D9BBD2833977FF7A9 /* A2GameDirMigration.h */,
-				0B3D6D1B16A31DBED39334EE /* A2GameFiles.h */,
-				CDB8C000E2777EB953C462DD /* A2VersionIsolation.h */,
-			);
-			path = Path;
-			sourceTree = "<group>";
-		};
-
-		7BE232A3F169182CC82ED438 /* Renderer */ = {
-			isa = PBXGroup;
-			children = (
-				47106E1A43667C70F671BED2 /* A2Renderer.m */,
-				12B70B0E6FB31B7E75D61633 /* A2Renderer.h */,
-			);
-			path = Renderer;
-			sourceTree = "<group>";
-		};
-
-		836F8EEA81C821DAF5B999B4 /* Settings */ = {
-			isa = PBXGroup;
-			children = (
-				035FB3CC4FE4018F44632AD5 /* A2Settings.m */,
-				8D9149596220C9F4F49C460D /* A2Settings.h */,
-			);
-			path = Settings;
-			sourceTree = "<group>";
-		};
-
-		1A5C09A9A5278A534417CCF0 /* Version */ = {
-			isa = PBXGroup;
-			children = (
-				044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */,
-				C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */,
-				643B820206971C227F265607 /* A2VersionManager.m */,
-				8407C36C2C93136130B9F07E /* A2GameInstaller.h */,
-				797843066906C8A344CE1344 /* A2RemoteVersions.h */,
-				8566CA5C1C5F50A603ACC370 /* A2VersionManager.h */,
-			);
-			path = Version;
-			sourceTree = "<group>";
-		};
-
-		8B89578D010E17535991475E /* Components */ = {
-			isa = PBXGroup;
-			children = (
-				872075DCD0F565557A6554D2 /* A2BackgroundView.m */,
-				C733462374B52500F6D83649 /* A2CardPosition.m */,
-				CA1D52969E0783051081B038 /* A2CardTitleBar.m */,
-				A283C0C24413C706B449C36A /* A2CategoryNavView.m */,
-				75554051E6AED37FAF518AAF /* A2ColorWheel.m */,
-				A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */,
-				139430B14A933139D8C20D5C /* A2LoaderCard.m */,
-				EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */,
-				EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */,
-				BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */,
-				65B73468B0B2BABA009E64BC /* A2RingProgress.m */,
-				FB7BA68822FCB0D14D580939 /* A2SegmentedControl.m */,
-				235D2D4A2ABFFA39AEDB334D /* A2SettingsRow.m */,
-				EE215D4473E1887376B33E1E /* A2SettingsSection.m */,
-				84CCDDC48E40B58090F702AC /* A2SkinHeadView.m */,
-				DA139E80AEDB846DE5191C14 /* A2TaskDrawer.m */,
-				ADC4C42CB382EAFDCA556C09 /* A2TaskProgressView.m */,
-				B498358055FFAD0453CC27C7 /* A2TextField.m */,
-				F3C972A56B473038ED5074FD /* A2Toast.m */,
-				DCF1F61258EDBCB81698B32B /* A2VersionCard.m */,
-				930418C55810BF7B65B85AE9 /* A2BackgroundView.h */,
-				EB440E13AD4A8BB54186F381 /* A2CardPosition.h */,
-				1F985FAD5DEB8D4699A8B5AE /* A2CardTitleBar.h */,
-				853858C5BCCD6563D696BCE9 /* A2CategoryNavView.h */,
-				D0D70559C6A4486D1060EC44 /* A2ColorWheel.h */,
-				011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */,
-				0AE3E9A2D83CB6D50AE64979 /* A2LoaderCard.h */,
-				F483F847F6597D3BD17BBBA5 /* A2PrimaryButton.h */,
-				A2C65A10681693BAA019E065 /* A2ProgressBar.h */,
-				D771FB41CA40081650206A01 /* A2ProgressView.h */,
-				6585C7CB91A28A24F014676B /* A2QuickActionCard.h */,
-				448AFE07A533753F67B61451 /* A2RingProgress.h */,
-				06BF25C201A9B83666E117F1 /* A2SegmentedControl.h */,
-				32854779149E0E29A0EC1CE2 /* A2SettingsRow.h */,
-				96423A07FE49DD9B2383632F /* A2SettingsSection.h */,
-				443AE8E5ACDC8A02D5AD1308 /* A2SkinHeadView.h */,
-				86BA725A974D441AEC4C7082 /* A2TaskDrawer.h */,
-				1D0B896EEB924745CE5C4038 /* A2TaskProgressView.h */,
-				46EB509F1EF9D56C1DD81B78 /* A2TextField.h */,
-				DBF31C9D8FD1524E6BEB2D62 /* A2Toast.h */,
-				88C9076497160DA45470EFB1 /* A2VersionCard.h */,
-			);
-			path = Components;
-			sourceTree = "<group>";
-		};
-
-		E4F1D82CF180792A5EDFE454 /* Screens */ = {
-			isa = PBXGroup;
-			children = (
-				BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */,
-				346D941B767D969728343CD3 /* A2BaseViewController.h */,
-				8957500F4C1E2FA1D18DFCD1 /* Account */,
-				55AB3FA6D6516DF096EA9950 /* Download */,
-				8AE91C9F5AC2D4232C4E21E3 /* Files */,
-				C7F61C0D99C863113AC1C553 /* Home */,
-				C09CC792827909A5EC124675 /* Settings */,
-				940C24E13AC2B0BB0C4F8B79 /* Version */,
-			);
-			path = Screens;
-			sourceTree = "<group>";
-		};
-
-		ED89BE603E6F0B8503DCD530 /* Theme */ = {
-			isa = PBXGroup;
-			children = (
-				93BF612ED3930C6A33249855 /* A2ColorScheme.m */,
-				25966F1F7F932D2795B0F1A8 /* A2ColorTheme+Seed.m */,
-				82FE348CB0D3A5CE4DD665A1 /* A2ColorTheme.m */,
-				C144BE68C9BFFFAA61A92B1A /* A2Metrics.m */,
-				E6F6FA4C47FD771177075404 /* A2PaletteStyle.m */,
-				5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */,
-				42B68771E09EA8BB40AC83D7 /* A2Typography.m */,
-				DAC23739A567EAE9F7189258 /* A2ColorScheme.h */,
-				89FE8C9FAF9D157BFC4F8D14 /* A2ColorTheme.h */,
-				7CD8335A45FF442EAEDE63C3 /* A2ColorTheme_Internal.h */,
-				E61D2D443ACA03984F35EFCA /* A2Metrics.h */,
-				812104F4721E701E0A31697D /* A2PaletteStyle.h */,
-				789AF4E406F5B8122812523E /* A2ThemeManager.h */,
-				2146F61DDD3A2234BEDF108A /* A2Typography.h */,
-			);
-			path = Theme;
-			sourceTree = "<group>";
-		};
-
-		8957500F4C1E2FA1D18DFCD1 /* Account */ = {
-			isa = PBXGroup;
-			children = (
-				2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */,
-				CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */,
-				1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */,
-				0D773FDDDB48AA7436E8FAA5 /* A2AccountRowView.h */,
-				6D2B976BBD0701B19B6533DD /* A2AccountViewController.h */,
-				52F4C13395826CC0FD71F073 /* A2LoginViewController.h */,
-			);
-			path = Account;
-			sourceTree = "<group>";
-		};
-
-		55AB3FA6D6516DF096EA9950 /* Download */ = {
-			isa = PBXGroup;
-			children = (
-				9C6B3720B9A3DD4535D686F1 /* A2CurseForgeKeyPrompt.m */,
-				6BD5B5E88F004055F7FD4B0E /* A2DownloadHomeViewController.m */,
-				904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */,
-				58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */,
-				82DAFF5D1DF928F825EA8452 /* A2FavoritesViewController.m */,
-				3448695748B18FEC501E0C2F /* A2GameInstallOptionsViewController.m */,
-				AD5DE88799682F07A3341134 /* A2GameVersionListViewController.m */,
-				6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */,
-				D02B95F885FA2BEC74B793AA /* A2ProjectDetailViewController.m */,
-				C769776AF3D8703861D81699 /* A2SearchByIdViewController.m */,
-				9AB5CD42A663FD555714F649 /* A2CurseForgeKeyPrompt.h */,
-				72E65FE9114002E5C6F41167 /* A2DownloadHomeViewController.h */,
-				03B2D97D5F4CDEEC6A69B6D0 /* A2DownloadListViewController.h */,
-				A7D45435EB1780C938976BA4 /* A2DownloadViewController.h */,
-				E9C2A18759AEABAB3EAE0B16 /* A2FavoritesViewController.h */,
-				A9F54FD3EE4B13741768C5AE /* A2GameInstallOptionsViewController.h */,
-				202A98989688120E4B50688E /* A2GameVersionListViewController.h */,
-				C7770877217FAF37A3CE2F32 /* A2InstallingViewController.h */,
-				D625B7A19C581DEB25154EAD /* A2ProjectDetailViewController.h */,
-				018CB525E29025D7B9C0B237 /* A2SearchByIdViewController.h */,
-			);
-			path = Download;
-			sourceTree = "<group>";
-		};
-
-		8AE91C9F5AC2D4232C4E21E3 /* Files */ = {
-			isa = PBXGroup;
-			children = (
-				E10CEEF11893D9C3037031FF /* A2FilesViewController.m */,
-				593DBA138961EDD00008892E /* A2FilesViewController.h */,
-			);
-			path = Files;
-			sourceTree = "<group>";
-		};
-
-		C7F61C0D99C863113AC1C553 /* Home */ = {
-			isa = PBXGroup;
-			children = (
-				C8A9221A5FAC2B9E0D63B27A /* A2LauncherViewController.m */,
-				39421C371A5FDC787D490323 /* A2LauncherViewController.h */,
-			);
-			path = Home;
-			sourceTree = "<group>";
-		};
-
-		C09CC792827909A5EC124675 /* Settings */ = {
-			isa = PBXGroup;
-			children = (
-				CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */,
-				976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */,
-				5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */,
-				D26B0D2BE92BE11D88C18FE5 /* A2CurseForgeKeyPageViewController.m */,
-				D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */,
-				0FB44E450592838BA6F7B061 /* A2GameSettings.m */,
-				9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */,
-				8A8A69E0C0117AD2228117A1 /* A2BackgroundSettingsViewController.h */,
-				137E26C858B461DBC6F3AB93 /* A2ColorThemeDialog.h */,
-				4FC57D1EADA4E18987F23F52 /* A2CurseForgeKeyPageViewController.h */,
-				9CE1BE0BB775D12731066330 /* A2DiagnosticsSettings.h */,
-				A309D45ADA810213043EDE96 /* A2SettingsSections.h */,
-				F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */,
-			);
-			path = Settings;
-			sourceTree = "<group>";
-		};
-
-		940C24E13AC2B0BB0C4F8B79 /* Version */ = {
-			isa = PBXGroup;
-			children = (
-				ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */,
-				8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */,
-				4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */,
-				271E6A92F0F655D2A7EA5627 /* A2VersionListViewController.h */,
-				EF8A5FB174D5923A21B4D162 /* A2VersionRowView.h */,
-				E0C16E70541109926240BD8B /* A2VersionSettingsViewController.h */,
-			);
-			path = Version;
 			sourceTree = "<group>";
 		};
 
@@ -723,91 +441,93 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				5B69779F761A566D166C2342 /* A2AppDelegate.m in Sources */,
-				59F01512A836702FD0D9F5D9 /* A2CrashGuard.m in Sources */,
-				84B4ED65340FEC57222535E6 /* A2NavigationController.m in Sources */,
-				1D4ED46FBFBF946134C72573 /* A2RootViewController.m in Sources */,
-				84C22A76F0D470DBB7E9248C /* A2SceneDelegate.m in Sources */,
-				B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */,
-				434831579F14E55A1DF7A0D1 /* A2Account.m in Sources */,
-				0B32EEA9A11A39AA5D315041 /* A2AccountManager.m in Sources */,
-				3352C680504CA3F9AB6CFD26 /* A2MicrosoftAuth.m in Sources */,
-				B70F2470805980B206B1EAF8 /* A2Wardrobe.m in Sources */,
-				514C73BF78432EFA524E3D87 /* A2ContentSource.m in Sources */,
-				0D17D81407F6A22D20B89620 /* A2CurseForgeAPI.m in Sources */,
-				178E4C042E711E4F72FAAAED /* A2MirrorResolver.m in Sources */,
-				A83EEEB1694635A4E2D8A05C /* A2ModLoaderAPI.m in Sources */,
-				06B9E837FB19EE06FB5B8001 /* A2ModLoaderInstaller.m in Sources */,
-				B93BF19B9A5817F070177A3E /* A2ModPack.m in Sources */,
-				FAE87882A16451C5E2E43DDE /* A2ModrinthAPI.m in Sources */,
-				006F90647E36FA45B54D7B39 /* A2ZipReader.m in Sources */,
-				9F125686BA18A3A79AC3C941 /* A2DownloadEngine.m in Sources */,
-				04806F8C420A200707485301 /* A2DownloadFavorites.m in Sources */,
-				E6679E2C4F527A9777EA6CEC /* A2DownloadManifest.m in Sources */,
-				9B094A240FBA6A3C1821F88C /* A2DownloadTask.m in Sources */,
-				186C2F9B8B2FA203E76FC125 /* A2GameDirMigration.m in Sources */,
-				B084543A044A1B44B18F5627 /* A2GameFiles.m in Sources */,
-				6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */,
-				8B0D65271C85EAABC46B0226 /* A2Renderer.m in Sources */,
-				E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */,
-				15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */,
-				42E2F81428F01FB2F3F912BC /* A2RemoteVersions.m in Sources */,
-				7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */,
-				B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */,
-				BAF1CF7998AAC1E178EC66D0 /* A2CardPosition.m in Sources */,
-				D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */,
-				0769485BDAD9E62F52C32A8C /* A2CategoryNavView.m in Sources */,
-				0964A8EE7FBEE0DA072679D2 /* A2ColorWheel.m in Sources */,
-				350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */,
-				2C9CD0FA185D54ECBE085D43 /* A2LoaderCard.m in Sources */,
-				552EA36099808FC6CF1AF68C /* A2PrimaryButton.m in Sources */,
-				8ABD4DA07F7A241239D71053 /* A2ProgressBar.m in Sources */,
-				ED8B276093698A47A8E600CB /* A2QuickActionCard.m in Sources */,
-				54F109AC2BE3E147AEEE07FF /* A2RingProgress.m in Sources */,
-				11A6C38842401D6C12DD4597 /* A2SegmentedControl.m in Sources */,
-				41CF931E6887AD8AF73E145F /* A2SettingsRow.m in Sources */,
-				2AF28D616C17109E5DDEB2E6 /* A2SettingsSection.m in Sources */,
-				7E84349CB65DC97070E0BD74 /* A2SkinHeadView.m in Sources */,
-				5B82BB5F439B75DE2AE64C6A /* A2TaskDrawer.m in Sources */,
-				464FCB1D2C9D4FA080A24820 /* A2TaskProgressView.m in Sources */,
-				FD82F8F78F3C230BEBAE1F4B /* A2TextField.m in Sources */,
-				5A0A0E6AE2BBFCAD8A947CA9 /* A2Toast.m in Sources */,
-				46BEB683A03C405C1E74C0B2 /* A2VersionCard.m in Sources */,
-				5440FDEA95986768641FF753 /* A2BaseViewController.m in Sources */,
-				912C3DEC9D63AE689DA1F2DE /* A2AccountRowView.m in Sources */,
-				AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */,
-				FB68423E2789A6F0A08E6E54 /* A2LoginViewController.m in Sources */,
-				E9CDC809C5E3AD84272E1B26 /* A2CurseForgeKeyPrompt.m in Sources */,
-				2A198491CA6B003BDC631499 /* A2DownloadHomeViewController.m in Sources */,
-				417DB6BA2038F2AFE425AB2B /* A2DownloadListViewController.m in Sources */,
-				AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */,
-				EBFE6778C18900FDF0942172 /* A2FavoritesViewController.m in Sources */,
-				B9AF292E811122649CF9FEE6 /* A2GameInstallOptionsViewController.m in Sources */,
-				6C998AE9614B2353B8C03DC2 /* A2GameVersionListViewController.m in Sources */,
-				7344000874E6AFAA9489A939 /* A2InstallingViewController.m in Sources */,
-				24382DEA0CF7EDAB682B261B /* A2ProjectDetailViewController.m in Sources */,
-				4037C5EBDB3F5A02EBD25E87 /* A2SearchByIdViewController.m in Sources */,
-				7300D5E59DE772A9BD66181A /* A2FilesViewController.m in Sources */,
-				F6C91785AE1F856D4C3E08BB /* A2LauncherViewController.m in Sources */,
-				8DF920441794A778BEFD9DD0 /* A2AppearanceSettings.m in Sources */,
-				28E0E9F04A06993B01FFC1D8 /* A2BackgroundSettingsViewController.m in Sources */,
-				231BA8D647ED52A70C2A644B /* A2ColorThemeDialog.m in Sources */,
-				EEF4A6D7B7ED12797FCBBD77 /* A2CurseForgeKeyPageViewController.m in Sources */,
-				1E7FB60017717A3BE32B9A3C /* A2DiagnosticsSettings.m in Sources */,
-				C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */,
-				1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */,
-				5C3C3472B73A413C081E753F /* A2VersionListViewController.m in Sources */,
-				7635F6BA870CB67CA1FBFDF4 /* A2VersionRowView.m in Sources */,
-				D33BBA190C82A6A3205F3A9E /* A2VersionSettingsViewController.m in Sources */,
-				27702DAD22876D499AD213EF /* A2ColorScheme.m in Sources */,
-				141BC76960489907EC08BDBA /* A2ColorTheme+Seed.m in Sources */,
-				86D43CE5B95D29876BF7D34D /* A2ColorTheme.m in Sources */,
-				01294C3B04FD73AA638FC63E /* A2Metrics.m in Sources */,
-				4BE5F7816DB3CEF6CBE3809A /* A2PaletteStyle.m in Sources */,
-				7B7A47F5F8AA510170F1A159 /* A2ThemeManager.m in Sources */,
-				0771576A647FFB4348CEC538 /* A2Typography.m in Sources */,
-				C754280DF19913731620CE6A /* A2Log.m in Sources */,
-				6B1CD1AC96CD93B7EE0847A4 /* A2MurmurHash2.m in Sources */,
+				5F4DFA3FC6B755E5F35925ED /* A2Account.m in Sources */,
+				44E9E6648C38322B81720B12 /* A2AccountManager.m in Sources */,
+				40B26BD35F808104E7285711 /* A2MicrosoftAuth.m in Sources */,
+				A32E6F93250190056F4F5559 /* A2Wardrobe.m in Sources */,
+				D28FE4734ED4E47AE5B16686 /* A2ContentSource.m in Sources */,
+				E5C88EE852A2A24FDA8EB9E5 /* A2CurseForgeAPI.m in Sources */,
+				59F9575EAE80CA0C1FCA0A95 /* A2MirrorResolver.m in Sources */,
+				CAC4E0C976163211F6A8B195 /* A2ModLoaderAPI.m in Sources */,
+				C5CDC6EDDF5461A6C9027B02 /* A2ModLoaderInstaller.m in Sources */,
+				F5D54C0847FB1BB807845F7A /* A2ModPack.m in Sources */,
+				1FA2B171BD505CB7635F1420 /* A2ModrinthAPI.m in Sources */,
+				12479F10BECD491E506A3B1A /* A2ZipReader.m in Sources */,
+				E30E3600617DCBBA78866167 /* A2DownloadEngine.m in Sources */,
+				158003481ACC2377D1EE702A /* A2DownloadFavorites.m in Sources */,
+				01CD05C0B027EB4BADF133AB /* A2DownloadManifest.m in Sources */,
+				B603326F2C4B5602415E542D /* A2DownloadTask.m in Sources */,
+				AC279EBC3F27254F40BC6B43 /* A2GameDirMigration.m in Sources */,
+				2DD4CF0EBD8173CB7F12CAE0 /* A2GameFiles.m in Sources */,
+				EEF6AC98DD1DBCE65AEC89E0 /* A2VersionIsolation.m in Sources */,
+				5754172F4D73412B1B804C00 /* A2Renderer.m in Sources */,
+				2E2D88E2235889A1ED5080C4 /* A2Settings.m in Sources */,
+				725FF2AB9DD656F7AC0E39E2 /* A2GameInstaller.m in Sources */,
+				86E948353CDEAC5CBE2B5652 /* A2RemoteVersions.m in Sources */,
+				A68A04BFB6E560F3E6CB6D8D /* A2VersionManager.m in Sources */,
+				4D0AE4E28C4F8580A1E1690A /* A2Log.m in Sources */,
+				8E5F7B0C4E979CDDEF47047A /* A2MurmurHash2.m in Sources */,
+				95B5AAE3FC5B20DB8046B054 /* Air2App.swift in Sources */,
+				F3753D608D1B88B7198CCC3D /* AppDelegate.swift in Sources */,
+				B3C70AA18F1F43DE2731B989 /* CrashGuard.swift in Sources */,
+				4C0B84FB5636D4795E7807F4 /* DependencyContainer.swift in Sources */,
+				63ABC5AEBAF3DEF13F5735B0 /* NavigationHost.swift in Sources */,
+				4CF0D5D151640BAE61DCA245 /* RootView.swift in Sources */,
+				FAD077D2D84886A529229F40 /* BackgroundView.swift in Sources */,
+				83CE296EAC1AE24A5132F368 /* CardPosition.swift in Sources */,
+				66E207F9F8B51332833AAFA0 /* CardTitleBar.swift in Sources */,
+				2D3D830B2571657D18FCF5E9 /* CategoryNavView.swift in Sources */,
+				B5926354A82F37402D899C1B /* ColorWheel.swift in Sources */,
+				6D9DDF8D9701D8CD12846E52 /* ComponentTheme.swift in Sources */,
+				D78B763A0EC0C24AC0F072FB /* GlassCard.swift in Sources */,
+				8766ED79923150D0F084AC4B /* LoaderCard.swift in Sources */,
+				C4B5F6973130302BA1FE67EB /* PrimaryButton.swift in Sources */,
+				195DF7836DF3798E9FA58A73 /* ProgressBar.swift in Sources */,
+				B854FD05929DA397C9EC0E3F /* ProgressView.swift in Sources */,
+				77EC75BFF688370FB5259F4D /* QuickActionCard.swift in Sources */,
+				7C037871744E9B0EC4C696D3 /* RingProgress.swift in Sources */,
+				4903DABBF4EDCB4B7D4EADE1 /* SegmentedControl.swift in Sources */,
+				0DC758660E8629E4C75A03AC /* SettingsRow.swift in Sources */,
+				A4A642EC9CBF7C80D53B7B0A /* SettingsSection.swift in Sources */,
+				41F4AE2A116025F1DDCEAAD9 /* SkinHeadView.swift in Sources */,
+				B1BE25C7DD55BE1D5950E937 /* TaskDrawer.swift in Sources */,
+				010CAAC4D72808CB0397DCD5 /* TaskProgressView.swift in Sources */,
+				7BDD99BEC9FCF75FAED3DA9A /* TextField.swift in Sources */,
+				722C6E247397912FBF7E1910 /* Toast.swift in Sources */,
+				20F9ACF381FD9732406E47F1 /* VersionCard.swift in Sources */,
+				CDE53BE4FF742EB6F884FEBE /* GameTouchControls.swift in Sources */,
+				4291A80047A1C83E3DDC8D8D /* AccountRowView.swift in Sources */,
+				0E1DDADE109E0C8A22004166 /* AccountView.swift in Sources */,
+				0B3B34805D0367033FEACED8 /* LoginView.swift in Sources */,
+				E30AA7728459D6C259553E9A /* ThreeZoneScaffold.swift in Sources */,
+				CE59363967539B009C0DD55E /* CurseForgePrompt.swift in Sources */,
+				17097DD857A3E186B208A501 /* DownloadHomeView.swift in Sources */,
+				206E6BD299FC28FE0662F8D1 /* DownloadListView.swift in Sources */,
+				84DD43DBBA5AFB76A3A0A267 /* DownloadRootView.swift in Sources */,
+				1C4B0170D31FB10D66EB9AFD /* FavoritesView.swift in Sources */,
+				1D42CC0E4945CC59BB71B885 /* GameVersionListView.swift in Sources */,
+				E4E5882DEDDD6B3374506831 /* InstallOptionsView.swift in Sources */,
+				F8311647A68D58ABC0A5A15E /* InstallingView.swift in Sources */,
+				136F7DA47D5CCE44F28CF97D /* ProjectDetailView.swift in Sources */,
+				2943F5FD1F6C1721E950C2F2 /* SearchByIdView.swift in Sources */,
+				BED024D454182F835A167903 /* FilesView.swift in Sources */,
+				4EC45993D6FFAC51D36AFF39 /* LauncherView.swift in Sources */,
+				F93236082155BDE721039864 /* AppearanceSettings.swift in Sources */,
+				F03D87E84F747CBE6C6C8095 /* BackgroundSettingsView.swift in Sources */,
+				006EB952506C80099E052F73 /* ColorThemeDialog.swift in Sources */,
+				319CD659BC91D6A4F10013DF /* CurseForgeKeyPageView.swift in Sources */,
+				DE0E28A90563CF67FFE7EA37 /* DiagnosticsSettings.swift in Sources */,
+				A447F56484657C18BFDA508E /* GameSettings.swift in Sources */,
+				C14D4E5A85BB19E2A68EEE50 /* SettingsView.swift in Sources */,
+				199A6A4A6C1A0D6427CF0271 /* VersionListView.swift in Sources */,
+				F0EED31C7B8FC79BBB836F87 /* VersionRowView.swift in Sources */,
+				E3B54E43AB4440A641CA0248 /* VersionSettingsView.swift in Sources */,
+				A7D53DBD46BABD94CE586009 /* BuiltinThemes.swift in Sources */,
+				C9481E71DB3980A8B4C33E46 /* ColorScheme.swift in Sources */,
+				BE1594A6558CEE700A11E233 /* Metrics.swift in Sources */,
+				C0C7942A563745FBA2F897FF /* Motion.swift in Sources */,
+				F44C0AA8E52A60005B2B0CE1 /* ThemeManager.swift in Sources */,
+				883E08884F97AC1B2F94F35C /* Typography.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -898,6 +618,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.airdevs.air2";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = "YES";
+				SWIFT_VERSION = "5.0";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Debug;
@@ -918,6 +639,7 @@
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.airdevs.air2";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = "YES";
+				SWIFT_VERSION = "5.0";
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
 			name = Release;

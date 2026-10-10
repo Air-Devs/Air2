@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """
-生成 Air2.xcodeproj/project.pbxproj
+生成 Air2.xcodeproj/project.pbxproj（瞬时产物，可随时删除重生成）
 
+真相源是文件系统 + Package.swift，本脚本只是把盘上的
+.m/.mm/.swift/.h 翻译成 Xcode 能读的格式。
 为什么不手写：pbxproj 是 Xcode 的内部格式，结构严格、UUID 到处引用，
 手写几乎必错且难排查。用脚本生成，源文件列表从磁盘扫描，
 新增文件不用手动改工程。
@@ -32,16 +34,22 @@ def uid(*parts):
 
 
 def scan_sources():
-    """扫描 Air2/ 下的所有编译单元与头文件"""
-    impl, headers = [], []
+    """扫描 Air2/ 下的所有编译单元与头文件
+
+    真相源是文件系统：.m/.mm（ObjC 残留）与 .swift（迁移目标）
+    都会被拾取，新增文件不用手动改工程。
+    """
+    impl, headers, swift = [], [], []
     base = os.path.join(ROOT, "Air2")
     for dirpath, _, files in os.walk(base):
         for f in sorted(files):
             if f.endswith(".m") or f.endswith(".mm"):
                 impl.append(os.path.relpath(os.path.join(dirpath, f), ROOT))
+            elif f.endswith(".swift"):
+                swift.append(os.path.relpath(os.path.join(dirpath, f), ROOT))
             elif f.endswith(".h"):
                 headers.append(os.path.relpath(os.path.join(dirpath, f), ROOT))
-    return sorted(impl), sorted(headers)
+    return sorted(impl), sorted(headers), sorted(swift)
 
 
 def group_tree(paths):
@@ -66,11 +74,12 @@ def group_tree(paths):
 
 
 def build():
-    impl_files, header_files = scan_sources()
-    all_files = impl_files + header_files
+    impl_files, header_files, swift_files = scan_sources()
+    compile_files = impl_files + swift_files
+    all_files = impl_files + swift_files + header_files
 
-    if not impl_files:
-        print("错误：没有找到任何 .m 源文件", file=sys.stderr)
+    if not compile_files:
+        print("错误：没有找到任何 .m/.mm/.swift 源文件", file=sys.stderr)
         return 1
 
     L = []
@@ -88,7 +97,7 @@ def build():
 
     # ---------------- PBXBuildFile ----------------
     add("/* Begin PBXBuildFile section */")
-    for f in impl_files:
+    for f in compile_files:
         u = uid("buildfile", f)
         name = os.path.basename(f)
         add(f"\t\t{u} /* {name} in Sources */ = {{isa = PBXBuildFile; fileRef = {uid('fileref', f)} /* {name} */; }};")
@@ -109,6 +118,10 @@ def build():
         name = os.path.basename(f)
         if f.endswith(".h"):
             ftype = "sourcecode.c.h"
+        elif f.endswith(".swift"):
+            ftype = "sourcecode.swift"
+        elif f.endswith(".mm"):
+            ftype = "sourcecode.cpp.objcpp"
         else:
             ftype = "sourcecode.c.objc"
         # path 一律加引号：文件名可能含 + - # 等字符
@@ -298,7 +311,7 @@ def build():
     add("\t\t\tisa = PBXSourcesBuildPhase;")
     add("\t\t\tbuildActionMask = 2147483647;")
     add("\t\t\tfiles = (")
-    for f in impl_files:
+    for f in compile_files:
         add(f"\t\t\t\t{uid('buildfile', f)} /* {os.path.basename(f)} in Sources */,")
     add("\t\t\t);")
     add("\t\t\trunOnlyForDeploymentPostprocessing = 0;")
@@ -321,8 +334,15 @@ def build():
                 "PRODUCT_BUNDLE_IDENTIFIER": BUNDLE_ID,
                 "PRODUCT_NAME": "$(TARGET_NAME)",
                 "SWIFT_EMIT_LOC_STRINGS": "YES",
+                "SWIFT_VERSION": "5.0",
                 "TARGETED_DEVICE_FAMILY": "1,2",
             })
+            # Swift ↔ ObjC 混编需要桥接头。文件存在才写 setting，
+            # 不存在不写（SWIFT_OBJC_BRIDGING_HEADER 指向不存在的文件
+            # 会直接编译失败，所以必须条件加入）。
+            bridging = os.path.join(ROOT, "Air2", "Air2-Bridging-Header.h")
+            if os.path.exists(bridging):
+                s["SWIFT_OBJC_BRIDGING_HEADER"] = "Air2/Air2-Bridging-Header.h"
         else:
             s.update({
                 "ALWAYS_SEARCH_USER_PATHS": "NO",
@@ -453,9 +473,9 @@ def main():
         open(scheme, "w").write(s)
         print(f"  已回填 scheme target UUID: {target_uuid}")
 
-    impl, headers = scan_sources()
+    impl, headers, swift = scan_sources()
     print(f"已生成 {os.path.relpath(out, ROOT)}")
-    print(f"  编译单元 {len(impl)} 个")
+    print(f"  编译单元 {len(impl)} 个（ObjC） + {len(swift)} 个（Swift）")
     print(f"  头文件   {len(headers)} 个")
     print(f"  Bundle ID: {BUNDLE_ID}")
     print(f"  部署目标:  iOS {DEPLOYMENT_TARGET}")

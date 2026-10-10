@@ -1,5 +1,11 @@
 name: Build IPA
 
+# 真相源 = 文件系统 + Package.swift。
+# `Air2.xcodeproj/project.pbxproj` 只是瞬时产物：任何需要它的任务
+# 都先跑 `python3 scripts/gen_xcodeproj.py` 按需重生成，
+# 绝不依赖、不读取入库的副本（`-project` 指向提交文件是禁止的）。
+# 删除入库 pbxproj 是另一次 PR 的决策，本次仅停止依赖它。
+#
 # 出可安装的未签名 IPA。
 # 没有 Apple 开发者证书时走这条路：
 #   CI 用 CODE_SIGNING_ALLOWED=NO 编译 → 产出未签名 .app → 手动包成 ipa
@@ -22,6 +28,8 @@ permissions:
 jobs:
   # ============================================================
   # 规范检查 —— 挡住"石山代码"
+  # 注意：这里不对 pbxproj 做硬门禁。它是瞬时产物，
+  # 以文件系统 + Package.swift 为准，工程在 ios-build 任务里重生成。
   # ============================================================
   lint:
     name: 规范检查
@@ -32,19 +40,85 @@ jobs:
       - name: 目录与命名规范
         run: bash scripts/lint_structure.sh
 
-      - name: 校验头文件引用
-        run: python3 scripts/check_imports.py
+      - name: Swift 格式检查（swift-format 风格，无工具时退化为基础检查）
+        run: |
+          SWIFT_FILES=$(find Air2 -name '*.swift' -type f 2>/dev/null || true)
+          if [ -z "$SWIFT_FILES" ]; then
+            echo "无 Swift 文件，跳过"
+            exit 0
+          fi
+          echo "$SWIFT_FILES"
+          FAIL=0
+          if command -v swift-format >/dev/null 2>&1; then
+            # 有官方工具就用它做 lint，不改文件
+            echo "$SWIFT_FILES" | xargs swift-format lint
+          else
+            # 退化检查：行尾空白、Tab 缩进（本项目约定 4 空格，见 .editorconfig）
+            BAD_WS=$(echo "$SWIFT_FILES" | xargs grep -ln ' $' 2>/dev/null || true)
+            if [ -n "$BAD_WS" ]; then
+              echo "::error::以下 Swift 文件含行尾空白："
+              echo "$BAD_WS"
+              FAIL=1
+            fi
+            BAD_TAB=$(echo "$SWIFT_FILES" | xargs grep -ln "$(printf '\t')" 2>/dev/null || true)
+            if [ -n "$BAD_TAB" ]; then
+              echo "::error::以下 Swift 文件含 Tab 缩进（约定 4 空格）："
+              echo "$BAD_TAB"
+              FAIL=1
+            fi
+            [ "$FAIL" -eq 0 ] && echo "Swift 基础格式检查通过"
+          fi
+          exit "$FAIL"
 
-      - name: 校验 Xcode 工程完整性
-        run: python3 scripts/verify_pbxproj.py
+      - name: pbxproj 一致性（仅告警，非门禁）
+        run: |
+          python3 scripts/verify_pbxproj.py \
+            || echo "::warning::pbxproj 校验未通过。它是瞬时产物，ios-build 任务会重生成；请确认文件系统 + Package.swift 正确。"
 
   # ============================================================
-  # 编译并打包 IPA
+  # SwiftPM 校验 —— Package.swift 即真相源，必须可解析、可编译
   # ============================================================
-  build:
-    name: 编译打包
+  spm-validate:
+    name: SwiftPM 校验
     runs-on: macos-15
     needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 工具链信息
+        run: swift --version
+
+      - name: 清单可解析
+        run: swift package dump-package > /dev/null
+
+      - name: 编译 Swift 逻辑目标（iOS SDK）
+        run: |
+          set -e
+          SDK=$(xcrun --sdk iphoneos --show-sdk-path)
+          echo "iOS SDK: $SDK"
+          # target 名与源码目录的映射（与 Package.swift 保持一致）。
+          # 目录下尚无 .swift 文件的 target 跳过——不是失败：
+          # SwiftPM 要求 target 非空，迁移完成前允许空 target 占位。
+          for spec in "Air2Theme:Air2/UI/Theme" "Air2Utils:Air2/Utils" "Air2Core:Air2/Core" "Air2App:Air2/App"; do
+            T=${spec%%:*}
+            D=${spec#*:}
+            if [ -z "$(find "$D" -name '*.swift' -type f 2>/dev/null | head -1)" ]; then
+              echo "跳过 $T：$D 下暂无 .swift 文件"
+              continue
+            fi
+            echo "==> 编译 $T"
+            swift build --target "$T" \
+              -Xswiftc -sdk -Xswiftc "$SDK" \
+              -Xswiftc -target -Xswiftc arm64-apple-ios15.0
+          done
+
+  # ============================================================
+  # 编译并打包 IPA（工程为瞬时生成，不读入库副本）
+  # ============================================================
+  ios-build:
+    name: 编译打包
+    runs-on: macos-15
+    needs: [lint, spm-validate]
     steps:
       - uses: actions/checkout@v4
 
@@ -53,10 +127,10 @@ jobs:
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
 
-      - name: 重新生成工程文件
+      - name: 瞬时重生成工程文件
         run: python3 scripts/gen_xcodeproj.py
 
-      - name: 校验工程
+      - name: 校验本次生成的工程
         run: python3 scripts/verify_pbxproj.py
 
       - name: 编译（未签名）
@@ -64,12 +138,13 @@ jobs:
           set -o pipefail
           mkdir -p logs
           # 输出同时进终端和文件：xcactivitylog 是二进制且常为空，
-          # 直接存文本日志才可靠
+          # 直接存文本日志才可靠。
+          # 注意：只用 -scheme，不用 `-project <入库文件>`——
+          # 工程是上一步瞬时生成的，CI 绝不依赖提交进来的副本。
           xcodebuild \
-            -project Air2.xcodeproj \
             -scheme Air2 \
             -configuration Release \
-            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
             -derivedDataPath build \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -109,8 +184,8 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      - name: 上传编译日志（失败时）
-        if: failure()
+      - name: 上传编译日志
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: build-log

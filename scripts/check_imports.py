@@ -31,6 +31,19 @@ SYSTEM_LIKE = {
     "MobileCoreServices.h", "UniformTypeIdentifiers.h",
 }
 
+# Swift `import X` 里允许的系统模块（iOS SDK + 标准库 + 测试）。
+# 本地模块必须与 Package.swift 的 target 名一致，新增 target 时同步加。
+SYSTEM_SWIFT_MODULES = {
+    "Foundation", "FoundationNetworking", "UIKit", "SwiftUI", "Combine",
+    "CoreGraphics", "QuartzCore", "CoreImage", "CoreAnimation",
+    "Photos", "PhotosUI", "AVFoundation", "AVKit",
+    "CoreData", "CloudKit", "Network", "Security", "CryptoKit",
+    "CoreLocation", "MapKit", "WebKit", "UserNotifications",
+    "os", "Dispatch", "Darwin", "ObjectiveC", "Swift", "SwiftUIX",
+    "XCTest", "XCUITest",
+}
+LOCAL_SWIFT_TARGETS = {"Air2Utils", "Air2Theme", "Air2Core", "Air2App"}
+
 
 
 
@@ -274,6 +287,46 @@ def check_component_dependencies():
     return issues
 
 
+def check_swift_imports():
+    """检查 .swift 里 import 的模块是否可解析。
+
+    规则：
+      - 系统模块（SYSTEM_SWIFT_MODULES）直接放行
+      - 本地模块必须是 Package.swift 的 target（LOCAL_SWIFT_TARGETS）
+      - 注释里的 import 不算（先去注释）
+    """
+    import os, re
+    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    issues = []
+
+    for dirpath, _, files in os.walk(os.path.join(ROOT, "Air2")):
+        for f in files:
+            if not f.endswith(".swift"):
+                continue
+            p = os.path.join(dirpath, f)
+            try:
+                src = open(p, encoding="utf-8").read()
+            except (OSError, UnicodeDecodeError):
+                continue
+            # 去注释：块注释与行注释里的 import 不算
+            src = re.sub(r'/\*.*?\*/', '', src, flags=re.S)
+            src = re.sub(r'//[^\n]*', '', src)
+            rel = os.path.relpath(p, ROOT)
+            for m in re.finditer(
+                    r'^\s*(?:@testable\s+|@_exported\s+)?import\s+([A-Za-z_]\w*)',
+                    src, re.M):
+                mod = m.group(1)
+                if mod in SYSTEM_SWIFT_MODULES or mod in LOCAL_SWIFT_TARGETS:
+                    continue
+                line = src[:m.start()].count('\n') + 1
+                issues.append(
+                    f"{rel}:{line} import {mod} 既不是系统模块，"
+                    f"也不是 Package.swift 的 target"
+                    f"（本地 target 限 {sorted(LOCAL_SWIFT_TARGETS)}）")
+
+    return issues
+
+
 def main():
     problems = []
     total_imports = 0
@@ -311,6 +364,19 @@ def main():
         return 1
 
     print("✓ 所有本地 #import 都能找到对应头文件")
+
+    # ---------- Swift import 检查 ----------
+    # .swift 里的 `import X`：系统模块放行，本地模块必须是在
+    # Package.swift 里声明过的 target（拼错 target 名时，
+    # 编译器报 no such module，等 CI 要几分钟，本地先拦掉）。
+    swift_issues = check_swift_imports()
+    if swift_issues:
+        print(f"\n发现 {len(swift_issues)} 处无法解析的 Swift import：")
+        for msg in swift_issues:
+            print(f"  {msg}")
+        return 1
+
+    print("✓ 所有 Swift import 都能解析到系统模块或本地 target")
 
     # ---------- 头文件声明 vs 实现 一致性 ----------
     # 这个错误反复出现：改了 .m 忘了 .h（调用方报 no visible @interface），

@@ -6,11 +6,15 @@
   1. 括号 / 引号不平衡
   2. 引用了未定义的 UUID
   3. 定义了但从未被引用的对象（说明文件没被加进工程）
-  4. 源文件在盘上但没进 Sources 阶段
+  4. 源文件在盘上但没进 Sources 阶段（.m/.mm/.swift 都查）
   5. 工程里声明的路径在磁盘上不存在（最难排查的一类，
      表现为编译时报 "Build input file cannot be found"）
 
 pbxproj 是纯文本，这些都能静态查出来。
+
+注意：pbxproj 是瞬时产物（真相源是文件系统 + Package.swift）。
+如果工程文件根本不存在、而 Package.swift 存在，说明还没重生成，
+这时只告警、不报错——CI 的 ios-build 任务会先重生成再严格校验。
 """
 import os
 import re
@@ -73,6 +77,11 @@ def parse_file_refs(src):
 
 def main():
     if not os.path.exists(PBX):
+        # 瞬时产物还没生成不算错：真相源是文件系统 + Package.swift。
+        if os.path.exists(os.path.join(ROOT, "Package.swift")):
+            print(f"提示：{PBX} 不存在，但 Package.swift 存在。")
+            print("pbxproj 是瞬时产物，构建前由 scripts/gen_xcodeproj.py 重生成，本次只告警。")
+            return 0
         print(f"找不到 {PBX}")
         return 1
 
@@ -125,10 +134,11 @@ def main():
         print("✓ 无孤立对象")
 
     # ---------- 3. 源文件覆盖 ----------
+    # .m/.mm 是 ObjC 残留，.swift 是迁移目标，两边都要进 Sources。
     on_disk = []
     for dirpath, _, files in os.walk(os.path.join(ROOT, "Air2")):
         for f in files:
-            if f.endswith((".m", ".mm")):
+            if f.endswith((".m", ".mm", ".swift")):
                 on_disk.append(os.path.relpath(os.path.join(dirpath, f), ROOT))
     on_disk = sorted(on_disk)
 
@@ -214,7 +224,7 @@ def main():
             print(f"✓ {len(resolved)} 个源文件的路径全部能解析到真实文件")
 
     # ---------- 5. 关键 build settings ----------
-    for key in ["INFOPLIST_FILE", "PRODUCT_BUNDLE_IDENTIFIER", "IPHONEOS_DEPLOYMENT_TARGET", "SDKROOT"]:
+    for key in ["INFOPLIST_FILE", "PRODUCT_BUNDLE_IDENTIFIER", "IPHONEOS_DEPLOYMENT_TARGET", "SDKROOT", "SWIFT_VERSION"]:
         if key not in src:
             errors.append(f"缺少必要的 build setting: {key}")
     if not any(e.startswith("缺少必要") for e in errors):

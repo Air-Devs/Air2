@@ -76,7 +76,12 @@ java: bootstrap
 	fi
 
 # ------------------------------------------------------------
+# 真相源 = 文件系统 + Package.swift，pbxproj 是瞬时产物。
+# 打包前一律重生成工程，不依赖入库的副本；
+# 删除入库副本是另一次 PR 的决策，本次仅停止依赖它。
 package: natives java
+	@echo "==> 重生成 Xcode 工程（瞬时产物）"
+	@python3 "$(SOURCEDIR)/scripts/gen_xcodeproj.py"
 	@echo "==> 打包 IPA"
 	@mkdir -p "$(OUTPUTDIR)"
 	@if [ -d "$(SOURCEDIR)/Air2.xcodeproj" ]; then \
