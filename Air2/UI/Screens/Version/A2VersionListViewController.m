@@ -36,6 +36,7 @@
 #import "A2VersionListViewController.h"
 #import "A2VersionSettingsViewController.h"
 #import "A2GameVersionListViewController.h"
+#import "A2InputDialog.h"
 #import "A2TextField.h"
 #import "A2VersionManager.h"
 #import "A2VersionRowView.h"
@@ -499,7 +500,7 @@
                                               style:UIAlertActionStyleDefault
                                             handler:^(UIAlertAction *action) {
         __strong typeof(weakSelf) self = weakSelf;
-        [self showCopyDialogForVersion:version];
+        [self showCopyDialogForVersion:version fromView:source];
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"删除"
                                               style:UIAlertActionStyleDestructive
@@ -518,18 +519,13 @@
 /// 重命名弹窗：非法名由管理器校验，这里只透出错误文案。
 - (void)showRenameDialogForVersion:(A2Version *)version {
     __weak typeof(self) weakSelf = self;
-    UIAlertController *alert =
-        [UIAlertController alertControllerWithTitle:@"重命名版本"
-                                            message:nil
-                                     preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-        tf.text = version.name;
-    }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"确定" style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *a) {
+    [A2InputDialog presentFrom:self
+                        title:@"重命名版本"
+                        label:@"新版本名"
+                  initialText:version.name
+                     onFinish:^(BOOL committed, NSString *text) {
+        if (!committed) return;
         __strong typeof(weakSelf) self = weakSelf;
-        NSString *text = alert.textFields.firstObject.text;
         NSError *err = nil;
         if ([A2VersionManager.shared renameVersion:version to:text error:&err]) {
             [self reloadVersionList];
@@ -537,40 +533,50 @@
         } else {
             [A2Toast show:(err.localizedDescription ?: @"重命名失败") inView:self.view];
         }
-    }]];
-    [self presentViewController:alert animated:YES completion:nil];
+    }];
 }
 
-/// 复制弹窗：两种粒度二选一，新版本不继承置顶。
-- (void)showCopyDialogForVersion:(A2Version *)version {
+/// 复制：先选粒度（无输入框的 sheet，锚在行上防 iPad 崩），再输新名，两步都合规。
+- (void)showCopyDialogForVersion:(A2Version *)version fromView:(UIView *)source {
     __weak typeof(self) weakSelf = self;
-    UIAlertController *alert =
+    UIAlertController *sheet =
         [UIAlertController alertControllerWithTitle:@"复制版本"
                                             message:@"仅版本文件只拷 json 与 jar；全部文件连存档模组一起拷"
-                                     preferredStyle:UIAlertControllerStyleAlert];
-    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
-        tf.text = [version.name stringByAppendingString:@" 副本"];
+                                     preferredStyle:UIAlertControllerStyleActionSheet];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"仅版本文件" style:UIAlertActionStyleDefault
+                                           handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self requestCopyNameForVersion:version mode:A2VersionCopyModeMinimal];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"全部文件" style:UIAlertActionStyleDefault
+                                           handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self requestCopyNameForVersion:version mode:A2VersionCopyModeFull];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    sheet.popoverPresentationController.sourceView = source ?: self.view;
+    sheet.popoverPresentationController.sourceRect = source ? source.bounds : self.view.bounds;
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+/// 复制第二步：输新名并执行（粒度由上一步定，不用开关传）。
+- (void)requestCopyNameForVersion:(A2Version *)version mode:(A2VersionCopyMode)mode {
+    __weak typeof(self) weakSelf = self;
+    [A2InputDialog presentFrom:self
+                        title:@"复制版本"
+                        label:@"新版本名"
+                  initialText:[version.name stringByAppendingString:@" 副本"]
+                     onFinish:^(BOOL committed, NSString *text) {
+        if (!committed) return;
+        __strong typeof(weakSelf) self = weakSelf;
+        NSError *err = nil;
+        if (mode == A2VersionCopyModeFull) {
+            [A2VersionManager.shared copyVersionFully:version to:text error:&err];
+        } else {
+            [A2VersionManager.shared copyVersionMinimal:version to:text error:&err];
+        }
+        [self completeCopyWithError:err];
     }];
-    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"仅版本文件" style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *a) {
-        __strong typeof(weakSelf) self = weakSelf;
-        NSError *err = nil;
-        [A2VersionManager.shared copyVersionMinimal:version
-                                                 to:alert.textFields.firstObject.text
-                                              error:&err];
-        [self completeCopyWithError:err];
-    }]];
-    [alert addAction:[UIAlertAction actionWithTitle:@"全部文件" style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *a) {
-        __strong typeof(weakSelf) self = weakSelf;
-        NSError *err = nil;
-        [A2VersionManager.shared copyVersionFully:version
-                                               to:alert.textFields.firstObject.text
-                                            error:&err];
-        [self completeCopyWithError:err];
-    }]];
-    [self presentViewController:alert animated:YES completion:nil];
 }
 
 /// 复制收尾：成功重刷列表，失败透出原因（Cocoa 的 error 惯例，nil 即成功）。
