@@ -56,7 +56,7 @@ public struct CategoryNavView: View {
     public var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(spacing: A2SpaceS) {
-                ForEach(categories.indices, id: \.self) { index in
+                ForEach(Array(categories.indices), id: \.self) { index in
                     let category = categories[index]
                     if category.divisionBefore {
                         Color.cOnSurface.opacity(0.25)
