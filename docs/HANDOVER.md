@@ -1011,3 +1011,46 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
 - [x] 校验：`verify_pbxproj.py` 通过（无新增文件，工程文件未变）；`make lint`（169 文件）
       通过；`tests/Core` 7 个脚本全绿。
 - 未做：真机端到端验证（本机无 Xcode）。
+
+## 10.11 前端由 ObjC 迁移到 Swift/SwiftUI（分支 `feat/swift-frontend`）
+
+> 背景：第二章 2.1 曾把 UI 钉死为 Objective-C，但本仓 ADR-001 早已决定 UI 用 SwiftUI。
+> 本轮把 `App/` 与 `UI/` 整体用 Swift 重写落地，**Core / Utils / 原生层继续用 ObjC 不动**。
+> 记法同上：**不回头改第一～九章**，2.1 的语言表由 **ADR-006** 取代。本轮不含 release，
+> 出包只走 CI artifact。
+
+- **语言边界**：`App/` + `UI/` = Swift（SwiftUI 为主，宿主容器用 UIKit）；`Core/`（24 个 `.m`）
+  与 `Utils/`（2 个 `.m`）保持 ObjC。Swift 经 `Air2-Bridging-Header.h` 单向调用 Core，
+  桥接头只 import `Core/`、`Utils/`，Core 仍禁止 import UIKit / SwiftUI（ADR-002 不放松）。
+- **App 层重写**：`A2AppDelegate` / `A2SceneDelegate` / `A2RootViewController` /
+  `A2NavigationController` / `A2CrashGuard` / `main.m` 共 7 组 ObjC 文件删除，改为
+  `Air2App.swift` / `AppDelegate.swift` / `RootView.swift` / `NavigationHost.swift` /
+  `CrashGuard.swift` / `DependencyContainer.swift`；导航改走自研 `NavigationHost`
+  （无 `NavigationStack` 依赖，保 iOS 15.0 部署目标）。
+- **UI 层重写**：`UI/Theme`（8 组）+ `UI/Components`（20 组）+ `UI/Screens`（全部页面）
+  + `UI/Control` 的 ObjC 实现删除，对应 Swift 实现入库；主题仍按材料包式语义色组织，
+  沿用 PCL 浅色规范（蓝顶栏 / 浅蓝灰背景 / 白卡 + `#D9E4F0` 边框 + 圆角 0.012H + 微阴影）。
+- **本轮新增下载页（共用）**：`DownloadListView`（搜索 + 可展开筛选卡 + 分页结果）、
+  `ProjectDetailView`（详情 + 版本列表 + 下载/更新）、`DownloadTasksView`（进行中/已完成
+  任务列表 + 暂停/继续/重试/取消），外加 `RemoteImageView`（内存 + 磁盘缓存 + 下采样）。
+  三者均复用既有的 `A2ContentSource` / `A2DownloadTaskCenter` / `A2DownloadFavorites` /
+  `A2DownloadManifest`，不新写业务逻辑。
+- **构建真相源**：新增 `Package.swift`（SwiftPM 负责逻辑 target 编译与单测），
+  `gen_xcodeproj.py` 扫盘生成瞬时工程（本轮 27 ObjC + 64 Swift 编译单元、28 头文件），
+  CI 的 `ios-build` 先重生成再 `xcodebuild -scheme`，不再读入库的 `project.pbxproj` 副本。
+- **ObjC → Swift 导入名踩坑（已固化结论）**：类工厂方法不能用「直觉拆分」猜，须按
+  Clang importer 实际规则：`sourceForPlatform:` → `init(for:)`、`itemWithContentItem:` →
+  `init(contentItem:)`、`pathWithGameHome:` → `init(gameHome:)`、`defaultFilter` → `default()`、
+  `fetchVersionsWithCompletion:` → `fetch(completion:)`；类方法首段含类名基名时不拆分
+  （`identifierForType:` → `identifier(for:)`）；实例方法按介词拆首段
+  （`categoriesForContentClass:` → `categories(for:)`、`searchWithFilter:contentClass:` →
+  `search(with:contentClass:)`）；`extern NSNotificationName const` 一律映射为
+  `NSNotification.Name.<去尾 Notification>`。校验手段：用真实 bridging header 跑
+  `swiftc -typecheck` 探针（Clang importer 名称翻译与 SDK 无关），迭代到 0 错误。
+- [x] 校验：`make lint` 通过（82 处 `#import` / 28 头文件 / 52 类 / 55 文件，分层检查通过）；
+  `gen_xcodeproj.py`（27 ObjC + 64 Swift）+ `verify_pbxproj.py` 通过；`tests/Core` 7 个脚本全绿；
+  CI `Build IPA` 转绿（run 38028587501）。
+- [x] 文档同步：`docs/ARCHITECTURE.md` 顶层表与真相源声明改按 Swift 迁移态；
+  `docs/DECISIONS.md` 新增 **ADR-006** 取代 HANDOVER 2.1。
+- 未做：真机端到端验证（本机无 iOS SDK / 无 Xcode）；业务逻辑与 ObjC 原版的逐页行为对齐
+  仅做到「结构等价 + 编译通过」，交互细节待真机回归。

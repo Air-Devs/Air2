@@ -65,3 +65,27 @@
 - **背景**：混合命名（`download` / `Downloads` / `downloads`）在大型项目中会造成认知负担。
 - **决策**：目录一律 UpperCamelCase 且用单数：`Download/`、`Version/`、`Account/`。
 - **理由**：与 Swift/ObjC 类型命名一致，导入路径与类型名视觉统一；单数避免"目录里到底装一个还是多个"的歧义。
+
+---
+
+## ADR-006：UI 层由 Objective-C 迁移到 SwiftUI，Core / 原生层保持 ObjC
+
+- **状态**：已接受
+- **日期**：2026-10-10
+- **背景**：HANDOVER 第二章 2.1「技术栈（已定，不要改）」把 UI 与 Core 都钉死为 Objective-C
+  （"不是 Swift！不是 SwiftUI！"），与本仓 ADR-001「UI 层用 SwiftUI」直接冲突。工程实际已按
+  ADR-001 把 `App/` 与 `UI/` 整体用 Swift 重写完毕（分支 `feat/swift-frontend`），Core 的
+  24 个 `.m`、Utils 的 2 个 `.m` 原样保留。
+- **决策**：
+  - `App/` 与 `UI/` 的语言改为 **Swift**（UI 以 SwiftUI 为主，宿主容器等必要处用 UIKit）。
+  - `Core/`、`Utils/`、`Natives/` **继续用 Objective-C 不动**；Swift 侧经
+    `Air2-Bridging-Header.h` 调用 Core，桥接头只允许 import `Core/`、`Utils/`。
+  - 分层与依赖方向沿用 ADR-002：Core 仍**禁止** `import SwiftUI / UIKit`，CI 的
+    `scripts/lint_structure.sh` 继续机器化拦截违规。
+- **取代关系**：本条取代 **HANDOVER.md 第二章 2.1** 的语言表及其「Swift 仅保留为极少量衔接点 /
+  工程里一个 Swift 文件都没有」的表述；ADR-001 的技术栈指向由此正式落地。HANDOVER 第一～九章为
+  交接原文，不回头改写，改动一律以本条 + HANDOVER 第十章的新条目为准。
+- **理由**：
+  - Objective-C 手写 UIKit 布局成本高，SwiftUI 的结构化视图与语义色更利于材料包式主题化；
+  - Core 保持 ObjC 避免一次性大爆炸重写，Swift ↔ ObjC 的边界收敛在唯一 bridging header，风险可控；
+  - 与 ADR-002 单向分层一致，迁移不放松任何既有硬约束。
