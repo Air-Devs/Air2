@@ -1266,7 +1266,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\ncd \"$SRCROOT/JavaApp\"\nBOOT=$(/usr/libexec/java_home -v 1.8 2>/dev/null || true)\nmake -s all BOOTJDK=\"$BOOT\"\nmake -s verify BOOTJDK=\"$BOOT\"\nmake -s verify-lwjgl BOOTJDK=\"$BOOT\"\nCFP=\"$CONTENTS_FOLDER_PATH\"\n[ -n \"$CFP\" ] || CFP=\"Air2.app\"\nDEST=\"$BUILT_PRODUCTS_DIR/$CFP/Java\"\nmkdir -p \"$DEST\"\ncp -f build/air2-launch.jar \"$DEST/\"\ntest -f \"$DEST/air2-launch.jar\"\ncp -f build/air2-lwjgl-patch.jar \"$DEST/\"\ntest -f \"$DEST/air2-lwjgl-patch.jar\"\necho \"note: Java 启动核心 -> $DEST/air2-launch.jar\"\necho \"note: LWJGL 补丁类 -> $DEST/air2-lwjgl-patch.jar\"\n";
+			shellScript = "set -e\ncd \"$SRCROOT/JavaApp\"\nBOOT=$(/usr/libexec/java_home -v 1.8 2>/dev/null || true)\nmake -s all BOOTJDK=\"$BOOT\"\nmake -s verify BOOTJDK=\"$BOOT\"\nmake -s verify-lwjgl BOOTJDK=\"$BOOT\"\nmake -s verify-ownglfw BOOTJDK=\"$BOOT\"\nCFP=\"$CONTENTS_FOLDER_PATH\"\n[ -n \"$CFP\" ] || CFP=\"Air2.app\"\nDEST=\"$BUILT_PRODUCTS_DIR/$CFP/Java\"\nmkdir -p \"$DEST\"\ncp -f build/air2-launch.jar \"$DEST/\"\ntest -f \"$DEST/air2-launch.jar\"\ncp -f build/air2-lwjgl-patch.jar \"$DEST/\"\ntest -f \"$DEST/air2-lwjgl-patch.jar\"\ncp -f build/air2-ownglfw.jar \"$DEST/\"\ntest -f \"$DEST/air2-ownglfw.jar\"\necho \"note: Java 启动核心 -> $DEST/air2-launch.jar\"\necho \"note: LWJGL 补丁类 -> $DEST/air2-lwjgl-patch.jar\"\necho \"note: 自研 GLFW 最小集 -> $DEST/air2-ownglfw.jar\"\n";
 		};
 
 		26F00CCBB4C89AA09B7D6BE0 /* Stage Runtime Bundle */ = {

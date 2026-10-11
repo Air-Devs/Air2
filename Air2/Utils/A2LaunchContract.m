@@ -14,6 +14,7 @@ NSString *const A2LaunchPlanFlag              = @"--plan";
 NSString *const A2LaunchGameClassLoaderName   = @"dev.airdevs.air2.launch.A2GameClassLoader";
 NSString *const A2LaunchJavaEntryJarName      = @"air2-launch.jar";
 NSString *const A2LaunchJavaPatchJarName      = @"air2-lwjgl-patch.jar";
+NSString *const A2LaunchJavaOwnGlfwJarName    = @"air2-ownglfw.jar";
 
 const NSInteger A2LaunchPlanSchema = 1;
 

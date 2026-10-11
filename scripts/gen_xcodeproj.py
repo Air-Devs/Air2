@@ -58,6 +58,9 @@ JAVA_JAR_NAME = "air2-launch.jar"
 # ★决策（org.lwjgl.* 补丁类归属）★：补丁类在 Java 侧、独立 jar，随包到同一目录；
 # Bridge 组 classpath 时把它放在最前（先于 libs/lwjgl-<ver>/*）。见 docs/ARCHITECTURE.md [LWJGL-PATCH]。
 JAVA_PATCH_JAR_NAME = "air2-lwjgl-patch.jar"
+# ★自研 GLFW 最小集 jar★（[A2-OWNGLFW-1]）：覆盖官方 org.lwjgl.glfw.GLFW / Callbacks /
+# GLFWNativeCocoa，必须与补丁 jar 同列 classpath 最前（A2LaunchRunner 按 jar 名自动加入 front 项）。
+JAVA_OWNGLFW_JAR_NAME = "air2-ownglfw.jar"
 JAVA_PHASE_SCRIPT = (
     "set -e\n"
     "cd \"$SRCROOT/JavaApp\"\n"
@@ -65,6 +68,8 @@ JAVA_PHASE_SCRIPT = (
     "make -s all BOOTJDK=\"$BOOT\"\n"          # all ⇒ air2-launch.jar + air2-lwjgl-patch.jar
     "make -s verify BOOTJDK=\"$BOOT\"\n"
     "make -s verify-lwjgl BOOTJDK=\"$BOOT\"\n"
+    # 自研 GLFW 最小集：编译 + 薄 JNI 对齐 + 包内自证 + native⇄Java 事件通道对齐（缺一即失败）
+    "make -s verify-ownglfw BOOTJDK=\"$BOOT\"\n"
     # CONTENTS_FOLDER_PATH 在 -target 构建下可能为空 ⇒ 显式兜底，避免把 jar 写到
     # BUILT_PRODUCTS_DIR 根上（那样 IPA 里没有它，且构建不报错 —— 静默失败最难查）。
     "CFP=\"$CONTENTS_FOLDER_PATH\"\n"
@@ -75,8 +80,11 @@ JAVA_PHASE_SCRIPT = (
     "test -f \"$DEST/" + JAVA_JAR_NAME + "\"\n"
     "cp -f build/" + JAVA_PATCH_JAR_NAME + " \"$DEST/\"\n"
     "test -f \"$DEST/" + JAVA_PATCH_JAR_NAME + "\"\n"
+    "cp -f build/" + JAVA_OWNGLFW_JAR_NAME + " \"$DEST/\"\n"
+    "test -f \"$DEST/" + JAVA_OWNGLFW_JAR_NAME + "\"\n"
     "echo \"note: Java 启动核心 -> $DEST/" + JAVA_JAR_NAME + "\"\n"
     "echo \"note: LWJGL 补丁类 -> $DEST/" + JAVA_PATCH_JAR_NAME + "\"\n"
+    "echo \"note: 自研 GLFW 最小集 -> $DEST/" + JAVA_OWNGLFW_JAR_NAME + "\"\n"
 )
 
 

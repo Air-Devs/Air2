@@ -1,7 +1,12 @@
 Air2 —— org.lwjgl.* 补丁类清单（jar 内随包自证）
 =================================================
 
-归属决策：Java 侧、独立 jar（air2-lwjgl-patch.jar），classpath 最前（先于 libs/lwjgl-<ver>/*）。
+归属决策：Java 侧、独立 jar，classpath 最前（先于 libs/lwjgl-<ver>/*）。
+★两条线并存、互不混同（合并时确认）★：
+  · 复用线 air2-lwjgl-patch.jar（JavaApp/src/lwjgl/）        —— 见 §A
+  · 自研线 air2-ownglfw.jar （JavaApp/src/ownglfw/）★classpath 更前★ —— 见 §B
+    （A2LaunchRunner.m:211 把自研 jar 作为 frontJar 传入 a2_paths_build_classpath ⇒
+      同名类以自研版为准；复用 jar 仍提供它独有的类，如 javax.annotation.Nullable）
 理由与规范依据见 docs/ARCHITECTURE.md [LWJGL-PATCH] 与 D:\CTF\_AIR2_LAUNCH_PATH.md §①。
 
 ★本轮变更（[A2-GLFW-REUSE-1]）：按用户拍板改走【复用老树】路线★
@@ -9,7 +14,7 @@ Air2 —— org.lwjgl.* 补丁类清单（jar 内随包自证）
   项目本身是 GPL-3.0 ⇒ 复用合法；评估重点由「净室怎么写」转为「好不好维护」。
   逐文件来源/适配见 docs/DEPENDENCIES.md「启动核心后端 · 自研替换」一节。
 
-本 jar 当前【已实现】的类（10 个）：
+§A 复用线 air2-lwjgl-patch.jar —— 本 jar 当前【已实现】的类（10 个）：
 
   复用自老树（9 个，均带来源/许可头，改动见 ★A2-LWJGL-*★ 标记）：
     org/lwjgl/glfw/GLFW.class                 ★首帧必需★ GLFW 全量 iOS 实现；★改动★ A2-LWJGL-2
@@ -38,6 +43,62 @@ Air2 —— org.lwjgl.* 补丁类清单（jar 内随包自证）
   C. org/lwjgl/input/InfdevMouse.java —— 依赖 net.java.openjdk.cacio.ctc.{ExternalMouseReader,
      InfdevGrabHandler}（Caciocavallo，老树 AWT 路径）。本仓无该依赖，且服务的是老版本 MC 的
      LWJGL2 org.lwjgl.input.Mouse 路径，与「进主界面」无关 ⇒ 不复用。
+
+§B 自研线 air2-ownglfw.jar —— GLFW 全链最小必需集（本 jar classpath 更前，同名类以本版为准）
+【未实现 · 剩余清单】（均为官方同名类 ⇒ 落位时会遮蔽官方实现，必须与 Natives 输入桥
+符号一起做，否则会把 LWJGL 类初始化打坏；逐条排在下面，按「启动/首帧必需」优先级排序）：
+  ★每条给四件事：覆盖谁 / 为什么必须覆盖 / 谁调它 / 不覆盖会报什么★
+
+  ── GLFW 全链最小必需集（本单已交付，★不在本 jar、在 air2-ownglfw.jar★）──
+  1. org/lwjgl/glfw/GLFW.java
+     覆盖谁：官方 org.lwjgl.glfw.GLFW（lwjgl-glfw.jar）
+     为什么：官方 GLFW 的每个方法都走 native `nglfw*`（liblwjgl），iOS 上无该实现
+     谁调它：MC com.mojang.blaze3d.platform.Window / InputConstants / GLX 的初始化第一撞它
+     不覆盖：NoClassDefFoundError / UnsatisfiedLinkError（`nglfwInit` 等找不到）
+  2. org/lwjgl/glfw/Callbacks.java
+     覆盖谁：官方 org.lwjgl.glfw.Callbacks
+     为什么：官方实现会把回调包装当 Callback 释放；本链回调是无包装 lambda（且自研
+             glfwSet*Callback 的返回语义已对齐）⇒ 需自研版避免 ClassCastException
+     谁调它：MC Window.close() → Callbacks.glfwFreeCallbacks(handle)
+     不覆盖：窗口关闭/重开路径上抛 ClassCastException（回调释放失败）
+  3. org/lwjgl/glfw/GLFWNativeCocoa.java
+     覆盖谁：官方 org.lwjgl.glfw.GLFWNativeCocoa
+     为什么：官方会返回真实 NSWindow/NSView 指针；iOS 无 Cocoa 窗口对象 ⇒ 返回 0
+     谁调它：MC 的 macOS 分支（Blaze3D 取 NSWindow/NSView 那段）
+     不覆盖：走到 NSWindow 分支 ⇒ 对空/野指针操作（崩溃）
+     ⇒ 这 3 个即「进主界面 + 拿到窗口/事件」的最小必需集，已由自研线
+       JavaApp/src/ownglfw/ 交付（air2-ownglfw.jar，classpath 最前）。
+
+  ── 可证「本单不需要」（不硬塞，列出判据）──
+  4. org/lwjgl/glfw/GLFWNativeEGL.java
+     覆盖谁：无 —— ★官方 lwjgl-glfw.jar 内不存在该类★（实测 javap -cp 无此类型）。
+     判据：官方类集里没有它 ⇒ 无从「覆盖」；vanilla MC 不引用 ⇒ 不做。
+  5. org/lwjgl/glfw/GLFWVulkan.java
+     覆盖谁：官方 org.lwjgl.glfw.GLFWVulkan
+     为什么不做：官方签名依赖 org.lwjgl.vulkan.*，本仓 Libraries/Jars/lwjgl-341/ 无
+                 lwjgl-vulkan jar ⇒ 现在落会编不过；Air2 主推渲染后端是 Metal，
+                 Vulkan 路径非「拿窗口/事件」所必需 ⇒ 缓（阶段后）。
+  6. org/lwjgl/system/Callback.java + 7. CallbackI.java
+     覆盖谁：官方 org.lwjgl.system.Callback / CallbackI
+     为什么不在本单：本链的 native→Java 是【自研 native 直接静态调用 Java 方法】，
+                     全程不创建官方 native 回调桩 ⇒ 不走 Callback.create 那条路。
+                     编译期只用官方 SPI 类型（GLFWKeyCallbackI 等），运行期由官方层提供。
+     判据：自研层源码内不出现 Callback.create / getCallbackHandler 调用点。
+     ★风险（如实标出）★：若 MC 某处显式调 GLFWxxxCallback.create(...)（需要 native 桩），
+     会 UnsatisfiedLinkError ⇒ 属阶段后待办，本单不掩盖。
+  8. org/lwjgl/system/APIUtil.java
+     覆盖谁：官方 org.lwjgl.system.APIUtil
+     为什么不在本单：apiCheck 只在 LWJGL 自身做版本自检；本链不触发它即不影响
+                     「拿窗口/事件」⇒ 缓（若真机报 API 版本断言再落）。
+  9. org/lwjgl/input/*.java
+     覆盖谁：官方 org.lwjgl.input.*（LWJGL2 遗留）
+     为什么不做：MC 1.13+ 已不用 LWJGL2 输入；本链的输入走 org.lwjgl.glfw 回调 ⇒ 无关。
+  10. org/lwjgl/stb/STBImageResize.java
+     覆盖谁：官方 org.lwjgl.stb.STBImageResize
+     为什么不做：贴图缩放 native 壳，与「窗口/键鼠触摸事件」无关 ⇒ 不在本单范围。
+※ 更新（合并轮）：上段「另需」所述的 Natives/Input native 符号实现，已由 [A2-GLFW-FULL] 落地
+   —— air2_own_glfw_bridge.m + a2_glfw_window.{h,m} + a2_glfw_input.{h,m}，11 个 JNI 符号；
+   详见 D:\CTF\_AIR2_GLFW_FULL.md。
 
 另需（不属 org.lwjgl，但是同一条「首帧」路径）：
      Natives/Input 的 native 符号实现（Java_org_lwjgl_glfw_GLFW_nglfwSet*Callback 10 个、

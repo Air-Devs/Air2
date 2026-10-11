@@ -14,6 +14,18 @@ Air2 —— 自研 org.lwjgl.glfw.* 最小集（阶段 1）· 包内清单
   org/lwjgl/glfw/Callbacks.class            自研 glfwFreeCallbacks(long)
   org/lwjgl/glfw/GLFWNativeCocoa.class      iOS 替身：glfwGetCocoaWindow/View/Monitor 返回 0
 
+【阶段 2（本单）：native → Java 最后一跳已落地】
+  GLFW.a2OwnGlfwDispatch(long,int,int,int,int,int,double,double)  = 描述符 (JIIIIIDD)V
+    · 调用方：Natives/OwnGlfw/a2_own_glfw_bridge.m 的 a2_own_glfw_java_sink（pump 线程，静态调用）。
+    · 把事件转成 LWJGL 回调（glfwSet*Callback 登记的那批）并同步 Java 状态。
+    · 覆盖 10 种事件（值 = Natives/Input/a2_glfw_window.h 的 A2GlfwEventType，逐值对齐）：
+      CURSOR_POS / MOUSE_BUTTON / KEY / FRAMEBUFFER_SIZE / WINDOW_SIZE /
+      WINDOW_FOCUS / CONTENT_SCALE / CURSOR_ENTER / CHAR / SCROLL
+    · 机器判据：JavaApp/scripts/ownglfw_verify.py 第 [5] 条「事件通道对齐」（缺/值错/无 case 任一即失败）。
+  ★另修一处会打断链路的缺陷★：glfwSet*Callback 的返回值改用 swapPrev —— 早先在旧值不是回调
+  包装类（MC 传的 lambda 就是这种）时强转成返回类型会 ClassCastException（第二次登记 /
+  Callbacks.glfwFreeCallbacks 就炸）。
+
 编译依赖（编译期，运行时由官方层提供）：
   Libraries/Jars/lwjgl-341/lwjgl-glfw.jar   提供回调 SPI 类型（GLFWKeyCallbackI 等）与 Struct 类型
   Libraries/Jars/lwjgl-341/lwjgl.jar        提供 org.lwjgl.PointerBuffer / system.MemoryUtil

@@ -28,9 +28,10 @@
  *                                           int i0, int i1, int i2, int i3,
  *                                           double d0, double d1)   // static void
  *   签名描述符 = (JIIIIIDD)V。
- *   ★该方法尚不存在★ —— 由自研 Java 线在阶段 2 落（本单不碰 Java 层）。
- *   在它落地之前，本桥**一次性**报告「落地点缺失」并静默空转（绝不抛异常/不死锁），
- *   这正是本阶段的诚实状态：native 事件通道已通到边界，Java 侧接最后一跳。
+ *   ★该方法已落地★（自研 Java 线阶段 2：JavaApp/src/ownglfw/org/lwjgl/glfw/GLFW.java）。
+ *   它在同一方法里把事件转成 LWJGL 回调（glfwSet*Callback 登记的那批）并同步 Java 状态；
+ *   Java 侧一旦缺失/签名不符，本桥**一次性**报告并静默空转（绝不抛异常/不死锁）。
+ *   两侧对齐由 JavaApp/scripts/ownglfw_verify.py 的「事件通道对齐」判据守住。
  *
  * 净室声明：未参考、未复制 Pojav / Boardwalk / Amethyst / LWJGL 的 native 源码。
  * 许可：归 Air2 项目本人；无 GPL 血缘。
