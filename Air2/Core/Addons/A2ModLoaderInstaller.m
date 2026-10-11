@@ -126,12 +126,10 @@ static void A2Main(dispatch_block_t b) {
             break;
 
         case A2ModLoaderTypeOptiFine:
-            [self installOptiFine];
-            break;
-
         case A2ModLoaderTypeLiteLoader:
         case A2ModLoaderTypeRift:
             // 官方无稳定接口 —— 与 ZL2 的 autoDownloadable=false 一致
+            // （OptiFine 与 LiteLoader/Rift 同属 A2ModLoaderSupportsAutoInstall == NO 的一档）
             [self failWithMessage:[NSString stringWithFormat:
                 @"%@ 不支持自动安装，请手动下载安装包后放入 versions 目录",
                 [A2ModLoaderAPI displayNameForType:loader.type]]];
