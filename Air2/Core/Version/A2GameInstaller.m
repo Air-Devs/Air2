@@ -23,6 +23,7 @@
 #import "A2GameInstaller.h"
 #import "A2VersionIsolation.h"
 #import "A2ModLoaderInstaller.h"
+#import "A2APIModDownloader.h"
 #import "A2Log.h"
 
 /// 官方版本清单地址（Mojang piston-meta）
@@ -511,14 +512,25 @@ static void A2Main(dispatch_block_t block) {
         [A2Logger info:@"GameInstaller"
                message:[NSString stringWithFormat:@"%@ 选定版本 %@", apiName, chosen.version]];
 
-        [self report:A2InstallStageInstallLoader progress:1
-             message:[NSString stringWithFormat:@"%@ %@ 将在首次启动时下载", apiName, chosen.version]];
-
-        // 实际的 jar 下载需要知道文件的下载地址，而 Fabric API 的地址
-        // 要从 Modrinth 或 CurseForge 查。这里记录选择，由上层在
-        // 「资源下载」里补装 —— 或者后续接入 API 模组专用下载器。
-        [self recordAPIModSelection:apiType version:chosen.version];
-        [self endInstallation];
+        // 真的下载并装到版本的 mods 目录
+        [[A2APIModDownloader shared]
+            installAPIType:apiType
+                 mcVersion:self.request.mcVersion
+               versionName:self.request.versionName
+                  gameHome:self.request.gameHome
+          preferredVersion:chosen.version
+                  progress:^(double p, NSString *msg) {
+            [self report:A2InstallStageInstallLoader progress:p message:msg];
+        }
+                completion:^(BOOL success, NSError *apiError) {
+            // 失败不阻断 —— 用户仍可手动补装，游戏本体已经装好了
+            if (!success) {
+                [A2Logger warn:@"GameInstaller"
+                       message:[NSString stringWithFormat:@"%@ 安装失败：%@（不影响游戏本体）",
+                                apiName, apiError.localizedDescription ?: @""]];
+            }
+            [self endInstallation];
+        }];
     }];
 }
 

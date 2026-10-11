@@ -17,6 +17,7 @@
 		0B32EEA9A11A39AA5D315041 /* A2AccountManager.m in Sources */ = {isa = PBXBuildFile; fileRef = FBBBB4EFA2B5334A45EA3C4E /* A2AccountManager.m */; };
 		3352C680504CA3F9AB6CFD26 /* A2MicrosoftAuth.m in Sources */ = {isa = PBXBuildFile; fileRef = BA94035A25A574575C224EC9 /* A2MicrosoftAuth.m */; };
 		B70F2470805980B206B1EAF8 /* A2Wardrobe.m in Sources */ = {isa = PBXBuildFile; fileRef = 1FCEEB9DA67A103C2B6DBA4A /* A2Wardrobe.m */; };
+		EB8AF64AB9D51A26942A884F /* A2APIModDownloader.m in Sources */ = {isa = PBXBuildFile; fileRef = AF6416AF6E60A32784E6C349 /* A2APIModDownloader.m */; };
 		514C73BF78432EFA524E3D87 /* A2ContentSource.m in Sources */ = {isa = PBXBuildFile; fileRef = 1701CD5F8C697E4FB0EA95CC /* A2ContentSource.m */; };
 		0D17D81407F6A22D20B89620 /* A2CurseForgeAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = B9FA6C49037A18A6B1E59FD5 /* A2CurseForgeAPI.m */; };
 		7BC46830363BB7D24F1EB261 /* A2LoaderVersionSource+Forge.m in Sources */ = {isa = PBXBuildFile; fileRef = CAF1C722D6447EBFD3DE5AC9 /* A2LoaderVersionSource+Forge.m */; };
@@ -138,6 +139,7 @@
 		FBBBB4EFA2B5334A45EA3C4E /* A2AccountManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountManager.m"; sourceTree = "<group>"; };
 		BA94035A25A574575C224EC9 /* A2MicrosoftAuth.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MicrosoftAuth.m"; sourceTree = "<group>"; };
 		1FCEEB9DA67A103C2B6DBA4A /* A2Wardrobe.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Wardrobe.m"; sourceTree = "<group>"; };
+		AF6416AF6E60A32784E6C349 /* A2APIModDownloader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2APIModDownloader.m"; sourceTree = "<group>"; };
 		1701CD5F8C697E4FB0EA95CC /* A2ContentSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ContentSource.m"; sourceTree = "<group>"; };
 		B9FA6C49037A18A6B1E59FD5 /* A2CurseForgeAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CurseForgeAPI.m"; sourceTree = "<group>"; };
 		CAF1C722D6447EBFD3DE5AC9 /* A2LoaderVersionSource+Forge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoaderVersionSource+Forge.m"; sourceTree = "<group>"; };
@@ -252,6 +254,7 @@
 		1EB22C948F38C8AEC14F9AB3 /* A2AccountManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountManager.h"; sourceTree = "<group>"; };
 		845233208F5ECAED2A1B1D6B /* A2MicrosoftAuth.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MicrosoftAuth.h"; sourceTree = "<group>"; };
 		BE140C5384D36CE4A510C926 /* A2Wardrobe.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Wardrobe.h"; sourceTree = "<group>"; };
+		C4CDABCCADEE50C7FF0835B2 /* A2APIModDownloader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2APIModDownloader.h"; sourceTree = "<group>"; };
 		7452A96D7665BFCA516E1759 /* A2ContentSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ContentSource.h"; sourceTree = "<group>"; };
 		732674FFF97FD95863EEEAC7 /* A2CurseForgeAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CurseForgeAPI.h"; sourceTree = "<group>"; };
 		5755D893F4092F66C2AF4252 /* A2LoaderVersionSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoaderVersionSource.h"; sourceTree = "<group>"; };
@@ -480,6 +483,7 @@
 		184E0966D040B090B9F76405 /* Addons */ = {
 			isa = PBXGroup;
 			children = (
+				AF6416AF6E60A32784E6C349 /* A2APIModDownloader.m */,
 				1701CD5F8C697E4FB0EA95CC /* A2ContentSource.m */,
 				B9FA6C49037A18A6B1E59FD5 /* A2CurseForgeAPI.m */,
 				CAF1C722D6447EBFD3DE5AC9 /* A2LoaderVersionSource+Forge.m */,
@@ -498,6 +502,7 @@
 				354E0D6D2FD88A0DA1EBAF70 /* A2ResourceScanner.m */,
 				C7F15DE318744485CEE00538 /* A2ZipReader.m */,
 				025FEA920C79EED2B15C509E /* A2ZipWriter.m */,
+				C4CDABCCADEE50C7FF0835B2 /* A2APIModDownloader.h */,
 				7452A96D7665BFCA516E1759 /* A2ContentSource.h */,
 				732674FFF97FD95863EEEAC7 /* A2CurseForgeAPI.h */,
 				5755D893F4092F66C2AF4252 /* A2LoaderVersionSource.h */,
@@ -918,6 +923,7 @@
 				0B32EEA9A11A39AA5D315041 /* A2AccountManager.m in Sources */,
 				3352C680504CA3F9AB6CFD26 /* A2MicrosoftAuth.m in Sources */,
 				B70F2470805980B206B1EAF8 /* A2Wardrobe.m in Sources */,
+				EB8AF64AB9D51A26942A884F /* A2APIModDownloader.m in Sources */,
 				514C73BF78432EFA524E3D87 /* A2ContentSource.m in Sources */,
 				0D17D81407F6A22D20B89620 /* A2CurseForgeAPI.m in Sources */,
 				7BC46830363BB7D24F1EB261 /* A2LoaderVersionSource+Forge.m in Sources */,
