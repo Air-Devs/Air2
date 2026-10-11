@@ -186,6 +186,23 @@
         [_separator.heightAnchor constraintEqualToConstant:1],
     ]];
 
+    // ---- 压缩优先级：决定窄屏时谁先让步 ----
+    //
+    // 不设的话，文字区与右侧控件都抗拒压缩，整行会把父容器撑宽，
+    // 进而在滚动容器里产生【本不该有的水平滚动】（用户需左滑才能看到右侧）。
+    //
+    // 优先级从低到高：文字区 < 右侧控件
+    //   文字先被压缩（titleLabel 已有 truncate，挤一点不影响可读性）
+    //   右侧控件（开关/箭头）保持完整，它们被压就完全不可用了
+    [_titleLabel setContentCompressionResistancePriority:UILayoutPriorityDefaultLow
+                                                 forAxis:UILayoutConstraintAxisHorizontal];
+    [_subtitleLabel setContentCompressionResistancePriority:UILayoutPriorityDefaultLow
+                                                    forAxis:UILayoutConstraintAxisHorizontal];
+    [_titleLabel setContentHuggingPriority:UILayoutPriorityDefaultLow
+                                   forAxis:UILayoutConstraintAxisHorizontal];
+    [_subtitleLabel setContentHuggingPriority:UILayoutPriorityDefaultLow
+                                      forAxis:UILayoutConstraintAxisHorizontal];
+
     [self applyTheme];
 
     [NSNotificationCenter.defaultCenter addObserver:self

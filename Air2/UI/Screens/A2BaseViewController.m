@@ -177,7 +177,13 @@
     _scrollViewInternal = [[UIScrollView alloc] initWithFrame:CGRectZero];
     _scrollViewInternal.translatesAutoresizingMaskIntoConstraints = NO;
     _scrollViewInternal.showsVerticalScrollIndicator = NO;
+    _scrollViewInternal.showsHorizontalScrollIndicator = NO;
     _scrollViewInternal.alwaysBounceVertical = YES;
+    // 二级页面只应垂直滚动。禁用水平方向有两个作用：
+    //   1. 即使某处子视图意外撑宽内容，也不会出现"左滑才能看到右边"
+    //   2. 内容宽度被钳到可视区宽，超出部分由内层视图自己压缩
+    _scrollViewInternal.alwaysBounceHorizontal = NO;
+    _scrollViewInternal.directionalLockEnabled = YES;
     _scrollViewInternal.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     [self.view addSubview:_scrollViewInternal];
 
