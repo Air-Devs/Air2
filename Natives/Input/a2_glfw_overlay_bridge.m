@@ -502,8 +502,22 @@ JNIEXPORT void JNICALL Java_org_lwjgl_glfw_CallbackBridge_nativeSetGrabbing
 //  签名逐字对齐 Java 调用点：pojavInit(jint)→jint、pojavCreateContext(jlong)→jlong、
 //  pojavMakeCurrent/SwapBuffers/PumpEvents(jlong)→void、pojavSetWindowHint(jint,jint)/SwapInterval(jint)→void、
 //  pojavGetCurrentContext()→jlong、pojavTerminate/RewindEvents()→void。
+//
+//  ★为什么必须带 A2_GLFW_ENTRY（显式 default 可见性）★ —— 真机证据驱动，非风格问题：
+//    主可执行文件里，ld64 对「普通全局函数」写的是 Mach-O nlist 的 **N_PEXT**（未导出），
+//    而 Java 侧是 `apiGetFunctionAddress(GLFW, "pojav…")` ⇒ **运行期 dlsym 按名字找**
+//    （GLFW.java:604 的 MacOSXLibraryDL + :613-624 的 Functions），找不到就在
+//    `Functions` 类初始化时抛异常。本单第一版主二进制实测：
+//      `_pojavInit` = SECT|**PEXT**（`nm -gU` 计 0）
+//    同文件里带 JNIEXPORT（= `__attribute__((visibility("default")))`）的 JNI 符号 = SECT|EXT。
+//    2d 参照：真机跑得起来的参考包（Air-5.1.1-b12-jitorder2）主二进制里
+//      `_pojavInit` / `_pojavPumpEvents` / `_pojavCreateContext` / `_pojavSetWindowHint` = **SECT|EXT**。
+//    ⇒ 本组 10 个入口一律显式 default 可见性（与 JNI 组同等待遇），并把「是否 EXT」
+//      写进包内自证断言（§④），使这条不再靠人眼。
 // ---------------------------------------------------------------------------
-jint pojavInit(jint isCalledFromLWJGLX) {
+#define A2_GLFW_ENTRY __attribute__((visibility("default")))
+
+A2_GLFW_ENTRY jint pojavInit(jint isCalledFromLWJGLX) {
     a2_glfw_event_set_sink(a2_overlay_dispatch, NULL);
     int ok = a2_glfw_window_platform_init();
     a2_log_f(@"[A2-GLFW-PEER] pojavInit(参数=%d) ⇒ %d：窗口/事件层就绪"
@@ -512,7 +526,7 @@ jint pojavInit(jint isCalledFromLWJGLX) {
     return ok ? 1 : 0;
 }
 
-void pojavTerminate(void) {
+A2_GLFW_ENTRY void pojavTerminate(void) {
     a2_glfw_event_set_sink(NULL, NULL);
     a2_glfw_window_platform_terminate();
 
@@ -527,7 +541,7 @@ void pojavTerminate(void) {
     a2_log_f(@"[A2-GLFW-PEER] pojavTerminate：窗口/事件层已结束（回调槽已清空）");
 }
 
-jlong pojavGetCurrentContext(void) {
+A2_GLFW_ENTRY jlong pojavGetCurrentContext(void) {
     pthread_mutex_lock(&gLock);
     long ctx = gCurrentContext;
     pthread_mutex_unlock(&gLock);
@@ -537,7 +551,7 @@ jlong pojavGetCurrentContext(void) {
 // glfwCreateWindow → nglfwCreateContext → 这里（GLFW.java:1029-1033）。
 // ★本层只造「中立窗口」并返回句柄★：尺寸/标题由中立层的建窗流程与 UIKit 决定（真实尺寸经
 // 「窗口就绪」事件回到 Java），图形上下文不在这里创建（渲染器职责）。
-jlong pojavCreateContext(jlong share) {
+A2_GLFW_ENTRY jlong pojavCreateContext(jlong share) {
     pthread_mutex_lock(&gLock);
     long handle = gNextHandle++;
     pthread_mutex_unlock(&gLock);
@@ -558,7 +572,7 @@ jlong pojavCreateContext(jlong share) {
 }
 
 // ★渲染器交接点（本层刻意不做图形工作）★：绑定当前上下文属渲染器。
-void pojavMakeCurrent(jlong window) {
+A2_GLFW_ENTRY void pojavMakeCurrent(jlong window) {
     pthread_mutex_lock(&gLock);
     gCurrentContext = (long) window;
     pthread_mutex_unlock(&gLock);
@@ -567,7 +581,7 @@ void pojavMakeCurrent(jlong window) {
 }
 
 // ★渲染器交接点★：呈现属渲染器；每帧都会调 ⇒ 只在首次打一行判据，不刷屏。
-void pojavSwapBuffers(jlong window) {
+A2_GLFW_ENTRY void pojavSwapBuffers(jlong window) {
     pthread_mutex_lock(&gLock);
     gSwapCount++;
     long n = gSwapCount;
@@ -578,13 +592,13 @@ void pojavSwapBuffers(jlong window) {
     }
 }
 
-void pojavSwapInterval(jint interval) {
+A2_GLFW_ENTRY void pojavSwapInterval(jint interval) {
     a2_log_f(@"[A2-GLFW-PEER] pojavSwapInterval interval=%d（帧率/垂直同步属渲染器）", (int) interval);
 }
 
 // GLFW 窗口提示。本层不需要它们来建中立窗口 ⇒ 只记日志（不存一份没人读的表），
 // 上限 32 行防刷屏；渲染器接线时若需要，再按「谁调它」补落地。
-void pojavSetWindowHint(jint hint, jint value) {
+A2_GLFW_ENTRY void pojavSetWindowHint(jint hint, jint value) {
     pthread_mutex_lock(&gLock);
     int idx = gHintLogged;
     if (idx < 32) {
@@ -600,7 +614,7 @@ void pojavSetWindowHint(jint hint, jint value) {
 }
 
 // glfwPollEvents（GLFW.java:1150-1152）→ 中立层事件队列在此刻、本线程排空。
-void pojavPumpEvents(jlong window) {
+A2_GLFW_ENTRY void pojavPumpEvents(jlong window) {
     pthread_mutex_lock(&gLock);
     gPumpCount++;
     long n = gPumpCount;
@@ -615,7 +629,7 @@ void pojavPumpEvents(jlong window) {
 }
 
 // 本层事件语义 = pump 即全部消费（无「回退重放」需求）⇒ 空实现，保留符号满足 ABI。
-void pojavRewindEvents(void) {
+A2_GLFW_ENTRY void pojavRewindEvents(void) {
     static int logged = 0;
     if (logged == 0) {
         logged = 1;
