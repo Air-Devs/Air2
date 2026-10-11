@@ -113,38 +113,6 @@ static const NSInteger A2SettingsMinRAMMB = 256;
 /// 启动时自动登录（校验/续期当前账号凭据）。默认 YES。
 @property (nonatomic, assign) BOOL autoLogin;
 
-#pragma mark - 渲染
-
-/// Vulkan 驱动器标识。默认 "mainline-turnip-sync-V32"。
-@property (nonatomic, copy, nullable) NSString *vulkanDriver;
-
-/// 图形 API 策略。默认「仅首次启动时设置为 OpenGL」。
-@property (nonatomic, copy, nullable) NSString *graphicsApi;
-
-/// 分辨率规则（百分比 / 固定分辨率 / 跟随设备）。默认「百分比」。
-@property (nonatomic, copy, nullable) NSString *resolutionRule;
-
-/// 渲染分辨率百分比，10~200。默认 100。
-@property (nonatomic, assign) NSInteger renderScale;
-
-/// 游戏页面全屏化（忽略安全区）。默认 NO。
-@property (nonatomic, assign) BOOL fullscreenGame;
-
-/// 持续性能模式。默认 NO。
-@property (nonatomic, assign) BOOL sustainedPerformance;
-
-/// 强制使用系统 Vulkan 驱动（而非 Turnip）。默认 NO。
-@property (nonatomic, assign) BOOL useSystemVulkan;
-
-/// Zink 垂直同步。默认 NO。
-@property (nonatomic, assign) BOOL zinkVSync;
-
-/// 使用独立渲染层。默认 YES。
-@property (nonatomic, assign) BOOL useSurfaceView;
-
-/// 着色器日志输出。默认 NO。
-@property (nonatomic, assign) BOOL shaderLog;
-
 @end
 
 NS_ASSUME_NONNULL_END

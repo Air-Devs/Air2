@@ -34,7 +34,6 @@
 #import "A2ResourceSearchViewController.h"
 #import "A2ContentSource.h"
 #import "A2CurseForgeAPI.h"
-#import "A2CurseForgeKeyPrompt.h"
 #import "A2DownloadFavorites.h"
 #import "A2DownloadManifest.h"
 #import "A2FilterChip.h"
@@ -390,20 +389,8 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     A2ContentPlatform previous = self.platform;
     if (picked == previous) return;
 
-    // 切 CurseForge 但没 Key：弹框要 Key，取消则回退原平台，不留不可用态。
-    if (picked == A2ContentPlatformCurseForge && ![A2CurseForgeAPI hasAPIKey]) {
-        __weak typeof(self) weakSelf = self;
-        [A2CurseForgeKeyPrompt promptFrom:self completion:^(BOOL saved) {
-            __strong typeof(weakSelf) self = weakSelf;
-            if (!self) return;
-            if (saved) {
-                [self applyPlatform:A2ContentPlatformCurseForge remember:YES];
-            } else {
-                [self selectPlatformControlForPlatform:previous];
-            }
-        }];
-        return;
-    }
+    // Key 是内置的，两个平台都开箱可用，不需要任何拦截。
+    (void)previous;
     [self applyPlatform:picked remember:YES];
 }
 

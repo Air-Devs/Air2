@@ -26,7 +26,6 @@
 
 #import "A2DownloadListViewController.h"
 #import "A2CurseForgeAPI.h"
-#import "A2CurseForgeKeyPrompt.h"
 #import "A2DownloadManifest.h"
 #import "A2GlassCard.h"
 #import "A2Log.h"
@@ -375,18 +374,7 @@ static NSString *const kCellID = @"A2DownloadCell";
 - (void)platformChanged {
     A2ContentPlatform picked = (_platformSwitch.selectedSegmentIndex == 0)
         ? A2ContentPlatformModrinth : A2ContentPlatformCurseForge;
-    // 切 CurseForge 但无 Key：弹框要 Key，取消则回退 Modrinth，不留不可用态。
-    if (picked == A2ContentPlatformCurseForge && ![A2CurseForgeAPI hasAPIKey]) {
-        [A2CurseForgeKeyPrompt promptFrom:self completion:^(BOOL saved) {
-            if (saved) {
-                [self applyPlatform:A2ContentPlatformCurseForge];
-            } else {
-                self.platformSwitch.selectedSegmentIndex = 0;
-                [self applyPlatform:A2ContentPlatformModrinth];
-            }
-        }];
-        return;
-    }
+    // Key 是内置的，两个平台都开箱可用，不需要拦截。
     [self applyPlatform:picked];
 }
 

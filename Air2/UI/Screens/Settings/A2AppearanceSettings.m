@@ -37,7 +37,6 @@
 #import "A2BackgroundSettingsViewController.h"
 #import "A2ColorThemeDialog.h"
 #import "A2CurseForgeAPI.h"
-#import "A2CurseForgeKeyPageViewController.h"
 #import "A2MirrorResolver.h"
 #import "A2Toast.h"
 
@@ -159,43 +158,8 @@
 
     BOOL hasKey = [A2CurseForgeAPI hasAPIKey];
 
-    A2SettingsRow *cfRow = [[A2SettingsRow alloc] init];
-    cfRow.symbolName = @"flame.fill";
-    cfRow.title = @"CurseForge API Key";
-    cfRow.subtitle = hasKey ? @"已配置" : @"未配置，无法使用 CurseForge 资源";
-    cfRow.valueText = hasKey ? @"已设置" : @"未设置";
-    cfRow.accessory = A2SettingsRowAccessoryDisclosure;
-    // 弱引用供下方清除行刷新状态用。
-    __weak A2SettingsRow *weakCfRow = cfRow;
-    cfRow.onTap = ^{
-        // 独立输入页承接填写/验证/清除；下载页拦截仍走共享弹窗。
-        A2CurseForgeKeyPageViewController *vc = [[A2CurseForgeKeyPageViewController alloc] init];
-        [host.navigationController pushViewController:vc animated:YES];
-    };
-    [section addRow:cfRow];
-
-    A2SettingsRow *testRow = [[A2SettingsRow alloc] init];
-    testRow.symbolName = @"checkmark.seal";
-    testRow.title = @"验证 Key";
-    testRow.subtitle = @"向 CurseForge 发一次请求确认有效";
-    testRow.accessory = A2SettingsRowAccessoryDisclosure;
-    testRow.onTap = ^{
-        if (![A2CurseForgeAPI hasAPIKey]) {
-            [A2Toast show:@"请先填写 API Key" inView:host.view];
-            return;
-        }
-        [A2Toast show:@"正在验证…" inView:host.view];
-        [[A2CurseForgeAPI shared] validateKeyWithCompletion:^(BOOL valid, NSError *error) {
-            dispatch_async(dispatch_get_main_queue(), ^{
-                if (valid) {
-                    [A2Toast show:@"Key 有效" inView:host.view];
-                } else {
-                    [A2Toast show:(error.localizedDescription ?: @"Key 无效") inView:host.view];
-                }
-            });
-        }];
-    };
-    [section addRow:testRow];
+        // Key 是内置的（参考 ZL2 的构建期注入），
+    // 用户无需配置，因此这里不再有「填写 / 验证 / 清除 Key」的入口。
 
     // ---- 镜像加速 ----
     A2SettingsRow *mirrorRow = [[A2SettingsRow alloc] init];
@@ -242,18 +206,6 @@
     };
     [section addRow:priorityRow];
 
-    A2SettingsRow *clearRow = [[A2SettingsRow alloc] init];
-    clearRow.symbolName = @"trash";
-    clearRow.title = @"清除 Key";
-    clearRow.destructive = YES;
-    clearRow.accessory = A2SettingsRowAccessoryNone;
-    clearRow.onTap = ^{
-        [A2CurseForgeAPI setAPIKey:nil];
-        weakCfRow.subtitle = @"未配置，无法使用 CurseForge 资源";
-        weakCfRow.valueText = @"未设置";
-        [A2Toast show:@"已清除" inView:host.view];
-    };
-    [section addRow:clearRow];
 
     return section;
 }

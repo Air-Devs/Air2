@@ -52,9 +52,9 @@
     self.pageTitle = @"设置";
 
     // 其余等对应功能实现后再加。见 A2SettingsSections.h 的说明。
-    // 分类顺序参考 ZL2：渲染在前（最常用），其后是游戏与外观
+    // 只放有真实实现的分类。
+    // 渲染设置暂不加 —— 渲染层还没实现，加了就是空壳。
     NSArray<A2NavCategory *> *cats = @[
-        [A2NavCategory title:@"渲染" symbol:@"video.fill"],
         [A2NavCategory title:@"游戏" symbol:@"gamecontroller.fill"],
         [A2NavCategory title:@"外观" symbol:@"paintpalette.fill"],
         [A2NavCategory title:@"诊断" symbol:@"stethoscope"],
@@ -112,16 +112,11 @@
 
     // 索引对应 setupNav 里的分类顺序
     if (index == 0) {
-        // 渲染：内容多，构建器返回多个分组
-        for (A2SettingsSection *sec in [A2RendererSettings buildSectionsWithHost:self]) {
-            [_detailStack addArrangedSubview:sec];
-        }
-    } else if (index == 1) {
         [_detailStack addArrangedSubview:[A2GameSettings buildWithHost:self]];
-    } else if (index == 2) {
+    } else if (index == 1) {
         [_detailStack addArrangedSubview:[A2AppearanceSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2AppearanceSettings buildSourceSectionWithHost:self]];
-    } else if (index == 3) {
+    } else if (index == 2) {
         [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildWithHost:self]];
     }
 

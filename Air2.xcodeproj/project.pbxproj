@@ -75,7 +75,6 @@
 		912C3DEC9D63AE689DA1F2DE /* A2AccountRowView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */; };
 		AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */; };
 		FB68423E2789A6F0A08E6E54 /* A2LoginViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */; };
-		E9CDC809C5E3AD84272E1B26 /* A2CurseForgeKeyPrompt.m in Sources */ = {isa = PBXBuildFile; fileRef = 9C6B3720B9A3DD4535D686F1 /* A2CurseForgeKeyPrompt.m */; };
 		417DB6BA2038F2AFE425AB2B /* A2DownloadListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */; };
 		F2AE6F53868183175D2DEFAD /* A2DownloadTasksViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = FCF786571196D883A85C10CF /* A2DownloadTasksViewController.m */; };
 		AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */; };
@@ -92,10 +91,8 @@
 		8DF920441794A778BEFD9DD0 /* A2AppearanceSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */; };
 		28E0E9F04A06993B01FFC1D8 /* A2BackgroundSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */; };
 		231BA8D647ED52A70C2A644B /* A2ColorThemeDialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */; };
-		EEF4A6D7B7ED12797FCBBD77 /* A2CurseForgeKeyPageViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = D26B0D2BE92BE11D88C18FE5 /* A2CurseForgeKeyPageViewController.m */; };
 		1E7FB60017717A3BE32B9A3C /* A2DiagnosticsSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */; };
 		C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB44E450592838BA6F7B061 /* A2GameSettings.m */; };
-		5410B17BED6F52D8CF28A79E /* A2RendererSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 40638D8EF5A463CF055C788F /* A2RendererSettings.m */; };
 		1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */; };
 		F3A3A971AE05998E6D648440 /* A2ModListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 86984D61C69EA55C028368AC /* A2ModListViewController.m */; };
 		5C3C3472B73A413C081E753F /* A2VersionListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */; };
@@ -184,7 +181,6 @@
 		2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountRowView.m"; sourceTree = "<group>"; };
 		CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountViewController.m"; sourceTree = "<group>"; };
 		1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoginViewController.m"; sourceTree = "<group>"; };
-		9C6B3720B9A3DD4535D686F1 /* A2CurseForgeKeyPrompt.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CurseForgeKeyPrompt.m"; sourceTree = "<group>"; };
 		904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadListViewController.m"; sourceTree = "<group>"; };
 		FCF786571196D883A85C10CF /* A2DownloadTasksViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadTasksViewController.m"; sourceTree = "<group>"; };
 		58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadViewController.m"; sourceTree = "<group>"; };
@@ -201,10 +197,8 @@
 		CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AppearanceSettings.m"; sourceTree = "<group>"; };
 		976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BackgroundSettingsViewController.m"; sourceTree = "<group>"; };
 		5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorThemeDialog.m"; sourceTree = "<group>"; };
-		D26B0D2BE92BE11D88C18FE5 /* A2CurseForgeKeyPageViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CurseForgeKeyPageViewController.m"; sourceTree = "<group>"; };
 		D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DiagnosticsSettings.m"; sourceTree = "<group>"; };
 		0FB44E450592838BA6F7B061 /* A2GameSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameSettings.m"; sourceTree = "<group>"; };
-		40638D8EF5A463CF055C788F /* A2RendererSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererSettings.m"; sourceTree = "<group>"; };
 		9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsViewController.m"; sourceTree = "<group>"; };
 		86984D61C69EA55C028368AC /* A2ModListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModListViewController.m"; sourceTree = "<group>"; };
 		ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionListViewController.m"; sourceTree = "<group>"; };
@@ -288,7 +282,6 @@
 		0D773FDDDB48AA7436E8FAA5 /* A2AccountRowView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountRowView.h"; sourceTree = "<group>"; };
 		6D2B976BBD0701B19B6533DD /* A2AccountViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountViewController.h"; sourceTree = "<group>"; };
 		52F4C13395826CC0FD71F073 /* A2LoginViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoginViewController.h"; sourceTree = "<group>"; };
-		9AB5CD42A663FD555714F649 /* A2CurseForgeKeyPrompt.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CurseForgeKeyPrompt.h"; sourceTree = "<group>"; };
 		03B2D97D5F4CDEEC6A69B6D0 /* A2DownloadListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadListViewController.h"; sourceTree = "<group>"; };
 		AC97C75576BC6EEE17640A0E /* A2DownloadTasksViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTasksViewController.h"; sourceTree = "<group>"; };
 		A7D45435EB1780C938976BA4 /* A2DownloadViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadViewController.h"; sourceTree = "<group>"; };
@@ -304,7 +297,6 @@
 		39421C371A5FDC787D490323 /* A2LauncherViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LauncherViewController.h"; sourceTree = "<group>"; };
 		8A8A69E0C0117AD2228117A1 /* A2BackgroundSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundSettingsViewController.h"; sourceTree = "<group>"; };
 		137E26C858B461DBC6F3AB93 /* A2ColorThemeDialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorThemeDialog.h"; sourceTree = "<group>"; };
-		4FC57D1EADA4E18987F23F52 /* A2CurseForgeKeyPageViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CurseForgeKeyPageViewController.h"; sourceTree = "<group>"; };
 		9CE1BE0BB775D12731066330 /* A2DiagnosticsSettings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DiagnosticsSettings.h"; sourceTree = "<group>"; };
 		A309D45ADA810213043EDE96 /* A2SettingsSections.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsSections.h"; sourceTree = "<group>"; };
 		F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsViewController.h"; sourceTree = "<group>"; };
@@ -661,7 +653,6 @@
 		55AB3FA6D6516DF096EA9950 /* Download */ = {
 			isa = PBXGroup;
 			children = (
-				9C6B3720B9A3DD4535D686F1 /* A2CurseForgeKeyPrompt.m */,
 				904BCDEEF2760697F575CA29 /* A2DownloadListViewController.m */,
 				FCF786571196D883A85C10CF /* A2DownloadTasksViewController.m */,
 				58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */,
@@ -673,7 +664,6 @@
 				39176526660F1CAEC3199C8F /* A2ResourceDetailViewController.m */,
 				98024C5565241D478B54F4D6 /* A2ResourceSearchViewController.m */,
 				C769776AF3D8703861D81699 /* A2SearchByIdViewController.m */,
-				9AB5CD42A663FD555714F649 /* A2CurseForgeKeyPrompt.h */,
 				03B2D97D5F4CDEEC6A69B6D0 /* A2DownloadListViewController.h */,
 				AC97C75576BC6EEE17640A0E /* A2DownloadTasksViewController.h */,
 				A7D45435EB1780C938976BA4 /* A2DownloadViewController.h */,
@@ -716,14 +706,11 @@
 				CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */,
 				976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */,
 				5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */,
-				D26B0D2BE92BE11D88C18FE5 /* A2CurseForgeKeyPageViewController.m */,
 				D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */,
 				0FB44E450592838BA6F7B061 /* A2GameSettings.m */,
-				40638D8EF5A463CF055C788F /* A2RendererSettings.m */,
 				9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */,
 				8A8A69E0C0117AD2228117A1 /* A2BackgroundSettingsViewController.h */,
 				137E26C858B461DBC6F3AB93 /* A2ColorThemeDialog.h */,
-				4FC57D1EADA4E18987F23F52 /* A2CurseForgeKeyPageViewController.h */,
 				9CE1BE0BB775D12731066330 /* A2DiagnosticsSettings.h */,
 				A309D45ADA810213043EDE96 /* A2SettingsSections.h */,
 				F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */,
@@ -884,7 +871,6 @@
 				912C3DEC9D63AE689DA1F2DE /* A2AccountRowView.m in Sources */,
 				AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */,
 				FB68423E2789A6F0A08E6E54 /* A2LoginViewController.m in Sources */,
-				E9CDC809C5E3AD84272E1B26 /* A2CurseForgeKeyPrompt.m in Sources */,
 				417DB6BA2038F2AFE425AB2B /* A2DownloadListViewController.m in Sources */,
 				F2AE6F53868183175D2DEFAD /* A2DownloadTasksViewController.m in Sources */,
 				AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */,
@@ -901,10 +887,8 @@
 				8DF920441794A778BEFD9DD0 /* A2AppearanceSettings.m in Sources */,
 				28E0E9F04A06993B01FFC1D8 /* A2BackgroundSettingsViewController.m in Sources */,
 				231BA8D647ED52A70C2A644B /* A2ColorThemeDialog.m in Sources */,
-				EEF4A6D7B7ED12797FCBBD77 /* A2CurseForgeKeyPageViewController.m in Sources */,
 				1E7FB60017717A3BE32B9A3C /* A2DiagnosticsSettings.m in Sources */,
 				C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */,
-				5410B17BED6F52D8CF28A79E /* A2RendererSettings.m in Sources */,
 				1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */,
 				F3A3A971AE05998E6D648440 /* A2ModListViewController.m in Sources */,
 				5C3C3472B73A413C081E753F /* A2VersionListViewController.m in Sources */,
