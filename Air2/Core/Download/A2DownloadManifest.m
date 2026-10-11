@@ -24,6 +24,7 @@
 //
 
 #import "A2DownloadManifest.h"
+#import "A2Log.h"
 #import "A2VersionIsolation.h"
 
 @implementation A2DownloadManifest {
@@ -62,9 +63,16 @@
     id json = [NSJSONSerialization JSONObjectWithData:data options:NSJSONReadingMutableContainers error:nil];
     if ([json isKindOfClass:NSArray.class]) return [(NSArray *)json mutableCopy];
     // 坏文件不崩：改名备份后从空开始，避免每次读写都失败。
+    // 已安装标记会丢失（列表不再显示角标），原因要记下来。
     NSString *broken = [[self manifestPath] stringByAppendingString:@".broken"];
     [NSFileManager.defaultManager removeItemAtPath:broken error:nil];
-    [NSFileManager.defaultManager moveItemAtPath:[self manifestPath] toPath:broken error:nil];
+    NSError *quarantineErr = nil;
+    if ([NSFileManager.defaultManager moveItemAtPath:[self manifestPath] toPath:broken error:&quarantineErr]) {
+        [A2Log log:@"download-manifest: 清单损坏，已隔离到 %@，已安装标记丢失", broken.lastPathComponent];
+    } else {
+        [A2Log log:@"download-manifest: 清单损坏且隔离失败（%@）",
+                    quarantineErr.localizedDescription ?: @"未知错误"];
+    }
     return [NSMutableArray array];
 }
 
