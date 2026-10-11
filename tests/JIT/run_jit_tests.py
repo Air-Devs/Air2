@@ -35,6 +35,8 @@ SOURCES = [
     os.path.join(PLAYER, "A2JITStateMachine.m"),
     os.path.join(PLAYER, "A2JITCoordinator.m"),
     os.path.join(PLAYER, "A2LaunchChain.m"),
+    # --- [JIT↔VM] 启动链失败分类 / 判据行 / 用户文案（纯逻辑，可单测）---
+    os.path.join(PLAYER, "A2LaunchFailure.m"),
     os.path.join(PLAYER, "A2JITAutomaticPairingProvider.m"),
     os.path.join(PLAYER, "A2JITImportedPairingProvider.m"),
     os.path.join(PLAYER, "A2JITExternalToolProvider.m"),

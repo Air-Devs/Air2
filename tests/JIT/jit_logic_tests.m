@@ -23,6 +23,8 @@
 #import "A2PairingFile.h"
 #import "A2JITCoordinator.h"
 #import "A2LaunchChain.h"
+// [JIT↔VM] 启动链失败分类 / 判据行 / 用户文案（Player 纯逻辑）
+#import "A2LaunchFailure.h"
 // [JIT-IMPL-2] 本单新增：判据缝 / 分流表 / 四语文案 / 配对文件存储 / 两条真实现 Provider
 #import "A2JITReadinessProbe.h"
 #import "A2JITExternalToolLauncher.h"
@@ -2540,6 +2542,108 @@ static void testIntegrationTLSPSK(void) {
     }
 }
 
+#pragma mark - ⑱ [JIT↔VM] 启动链串联（①脚本 → ②JIT → ③建 VM）
+
+/// 本单核心：**顺序 / 短路 / 单一真相源 / 接线点** 四件。
+/// 造「JIT 不可用」与「建 VM 失败」两种失败，断言 ③ 不该跑时【真的没跑】。
+static void testLaunchChainJitVmWiring(void) {
+    printf("\n=== ⑱ [JIT↔VM] 串联：①脚本→②JIT→③建VM（顺序 / 短路 / 单一真相源）===\n");
+
+    // ① 顺序：三步按 ①脚本 → ②JIT → ③VM 跑；成功后 stage = Done
+    NSMutableArray<NSString *> *order = [NSMutableArray array];
+    A2LaunchChain *c1 = [A2LaunchChain chainWithDeliverScript:^BOOL(NSError **e) {
+                [order addObject:@"script"]; return YES; }
+                                                      verify:^BOOL(NSString **r) {
+                [order addObject:@"verify"]; return YES; }
+                                                   createJVM:^BOOL(NSError **e) {
+                [order addObject:@"vm"]; return YES; }];
+    ok([c1 runWithError:NULL], @"三步全成功 ⇒ run 返回 YES");
+    ok([order isEqualToArray:@[@"script", @"verify", @"vm"]], @"★顺序严格 ①脚本 → ②JIT → ③VM★");
+    eqInt((NSInteger)c1.stage, (NSInteger)A2LaunchChainStageDone, @"成功后 stage = Done");
+
+    // ② ★JIT 不可用 ⇒ 拦路：③ 建 VM 完全未运行★（本单最核心的不变量）
+    __block BOOL ranVerify2 = NO, ranVM2 = NO;
+    A2LaunchChain *c2 = [A2LaunchChain chainWithDeliverScript:^BOOL(NSError **e) { return NO; }  // ① 故意失败
+                                                      verify:^BOOL(NSString **r) {
+                ranVerify2 = YES; if (r) *r = @"brk #0x69 无人服务"; return NO; }
+                                                   createJVM:^BOOL(NSError **e) {
+                ranVM2 = YES; return YES; }];
+    NSError *err2 = nil;
+    ok(![c2 runWithError:&err2], @"② 探测失败 ⇒ run 返回 NO");
+    ok(ranVerify2, @"① 失败【不拦路】：仍进入 ②");
+    ok(!ranVM2, @"★② 失败 ⇒ ③ 建 VM 完全未运行（绝不带病建 VM）★");
+    eqInt((NSInteger)c2.stage, (NSInteger)A2LaunchChainStageVerify, @"停在 ②（stage = 唯一真相源）");
+    ok(c2.failureReason.length > 0, @"② 失败有可读 failureReason");
+    ok(err2 != nil, @"② 失败回填 NSError");
+
+    // ③ ③ 建 VM 失败 ⇒ stage = CreateVM（失败定位读同一处）
+    A2LaunchChain *c3 = [A2LaunchChain chainWithDeliverScript:^BOOL(NSError **e) { return YES; }
+                                                      verify:^BOOL(NSString **r) { return YES; }
+                                                   createJVM:^BOOL(NSError **e) {
+                if (e) *e = [NSError errorWithDomain:@"t" code:-4
+                                            userInfo:@{NSLocalizedDescriptionKey: @"JNI_CreateJavaVM 失败"}];
+                return NO; }];
+    ok(![c3 runWithError:NULL], @"③ 失败 ⇒ run 返回 NO");
+    eqInt((NSInteger)c3.stage, (NSInteger)A2LaunchChainStageCreateVM, @"停在 ③（stage = CreateVM）");
+
+    // ④ 失败分类：与「停在哪一步」一一对应（★单一实现，不在各调用点各写一套★）
+    eqInt((NSInteger)[A2LaunchFailure classForChainStage:A2LaunchChainStageVerify],
+          (NSInteger)A2LaunchFailureClassJITBlocked, @"② 停 ⇒ 类 = JITBlocked");
+    eqInt((NSInteger)[A2LaunchFailure classForChainStage:A2LaunchChainStageCreateVM],
+          (NSInteger)A2LaunchFailureClassVMFailed, @"③ 停 ⇒ 类 = VMFailed");
+    eqInt((NSInteger)[A2LaunchFailure classForChainStage:A2LaunchChainStageDone],
+          (NSInteger)A2LaunchFailureClassNone, @"Done ⇒ 类 = None");
+
+    // ⑤ ② 的分流：7 档 verdict 各有专属【原因/动作】文案（不退化成一个万能句）
+    NSMutableSet<NSString *> *reasons = [NSMutableSet set];
+    NSMutableSet<NSString *> *actions = [NSMutableSet set];
+    for (NSInteger v = A2JITReadinessVerdictUnknown; v <= A2JITReadinessVerdictNotExecutable; v++) {
+        NSString *line = [A2LaunchFailure diagnosticForJITVerdict:(A2JITReadinessVerdict)v evidence:@"ev"];
+        NSString *msg  = [A2LaunchFailure userMessageForJITVerdict:(A2JITReadinessVerdict)v];
+        ok([line containsString:@"[A2-CHAIN] ② JIT 不可用"],
+           [NSString stringWithFormat:@"verdict %ld 有判据行", (long)v]);
+        NSString *reason = [A2JITStrings stringForKey:[A2JITVerdictGuidance reasonKeyForVerdict:(A2JITReadinessVerdict)v]];
+        ok([msg containsString:reason], [NSString stringWithFormat:@"verdict %ld 文案含该档专属原因", (long)v]);
+        [reasons addObject:reason];
+        [actions addObject:[A2JITStrings stringForKey:[A2JITVerdictGuidance actionKeyForVerdict:(A2JITReadinessVerdict)v]]];
+    }
+    eqInt((NSInteger)reasons.count, 7, @"★7 档原因文案互不相同★");
+    eqInt((NSInteger)actions.count, 7, @"★7 档动作文案互不相同（告知怎么开）★");
+
+    // ⑥ ③ 的返回码释义（照 a2_launch.h 契约；每档非空，-4 点名 JNI_CreateJavaVM）
+    for (NSNumber *rc in @[@(-1), @(-2), @(-3), @(-4), @(-5), @(-8), @(-9)]) {
+        ok([A2LaunchFailure userMessageForVMFailureCode:rc.integerValue].length > 0,
+           [NSString stringWithFormat:@"rc=%@ 有可读文案", rc]);
+    }
+    ok([[A2LaunchFailure userMessageForVMFailureCode:-4] containsString:@"JNI_CreateJavaVM"],
+       @"rc=-4 点名 JNI_CreateJavaVM");
+
+    // ⑦ ★单一真相源★ 源码级回归：启动路径不得用局部变量记 JIT 状态
+    NSString *sessionSrc = [NSString stringWithContentsOfFile:RepoPath(@"Air2/Player/A2LaunchSession.m")
+                                                     encoding:NSUTF8StringEncoding error:NULL];
+    ok(sessionSrc.length > 0, @"读得到 A2LaunchSession.m");
+    ok(![sessionSrc containsString:@"jitExtEarlyOk"], @"★无历史误判形态（局部 BOOL 记 JIT 状态）★");
+    ok([sessionSrc containsString:@"A2LaunchChain"], @"启动路径经 A2LaunchChain 编排");
+    ok([sessionSrc containsString:@"runWithError:"], @"真跑链（不是只构造）");
+    ok([sessionSrc containsString:@"chain.stage"], @"失败定位读 chain.stage（单一真相源）");
+    ok([sessionSrc containsString:@"[A2-CHAIN] 开关=关"], @"开关【关】有判据行");
+    ok([sessionSrc containsString:@"[A2-CHAIN] 开关=开"], @"开关【开】有判据行");
+    ok(![sessionSrc containsString:@"a2_jit_send_script_safe"], @"★Player 不直接调 Natives 下发原语（单向分层）★");
+    ok([sessionSrc containsString:@"A2JITScriptDelivery"], @"① 经 Bridge 的 A2JITScriptDelivery");
+    ok([sessionSrc containsString:@"A2JITEnvironmentProbe"], @"② 经 Bridge 的 A2JITEnvironmentProbe");
+
+    NSString *deliverSrc = [NSString stringWithContentsOfFile:RepoPath(@"Air2/Bridge/A2JITScriptDelivery.m")
+                                                     encoding:NSUTF8StringEncoding error:NULL];
+    ok(deliverSrc.length > 0, @"读得到 A2JITScriptDelivery.m");
+    ok([deliverSrc containsString:@"a2_jit_send_script_safe"], @"★① 真调 Natives 下发原语★");
+    ok([deliverSrc containsString:@"AmethystJIT69"], @"① 下发的是随包自包含脚本");
+
+    // ⑧ 承接检查：[JIT-ORDER] 的「先 JIT 后启 JVM」钩子仍在（未回退、未被本单顶掉）
+    NSString *coordSrc = [NSString stringWithContentsOfFile:RepoPath(@"Air2/Player/A2JITCoordinator.m")
+                                                   encoding:NSUTF8StringEncoding error:NULL];
+    ok([coordSrc containsString:@"prepareJITThenRunLaunchChain"], @"「先 JIT 后启 JVM」钩子仍在");
+}
+
 #pragma mark - main
 
 int main(int argc, const char *argv[]) {
@@ -2564,6 +2668,7 @@ int main(int argc, const char *argv[]) {
         testRPPairingCore();
         testRPPairingHandshakeBody();
         testIntegrationTLSPSK();
+        testLaunchChainJitVmWiring();
         testWiringInvariants();
 
         printf("\n----------------------------------------\n");
