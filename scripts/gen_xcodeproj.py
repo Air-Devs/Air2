@@ -370,7 +370,11 @@ def build():
         s = {}
         if is_target:
             s.update({
-                "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
+                # AppIcon 尚未设计 —— 当前 Assets 里没有图标集。
+                # 不设 ASSETCATALOG_COMPILER_APPICON_NAME，actool 就不会
+                # 强制要求图标，编译能过；装到设备上显示系统默认图标。
+                # 设计好图标后放进 Assets/Images.xcassets/AppIcon.appiconset，
+                # 并在这里加回这一行。
                 "CODE_SIGN_STYLE": "Automatic",
                 "CURRENT_PROJECT_VERSION": BUILD_VERSION,
                 "GENERATE_INFOPLIST_FILE": "NO",

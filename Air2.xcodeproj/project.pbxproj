@@ -1060,7 +1060,6 @@
 		2381CE2D4AF8729870E1984E /* Build configuration list for PBXNativeTarget "Air2" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon";
 				CODE_SIGN_STYLE = "Automatic";
 				CURRENT_PROJECT_VERSION = "1";
 				GENERATE_INFOPLIST_FILE = "NO";
@@ -1091,7 +1090,6 @@
 		AB7D16C820D649D1E1709822 /* Build configuration list for PBXNativeTarget "Air2" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = "AppIcon";
 				CODE_SIGN_STYLE = "Automatic";
 				CURRENT_PROJECT_VERSION = "1";
 				GENERATE_INFOPLIST_FILE = "NO";
