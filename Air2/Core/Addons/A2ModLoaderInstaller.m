@@ -126,21 +126,29 @@ static void A2Main(dispatch_block_t b) {
             break;
 
         case A2ModLoaderTypeOptiFine:
-            // OptiFine 的自动安装【必须能跑 JVM】，不是纯下载能完成的。
+            // OptiFine 的自动安装需要跑 JVM，不是纯下载能完成的。
             //
-            // 核对 FoldCraftLauncher（ZL2 的上游）的 OptiFineInstallTask.java：
-            //   OptiFine 的 installer 里带一个 Patcher.class，
-            //   安装时要执行：
+            // 【为什么需要 JVM】
+            //   OptiFine 的 installer 里带一个 Patcher.class，安装时要执行：
             //       java -cp installer.jar optifine.Patcher \
             //            {原版jar} {installer.jar} {输出jar}
             //   它把原版 jar 与 OptiFine 合并成新的库文件。
-            //   不做这步，OptiFine 装不上。
+            //   不做这步装不上。
+            //   （参考 FoldCraftLauncher 的 OptiFineInstallTask.java，
+            //     它还有 8→17→11→21 的多版本 JRE 回退链）
             //
-            // FCL 还有多版本 JRE 回退链（8 → 17 → 11 → 21），
-            // 说明这个 Patcher 对 Java 版本敏感。
+            // 【iOS 上怎么做 —— 这步很关键】
+            //   iOS 沙箱【禁止 fork/exec】，无法 spawn 子 JVM。
+            //   Amethyst（Air1）的方案是「进程内 headless JVM」：
+            //     1. 命令序列化为 commands.json
+            //     2. 调 launchHeadlessJVM 起一个 headless JVM
+            //     3. JVM 里跑 Runner 类执行命令，轮询 status.json 报进度
+            //     4. 完成后【必须重启 App】才能启动游戏
+            //        （进程内 JVM 只能创建一次）
+            //   同一套机制也用于 Forge 的 processors 执行。
             //
-            // 所以我们当前确实做不到 —— 等启动核心就绪（能起 JVM）后，
-            // 照 FCL 的流程实现即可，逻辑不复杂。
+            // 所以等启动核心就绪后，OptiFine 与 Forge processors
+            // 可以共用这个 headless JVM 方案。
             [self failWithMessage:
                 @"OptiFine 需要运行其自带的 Patcher 程序才能安装，"
                 @"当前启动核心尚未就绪，请手动安装"];
