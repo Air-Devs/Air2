@@ -48,6 +48,8 @@
 // [JIT-AUTOPAIR-2] 真握手本体：pair-verify 消息机 + RSD 发现/连接
 #import "a2_rppairing_verify.h"
 #import "a2_rppairing_rsd.h"
+// [A2-INTEGRATION] TLS-PSK 隧道门面（可替换后端 / 默认关 / 不上云）—— 真实现直接编译并链接
+#import "a2_tlspsk_tunnel.h"
 
 static int gPass = 0;
 static int gFail = 0;
@@ -2422,6 +2424,122 @@ static void testRPPairingHandshakeBody(void) {
     ok([plistSrc containsString:A2RPRSDServicePairableHost], @"plist 登记了可配对宿主服务类型");
 }
 
+#pragma mark - [A2-INTEGRATION] TLS-PSK 隧道（可替换门面 + 默认关 + 不谎报 + 不上云）
+
+/// 假后端：只为验证「门面把调用转给后端」这一件事（真后端 = mbedTLS，见 Natives/Support/a2_tlspsk_mbedtls.m）。
+@interface A2TestTLSPskBackend : NSObject <A2TLSPskTunnelBackend>
+@property (nonatomic, copy) NSString *name;
+@end
+
+@implementation A2TestTLSPskBackend
+- (NSString *)backendName { return self.name ?: @"测试后端"; }
+- (BOOL)isAvailableWithReason:(NSString **)reason { if (reason) { *reason = @""; } return YES; }
+- (BOOL)connectToHost:(NSString *)host port:(uint16_t)port psk:(NSData *)psk identity:(NSString *)identity
+              timeout:(NSTimeInterval)timeout reason:(NSString **)reason {
+    if (reason) { *reason = @"测试后端已连"; }
+    return YES;
+}
+- (BOOL)sendFrame:(NSData *)frame timeout:(NSTimeInterval)timeout reason:(NSString **)reason { return YES; }
+- (NSData *)receiveFrameWithTimeout:(NSTimeInterval)timeout reason:(NSString **)reason {
+    return [@"pong" dataUsingEncoding:NSUTF8StringEncoding];
+}
+- (void)close {}
+@end
+
+static void testIntegrationTLSPSK(void) {
+    // ① 门面默认关（★用户拍板「默认关」★）
+    A2TLSPskTunnel *t = [A2TLSPskTunnel sharedTunnel];
+    ok(t != nil, @"TLS-PSK 门面可取得");
+    ok(t.isEnabled == NO, @"★TLS-PSK 隧道默认关（enabled 默认 NO）★");
+
+    // ② 未注册后端 ⇒ 如实报缺（★不谎报★）
+    NSString *why = nil;
+    ok([A2TLSPskTunnel isAvailableWithReason:&why] == NO, @"★无后端时可用性如实回 NO★");
+    ok(why.length > 0 && [why containsString:@"未注册"], @"理由点名「未注册后端」");
+    eqStr([A2TLSPskTunnel backendName], @"未注册", @"无后端时后端名如实为「未注册」");
+    ok([[A2TLSPskTunnel statusLine] containsString:@"默认关"], @"状态行如实标注「默认关」");
+
+    // ③ 开关未开 ⇒ 一律拒绝（且点名）
+    NSString *r1 = nil;
+    ok([t connectToHost:@"127.0.0.1" port:1234 psk:[NSData dataWithBytes:"x" length:1] identity:@""
+                timeout:1.0 reason:&r1] == NO, @"★开关未开 ⇒ connect 一律拒绝★");
+    ok(r1.length > 0 && [r1 containsString:@"默认关"], @"拒绝理由点名「默认关」");
+
+    // ④ ★可替换★：换后端只走 registerBackend:（这里用假后端验证结构；真后端是 mbedTLS）
+    A2TestTLSPskBackend *stub = [[A2TestTLSPskBackend alloc] init];
+    stub.name = @"A2Test-mbedTLS-shaped";
+    [A2TLSPskTunnel registerBackend:stub];
+    eqStr([A2TLSPskTunnel backendName], @"A2Test-mbedTLS-shaped", @"★后端可替换（registerBackend: 生效）★");
+    ok([A2TLSPskTunnel isAvailableWithReason:NULL] == YES, @"注册后端后可用性为 YES");
+
+    // ⑤ ★不上云★：默认主机准入策略
+    ok(A2TLSPskDefaultHostPolicy(@"127.0.0.1") == YES, @"策略放行 127.0.0.1");
+    ok(A2TLSPskDefaultHostPolicy(@"localhost") == YES, @"策略放行 localhost");
+    ok(A2TLSPskDefaultHostPolicy(@"192.168.3.172") == YES, @"策略放行 192.168.x");
+    ok(A2TLSPskDefaultHostPolicy(@"10.1.2.3") == YES, @"策略放行 10.x");
+    ok(A2TLSPskDefaultHostPolicy(@"172.20.0.1") == YES, @"策略放行 172.16-31.x");
+    ok(A2TLSPskDefaultHostPolicy(@"172.40.0.1") == NO, @"策略拒绝 172.40.x（非私有段）");
+    ok(A2TLSPskDefaultHostPolicy(@"iPhone-de.local") == YES, @"策略放行 .local（Bonjour）");
+    ok(A2TLSPskDefaultHostPolicy(@"fe80::1") == YES, @"策略放行 fe80::（链路本地）");
+    ok(A2TLSPskDefaultHostPolicy(@"github.com") == NO, @"★策略拒绝公网域名（不上云）★");
+    ok(A2TLSPskDefaultHostPolicy(@"8.8.8.8") == NO, @"★策略拒绝公网 IP（不上云）★");
+
+    // ⑥ 开关默认关的再确认：即便后端就绪，未 enabled 仍拒绝
+    NSString *r2 = nil;
+    ok([t connectToHost:@"10.0.0.5" port:443 psk:[NSData dataWithBytes:"x" length:1] identity:@""
+                timeout:1.0 reason:&r2] == NO, @"未 enabled 时即便后端就绪也拒绝");
+
+    // ⑦ enabled 后：不上云拦截 + PSK 空拦截 + 正常转发
+    t.enabled = YES;
+    NSString *r3 = nil;
+    ok([t connectToHost:@"github.com" port:443 psk:[NSData dataWithBytes:"x" length:1] identity:@""
+                timeout:1.0 reason:&r3] == NO, @"★enabled 后公网地址仍被拒（不上云）★");
+    ok(r3.length > 0 && [r3 containsString:@"不上云"], @"拒绝理由点名「不上云」");
+
+    NSString *r4 = nil;
+    ok([t connectToHost:@"127.0.0.1" port:1 psk:[NSData data] identity:@""
+                timeout:1.0 reason:&r4] == NO, @"PSK 为空 ⇒ 拒绝");
+    ok(r4.length > 0 && [r4 containsString:@"PSK"], @"空 PSK 理由点名 PSK");
+
+    NSString *r5 = nil;
+    ok([t connectToHost:@"127.0.0.1" port:1 psk:[NSData dataWithBytes:"x" length:1] identity:@""
+                timeout:1.0 reason:&r5] == YES, @"本地地址 + 有 PSK ⇒ 转发给后端并成功");
+    eqInt((NSInteger)t.state, (NSInteger)A2TLSPskTunnelStateReady, @"成功后状态 = Ready");
+    NSData *pong = [t receiveFrameWithTimeout:1.0 reason:NULL];
+    ok(pong != nil && [[[NSString alloc] initWithData:pong encoding:NSUTF8StringEncoding] isEqualToString:@"pong"],
+       @"收帧被转发到后端");
+    [t close];
+    eqInt((NSInteger)t.state, (NSInteger)A2TLSPskTunnelStateClosed, @"close 后状态 = Closed");
+    t.enabled = NO;   // ★还原默认关★（不给后续/他人留「已开」假象）
+
+    // ⑧ 源码级自证：生产接线 + 第三方链接 + Java 最后一跳
+    NSString *bridgeSrc = [NSString stringWithContentsOfFile:RepoPath(@"Air2/Bridge/A2JITAutoPairingEngineBridge.m")
+                                                    encoding:NSUTF8StringEncoding error:NULL];
+    ok([bridgeSrc containsString:@"A2TLSPskMbedTLSEnsureRegistered"], @"★Bridge 真注册 mbedTLS 后端（生产调用点）★");
+    ok([bridgeSrc containsString:@"A2TLSPskTunnel statusLine"], @"Bridge 记 TLS-PSK 隧道如实状态行");
+
+    NSString *genSrc = [NSString stringWithContentsOfFile:RepoPath(@"scripts/gen_xcodeproj.py")
+                                                 encoding:NSUTF8StringEncoding error:NULL];
+    ok([genSrc containsString:@"MBEDTLS_LDFLAGS"], @"★gen 脚本登记 mbedTLS 链接参数★");
+    ok([genSrc containsString:@"-lmbedtls"] && [genSrc containsString:@"-lmbedcrypto"], @"链接 mbedtls/mbedcrypto 静态库");
+
+    NSString *javaSrc = [NSString stringWithContentsOfFile:RepoPath(@"JavaApp/src/ownglfw/org/lwjgl/glfw/GLFW.java")
+                                                  encoding:NSUTF8StringEncoding error:NULL];
+    ok([javaSrc containsString:@"a2OwnGlfwDispatch"], @"★Java 最后一跳 a2OwnGlfwDispatch 已落★");
+    ok([javaSrc containsString:@"int i0, int i1, int i2, int i3"],
+       @"签名与 native 侧契约一致（long,int,int,int,int,int,double,double）");
+
+    // ⑨ 随仓第三方件自证（缺一即失败；★这是「真编进来了」的静态证据★）
+    NSString *mbDir = RepoPath(@"Libraries/ThirdParty/mbedtls");
+    for (NSString *f in @[@"lib/libmbedtls.a", @"lib/libmbedx509.a", @"lib/libmbedcrypto.a",
+                          @"include/mbedtls/ssl.h", @"LICENSE", @"NOTICE.md"]) {
+        NSString *full = [mbDir stringByAppendingPathComponent:f];
+        NSDictionary *at = [[NSFileManager defaultManager] attributesOfItemAtPath:full error:NULL];
+        ok(at != nil && [at[NSFileSize] longLongValue] > 0,
+           [NSString stringWithFormat:@"随仓第三方件存在且非空：%@", f]);
+    }
+}
+
 #pragma mark - main
 
 int main(int argc, const char *argv[]) {
@@ -2445,6 +2563,7 @@ int main(int argc, const char *argv[]) {
         testDDIProbeAndGuidance();
         testRPPairingCore();
         testRPPairingHandshakeBody();
+        testIntegrationTLSPSK();
         testWiringInvariants();
 
         printf("\n----------------------------------------\n");

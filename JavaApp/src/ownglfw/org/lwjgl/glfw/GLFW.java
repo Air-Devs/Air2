@@ -400,6 +400,102 @@ public class GLFW {
     private static native void nWaitEventsTimeout(double timeout);
     private static native void nPostEmptyEvent();
 
+    // ================== native → Java 事件落地点（★阶段 2 最后一跳★） ==================
+    // ★契约★：native 侧 Natives/OwnGlfw/a2_own_glfw_bridge.m 以
+    //   GetStaticMethodID(..., "a2OwnGlfwDispatch", "(JIIIIIDD)V") 绑定，再 CallStaticVoidMethod。
+    //   ★签名一字不可改★ —— 改了 native 侧会如实报「落地点签名不匹配」并停用事件通道。
+    // 事件语义 = Natives/Input/a2_glfw_window.h 的 A2GlfwEventType（数值一一对应，下同）。
+    // 归属：[A2-INTEGRATION]（自研 native 层事件通道的 Java 落地点；此前"通到边界就停"）。
+    private static final int A2_EV_CURSOR_POS       = 1; // d0=x, d1=y（逻辑点）
+    private static final int A2_EV_MOUSE_BUTTON     = 2; // i0=button, i1=action, i2=mods
+    private static final int A2_EV_KEY              = 3; // i0=key, i1=scancode, i2=action, i3=mods
+    private static final int A2_EV_FRAMEBUFFER_SIZE = 4; // i0=w(px), i1=h(px)
+    private static final int A2_EV_WINDOW_SIZE      = 5; // i0=w(pt), i1=h(pt)
+    private static final int A2_EV_WINDOW_FOCUS     = 6; // i0=1 获得 / 0 失去
+    private static final int A2_EV_CONTENT_SCALE    = 7; // d0=xscale, d1=yscale
+    private static final int A2_EV_CURSOR_ENTER     = 8; // i0=1 进入 / 0 离开
+
+    private static void a2OwnGlfwDispatch(long window, int type,
+                                          int i0, int i1, int i2, int i3,
+                                          double d0, double d1) {
+        Window w = state(window);
+        if (w == null) {
+            return;
+        }
+        switch (type) {
+            case A2_EV_CURSOR_POS: {
+                w.cursorX = d0;
+                w.cursorY = d1;
+                GLFWCursorPosCallbackI cb = (GLFWCursorPosCallbackI) w.cbCursorPos[0];
+                if (cb != null) {
+                    cb.invoke(window, d0, d1);
+                }
+                break;
+            }
+            case A2_EV_MOUSE_BUTTON: {
+                w.buttons.put(Integer.valueOf(i0), Integer.valueOf(i1));
+                GLFWMouseButtonCallbackI cb = (GLFWMouseButtonCallbackI) w.cbMouseButton[0];
+                if (cb != null) {
+                    cb.invoke(window, i0, i1, i2);
+                }
+                break;
+            }
+            case A2_EV_KEY: {
+                w.keys.put(Integer.valueOf(i0), Integer.valueOf(i2));
+                GLFWKeyCallbackI cb = (GLFWKeyCallbackI) w.cbKey[0];
+                if (cb != null) {
+                    cb.invoke(window, i0, i1, i2, i3);
+                }
+                break;
+            }
+            case A2_EV_FRAMEBUFFER_SIZE: {
+                w.fbWidth = i0;
+                w.fbHeight = i1;
+                GLFWFramebufferSizeCallbackI cb = (GLFWFramebufferSizeCallbackI) w.cbFramebufferSize[0];
+                if (cb != null) {
+                    cb.invoke(window, i0, i1);
+                }
+                break;
+            }
+            case A2_EV_WINDOW_SIZE: {
+                w.width = i0;
+                w.height = i1;
+                GLFWWindowSizeCallbackI cb = (GLFWWindowSizeCallbackI) w.cbWindowSize[0];
+                if (cb != null) {
+                    cb.invoke(window, i0, i1);
+                }
+                break;
+            }
+            case A2_EV_WINDOW_FOCUS: {
+                w.focused = (i0 != 0);
+                GLFWWindowFocusCallbackI cb = (GLFWWindowFocusCallbackI) w.cbWindowFocus[0];
+                if (cb != null) {
+                    cb.invoke(window, i0 != 0);
+                }
+                break;
+            }
+            case A2_EV_CONTENT_SCALE: {
+                w.scaleX = (float) d0;
+                w.scaleY = (float) d1;
+                GLFWWindowContentScaleCallbackI cb = (GLFWWindowContentScaleCallbackI) w.cbWindowContentScale[0];
+                if (cb != null) {
+                    cb.invoke(window, (float) d0, (float) d1);
+                }
+                break;
+            }
+            case A2_EV_CURSOR_ENTER: {
+                GLFWCursorEnterCallbackI cb = (GLFWCursorEnterCallbackI) w.cbCursorEnter[0];
+                if (cb != null) {
+                    cb.invoke(window, i0 != 0);
+                }
+                break;
+            }
+            default:
+                // 未知事件类型：★不猜★、不抛异常（native 侧契约将来可能扩充）。
+                break;
+        }
+    }
+
     /** 每个窗口的 Java 侧状态（native 侧后续经回调桥回写；阶段 1 由本类维护）。 */
     static final class Window {
         final long handle;

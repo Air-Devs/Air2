@@ -60,6 +60,8 @@ SOURCES = [
     os.path.join(ROOT, "Natives", "Support", "a2_rppairing_ed25519.m"),
     os.path.join(ROOT, "Natives", "Support", "a2_rppairing_verify.m"),
     os.path.join(ROOT, "Natives", "Support", "a2_rppairing_rsd.m"),
+    # --- [A2-INTEGRATION] TLS-PSK 隧道门面（可替换后端 / 默认关 / 不上云；纯逻辑，无第三方）---
+    os.path.join(ROOT, "Natives", "Support", "a2_tlspsk_tunnel.m"),
     os.path.join(HERE, "jit_logic_tests.m"),
 ]
 
