@@ -23,6 +23,7 @@
 
 #import "A2ModLoaderInstaller.h"
 #import "A2DownloadEngine.h"
+#import "A2Log.h"
 #import "A2VersionIsolation.h"
 #import <CommonCrypto/CommonDigest.h>
 #import "A2ZipReader.h"
@@ -354,10 +355,15 @@ static void A2Main(dispatch_block_t b) {
         if (![[NSFileManager defaultManager] linkItemAtPath:baseJar
                                                      toPath:newJar
                                                       error:&linkErr]) {
-            // 硬链接失败就老实地复制
-            [[NSFileManager defaultManager] copyItemAtPath:baseJar
-                                                     toPath:newJar
-                                                      error:nil];
+            // 硬链接失败就老实地复制；复制也失败就整体失败，不带病继续。
+            NSError *copyErr = nil;
+            if (![[NSFileManager defaultManager] copyItemAtPath:baseJar
+                                                         toPath:newJar
+                                                          error:&copyErr]) {
+                [self failWithMessage:[NSString stringWithFormat:
+                    @"复制客户端失败（%@）", copyErr.localizedDescription ?: @"未知错误"]];
+                return;
+            }
         }
     }
 
@@ -586,6 +592,8 @@ static void A2Main(dispatch_block_t b) {
 }
 
 - (void)failWithError:(NSError *)error {
+    // 唯一失败出口：所有安装失败都从这里出去，原因记一份日志。
+    [A2Log log:@"loader-installer: 安装失败（%@）", error.localizedDescription ?: @"未知错误"];
     A2Main(^{
         if (self.completionBlock) self.completionBlock(NO, error);
     });
