@@ -25,16 +25,19 @@
 //  ★Bridge 是唯一与 Natives 相邻的层★，所以「真发 Bonjour / 连 RSD / pair-verify / 建 TLS-PSK」
 //  只能发生在 Bridge → Natives；Player 侧只认协议 A2JITAutoPairingEngine。
 //
-//  ★[JIT-AUTOPAIR-1] 本类当前是【骨架】★：真实现（RSD host + pair-verify + TLS-PSK 隧道）
-//  属下一阶段（docs/JIT-PROVISIONING.md §4.2，估算 10–15 人日，需自研、不得抄 SideInstaller）。
-//  骨架★必须如实报「未接入」★（isEngineAvailable=NO / readPreconditions 全 Unknown /
-//  generate 返回 EngineUnavailable）—— 绝不假成功，也绝不把「没探测到」报成「已满足」。
+//  ★[JIT-AUTOPAIR-2] 本类的状态（比骨架进了一步，但仍如实，不假成功）★：
+//    1. readPreconditions —— 已从「全 Unknown 骨架」改为【真读】：
+//         · Developer Mode：sysctl(security.mac.amfi.developer_mode_status)，取不到 ⇒ Unknown；
+//         · get-task-allow ：SecTaskCopyValueForEntitlement(self)，读不到 ⇒ Unknown；
+//         · 本地网络权限   ：iOS 无公开查询 API ⇒ **如实 Unknown**（不猜）；
+//         · DDI            ：交由 Provider 注入的 A2JITDDIProbe 真三态覆盖（此处 Unknown）。
+//    2. isEngineAvailable / generate —— 真跑 Natives/Support 的 `a2_rppairing`【握手完成度自检】，
+//       ★首个受阻步骤就如实点名★（本阶段 = Ed25519 签名原语未落地）。仍未接入 ⇒ 返回 NO。
+//    3. RPPairing 的【线上编解码 + X25519/HKDF 内核】已落地（Natives/Support/a2_rppairing*），
+//       由自检真实驱动；★pair-setup(SRP-3072)/pair-verify 消息机 + TLS-PSK 隧道 仍未落地★
+//       —— 缺口与判据见 docs/JIT-PROVISIONING.md §4.2-a。
 //
-//  下一阶段的落点（本单只定调用点与错误码，不实现）：
-//    1. Natives/Support 新增 RPPairing 最小实现（BSD socket + Bonjour(NWBrowser) + pair-verify + PSK）；
-//    2. 本类 readPreconditions 改为真读（Developer Mode / 本地网络 / get-task-allow / DDI）；
-//    3. 本类 generatePairingFileWithinBudget:reason:blocker: 逐字转发到 Natives 实现，
-//       并把写出的配对材料交给注入的 A2JITPairingFileStore 落盘（与 ②导入 同一约定位置）。
+//  ★绝不假成功，也绝不把「没探测到」报成「已满足」★。
 //
 //  合规：零第三方；★不引入 / 不搬运 SideInstaller 代码★（自定义许可：非商业 + 禁止再分发）。
 //

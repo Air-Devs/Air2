@@ -43,6 +43,8 @@
 #import "A2JITDDIGuidance.h"
 // ★跨层镜像的运行期断言用★：直接读 Natives 的判据枚举（-I Natives/Support，不链接其实现）。
 #import "A2JITEnvironment.h"
+// [JIT-AUTOPAIR-2] RPPairing 握手内核（★这些是【真实现】源文件，直接编译并链接运行★）
+#import "a2_rppairing.h"
 
 static int gPass = 0;
 static int gFail = 0;
@@ -1974,6 +1976,189 @@ static void testDDIProbeAndGuidance(void) {
           A2JITAutoPairingPreconditionStateSatisfied, @"★有探测 ⇒ 以探测为准（覆盖注入值）★");
 }
 
+#pragma mark - [JIT-AUTOPAIR-2] RPPairing 握手内核（★真实现 + RFC 向量自证★）
+
+/// 十六进制串 → 字节（测试夹具）。
+static NSData *A2RPHexData(NSString *hex) {
+    NSMutableData *d = [NSMutableData data];
+    for (NSUInteger i = 0; i + 1 < hex.length; i += 2) {
+        unsigned v = 0;
+        sscanf([[hex substringWithRange:NSMakeRange(i, 2)] UTF8String], "%2x", &v);
+        uint8_t b = (uint8_t)v;
+        [d appendBytes:&b length:1];
+    }
+    return d;
+}
+
+/// 字节 → 十六进制小写（测试夹具）。
+static NSString *A2RPHexString(const uint8_t *bytes, size_t n) {
+    NSMutableString *s = [NSMutableString string];
+    for (size_t i = 0; i < n; i++) {
+        [s appendFormat:@"%02x", bytes[i]];
+    }
+    return s;
+}
+
+/// [JIT-AUTOPAIR-2]：X25519 / HKDF-SHA512 / 摘要 / UUIDv3 / 帧 / 信封 / 配对文件 / 完成度自检。
+/// ★这些跑的是真实现（Natives/Support/a2_rppairing*.m 直接编译链接），并对 RFC 向量逐位核对★。
+static void testRPPairingCore(void) {
+    printf("\n-- [JIT-AUTOPAIR-2] RPPairing 握手内核 --\n");
+
+    // ---- X25519（RFC 7748 §5.2 向量 1 + §6.1 基点向量）----
+    uint8_t priv[32], pub[32], out[32];
+    [A2RPHexData(@"a546e36bf0527c9d3b16154b82465edd62144c0ac1fc5a18506a2244ba449ac4") getBytes:priv length:32];
+    [A2RPHexData(@"e6db6867583030db3594c1a424b15f7c726624ec26b3353b10a903a6d0ab1c4c") getBytes:pub length:32];
+    ok(A2RPX25519(out, priv, pub), @"X25519 标量乘调用成功");
+    eqStr(A2RPHexString(out, 32),
+          @"c3da55379de9c6908e94ea4df28d084f32eccf03491c71f754b4075577a28552",
+          @"★X25519 与 RFC 7748 §5.2 向量 1 逐位相同★");
+    uint8_t k9[32] = { 9 }, o9[32];
+    ok(A2RPX25519(o9, k9, k9), @"X25519(9,9) 调用成功");
+    eqStr(A2RPHexString(o9, 32),
+          @"422c8e7a6227d7bca1350b3e2bb7279f7897b87bb6854b783c60e80311ae3079",
+          @"★X25519(9,9) 与 RFC 7748 §6.1 一致★");
+    uint8_t pubDerived[32];
+    ok(A2RPX25519PublicKey(pubDerived, priv), @"X25519 公钥派生成功");
+    ok(memcmp(pubDerived, out, 32) != 0, @"公钥派生（对基点）与普通标量乘结果不同（不是恒等）");
+    ok(!A2RPX25519(NULL, priv, pub), @"X25519 空指针 ⇒ 安全返回 NO（不崩）");
+
+    // ---- HKDF-SHA512（与独立参考实现逐位核对）----
+    uint8_t ikm[22]; memset(ikm, 0x0b, 22);
+    uint8_t salt[13]; [A2RPHexData(@"000102030405060708090a0b0c") getBytes:salt length:13];
+    uint8_t info[10]; [A2RPHexData(@"f0f1f2f3f4f5f6f7f8f9") getBytes:info length:10];
+    uint8_t okm[42];
+    ok(A2RPHKDF_SHA512(ikm, 22, salt, 13, info, 10, okm, 42), @"HKDF-SHA512 调用成功");
+    eqStr(A2RPHexString(okm, 42),
+          @"832390086cda71fb47625bb5ceb168e4c8e26a1a16ed34d9fc7fe92c1481579338da362cb8d9f925d7cb",
+          @"★HKDF-SHA512 与独立参考逐位相同★");
+    uint8_t tiny[8];
+    ok(A2RPHKDF_SHA512(ikm, 22, NULL, 0, NULL, 0, tiny, 8), @"HKDF 省略盐/信息（按 RFC 用全零盐）可用");
+    ok(!A2RPHKDF_SHA512(ikm, 22, salt, 13, info, 10, okm, 255 * 64 + 1),
+       @"HKDF 超出 L 上限 ⇒ 返回 NO（不越界）");
+
+    // ---- 摘要 ----
+    uint8_t sha[64];
+    ok(A2RPSHA512((const uint8_t *)"abc", 3, sha), @"SHA-512 调用成功");
+    eqStr([A2RPHexString(sha, 64) substringToIndex:16], @"ddaf35a193617aba", @"SHA-512('abc') 前缀正确");
+    uint8_t md5[16];
+    ok(A2RPMD5((const uint8_t *)"abc", 3, md5), @"MD5 调用成功");
+    eqStr(A2RPHexString(md5, 16), @"900150983cd24fb0d6963f7d28e17f72", @"MD5('abc') 正确");
+
+    // ---- UUIDv3（RFC 4122 §4.3；identifier 的派生方式）----
+    eqStr(A2RPPairingIdentifierForName(@"www.example.com"),
+          @"5df41881-3aed-3515-88a7-2f4a814cf09e",
+          @"★uuid_v3(NAMESPACE_DNS,'www.example.com') 与参考一致★");
+    eqStr(A2RPPairingIdentifierForName(@"air2-rppairing"),
+          @"a4ea0e44-3241-3f60-ba6c-17f089012e01",
+          @"uuid_v3(NAMESPACE_DNS,'air2-rppairing') 与参考一致");
+    ok(A2RPPairingIdentifierForName(@"") == nil, @"空名字 ⇒ 不产标识符（如实返回 nil）");
+
+    // ---- 线上帧（magic + 2B 大端长度 + 载荷）----
+    NSData *payload = [@"hello" dataUsingEncoding:NSUTF8StringEncoding];
+    NSData *frame = A2RPFrameEncode(payload);
+    eqInt((NSInteger)frame.length, 9 + 2 + 5, @"帧长度 = magic(9)+长度(2)+载荷(5)");
+    ok(memcmp(frame.bytes, "RPPairing", 9) == 0, @"★帧 magic = ASCII 'RPPairing'★");
+    const uint8_t *fb = (const uint8_t *)frame.bytes;
+    ok(fb[9] == 0 && fb[10] == 5, @"帧长度字段为大端 16 位");
+    NSUInteger consumed = 0;
+    NSData *decoded = nil;
+    NSString *err = nil;
+    ok(A2RPFramePop(frame, &consumed, &decoded, &err), @"FramePop 能切出一帧");
+    eqInt((NSInteger)consumed, 16, @"FramePop 消费字节数正确");
+    ok([decoded isEqualToData:payload], @"FramePop 载荷与原文一致（往返）");
+    NSData *partial = [frame subdataWithRange:NSMakeRange(0, 12)];
+    err = nil;
+    ok(!A2RPFramePop(partial, &consumed, NULL, &err) && err.length > 0,
+       @"不完整帧 ⇒ NO 且给出可读原因（不是静默失败）");
+    uint8_t bad[11] = { 0 };
+    memcpy(bad, "XXXXXxxxx", 9);
+    err = nil;
+    ok(!A2RPFramePop([NSData dataWithBytes:bad length:11], &consumed, NULL, &err) && err.length > 0,
+       @"magic 不匹配 ⇒ NO 且给出原因");
+    NSUInteger lenOut = 0;
+    ok(A2RPFrameReadLength(frame, &lenOut) && lenOut == 5, @"FrameReadLength 读出 5");
+    NSData *shortBuf = [frame subdataWithRange:NSMakeRange(0, 8)];
+    ok(A2RPFrameReadLength(shortBuf, &lenOut) == NO, @"不足 11 字节 ⇒ FrameReadLength 返回 NO");
+    ok(A2RPFrameEncode([NSMutableData dataWithLength:65536]) == nil, @"载荷超 65535 ⇒ 组帧返回 nil（不截断）");
+    ok(A2RPFrameEncode(nil).length == 11, @"nil 载荷 ⇒ 空帧（11 字节）");
+
+    // ---- 消息信封 ----
+    NSDictionary *env = A2RPEnvelopePlain(@{ @"Hello": @"x" }, @"host", 7);
+    eqStr(env[@"originatedBy"], @"host", @"信封 originatedBy 正确");
+    eqInt([env[@"sequenceNumber"] integerValue], 7, @"信封 sequenceNumber 正确");
+    ok([env[@"message"][@"plain"][@"_0"][@"Hello"] isEqualToString:@"x"], @"明文信封载荷嵌套正确（message.plain._0）");
+    NSDictionary *envEnc = A2RPEnvelopeStreamEncrypted(@"AQID", @"device", 8);
+    eqStr(envEnc[@"message"][@"streamEncrypted"][@"_0"], @"AQID", @"密文信封走 streamEncrypted._0（base64）");
+    eqStr(envEnc[@"originatedBy"], @"device", @"密文信封 originatedBy 正确");
+    NSString *frameErr = nil;
+    ok(A2RPFrameEncodeEnvelope(env, &frameErr) != nil, @"信封可组帧");
+    ok(A2RPFrameEncodeEnvelope(@{ @"bad": [NSDate date] }, &frameErr) == nil && frameErr.length > 0,
+       @"非 JSON 信封 ⇒ 组帧失败并给原因");
+
+    // ---- 配对文件（RpPairingFile）----
+    NSData *pk = [NSData dataWithBytes:priv length:32];
+    NSData *sk = [NSData dataWithBytes:pub length:32];
+    NSString *ident = A2RPPairingIdentifierForName(@"Air2 (self)");
+    NSData *pfData = A2RPPairingFileData(ident, pk, sk);
+    ok(pfData.length > 0, @"配对文件可组装");
+    NSDictionary *back = [NSPropertyListSerialization propertyListWithData:pfData options:0 format:NULL error:NULL];
+    ok([back[@"identifier"] isEqualToString:ident], @"配对文件 identifier 往返一致");
+    ok([back[@"public_key"] isEqualToData:pk] && [back[@"private_key"] isEqualToData:sk],
+       @"配对文件 public_key/private_key 往返一致");
+    ok(A2RPPairingFileData(@"", pk, sk) == nil, @"缺 identifier ⇒ 不产出文件（不假成功）");
+    ok(A2RPPairingFileData(ident, [NSData data], sk) == nil, @"空公钥 ⇒ 不产出文件（不假成功）");
+
+    // ---- ★与既有设施的交接★：把 ① 产出的字节喂给 A2PairingFile / A2JITPairingFileStore ----
+    NSError *pfErr = nil;
+    A2PairingFile *parsed = [A2PairingFile pairingFileWithData:pfData error:&pfErr];
+    ok(parsed != nil && parsed.isValid, @"★产出的字节通过 A2PairingFile 校验（=真·合法配对文件）★");
+    eqInt(parsed.format, A2PairingFileFormatRemotePairing, @"被识别为 RemotePairing 格式");
+    eqStr(parsed.deviceIdentifier, ident, @"deviceIdentifier 取自 identifier");
+
+    NSString *tmpDir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+                        [NSString stringWithFormat:@"a2rp_%d", (int)getpid()]];
+    [[NSFileManager defaultManager] removeItemAtPath:tmpDir error:NULL];
+    A2JITPairingFileStore *store = [[A2JITPairingFileStore alloc] initWithDirectory:tmpDir];
+    NSError *impErr = nil;
+    NSString *written = [store importData:pfData sourceName:@"a2rppairing-self" error:&impErr];
+    ok(written.length > 0 && impErr == nil, @"★产出交给 A2JITPairingFileStore 落盘成功（与 ②导入 同一约定位置）★");
+    ok(store.hasUsablePairingFile, @"落盘后可被真探测到（hasUsablePairingFile）");
+    [[NSFileManager defaultManager] removeItemAtPath:tmpDir error:NULL];
+
+    // ---- 完成度自检（★真跑原语，如实点名受阻步骤★）----
+    A2RPPairingPreflight *pf = [A2RPPairingPreflight run];
+    ok(pf.randomOK, @"自检：CSPRNG 可用");
+    ok(pf.keyAgreementOK, @"自检：X25519 双向协商一致（运行期真跑，非查缓存）");
+    ok(!pf.signingOK, @"★自检：Ed25519 如实报【未落地】★");
+    ok(!pf.streamCipherOK, @"★自检：ChaCha20-Poly1305 如实报【未落地】★");
+    eqInt(pf.firstBlockedStep, A2RPPairingBlockedStepSigningKey, @"★首个受阻步骤 = SigningKey(Ed25519)★");
+    ok([pf.summary containsString:@"Ed25519"], @"自检摘要点名校验");
+    ok([pf.summary containsString:@"未落地"], @"★自检摘要不谎报（写「未落地」）★");
+    eqStr([A2RPPairingPreflight displayNameForBlockedStep:A2RPPairingBlockedStepPairSetup],
+          @"PairSetup(SRP-3072)", @"受阻步骤诊断名稳定");
+    ok(!A2RPEd25519Available(), @"Ed25519 可用性如实回 NO");
+    ok(!A2RPChaCha20Poly1305Available(), @"ChaCha20-Poly1305 可用性如实回 NO");
+    ok(A2RPHandshakeCryptoUnavailableReason().length > 0, @"未落地原因可读（不空）");
+
+    // ---- [JIT-AUTOPAIR-2] Bridge 真接线（源码级不变量）----
+    NSString *bridgeEngine = [NSString stringWithContentsOfFile:RepoPath(@"Air2/Bridge/A2JITAutoPairingEngineBridge.m")
+                                                       encoding:NSUTF8StringEncoding
+                                                          error:NULL];
+    ok(bridgeEngine.length > 0, @"读得到自动配对引擎 Bridge");
+    ok([bridgeEngine containsString:@"#import \"a2_rppairing.h\""], @"★Bridge 真接进了 Natives 的握手内核★");
+    ok([bridgeEngine containsString:@"[A2RPPairingPreflight run]"], @"★Bridge 真跑握手完成度自检（有调用点）★");
+    ok([bridgeEngine containsString:@"A2RPHandshakeCryptoUnavailableReason"], @"Bridge 把「未落地原因」透出给上层");
+    ok([bridgeEngine containsString:@"sysctlbyname"], @"★Developer Mode 真读（sysctl）★");
+    ok([bridgeEngine containsString:@"security.mac.amfi.developer_mode_status"], @"Developer Mode 探测键明确");
+    ok([bridgeEngine containsString:@"SecTaskCreateFromSelf"], @"★get-task-allow 真读（SecTask）★");
+    ok([bridgeEngine containsString:@"SecTaskCopyValueForEntitlement"], @"entitlement 读取点明确");
+    ok([bridgeEngine containsString:@"unknownPreconditions"], @"★仍以「全 Unknown」为底（没探测到 ≠ 已满足）★");
+    ok([bridgeEngine containsString:@"return NO;"], @"★isEngineAvailable/generate 仍如实回 NO（不假成功）★");
+    ok(![bridgeEngine containsString:@"return YES;"], @"★Bridge 里没有任何「生成成功」的假出口★");
+    ok([bridgeEngine containsString:@"A2JITAutoPairingBlockerEngineUnavailable"], @"失败分类 = EngineUnavailable（未接入语义）");
+    ok(![bridgeEngine containsString:@"#import \"A2JITEnvironment.h\""], @"Bridge 不 import 判据头（分层：判据另有 probe）");
+}
+
 #pragma mark - main
 
 int main(int argc, const char *argv[]) {
@@ -1995,6 +2180,7 @@ int main(int argc, const char *argv[]) {
         testAutoPairingGuidance();
         testDDILogicAndStore();
         testDDIProbeAndGuidance();
+        testRPPairingCore();
         testWiringInvariants();
 
         printf("\n----------------------------------------\n");

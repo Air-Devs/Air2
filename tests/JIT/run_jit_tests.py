@@ -52,6 +52,9 @@ SOURCES = [
     os.path.join(PLAYER, "A2JITDDIStore.m"),
     os.path.join(PLAYER, "A2JITDDIProbe.m"),
     os.path.join(PLAYER, "A2JITDDIGuidance.m"),
+    # --- [JIT-AUTOPAIR-2] RPPairing 握手内核（Natives/Support：★真实现，含系统 corecrypto 的 X25519★）---
+    os.path.join(ROOT, "Natives", "Support", "a2_rppairing_crypto.m"),
+    os.path.join(ROOT, "Natives", "Support", "a2_rppairing.m"),
     os.path.join(HERE, "jit_logic_tests.m"),
 ]
 
@@ -94,7 +97,8 @@ def main():
     for inc in EXTRA_INCLUDES:
         includes += ["-I", inc]
     cmd = [clang, "-fobjc-arc", "-fblocks", "-Wall", "-Wno-unused-parameter"] + \
-          includes + ["-framework", "Foundation", "-o", binary] + SOURCES
+          includes + ["-framework", "Foundation", "-framework", "Security",
+                      "-o", binary] + SOURCES
     print("compile: clang -fobjc-arc -I Air2/Player ... -o jit_logic_tests")
     ci = subprocess.run(cmd, capture_output=True, text=True)
     if ci.stderr.strip():

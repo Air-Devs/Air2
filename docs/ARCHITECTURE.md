@@ -258,10 +258,12 @@ ADR 见 `docs/DECISIONS.md` ADR-007 / ADR-008 / ADR-009。
 | `Air2/Player/A2JITAutoPairing.[hm]` | Player | 自动配对类型（前置条件 4 项 / 步骤 / 阻塞分类）+ `A2JITAutoPairingPreconditions`（三态值对象）+ `A2JITAutoPairingEngine` 注入缝 |
 | `Air2/Player/A2JITAutoPairingGuidance.[hm]` | Player | 自动配对分流表：blocker → 现有 `A2JITFailureReason` / 本地化 key / 诊断名 / 日志行 |
 | `Air2/Player/A2JITAutomaticPairingProvider.[hm]` | Player | ① 自动配对 Provider 真实现（能力 / 前置 / 新鲜度 / ★有界★生成调用点 / 真调判据复验） |
-| `Air2/Bridge/A2JITAutoPairingEngineBridge.[hm]` | **Bridge** | RPPairing 引擎接线点骨架（本阶段如实报「未接入」；真实现见 `docs/JIT-PROVISIONING.md` §4.2） |
+| `Air2/Bridge/A2JITAutoPairingEngineBridge.[hm]` | **Bridge** | RPPairing 引擎接线点：★[JIT-AUTOPAIR-2] 起为真接线★（前置条件真读 + 真跑 `A2RPPairingPreflight` 并点名受阻步骤；仍如实报「未接入」） |
+| `Natives/Support/a2_rppairing_crypto.[hm]` | **Natives** | 系统密码学原语薄封装：X25519（corecrypto `cccurve25519`）/ HKDF-SHA512 / SHA-512 / MD5 / CSPRNG / UUIDv3；★Ed25519 / ChaCha20-Poly1305 如实报未落地★ |
+| `Natives/Support/a2_rppairing.[hm]` | **Natives** | RPPairing 线上编解码（帧 / 信封）+ 配对文件（RpPairingFile）组装 + 握手完成度自检 `A2RPPairingPreflight` |
 
-**来源**：`docs/JIT-PROVISIONING.md` §1.2 / §3.3；许可口径见 `docs/DEPENDENCIES.md`「JIT 自动配对」节
-（★自研；只参考 SideInstaller 思路、未用其代码★）。
+**来源**：`docs/JIT-PROVISIONING.md` §1.2 / §3.3 / §3.6；许可口径见 `docs/DEPENDENCIES.md`「JIT 自动配对」节
+（★自研；只参考公开协议描述，未用任何第三方代码★）。
 
 ### DDI（Developer Disk Image）取得与三态判定 —— [JIT-DDI-1]
 

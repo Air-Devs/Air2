@@ -27,7 +27,12 @@
   Bridge 确实调用了 `A2JITEnvironment`；★[JIT-AUTOPAIR-1] 另加：设置页接入自动配对行、
   Bridge 骨架如实报未接入、Player 不得 import Bridge★；★[JIT-DDI-1] 另加：设置页接入 DDI 行 /
   导入 / **联网取开关（默认关）**、DDI 设备侧 Bridge 骨架如实回 `Unknown` / `NO`、
-  Player 不得 import DDI Bridge★。
+  Player 不得 import DDI Bridge★；
+- **`[JIT-AUTOPAIR-2]`** `a2_rppairing_crypto` + `a2_rppairing`（Natives/Support，★真实现直接链接★）——
+  RPPairing 握手内核：**X25519**（RFC 7748 §5.2/§6.1 向量逐位核对）、**HKDF-SHA512**（独立参考逐位核对）、
+  SHA-512 / MD5 / CSPRNG / **UUIDv3**（RFC 4122）、**线上帧与信封编解码**（往返 + 边界如实报错）、
+  **配对文件组装 → `A2PairingFile` 校验 → `A2JITPairingFileStore` 落盘**（与 ④ 的交接）、
+  **握手完成度自检**如实点名受阻步骤（Ed25519 / ChaCha20-Poly1305 未落地）+ Bridge 真接线不变量。
 
 ## 运行（macOS：需 Xcode 命令行工具的 clang）
 
@@ -45,7 +50,8 @@ TOTAL pass=<N> fail=0
 退出码：`0` = 全通过；`1` = 有 `FAIL`（或编译/工具链失败）。
 
 > 计数是**单调不回退**的门禁：新增逻辑只许加例（`[JIT-AUTOPAIR-1]` 达 396；
-> `[JIT-DDI-1]` 再增 ⑭⑮ 与不变量 ⑩），基线例数一项都不许掉。
+> `[JIT-DDI-1]` 再增 ⑭⑮ 与不变量 ⑩；`[JIT-AUTOPAIR-2]` 再增 §⑯ 共 71 例 ⇒ 基线 **517 → 588**），
+> 基线例数一项都不许掉（历史 107 套件对**新源码**仍 107/0）。
 
 > 为什么是真编译：版本隔离那套用 Python 镜像，是因为当年 iSH 里没有 ObjC 编译器；
 > 本机有 clang + Foundation，直接编译**被测的真实源文件**严格强于镜像。

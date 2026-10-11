@@ -129,6 +129,19 @@
 - **本阶段复核**：未引入 StikJIT(MPL-2.0) / StikDebug(AGPL-3.0) / SideInstaller(禁抄) 的任何代码；
   未改 `Natives/Support/A2JITEnvironment` 的判据语义。
 
+**★[JIT-AUTOPAIR-2] 补充（阶段 2a）★**：
+- **仍然零新增第三方依赖、零 vendor**。新增的 `Natives/Support/a2_rppairing*` 只用**系统库**：
+  CommonCrypto（`CCHmac` / `CC_SHA512` / `CC_MD5`）、`SecRandomCopyBytes`、以及
+  ★系统 corecrypto 的 **私有导出符号** `cccurve25519`（libSystem 导出，无公开头文件）★。
+- **★必须登记的合规点★**：`cccurve25519` 是 **Apple 私有 API**（CryptoKit 底层同一实现），
+  仅供本仓**非 App Store 分发**（自签名 / SideStore / TrollStore 侧载）使用；
+  ★若将来上架 App Store，此调用须替换为公开 API（如引入 Swift + CryptoKit）或移除★。
+  签名经 **RFC 7748 向量实测**确认（见 `tests/JIT/jit_logic_tests.m` §⑯），若系统改签名测试立刻变红。
+- **StikPair 关系声明**：只参考其**公开行为与协议描述**（设备内生成配对文件；
+  jkcoxson 的 RPPairing 协议说明）——★**未拷贝、未改写其任何代码/常量/文件**★；
+  其仓库 **LICENSE = NOASSERTION（未声明许可，默认保留所有权利）**，故一律「只参考协议事实、不入仓」。
+- 下一阶段若引入 `idevice`(**MIT**) 或 Swift/CryptoKit，须**先登记本表**再落码。
+
 ---
 
 ## DDI（Developer Disk Image）取得 —— [JIT-DDI-1]

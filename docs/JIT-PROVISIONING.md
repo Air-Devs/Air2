@@ -343,6 +343,41 @@ cryptex 另加 cryptex_info 与 root_hash）→ **经 RPPairing 隧道调用设�
 
 ---
 
+### 3.6【JIT-AUTOPAIR-2】RPPairing 握手内核（★真原语 + RFC 向量自证★）
+
+本阶段把 §4.2-a 的**握手密码学内核与线上编解码**做成**真实现**（不再是纯占位），
+并**如实**给出剩下卡在哪一步：
+
+| 文件 | 层 | 变更 |
+|---|---|---|
+| `Natives/Support/a2_rppairing_crypto.h/.m` | **Natives** | **新增**：系统密码学原语薄封装 —— X25519（系统 corecrypto 的 `cccurve25519`）、HKDF-SHA512（`CCHmac`）、SHA-512/MD5（CommonCrypto）、CSPRNG（`SecRandomCopyBytes`）、UUIDv3。★Ed25519 / ChaCha20-Poly1305 **如实报「未落地」**（`A2RPEd25519Available()` = NO）★ |
+| `Natives/Support/a2_rppairing.h/.m` | **Natives** | **新增**：RPPairing 线上编解码（帧 = magic `RPPairing`+2B 大端长度+载荷；信封 = `message.plain/streamEncrypted._0` + `originatedBy` + `sequenceNumber`）+ 配对文件（RpPairingFile：`identifier`/`public_key`/`private_key`）组装 + **握手完成度自检** `A2RPPairingPreflight` |
+| `Air2/Bridge/A2JITAutoPairingEngineBridge.h/.m` | **Bridge** | 骨架 → **真接线**：`readPreconditions` 真读（Developer Mode = `sysctl security.mac.amfi.developer_mode_status`；get-task-allow = `SecTaskCopyValueForEntitlement`；本地网络 = 如实 Unknown）；`isEngineAvailable`/`generate` 真跑 `A2RPPairingPreflight` 并**点名受阻步骤** |
+| `tests/JIT/*` | tests | 新增 §⑯（**71 例**）：X25519 RFC 7748 向量 / HKDF-SHA512 独立参考 / 摘要 / UUIDv3（RFC 4122）/ 帧与信封往返 / 配对文件→`A2PairingFile`→`A2JITPairingFileStore` 交接 / 自检如实 / Bridge 接线不变量 |
+
+★ **本阶段【已落地并自证】★**：
+1. **X25519**（RFC 7748 §5.2 向量 1 与 §6.1 基点向量**逐位相同**）；
+2. **HKDF-SHA512**（与独立参考实现逐位相同）；
+3. **SHA-512 / MD5 / CSPRNG / UUIDv3**（RFC 4122 向量）；
+4. **线上帧 / 信封编解码**（往返一致、边界如实报错）；
+5. **配对文件组装** —— 产出的字节**能通过 `A2PairingFile` 校验**并**能交给 `A2JITPairingFileStore` 落盘**（= 与 ④ 的交接已通）。
+
+★ **本阶段【仍未落地】（如实点名，绝不假成功）★**：
+1. **Ed25519 签名**：Objective-C 侧无公开 API（CryptoKit 为 Swift-only）；libSystem 虽导出
+   `cced25519_*`，但其 `cced25519_ctx` 无公开初始化路径（实测 ctx=NULL / 自备缓冲均失败），
+   `cced25519_ctx_size`/`cced25519_ctx_new` 符号**不存在** ⇒ 无法驱动；
+2. **ChaCha20-Poly1305**：`ccchacha20poly1305_{encrypt,decrypt}_oneshot` 需要 corecrypto 的
+   `info` 结构，其获取方式未确认（实测调用崩溃）；
+3. **pair-setup（SRP-3072）/ pair-verify 消息机**、**TLS-PSK 隧道**、**Bonjour 发现/RSD 连接**：
+   属 §4.2-a 的其余部分，未落地。
+
+★ **卡点与决策点（需拍板）★**：Ed25519/ChaCha20-Poly1305 这两块要么
+(a) **落地可自证的私有符号桥**（继续逆向 ctx/ info 结构；本仓已验证 X25519 走通此路），
+要么 (b) **引入一个 Swift 文件用 CryptoKit**（需改 `gen_xcodeproj.py` 与工程结构）。
+★两者都是「架构/依赖决策」，本单**不自行决定**★。
+
+---
+
 ## 4. 第二阶段工作拆分与工作量估算（★本单不实现★）
 
 > 估算单位＝**人日**（含真机调试，不含外部等待/审核）。★每项标注许可红线★。
@@ -379,6 +414,10 @@ cryptex 另加 cryptex_info 与 root_hash）→ **经 RPPairing 隧道调用设�
 **尚未做**的是 4.2-a（RSD/TLS-PSK 握手）、4.2-b 的真读（Developer Mode / 本地网络 / DDI）与 4.2-d/e。
 ★ **进度（[JIT-DDI-1]，§3.4）**：4.2-d 的 **DDI 本地优先取得（发现 / 校验 / 手动导入）+ 三态判定 +
 版本匹配与新鲜度** 已落；4.2-b 的 **DDI 一项** 已真读（不再是 Unknown 占位）。
+★ **进度（[JIT-AUTOPAIR-2]，§3.6）**：4.2-a 的 **握手密码学内核 + 线上编解码** 已落并自证
+（X25519 / HKDF-SHA512 / 帧 / 信封 / 配对文件组装）；4.2-b 的 **Developer Mode 与 get-task-allow**
+已真读（本地网络仍如实 Unknown）。★仍未做★：**Ed25519 / ChaCha20-Poly1305 原语**（卡点见 §3.6）、
+**pair-setup(SRP-3072) / pair-verify 消息机**、**TLS-PSK 隧道**、**Bonjour 发现与 RSD 连接**。
 ★仍未做★：**联网个性化请求（Apple personalization / TSS）与 image_mounter 挂载**
 （属 4.2-a 的一部分；需设备标识、网络与特权，仓内以 Bridge 骨架如实报未接入）。
 ★本节不动分级口径：iOS 27+ 仍 = `A2JITStrategyAutomatic`（与 `Air2/Player/A2JITStrategySelector.m` 同改）★。
