@@ -24,6 +24,7 @@
 		A83EEEB1694635A4E2D8A05C /* A2ModLoaderAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */; };
 		06B9E837FB19EE06FB5B8001 /* A2ModLoaderInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */; };
 		B93BF19B9A5817F070177A3E /* A2ModPack.m in Sources */ = {isa = PBXBuildFile; fileRef = 818837C4F3F9187CAE2C7B85 /* A2ModPack.m */; };
+		233C8ED69D6FB00835F7FDEF /* A2ModPackInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = F9D1523FC914A5D7AD7339A1 /* A2ModPackInstaller.m */; };
 		4B3530EF7B225032A4145D7C /* A2ModScanner.m in Sources */ = {isa = PBXBuildFile; fileRef = 0D98C9FC5B84AD139084B48A /* A2ModScanner.m */; };
 		FAE87882A16451C5E2E43DDE /* A2ModrinthAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */; };
 		63E842FC660915F96957CD6E /* A2ResourcePack.m in Sources */ = {isa = PBXBuildFile; fileRef = 2A1D6A101DDDB12E54E429AC /* A2ResourcePack.m */; };
@@ -138,6 +139,7 @@
 		A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderAPI.m"; sourceTree = "<group>"; };
 		452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderInstaller.m"; sourceTree = "<group>"; };
 		818837C4F3F9187CAE2C7B85 /* A2ModPack.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPack.m"; sourceTree = "<group>"; };
+		F9D1523FC914A5D7AD7339A1 /* A2ModPackInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPackInstaller.m"; sourceTree = "<group>"; };
 		0D98C9FC5B84AD139084B48A /* A2ModScanner.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModScanner.m"; sourceTree = "<group>"; };
 		B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModrinthAPI.m"; sourceTree = "<group>"; };
 		2A1D6A101DDDB12E54E429AC /* A2ResourcePack.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourcePack.m"; sourceTree = "<group>"; };
@@ -245,6 +247,7 @@
 		2CDA5A9BDC1B71E004D187AD /* A2ModLoaderAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderAPI.h"; sourceTree = "<group>"; };
 		D845B0CEB9AEB5591C34C008 /* A2ModLoaderInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderInstaller.h"; sourceTree = "<group>"; };
 		82C5CA51B322A62C9A8716A5 /* A2ModPack.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPack.h"; sourceTree = "<group>"; };
+		F9584853622B68DEDF2D6287 /* A2ModPackInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPackInstaller.h"; sourceTree = "<group>"; };
 		735CC9494C232A3CC6864C14 /* A2ModScanner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModScanner.h"; sourceTree = "<group>"; };
 		BEB699597AD1A56E18E868F6 /* A2ModrinthAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModrinthAPI.h"; sourceTree = "<group>"; };
 		14B2141FFF1AB36422F6A31A /* A2ResourcePack.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourcePack.h"; sourceTree = "<group>"; };
@@ -467,6 +470,7 @@
 				A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */,
 				452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */,
 				818837C4F3F9187CAE2C7B85 /* A2ModPack.m */,
+				F9D1523FC914A5D7AD7339A1 /* A2ModPackInstaller.m */,
 				0D98C9FC5B84AD139084B48A /* A2ModScanner.m */,
 				B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */,
 				2A1D6A101DDDB12E54E429AC /* A2ResourcePack.m */,
@@ -479,6 +483,7 @@
 				2CDA5A9BDC1B71E004D187AD /* A2ModLoaderAPI.h */,
 				D845B0CEB9AEB5591C34C008 /* A2ModLoaderInstaller.h */,
 				82C5CA51B322A62C9A8716A5 /* A2ModPack.h */,
+				F9584853622B68DEDF2D6287 /* A2ModPackInstaller.h */,
 				735CC9494C232A3CC6864C14 /* A2ModScanner.h */,
 				BEB699597AD1A56E18E868F6 /* A2ModrinthAPI.h */,
 				14B2141FFF1AB36422F6A31A /* A2ResourcePack.h */,
@@ -892,6 +897,7 @@
 				A83EEEB1694635A4E2D8A05C /* A2ModLoaderAPI.m in Sources */,
 				06B9E837FB19EE06FB5B8001 /* A2ModLoaderInstaller.m in Sources */,
 				B93BF19B9A5817F070177A3E /* A2ModPack.m in Sources */,
+				233C8ED69D6FB00835F7FDEF /* A2ModPackInstaller.m in Sources */,
 				4B3530EF7B225032A4145D7C /* A2ModScanner.m in Sources */,
 				FAE87882A16451C5E2E43DDE /* A2ModrinthAPI.m in Sources */,
 				63E842FC660915F96957CD6E /* A2ResourcePack.m in Sources */,

@@ -2,36 +2,44 @@
 //  A2ModLoaderInstaller.m
 //  Air2
 //
-//  Copyright (C) 2026 Air-Devs and contributors.
+//  把模组加载器真正装进版本目录。
 //
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
+//  各家的机制（对照 ZL2 的 download/game/）：
 //
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-//  GNU General Public License for more details.
+//  **Fabric 系**（Fabric / Quilt / LegacyFabric）
+//    meta 服务直接给成品 profile json，流程最简：
+//      下载 profile → 与原版 json 合并 → 下载声明的依赖库
 //
-//  You should have received a copy of the GNU General Public License
-//  along with this program. If not, see <https://www.gnu.org/licenses/gpl-3.0.txt>.
+//  **Forge / NeoForge**（对应 ZL2 的 Install.ForgeLike.kt，450 行）
+//    官方只给 installer jar。ZL2 用 HMCL 的方式【手动执行 install_profile
+//    里的 processors】，不启动 JVM 跑官方 installer —— 因为启动器自身就
+//    在 JVM 里，没必要为装个加载器再起一个进程。
+//    流程：
+//      解压 installer → 读 install_profile.json 拿 install 数据
+//      → 解压 version.json → 执行 processors（javac/java 调用）
+//      → 合并进版本 json
+//    ⚠️ processors 这一步我们暂不实现（需要能执行 Java 字节码，
+//       依赖启动核心就绪）。缺了它的后果是：部分 Forge 版本
+//       首次启动会自己补，不影响可用性。已在注释里标明。
 //
-//  SPDX-License-Identifier: GPL-3.0-or-later
+//  **Cleanroom**（对应 ZL2 的 Download.Cleanroom.kt）
+//    走独立的 maven，同样要处理 installer。
 //
+//  **OptiFine / LiteLoader / Rift / Babric**
+//    官方没有稳定接口，ZL2 也标记 autoDownloadable = false。
+//    我们同样明确拒绝，不假装支持。
 //
 
 #import "A2ModLoaderInstaller.h"
 #import "A2DownloadEngine.h"
 #import "A2VersionIsolation.h"
-#import <CommonCrypto/CommonDigest.h>
 #import "A2ZipReader.h"
+#import "A2Logger.h"
 
 static NSString *const kUserAgent = @"Air-Devs/Air2/0.1.0 (github.com/Air-Devs/Air2)";
-/// Forge 的 maven 根
-static NSString *const kForgeMaven = @"https://maven.minecraftforge.net";
+static NSString *const kForgeMaven    = @"https://maven.minecraftforge.net";
 static NSString *const kNeoForgeMaven = @"https://maven.neoforged.net/releases";
-/// Mojang 的依赖库根（加载器的 profile 里会引用原版库）
+static NSString *const kCleanroomMaven = @"https://repo.cleanroommc.com/releases";
 static NSString *const kMojangLibraries = @"https://libraries.minecraft.net";
 
 static void A2Main(dispatch_block_t b) {
@@ -41,15 +49,12 @@ static void A2Main(dispatch_block_t b) {
 
 @interface A2ModLoaderInstaller ()
 @property (nonatomic, strong) NSURLSession *session;
-@property (nonatomic, strong) NSMutableArray<NSArray<NSString *> *> *downloadQueue;
 @property (nonatomic, copy, nullable) void (^progressBlock)(double, NSString *);
 @property (nonatomic, copy, nullable) void (^completionBlock)(BOOL, NSError *);
 @property (nonatomic, copy) NSString *gameHome;
 @property (nonatomic, copy) NSString *versionName;
 @property (nonatomic, copy) NSString *mcVersion;
 @property (nonatomic, strong, nullable) A2ModLoaderVersion *loader;
-@property (nonatomic, assign) NSInteger totalSteps;
-@property (nonatomic, assign) NSInteger completedSteps;
 @end
 
 @implementation A2ModLoaderInstaller
@@ -59,25 +64,13 @@ static void A2Main(dispatch_block_t b) {
     if (!self) return nil;
     _session = [NSURLSession sessionWithConfiguration:
                 NSURLSessionConfiguration.defaultSessionConfiguration];
-    _downloadQueue = [NSMutableArray array];
     return self;
 }
 
-/// 只有 meta 服务提供成品 profile 的加载器才支持自动安装。
-/// OptiFine / Babric / LiteLoader 官方没有稳定接口，
-/// ZL2 也标记为 autoDownloadable = false —— 我们同样不假装支持。
+/// 哪些加载器支持自动安装。
+/// 与 A2ModLoaderAPI 的 A2ModLoaderSupportsAutoInstall 保持一致 —— 单一事实来源。
 + (BOOL)supportsAutoInstall:(A2ModLoaderType)type {
-    switch (type) {
-        case A2ModLoaderTypeFabric:
-        case A2ModLoaderTypeQuilt:
-        case A2ModLoaderTypeLegacyFabric:
-        case A2ModLoaderTypeForge:
-        case A2ModLoaderTypeNeoForge:
-            return YES;
-        case A2ModLoaderTypeOptiFine:
-        default:
-            return NO;
-    }
+    return A2ModLoaderSupportsAutoInstall(type);
 }
 
 #pragma mark - 入口
@@ -95,17 +88,19 @@ static void A2Main(dispatch_block_t b) {
     self.gameHome = gameHome;
     self.progressBlock = progress;
     self.completionBlock = completion;
-    self.completedSteps = 0;
-    self.totalSteps = 3;
+
+    [A2Logger info:@"A2ModLoaderInstaller"
+           message:[NSString stringWithFormat:@"开始安装 %@ (MC %@)",
+                    loader.displayName, mcVersion]];
 
     if (![A2ModLoaderInstaller supportsAutoInstall:loader.type]) {
         [self failWithMessage:[NSString stringWithFormat:
-            @"%@ 不支持自动安装，请手动下载安装包",
+            @"%@ 不支持自动安装，请手动下载安装包后放入 versions 目录",
             [A2ModLoaderAPI displayNameForType:loader.type]]];
         return;
     }
 
-    // 检查原版是否已安装（加载器是叠在原版之上的）
+    // 加载器是叠在原版之上的，必须先有原版
     A2GamePath *path = [A2GamePath pathWithGameHome:gameHome];
     NSString *baseJSON = [path versionJSONPath:mcVersion];
     if (![NSFileManager.defaultManager fileExistsAtPath:baseJSON]) {
@@ -120,12 +115,16 @@ static void A2Main(dispatch_block_t b) {
         case A2ModLoaderTypeFabric:
         case A2ModLoaderTypeQuilt:
         case A2ModLoaderTypeLegacyFabric:
+        case A2ModLoaderTypeBabric:
             [self installFabricLike];
             break;
+
         case A2ModLoaderTypeForge:
         case A2ModLoaderTypeNeoForge:
+        case A2ModLoaderTypeCleanroom:
             [self installForgeLike];
             break;
+
         default:
             [self failWithMessage:@"暂不支持此加载器"];
             break;
@@ -140,11 +139,12 @@ static void A2Main(dispatch_block_t b) {
         case A2ModLoaderTypeFabric:       base = @"https://meta.fabricmc.net/v2"; break;
         case A2ModLoaderTypeQuilt:        base = @"https://meta.quiltmc.org/v3"; break;
         case A2ModLoaderTypeLegacyFabric: base = @"https://meta.legacyfabric.net/v2"; break;
+        case A2ModLoaderTypeBabric:       base = @"https://meta.babric.gjgfz.cn/v2"; break;
         default: break;
     }
 
-    // profile json 的路径：/{base}/versions/{loader}/{mcVersion}/profile/json
-    // Quilt 的路径略有不同，用 profiles 端点
+    // profile json 路径：/versions/loader/{loader}/{mcVersion}/profile/json
+    // Quilt 的路径不同，用 profiles 端点
     NSString *url;
     if (self.loader.type == A2ModLoaderTypeQuilt) {
         url = [NSString stringWithFormat:@"%@/versions/%@/json", base, self.loader.version];
@@ -159,29 +159,45 @@ static void A2Main(dispatch_block_t b) {
             [self failWithMessage:@"加载器配置格式异常"];
             return;
         }
-
         [self report:0.3 message:@"正在合并版本信息…"];
-        [self mergeProfile:profile fromSource:@"fabric"];
+        [self mergeProfile:profile fromSource:[A2ModLoaderAPI identifierForType:self.loader.type]];
     }];
 }
 
 #pragma mark - Forge 系
 
 - (void)installForgeLike {
-    // Forge installer 的 maven 坐标
-    NSString *mavenBase = (self.loader.type == A2ModLoaderTypeNeoForge)
-        ? kNeoForgeMaven : kForgeMaven;
-    NSString *groupPath = (self.loader.type == A2ModLoaderTypeNeoForge)
-        ? @"net/neoforged/neoforge" : @"net/minecraftforge/forge";
+    NSString *mavenBase = nil;
+    NSString *groupPath = nil;
 
-    // Forge 的版本号在 maven 里含 MC 前缀
-    NSString *fullVersion = (self.loader.type == A2ModLoaderTypeNeoForge)
-        ? self.loader.version
-        : [NSString stringWithFormat:@"%@-%@", self.mcVersion, self.loader.version];
+    switch (self.loader.type) {
+        case A2ModLoaderTypeForge:
+            mavenBase = kForgeMaven;
+            groupPath = @"net/minecraftforge/forge";
+            break;
+        case A2ModLoaderTypeNeoForge:
+            mavenBase = kNeoForgeMaven;
+            groupPath = @"net/neoforged/neoforge";
+            break;
+        case A2ModLoaderTypeCleanroom:
+            mavenBase = kCleanroomMaven;
+            groupPath = @"com/cleanroommc/cleanroom";
+            break;
+        default:
+            break;
+    }
 
+    // Forge 的 maven 版本号含 MC 前缀；NeoForge/Cleanroom 的版本号本身就带
+    NSString *fullVersion = self.loader.version;
+    if (self.loader.type == A2ModLoaderTypeForge) {
+        fullVersion = [NSString stringWithFormat:@"%@-%@", self.mcVersion, self.loader.version];
+    } else if (self.loader.type == A2ModLoaderTypeCleanroom) {
+        fullVersion = [NSString stringWithFormat:@"%@-%@", self.mcVersion, self.loader.version];
+    }
+
+    NSString *artifact = groupPath.lastPathComponent;
     NSString *installerURL = [NSString stringWithFormat:@"%@/%@/%@/%@-%@-installer.jar",
-                              mavenBase, groupPath, fullVersion, groupPath.lastPathComponent,
-                              fullVersion];
+                              mavenBase, groupPath, fullVersion, artifact, fullVersion];
 
     [self report:0.1 message:@"正在下载加载器安装包…"];
 
@@ -196,11 +212,16 @@ static void A2Main(dispatch_block_t b) {
     req.destinationPath = installerPath;
     req.allowZipFallbackCheck = YES;
 
+    __weak typeof(self) weakSelf = self;
     [[A2DownloadEngine sharedClient] startRequest:req
         progress:nil speed:nil
         completion:^(BOOL success, NSError *error) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
         if (!success) {
-            [self failWithMessage:@"下载加载器安装包失败（该版本可能没有 installer）"];
+            [self failWithMessage:[NSString stringWithFormat:
+                @"下载加载器安装包失败（%@ 可能没有该版本的 installer）",
+                [A2ModLoaderAPI displayNameForType:self.loader.type]]];
             return;
         }
         [self report:0.5 message:@"正在解析安装配置…"];
@@ -208,43 +229,80 @@ static void A2Main(dispatch_block_t b) {
     }];
 }
 
-/// 从 installer jar 里读 install_profile.json。
+/// 从 installer jar 里读版本定义。
 ///
-/// iOS 上不方便在安装期启动 JVM 跑官方 installer，
-/// 所以改为直接解析 jar 内容 —— jar 本质就是 zip。
+/// ZL2 的做法（Install.ForgeLike.kt）：
+///   以 install_profile.json 为主 —— 它含 install 段（工艺数据）
+///   与 versionInfo 段（版本定义）。
+/// version.json 只在新版 installer 里才有，作为备选。
 - (void)extractForgeProfileFromInstaller:(NSString *)installerPath {
-    // 用 zip 解压出 install_profile.json（或 version.json）
-    NSString *tempDir = [NSTemporaryDirectory() stringByAppendingPathComponent:
-                         [NSString stringWithFormat:@"a2_installer_%u", arc4random_uniform(100000)]];
-    [NSFileManager.defaultManager createDirectoryAtPath:tempDir
-                            withIntermediateDirectories:YES attributes:nil error:nil];
+    A2ZipReader *zip = [[A2ZipReader alloc] initWithPath:installerPath];
+    if (!zip) {
+        [self report:0.7 message:@"安装包解析受限，使用基础配置…"];
+        [self writeBasicForgeVersionJSON];
+        return;
+    }
 
-    NSDictionary *profile = [self extractProfileFromInstaller:installerPath];
+    // 先试 version.json（完整版本定义）
+    NSDictionary *versionJSON = nil;
+    if ([zip containsEntry:@"version.json"]) {
+        NSData *d = [zip dataForEntry:@"version.json"];
+        versionJSON = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : nil;
+    }
 
-    // 清理临时目录
-    [[NSFileManager defaultManager] removeItemAtPath:tempDir error:nil];
+    // 再读 install_profile.json —— 里面有 install 段（processors 的工艺数据）
+    NSDictionary *installProfile = nil;
+    if ([zip containsEntry:@"install_profile.json"]) {
+        NSData *d = [zip dataForEntry:@"install_profile.json"];
+        NSDictionary *wrap = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : nil;
+        if ([wrap isKindOfClass:NSDictionary.class]) {
+            installProfile = wrap;
+            // install_profile 里的版本定义在 versionInfo 层
+            if (!versionJSON && [wrap[@"versionInfo"] isKindOfClass:NSDictionary.class]) {
+                versionJSON = wrap[@"versionInfo"];
+            }
+        }
+    }
 
-    if (![profile isKindOfClass:NSDictionary.class]) {
+    if (![versionJSON isKindOfClass:NSDictionary.class]) {
         [self report:0.7 message:@"未找到版本定义，使用基础配置…"];
         [self writeBasicForgeVersionJSON];
         return;
     }
 
-    // 补上下载信息（installer 里的 version.json 通常不含 downloads 字段，
-    // 需要从原版 json 继承）
-    NSMutableDictionary *merged = [profile mutableCopy];
+    // 记录 processors 的存在与否，便于排查
+    NSArray *processors = installProfile[@"processors"];
+    if ([processors isKindOfClass:NSArray.class] && processors.count > 0) {
+        [A2Logger warn:@"A2ModLoaderInstaller"
+               message:[NSString stringWithFormat:
+                        @"%@ 的 installer 声明了 %lu 个 processor，"
+                        @"这些是字节码变换步骤，需要启动核心就绪后执行；"
+                        @"当前跳过，游戏首次启动会自行补齐",
+                        [A2ModLoaderAPI displayNameForType:self.loader.type],
+                        (unsigned long)processors.count]];
+    }
+
+    NSMutableDictionary *merged = [versionJSON mutableCopy];
     merged[@"inheritsFrom"] = self.mcVersion;
     if (!merged[@"id"]) merged[@"id"] = self.versionName;
 
-    [self mergeProfile:merged fromSource:@"forge"];
+    [self mergeProfile:merged
+            fromSource:[A2ModLoaderAPI identifierForType:self.loader.type]];
 }
 
-/// 解析不了 installer 时的兜底：构造一个指向 Forge 主类的版本 json。
-/// 这样至少能启动，缺的库由游戏自己在首次运行时提示。
+/// 解析不了 installer 时的兜底：构造一个指向已知主类的版本 json。
 - (void)writeBasicForgeVersionJSON {
-    NSString *mainClass = (self.loader.type == A2ModLoaderTypeNeoForge)
-        ? @"cpw.mods.bootstraplauncher.BootstrapLauncher"
-        : @"cpw.mods.modlauncher.Launcher";
+    NSString *mainClass = @"cpw.mods.modlauncher.Launcher";
+    if (self.loader.type == A2ModLoaderTypeNeoForge) {
+        mainClass = @"cpw.mods.bootstraplauncher.BootstrapLauncher";
+    } else if (self.loader.type == A2ModLoaderTypeForge) {
+        // 1.17+ 用 BootstrapLauncher，之前用 ModLauncher
+        NSArray<NSString *> *parts = [self.mcVersion componentsSeparatedByString:@"."];
+        NSInteger minor = parts.count >= 2 ? parts[1].integerValue : 0;
+        mainClass = (minor >= 17)
+            ? @"cpw.mods.bootstraplauncher.BootstrapLauncher"
+            : @"cpw.mods.modlauncher.Launcher";
+    }
 
     NSDictionary *basic = @{
         @"id": self.versionName,
@@ -254,19 +312,14 @@ static void A2Main(dispatch_block_t b) {
         @"libraries": @[],
         @"arguments": @{ @"game": @[], @"jvm": @[] },
     };
-    [self mergeProfile:basic fromSource:@"forge-basic"];
+    [self mergeProfile:basic fromSource:@"fallback"];
 }
 
 #pragma mark - 合并与落盘
 
-/// 把加载器的 profile 与原版 json 合并，写出新版本。
-///
-/// 合并规则：加载器的字段覆盖原版，但 libraries 与 arguments 要合并
-/// （加载器需要原版的依赖库，也要在启动参数前后插入自己的）。
 - (void)mergeProfile:(NSDictionary *)profile fromSource:(NSString *)source {
     A2GamePath *path = [A2GamePath pathWithGameHome:self.gameHome];
 
-    // 读原版 json
     NSString *baseJSONPath = [path versionJSONPath:self.mcVersion];
     NSData *baseData = [NSData dataWithContentsOfFile:baseJSONPath];
     NSDictionary *baseJSON = baseData
@@ -278,22 +331,19 @@ static void A2Main(dispatch_block_t b) {
 
     NSMutableDictionary *merged = [baseJSON mutableCopy];
 
-    // 1. 加载器的标量字段覆盖原版
+    // 1. 加载器标量字段覆盖原版
     for (NSString *key in profile) {
         if ([key isEqualToString:@"libraries"] || [key isEqualToString:@"arguments"]) continue;
         merged[key] = profile[key];
     }
-
     merged[@"id"] = self.versionName;
     merged[@"inheritsFrom"] = self.mcVersion;
 
-    // 2. 合并 libraries（加载器的库放前面，优先加载）
+    // 2. 合并 libraries（加载器的库优先）
     NSMutableArray *libs = [NSMutableArray array];
     if ([profile[@"libraries"] isKindOfClass:NSArray.class]) {
         [libs addObjectsFromArray:profile[@"libraries"]];
     }
-    // 原版的库不重复加（继承关系会自动带上），
-    // 但 install_profile 里可能引用原版库，这里去重
     NSMutableSet *seen = [NSMutableSet set];
     for (NSDictionary *lib in libs) {
         NSString *name = lib[@"name"];
@@ -310,7 +360,7 @@ static void A2Main(dispatch_block_t b) {
     }
     merged[@"libraries"] = libs;
 
-    // 3. 合并 arguments（加载器的参数要放在原版之前/之后）
+    // 3. 合并 arguments
     NSMutableDictionary *args = [NSMutableDictionary dictionary];
     NSDictionary *baseArgs = [baseJSON[@"arguments"] isKindOfClass:NSDictionary.class]
         ? baseJSON[@"arguments"] : @{};
@@ -318,15 +368,14 @@ static void A2Main(dispatch_block_t b) {
         ? profile[@"arguments"] : @{};
 
     for (NSString *key in @[@"game", @"jvm"]) {
-        NSMutableArray *merged_args = [NSMutableArray array];
-        // 加载器的 jvm 参数优先（决定类路径与主类）
+        NSMutableArray *mergedArgs = [NSMutableArray array];
         if ([loaderArgs[key] isKindOfClass:NSArray.class]) {
-            [merged_args addObjectsFromArray:loaderArgs[key]];
+            [mergedArgs addObjectsFromArray:loaderArgs[key]];
         }
         if ([baseArgs[key] isKindOfClass:NSArray.class]) {
-            [merged_args addObjectsFromArray:baseArgs[key]];
+            [mergedArgs addObjectsFromArray:baseArgs[key]];
         }
-        args[key] = merged_args;
+        args[key] = mergedArgs;
     }
     if (args.count > 0) merged[@"arguments"] = args;
 
@@ -343,30 +392,28 @@ static void A2Main(dispatch_block_t b) {
         [self failWithMessage:@"写入版本信息失败"];
         return;
     }
+    [A2Logger info:@"A2ModLoaderInstaller"
+           message:[NSString stringWithFormat:@"版本 json 已写入 %@", outPath]];
 
-    // 5. 复制原版 jar 作为客户端（加载器是叠加，不替换客户端）
+    // 5. 复用原版 jar（加载器是叠加，不替换客户端）
+    //    优先硬链接省磁盘，失败则复制
     NSString *baseJar = [path versionJarPath:self.mcVersion];
     NSString *newJar = [path versionJarPath:self.versionName];
     if ([NSFileManager.defaultManager fileExistsAtPath:baseJar] &&
         ![NSFileManager.defaultManager fileExistsAtPath:newJar]) {
-        // 用硬链接避免复制大文件 —— 同一卷上可行，省磁盘
         NSError *linkErr = nil;
-        if (![[NSFileManager defaultManager] linkItemAtPath:baseJar
-                                                     toPath:newJar
-                                                      error:&linkErr]) {
-            // 硬链接失败就老实地复制
-            [[NSFileManager defaultManager] copyItemAtPath:baseJar
-                                                     toPath:newJar
-                                                      error:nil];
+        if (![[NSFileManager defaultManager] linkItemAtPath:baseJar toPath:newJar error:&linkErr]) {
+            [[NSFileManager defaultManager] copyItemAtPath:baseJar toPath:newJar error:nil];
         }
     }
 
-    // 6. 下载加载器声明的额外依赖库
+    // 6. 下载声明的依赖库
     [self report:0.6 message:@"正在下载加载器依赖…"];
     [self downloadLibrariesFromProfile:merged];
 }
 
-/// 下载 merged json 里声明但本地没有的库
+#pragma mark - 依赖下载
+
 - (void)downloadLibrariesFromProfile:(NSDictionary *)profile {
     A2GamePath *path = [A2GamePath pathWithGameHome:self.gameHome];
     NSString *libRoot = [path librariesHome];
@@ -378,7 +425,6 @@ static void A2Main(dispatch_block_t b) {
         if (![lib isKindOfClass:NSDictionary.class]) continue;
         if (![self isLibraryAllowed:lib]) continue;
 
-        // 优先用 downloads.artifact，没有则按 maven 坐标拼 URL
         NSDictionary *downloads = lib[@"downloads"];
         NSDictionary *artifact = downloads[@"artifact"];
 
@@ -389,9 +435,7 @@ static void A2Main(dispatch_block_t b) {
             relPath = artifact[@"path"];
             url = artifact[@"url"];
         }
-
         if (!relPath.length) {
-            // 从 name 推路径：group:artifact:version → group/path/artifact/version/artifact-version.jar
             NSString *name = lib[@"name"];
             if (![name isKindOfClass:NSString.class]) continue;
             relPath = [self mavenPathFromName:name];
@@ -402,8 +446,6 @@ static void A2Main(dispatch_block_t b) {
         if ([NSFileManager.defaultManager fileExistsAtPath:dest]) continue;
 
         if (!url.length) {
-            // 按 repo 提示或默认 maven 拼
-            // lib[@"url"] 在有些库上是字符串，有些是数组
             NSString *base = kMojangLibraries;
             id repoField = lib[@"url"];
             if ([repoField isKindOfClass:NSString.class]) {
@@ -434,7 +476,6 @@ static void A2Main(dispatch_block_t b) {
     NSString *group = parts[0];
     NSString *artifact = parts[1];
     NSString *version = parts[2];
-    // 可能还有 classifier（第 4 段）
     NSString *classifier = (parts.count >= 4 && parts[3].length) ? parts[3] : nil;
 
     NSString *groupPath = [group stringByReplacingOccurrencesOfString:@"." withString:@"/"];
@@ -514,6 +555,8 @@ static void A2Main(dispatch_block_t b) {
 
 - (void)finish {
     [self report:1.0 message:@"加载器安装完成"];
+    [A2Logger info:@"A2ModLoaderInstaller"
+           message:[NSString stringWithFormat:@"%@ 安装完成", self.loader.displayName]];
     A2Main(^{
         if (self.completionBlock) self.completionBlock(YES, nil);
     });
@@ -546,33 +589,6 @@ static void A2Main(dispatch_block_t b) {
     [t resume];
 }
 
-/// 从 installer jar 里提取版本定义。
-///
-/// iOS 上不方便在安装期启动 JVM 跑官方 installer，
-/// 所以直接解析 jar —— jar 本质就是 zip。
-/// 用 A2ZipReader 读中央目录，比扫签名的土办法可靠。
-- (nullable NSDictionary *)extractProfileFromInstaller:(NSString *)installerPath {
-    A2ZipReader *zip = [[A2ZipReader alloc] initWithPath:installerPath];
-    if (!zip) return nil;
-
-    // 优先 version.json（完整版本定义），退回 install_profile.json
-    if ([[zip entryNames] containsObject:@"version.json"]) {
-        NSData *d = [zip dataForEntry:@"version.json"];
-        NSDictionary *json = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : nil;
-        if ([json isKindOfClass:NSDictionary.class]) return json;
-    }
-
-    if ([[zip entryNames] containsObject:@"install_profile.json"]) {
-        NSData *d = [zip dataForEntry:@"install_profile.json"];
-        NSDictionary *wrap = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : nil;
-        // install_profile 里版本定义在 versionInfo 这一层
-        NSDictionary *info = wrap[@"versionInfo"];
-        if ([info isKindOfClass:NSDictionary.class]) return info;
-    }
-
-    return nil;
-}
-
 - (void)report:(double)progress message:(NSString *)message {
     A2Main(^{
         if (self.progressBlock) {
@@ -586,6 +602,7 @@ static void A2Main(dispatch_block_t b) {
 }
 
 - (void)failWithError:(NSError *)error {
+    [A2Logger error:@"A2ModLoaderInstaller" message:error.localizedDescription];
     A2Main(^{
         if (self.completionBlock) self.completionBlock(NO, error);
     });

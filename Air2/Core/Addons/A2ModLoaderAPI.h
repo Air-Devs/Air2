@@ -40,14 +40,41 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// 加载器类型。对照 ZL2 的 ModLoader 枚举，逐个对齐。
+///
+/// 其中带 _API 后缀的是「前置模组」而非加载器本身 ——
+/// 装完 Fabric 后通常还要装 Fabric API，否则多数模组跑不起来。
+/// ZL2 把它们区分开（isLoader / isApiMod），我们保持同样语义。
 typedef NS_ENUM(NSInteger, A2ModLoaderType) {
+    // ---- 加载器 ----
     A2ModLoaderTypeFabric = 0,
     A2ModLoaderTypeQuilt,
     A2ModLoaderTypeLegacyFabric,
+    A2ModLoaderTypeBabric,          ///< 给 Beta 1.7.3 用的 Fabric 分支
     A2ModLoaderTypeForge,
     A2ModLoaderTypeNeoForge,
+    A2ModLoaderTypeCleanroom,       ///< Forge 1.12.2 的社区延续版
+    A2ModLoaderTypeLiteLoader,
     A2ModLoaderTypeOptiFine,
+    A2ModLoaderTypeRift,            ///< 1.13 时代的轻量加载器
+
+    // ---- 前置模组（不是加载器，但安装流程相同）----
+    A2ModLoaderTypeFabricAPI,
+    A2ModLoaderTypeQuiltAPI,
+    A2ModLoaderTypeLegacyFabricAPI,
+    A2ModLoaderTypeBabricAPI,
+
+    A2ModLoaderTypeUnknown = 99,
 };
+
+/// 该类型是否是真正的加载器（而非前置模组）
+FOUNDATION_EXPORT BOOL A2ModLoaderIsLoader(A2ModLoaderType type);
+/// 该类型是否是前置模组
+FOUNDATION_EXPORT BOOL A2ModLoaderIsAPIMod(A2ModLoaderType type);
+/// 是否支持自动安装（对照 ZL2 的 autoDownloadable）
+FOUNDATION_EXPORT BOOL A2ModLoaderSupportsAutoInstall(A2ModLoaderType type);
+/// 该加载器对应的前置模组（没有则返回 Unknown）
+FOUNDATION_EXPORT A2ModLoaderType A2ModLoaderCompanionAPIFor(A2ModLoaderType loader);
 
 /// 一个加载器版本
 @interface A2ModLoaderVersion : NSObject

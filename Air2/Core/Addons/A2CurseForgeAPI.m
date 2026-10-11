@@ -505,6 +505,21 @@ static NSNumber *A2CFModLoaderTypeForIdentifier(NSString *identifier) {
     }];
 }
 
+/// 取单个文件。CurseForge 的端点：GET /v1/mods/{modId}/files/{fileId}
+- (void)fileWithProjectID:(NSInteger)projectID
+                    fileID:(NSInteger)fileID
+                completion:(void (^)(A2CFFile *, NSError *))completion {
+
+    NSString *path = [NSString stringWithFormat:@"/mods/%ld/files/%ld",
+                      (long)projectID, (long)fileID];
+    [self GET:path query:nil completion:^(id json, NSError *error) {
+        if (error) { if (completion) completion(nil, error); return; }
+        NSDictionary *dict = [json isKindOfClass:NSDictionary.class] ? json : nil;
+        A2CFFile *f = [A2CFFile fromJSON:dict[@"data"]];
+        if (completion) completion(f, f ? nil : [self err:@"文件不存在"]);
+    }];
+}
+
 - (void)projectWithID:(NSInteger)projectID
            completion:(void (^)(A2CFProject *, NSError *))completion {
     NSString *path = [NSString stringWithFormat:@"/mods/%ld", (long)projectID];

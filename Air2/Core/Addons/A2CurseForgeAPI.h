@@ -146,6 +146,12 @@ extern const NSInteger A2CFMinecraftGameID;
                 completion:(void (^)(A2CFFile * _Nullable file,
                                      NSError * _Nullable error))completion;
 
+/// 取单个文件的信息（整合包安装时用：清单只给 projectID/fileID，要换成下载地址）
+- (void)fileWithProjectID:(NSInteger)projectID
+                    fileID:(NSInteger)fileID
+                completion:(void (^)(A2CFFile * _Nullable file,
+                                     NSError * _Nullable error))completion;
+
 /// 取项目的文件列表
 - (void)filesForProject:(NSInteger)projectID
             gameVersion:(nullable NSString *)gameVersion
