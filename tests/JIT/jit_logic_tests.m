@@ -3361,7 +3361,7 @@ static void testPairSetupPinSource(void) {
     eqInt((NSInteger)missing.count, 0, @"★配对码来源的新文案四语齐全★");
 }
 
-#pragma mark - ⑲ [JIT↔VM] 各档 verdict 全跑一遍（5 档供给路径 × 判据行 × 建 VM 决策）
+#pragma mark - ⑳ [JIT↔VM] 各档 verdict 全跑一遍（5 档供给路径 × 判据行 × 建 VM 决策）
 
 /// 本单验收：把【五个供给档】各自的判据真跑一遍，断言三件事一致 ——
 ///   ① ② 的结论（verdict / enable）⇒ ③ 建 VM 究竟被放行还是被拦下；
