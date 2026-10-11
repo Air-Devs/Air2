@@ -524,6 +524,236 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
             @"en": @"Auto pairing failed",
             @"ja": @"自動ペアリングに失敗しました",
         },
+
+        // ---------------- [JIT-DDI-1] DDI（Developer Disk Image）----------------
+        @"jit.row.ddi": @{
+            @"zh-Hans": @"DDI（Developer Disk Image）",
+            @"zh-Hant": @"DDI（Developer Disk Image）",
+            @"en": @"DDI (Developer Disk Image)",
+            @"ja": @"DDI（Developer Disk Image）",
+        },
+        @"jit.row.ddiImport": @{
+            @"zh-Hans": @"导入 DDI 镜像",
+            @"zh-Hant": @"匯入 DDI 映像",
+            @"en": @"Import DDI image",
+            @"ja": @"DDI イメージを取り込む",
+        },
+        @"jit.row.ddiImport.needFile": @{
+            @"zh-Hans": @"选择 DeveloperDiskImage.dmg，本机校验（不联网）",
+            @"zh-Hant": @"選擇 DeveloperDiskImage.dmg，本機校驗（不連網）",
+            @"en": @"Pick DeveloperDiskImage.dmg; validated on device (no network)",
+            @"ja": @"DeveloperDiskImage.dmg を選択（端末内で検証・通信なし）",
+        },
+        @"jit.row.ddiFetch": @{
+            @"zh-Hans": @"联网取 DDI",
+            @"zh-Hant": @"連網取 DDI",
+            @"en": @"Fetch DDI online",
+            @"ja": @"DDI をオンライン取得",
+        },
+        @"jit.row.ddiFetch.detail": @{
+            @"zh-Hans": @"默认关。开启后向 Apple 官方服务请求个性化 DDI——这是访问 Apple 官方服务，不是「上云」",
+            @"zh-Hant": @"預設關。開啟後向 Apple 官方服務請求個人化 DDI——這是存取 Apple 官方服務，不是「上雲」",
+            @"en": @"Off by default. When on, requests a personalized DDI from Apple's official service — that is accessing Apple's service, not \"going to the cloud\"",
+            @"ja": @"既定はオフ。オンにすると Apple 公式サービスへ個別化 DDI を要求します（Apple 公式サービスへのアクセスであり「クラウド化」ではありません）",
+        },
+        // 判定短文案
+        @"jit.ddi.status.present": @{
+            @"zh-Hans": @"已就位",
+            @"zh-Hant": @"已就位",
+            @"en": @"In place",
+            @"ja": @"準備済み",
+        },
+        @"jit.ddi.status.missing": @{
+            @"zh-Hans": @"缺失",
+            @"zh-Hant": @"缺失",
+            @"en": @"Missing",
+            @"ja": @"未検出",
+        },
+        @"jit.ddi.status.versionMismatch": @{
+            @"zh-Hans": @"版本不匹配",
+            @"zh-Hant": @"版本不相符",
+            @"en": @"Version mismatch",
+            @"ja": @"バージョン不一致",
+        },
+        @"jit.ddi.status.stale": @{
+            @"zh-Hans": @"已过期",
+            @"zh-Hant": @"已過期",
+            @"en": @"Stale",
+            @"ja": @"期限切れ",
+        },
+        @"jit.ddi.status.unknown": @{
+            @"zh-Hans": @"无法确认",
+            @"zh-Hant": @"無法確認",
+            @"en": @"Unconfirmed",
+            @"ja": @"確認できません",
+        },
+        // 判定原因
+        @"jit.ddi.verdict.present.reason": @{
+            @"zh-Hans": @"本地已有可用的 DDI 镜像（版本匹配且未过期）",
+            @"zh-Hant": @"本機已有可用的 DDI 映像（版本相符且未過期）",
+            @"en": @"A usable local DDI image is present (version-matched and fresh)",
+            @"ja": @"利用可能な DDI イメージが本機にあります（バージョン一致・期限内）",
+        },
+        @"jit.ddi.verdict.missing.reason": @{
+            @"zh-Hans": @"本地没有可用的 DDI 镜像",
+            @"zh-Hant": @"本機沒有可用的 DDI 映像",
+            @"en": @"No usable local DDI image",
+            @"ja": @"本機に利用可能な DDI イメージがありません",
+        },
+        @"jit.ddi.verdict.versionMismatch.reason": @{
+            @"zh-Hans": @"本地 DDI 与当前系统版本/构建号不一致",
+            @"zh-Hant": @"本機 DDI 與目前系統版本/組建號不相符",
+            @"en": @"The local DDI does not match the current OS version/build",
+            @"ja": @"本機 DDI が現在のシステムのバージョン/ビルドと一致しません",
+        },
+        @"jit.ddi.verdict.stale.reason": @{
+            @"zh-Hans": @"本地 DDI 镜像超出新鲜度窗口（超过 7 天）",
+            @"zh-Hant": @"本機 DDI 映像超出新鮮度視窗（超過 7 天）",
+            @"en": @"The local DDI image is beyond the freshness window (over 7 days)",
+            @"ja": @"本機 DDI イメージが鮮度ウィンドウ（7 日）を超えています",
+        },
+        @"jit.ddi.verdict.unknown.reason": @{
+            @"zh-Hans": @"DDI 状态无法确认（探测未接线 / 镜像未声明版本 / 目录不可读）",
+            @"zh-Hant": @"DDI 狀態無法確認（探測未接線 / 映像未宣告版本 / 目錄不可讀）",
+            @"en": @"DDI state cannot be confirmed (probe not wired / image declares no version / directory unreadable)",
+            @"ja": @"DDI の状態を確認できません（検出未接続 / イメージにバージョン宣言なし / ディレクトリ読めず）",
+        },
+        // 判定动作
+        @"jit.ddi.verdict.present.action": @{
+            @"zh-Hans": @"无需操作",
+            @"zh-Hant": @"無需操作",
+            @"en": @"No action needed",
+            @"ja": @"操作は不要です",
+        },
+        @"jit.ddi.verdict.missing.action": @{
+            @"zh-Hans": @"导入一份 DDI 镜像，或打开「联网取 DDI」开关",
+            @"zh-Hant": @"匯入一份 DDI 映像，或開啟「連網取 DDI」開關",
+            @"en": @"Import a DDI image, or turn on \"Fetch DDI online\"",
+            @"ja": @"DDI イメージを取り込むか、「DDI をオンライン取得」をオンにします",
+        },
+        @"jit.ddi.verdict.versionMismatch.action": @{
+            @"zh-Hans": @"导入与当前系统匹配的 DDI；或改用外部工具开启 JIT",
+            @"zh-Hant": @"匯入與目前系統相符的 DDI；或改用外部工具開啟 JIT",
+            @"en": @"Import a DDI matching the current OS, or use an external tool to enable JIT",
+            @"ja": @"現在のシステムに一致する DDI を取り込むか、外部ツールで JIT を有効化します",
+        },
+        @"jit.ddi.verdict.stale.action": @{
+            @"zh-Hans": @"重新导入一份 DDI 镜像",
+            @"zh-Hant": @"重新匯入一份 DDI 映像",
+            @"en": @"Import a fresh DDI image",
+            @"ja": @"新しい DDI イメージを取り込み直します",
+        },
+        @"jit.ddi.verdict.unknown.action": @{
+            @"zh-Hans": @"先看日志取证；必要时导入一份带版本声明的 DDI",
+            @"zh-Hant": @"先看日誌取證；必要時匯入一份帶版本宣告的 DDI",
+            @"en": @"Check the log for evidence; if needed, import a DDI that declares its version",
+            @"ja": @"まずログの証跡を確認し、必要ならバージョン宣言付きの DDI を取り込みます",
+        },
+        // 下一步动作
+        @"jit.ddi.next.ready": @{
+            @"zh-Hans": @"DDI 已就位，可继续",
+            @"zh-Hant": @"DDI 已就位，可繼續",
+            @"en": @"DDI is in place; you can continue",
+            @"ja": @"DDI は準備済みです。続行できます",
+        },
+        @"jit.ddi.next.enableFetch": @{
+            @"zh-Hans": @"本地没有 DDI：导入一份，或打开「联网取 DDI」开关",
+            @"zh-Hant": @"本機沒有 DDI：匯入一份，或開啟「連網取 DDI」開關",
+            @"en": @"No local DDI: import one, or turn on \"Fetch DDI online\"",
+            @"ja": @"本機に DDI がありません。取り込むか「DDI をオンライン取得」をオンにします",
+        },
+        @"jit.ddi.next.fetch": @{
+            @"zh-Hans": @"本地没有 DDI：可向 Apple 官方服务请求（需联网）",
+            @"zh-Hant": @"本機沒有 DDI：可向 Apple 官方服務請求（需連網）",
+            @"en": @"No local DDI: you can request one from Apple's official service (needs network)",
+            @"ja": @"本機に DDI がありません。Apple 公式サービスへ要求できます（通信が必要）",
+        },
+        @"jit.ddi.next.reimport": @{
+            @"zh-Hans": @"重新导入一份与当前系统匹配的 DDI",
+            @"zh-Hant": @"重新匯入一份與目前系統相符的 DDI",
+            @"en": @"Re-import a DDI matching the current OS",
+            @"ja": @"現在のシステムに一致する DDI を取り込み直します",
+        },
+        @"jit.ddi.next.unconfirmed": @{
+            @"zh-Hans": @"无法确认：查看日志取证后再决定",
+            @"zh-Hant": @"無法確認：查看日誌取證後再決定",
+            @"en": @"Unconfirmed: check the log evidence first",
+            @"ja": @"確認できません。まずログの証跡を確認します",
+        },
+        // 机制阻塞（联网取 / 挂载）
+        @"jit.ddi.fetch.disabled.reason": @{
+            @"zh-Hans": @"「联网取 DDI」当前是关闭的",
+            @"zh-Hant": @"「連網取 DDI」目前是關閉的",
+            @"en": "\"Fetch DDI online\" is currently off",
+            @"ja": @"「DDI をオンライン取得」は現在オフです",
+        },
+        @"jit.ddi.fetch.disabled.action": @{
+            @"zh-Hans": @"打开开关后重试（这是访问 Apple 官方服务，不是「上云」）",
+            @"zh-Hant": @"開啟開關後重試（這是存取 Apple 官方服務，不是「上雲」）",
+            @"en": @"Turn it on and retry (this accesses Apple's official service, not \"the cloud\")",
+            @"ja": @"オンにして再試行します（Apple 公式サービスへのアクセスであり「クラウド化」ではありません）",
+        },
+        @"jit.ddi.fetch.unsupported.reason": @{
+            @"zh-Hans": @"联网取 DDI 尚不可用（个性化机制未接入 / 缺设备标识）",
+            @"zh-Hant": @"連網取 DDI 尚不可用（個人化機制未接線 / 缺裝置識別）",
+            @"en": @"Online DDI fetch is not available yet (personalization not wired / missing device identifier)",
+            @"ja": @"DDI のオンライン取得は未対応です（個別化の未接続 / デバイス識別子なし）",
+        },
+        @"jit.ddi.fetch.unsupported.action": @{
+            @"zh-Hans": @"先手动导入 DDI 镜像；机制落地见下一阶段",
+            @"zh-Hant": @"先手動匯入 DDI 映像；機制落地見下一階段",
+            @"en": @"Import a DDI image manually for now; the mechanism lands next phase",
+            @"ja": @"当面は手動で DDI イメージを取り込みます（機構は次段階）",
+        },
+        @"jit.ddi.mount.unavailable.reason": @{
+            @"zh-Hans": @"挂载 DDI 当前不可用（需 image_mounter 服务与相应特权）",
+            @"zh-Hant": @"掛載 DDI 目前不可用（需 image_mounter 服務與相應特權）",
+            @"en": @"Mounting the DDI is unavailable (needs the image_mounter service and privileges)",
+            @"ja": @"DDI のマウントは利用できません（image_mounter サービスと権限が必要）",
+        },
+        @"jit.ddi.mount.unavailable.action": @{
+            @"zh-Hans": @"确认 Developer Mode 与网络后重试；仍不可用请附日志取证",
+            @"zh-Hant": @"確認 Developer Mode 與網路後重試；仍不可用請附日誌取證",
+            @"en": @"Verify Developer Mode and network, then retry; if it still fails, attach the log evidence",
+            @"ja": @"Developer Mode とネットワークを確認して再試行します。それでも不可ならログの証跡を添えてください",
+        },
+        // 提示
+        @"jit.toast.ddiImporting": @{
+            @"zh-Hans": @"正在导入 DDI…",
+            @"zh-Hant": @"正在匯入 DDI…",
+            @"en": @"Importing DDI…",
+            @"ja": @"DDI を取り込み中…",
+        },
+        @"jit.toast.ddiImportOK": @{
+            @"zh-Hans": @"DDI 已导入",
+            @"zh-Hant": @"DDI 已匯入",
+            @"en": @"DDI imported",
+            @"ja": @"DDI を取り込みました",
+        },
+        @"jit.toast.ddiImportFail": @{
+            @"zh-Hans": @"DDI 导入失败",
+            @"zh-Hant": @"DDI 匯入失敗",
+            @"en": @"DDI import failed",
+            @"ja": @"DDI の取り込みに失敗しました",
+        },
+        @"jit.toast.ddiFetching": @{
+            @"zh-Hans": @"正在向 Apple 官方服务请求 DDI…",
+            @"zh-Hant": @"正在向 Apple 官方服務請求 DDI…",
+            @"en": @"Requesting DDI from Apple's official service…",
+            @"ja": @"Apple 公式サービスへ DDI を要求中…",
+        },
+        @"jit.toast.ddiFetchFail": @{
+            @"zh-Hans": @"联网取 DDI 失败",
+            @"zh-Hant": @"連網取 DDI 失敗",
+            @"en": @"Online DDI fetch failed",
+            @"ja": @"DDI のオンライン取得に失敗しました",
+        },
+        @"jit.toast.ddiFetchOff": @{
+            @"zh-Hans": @"「联网取 DDI」是关着的：先打开开关",
+            @"zh-Hant": @"「連網取 DDI」是關著的：先開啟開關",
+            @"en": "\"Fetch DDI online\" is off: turn it on first",
+            @"ja": @"「DDI をオンライン取得」はオフです。先にオンにしてください",
+        },
         };
     });
     return table;

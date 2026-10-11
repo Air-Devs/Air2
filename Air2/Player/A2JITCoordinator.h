@@ -41,6 +41,8 @@
 #import "A2JITExternalToolLauncher.h"
 // [JIT-AUTOPAIR-1] 自动配对（iOS 27+）的注入缝与前置条件值对象。
 #import "A2JITAutoPairing.h"
+// [JIT-DDI-1] DDI 前置条件的真探测（协议注入缝）。
+#import "A2JITDDIProbe.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -99,6 +101,17 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSArray<id<A2JITProvider>> *)providersWithFacts:(A2JITFacts *)facts
                                       preconditions:(nullable A2JITAutoPairingPreconditions *)preconditions
                                              engine:(nullable id<A2JITAutoPairingEngine>)engine
+                                              probe:(nullable id<A2JITReadinessProbe>)probe
+                                           launcher:(nullable id<A2JITExternalToolLauncher>)launcher
+                                  pairingFileStore:(nullable A2JITPairingFileStore *)store;
+
+/// ★[JIT-DDI-1] 装配用（推荐）★：在上一版基础上再注入 DDI 真探测。
+/// ★注入 ddiProbe 后，① 自动配对的前置条件里【DDI 那一项】以探测结果为准★
+/// （可区分「已就位 / 缺失 / 无法确认」；探测回 Unknown 时仍报 Unknown，绝不猜成已满足）。
++ (NSArray<id<A2JITProvider>> *)providersWithFacts:(A2JITFacts *)facts
+                                      preconditions:(nullable A2JITAutoPairingPreconditions *)preconditions
+                                             engine:(nullable id<A2JITAutoPairingEngine>)engine
+                                           ddiProbe:(nullable id<A2JITDDIProbe>)ddiProbe
                                               probe:(nullable id<A2JITReadinessProbe>)probe
                                            launcher:(nullable id<A2JITExternalToolLauncher>)launcher
                                   pairingFileStore:(nullable A2JITPairingFileStore *)store;

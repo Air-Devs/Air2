@@ -112,14 +112,33 @@ static NSString *const A2JITCoordinatorErrorDomain = @"A2JITCoordinatorError";
                                               probe:(nullable id<A2JITReadinessProbe>)probe
                                            launcher:(nullable id<A2JITExternalToolLauncher>)launcher
                                   pairingFileStore:(nullable A2JITPairingFileStore *)store {
+    // [JIT-DDI-1] 旧签名等价于「不注入 DDI 探测」⇒ ① 的 DDI 那一项沿用注入的前置条件值。
+    return [self providersWithFacts:facts
+                     preconditions:preconditions
+                            engine:engine
+                          ddiProbe:nil
+                             probe:probe
+                          launcher:launcher
+                 pairingFileStore:store];
+}
+
++ (NSArray<id<A2JITProvider>> *)providersWithFacts:(A2JITFacts *)facts
+                                      preconditions:(nullable A2JITAutoPairingPreconditions *)preconditions
+                                             engine:(nullable id<A2JITAutoPairingEngine>)engine
+                                           ddiProbe:(nullable id<A2JITDDIProbe>)ddiProbe
+                                              probe:(nullable id<A2JITReadinessProbe>)probe
+                                           launcher:(nullable id<A2JITExternalToolLauncher>)launcher
+                                  pairingFileStore:(nullable A2JITPairingFileStore *)store {
     NSParameterAssert(facts);
     // ★[JIT-IMPL-2]★ 判据内核（probe）同时注入 ② 导入 / ③ 外部 / ④ 内核三条路径：
     // 它们都要靠 A2JITEnvironment 的真实判据说话，而不是靠「能力声明」。
     // ★[JIT-AUTOPAIR-1]★ ① 自动配对另注入前置条件与 RPPairing 引擎（真机 = Bridge → Natives）。
+    // ★[JIT-DDI-1]★ ① 另注入 DDI 真探测 ⇒ 前置条件的 DDI 一项变成真三态。
     A2JITPairingFileStore *fileStore = store ?: [A2JITPairingFileStore defaultStore];
     return @[ [[A2JITAutomaticPairingProvider alloc] initWithFacts:facts
                                                      preconditions:preconditions
                                                             engine:engine
+                                                          ddiProbe:ddiProbe
                                                              store:fileStore
                                                              probe:probe],
               [[A2JITImportedPairingProvider alloc] initWithFacts:facts store:fileStore probe:probe],

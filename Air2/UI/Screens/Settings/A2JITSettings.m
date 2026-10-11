@@ -46,6 +46,12 @@
 #import "A2JITSystemToolLauncher.h"
 #import "A2JITEnvironmentProbe.h"
 #import "A2JITAutoPairingEngineBridge.h"
+// [JIT-DDI-1] DDI：本地镜像存储 / 判定缝 / 分流表 / 设备侧 Bridge 骨架
+#import "A2JITDDI.h"
+#import "A2JITDDIStore.h"
+#import "A2JITDDIProbe.h"
+#import "A2JITDDIGuidance.h"
+#import "A2JITDDIDeviceBridge.h"
 #import "A2Toast.h"
 
 #import <UIKit/UIKit.h>
@@ -95,21 +101,38 @@
 @property (nonatomic, strong, nullable) id<A2JITReadinessProbe> probe;
 /// [JIT-AUTOPAIR-1] ① 自动配对 Provider（用于显示前置 / 新鲜度 / 失败分类）。
 @property (nonatomic, strong, nullable) A2JITAutomaticPairingProvider *autoProvider;
+/// [JIT-DDI-1] DDI 判定（本地镜像 + 设备侧骨架）与本地镜像存储。
+@property (nonatomic, strong, nullable) A2JITLocalDDIProbe *ddiProbe;
+@property (nonatomic, strong, nullable) A2JITDDIStore *ddiStore;
 
 // 行（section 持有它们；这里只用弱引用，避免与行内 block 形成环）
 @property (nonatomic, weak, nullable) A2SettingsRow *statusRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *strategyRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *nextRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *autopairRow;
+@property (nonatomic, weak, nullable) A2SettingsRow *ddiRow;
+@property (nonatomic, weak, nullable) A2SettingsRow *ddiImportRow;
+@property (nonatomic, weak, nullable) A2SettingsRow *ddiFetchRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *importRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *toolRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *evidenceRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *enableRow;
 
+/// 当前正在等哪一类文件（0 = 配对文件；1 = DDI 镜像）。
+@property (nonatomic, assign) NSInteger pendingPickerKind;
+
 /// 按当前事实 / 状态 / 判据刷新所有行的文字与启用态。
 - (void)apply;
+/// [JIT-DDI-1] 刷新 DDI 行（状态 + 下一步动作 + 取证）。
+- (void)applyDDIRow;
 /// 起系统文档选择器挑选配对文件。
 - (void)presentImportPicker;
+/// [JIT-DDI-1] 起系统文档选择器挑选 DDI 镜像（与配对文件同机制）。
+- (void)presentDDIImportPicker;
+/// [JIT-DDI-1] 「联网取 DDI」：开关关着就提示去开；开着才真呼叫机制（如实失败）。
+- (void)runDDIFetch;
+/// [JIT-DDI-1] DDI 镜像导入落盘（与配对文件同机制）。
+- (void)importDDIImageAtURL:(NSURL *)url;
 /// [JIT-AUTOPAIR-1] 后台队列开展自动配对（有界），完成后回主线程刷新。
 - (void)runAutoPair;
 /// 后台队列开启 JIT（有界等待），完成后回主线程刷新。
@@ -154,6 +177,9 @@
 
     // ---- [JIT-AUTOPAIR-1] 自动配对（iOS 27+ 推荐）----
     [self applyAutopairRowForDecision:decision];
+
+    // ---- [JIT-DDI-1] DDI 状态与下一步动作 ----
+    [self applyDDIRow];
 
     // ---- 判据取证（失败原因★按 verdict 分流★）----
     A2JITReadinessVerdict verdict = [self currentVerdict];
@@ -233,6 +259,40 @@
     self.autopairRow.subtitle = [self text:@"jit.row.autopair.needRun"];
 }
 
+#pragma mark [JIT-DDI-1] DDI 行（状态 + 下一步动作 + 取证）
+
+- (void)applyDDIRow {
+    A2JITLocalDDIProbe *probe = self.ddiProbe;
+    if (probe == nil) {
+        // 未注入探测 ⇒ 如实写「无法确认」（★不写「已就位」，也不写「缺失」★）。
+        self.ddiRow.enabled = NO;
+        self.ddiRow.valueText = @"";
+        self.ddiRow.subtitle = [self text:@"jit.ddi.status.unknown"];
+        self.ddiImportRow.enabled = NO;
+        self.ddiFetchRow.enabled = NO;
+        return;
+    }
+    BOOL fetchOn = [NSUserDefaults.standardUserDefaults boolForKey:@"debug.jit_ddi_fetch"];
+    A2JITDDIStatus *st = [probe ddiStatus];
+
+    // 状态（短文案）+ 下一步动作 + 取证（一行定成败，便于照单核对）。
+    self.ddiRow.enabled = YES;
+    self.ddiRow.valueText = [self text:[A2JITDDIGuidance statusKeyForVerdict:st.verdict]];
+    NSString *next = [self text:[A2JITDDIGuidance nextActionKeyForVerdict:st.verdict fetchEnabled:fetchOn]];
+    self.ddiRow.subtitle = [NSString stringWithFormat:@"%@｜%@", next, st.evidence ?: @""];
+
+    // 导入 DDI 行（与配对文件同机制：系统文档选择器 → 本机校验）。
+    self.ddiImportRow.enabled = YES;
+    self.ddiImportRow.subtitle = (st.verdict == A2JITDDIVerdictPresent)
+        ? [self text:@"jit.ddi.status.present"]
+        : [self text:@"jit.row.ddiImport.needFile"];
+
+    // 「联网取 DDI」开关行（★默认关★；文案写明这是访问 Apple 官方服务，不是「上云」）。
+    self.ddiFetchRow.enabled = YES;
+    self.ddiFetchRow.on = fetchOn;
+    self.ddiFetchRow.subtitle = [self text:@"jit.row.ddiFetch.detail"];
+}
+
 - (NSString *)nextActionTextForVerdict:(A2JITReadinessVerdict)verdict
                               decision:(A2JITStrategyDecision *)decision {
     if (self.coordinator.state == A2JITStateEnabled) {
@@ -256,9 +316,24 @@
     if (self.host == nil) {
         return;
     }
+    self.pendingPickerKind = 0;   // 配对文件
     // asCopy:YES ⇒ 系统先把文件拷进本 App 的临时目录，省掉 security-scoped 的长时间持有。
     UIDocumentPickerViewController *picker =
         [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[ UTTypeData, UTTypePropertyList ]
+                                                                  asCopy:YES];
+    picker.delegate = self;
+    picker.allowsMultipleSelection = NO;
+    [self.host presentViewController:picker animated:YES completion:nil];
+}
+
+// [JIT-DDI-1] 导入 DDI 镜像：与配对文件【同一机制】（同一个 delegate / 同一个落盘思路）。
+- (void)presentDDIImportPicker {
+    if (self.host == nil) {
+        return;
+    }
+    self.pendingPickerKind = 1;   // DDI 镜像
+    UIDocumentPickerViewController *picker =
+        [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[ UTTypeData ]
                                                                   asCopy:YES];
     picker.delegate = self;
     picker.allowsMultipleSelection = NO;
@@ -275,7 +350,76 @@
     if (url == nil) {
         return;
     }
-    [self importPairingFileAtURL:url];
+    if (self.pendingPickerKind == 1) {
+        [self importDDIImageAtURL:url];
+    } else {
+        [self importPairingFileAtURL:url];
+    }
+}
+
+// [JIT-DDI-1] 导入 DDI：真校验（UDIF 尾标）→ 落盘 + 元数据 → 刷新（判定会立刻反映）。
+- (void)importDDIImageAtURL:(NSURL *)url {
+    UIViewController *host = self.host;
+    [A2Toast show:[self text:@"jit.toast.ddiImporting"] inView:host.view];
+
+    A2JITDDIStore *store = self.ddiStore;
+    if (store == nil) {
+        [A2Toast show:[self text:@"jit.toast.ddiImportFail"] inView:host.view];
+        return;
+    }
+    NSError *importErr = nil;
+    NSString *path = [store importImageFromURL:url sourceName:url.lastPathComponent error:&importErr];
+    if (path == nil) {
+        NSString *why = importErr.localizedDescription ?: @"未知原因";
+        NSLog(@"[A2JIT] DDI 导入失败 url=%@ reason=%@", url.absoluteString, why);
+        [A2Toast show:[NSString stringWithFormat:@"%@：%@", [self text:@"jit.toast.ddiImportFail"], why]
+               inView:host.view];
+        [self apply];
+        return;
+    }
+    [A2Toast show:[self text:@"jit.toast.ddiImportOK"] inView:host.view];
+    [self apply];
+}
+
+// [JIT-DDI-1] 「联网取 DDI」：★默认关★；关着就【不发起任何网络动作】，只提示去开开关。
+// 开着才真呼叫机制 —— 机制未接入时如实失败并点名缺什么（绝不假成功）。
+- (void)runDDIFetch {
+    UIViewController *host = self.host;
+    BOOL fetchOn = [NSUserDefaults.standardUserDefaults boolForKey:@"debug.jit_ddi_fetch"];
+    if (!fetchOn) {
+        NSString *reason = [self text:[A2JITDDIGuidance fetchDisabledReasonKey]];
+        NSString *action = [self text:[A2JITDDIGuidance fetchDisabledActionKey]];
+        NSLog(@"[A2JIT] DDI 联网取：开关关闭 ⇒ 不发起任何网络动作（这是访问 Apple 官方服务，非「上云」）");
+        [A2Toast show:[NSString stringWithFormat:@"%@；%@", reason, action] inView:host.view];
+        [self apply];
+        return;
+    }
+
+    A2JITLocalDDIProbe *probe = self.ddiProbe;
+    if (probe == nil) {
+        [A2Toast show:[self text:@"jit.toast.ddiFetchFail"] inView:host.view];
+        return;
+    }
+    [A2Toast show:[self text:@"jit.toast.ddiFetching"] inView:host.view];
+
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSString *why = nil;
+        BOOL ok = [probe fetchPersonalizedImageWithReason:&why];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSString *head = ok ? [weakSelf text:@"jit.toast.ddiImportOK"] : [weakSelf text:@"jit.toast.ddiFetchFail"];
+            NSString *detail = @"";
+            if (!ok) {
+                NSString *reason = [weakSelf text:[A2JITDDIGuidance fetchUnsupportedReasonKey]];
+                NSString *action = [weakSelf text:[A2JITDDIGuidance fetchUnsupportedActionKey]];
+                detail = [NSString stringWithFormat:@"：%@；%@%@", reason, action,
+                          why.length ? [NSString stringWithFormat:@"（取证：%@）", why] : @""];
+            }
+            NSLog(@"[A2JIT] DDI 联网取结果 ok=%d detail=%@", (int)ok, why ?: @"(无)");
+            [A2Toast show:[NSString stringWithFormat:@"%@%@", head, detail] inView:host.view];
+            [weakSelf apply];
+        });
+    });
 }
 
 - (void)importPairingFileAtURL:(NSURL *)url {
@@ -388,9 +532,25 @@
     A2JITAutoPairingEngineBridge *autoEngine = [[A2JITAutoPairingEngineBridge alloc] init];
     A2JITAutoPairingPreconditions *preconditions = [autoEngine readPreconditions];
 
+    // ★[JIT-DDI-1] DDI 真探测★：本地镜像存储（容器约定目录）+ 设备侧查询（Bridge 骨架）+ 系统要求。
+    // 系统构建号取自 NSProcessInfo（取不到就是 nil ⇒ 判定按「无法对齐」如实报 Unknown，不猜）。
+    A2JITDDIDeviceBridge *ddiDevice = [[A2JITDDIDeviceBridge alloc] init];
+    NSString *osBuild = [A2JITDDI buildFromOperatingSystemVersionString:
+                         NSProcessInfo.processInfo.operatingSystemVersionString];
+    A2JITDDIRequirement *ddiRequirement =
+        [A2JITDDIRequirement requirementWithOSMajorVersion:facts.osMajorVersion
+                                              minorVersion:facts.osMinorVersion
+                                                     build:osBuild
+                                              uniqueChipID:[ddiDevice uniqueChipID]];
+    A2JITDDIStore *ddiStore = [A2JITDDIStore defaultStore];
+    A2JITLocalDDIProbe *ddiProbe = [[A2JITLocalDDIProbe alloc] initWithStore:ddiStore
+                                                                 requirement:ddiRequirement
+                                                                 deviceQuery:ddiDevice];
+
     NSArray<id<A2JITProvider>> *providers = [A2JITCoordinator providersWithFacts:facts
                                                                   preconditions:preconditions
                                                                          engine:autoEngine
+                                                                       ddiProbe:ddiProbe
                                                                           probe:probe
                                                                        launcher:launcher
                                                               pairingFileStore:store];
@@ -405,25 +565,29 @@
         }
     }
 
-    NSLog(@"[A2JIT] 装配完成：strategy=%@ state=%@ 外部工具=%@ 配对文件=%@ 自动配对=%@",
+    NSLog(@"[A2JIT] 装配完成：strategy=%@ state=%@ 外部工具=%@ 配对文件=%@ 自动配对=%@ DDI=%@",
           [A2JITStrategySelector displayNameForStrategy:[A2JITStrategySelector strategyForFacts:facts]],
           [A2JITStateMachine displayNameForState:coordinator.state],
           facts.hasExternalEnablerInstalled ? @"已安装" : @"未安装",
           store.hasUsablePairingFile ? @"已导入" : @"未导入",
-          autoProvider ? (autoProvider.canGeneratePairingFile ? @"可生成" : @"未就绪") : @"无");
+          autoProvider ? (autoProvider.canGeneratePairingFile ? @"可生成" : @"未就绪") : @"无",
+          [A2JITDDI displayNameForVerdict:[ddiProbe ddiStatus].verdict]);
 
     return [self buildWithHost:host facts:facts coordinator:coordinator store:store
-                         probe:probe launcher:launcher autoProvider:autoProvider];
+                         probe:probe launcher:launcher autoProvider:autoProvider
+                      ddiProbe:ddiProbe ddiStore:ddiStore];
 }
 
-/// 可注入重载（单测 / 装配处可传自制事实、编排器、存储、判据与拉起器）。
+/// 可注入重载（单测 / 装配处可传自制事实、编排器、存储、判据、拉起器与 DDI 探测）。
 + (A2SettingsSection *)buildWithHost:(UIViewController *)host
                                facts:(A2JITFacts *)facts
                          coordinator:(A2JITCoordinator *)coordinator
                                store:(A2JITPairingFileStore *)store
                                probe:(nullable id<A2JITReadinessProbe>)probe
                             launcher:(nullable id<A2JITExternalToolLauncher>)launcher
-                        autoProvider:(nullable A2JITAutomaticPairingProvider *)autoProvider {
+                        autoProvider:(nullable A2JITAutomaticPairingProvider *)autoProvider
+                            ddiProbe:(nullable A2JITLocalDDIProbe *)ddiProbe
+                            ddiStore:(nullable A2JITDDIStore *)ddiStore {
     A2JITPanelPresenter *presenter = [[A2JITPanelPresenter alloc] init];
     presenter.host = host;
     presenter.facts = facts;
@@ -431,6 +595,8 @@
     presenter.store = store;
     presenter.probe = probe;
     presenter.autoProvider = autoProvider;
+    presenter.ddiProbe = ddiProbe;
+    presenter.ddiStore = ddiStore;
     (void)launcher;   // 拉起器只被 Provider 使用；此处保留形参便于装配处换实现。
 
     A2JITStrategyDecision *decision = [A2JITStrategySelector decisionForFacts:facts];
@@ -466,6 +632,26 @@
     autopairRow.accessory = A2SettingsRowAccessoryDisclosure;
     [section addRow:autopairRow];
 
+    // ---- [JIT-DDI-1] DDI：状态行 / 导入行 / 「联网取 DDI」开关行 ----
+    A2SettingsRow *ddiRow = [[A2SettingsRow alloc] init];
+    ddiRow.symbolName = @"externaldrive.fill";
+    ddiRow.title = [A2JITStrings stringForKey:@"jit.row.ddi"];
+    [section addRow:ddiRow];
+
+    A2SettingsRow *ddiImportRow = [[A2SettingsRow alloc] init];
+    ddiImportRow.symbolName = @"square.and.arrow.down.on.square";
+    ddiImportRow.title = [A2JITStrings stringForKey:@"jit.row.ddiImport"];
+    ddiImportRow.accessory = A2SettingsRowAccessoryDisclosure;
+    [section addRow:ddiImportRow];
+
+    A2SettingsRow *ddiFetchRow = [[A2SettingsRow alloc] init];
+    ddiFetchRow.symbolName = @"antenna.radiowaves.left.and.right";
+    ddiFetchRow.title = [A2JITStrings stringForKey:@"jit.row.ddiFetch"];
+    ddiFetchRow.accessory = A2SettingsRowAccessorySwitch;
+    // ★默认关★（偏好键 debug.jit_ddi_fetch 默认 NO）。
+    ddiFetchRow.on = [NSUserDefaults.standardUserDefaults boolForKey:@"debug.jit_ddi_fetch"];
+    [section addRow:ddiFetchRow];
+
     A2SettingsRow *importRow = [[A2SettingsRow alloc] init];
     importRow.symbolName = @"doc.badge.plus";
     importRow.title = [A2JITStrings stringForKey:@"jit.row.import"];
@@ -487,6 +673,9 @@
     presenter.nextRow = nextRow;
     presenter.evidenceRow = evidenceRow;
     presenter.autopairRow = autopairRow;
+    presenter.ddiRow = ddiRow;
+    presenter.ddiImportRow = ddiImportRow;
+    presenter.ddiFetchRow = ddiFetchRow;
     presenter.importRow = importRow;
     presenter.toolRow = toolRow;
     presenter.enableRow = enableRow;
@@ -495,6 +684,20 @@
     __weak typeof(presenter) weakPresenter = presenter;
     autopairRow.onTap = ^{
         [weakPresenter runAutoPair];
+    };
+    ddiImportRow.onTap = ^{
+        [weakPresenter presentDDIImportPicker];
+    };
+    // ★「联网取 DDI」默认关★：开关只写偏好；打开的那一刻才真呼叫机制
+    // （机制未接入时如实失败并点名缺什么——绝不假成功）。
+    ddiFetchRow.onToggle = ^(BOOL isOn) {
+        [NSUserDefaults.standardUserDefaults setBool:isOn forKey:@"debug.jit_ddi_fetch"];
+        NSLog(@"[A2JIT] DDI 联网取开关 = %@（★这是访问 Apple 官方服务，不是「上云」★）", isOn ? @"开" : @"关");
+        if (isOn) {
+            [weakPresenter runDDIFetch];
+        } else {
+            [weakPresenter apply];
+        }
     };
     importRow.onTap = ^{
         [weakPresenter presentImportPicker];

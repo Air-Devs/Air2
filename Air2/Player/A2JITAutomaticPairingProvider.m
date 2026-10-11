@@ -20,6 +20,9 @@
 #import "A2JITAutoPairingGuidance.h"
 #import "A2JITVerdictGuidance.h"
 #import "A2JITStrings.h"
+#import "A2JITDDI.h"          // [JIT-DDI-1] DDI 判定（类型 / 纯逻辑）
+#import "A2JITDDIProbe.h"     // [JIT-DDI-1] DDI 判定缝
+#import "A2JITDDIGuidance.h"  // [JIT-DDI-1] 判定 → 前置条件三态
 
 /// 默认生成预算与新鲜度窗口（有界；见 docs/JIT-PROVISIONING.md §5 风险 3「7 天重签」）。
 static const NSTimeInterval kA2JITAutoPairingDefaultBudget = 45.0;
@@ -62,6 +65,9 @@ static A2JITAutoPairingStep A2StepForBlocker(A2JITAutoPairingBlocker blocker) {
 @property (nonatomic, readwrite) A2JITAutoPairingBlocker lastBlocker;
 @property (nonatomic, readwrite) A2JITReadinessVerdict lastVerdict;
 @property (nonatomic, readwrite, copy, nullable) NSString *lastEvidence;
+
+/// [JIT-DDI-1] DDI 那一项的取证（仅 DDI 且有探测时返回；供「缺什么报什么」更具体）。
+- (nullable NSString *)ddiEvidenceForPrecondition:(A2JITAutoPairingPrecondition)precondition;
 @end
 
 @implementation A2JITAutomaticPairingProvider
@@ -78,12 +84,26 @@ static A2JITAutoPairingStep A2StepForBlocker(A2JITAutoPairingBlocker blocker) {
 
 - (instancetype)initWithFacts:(A2JITFacts *)facts {
     // 兼容旧装配：前置条件未知 + 无引擎 ⇒ 后面会【如实】报「未确认 / 未接入」，不假装成功。
-    return [self initWithFacts:facts preconditions:nil engine:nil store:nil probe:nil];
+    return [self initWithFacts:facts preconditions:nil engine:nil ddiProbe:nil store:nil probe:nil];
 }
 
 - (instancetype)initWithFacts:(A2JITFacts *)facts
                 preconditions:(nullable A2JITAutoPairingPreconditions *)preconditions
                        engine:(nullable id<A2JITAutoPairingEngine>)engine
+                        store:(nullable A2JITPairingFileStore *)store
+                        probe:(nullable id<A2JITReadinessProbe>)probe {
+    return [self initWithFacts:facts
+                 preconditions:preconditions
+                        engine:engine
+                      ddiProbe:nil
+                         store:store
+                         probe:probe];
+}
+
+- (instancetype)initWithFacts:(A2JITFacts *)facts
+                preconditions:(nullable A2JITAutoPairingPreconditions *)preconditions
+                       engine:(nullable id<A2JITAutoPairingEngine>)engine
+                     ddiProbe:(nullable id<A2JITDDIProbe>)ddiProbe
                         store:(nullable A2JITPairingFileStore *)store
                         probe:(nullable id<A2JITReadinessProbe>)probe {
     NSParameterAssert(facts);
@@ -92,6 +112,7 @@ static A2JITAutoPairingStep A2StepForBlocker(A2JITAutoPairingBlocker blocker) {
         _facts = facts;
         _preconditions = preconditions ?: [A2JITAutoPairingPreconditions unknownPreconditions];
         _engine = engine;
+        _ddiProbe = ddiProbe;
         _store = store ?: [A2JITPairingFileStore defaultStore];
         _probe = probe;
         _generationBudget = kA2JITAutoPairingDefaultBudget;
@@ -101,6 +122,31 @@ static A2JITAutoPairingStep A2StepForBlocker(A2JITAutoPairingBlocker blocker) {
         _lastVerdict = A2JITReadinessVerdictUnknown;
     }
     return self;
+}
+
+#pragma mark - [JIT-DDI-1] DDI 前置条件的真三态
+
+- (nullable A2JITDDIStatus *)ddiStatus {
+    return self.ddiProbe ? [self.ddiProbe ddiStatus] : nil;
+}
+
+- (A2JITAutoPairingPreconditions *)effectivePreconditions {
+    A2JITAutoPairingPreconditions *base = self.preconditions;
+    // ★未注入探测 ⇒ 沿用注入值（通常是 Unknown）★：绝不因「没探测到」就当成满足。
+    if (self.ddiProbe == nil) {
+        return base;
+    }
+    A2JITDDIStatus *st = [self.ddiProbe ddiStatus];
+    if (st == nil) {
+        return base;
+    }
+    A2JITAutoPairingPreconditionState ddiState =
+        [A2JITDDIGuidance preconditionStateForVerdict:st.verdict];
+    return [A2JITAutoPairingPreconditions
+            preconditionsWithDeveloperMode:[base stateForPrecondition:A2JITAutoPairingPreconditionDeveloperMode]
+                              localNetwork:[base stateForPrecondition:A2JITAutoPairingPreconditionLocalNetwork]
+                              getTaskAllow:[base stateForPrecondition:A2JITAutoPairingPreconditionGetTaskAllow]
+                                       ddi:ddiState];
 }
 
 #pragma mark - 身份与能力
@@ -153,23 +199,26 @@ static A2JITAutoPairingStep A2StepForBlocker(A2JITAutoPairingBlocker blocker) {
 }
 
 - (BOOL)canGeneratePairingFile {
-    return self.preconditions.allSatisfied && (self.engine != nil) && [self.engine isEngineAvailable];
+    // ★用生效的前置条件★（DDI 那一项在有探测时以探测结果为准；无探测时沿用注入值）。
+    return [self effectivePreconditions].allSatisfied && (self.engine != nil) && [self.engine isEngineAvailable];
 }
 
 - (nullable NSNumber *)firstBlockingPrecondition {
-    NSNumber *unsatisfied = [self.preconditions firstUnsatisfiedPrecondition];
+    A2JITAutoPairingPreconditions *pc = [self effectivePreconditions];
+    NSNumber *unsatisfied = [pc firstUnsatisfiedPrecondition];
     if (unsatisfied) {
         return unsatisfied;
     }
-    return [self.preconditions firstUnconfirmedPrecondition];
+    return [pc firstUnconfirmedPrecondition];
 }
 
 - (nullable NSString *)blockingPreconditionReasonKey {
     // ★三态要分清★：明确未满足 ⇒「未满足」；仅无法确认 ⇒「未确认」（不把 Unknown 说成未满足）。
-    if ([self.preconditions firstUnsatisfiedPrecondition]) {
+    A2JITAutoPairingPreconditions *pc = [self effectivePreconditions];
+    if ([pc firstUnsatisfiedPrecondition]) {
         return @"jit.row.autopair.precondMissing";
     }
-    if ([self.preconditions firstUnconfirmedPrecondition]) {
+    if ([pc firstUnconfirmedPrecondition]) {
         return @"jit.row.autopair.precondUnknown";
     }
     return nil;
@@ -184,6 +233,20 @@ static A2JITAutoPairingStep A2StepForBlocker(A2JITAutoPairingBlocker blocker) {
                                                           step:step
                                                        blocker:blocker
                                                       evidence:evidence]);
+}
+
+/// [JIT-DDI-1] DDI 项的取证：只有 DDI 那一项、且注入了探测时才有（其余项返回 nil）。
+- (nullable NSString *)ddiEvidenceForPrecondition:(A2JITAutoPairingPrecondition)precondition {
+    if (precondition != A2JITAutoPairingPreconditionDDI) {
+        return nil;
+    }
+    A2JITDDIStatus *st = [self ddiStatus];
+    if (st == nil) {
+        return nil;
+    }
+    // 带上判定名，便于把「无法确认」与「缺失」在日志里一眼分清。
+    return [NSString stringWithFormat:@"%@｜%@",
+            [A2JITDDI displayNameForVerdict:st.verdict], st.evidence];
 }
 
 #pragma mark - 取配对（前置检查 → 有界生成）
@@ -227,25 +290,31 @@ static A2JITAutoPairingStep A2StepForBlocker(A2JITAutoPairingBlocker blocker) {
     }
 
     // ---- ④ 前置条件：缺什么报什么（未满足优先，其次未确认）----
-    NSNumber *unsatisfied = [self.preconditions firstUnsatisfiedPrecondition];
+    // ★用生效的前置条件★：DDI 那一项在有 ddiProbe 时是【真三态】（已就位 / 缺失 / 无法确认）。
+    A2JITAutoPairingPreconditions *pcStates = [self effectivePreconditions];
+    NSNumber *unsatisfied = [pcStates firstUnsatisfiedPrecondition];
     if (unsatisfied) {
         A2JITAutoPairingPrecondition pc = (A2JITAutoPairingPrecondition)unsatisfied.integerValue;
         self.lastBlocker = A2BlockerForPrecondition(pc);
-        NSString *detail = [A2JITStrings stringForKey:[A2JITAutoPairingGuidance nameKeyForPrecondition:pc]];
+        NSString *name = [A2JITStrings stringForKey:[A2JITAutoPairingGuidance nameKeyForPrecondition:pc]];
+        NSString *ddiEv = [self ddiEvidenceForPrecondition:pc];
+        NSString *detail = ddiEv.length ? [NSString stringWithFormat:@"%@（%@）", name, ddiEv] : name;
         [self logStep:A2JITAutoPairingStepIdle blocker:self.lastBlocker evidence:detail];
         if (error) {
             *error = A2JITProviderFailureError([self messageForBlocker:self.lastBlocker detail:detail]);
         }
         return NO;
     }
-    NSNumber *unconfirmed = [self.preconditions firstUnconfirmedPrecondition];
+    NSNumber *unconfirmed = [pcStates firstUnconfirmedPrecondition];
     if (unconfirmed) {
         A2JITAutoPairingPrecondition pc = (A2JITAutoPairingPrecondition)unconfirmed.integerValue;
         self.lastBlocker = A2JITAutoPairingBlockerPreconditionUnconfirmed;
-        NSString *detail = [NSString stringWithFormat:@"%@（%@）",
-                            [A2JITStrings stringForKey:[A2JITAutoPairingGuidance nameKeyForPrecondition:pc]],
-                            [A2JITStrings stringForKey:[A2JITAutoPairingGuidance stateKeyForPreconditionState:
-                                                       A2JITAutoPairingPreconditionStateUnknown]]];
+        NSString *name = [A2JITStrings stringForKey:[A2JITAutoPairingGuidance nameKeyForPrecondition:pc]];
+        NSString *stateName = [A2JITStrings stringForKey:[A2JITAutoPairingGuidance stateKeyForPreconditionState:
+                                                          A2JITAutoPairingPreconditionStateUnknown]];
+        NSString *ddiEv = [self ddiEvidenceForPrecondition:pc];
+        NSString *detail = [NSString stringWithFormat:@"%@（%@）%@", name, stateName,
+                            ddiEv.length ? [NSString stringWithFormat:@"：%@", ddiEv] : @""];
         [self logStep:A2JITAutoPairingStepIdle blocker:self.lastBlocker evidence:detail];
         if (error) {
             *error = A2JITProviderFailureError([self messageForBlocker:self.lastBlocker detail:detail]);
@@ -276,7 +345,7 @@ static A2JITAutoPairingStep A2StepForBlocker(A2JITAutoPairingBlocker blocker) {
     self.lastStep = A2JITAutoPairingStepDiscovery;
     NSString *why = nil;
     A2JITAutoPairingBlocker reported = A2JITAutoPairingBlockerNone;
-    NSLog(@"[A2JIT] autopair 开始生成 budget=%.1fs preconditions=%@", budget, self.preconditions);
+    NSLog(@"[A2JIT] autopair 开始生成 budget=%.1fs preconditions=%@", budget, [self effectivePreconditions]);
     BOOL ok = [self.engine generatePairingFileWithinBudget:budget reason:&why blocker:&reported];
     self.lastEvidence = why;
 

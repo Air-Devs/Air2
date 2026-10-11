@@ -25,6 +25,7 @@
 #import "A2JITProvider.h"
 #import "A2JITReadinessProbe.h"
 #import "A2JITAutoPairing.h"
+#import "A2JITDDIProbe.h"   // [JIT-DDI-1] DDI 前置条件的真探测（注入缝 + 判定合成）
 
 @class A2JITFacts;
 @class A2JITPairingFileStore;
@@ -55,6 +56,26 @@ NS_ASSUME_NONNULL_BEGIN
                        engine:(nullable id<A2JITAutoPairingEngine>)engine
                         store:(nullable A2JITPairingFileStore *)store
                         probe:(nullable id<A2JITReadinessProbe>)probe;
+
+/// ★[JIT-DDI-1] 装配用（推荐）★：在上一版基础上再注入 DDI 真探测。
+/// ★注入 ddiProbe 后，前置条件里的【DDI 那一项】以探测结果为准★
+/// （可区分「已就位 / 缺失 / 无法确认」）；★探测回 Unknown 时仍报 Unknown，绝不猜成已满足★。
+/// @param ddiProbe DDI 判定（nil ⇒ DDI 一项沿用注入的 preconditions 原值，如实保持 Unknown）。
+- (instancetype)initWithFacts:(A2JITFacts *)facts
+                preconditions:(nullable A2JITAutoPairingPreconditions *)preconditions
+                       engine:(nullable id<A2JITAutoPairingEngine>)engine
+                     ddiProbe:(nullable id<A2JITDDIProbe>)ddiProbe
+                        store:(nullable A2JITPairingFileStore *)store
+                        probe:(nullable id<A2JITReadinessProbe>)probe;
+
+/// DDI 判定探测（未注入 ⇒ nil）。
+@property (nonatomic, readonly, strong, nullable) id<A2JITDDIProbe> ddiProbe;
+
+/// ★生效的前置条件★：注入值 +（有 ddiProbe 时）以探测结果覆盖 DDI 那一项。
+- (A2JITAutoPairingPreconditions *)effectivePreconditions;
+
+/// 最近一次 DDI 判定（未注入 ddiProbe 时为 nil）。
+- (nullable A2JITDDIStatus *)ddiStatus;
 
 /// 生成配对文件的有界预算（秒）。
 @property (nonatomic, readonly) NSTimeInterval generationBudget;
