@@ -42,10 +42,22 @@ SOURCES = [
     os.path.join(SUPPORT, "a2_rppairing_crypto.m"),
     os.path.join(SUPPORT, "a2_rppairing_chacha.m"),
     os.path.join(SUPPORT, "a2_rppairing_ed25519.m"),
+    # ★合并后新增★：a2_rppairing.m 里引用了 pair-setup 的自证类(A2RPPairSetupSelfTest)/
+    #   会话类 ⇒ 必须把这两份源文件一并链进来,否则 x86_64 链接报
+    #   Undefined symbols: _OBJC_CLASS_$_A2RPPairSetupSelfTest。
+    #   （a2_rppairing_srp.m 用 mbedtls_mpi 做模幂 ⇒ 见下方 MBEDTLS 链参数。）
+    os.path.join(SUPPORT, "a2_rppairing_srp.m"),
+    os.path.join(SUPPORT, "a2_rppairing_pairsetup.m"),
     # 判据行走到 a2_log_f ⇒ 一并链接项目统一的纯日志实现（只有 Foundation + stdio）。
     os.path.join(SUPPORT, "a2_log.m"),
     os.path.join(HERE, "remotexpc_tests.m"),
 ]
+
+# 随仓第三方 mbedTLS（Apache-2.0）：a2_rppairing_srp.m 的大数模幂。
+# 头在 Libraries/ThirdParty/mbedtls/include；macOS 测试用库在 .../lib-macos（与 JIT runner 同源 3.6.2）。
+MBEDTLS_DIR = os.path.join(ROOT, "Libraries", "ThirdParty", "mbedtls")
+MBEDTLS_INCLUDE = os.path.join(MBEDTLS_DIR, "include")
+MBEDTLS_MACOS_LIB = os.path.join(MBEDTLS_DIR, "lib-macos")
 
 # 头搜索路径：本层文件以裸文件名互相 import（与 gen_xcodeproj.py 的 NATIVES_INCLUDE_DIRS 同款）。
 EXTRA_INCLUDES = [SUPPORT]
@@ -81,14 +93,23 @@ def main():
     tmpdir = tempfile.mkdtemp(prefix="a2rxpc_tests_")
     binary = os.path.join(tmpdir, "remotexpc_tests")
 
-    includes = []
-    for inc in EXTRA_INCLUDES:
-        includes += ["-I", inc]
+    includes = ["-I", SUPPORT]
+    if not os.path.isdir(MBEDTLS_INCLUDE):
+        print("缺少 mbedTLS 头目录: %s" % MBEDTLS_INCLUDE)
+        return 1
+    mbedcrypto = os.path.join(MBEDTLS_MACOS_LIB, "libmbedcrypto.a")
+    if not os.path.exists(mbedcrypto):
+        print("缺少 macOS mbedcrypto: %s" % mbedcrypto)
+        print("  → 先在 Mac 上跑：bash scripts/build_mbedtls_macos_tests.sh <mbedtls-3.6.2 源码目录>")
+        return 1
+    includes += ["-I", MBEDTLS_INCLUDE]
     cmd = [clang, "-fobjc-arc", "-fblocks", "-Wall", "-Wno-unused-parameter"] + \
-          includes + ["-framework", "Foundation", "-framework", "Security",
-                      # 传输层与 pairable-host 通告器用 Network.framework
-                      "-framework", "Network",
-                      "-o", binary] + SOURCES
+        includes + ["-framework", "Foundation", "-framework", "Security",
+                    # 传输层与 pairable-host 通告器用 Network.framework
+                    "-framework", "Network",
+                    # a2_rppairing_srp.m 的 mbedtls_mpi（静态库，macOS 测试用）
+                    "-L", MBEDTLS_MACOS_LIB, "-lmbedcrypto",
+                    "-o", binary] + SOURCES
     print("compile: clang -fobjc-arc -I Natives/Support ... -o remotexpc_tests")
     ci = subprocess.run(cmd, capture_output=True, text=True)
     if ci.stderr.strip():

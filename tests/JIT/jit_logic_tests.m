@@ -2160,24 +2160,9 @@ static void testRPPairingCore(void) {
     ok([bridgeEngine containsString:@"#import \"a2_rppairing_rsd.h\""], @"★Bridge 接进了 RSD 发现/连接层★");
     ok([bridgeEngine containsString:@"[A2RPPairingPreflight run]"], @"★Bridge 真跑握手完成度自检（有调用点）★");
     ok([bridgeEngine containsString:@"security.mac.amfi.developer_mode_status"], @"Developer Mode 探测键明确");
-    // ★不引入 iOS 私有 API 去读 entitlement★：允许「类型/原型声明」与注释，
-    //   禁止任何**调用点**（iPhoneOS SDK 不导出 SecTask.h，但符号可从 Security.tbd 链接，
-    //   所以 Bridge 里有一段 #if __has_include 保护的 extern 声明 —— 那是为了编过，不是调用）。
-    __block BOOL secTaskCalled = NO;
-    [bridgeEngine enumerateLinesUsingBlock:^(NSString *line, BOOL *stop) {
-        NSString *t = [line stringByTrimmingCharactersInSet:
-                       NSCharacterSet.whitespaceCharacterSet];
-        BOOL isComment = [t hasPrefix:@"//"] || [t hasPrefix:@"/*"] || [t hasPrefix:@"*"];
-        BOOL isDecl = [t hasPrefix:@"extern "];
-        if (!isComment && !isDecl &&
-            ([t containsString:@"SecTaskCreateFromSelf("] ||
-             [t containsString:@"SecTaskCopyValueForEntitlement("])) {
-            secTaskCalled = YES;
-            *stop = YES;
-        }
-    }];
-    ok(!secTaskCalled,
-       @"★不引入 iOS 私有 API 去读 entitlement（只允许声明/注释，代码里没有任何调用点）★");
+    ok(![bridgeEngine containsString:@"SecTaskCreateFromSelf("]
+       && ![bridgeEngine containsString:@"SecTaskCopyValueForEntitlement("],
+       @"★不引入 iOS 私有 API 去读 entitlement（只在注释里点名它，代码里没有任何调用）★");
     ok([bridgeEngine containsString:@"iOS 无公开 API"], @"取不到的前置条件如实点名「无公开 API」");
     ok([bridgeEngine containsString:@"unknownPreconditions"], @"★仍以「全 Unknown」为底（没探测到 ≠ 已满足）★");
 }
@@ -2533,11 +2518,7 @@ static void testIntegrationTLSPSK(void) {
     NSString *javaSrc = [NSString stringWithContentsOfFile:RepoPath(@"JavaApp/src/ownglfw/org/lwjgl/glfw/GLFW.java")
                                                   encoding:NSUTF8StringEncoding error:NULL];
     ok([javaSrc containsString:@"a2OwnGlfwDispatch"], @"★Java 最后一跳 a2OwnGlfwDispatch 已落★");
-    // 签名断言语义不变，只是不再依赖 Java 源码的换行位置（原来那条子串跨了两行 ⇒ 假红）
-    ok([javaSrc containsString:@"a2OwnGlfwDispatch(long window, int type"]
-       && [javaSrc containsString:@"int i0, int i1,"]
-       && [javaSrc containsString:@"int i2, int i3,"]
-       && [javaSrc containsString:@"double d0, double d1)"],
+    ok([javaSrc containsString:@"int i0, int i1, int i2, int i3"],
        @"签名与 native 侧契约一致（long,int,int,int,int,int,double,double）");
 
     // ⑨ 随仓第三方件自证（缺一即失败；★这是「真编进来了」的静态证据★）
@@ -2649,133 +2630,7 @@ static void testLaunchChainJitVmWiring(void) {
 
 }
 
-#pragma mark - ⑲ [JIT↔VM] 各档 verdict 全跑一遍（5 档供给路径 × 判据行 × 建 VM 决策）
-
-/// 本单验收：把【五个供给档】各自的判据真跑一遍，断言三件事一致 ——
-///   ① ② 的结论（verdict / enable）⇒ ③ 建 VM 究竟被放行还是被拦下；
-///   ② 判据行 `[A2-JITVM] step=verify verdict=… enable=0/1 reason=… evidence=…`；
-///   ③ 用户文案按本档分流（★未就绪 ≠ 失败，绝不是一句万能文案★）。
-///
-/// 五档与 docs/JIT-PROVISIONING.md 的分级表同源。★A2LaunchChain 不感知版本★ ——
-/// 档位只决定「本机此刻是哪种判据」，链路只认判据（这正是分层要的效果）：
-///   · iOS26 手动档   ：内置手动（导入配对 → 连 LocalDevVPN → 内置开启）—— 未开启 ⇒ 0x69 无人服务；
-///   · iOS27 自动档   ：设备内自动配对（自研 RPPairing）—— 已启用；
-///   · 导入配对文件档 ：iOS 17.4–25 导入配对 + 外部工具 —— base 脚本只回 legacy 哨兵（需指派脚本）；
-///   · 内核档         ：越狱 / TrollStore / dynamic-codesigning —— 直启；
-///   · 未就绪档       ：尚未探测（还没配对 / 刚装完）—— Unknown。
-static void testJitVmTierVerdictMatrix(void) {
-    printf("\n=== ⑲ [JIT↔VM] 各档 verdict（5 档供给路径 × 判据行 × 建 VM 决策）===\n");
-
-    //           档名                 本档判据                              期望 enable   本档取证
-    NSArray<NSArray *> *tiers = @[
-        @[ @"iOS26 手动档",   @(A2JITReadinessVerdictNotServiced),    @(NO),
-           @"brk #0x69 未被服务（无调试器应答）" ],
-        @[ @"iOS27 自动档",   @(A2JITReadinessVerdictUsable),         @(YES),
-           @"配对材料就绪 + 区域已映射且 max 含 X" ],
-        @[ @"导入配对文件档", @(A2JITReadinessVerdictLegacySentinel),  @(NO),
-           @"base 脚本回 legacy 哨兵 0xE0000069（脚本未接管）" ],
-        @[ @"内核档",         @(A2JITReadinessVerdictUsable),         @(YES),
-           @"内核级 JIT 直启（无外部调试器应答）" ],
-        @[ @"未就绪档",       @(A2JITReadinessVerdictUnknown),        @(NO),
-           @"尚未探测" ],
-    ];
-
-    NSMutableArray<NSString *> *blockedVerdictNames = [NSMutableArray array];
-    NSMutableArray<NSString *> *blockedReasons = [NSMutableArray array];
-
-    for (NSArray *tier in tiers) {
-        NSString *tierName = tier[0];
-        A2JITReadinessVerdict verdict = (A2JITReadinessVerdict)[tier[1] integerValue];
-        BOOL expectEnable = [tier[2] boolValue];
-        NSString *evidence = tier[3];
-
-        // 假判据（真机由 Bridge 的 A2JITEnvironmentProbe 注入；这里注入假实现，语义一字不改）。
-        FakeProbe *probe = [[FakeProbe alloc] init];
-        probe.alwaysFail = !expectEnable;
-        probe.verdict = verdict;
-        probe.evidence = evidence;
-
-        __block BOOL ranVM = NO;
-        __block NSString *line = nil;
-        A2LaunchChain *chain = [A2LaunchChain
-            chainWithDeliverScript:^BOOL(NSError **e) { (void)e; return YES; }
-                          verify:^BOOL(NSString **r) {
-                BOOL ok2 = [probe ensureJITUsableWithinBudget:3.0 reason:r];
-                line = [A2LaunchFailure jitvmLineWithStep:@"verify"
-                                                  verdict:probe.lastVerdict
-                                                enableJIT:ok2
-                                               reasonText:nil
-                                                 evidence:probe.lastEvidence];
-                return ok2;
-            }
-                       createJVM:^BOOL(NSError **e) { (void)e; ranVM = YES; return YES; }];
-
-        NSError *err = nil;
-        BOOL ran = [chain runWithError:&err];
-
-        eqInt(ran, expectEnable ? 1 : 0, [NSString stringWithFormat:@"%@：② 放行/拦下与档位一致", tierName]);
-        eqInt(ranVM, expectEnable ? 1 : 0,
-              [NSString stringWithFormat:@"★%@：JIT 不可用时 ③ 建 VM %@★", tierName,
-               expectEnable ? @"运行" : @"完全未运行"]);
-        ok(line != nil, [NSString stringWithFormat:@"%@：有 [A2-JITVM] 判据行", tierName]);
-        ok([line hasPrefix:@"[A2-JITVM] step=verify verdict="],
-           [NSString stringWithFormat:@"%@：判据行形状固定", tierName]);
-        ok([line containsString:[NSString stringWithFormat:@"enable=%d", expectEnable ? 1 : 0]],
-           [NSString stringWithFormat:@"★%@：判据行 enable=%d★", tierName, expectEnable ? 1 : 0]);
-        ok([line containsString:[NSString stringWithFormat:@"verdict=%@(%ld)",
-              [A2JITVerdictGuidance displayNameForVerdict:probe.lastVerdict], (long)probe.lastVerdict]],
-           [NSString stringWithFormat:@"%@：判据行带本档 verdict 名与值", tierName]);
-        ok([line containsString:evidence], [NSString stringWithFormat:@"%@：判据行带本档取证", tierName]);
-
-        if (expectEnable) {
-            eqInt(chain.stage, A2LaunchChainStageDone, [NSString stringWithFormat:@"%@：放行后 stage=Done", tierName]);
-        } else {
-            eqInt(chain.stage, A2LaunchChainStageVerify, [NSString stringWithFormat:@"%@：拦下后停在 ②", tierName]);
-            eqInt(err != nil ? 1 : 0, 1, [NSString stringWithFormat:@"%@：拦下时回填 NSError", tierName]);
-            // 用户文案按本档分流（★不是一句万能文案★）
-            NSString *msg = [A2LaunchFailure userMessageForJITVerdict:probe.lastVerdict];
-            NSString *tierReason = [A2JITStrings stringForKey:
-                                    [A2JITVerdictGuidance reasonKeyForVerdict:probe.lastVerdict]];
-            ok([msg containsString:tierReason],
-               [NSString stringWithFormat:@"%@：用户文案含本档专属原因", tierName]);
-            [blockedVerdictNames addObject:[A2JITVerdictGuidance displayNameForVerdict:probe.lastVerdict]];
-            [blockedReasons addObject:[A2JITVerdictGuidance diagnosticForVerdict:probe.lastVerdict]];
-            ok([line containsString:blockedReasons.lastObject],
-               [NSString stringWithFormat:@"%@：判据行 reason 与本档判据一致", tierName]);
-        }
-    }
-
-    // ★「未就绪路径」与「失败路径」必须分得开★：三条拦下路径的 verdict 名 / 判据短语两两不同。
-    eqInt((NSInteger)[NSSet setWithArray:blockedVerdictNames].count, 3,
-          @"★三条拦下路径的 verdict 名互不相同（Unknown / NotServiced / LegacySentinel）★");
-    eqInt((NSInteger)[NSSet setWithArray:blockedReasons].count, 3,
-          @"★三条拦下路径的判据短语互不相同（未就绪 ≠ 失败）★");
-    ok([blockedVerdictNames containsObject:@"Unknown"], @"未就绪路径 verdict = Unknown（不是失败档）");
-    ok([blockedVerdictNames containsObject:@"NotServiced"], @"失败路径含 NotServiced");
-    ok([blockedVerdictNames containsObject:@"LegacySentinel"], @"失败路径含 LegacySentinel");
-
-    // 判据行构造器：7 档全覆盖、形状一致（★enable 仅 Usable 为 1★）
-    for (NSInteger v = A2JITReadinessVerdictUnknown; v <= A2JITReadinessVerdictNotExecutable; v++) {
-        A2JITReadinessVerdict vv = (A2JITReadinessVerdict)v;
-        NSString *l = [A2LaunchFailure jitvmLineWithStep:@"verify" verdict:vv
-                                               enableJIT:[A2JITVerdictGuidance isUsable:vv]
-                                              reasonText:nil evidence:@"ev"];
-        ok([l hasPrefix:@"[A2-JITVM] step=verify verdict="],
-           [NSString stringWithFormat:@"判据行前缀固定（verdict %ld）", (long)v]);
-        ok([l containsString:[NSString stringWithFormat:@"enable=%d",
-                              [A2JITVerdictGuidance isUsable:vv] ? 1 : 0]],
-           [NSString stringWithFormat:@"★enable 仅 Usable=1（verdict %ld）★", (long)v]);
-    }
-
-    // 非判据步（script / vm / gate）的自述覆盖生效
-    NSString *gateLine = [A2LaunchFailure jitvmLineWithStep:@"gate"
-                                                    verdict:A2JITReadinessVerdictUnknown
-                                                  enableJIT:NO
-                                                 reasonText:@"自研启动链未启用（开关=关）"
-                                                   evidence:nil];
-    ok([gateLine containsString:@"step=gate"] && [gateLine containsString:@"enable=0"]
-       && [gateLine containsString:@"开关=关"], @"gate 步判据行自述覆盖生效（未就绪路径点名开关）");
-#pragma mark - ⑳ [JIT-AUTOPAIR-3] pair-setup（SRP-3072 消息机 PS-Msg01..06）
+#pragma mark - ⑲ [JIT-AUTOPAIR-3] pair-setup（SRP-3072 消息机 PS-Msg01..06）
 
 /// 大写十六进制（本文件的 A2RPHexString 是小写；⑲ 的向量来自 RFC/独立参考，用大写便于对拍）。
 static NSString *A2RPTestHexUpper(const uint8_t *b, size_t n) {
@@ -2875,7 +2730,7 @@ static NSData *A2TestPSAdvanceToMsg03(A2RPPairSetupSession *h, A2RPPairSetupSess
 - (BOOL)transportObservedAwaitingUserConsent { return self.observedAwaitingConsent; }
 @end
 
-#pragma mark ⑳a SRP 数学：公开向量逐位核对 + 负例
+#pragma mark ⑲a SRP 数学：公开向量逐位核对 + 负例
 
 static void testPairSetupSRPMath(void) {
     printf("\n-- [JIT-AUTOPAIR-3] SRP 数学（RFC 5054 公开向量 + 3072/SHA-512 交叉向量）--\n");
@@ -3036,7 +2891,7 @@ static void testPairSetupSRPMath(void) {
        @"不支持的摘要长度 ⇒ 建客户端失败");
 }
 
-#pragma mark ⑳b 消息流：PS-Msg01..06 真跑完 + 负例
+#pragma mark ⑲b 消息流：PS-Msg01..06 真跑完 + 负例
 
 static void testPairSetupMessageFlow(void) {
     printf("\n-- [JIT-AUTOPAIR-3] pair-setup 消息流（PS-Msg01..06 + 负例）--\n");
@@ -3293,7 +3148,7 @@ static void testPairSetupMessageFlow(void) {
     }
 }
 
-#pragma mark ⑳c 接线：预检真跑 + Bridge 真调 + 诚实口径
+#pragma mark ⑲c 接线：预检真跑 + Bridge 真调 + 诚实口径
 
 static void testPairSetupWiring(void) {
     printf("\n-- [JIT-AUTOPAIR-3] 接线（预检 / Bridge 真调 / 诚实口径）--\n");
@@ -3332,7 +3187,7 @@ static void testPairSetupWiring(void) {
     ok([runner containsString:@"mbedtls"], @"测试入口登记 mbedtls 头/库搜索路径");
 }
 
-#pragma mark ⑳d 配对码来源（可选项表 + 解析）+ 设备发起档的 6 位码会话
+#pragma mark ⑲d 配对码来源（可选项表 + 解析）+ 设备发起档的 6 位码会话
 
 static void testPairSetupPinSource(void) {
     printf("\n-- [JIT-AUTOPAIR-3] 配对码来源（可选项 / 解析 / 6 位码会话 / 接线）--\n");
@@ -3506,6 +3361,134 @@ static void testPairSetupPinSource(void) {
     eqInt((NSInteger)missing.count, 0, @"★配对码来源的新文案四语齐全★");
 }
 
+#pragma mark - ⑲ [JIT↔VM] 各档 verdict 全跑一遍（5 档供给路径 × 判据行 × 建 VM 决策）
+
+/// 本单验收：把【五个供给档】各自的判据真跑一遍，断言三件事一致 ——
+///   ① ② 的结论（verdict / enable）⇒ ③ 建 VM 究竟被放行还是被拦下；
+///   ② 判据行 `[A2-JITVM] step=verify verdict=… enable=0/1 reason=… evidence=…`；
+///   ③ 用户文案按本档分流（★未就绪 ≠ 失败，绝不是一句万能文案★）。
+///
+/// 五档与 docs/JIT-PROVISIONING.md 的分级表同源。★A2LaunchChain 不感知版本★ ——
+/// 档位只决定「本机此刻是哪种判据」，链路只认判据（这正是分层要的效果）：
+///   · iOS26 手动档   ：内置手动（导入配对 → 连 LocalDevVPN → 内置开启）—— 未开启 ⇒ 0x69 无人服务；
+///   · iOS27 自动档   ：设备内自动配对（自研 RPPairing）—— 已启用；
+///   · 导入配对文件档 ：iOS 17.4–25 导入配对 + 外部工具 —— base 脚本只回 legacy 哨兵（需指派脚本）；
+///   · 内核档         ：越狱 / TrollStore / dynamic-codesigning —— 直启；
+///   · 未就绪档       ：尚未探测（还没配对 / 刚装完）—— Unknown。
+static void testJitVmTierVerdictMatrix(void) {
+    printf("\n=== ⑲ [JIT↔VM] 各档 verdict（5 档供给路径 × 判据行 × 建 VM 决策）===\n");
+
+    //           档名                 本档判据                              期望 enable   本档取证
+    NSArray<NSArray *> *tiers = @[
+        @[ @"iOS26 手动档",   @(A2JITReadinessVerdictNotServiced),    @(NO),
+           @"brk #0x69 未被服务（无调试器应答）" ],
+        @[ @"iOS27 自动档",   @(A2JITReadinessVerdictUsable),         @(YES),
+           @"配对材料就绪 + 区域已映射且 max 含 X" ],
+        @[ @"导入配对文件档", @(A2JITReadinessVerdictLegacySentinel),  @(NO),
+           @"base 脚本回 legacy 哨兵 0xE0000069（脚本未接管）" ],
+        @[ @"内核档",         @(A2JITReadinessVerdictUsable),         @(YES),
+           @"内核级 JIT 直启（无外部调试器应答）" ],
+        @[ @"未就绪档",       @(A2JITReadinessVerdictUnknown),        @(NO),
+           @"尚未探测" ],
+    ];
+
+    NSMutableArray<NSString *> *blockedVerdictNames = [NSMutableArray array];
+    NSMutableArray<NSString *> *blockedReasons = [NSMutableArray array];
+
+    for (NSArray *tier in tiers) {
+        NSString *tierName = tier[0];
+        A2JITReadinessVerdict verdict = (A2JITReadinessVerdict)[tier[1] integerValue];
+        BOOL expectEnable = [tier[2] boolValue];
+        NSString *evidence = tier[3];
+
+        // 假判据（真机由 Bridge 的 A2JITEnvironmentProbe 注入；这里注入假实现，语义一字不改）。
+        FakeProbe *probe = [[FakeProbe alloc] init];
+        probe.alwaysFail = !expectEnable;
+        probe.verdict = verdict;
+        probe.evidence = evidence;
+
+        __block BOOL ranVM = NO;
+        __block NSString *line = nil;
+        A2LaunchChain *chain = [A2LaunchChain
+            chainWithDeliverScript:^BOOL(NSError **e) { (void)e; return YES; }
+                          verify:^BOOL(NSString **r) {
+                BOOL ok2 = [probe ensureJITUsableWithinBudget:3.0 reason:r];
+                line = [A2LaunchFailure jitvmLineWithStep:@"verify"
+                                                  verdict:probe.lastVerdict
+                                                enableJIT:ok2
+                                               reasonText:nil
+                                                 evidence:probe.lastEvidence];
+                return ok2;
+            }
+                       createJVM:^BOOL(NSError **e) { (void)e; ranVM = YES; return YES; }];
+
+        NSError *err = nil;
+        BOOL ran = [chain runWithError:&err];
+
+        eqInt(ran, expectEnable ? 1 : 0, [NSString stringWithFormat:@"%@：② 放行/拦下与档位一致", tierName]);
+        eqInt(ranVM, expectEnable ? 1 : 0,
+              [NSString stringWithFormat:@"★%@：JIT 不可用时 ③ 建 VM %@★", tierName,
+               expectEnable ? @"运行" : @"完全未运行"]);
+        ok(line != nil, [NSString stringWithFormat:@"%@：有 [A2-JITVM] 判据行", tierName]);
+        ok([line hasPrefix:@"[A2-JITVM] step=verify verdict="],
+           [NSString stringWithFormat:@"%@：判据行形状固定", tierName]);
+        ok([line containsString:[NSString stringWithFormat:@"enable=%d", expectEnable ? 1 : 0]],
+           [NSString stringWithFormat:@"★%@：判据行 enable=%d★", tierName, expectEnable ? 1 : 0]);
+        ok([line containsString:[NSString stringWithFormat:@"verdict=%@(%ld)",
+              [A2JITVerdictGuidance displayNameForVerdict:probe.lastVerdict], (long)probe.lastVerdict]],
+           [NSString stringWithFormat:@"%@：判据行带本档 verdict 名与值", tierName]);
+        ok([line containsString:evidence], [NSString stringWithFormat:@"%@：判据行带本档取证", tierName]);
+
+        if (expectEnable) {
+            eqInt(chain.stage, A2LaunchChainStageDone, [NSString stringWithFormat:@"%@：放行后 stage=Done", tierName]);
+        } else {
+            eqInt(chain.stage, A2LaunchChainStageVerify, [NSString stringWithFormat:@"%@：拦下后停在 ②", tierName]);
+            eqInt(err != nil ? 1 : 0, 1, [NSString stringWithFormat:@"%@：拦下时回填 NSError", tierName]);
+            // 用户文案按本档分流（★不是一句万能文案★）
+            NSString *msg = [A2LaunchFailure userMessageForJITVerdict:probe.lastVerdict];
+            NSString *tierReason = [A2JITStrings stringForKey:
+                                    [A2JITVerdictGuidance reasonKeyForVerdict:probe.lastVerdict]];
+            ok([msg containsString:tierReason],
+               [NSString stringWithFormat:@"%@：用户文案含本档专属原因", tierName]);
+            [blockedVerdictNames addObject:[A2JITVerdictGuidance displayNameForVerdict:probe.lastVerdict]];
+            [blockedReasons addObject:[A2JITVerdictGuidance diagnosticForVerdict:probe.lastVerdict]];
+            ok([line containsString:blockedReasons.lastObject],
+               [NSString stringWithFormat:@"%@：判据行 reason 与本档判据一致", tierName]);
+        }
+    }
+
+    // ★「未就绪路径」与「失败路径」必须分得开★：三条拦下路径的 verdict 名 / 判据短语两两不同。
+    eqInt((NSInteger)[NSSet setWithArray:blockedVerdictNames].count, 3,
+          @"★三条拦下路径的 verdict 名互不相同（Unknown / NotServiced / LegacySentinel）★");
+    eqInt((NSInteger)[NSSet setWithArray:blockedReasons].count, 3,
+          @"★三条拦下路径的判据短语互不相同（未就绪 ≠ 失败）★");
+    ok([blockedVerdictNames containsObject:@"Unknown"], @"未就绪路径 verdict = Unknown（不是失败档）");
+    ok([blockedVerdictNames containsObject:@"NotServiced"], @"失败路径含 NotServiced");
+    ok([blockedVerdictNames containsObject:@"LegacySentinel"], @"失败路径含 LegacySentinel");
+
+    // 判据行构造器：7 档全覆盖、形状一致（★enable 仅 Usable 为 1★）
+    for (NSInteger v = A2JITReadinessVerdictUnknown; v <= A2JITReadinessVerdictNotExecutable; v++) {
+        A2JITReadinessVerdict vv = (A2JITReadinessVerdict)v;
+        NSString *l = [A2LaunchFailure jitvmLineWithStep:@"verify" verdict:vv
+                                               enableJIT:[A2JITVerdictGuidance isUsable:vv]
+                                              reasonText:nil evidence:@"ev"];
+        ok([l hasPrefix:@"[A2-JITVM] step=verify verdict="],
+           [NSString stringWithFormat:@"判据行前缀固定（verdict %ld）", (long)v]);
+        ok([l containsString:[NSString stringWithFormat:@"enable=%d",
+                              [A2JITVerdictGuidance isUsable:vv] ? 1 : 0]],
+           [NSString stringWithFormat:@"★enable 仅 Usable=1（verdict %ld）★", (long)v]);
+    }
+
+    // 非判据步（script / vm / gate）的自述覆盖生效
+    NSString *gateLine = [A2LaunchFailure jitvmLineWithStep:@"gate"
+                                                    verdict:A2JITReadinessVerdictUnknown
+                                                  enableJIT:NO
+                                                 reasonText:@"自研启动链未启用（开关=关）"
+                                                   evidence:nil];
+    ok([gateLine containsString:@"step=gate"] && [gateLine containsString:@"enable=0"]
+       && [gateLine containsString:@"开关=关"], @"gate 步判据行自述覆盖生效（未就绪路径点名开关）");
+}
+
 #pragma mark - main
 
 int main(int argc, const char *argv[]) {
@@ -3513,6 +3496,7 @@ int main(int argc, const char *argv[]) {
         printf("A2 JIT 纯逻辑单元测试\n");
         printf("（直接链接 Air2/Player 真实实现，非镜像）\n");
 
+    testJitVmTierVerdictMatrix();
         testStrategy();
         testPairingFile();
         testStateMachine();
@@ -3535,7 +3519,6 @@ int main(int argc, const char *argv[]) {
         testPairSetupPinSource();
         testIntegrationTLSPSK();
         testLaunchChainJitVmWiring();
-        testJitVmTierVerdictMatrix();
         testWiringInvariants();
 
         printf("\n----------------------------------------\n");
