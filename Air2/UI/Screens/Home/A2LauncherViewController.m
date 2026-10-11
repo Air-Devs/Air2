@@ -77,6 +77,15 @@
 @property (nonatomic, strong) A2GlassCard *recentCard;
 @property (nonatomic, strong) UIStackView *recentStack;
 
+/// 主卡（单卡三段式：账户 / 版本 / 启动）
+@property (nonatomic, strong) A2GlassCard *mainCard;
+@property (nonatomic, strong) UIStackView *mainStack;
+@property (nonatomic, strong) UIControl *accountSection;
+@property (nonatomic, strong) UIControl *versionSection;
+
+@property (nonatomic, strong) UILabel *plusLabel;
+@property (nonatomic, strong) UIImageView *versionIcon;
+@property (nonatomic, strong) UIButton *versionGear;
 @property (nonatomic, assign) BOOL didSetupConstraints;
 @property (nonatomic, assign) BOOL didPlayEntrance;
 @end
@@ -460,7 +469,7 @@
     ]];
 
     [_panelStack addArrangedSubview:_mainCard];
-    [self setNeedsUpdateConstraints];
+    [self.view setNeedsUpdateConstraints];
 }
 
 #pragma mark ① 账号段
@@ -563,7 +572,7 @@
     _versionGear = [UIButton buttonWithType:UIButtonTypeSystem];
     _versionGear.translatesAutoresizingMaskIntoConstraints = NO;
     UIImageSymbolConfiguration *cfg =
-        [UIImageSymbolConfiguration configurationWithPointSize:17 weight:UIImageFontWeightRegular];
+        [UIImageSymbolConfiguration configurationWithPointSize:17 weight:UIFontWeightRegular];
     [_versionGear setImage:[UIImage systemImageNamed:@"gearshape.fill" withConfiguration:cfg]
                   forState:UIControlStateNormal];
     [_versionGear addTarget:self action:@selector(openVersionSettings)
