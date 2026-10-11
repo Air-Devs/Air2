@@ -125,6 +125,18 @@ static void A2Main(dispatch_block_t b) {
             [self installForgeLike];
             break;
 
+        case A2ModLoaderTypeOptiFine:
+            [self installOptiFine];
+            break;
+
+        case A2ModLoaderTypeLiteLoader:
+        case A2ModLoaderTypeRift:
+            // 官方无稳定接口 —— 与 ZL2 的 autoDownloadable=false 一致
+            [self failWithMessage:[NSString stringWithFormat:
+                @"%@ 不支持自动安装，请手动下载安装包后放入 versions 目录",
+                [A2ModLoaderAPI displayNameForType:loader.type]]];
+            break;
+
         default:
             [self failWithMessage:@"暂不支持此加载器"];
             break;
@@ -509,6 +521,45 @@ static void A2Main(dispatch_block_t b) {
 }
 
 #pragma mark - 下载
+
+/// 下载单个文件到指定路径（带候选地址回退）。
+/// 与 downloadBatch: 的区别：这个是「一个文件、多个候选源」，
+/// 用于下载安装包本体；那个是「多个文件、各自一个源」，用于依赖。
+- (void)downloadInstaller:(NSArray<NSString *> *)urls
+                       to:(NSString *)destPath
+               completion:(void (^)(BOOL, NSError *))completion {
+
+    NSMutableArray<NSURL *> *candidates = [NSMutableArray array];
+    for (NSString *u in urls) {
+        NSURL *url = [NSURL URLWithString:u];
+        if (url) [candidates addObject:url];
+    }
+    if (candidates.count == 0) {
+        if (completion) completion(NO, [self error:@"没有可用的下载地址"]);
+        return;
+    }
+
+    [NSFileManager.defaultManager createDirectoryAtPath:destPath.stringByDeletingLastPathComponent
+                            withIntermediateDirectories:YES attributes:nil error:nil];
+
+    A2DownloadRequest *req = [A2DownloadRequest new];
+    req.candidateURLs = candidates;
+    req.destinationPath = destPath;
+    req.allowZipFallbackCheck = YES;
+
+    [[A2DownloadEngine sharedClient] startRequest:req
+        progress:nil speed:nil
+        completion:^(BOOL success, NSError *error) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (completion) completion(success, error);
+        });
+    }];
+}
+
+- (NSError *)error:(NSString *)msg {
+    return [NSError errorWithDomain:@"A2ModLoaderInstaller" code:1
+                           userInfo:@{NSLocalizedDescriptionKey: msg ?: @"安装失败"}];
+}
 
 - (void)downloadBatch:(NSArray<NSArray<NSString *> *> *)items {
     __block NSUInteger index = 0;
