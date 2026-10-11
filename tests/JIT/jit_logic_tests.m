@@ -2525,7 +2525,11 @@ static void testIntegrationTLSPSK(void) {
     NSString *javaSrc = [NSString stringWithContentsOfFile:RepoPath(@"JavaApp/src/ownglfw/org/lwjgl/glfw/GLFW.java")
                                                   encoding:NSUTF8StringEncoding error:NULL];
     ok([javaSrc containsString:@"a2OwnGlfwDispatch"], @"★Java 最后一跳 a2OwnGlfwDispatch 已落★");
-    ok([javaSrc containsString:@"int i0, int i1, int i2, int i3"],
+    // 签名断言语义不变，只是不再依赖 Java 源码的换行位置（原来那条子串跨了两行 ⇒ 假红）
+    ok([javaSrc containsString:@"a2OwnGlfwDispatch(long window, int type"]
+       && [javaSrc containsString:@"int i0, int i1,"]
+       && [javaSrc containsString:@"int i2, int i3,"]
+       && [javaSrc containsString:@"double d0, double d1)"],
        @"签名与 native 侧契约一致（long,int,int,int,int,int,double,double）");
 
     // ⑨ 随仓第三方件自证（缺一即失败；★这是「真编进来了」的静态证据★）
