@@ -143,7 +143,7 @@ def build():
         u = uid("fileref", rpath)
         name = os.path.basename(rpath)
         ftype = "folder.assetcatalog" if name.endswith(".xcassets") else "file"
-        add(f"\t\t{u} /* {name} */ = {{isa = PBXFileReference; lastKnownFileType = {ftype}; path = \"{name}\"; sourceTree = \"<group>\"; }};")
+        add(f"\t\t{u} /* {name} */ = {{isa = PBXFileReference; lastKnownFileType = {ftype}; path = \"{rpath}\"; sourceTree = \"<group>\"; }};")
     add("/* End PBXFileReference section */")
     add("")
 
