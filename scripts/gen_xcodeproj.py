@@ -50,9 +50,14 @@ JAVA_PHASE_SCRIPT = (
     "BOOT=$(/usr/libexec/java_home -v 1.8 2>/dev/null || true)\n"
     "make -s all BOOTJDK=\"$BOOT\"\n"
     "make -s verify BOOTJDK=\"$BOOT\"\n"
-    "DEST=\"$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH/Java\"\n"
+    # CONTENTS_FOLDER_PATH 在 -target 构建下可能为空 ⇒ 显式兜底，避免把 jar 写到
+    # BUILT_PRODUCTS_DIR 根上（那样 IPA 里没有它，且构建不报错 —— 静默失败最难查）。
+    "CFP=\"$CONTENTS_FOLDER_PATH\"\n"
+    "[ -n \"$CFP\" ] || CFP=\"Air2.app\"\n"
+    "DEST=\"$BUILT_PRODUCTS_DIR/$CFP/Java\"\n"
     "mkdir -p \"$DEST\"\n"
     "cp -f build/" + JAVA_JAR_NAME + " \"$DEST/\"\n"
+    "test -f \"$DEST/" + JAVA_JAR_NAME + "\"\n"
     "echo \"note: Java 启动核心 -> $DEST/" + JAVA_JAR_NAME + "\"\n"
 )
 
