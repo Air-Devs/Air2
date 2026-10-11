@@ -724,8 +724,8 @@ static A2RPPairSetupDriveFailure A2RPPSClassifyTransportFailure(id<A2RPPairSetup
     BOOL hasSend = [transport respondsToSelector:@selector(sendPairingData:kind:startNew:reason:)];
     if (!hasRecv || !hasSend) {
         A2RPS_ACC_FAIL(A2RPPairSetupDriveFailureTransport,
-                       [NSString stringWithFormat:@"传输未提供 responder 原语（收=%@ 发=%@）⇒ 无法驱动 accessory 侧",
-                        hasRecv ? @"有" : @"缺", hasSend ? @"有" : @"缺"]);
+                       ([NSString stringWithFormat:@"传输未提供 responder 原语（收=%@ 发=%@）⇒ 无法驱动 accessory 侧",
+                        hasRecv ? @"有" : @"缺", hasSend ? @"有" : @"缺"]));
     }
     if (pin.length == 0) {
         A2RPS_ACC_FAIL(A2RPPairSetupDriveFailurePinMissing, @"本机没有可用的 6 位码 ⇒ 拒绝（不猜、不默认）");
@@ -754,7 +754,7 @@ static A2RPPairSetupDriveFailure A2RPPSClassifyTransportFailure(id<A2RPPairSetup
                                                     reason:&rwhy];
         if (in == nil) {
             A2RPS_ACC_FAIL(A2RPPSClassifyTransportFailure(transport),
-                           [NSString stringWithFormat:@"收第 %d 条失败：%@", round * 2 + 1, rwhy ?: @"原因未记录"]);
+                           ([NSString stringWithFormat:@"收第 %d 条失败：%@", round * 2 + 1, rwhy ?: @"原因未记录"]));
         }
         NSString *awhy = nil;
         if (![session acceptMessage:in reason:&awhy]) {
@@ -781,7 +781,7 @@ static A2RPPairSetupDriveFailure A2RPPSClassifyTransportFailure(id<A2RPPairSetup
         NSString *swhy = nil;
         if (![transport sendPairingData:out kind:@(kA2RPPSKind) startNew:NO reason:&swhy]) {
             A2RPS_ACC_FAIL(A2RPPSClassifyTransportFailure(transport),
-                           [NSString stringWithFormat:@"发第 %d 条失败：%@", round * 2 + 2, swhy ?: @"原因未记录"]);
+                           ([NSString stringWithFormat:@"发第 %d 条失败：%@", round * 2 + 2, swhy ?: @"原因未记录"]));
         }
         if (stepObserver) {
             stepObserver(session.step,

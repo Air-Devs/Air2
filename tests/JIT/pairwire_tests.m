@@ -16,6 +16,7 @@
 
 #import <Foundation/Foundation.h>
 #import <stdio.h>
+#import <math.h>
 
 #import "a2_rppairing_pairsetup.h"
 #import "a2_rppairing_pairsetup_accessory.h"
@@ -195,15 +196,22 @@ static NSData *A2PairWireStateOnlyTLV(uint8_t state) {
 
 static void TestConstants(void) {
     T("marker 是 [A2-PAIRPIN]", [A2RPPairWireCriterionMarker isEqualToString:@"[A2-PAIRPIN]"]);
-    T("phase 名 starting", [[A2RPPairSetupAccessoryPhaseName(A2RPPairSetupAccessoryPhaseStarting) isEqualToString:@"starting"]);
-    T("phase 名 cancelled", [[A2RPPairSetupAccessoryPhaseName(A2RPPairSetupAccessoryPhaseCancelled) isEqualToString:@"cancelled"]);
-    T("failure 名 WrongPin", [[A2RPPairSetupAccessoryFailureName(A2RPPairSetupAccessoryFailureWrongPin) isEqualToString:@"WrongPin"]);
+    T("phase 名 starting",
+      [A2RPPairSetupAccessoryPhaseName(A2RPPairSetupAccessoryPhaseStarting) isEqualToString:@"starting"]);
+    T("phase 名 cancelled",
+      [A2RPPairSetupAccessoryPhaseName(A2RPPairSetupAccessoryPhaseCancelled) isEqualToString:@"cancelled"]);
+    T("failure 名 WrongPin",
+      [A2RPPairSetupAccessoryFailureName(A2RPPairSetupAccessoryFailureWrongPin) isEqualToString:@"WrongPin"]);
     T("failure 名 NoLocalNetworkPermission",
-      [[A2RPPairSetupAccessoryFailureName(A2RPPairSetupAccessoryFailureNoLocalNetworkPermission) isEqualToString:@"NoLocalNetworkPermission"]);
-    T("failure 名 Suspended", [[A2RPPairSetupAccessoryFailureName(A2RPPairSetupAccessoryFailureSuspended) isEqualToString:@"Suspended"]);
-    T("failure 名 WaitTimedOut", [[A2RPPairSetupAccessoryFailureName(A2RPPairSetupAccessoryFailureWaitTimedOut) isEqualToString:@"WaitTimedOut"]);
-    T("failure 名 SessionTimedOut", [[A2RPPairSetupAccessoryFailureName(A2RPPairSetupAccessoryFailureSessionTimedOut) isEqualToString:@"SessionTimedOut"]);
-    T("failure 名 Cancelled", [[A2RPPairSetupAccessoryFailureName(A2RPPairSetupAccessoryFailureCancelled) isEqualToString:@"Cancelled"]);
+      [A2RPPairSetupAccessoryFailureName(A2RPPairSetupAccessoryFailureNoLocalNetworkPermission) isEqualToString:@"NoLocalNetworkPermission"]);
+    T("failure 名 Suspended",
+      [A2RPPairSetupAccessoryFailureName(A2RPPairSetupAccessoryFailureSuspended) isEqualToString:@"Suspended"]);
+    T("failure 名 WaitTimedOut",
+      [A2RPPairSetupAccessoryFailureName(A2RPPairSetupAccessoryFailureWaitTimedOut) isEqualToString:@"WaitTimedOut"]);
+    T("failure 名 SessionTimedOut",
+      [A2RPPairSetupAccessoryFailureName(A2RPPairSetupAccessoryFailureSessionTimedOut) isEqualToString:@"SessionTimedOut"]);
+    T("failure 名 Cancelled",
+      [A2RPPairSetupAccessoryFailureName(A2RPPairSetupAccessoryFailureCancelled) isEqualToString:@"Cancelled"]);
     T("default 广告名含 Air2",
       [[A2RPPairSetupAccessory defaultAdvertisedNameForHostName:@"myiPhone"] isEqualToString:@"Air2 (myiPhone)"]);
 }

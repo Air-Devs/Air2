@@ -97,21 +97,20 @@ NSString *A2RPPairSetupAccessoryFailureName(A2RPPairSetupAccessoryFailure failur
 #pragma mark - 驱动
 
 /// 生产装配：真通告器（既有 A2RPPairableHostAdvertiser）。
-static id<A2RPPairSetupAccessoryListener> A2RPPWProductionListenerFactory(NSString *name,
-                                                                          NSString *model,
-                                                                          NSString *identifier,
-                                                                          NSData *altIRK) {
+static A2RPPairSetupAccessoryListenerFactory const A2RPPWProductionListenerFactory =
+    ^id<A2RPPairSetupAccessoryListener>(NSString *name, NSString *model,
+                                        NSString *identifier, NSData *altIRK) {
     return [[A2RPPairableHostAdvertiser alloc] initWithName:name
                                                       model:model
                                                  identifier:identifier
                                                      altIRK:altIRK];
-}
+};
 
 /// 生产装配：真传输（RemoteXPC；★本侧是 accessory ⇒ originatedBy=device★）。
 /// ★真机互操作未验证★：`originatedBy` 的取值是公开实现的通行口径，仍以真机对拍为准（见报告）。
-static id<A2RPPairSetupMessageTransport> A2RPPWProductionTransportFactory(id<A2RPByteStream> stream,
-                                                                          NSString *hostName,
-                                                                          NSString **_Nullable reason) {
+static A2RPPairSetupAccessoryTransportFactory const A2RPPWProductionTransportFactory =
+    ^id<A2RPPairSetupMessageTransport>(id<A2RPByteStream> stream, NSString *hostName,
+                                       NSString **_Nullable reason) {
     A2RemoteXPCErrorKind err = A2RemoteXPCErrorNone;
     return [A2RPPairSetupRemoteXPCTransport transportOverByteStream:stream
                                                        originatedBy:@"device"
@@ -120,7 +119,7 @@ static id<A2RPPairSetupMessageTransport> A2RPPWProductionTransportFactory(id<A2R
                                                             timeout:30.0
                                                              reason:reason
                                                               error:&err];
-}
+};
 
 @implementation A2RPPairSetupAccessory
 
@@ -197,7 +196,7 @@ static id<A2RPPairSetupMessageTransport> A2RPPWProductionTransportFactory(id<A2R
     A2RPPairingIdentity *identity = [A2RPPairingIdentity identityWithHostName:hostName error:&idErr];
     if (identity == nil) {
         A2RPPW_FAIL(A2RPPairSetupAccessoryFailureIdentityFailed,
-                    [NSString stringWithFormat:@"主机身份生成失败：%@", idErr.localizedDescription ?: @"未知"]);
+                    ([NSString stringWithFormat:@"主机身份生成失败：%@", idErr.localizedDescription ?: @"未知"]));
     }
     run.identifier = identity.identifier;
 
@@ -252,16 +251,16 @@ static id<A2RPPairSetupMessageTransport> A2RPPWProductionTransportFactory(id<A2R
             default:
                 mapped = A2RPPairSetupAccessoryFailurePublishFailed; break;
         }
-        A2RPPW_FAIL(mapped, [NSString stringWithFormat:@"广告/等待连入未成（通告分类=%@）：%@",
-                             A2RPPairableHostFailureName(hf), advWhy ?: listener.failureReason ?: @"原因未记录"]);
+        A2RPPW_FAIL(mapped, ([NSString stringWithFormat:@"广告/等待连入未成（通告分类=%@）：%@",
+                              A2RPPairableHostFailureName(hf), advWhy ?: listener.failureReason ?: @"原因未记录"]));
     }
 
-    A2RPPW_CANCELLED_IF_NEEDED();
     run.connected = YES;
     emit(A2RPPairSetupAccessoryPhaseConnected, A2RPPairSetupStepIdle,
          [NSString stringWithFormat:
           @"★被连入★ 服务=%@ 实例名=%@ 主机名=%@ 端口=%u（设置里的配对入口已被使用）",
           A2RPRSDServicePairableHost, listener.serviceName, listener.hostName, (unsigned)listener.port]);
+    A2RPPW_CANCELLED_IF_NEEDED();
 
     // ---- ④ 建传输 ----
     NSString *tWhy = nil;
@@ -271,7 +270,7 @@ static id<A2RPPairSetupMessageTransport> A2RPPWProductionTransportFactory(id<A2R
     }
     if (transport == nil) {
         A2RPPW_FAIL(A2RPPairSetupAccessoryFailureTransportFailed,
-                    [NSString stringWithFormat:@"建 pair-setup 传输失败：%@", tWhy ?: @"原因未记录"]);
+                    ([NSString stringWithFormat:@"建 pair-setup 传输失败：%@", tWhy ?: @"原因未记录"]));
     }
     A2RPPW_CANCELLED_IF_NEEDED();
     emit(A2RPPairSetupAccessoryPhaseVerifying, A2RPPairSetupStepIdle,
@@ -309,8 +308,8 @@ static id<A2RPPairSetupMessageTransport> A2RPPWProductionTransportFactory(id<A2R
             default:
                 mapped = A2RPPairSetupAccessoryFailureTransportFailed; break;
         }
-        A2RPPW_FAIL(mapped, [NSString stringWithFormat:@"pair-setup 未完成（驱动分类=%ld）：%@",
-                             (long)driveFail, driveWhy ?: @"原因未记录"]);
+        A2RPPW_FAIL(mapped, ([NSString stringWithFormat:@"pair-setup 未完成（驱动分类=%ld）：%@",
+                              (long)driveFail, driveWhy ?: @"原因未记录"]));
     }
 
     // ---- ⑥ 交出配对文件字节（★落盘由调用方的 store 负责，本层不碰存储★）----
