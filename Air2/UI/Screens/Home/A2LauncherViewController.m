@@ -205,8 +205,7 @@
     // 操作区只放两张卡：账户 + 版本。
     // 之前我额外加了「版本/下载/联机/文件」快捷网格，但它和顶栏入口
     // 功能重叠，还把右栏撑得很满。
-    [self buildAccountCard];
-    [self buildVersionCard];
+    [self buildMainCard];
     [self buildRecentCard];
 }
 
@@ -249,7 +248,7 @@
     ]];
 
     // 三张卡都按内容撑高，不互相争抢空间
-    for (UIView *card in @[_accountCard, _versionCard, _recentCard]) {
+    for (UIView *card in @[_mainCard, _recentCard]) {
         [card setContentHuggingPriority:UILayoutPriorityRequired
                                 forAxis:UILayoutConstraintAxisVertical];
         [card setContentCompressionResistancePriority:UILayoutPriorityRequired
@@ -319,8 +318,7 @@
 /// 做得克制一点：位移只有 16pt，间隔 35ms，整体不到 0.5 秒。
 - (void)playEntranceAnimation {
     NSMutableArray<UIView *> *cards = [NSMutableArray array];
-    if (_accountCard) [cards addObject:_accountCard];
-    if (_versionCard) [cards addObject:_versionCard];
+    if (_mainCard) [cards addObject:_mainCard];
     if (_recentCard) [cards addObject:_recentCard];
 
 
@@ -360,8 +358,7 @@
     // 注意：不能只遍历直接子视图 —— 控件都在 UIStackView 里，
     // 必须递归查找。
     [self tintTaggedViewsIn:_topBar color:s.cOnSurfaceVariant];
-    [self tintTaggedViewsIn:_versionCard color:s.cOnSurfaceVariant];
-    [self tintTaggedViewsIn:_accountCard color:s.cOnSurfaceVariant];
+    [self tintTaggedViewsIn:_mainCard color:s.cOnSurfaceVariant];
     [self tintTaggedViewsIn:_recentCard color:s.cOnSurfaceVariant];
 }
 
@@ -418,159 +415,195 @@
 //  三张卡从顶部依次排列，不强行撑满高度 ——
 //  内容少时下方留白，比把两张卡拉变形好看。
 
-#pragma mark 账户卡
+#pragma mark - 侧栏主卡片（单卡三段式）
+//
+//  对照 ZL2 主页截图：
+//    整张卡是一个大圆角白卡，内部上中下三段
+//    ┌──────────────────────────┐
+//    │           ＋              │  ① 账号段：头像 + 名字（居中）
+//    │       添加账号 / Steve     │     无账号时显示「＋ 添加账号」
+//    │                          │
+//    │  ┌────┐ 1.20.1      ⚙    │  ② 版本段：图标 + 名字 + meta + 齿轮
+//    │  │草块│ 1.20.1, Fabric   │
+//    │  └────┘                  │
+//    │                          │
+//    │  ┌────────────────────┐  │  ③ 操作段：启动按钮（整宽）
+//    │  │     启动游戏        │  │
+//    │  └────────────────────┘  │
+//    └──────────────────────────┘
 
-- (void)buildAccountCard {
-    _accountCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
-    _accountCard.cornerRadius = A2RadiusXL;
-    _accountCard.elevation = A2CardElevationLow;
-    _accountCard.tappable = YES;
-    _accountCard.onTap = ^{ [self openAccount]; };
-    _accountCard.contentInsets = UIEdgeInsetsMake(A2CardPadding + 4, A2CardPadding,
-                                                  A2CardPadding + 4, A2CardPadding);
+- (void)buildMainCard {
+    _mainCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
+    _mainCard.cornerRadius = A2RadiusXL;
+    _mainCard.elevation = A2CardElevationLow;
+    _mainCard.contentInsets = UIEdgeInsetsMake(A2SpaceXL, A2SpaceL, A2SpaceL, A2SpaceL);
 
-    // ---- 头像 ----
+    [self buildAccountSection];
+    [self buildVersionSection];
+    [self buildLaunchSection];
+
+    _mainStack = [[UIStackView alloc] initWithArrangedSubviews:
+                  @[_accountSection, _versionSection, _launchButton]];
+    _mainStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _mainStack.axis = UILayoutConstraintAxisVertical;
+    _mainStack.spacing = A2SpaceL;
+    // 账号段与版本段之间留更大气口（截图里这两段分得较开）
+    [_mainStack setCustomSpacing:A2SpaceXL afterView:_accountSection];
+
+    [_mainCard.contentView addSubview:_mainStack];
+    [NSLayoutConstraint activateConstraints:@[
+        [_mainStack.topAnchor constraintEqualToAnchor:_mainCard.contentView.topAnchor],
+        [_mainStack.bottomAnchor constraintEqualToAnchor:_mainCard.contentView.bottomAnchor],
+        [_mainStack.leadingAnchor constraintEqualToAnchor:_mainCard.contentView.leadingAnchor],
+        [_mainStack.trailingAnchor constraintEqualToAnchor:_mainCard.contentView.trailingAnchor],
+    ]];
+
+    [_panelStack addArrangedSubview:_mainCard];
+    [self setNeedsUpdateConstraints];
+}
+
+#pragma mark ① 账号段
+
+- (void)buildAccountSection {
+    _accountSection = [[UIControl alloc] initWithFrame:CGRectZero];
+    _accountSection.translatesAutoresizingMaskIntoConstraints = NO;
+    [_accountSection addTarget:self action:@selector(openAccount)
+              forControlEvents:UIControlEventTouchUpInside];
+
+    // 有账号：显示皮肤头像；无账号：显示「＋」
     _avatarView = [[A2SkinHeadView alloc] initWithFrame:CGRectZero];
     _avatarView.translatesAutoresizingMaskIntoConstraints = NO;
 
-    // ---- 名字与类型 ----
+    _plusLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    _plusLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _plusLabel.text = @"＋";
+    _plusLabel.font = [UIFont systemFontOfSize:44 weight:UIFontWeightLight];
+    _plusLabel.textAlignment = NSTextAlignmentCenter;
+    _plusLabel.hidden = YES;
+
     _accountNameLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _accountNameLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
+    _accountNameLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _accountNameLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightMedium];
     _accountNameLabel.textAlignment = NSTextAlignmentCenter;
-    _accountNameLabel.text = @"未登录";
-    _accountNameLabel.adjustsFontSizeToFitWidth = YES;
-    _accountNameLabel.minimumScaleFactor = 0.8;
+    _accountNameLabel.text = @"添加账号";
 
     _accountTypeLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    _accountTypeLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _accountTypeLabel.font = [A2Typography caption];
     _accountTypeLabel.textAlignment = NSTextAlignmentCenter;
-    _accountTypeLabel.text = @"点击添加账号";
-    _accountTypeLabel.adjustsFontSizeToFitWidth = YES;
-    _accountTypeLabel.minimumScaleFactor = 0.8;
+    _accountTypeLabel.hidden = YES;
 
-    UIStackView *textStack =
-        [[UIStackView alloc] initWithArrangedSubviews:@[_accountNameLabel, _accountTypeLabel]];
-    textStack.axis = UILayoutConstraintAxisVertical;
-    textStack.spacing = 2;
-    textStack.alignment = UIStackViewAlignmentCenter;
-
-    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[_avatarView, textStack]];
-    stack.translatesAutoresizingMaskIntoConstraints = NO;
-    stack.axis = UILayoutConstraintAxisVertical;
-    stack.spacing = A2SpaceS;
-    stack.alignment = UIStackViewAlignmentCenter;
-
-    [_accountCard.contentView addSubview:stack];
+    [_accountSection addSubview:_avatarView];
+    [_accountSection addSubview:_plusLabel];
+    [_accountSection addSubview:_accountNameLabel];
+    [_accountSection addSubview:_accountTypeLabel];
 
     [NSLayoutConstraint activateConstraints:@[
-        [_avatarView.widthAnchor constraintEqualToConstant:A2AvatarSizeLarge],
-        [_avatarView.heightAnchor constraintEqualToConstant:A2AvatarSizeLarge],
+        [_avatarView.topAnchor constraintEqualToAnchor:_accountSection.topAnchor],
+        [_avatarView.centerXAnchor constraintEqualToAnchor:_accountSection.centerXAnchor],
+        [_avatarView.widthAnchor constraintEqualToConstant:64],
+        [_avatarView.heightAnchor constraintEqualToConstant:64],
 
-        [textStack.leadingAnchor constraintEqualToAnchor:_accountCard.contentView.leadingAnchor],
-        [textStack.trailingAnchor constraintEqualToAnchor:_accountCard.contentView.trailingAnchor],
+        [_plusLabel.centerXAnchor constraintEqualToAnchor:_accountSection.centerXAnchor],
+        [_plusLabel.centerYAnchor constraintEqualToAnchor:_accountSection.topAnchor
+                                                 constant:36],
 
-        [stack.topAnchor constraintEqualToAnchor:_accountCard.contentView.topAnchor],
-        [stack.bottomAnchor constraintEqualToAnchor:_accountCard.contentView.bottomAnchor],
-        [stack.leadingAnchor constraintEqualToAnchor:_accountCard.contentView.leadingAnchor],
-        [stack.trailingAnchor constraintEqualToAnchor:_accountCard.contentView.trailingAnchor],
+        [_accountNameLabel.topAnchor constraintEqualToAnchor:_accountSection.topAnchor
+                                                    constant:76],
+        [_accountNameLabel.leadingAnchor constraintEqualToAnchor:_accountSection.leadingAnchor],
+        [_accountNameLabel.trailingAnchor constraintEqualToAnchor:_accountSection.trailingAnchor],
+
+        [_accountTypeLabel.topAnchor constraintEqualToAnchor:_accountNameLabel.bottomAnchor
+                                                    constant:2],
+        [_accountTypeLabel.leadingAnchor constraintEqualToAnchor:_accountSection.leadingAnchor],
+        [_accountTypeLabel.trailingAnchor constraintEqualToAnchor:_accountSection.trailingAnchor],
+        [_accountTypeLabel.bottomAnchor constraintEqualToAnchor:_accountSection.bottomAnchor],
     ]];
-
-    [_panelStack addArrangedSubview:_accountCard];
 }
 
-#pragma mark 版本卡
+#pragma mark ② 版本段
 
-- (void)buildVersionCard {
-    _versionCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
-    _versionCard.cornerRadius = A2RadiusXL;
-    _versionCard.elevation = A2CardElevationLow;
-    _versionCard.contentInsets = UIEdgeInsetsMake(A2CardPadding, A2CardPadding,
-                                                  A2CardPadding, A2CardPadding);
+- (void)buildVersionSection {
+    _versionSection = [[UIControl alloc] initWithFrame:CGRectZero];
+    _versionSection.translatesAutoresizingMaskIntoConstraints = NO;
+    [_versionSection addTarget:self action:@selector(openVersions)
+              forControlEvents:UIControlEventTouchUpInside];
 
-    // ---- 顶部行 ----
+    // 版本图标（草方块）
+    _versionIcon = [[UIImageView alloc] initWithFrame:CGRectZero];
+    _versionIcon.translatesAutoresizingMaskIntoConstraints = NO;
+    _versionIcon.contentMode = UIViewContentModeScaleAspectFit;
+    _versionIcon.image = [UIImage systemImageNamed:@"cube.fill"];
+    _versionIcon.layer.cornerRadius = A2RadiusS;
+    _versionIcon.layer.cornerCurve = kCACornerCurveContinuous;
+    _versionIcon.clipsToBounds = YES;
+
     _versionNameLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _versionNameLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
+    _versionNameLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _versionNameLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightMedium];
     _versionNameLabel.text = @"未选择版本";
-    _versionNameLabel.adjustsFontSizeToFitWidth = YES;
-    _versionNameLabel.minimumScaleFactor = 0.7;
+    _versionNameLabel.numberOfLines = 1;
+    _versionNameLabel.lineBreakMode = NSLineBreakByTruncatingTail;
 
     _versionMetaLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    _versionMetaLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _versionMetaLabel.font = [A2Typography caption];
-    _versionMetaLabel.text = @"点右下角进入版本管理";
-    _versionMetaLabel.adjustsFontSizeToFitWidth = YES;
-    _versionMetaLabel.minimumScaleFactor = 0.8;
+    _versionMetaLabel.text = @"点击进入版本管理";
+    _versionMetaLabel.numberOfLines = 1;
+    _versionMetaLabel.lineBreakMode = NSLineBreakByTruncatingTail;
 
-    UIStackView *infoStack =
-        [[UIStackView alloc] initWithArrangedSubviews:@[_versionNameLabel, _versionMetaLabel]];
-    infoStack.axis = UILayoutConstraintAxisVertical;
-    infoStack.spacing = 2;
+    UIStackView *textStack = [[UIStackView alloc] initWithArrangedSubviews:
+                              @[_versionNameLabel, _versionMetaLabel]];
+    textStack.translatesAutoresizingMaskIntoConstraints = NO;
+    textStack.axis = UILayoutConstraintAxisVertical;
+    textStack.spacing = 1;
 
-    UIImageSymbolConfiguration *gearCfg =
-        [UIImageSymbolConfiguration configurationWithPointSize:17 weight:UIImageSymbolWeightRegular];
-    UIButton *gearBtn = [UIButton buttonWithType:UIButtonTypeSystem];
-    gearBtn.translatesAutoresizingMaskIntoConstraints = NO;
-    [gearBtn setImage:[UIImage systemImageNamed:@"gearshape.fill" withConfiguration:gearCfg]
-             forState:UIControlStateNormal];
-    gearBtn.tag = 706;
-    [gearBtn addTarget:self action:@selector(openVersionSettings)
-      forControlEvents:UIControlEventTouchUpInside];
+    // 齿轮：进入版本设置
+    _versionGear = [UIButton buttonWithType:UIButtonTypeSystem];
+    _versionGear.translatesAutoresizingMaskIntoConstraints = NO;
+    UIImageSymbolConfiguration *cfg =
+        [UIImageSymbolConfiguration configurationWithPointSize:17 weight:UIImageFontWeightRegular];
+    [_versionGear setImage:[UIImage systemImageNamed:@"gearshape.fill" withConfiguration:cfg]
+                  forState:UIControlStateNormal];
+    [_versionGear addTarget:self action:@selector(openVersionSettings)
+           forControlEvents:UIControlEventTouchUpInside];
 
-    UIStackView *topRow = [[UIStackView alloc] initWithArrangedSubviews:@[infoStack, gearBtn]];
-    topRow.translatesAutoresizingMaskIntoConstraints = NO;
-    topRow.axis = UILayoutConstraintAxisHorizontal;
-    topRow.alignment = UIStackViewAlignmentCenter;
-    topRow.spacing = A2SpaceS;
-    [infoStack setContentHuggingPriority:UILayoutPriorityDefaultLow
-                                 forAxis:UILayoutConstraintAxisHorizontal];
-
-    // ---- 启动按钮 ----
-    _launchButton = [[A2PrimaryButton alloc] initWithTitle:@"启动游戏" style:A2ButtonStylePrimary];
-    _launchButton.icon = [UIImage systemImageNamed:@"play.fill"];
-    _launchButton.minHeight = A2ButtonHeight;
-    [_launchButton addTarget:self action:@selector(launchGame) forControlEvents:UIControlEventTouchUpInside];
-
-    // ---- 次级操作 ----
-    UIButton *settingsLink = [self makeTextLink:@"版本设置" action:@selector(openVersionSettings)];
-    UILabel *dot = [[UILabel alloc] initWithFrame:CGRectZero];
-    dot.text = @"·";
-    dot.font = [A2Typography caption];
-    dot.tag = 704;
-    UIButton *folderLink = [self makeTextLink:@"游戏目录" action:@selector(openVersions)];
-
-    UIStackView *linkRow = [[UIStackView alloc] initWithArrangedSubviews:@[settingsLink, dot, folderLink]];
-    linkRow.axis = UILayoutConstraintAxisHorizontal;
-    linkRow.spacing = A2SpaceXS;
-    linkRow.alignment = UIStackViewAlignmentCenter;
-
-    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:
-                          @[topRow, _launchButton, linkRow]];
-    stack.translatesAutoresizingMaskIntoConstraints = NO;
-    stack.axis = UILayoutConstraintAxisVertical;
-    stack.alignment = UIStackViewAlignmentFill;
-    [stack setCustomSpacing:A2SpaceL afterView:topRow];
-    [stack setCustomSpacing:A2SpaceM afterView:_launchButton];
-
-    [_versionCard.contentView addSubview:stack];
+    [_versionSection addSubview:_versionIcon];
+    [_versionSection addSubview:textStack];
+    [_versionSection addSubview:_versionGear];
 
     [NSLayoutConstraint activateConstraints:@[
-        [gearBtn.widthAnchor constraintEqualToConstant:32],
-        [gearBtn.heightAnchor constraintEqualToConstant:32],
+        [_versionIcon.leadingAnchor constraintEqualToAnchor:_versionSection.leadingAnchor],
+        [_versionIcon.centerYAnchor constraintEqualToAnchor:_versionSection.centerYAnchor],
+        [_versionIcon.widthAnchor constraintEqualToConstant:36],
+        [_versionIcon.heightAnchor constraintEqualToConstant:36],
+        [_versionIcon.topAnchor constraintEqualToAnchor:_versionSection.topAnchor],
+        [_versionIcon.bottomAnchor constraintEqualToAnchor:_versionSection.bottomAnchor],
 
-        [stack.topAnchor constraintEqualToAnchor:_versionCard.contentView.topAnchor],
-        [stack.bottomAnchor constraintEqualToAnchor:_versionCard.contentView.bottomAnchor],
-        [stack.leadingAnchor constraintEqualToAnchor:_versionCard.contentView.leadingAnchor],
-        [stack.trailingAnchor constraintEqualToAnchor:_versionCard.contentView.trailingAnchor],
+        [textStack.leadingAnchor constraintEqualToAnchor:_versionIcon.trailingAnchor
+                                                constant:A2SpaceM],
+        [textStack.centerYAnchor constraintEqualToAnchor:_versionSection.centerYAnchor],
+        [textStack.trailingAnchor constraintLessThanOrEqualToAnchor:_versionGear.leadingAnchor
+                                                           constant:-A2SpaceS],
+
+        [_versionGear.trailingAnchor constraintEqualToAnchor:_versionSection.trailingAnchor],
+        [_versionGear.centerYAnchor constraintEqualToAnchor:_versionSection.centerYAnchor],
+        [_versionGear.widthAnchor constraintEqualToConstant:36],
+        [_versionGear.heightAnchor constraintEqualToConstant:36],
     ]];
-
-    [_panelStack addArrangedSubview:_versionCard];
 }
 
-#pragma mark 最近游玩
+#pragma mark ③ 操作段
 
-/// 最近游玩 —— 横向滚动的版本小卡。
-///
-/// 之前右侧只有两张卡，内容太少而卡片被拉满高度，显空。
-/// 加这一块后信息密度合适，且确实有用：快速切换常玩的版本。
+- (void)buildLaunchSection {
+    _launchButton = [[A2PrimaryButton alloc] initWithTitle:@"启动游戏" style:A2ButtonStylePrimary];
+    _launchButton.minHeight = A2ButtonHeight;
+    [_launchButton addTarget:self action:@selector(launchGame)
+            forControlEvents:UIControlEventTouchUpInside];
+}
+
+#pragma mark - 约束
+
 - (void)buildRecentCard {
     _recentCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
     _recentCard.cornerRadius = A2RadiusXL;
@@ -723,6 +756,17 @@
 
     _versionNameLabel.text = current.name;
 
+    // 版本图标：约定放在版本的私有数据目录里（.air_version/VersionIcon.png）。
+    // 没有就让 A2VersionCard 那套的方块图标兜底。
+    NSString *iconPath = [current.launcherDataPath stringByAppendingPathComponent:@"VersionIcon.png"];
+    if (iconPath.length && [NSFileManager.defaultManager fileExistsAtPath:iconPath]) {
+        UIImage *icon = [UIImage imageWithContentsOfFile:iconPath];
+        if (icon) {
+            _versionIcon.image = icon;
+            _versionIcon.backgroundColor = UIColor.clearColor;
+        }
+    }
+
     NSMutableArray<NSString *> *parts = [NSMutableArray array];
     [parts addObject:current.loaderInfo.length ? current.loaderInfo : @"原版"];
     [parts addObject:[NSString stringWithFormat:@"隔离·%@",
@@ -730,16 +774,24 @@
     _versionMetaLabel.text = [parts componentsJoinedByString:@" · "];
 }
 
-/// 刷新账户卡
+/// 刷新账号段。
+///
+/// 未登录时显示「＋」大图标 + 「添加账号」（对应 ZL2 截图的空状态），
+/// 有账号时显示皮肤头像 + 名字 + 账号类型。
 - (void)refreshAccountUI {
     A2Account *acc = A2AccountManager.shared.currentAccount;
     if (!acc) {
-        _avatarView.skinPath = nil;
-        _avatarView.fallbackText = @"+";
-        _accountNameLabel.text = @"未登录";
-        _accountTypeLabel.text = @"点击添加账号";
+        _avatarView.hidden = YES;
+        _plusLabel.hidden = NO;
+        _accountNameLabel.text = @"添加账号";
+        _accountTypeLabel.hidden = YES;
         return;
     }
+
+    _avatarView.hidden = NO;
+    _plusLabel.hidden = YES;
+    _accountTypeLabel.hidden = NO;
+
     _avatarView.skinPath = acc.skinPath;
     _avatarView.fallbackText = acc.username;
     _accountNameLabel.text = acc.username;
