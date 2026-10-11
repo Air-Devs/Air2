@@ -33,6 +33,7 @@
 #import "A2Typography.h"
 #import "A2Metrics.h"
 #import "A2GameInstaller.h"
+#import "A2ModPackInstaller.h"
 #import "A2VersionManager.h"
 #import "A2ModLoaderAPI.h"
 #import "A2Log.h"
@@ -158,6 +159,9 @@ typedef NS_ENUM(NSInteger, A2InstallStepState) {
 @property (nonatomic, copy, nullable) NSString *loaderVersion;
 
 @property (nonatomic, strong) A2GameInstaller *installer;
+/// 整合包模式：zip 路径（nil 表示普通安装）
+@property (nonatomic, copy, nullable) NSString *modPackPath;
+@property (nonatomic, strong, nullable) A2ModPackInstaller *packInstaller;
 @property (nonatomic, assign) BOOL finished;
 
 @property (nonatomic, strong) A2RingProgress *ring;
@@ -207,9 +211,22 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     return self;
 }
 
+- (instancetype)initWithModPackPath:(NSString *)zipPath
+                        versionName:(NSString *)versionName {
+    self = [super initWithNibName:nil bundle:nil];
+    if (!self) return nil;
+    _mcVersion = @"";        // 整合包的 MC 版本从清单里解析
+    _versionName = [versionName copy];
+    _modPackPath = [zipPath copy];
+    _stepRows = [NSMutableArray array];
+    _packInstaller = [[A2ModPackInstaller alloc] init];
+    _currentStage = A2InstallStageFetchManifest;
+    return self;
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.pageTitle = @"安装中";
+    self.pageTitle = _modPackPath.length ? @"安装整合包" : @"安装中";
 
     __weak typeof(self) weakSelf = self;
     self.onBack = ^{
@@ -430,6 +447,12 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
 #pragma mark - 安装
 
 - (void)startInstall {
+    // 整合包模式走另一条流程 —— 它的阶段划分与「装原版+加载器」不同。
+    if (_modPackPath.length) {
+        [self startModPackInstall];
+        return;
+    }
+
     A2InstallRequest *req = [A2InstallRequest new];
     req.mcVersion = _mcVersion;
     req.versionName = _versionName;
@@ -444,6 +467,28 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     }
         completion:^(BOOL success, NSError *error) {
         [weakSelf applyCompletion:success error:error];
+    }];
+}
+
+/// 整合包安装。
+///
+/// 阶段与普通安装不同（解析清单 / 装加载器 / 下载文件 / 解压覆盖），
+/// 但复用同一套进度 UI —— 把安装器的回调映射到 A2InstallStage 的语义位置。
+- (void)startModPackInstall {
+    __weak typeof(self) weakSelf = self;
+    [_packInstaller installPackAtPath:_modPackPath
+                          versionName:_versionName
+                             gameHome:A2VersionManager.shared.gameHome
+                             progress:^(double progress, NSString *message) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        // 整合包进度总体映射到「下载资源」阶段 —— 它是耗时最长的一段
+        [self applyStage:A2InstallStageDownloadAssets progress:progress message:message];
+    }
+                           completion:^(BOOL success, NSError *error) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        [self applyCompletion:success error:error];
     }];
 }
 
