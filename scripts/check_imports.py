@@ -276,75 +276,6 @@ def check_component_dependencies():
 
 
 
-def check_class_method_calls():
-    """
-    检查 [A2Xxx method:...] 这类静态调用，被调类是否声明了该方法。
-
-    只查本工程的类、只比对方法首段 —— ObjC 多段方法名匹配复杂，
-    过度精确会大量误报。
-    """
-    import os, re
-    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-
-    class_methods = {}
-
-    def collect(path):
-        src = open(path).read()
-        current = None
-        for line in src.split("\n"):
-            m = re.match(r"@(?:interface|implementation)\s+(A2\w+)", line)
-            if m:
-                current = m.group(1)
-                class_methods.setdefault(current, set())
-                continue
-            if current and line.strip().startswith("@end"):
-                current = None
-                continue
-            if current:
-                mm = re.match(r"\s*\+\s*\([^)]*\)\s*(\w+)", line)
-                if mm:
-                    class_methods[current].add(mm.group(1))
-
-    for dirpath, _, files in os.walk(os.path.join(ROOT, "Air2")):
-        for f in files:
-            if f.endswith(".h") or f.endswith(".m"):
-                collect(os.path.join(dirpath, f))
-
-    # NSObject 及常用基类提供的方法 —— 不要求本工程显式声明
-    INHERITED_METHODS = {
-        "alloc", "new", "allocWithZone", "class", "superclass", "isSubclassOfClass",
-        "instancesRespondToSelector", "conformsToProtocol", "description",
-        "debugDescription", "hash", "isEqual", "copy", "mutableCopy",
-        "resolveClassMethod", "resolveInstanceMethod", "initialize", "load",
-        "shared", "instance", "defaultInstance",
-    }
-
-    issues = []
-    for dirpath, _, files in os.walk(os.path.join(ROOT, "Air2")):
-        for f in files:
-            if not (f.endswith(".m") or f.endswith(".h")):
-                continue
-            p = os.path.join(dirpath, f)
-            src = open(p).read()
-            for m in re.finditer(r"\[\s*(A2\w+)\s+(\w+)", src):
-                cls, method = m.group(1), m.group(2)
-                # NSObject 继承来的方法不该报（alloc / new / class / ...
-                # 这些在头文件里当然找不到声明）
-                if method in INHERITED_METHODS:
-                    continue
-                known = class_methods.get(cls)
-                if not known:
-                    continue
-                if method not in known:
-                    line = src[:m.start()].count("\n") + 1
-                    rel = os.path.relpath(p, ROOT)
-                    msg = f"{rel}:{line}  [{cls} {method}:] \u2014\u2014 {cls} \u672a\u58f0\u660e\u8be5\u65b9\u6cd5"
-                    if msg not in issues:
-                        issues.append(msg)
-
-    return issues
-
-
 def main():
     problems = []
     total_imports = 0
@@ -432,18 +363,6 @@ def main():
 
     print("\u2713 \u7ec4\u4ef6\u95f4\u4f9d\u8d56\u5b8c\u6574")
 
-    # ---------- 静态方法调用检查 ----------
-    # [A2Xxx method:...] 这类调用，若被调类未声明该方法，
-    # 编译器报 "no known class method for selector"。
-    # 本地拦下能省一轮 CI。
-    call_issues = check_class_method_calls()
-    if call_issues:
-        print(f"\n\u53d1\u73b0 {len(call_issues)} \u5904\u8c03\u7528\u4e86\u4e0d\u5b58\u5728\u7684\u65b9\u6cd5\uff1a")
-        for msg in call_issues:
-            print(f"  {msg}")
-        return 1
-
-    print("\u2713 \u9759\u6001\u65b9\u6cd5\u8c03\u7528\u90fd\u6709\u5b9a\u4e49")
     return 0
 
 

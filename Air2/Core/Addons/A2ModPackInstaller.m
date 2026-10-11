@@ -304,7 +304,6 @@ static void A2Main(dispatch_block_t b) {
 /// 整合包不包含游戏本体，只声明依赖 —— 缺的话要先装。
 - (void)ensureBaseVersion {
     A2ModPackManifest *m = self.manifest;
-    A2VersionManager *vmg = A2VersionManager.shared;
 
     // 找本地是否有符合的版本（同游戏版本 + 同加载器）
     A2Version *found = [self findMatchingVersion];
@@ -383,8 +382,7 @@ static void A2Main(dispatch_block_t b) {
     }
 
     A2GamePath *path = [A2GamePath pathWithGameHome:self.gameHome];
-    NSString *gameDir = [path gameDirectoryForVersion:self.versionName
-                                            isolation:[[A2VersionIsolation alloc] init]];
+    NSString *gameDir = [self gameDirectoryForCurrentVersion];
 
     [self report:0.5 message:[NSString stringWithFormat:@"正在下载 %lu 个文件…",
                               (unsigned long)m.files.count]];
@@ -526,6 +524,23 @@ static void A2Main(dispatch_block_t b) {
     }];
 }
 
+/// 当前版本实际使用的游戏目录。
+///
+/// 隔离档位从版本管理器取 —— 整合包安装是在「已存在的版本」上叠加内容，
+/// 那个版本的档位已经确定，不该由安装器自己造一个默认值。
+- (NSString *)gameDirectoryForCurrentVersion {
+    A2GamePath *path = [A2GamePath pathWithGameHome:self.gameHome];
+    A2IsolationMode mode = A2IsolationModeFull;
+
+    for (A2Version *v in A2VersionManager.shared.versions) {
+        if ([v.name isEqualToString:self.versionName]) {
+            mode = [v effectiveIsolationMode];
+            break;
+        }
+    }
+    return [path gameDirectoryForVersion:self.versionName mode:mode];
+}
+
 #pragma mark - overrides
 
 /// 解压 overrides 目录里的文件（原样覆盖，不走下载）
@@ -536,8 +551,7 @@ static void A2Main(dispatch_block_t b) {
     [self report:0.92 message:@"正在解压整合包覆盖文件…"];
 
     A2GamePath *path = [A2GamePath pathWithGameHome:self.gameHome];
-    NSString *gameDir = [path gameDirectoryForVersion:self.versionName
-                                            isolation:[[A2VersionIsolation alloc] init]];
+    NSString *gameDir = [self gameDirectoryForCurrentVersion];
 
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
         A2ZipReader *zip = [[A2ZipReader alloc] initWithPath:self.zipPath];
