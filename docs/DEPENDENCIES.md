@@ -167,3 +167,28 @@
 **零 Pojav 判据**：`JavaApp/Makefile` 的 `verify` 目标用 `jar tf` 扫
 `net/kdt/pojavlaunch|Boardwalk`，命中非 0 即构建失败；Xcode 脚本阶段会连带跑它。
 
+---
+
+## 运行时随包（启动必需 + 必要渲染器）—— [RT-BUNDLE]
+
+> 按「★防石山★」只引入**启动链必需**的运行时与**一个**主推渲染器：
+> JVM 运行时**只选一个版本**、渲染器**只选一个主推**、LWJGL **只收启动必需那几件**。
+> 落地位置与加载者见 `docs/ARCHITECTURE.md` 的「[RT-BUNDLE]」节；随包由
+> `scripts/gen_xcodeproj.py` 的 **「Stage Runtime Bundle」** 脚本阶段完成。
+
+| 名称 | 版本 | 来源 | 许可 | 用途 | 引入方式 |
+|---|---|---|---|---|---|
+| OpenJDK (iOS, aarch64) | **25.0.4**（`release` 内 `JAVA_VERSION=25.0.4` / `OS_NAME=Darwin` / `OS_ARCH=aarch64`） | **本地随包**：Amethyst 构建产物 `java_runtimes/java-25-openjdk`（上游 `herbrine8403/OpenJDK-iOS-FullVersion` = 官方 OpenJDK 25 + iOS 补丁） | **GPL-2.0 + Classpath Exception** | JVM 本体（`lib/server/libjvm.dylib` + `lib/modules`）；`a2_vmloader.m` 以 `dlopen` + `JNI_CreateJavaVM` 使用 | ★**不入 git**★（119 MB，「防石山」）：`scripts/stage_runtime.sh` 从**本机本地路径**就位到 `Libraries/java_runtimes/java-25-openjdk/`；★不上云、不下载★ |
+| **libmetallum.dylib**（Metallum 自研 Metal 渲染器） | 与 Amethyst b12 包内一致（md5 `7d6b022aa2564c422f71325314a771ab`，221,856 B） | **本地随包**：`Air-5.1.1-b12-jitorder2.ipa` 内 `Frameworks/libmetallum.dylib`（= Mac `b12/artifacts/Payload/…/Frameworks/`，逐字节相同） | 自研（Metallum/Amethyst 线），随上游 `LICENSE` = **GPL-3.0**；引入本仓后随本仓 `LICENSE`（GPL-3.0-or-later） | ★**唯一主推渲染器**★。`otool -L` 实测**只依赖系统框架**（Metal/UIKit/Foundation/CoreGraphics/QuartzCore/libSystem/swift 运行时），零第三方 dylib | **随仓** `Libraries/Renderers/libmetallum.dylib` → 随包 `<App>/Frameworks/`（= `-Djava.library.path`） |
+| LWJGL（核心 / 窗口 / GL / 贴图） | **3.4.1**（`lwjgl.jar` md5 `ab79e80355127103a864944c2923aa9b`；`lwjgl-glfw.jar` `7ebd0017934278aed913a6e6bc28784a`；`lwjgl-opengl.jar` `0c84a2d43c42d5bef2006da4f18f2e37`；`lwjgl-stb.jar` `7f99535811019cce530fc26451a16089`） | **本地随包**：Amethyst 构建树 `JavaApp/libs/lwjgl-341/`；上游 = lwjgl.org 官方 **3.4.1** | **BSD-3-Clause** | classpath 的 `<lwjglDir>/*` 尾项（`a2_resourcepaths.m:59-86`）；`lwjgl-glfw` 对应真机 `NoClassDefFoundError: org/lwjgl/glfw/GLFWErrorCallbackI` 那处根因 | **随仓** `Libraries/Jars/lwjgl-341/*.jar` → 随包 `<App>/libs/lwjgl-341/` |
+| LWJGL iOS natives + JNI 分发器 | 3.4.1（随 `Air-5.1.1-b12-jitorder2.ipa`） | **本地随包**：同 IPA 的 `Frameworks/{liblwjgl,liblwjgl_opengl,liblwjgl_stb}.dylib` + `libjnidispatch.jnilib`；上游 = lwjgl.org 官方 iOS/aarch64 | **BSD-3-Clause** | LWJGL Java 层 `System.loadLibrary(...)` 的目标；落 `<App>/Frameworks/` 才能被 `java.library.path` 解析 | **随仓** `Libraries/Frameworks/*` → 随包 `<App>/Frameworks/` |
+
+**「不上云」自查**：本单**未**引入任何云服务 / 远端清单 / 自建后台；**未**新增任何下载步骤；
+`stage_runtime.sh` 只做本机文件复制，找不到源就**报错退出**（不兜底去网上取）。
+
+**被本单明确排除的大件**（防石山口径，逐项理由见 `D:\CTF\_AIR2_RUNTIME_DEPS.md` §0）：
+另三个 JRE（`java-8/-17/-21-openjdk`，100 / 103 / 120 MB）、`libMobileGL{,-gles}.dylib`（85.8 MB ×2）、
+`libOSMesa.8.dylib`（17.8 MB）、`libmithril.dylib`（9.3 MB）、`libMoltenVK.dylib`、
+`libs/lwjgl-333/lwjgl.jar`（10.4 MB，与 3.4.1 重复）、着色器编译链（`libglslang*` / `libshaderc*` /
+`libspirv-cross*` / `libspvc`）等。
+

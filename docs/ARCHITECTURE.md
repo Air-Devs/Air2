@@ -262,3 +262,29 @@ ADR 见 `docs/DECISIONS.md` ADR-007 / ADR-008 / ADR-009。
 
 **来源**：`docs/JIT-PROVISIONING.md` §1.2 / §3.3；许可口径见 `docs/DEPENDENCIES.md`「JIT 自动配对」节
 （★自研；只参考 SideInstaller 思路、未用其代码★）。
+
+### 运行时 / 渲染器随包登记 —— [RT-BUNDLE]
+
+**分层**：`Libraries/` 是「预编译二进制」层（见 §顶层，**不放源码**）；启动链（`Natives/Context`）只**消费**它，
+方向仍是 单向 `Natives → Libraries`。
+
+| 路径 | 层 | 职责 | 随包目标 |
+|---|---|---|---|
+| `Libraries/Renderers/libmetallum.dylib` | Libraries | ★唯一主推渲染器★（自研 Metal，零第三方 dylib） | `<App>/Frameworks/libmetallum.dylib` |
+| `Libraries/Frameworks/liblwjgl{,_opengl,_stb}.dylib`、`libjnidispatch.jnilib` | Libraries | LWJGL 3.4.1 iOS natives（`System.loadLibrary` 的目标） | `<App>/Frameworks/` |
+| `Libraries/Jars/lwjgl-341/*.jar` | Libraries | LWJGL 3.4.1 jar 集（classpath 的 `<lwjglDir>/*` 尾项） | `<App>/libs/lwjgl-341/` |
+| `Libraries/java_runtimes/java-25-openjdk/` | Libraries | JVM 运行时（★不入 git★；由 `scripts/stage_runtime.sh` 从本机 Amethyst 产物就位） | `<App>/java_runtimes/java-25-openjdk/` |
+
+**加载者（谁读它）**：
+
+| 随包目标 | 加载者 | 证据行号 |
+|---|---|---|
+| `<App>/java_runtimes/<ver>/lib/server/libjvm.dylib` | `Natives/Context/a2_vmloader.m` `a2_vm_resolve_libjvm()` → `dlopen` + `dlsym("JNI_CreateJavaVM")` | `a2_vmloader.m:15-27,36-39` |
+| `<App>/Frameworks/*.dylib` | JVM 的 native 解析（`-Djava.library.path=<bundle>/Frameworks`） | `Natives/Context/a2_resourcepaths.m:100-117` |
+| `<App>/libs/lwjgl-<ver>/*` | classpath 通配展开后并入 `-Djava.class.path` | `a2_resourcepaths.m:59-86`（`a2_argbuilder` 保序下发） |
+
+**随包机制**：`scripts/gen_xcodeproj.py` 的 **「Stage Runtime Bundle」** 脚本阶段（`runtime_stage_script()`）。
+★独立函数，不改 `collect_resources()` / `scan_sources()` 等公共段落★；★不手改 `project.pbxproj`★（脚本重生成）。
+JRE 缺失时该阶段**只告警不失败**（同树多任务并行时不让别人的构建变红）；包内完整性由出包后的逐项断言兜底。
+
+**开关**：无 —— 运行时随包是常态；「走不走自研启动链」仍只由 `debug.rt_p1_runtime` 决定。

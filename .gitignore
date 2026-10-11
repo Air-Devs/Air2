@@ -15,6 +15,11 @@
 *.dylib
 *.so
 !Libraries/**/*.dylib
+
+# ★ JVM 运行时（java_runtimes，~119 MB）不入 git —— 「防石山」；
+#   由 scripts/stage_runtime.sh 从本机 Amethyst 构建产物就位（★不上云★）。
+#   渲染器与 LWJGL 仍随仓（见上方 !Libraries/**/*.dylib 与 !Libraries/**/*.jar）。
+/Libraries/java_runtimes/
 *.xcarchive
 
 # ---------- Xcode ----------

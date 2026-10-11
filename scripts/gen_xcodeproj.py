@@ -69,6 +69,62 @@ def pbx_escape_script(text):
                 .replace("\n", "\\n")
                 .replace("\t", "\\t"))
 
+# ----------------------------------------------------------------------------
+# 运行时随包阶段（★防石山：只搬「启动必需 + 必要渲染器」★）
+# ----------------------------------------------------------------------------
+# 为什么不走 Resources 阶段 / Copy Files 阶段：
+#   · 启动链对「目标子目录」有硬要求，Resources 阶段表达不了（它只会把文件平铺到 app 根）：
+#       - 渲染器 + LWJGL native → <App>/Frameworks   （-Djava.library.path 指向它，
+#                                                     Natives/Context/a2_resourcepaths.m:117）
+#       - LWJGL jar            → <App>/libs/lwjgl-<ver>（a2_resourcepaths.m 的 <lwjglDir>/* 尾项）
+#       - JVM 运行时           → <App>/java_runtimes/<ver>（a2_vmloader.m:15-27 解析
+#                                                     <javaHome>/lib/server/libjvm.dylib）
+#   · 且 JRE 体量 ~119 MB，走 Xcode 资源管线得不偿失。
+#   ⇒ 用一个独立脚本阶段显式 cp（与已有「Build Java Launch Core」同款做法）。
+#   ★本函数与 collect_resources() / scan_sources() 完全解耦★：只新增，不改公共段落。
+#
+# 源：
+#   · Libraries/Renderers/*.dylib 与 Libraries/Frameworks/lib* —— 随仓（BSD-3 / GPL-3，见 docs/DEPENDENCIES.md）
+#   · Libraries/Jars/lwjgl-*/      —— 随仓（BSD-3）
+#   · Libraries/java_runtimes/     —— ★不入 git★（119 MB「防石山」）；由 scripts/stage_runtime.sh
+#                                     从本地 Amethyst 构建产物就位（★不上云★）。
+# 缺失处理：JRE 缺失只告警不失败（同树其它任务可能未就位；本单的包内断言负责兜底）。
+RUNTIME_PHASE_NAME = "Stage Runtime Bundle"
+
+
+def runtime_stage_script():
+    """生成「运行时随包」脚本阶段的 shell 脚本（目标路径与启动链约定一一对应）。"""
+    lines = [
+        "set -e",
+        'APP="$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH"',
+        'LIB="$SRCROOT/Libraries"',
+        'mkdir -p "$APP/Frameworks" "$APP/libs" "$APP/java_runtimes"',
+        # ① 渲染器 + LWJGL native → <App>/Frameworks（= -Djava.library.path）
+        'for f in "$LIB"/Renderers/*.dylib "$LIB"/Frameworks/lib*; do',
+        '  [ -f "$f" ] || continue',
+        '  cp -f "$f" "$APP/Frameworks/"',
+        'done',
+        # ② LWJGL jar → <App>/libs/lwjgl-<ver>/
+        'for d in "$LIB"/Jars/lwjgl-*; do',
+        '  [ -d "$d" ] || continue',
+        '  mkdir -p "$APP/libs/$(basename "$d")"',
+        '  cp -f "$d"/*.jar "$APP/libs/$(basename "$d")/"',
+        'done',
+        # ③ JVM 运行时 → <App>/java_runtimes/<ver>/
+        'if [ -d "$LIB/java_runtimes" ]; then',
+        '  for r in "$LIB"/java_runtimes/*; do',
+        '    [ -d "$r" ] || continue',
+        '    rm -rf "$APP/java_runtimes/$(basename "$r")"',
+        '    cp -R "$r" "$APP/java_runtimes/$(basename "$r")"',
+        '  done',
+        'else',
+        '  echo "warning: Libraries/java_runtimes 缺失 —— 先跑 scripts/stage_runtime.sh 再出包" >&2',
+        'fi',
+        'echo "note: runtime bundle -> $APP/{Frameworks,libs,java_runtimes}"',
+    ]
+    return "\n".join(lines) + "\n"
+
+
 # libterracotta 是「可选二进制依赖」（工程内无 libterracotta.xcframework）。
 # A2Multiplayer.m 以 __attribute__((weak)) 声明其 C ABI，但现代 ld64 对
 # 「任何库都不提供」的符号即使声明为 weak 也不放行 ⇒ 链接期须显式 -Wl,-U,<sym>
@@ -335,6 +391,7 @@ def build():
     sources_phase = uid("phase", "sources")
     resources_phase = uid("phase", "resources")
     java_phase = uid("phase", "java-launch-core")
+    runtime_phase = uid("phase", "runtime-stage")
     project_obj = uid("project", PROJECT_NAME)
 
     add("/* Begin PBXNativeTarget section */")
@@ -346,6 +403,7 @@ def build():
     add(f"\t\t\t\t{frameworks_phase} /* Frameworks */,")
     add(f"\t\t\t\t{resources_phase} /* Resources */,")
     add(f"\t\t\t\t{java_phase} /* {JAVA_PHASE_NAME} */,")
+    add(f"\t\t\t\t{runtime_phase} /* {RUNTIME_PHASE_NAME} */,")
     add("\t\t\t);")
     add("\t\t\tbuildRules = (")
     add("\t\t\t);")
@@ -426,6 +484,24 @@ def build():
     add("\t\t\trunOnlyForDeploymentPostprocessing = 0;")
     add("\t\t\tshellPath = /bin/sh;")
     add(f"\t\t\tshellScript = \"{pbx_escape_script(JAVA_PHASE_SCRIPT)}\";")
+    add("\t\t};")
+    add("")
+    # 运行时随包阶段：把 Libraries/ 下「启动必需 + 必要渲染器」放进 <App>/{Frameworks,libs,java_runtimes}。
+    # ★独立函数 runtime_stage_script()，不改上面的 Java 阶段与任何公共段落。★
+    add(f"\t\t{runtime_phase} /* {RUNTIME_PHASE_NAME} */ = {{")
+    add("\t\t\tisa = PBXShellScriptBuildPhase;")
+    add("\t\t\talwaysOutOfDate = 1;")
+    add("\t\t\tbuildActionMask = 2147483647;")
+    add("\t\t\tfiles = (")
+    add("\t\t\t);")
+    add("\t\t\tinputPaths = (")
+    add("\t\t\t);")
+    add(f"\t\t\tname = \"{RUNTIME_PHASE_NAME}\";")
+    add("\t\t\toutputPaths = (")
+    add("\t\t\t);")
+    add("\t\t\trunOnlyForDeploymentPostprocessing = 0;")
+    add("\t\t\tshellPath = /bin/sh;")
+    add(f"\t\t\tshellScript = \"{pbx_escape_script(runtime_stage_script())}\";")
     add("\t\t};")
     add("/* End PBXShellScriptBuildPhase section */")
     add("")
