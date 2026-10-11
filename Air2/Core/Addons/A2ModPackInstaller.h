@@ -35,8 +35,15 @@
 //    4. 下载所有 mod/资源包到对应目录
 //    5. 解压 overrides 覆盖
 //
-//  ⚠️ 我们暂不支持 MCBBS 与 MultiMC 格式 —— 前者已停止维护，
-//     后者 ZL2 也是只读导入。需要时再补。
+//    **MCBBS**（mcbbs.packmeta）
+//      中文社区格式。结构是 MCBBSManifest：
+//        { name, version, author, description, url, origins[], addons[], libraries[] }
+//      origins 是「从哪下游戏本体」，addons 是内容文件。
+//
+//    **MultiMC**（mmc-pack.json）
+//      MultiMC / Prism Launcher / ATLauncher 系通用。
+//      结构是 components 列表，每项有 uid（如 net.minecraft / net.fabricmc.fabric-loader）
+//      与 version —— 靠 uid 反推游戏版本与加载器。
 //
 
 #import <Foundation/Foundation.h>
@@ -49,6 +56,8 @@ typedef NS_ENUM(NSInteger, A2ModPackFormat) {
     A2ModPackFormatUnknown = 0,
     A2ModPackFormatModrinth,      ///< modrinth.index.json
     A2ModPackFormatCurseForge,    ///< manifest.json（CurseForge 版）
+    A2ModPackFormatMCBBS,         ///< mcbbs.packmeta（中文社区格式）
+    A2ModPackFormatMultiMC,       ///< mmc-pack.json（MultiMC 系，含 Prism/ATLauncher）
 };
 
 /// 清单里描述的一个待下载文件

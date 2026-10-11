@@ -18,6 +18,10 @@
 
 static NSString *const kModrinthIndexName = @"modrinth.index.json";
 static NSString *const kCurseForgeManifestName = @"manifest.json";
+/// MCBBS 格式的清单名
+static NSString *const kMCBBSManifestName = @"mcbbs.packmeta";
+/// MultiMC 系的清单名
+static NSString *const kMultiMCManifestName = @"mmc-pack.json";
 
 static void A2Main(dispatch_block_t b) {
     if ([NSThread isMainThread]) b();
@@ -54,11 +58,22 @@ static void A2Main(dispatch_block_t b) {
 
     if ([z containsEntry:kModrinthIndexName]) return A2ModPackFormatModrinth;
 
-    // CurseForge 的 manifest.json 必须在根目录，避免误认 mod 里的同名文件
+    // 其余三种都要精确匹配根目录的文件名，
+    // 避免误认 mod 里的同名文件（有些模组也会打包 manifest.json）
     for (NSString *name in z.entryNames) {
         if ([name isEqualToString:kCurseForgeManifestName]) {
-            return A2ModPackFormatCurseForge;
+            // CurseForge 与 MCBBS 都用 manifest.json —— 靠 manifestType 区分。
+            // 这里先读出来看一眼。
+            NSData *d = [z dataForEntry:name];
+            NSDictionary *json = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : nil;
+            NSString *type = json[@"manifestType"];
+            if ([type isEqualToString:@"minecraftModpack"]) return A2ModPackFormatCurseForge;
+            if ([type isEqualToString:@"minecraftMcbbs"])  return A2ModPackFormatMCBBS;
+            return A2ModPackFormatCurseForge;   // 默认按 CurseForge 处理
         }
+        if ([name isEqualToString:kMCBBSManifestName]) return A2ModPackFormatMCBBS;
+        if ([name isEqualToString:kMultiMCManifestName]) return A2ModPackFormatMultiMC;
+        if ([name hasSuffix:@"/mmc-pack.json"]) return A2ModPackFormatMultiMC;
     }
     return A2ModPackFormatUnknown;
 }
@@ -94,8 +109,35 @@ static void A2Main(dispatch_block_t b) {
         return;
     }
 
+    if (format == A2ModPackFormatMCBBS) {
+        NSString *entry = [z containsEntry:kMCBBSManifestName]
+            ? kMCBBSManifestName : kCurseForgeManifestName;
+        NSData *d = [z dataForEntry:entry];
+        NSDictionary *json = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : nil;
+        A2ModPackManifest *m = [self parseMCBBSManifest:json];
+        if (completion) completion(m, m ? nil : [self err:@"MCBBS 清单解析失败"]);
+        return;
+    }
+
+    if (format == A2ModPackFormatMultiMC) {
+        // MultiMC 的清单可能在根目录或实例子目录下
+        NSString *entry = nil;
+        for (NSString *name in z.entryNames) {
+            if ([name isEqualToString:kMultiMCManifestName] ||
+                [name hasSuffix:[NSString stringWithFormat:@"/%@", kMultiMCManifestName]]) {
+                entry = name;
+                break;
+            }
+        }
+        NSData *d = entry ? [z dataForEntry:entry] : nil;
+        NSDictionary *json = d ? [NSJSONSerialization JSONObjectWithData:d options:0 error:nil] : nil;
+        A2ModPackManifest *m = [self parseMultiMCManifest:json];
+        if (completion) completion(m, m ? nil : [self err:@"MultiMC 清单解析失败"]);
+        return;
+    }
+
     if (completion) {
-        completion(nil, [self err:@"无法识别的整合包格式（支持 Modrinth / CurseForge）"]);
+        completion(nil, [self err:@"无法识别的整合包格式（支持 Modrinth / CurseForge / MCBBS / MultiMC）"]);
     }
 }
 
@@ -557,6 +599,158 @@ static void A2Main(dispatch_block_t b) {
 - (NSError *)err:(NSString *)msg {
     return [NSError errorWithDomain:@"A2ModPackInstaller" code:1
                            userInfo:@{NSLocalizedDescriptionKey: msg ?: @"整合包错误"}];
+}
+
+#pragma mark - MCBBS 格式
+
+/// MCBBS（中文社区格式）
+///
+/// 结构（对照 ZL2 的 MCBBSManifest）：
+///   {
+///     "manifestType": "minecraftMcbbs",
+///     "name": "...", "version": "...", "author": "...",
+///     "description": "...", "url": "...",
+///     "forceUpdate": bool,
+///     "origins": [{ "type": "game"|"forge"|"fabric"|"optifine", "version": "..." }],
+///     "addons": [{ "type": "mod"|"resourcepack"|"shader", "url": "...", "name": "..." }],
+///     "libraries": [...]
+///   }
+///
+/// origins 声明游戏本体与加载器；addons 是要装的内容文件。
+- (nullable A2ModPackManifest *)parseMCBBSManifest:(NSDictionary *)json {
+    if (![json isKindOfClass:NSDictionary.class]) return nil;
+
+    A2ModPackManifest *m = [A2ModPackManifest new];
+    m.format = A2ModPackFormatMCBBS;
+    m.name = json[@"name"] ?: @"未命名整合包";
+    m.summary = [json[@"description"] isKindOfClass:NSString.class] ? json[@"description"] : nil;
+    m.overridesDir = @"overrides";
+
+    // origins：从中解析游戏版本与加载器
+    NSArray *origins = json[@"origins"];
+    if ([origins isKindOfClass:NSArray.class]) {
+        for (NSDictionary *o in origins) {
+            if (![o isKindOfClass:NSDictionary.class]) continue;
+            NSString *type = o[@"type"];
+            NSString *version = o[@"version"];
+            if (![version isKindOfClass:NSString.class]) continue;
+
+            if ([type isEqualToString:@"game"]) {
+                m.gameVersion = version;
+            } else if ([type isEqualToString:@"forge"]) {
+                m.loaderIdentifier = @"forge";
+                m.loaderVersion = version;
+            } else if ([type isEqualToString:@"neoforge"]) {
+                m.loaderIdentifier = @"neoforge";
+                m.loaderVersion = version;
+            } else if ([type isEqualToString:@"fabric"]) {
+                m.loaderIdentifier = @"fabric";
+                m.loaderVersion = version;
+            } else if ([type isEqualToString:@"quilt"]) {
+                m.loaderIdentifier = @"quilt";
+                m.loaderVersion = version;
+            } else if ([type isEqualToString:@"optifine"]) {
+                // OptiFine 不覆盖已有的加载器选择（它可以与 Forge 共存）
+                if (!m.loaderIdentifier) m.loaderIdentifier = @"optifine";
+            }
+        }
+    }
+    if (m.gameVersion.length == 0) return nil;
+
+    // addons：要下载的内容文件
+    NSMutableArray<A2ModPackFile *> *files = [NSMutableArray array];
+    NSArray *addons = json[@"addons"];
+    if ([addons isKindOfClass:NSArray.class]) {
+        for (NSDictionary *a in addons) {
+            if (![a isKindOfClass:NSDictionary.class]) continue;
+
+            NSString *url = a[@"url"];
+            NSString *name = a[@"name"];
+            if (![url isKindOfClass:NSString.class] || url.length == 0) continue;
+
+            A2ModPackFile *file = [A2ModPackFile new];
+            file.urls = @[url];
+
+            // 按 type 决定落在哪个目录
+            NSString *type = a[@"type"];
+            NSString *subdir = @"mods";
+            if ([type isEqualToString:@"resourcepack"]) subdir = @"resourcepacks";
+            else if ([type isEqualToString:@"shader"]) subdir = @"shaderpacks";
+            else if ([type isEqualToString:@"save"]) subdir = @"saves";
+
+            NSString *fileName = [name isKindOfClass:NSString.class] && name.length
+                ? name
+                : [url lastPathComponent];
+            file.relativePath = [subdir stringByAppendingPathComponent:fileName];
+
+            [files addObject:file];
+        }
+    }
+    m.files = files;
+    return m;
+}
+
+#pragma mark - MultiMC 格式
+
+/// MultiMC / Prism Launcher / ATLauncher 系
+///
+/// 结构（对照 ZL2 的 MultiMCManifest）：
+///   { "formatVersion": 1, "components": [
+///       { "uid": "net.minecraft", "version": "1.20.1", "important": true },
+///       { "uid": "net.fabricmc.fabric-loader", "version": "0.15.0", "important": true },
+///       { "uid": "org.lwjgl3", "version": "3.3.3", ... }
+///   ]}
+///
+/// 靠 uid 反推游戏版本与加载器。
+- (nullable A2ModPackManifest *)parseMultiMCManifest:(NSDictionary *)json {
+    if (![json isKindOfClass:NSDictionary.class]) return nil;
+
+    A2ModPackManifest *m = [A2ModPackManifest new];
+    m.format = A2ModPackFormatMultiMC;
+    m.name = @"导入的 MultiMC 整合包";
+    m.overridesDir = @".minecraft";   // MultiMC 用 .minecraft 目录存实例内容
+
+    NSArray *components = json[@"components"];
+    if (![components isKindOfClass:NSArray.class]) return nil;
+
+    for (NSDictionary *c in components) {
+        if (![c isKindOfClass:NSDictionary.class]) continue;
+        NSString *uid = c[@"uid"];
+        NSString *version = c[@"version"];
+        if (![uid isKindOfClass:NSString.class] || ![version isKindOfClass:NSString.class]) {
+            continue;
+        }
+
+        NSString *lower = uid.lowercaseString;
+
+        if ([lower isEqualToString:@"net.minecraft"]) {
+            m.gameVersion = version;
+        } else if ([lower containsString:@"fabric-loader"]) {
+            m.loaderIdentifier = @"fabric";
+            m.loaderVersion = version;
+        } else if ([lower containsString:@"quilt-loader"]) {
+            m.loaderIdentifier = @"quilt";
+            m.loaderVersion = version;
+        } else if ([lower containsString:@"forge"]) {
+            // 注意顺序：neoforge 也要先判
+            if ([lower containsString:@"neoforge"]) {
+                m.loaderIdentifier = @"neoforge";
+            } else {
+                m.loaderIdentifier = @"forge";
+            }
+            m.loaderVersion = version;
+        } else if ([lower containsString:@"optifine"]) {
+            if (!m.loaderIdentifier) m.loaderIdentifier = @"optifine";
+            m.loaderVersion = version;
+        }
+    }
+
+    if (m.gameVersion.length == 0) return nil;
+
+    // MultiMC 的清单只声明组件，实际 mod 在 .minecraft 目录里，
+    // 靠 overrides 解压。所以 files 为空。
+    m.files = @[];
+    return m;
 }
 
 @end
