@@ -449,3 +449,63 @@ JIT 是否可用只由 `A2JITEnvironment.lastRegionVerdict`（经 probe）一处
 
 **边界（本单未做）**：只做「选择 + 加载」这一步，**不含** Metal 后端与 JVM 侧的对接
 （出画面不在本单范围）；`libmetallum.dylib` 本体仍是既存随包物，未改动字节。
+
+### 设置里的「渲染器 / Java 运行时」两张列表 + 接线到启动 —— [RENDER-SEL] / [JRE-SEL]
+
+**用户口径**：「像 Air 一样做一个渲染器选择列表，先放一些必要的，然后再选 JRE 就能启动」
+⇒ 三件事：① 渲染器列表 ② Java 运行时列表 ③ 选完就能启动（选中的值真的进启动链）。
+
+**数据侧（Core，纯逻辑、可单测）**
+
+| 文件 | 层 | 职责 |
+|---|---|---|
+| `Air2/Core/Renderer/A2RendererCatalog.[hm]` | Core | ★渲染器候选表 + 包内存在性★（标识 = dylib 文件名，与老线 `utils.h` 的 `RENDERER_NAME_*` 同一词汇表）；档位 主推 / 兼容底 / 实验；★未内置的候选也留在表里★（用户要看得见全表、选了要如实报）。登记进既有 `A2Renderers` 注册表（不另造解析） |
+| `Air2/Core/Version/A2JavaRuntimeCatalog.[hm]` | Core | ★Java 运行时候选表（25/21/17/8）+ 可用性判据★；候选目录名与本机 Amethyst 产物同血统；可用 = `<javaHome>/lib/server/libjvm.dylib` 在（= `a2_vmloader` 的首选布局），**不是**「目录在」 |
+| `Air2/Player/A2RuntimeStrings.[hm]` | Player | 四语（zh-Hans / zh-Hant / en / ja）文案表（同 `A2JITStrings` 的决策与形态：本仓无 i18n 基建，放纯逻辑件里可单测） |
+
+**持久化（Air2 自己的 `NSUserDefaults`，★不是老线 `$POJAV_HOME` 下的 plist★）**
+
+| 键 | 取值 | 写点（唯一） | 读点（唯一） |
+|---|---|---|---|
+| `A2SelectedRenderer`（`A2SelectedRendererPrefKey`） | 渲染器 dylib 文件名 | `A2RuntimeSettings.m` 渲染器行 | `A2LaunchSession.m` |
+| `A2SelectedJavaRuntime`（`A2SelectedJavaRuntimePrefKey`） | `java_runtimes/<目录名>` 的目录名 | `A2RuntimeSettings.m` Java 运行时行 | `A2LaunchSession.m` |
+
+两个键定义在 `Air2/Utils/A2LaunchContract.h`（跨层契约常量的家：UI 写、Player 读）。
+缺键 = 未选择 ⇒ 用主推（`libmetallum.dylib` / `java-25-openjdk`）。
+
+**UI**：`Air2/UI/Screens/Settings/A2RuntimeSettings.m`（新分组「运行环境」挂在「游戏」分类下，
+由 `A2SettingsViewController.m` 的 `index == 0` 分支挂上）—— 两行各弹一个 `UIAlertController`
+action sheet 列全部候选，**未内置的项照列但标「未内置」**（老线是直接隐藏；本单按用户口径改成可见）。
+
+**接线到启动（选完就能启动）**
+
+| 环节 | 文件 | 行为 |
+|---|---|---|
+| 渲染器 | `A2LaunchSession.m` → `A2LaunchRunner.m` → `Natives/Renderer/a2_renderer.m` | Player 读偏好 ⇒ 交给 Bridge ⇒ `a2_renderer_load_named(dylib, frameworksPath)` dlopen。★未内置 ⇒ 返回 -1，Bridge 返回 -10 **阻断启动**（不静默换一个渲染器）★ |
+| Java 运行时 | `A2LaunchSession.m` → `A2LaunchRunner.javaHome:` → 启动计划 | 选中的目录名拼成 `javaHome` 交给启动链（与 `A2LaunchPlan` / `A2LaunchInput.javaHome` 对接）。★不可用 ⇒ 阻断★；另区分「整份 java_runtimes 没随包」（构建问题）与「只是选的那一档没内置」（选项问题） |
+| 失败文案 | `Air2/Player/A2LaunchFailure.m` | `-10` / `-11` 的翻译（所选渲染器 / 所选 JRE 不可用） |
+
+**判据行（真机 grep 锚点）**
+
+```
+[A2-RENDERER] chosen=libmetallum.dylib(源: 默认; source=default)
+[A2-RENDERER] chosen=libgl4es_114.dylib(源: 用户选择; source=user)
+[A2-JRE] chosen=java-25-openjdk(源: 默认; source=default)
+[A2-JRE] chosen=java-21-openjdk(源: 用户选择; source=user)
+[A2-RENDERER] ★阻断启动★：所选渲染器未内置（libnggl4es.dylib）—— 包内缺 Frameworks/…
+[A2-JRE] ★阻断启动★：所选档未内置/不完整（java-21-openjdk）—— 期望 …/lib/server/libjvm.dylib
+```
+
+中文与稳定 tag（`source=user` / `source=default`）并存：真机换语言也能机器判据。
+
+**随包**：`scripts/gen_xcodeproj.py` 的「Stage Runtime Bundle」阶段 —— ①渲染器 dylib +
+①b ★`.framework` 依赖目录★（GL4ES 需要 ANGLE 的 `libEGL.framework` / `libGLESv2.framework`，
+它们是**目录**，`[ -f ]` 的旧循环会跳过）+ ②LWJGL jar + ③JRE。★不手改 `project.pbxproj`★。
+
+**测试**：`tests/Runtime/run_runtime_tests.py`（★真编译 + 真运行★）—— 候选表 / 默认项 /
+包内存在性 / 可用性判据 / 四语齐全 / 接线自证（谁调它哪一行）+ 随包件存在性 + 阴性对照。
+
+**来源**：老线 `runtime_native`（GPL-3.0，只读参考）：`Natives/utils.h`（`RENDERER_NAME_*`）、
+`Natives/LauncherPreferences.m`（渲染器候选表 + `rendererLibraryExists` 过滤）、
+`LauncherPreferences.m:351 getSelectedJavaHome`（JRE 分档选择）。★只拄口径，未搬运代码★。
+

@@ -64,7 +64,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// @param librariesPath `<...>/libraries`
 /// @param lwjglDir    `<...>/lwjgl-<ver>`
 /// @param frameworksPath `<App>/Frameworks`（可空 ⇒ 由 bundle 推）
-/// @return `a2_launch_jvm_with_argv` 的返回码（0 成功；负值见 a2_launch.h 契约）。
+/// @param rendererDylib ★用户选中的渲染后端 dylib 名★（`A2SelectedRendererPrefKey` 的值；
+///        可空 ⇒ 主推 `libmetallum.dylib`）。★由 Player 解析好传入，Bridge 不读偏好★ ——
+///        本层只负责「把它交给 Natives/Renderer/a2_renderer 加载」。
+/// @return `a2_launch_jvm_with_argv` 的返回码（0 成功；负值见 a2_launch.h 契约）；
+///         ★-10 = 所选渲染后端未内置/加载失败 ⇒ 未进 VM，如实阻断（不静默回退）★。
 + (int)launchWithPlanPath:(NSString *)planPath
              entryJarPath:(NSString *)entryJarPath
            patchJarPath:(nullable NSString *)patchJarPath
@@ -75,7 +79,8 @@ NS_ASSUME_NONNULL_BEGIN
                    tmpDir:(NSString *)tmpDir
             librariesPath:(NSString *)librariesPath
                  lwjglDir:(NSString *)lwjglDir
-           frameworksPath:(nullable NSString *)frameworksPath;
+           frameworksPath:(nullable NSString *)frameworksPath
+            rendererDylib:(nullable NSString *)rendererDylib;
 
 @end
 

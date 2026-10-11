@@ -20,3 +20,8 @@ const NSInteger A2LaunchPlanSchema = 1;
 // ★系统属性名★（读取方 = 复用线覆盖层 GLFW 的静态块；见 A2LaunchContract.h 的注解）
 NSString *const A2LaunchSysPropGLFWWindowSize         = @"glfw.windowSize";
 NSString *const A2LaunchSysPropMaximumFramesPerSecond = @"UIScreen.maximumFramesPerSecond";
+
+// ★用户选择项★（NSUserDefaults；Air2 自己的偏好存储 —— 与 Natives/Context/a2_launch.m
+// 读 debug.* 开关同一来源，不是老线 POJAV_HOME 下的 plist）。
+NSString *const A2SelectedRendererPrefKey    = @"A2SelectedRenderer";
+NSString *const A2SelectedJavaRuntimePrefKey = @"A2SelectedJavaRuntime";

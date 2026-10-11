@@ -92,18 +92,27 @@
                    tmpDir:(NSString *)tmpDir
             librariesPath:(NSString *)librariesPath
                  lwjglDir:(NSString *)lwjglDir
-           frameworksPath:(nullable NSString *)frameworksPath {
+           frameworksPath:(nullable NSString *)frameworksPath
+            rendererDylib:(nullable NSString *)rendererDylib {
     if (planPath.length == 0 || javaHome.length == 0) {
         [A2Log log:@"[A2-LAUNCH] 组命令行失败：planPath/javaHome 为空"];
         return -8;
     }
 
-    // ---- ★[RENDER-WIRE] 显式选择 + 加载渲染后端★ ----
+    // ---- ★[RENDER-WIRE]/[RENDER-SEL] 显式选择 + 加载用户选中的渲染后端★ ----
     // 为什么在这里：Bridge 是唯一与 Natives 相邻的层（同 [LAUNCH-PLAN] 决策 2）；
     // 且本函数只在自研链里被调用 ⇒ 开关（debug.rt_p1_runtime，默认关）关时零副作用。
-    // 判据：主二进制可扫到 A2RendererMetalDylibName（"libmetallum.dylib"）。
-    int renderRC = a2_renderer_load_metal(frameworksPath);
-    [A2Log log:@"[A2-RENDERER] 渲染后端选择完成 rc=%d（0=已加载；-1=未找到/失败，见上一行）", renderRC];
+    // 谁选的：Player（`A2LaunchSession` 读 NSUserDefaults 的 A2SelectedRendererPrefKey）；
+    // 判据：主二进制可扫到渲染器名（A2RendererMetalDylibName / A2RendererCompatDylibName）。
+    int renderRC = a2_renderer_load_named(rendererDylib, frameworksPath);
+    [A2Log log:@"[A2-RENDERER] 渲染后端加载完成 rc=%d（0=已加载；-1=未内置；-2=路径未解析；-3=dlopen 失败）",
+     renderRC];
+    if (renderRC != 0) {
+        // ★选到未内置/不合格的 ⇒ 如实阻断★：不静默换一个渲染器继续建 VM。
+        [A2Log log:@"[A2-RENDERER] ★阻断启动★：所选渲染器不可用（rc=%d）—— 缺什么/为何失败见上一行，改选已内置的渲染器后重试",
+         renderRC];
+        return -10;
+    }
 
     // ---- front 项：启动核心 jar + LWJGL 补丁 jar（补丁必须最先，才能盖住 libs/lwjgl-<ver>）----
     NSMutableArray<NSString *> *frontItems = [NSMutableArray array];

@@ -26,11 +26,34 @@
 
 /// ★主推渲染后端★（自研 Metal）的 dylib 文件名。
 /// ★判据锚点★：出包后应能在主二进制里扫到本串，作为「启动路径真的引用渲染器」的机器判据。
-/// 对应随包物 `Libraries/Renderers/libmetallum.dylib` → `<App>/Frameworks/`（见 [RT-BUNDLE]）。
+/// 对应随仓物 `Libraries/Renderers/libmetallum.dylib` → `<App>/Frameworks/`（见 [RT-BUNDLE]）。
 extern const char *const A2RendererMetalDylibName;
+
+/// ★兼容底渲染后端★（GL4ES：旧版 MC 的 GL→GLES 转译层）的 dylib 文件名。
+/// 对应随仓物 `Libraries/Renderers/libgl4es_114.dylib` → `<App>/Frameworks/`（见 [RENDER-SEL]）。
+/// 取值与老线 `runtime_native/Natives/utils.h` 的 `RENDERER_NAME_GL4ES` 逐字相同（同一份血统）。
+extern const char *const A2RendererCompatDylibName;
+
+/// 显式选择并加载指定渲染后端（`<frameworksPath>/<dylibName>`）。
+///
+/// ★调用点唯一★：`Air2/Bridge/A2LaunchRunner.m` 的 `+launchWithPlanPath:…`。
+/// 谁决定 dylibName：`Air2/Player/A2LaunchSession.m`（读 NSUserDefaults 的
+/// `A2SelectedRendererPrefKey`，缺省回落主推 `A2RendererMetalDylibName`）。
+///
+/// 幂等：重复调用安全（dyld 对已加载镜像返回同一 handle）。
+/// 不致死：任何一步失败都只打默认可见日志并返回负值，绝不 abort/抛异常。
+///
+/// @param dylibName   渲染后端 dylib 的文件名；空/nil ⇒ 按主推（`A2RendererMetalDylibName`）处理。
+/// @param frameworksPath `<App>/Frameworks`（与 `-Djava.library.path` 同一目录）。
+/// @return 0 = 已加载（或此前已加载）；
+///         -1 = ★包内缺该 dylib（未内置）★；
+///         -2 = frameworksPath 为空（上层未解析出 `<App>/Frameworks`）；
+///         -3 = dlopen 失败（文件在但加载不起来，原因见日志行）。
+int a2_renderer_load_named(NSString *dylibName, NSString *frameworksPath);
 
 /// 显式选择并加载 Metal 渲染后端（`<frameworksPath>/<A2RendererMetalDylibName>`）。
 ///
+/// ★历史语义保持★（返回码与日志串不动作）：
 /// 幂等：重复调用安全（dyld 对已加载镜像返回同一 handle）。
 /// 不致死：任何一步失败都只打默认可见日志并返回 -1，绝不 abort/抛异常。
 ///

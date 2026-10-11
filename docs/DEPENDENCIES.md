@@ -273,6 +273,8 @@
 |---|---|---|---|---|---|
 | OpenJDK (iOS, aarch64) | **25.0.4**（`release` 内 `JAVA_VERSION=25.0.4` / `OS_NAME=Darwin` / `OS_ARCH=aarch64`） | **本地随包**：Amethyst 构建产物 `java_runtimes/java-25-openjdk`（上游 `herbrine8403/OpenJDK-iOS-FullVersion` = 官方 OpenJDK 25 + iOS 补丁） | **GPL-2.0 + Classpath Exception** | JVM 本体（`lib/server/libjvm.dylib` + `lib/modules`）；`a2_vmloader.m` 以 `dlopen` + `JNI_CreateJavaVM` 使用 | ★**不入 git**★（119 MB，「防石山」）：`scripts/stage_runtime.sh` 从**本机本地路径**就位到 `Libraries/java_runtimes/java-25-openjdk/`；★不上云、不下载★ |
 | **libmetallum.dylib**（Metallum 自研 Metal 渲染器） | 与 Amethyst b12 包内一致（md5 `7d6b022aa2564c422f71325314a771ab`，221,856 B） | **本地随包**：`Air-5.1.1-b12-jitorder2.ipa` 内 `Frameworks/libmetallum.dylib`（= Mac `b12/artifacts/Payload/…/Frameworks/`，逐字节相同） | 自研（Metallum/Amethyst 线），随上游 `LICENSE` = **GPL-3.0**；引入本仓后随本仓 `LICENSE`（GPL-3.0-or-later） | ★**唯一主推渲染器**★。`otool -L` 实测**只依赖系统框架**（Metal/UIKit/Foundation/CoreGraphics/QuartzCore/libSystem/swift 运行时），零第三方 dylib | **随仓** `Libraries/Renderers/libmetallum.dylib` → 随包 `<App>/Frameworks/`（= `-Djava.library.path`） |
+| **libgl4es_114.dylib**（GL4ES —— ★兼容底渲染器★） | 与老线 `runtime_native/Natives/resources/Frameworks/libgl4es_114.dylib` 同源；入仓已 ad-hoc 签名（md5 `882141648165eb677188f52c94c4acc1`，5,680,592 B） | **本地随包**：老线树 `D:\CTF\_510src\runtime_native\Natives\resources\Frameworks\`（= 老线素材库，GPL 系树内素材）；上游 = `ptitSeb/gl4es` 家族（老线 `ThirdParty/gl4es_extra_extra`，其 `LICENSE` = **MIT**） | **MIT**（gl4es 上游；本仓不再许可） | ★**兼容底**★：GL 1.x/2.x → GL ES 转译，旧版 MC（≤1.16）的兜底后端。**依赖** ANGLE 的 `libEGL` / `libGLESv2`（`otool -L` 实测 `@rpath/libEGL.framework/libEGL` + `@rpath/libGLESv2.framework/libGLESv2`，由主二进制的 `@executable_path/Frameworks` rpath 解析）⇒ 三件必须一起在包内 | **随仓** `Libraries/Renderers/libgl4es_114.dylib` → 随包 `<App>/Frameworks/` |
+| **libEGL.framework / libGLESv2.framework**（ANGLE，GL4ES 的 EGL/GLES 运行依赖） | `libEGL` md5 `5ae505f76087081ea9529fdd4f899c4c`（363,600 B）/ `libGLESv2` md5 `932bdecd50fc1989b1acfcb5618a7a3a`（6,212,752 B）；两者 `Info.plist` 报 `MinimumOSVersion=16.0`、`CFBundleIdentifier=org.chromium.ost.lib{EGL,GLESv2}` | **本地随包**：老线树同目录的 `libEGL.framework/` `libGLESv2.framework/`（= 老线 app 包内那两份）；上游 = `google/angle` | **BSD-3-Clause**（ANGLE） | GL4ES 的 EGL/GLES 提供方（Krypton/WebKit 风格 `org.chromium.ost.*` 标识）。★iOS ≥16（`MinimumOSVersion=16.0`）★ | **随仓** `Libraries/Frameworks/lib{EGL,GLESv2}.framework/` → 随包 `<App>/Frameworks/`（`.framework` 是**目录**，由随包阶段 ①b 段 `cp -R`） |
 | LWJGL（核心 / 窗口 / GL / 贴图） | **3.4.1**（`lwjgl.jar` md5 `ab79e80355127103a864944c2923aa9b`；`lwjgl-glfw.jar` `7ebd0017934278aed913a6e6bc28784a`；`lwjgl-opengl.jar` `0c84a2d43c42d5bef2006da4f18f2e37`；`lwjgl-stb.jar` `7f99535811019cce530fc26451a16089`） | **本地随包**：Amethyst 构建树 `JavaApp/libs/lwjgl-341/`；上游 = lwjgl.org 官方 **3.4.1** | **BSD-3-Clause** | classpath 的 `<lwjglDir>/*` 尾项（`a2_resourcepaths.m:59-86`）；`lwjgl-glfw` 对应真机 `NoClassDefFoundError: org/lwjgl/glfw/GLFWErrorCallbackI` 那处根因 | **随仓** `Libraries/Jars/lwjgl-341/*.jar` → 随包 `<App>/libs/lwjgl-341/` |
 | LWJGL iOS natives + JNI 分发器 | 3.4.1（随 `Air-5.1.1-b12-jitorder2.ipa`） | **本地随包**：同 IPA 的 `Frameworks/{liblwjgl,liblwjgl_opengl,liblwjgl_stb}.dylib` + `libjnidispatch.jnilib`；上游 = lwjgl.org 官方 iOS/aarch64 | **BSD-3-Clause** | LWJGL Java 层 `System.loadLibrary(...)` 的目标；落 `<App>/Frameworks/` 才能被 `java.library.path` 解析 | **随仓** `Libraries/Frameworks/*` → 随包 `<App>/Frameworks/` |
 
@@ -284,6 +286,11 @@
 `libOSMesa.8.dylib`（17.8 MB）、`libmithril.dylib`（9.3 MB）、`libMoltenVK.dylib`、
 `libs/lwjgl-333/lwjgl.jar`（10.4 MB，与 3.4.1 重复）、着色器编译链（`libglslang*` / `libshaderc*` /
 `libspirv-cross*` / `libspvc`）等。
+
+> **[RENDER-SEL] 后续修订（本仓当前状态）**：按用户口径「渲染器要先放一个兼容底」，
+> 上面**未被排除**的 `libgl4es_114.dylib` 连同它的 ANGLE 依赖（`lib{EGL,GLESv2}.framework`）
+> **已入仓**（合计 ≈11.6 MB）；上面那张「排除清单」里的大件**仍然排除**（JRE 三档 / MobileGL /
+> OSMesa / mithril / MoltenVK 一律未入包，在设置页里如实标「未内置」）。
 
 ---
 

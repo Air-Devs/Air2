@@ -69,6 +69,10 @@
         case -7:  why = @"主类 main 派发失败（FindClass / GetStaticMethodID / 执行抛异常）"; break;
         case -8:  why = @"R3 摄取失败（未解析出主类 / 参数不足）"; break;
         case -9:  why = @"classpath 与 R3 摄取不一致（漂移）⇒ 阻断启动"; break;
+        // ★[RENDER-SEL]/[JRE-SEL]：所选渲染后端 / Java 运行时的可用性问题 ⇒ 未进 VM，
+        //   由各自调用点在更早一步阻断（这里只负责把码翻译成人话）。
+        case -10: why = @"所选渲染器未内置/加载失败 ⇒ 阻断启动（改选已内置的渲染器）"; break;
+        case -11: why = @"所选 Java 运行时未内置/不完整 ⇒ 阻断启动（改选已内置的档位）"; break;
         default:  why = [NSString stringWithFormat:@"未知返回码 %ld", (long)rc]; break;
     }
     return [NSString stringWithFormat:@"③ 建 VM 失败 rc=%ld：%@（见 a2_launch.h 契约）",

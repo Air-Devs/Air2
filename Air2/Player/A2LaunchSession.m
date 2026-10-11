@@ -19,6 +19,9 @@
 #import "A2AccountManager.h"
 #import "A2Account.h"
 #import "A2Settings.h"
+#import "A2RendererCatalog.h"       // Core/Renderer —— 渲染后端候选表 + 包内存在性（[RENDER-SEL]）
+#import "A2JavaRuntimeCatalog.h"    // Core/Version —— Java 运行时候选表 + 可用性（[JRE-SEL]）
+#import "A2RuntimeStrings.h"        // Player 同层 —— 四语文案（阻断文案 + 判据行的「源」）
 #import "A2Log.h"
 
 // ② 有界探测预算（本函数在后台队列跑；对齐 A2JITEnvironment 的建议量级）。
@@ -106,8 +109,57 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
     NSString *frameworks = [bundle stringByAppendingPathComponent:@"Frameworks"];
     NSString *lwjglDir = A2LaunchFirstSubdirectory([bundle stringByAppendingPathComponent:@"libs"],
                                                    @"lwjgl-");
-    NSString *javaHome = A2LaunchFirstSubdirectory([bundle stringByAppendingPathComponent:@"java_runtimes"],
-                                                   @"java-");
+
+    // ========================================================================
+    // ★[RENDER-SEL] 渲染后端：用户选择 → 已解析的 dylib 名★
+    // ------------------------------------------------------------------------
+    // 取值来源：Air2 自己的 NSUserDefaults（键 A2SelectedRendererPrefKey，写点唯一 =
+    // A2RuntimeSettings 的渲染器行）。缺省 ⇒ 主推（自研 Metal）。
+    // ★判据行★ `[A2-RENDERER] chosen=…(源: 用户选择; source=user)` ——
+    //   中文与稳定 tag 并存：真机换语言也能 grep 到（source=user / source=default）。
+    // ★选到未内置的 ⇒ 如实阻断★（不给 VM，不静默换一个渲染器）。
+    // ========================================================================
+    NSString *selRenderer = [NSUserDefaults.standardUserDefaults stringForKey:A2SelectedRendererPrefKey];
+    A2Renderer *renderer = [A2RendererCatalog candidateForIdentifier:selRenderer ?: @""]
+                           ?: [A2RendererCatalog defaultCandidate];
+    BOOL rendererFromUser = (selRenderer.length > 0);
+    NSString *rendererSourceWord = [A2RuntimeStrings stringForKey:(rendererFromUser
+                                                                    ? @"runtime.source.user"
+                                                                    : @"runtime.source.default")];
+    [A2Log log:@"[A2-RENDERER] chosen=%@(源: %@; source=%@)",
+     renderer.identifier, rendererSourceWord, rendererFromUser ? @"user" : @"default"];
+
+    if (![A2RendererCatalog isBundled:renderer frameworksPath:frameworks]) {
+        NSString *nameKey = [A2RendererCatalog nameLocalizationKeyForIdentifier:renderer.identifier];
+        NSString *name = [A2RuntimeStrings stringForKey:nameKey];
+        if ([name isEqualToString:nameKey]) name = renderer.identifier;   // 缺 key ⇒ 技术名兜底
+        [A2Log log:@"[A2-RENDERER] ★阻断启动★：所选渲染器未内置（%s）—— 包内缺 Frameworks/%s",
+         renderer.identifier.UTF8String, renderer.identifier.UTF8String];
+        finish(NO, 0, [NSString stringWithFormat:
+                       [A2RuntimeStrings stringForKey:@"runtime.blocked.renderer"],
+                       name, renderer.identifier]);
+        return;
+    }
+
+    // ========================================================================
+    // ★[JRE-SEL] Java 运行时：用户选择 → 启动计划的 javaHome★
+    // ------------------------------------------------------------------------
+    // 取值来源：同一个 NSUserDefaults（键 A2SelectedJavaRuntimePrefKey，写点唯一 =
+    // A2RuntimeSettings 的 Java 运行时行）。缺省 ⇒ 主推档（java-25-openjdk）。
+    // ★判据行★ `[A2-JRE] chosen=…(源: 用户选择; source=user)`。
+    // ★选到未内置/不完整的 ⇒ 如实阻断★（不自动换档）。
+    // ========================================================================
+    NSString *runtimesDir = [bundle stringByAppendingPathComponent:
+                             [A2JavaRuntimeCatalog javaRuntimesDirectoryName]];
+    NSString *selJRE = [NSUserDefaults.standardUserDefaults stringForKey:A2SelectedJavaRuntimePrefKey];
+    BOOL jreFromUser = (selJRE.length > 0 && [[A2JavaRuntimeCatalog allDirectoryNames] containsObject:selJRE]);
+    NSString *jreDir = jreFromUser ? selJRE : [A2JavaRuntimeCatalog defaultDirectoryName];
+    NSString *javaHome = [runtimesDir stringByAppendingPathComponent:jreDir];
+    NSString *jreSourceWord = [A2RuntimeStrings stringForKey:(jreFromUser ? @"runtime.source.user"
+                                                                         : @"runtime.source.default")];
+    [A2Log log:@"[A2-JRE] chosen=%@(源: %@; source=%@)",
+     jreDir, jreSourceWord, jreFromUser ? @"user" : @"default"];
+
     NSString *userHome = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
                                                              NSUserDomainMask, YES) firstObject];
     NSString *tmpDir = NSTemporaryDirectory();
@@ -117,8 +169,26 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
         finish(NO, 0, [NSString stringWithFormat:@"包内缺启动核心 %@", A2LaunchJavaEntryJarName]);
         return;
     }
-    if (javaHome.length == 0) {
-        finish(NO, 0, @"包内没有 JVM 运行时（java_runtimes/）—— 请先跑 scripts/stage_runtime.sh 再出包");
+    if (![A2JavaRuntimeCatalog isUsableJavaHome:javaHome]) {
+        // ★两种形态分开报，不混为一谈★：
+        //   ① 一整份 java_runtimes 都没随包 ⇒ 构建问题（提示跑 stage_runtime.sh）；
+        //   ② 只是**用户选的那一档**没内置 ⇒ 选项问题（如实报并让用户改选）。
+        BOOL anyBundled = NO;
+        for (NSString *d in [A2JavaRuntimeCatalog allDirectoryNames]) {
+            if ([A2JavaRuntimeCatalog isUsableJavaHome:
+                 [runtimesDir stringByAppendingPathComponent:d]]) {
+                anyBundled = YES;
+                break;
+            }
+        }
+        if (!anyBundled) {
+            finish(NO, 0, @"包内没有 JVM 运行时（java_runtimes/）—— 请先跑 scripts/stage_runtime.sh 再出包");
+            return;
+        }
+        [A2Log log:@"[A2-JRE] ★阻断启动★：所选档未内置/不完整（%s）—— 期望 %s/lib/server/libjvm.dylib",
+         jreDir.UTF8String, javaHome.UTF8String];
+        finish(NO, 0, [NSString stringWithFormat:
+                       [A2RuntimeStrings stringForKey:@"runtime.blocked.jre"], jreDir]);
         return;
     }
     if (lwjglDir.length == 0) {
@@ -205,7 +275,8 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
                                                    tmpDir:tmpDir
                                             librariesPath:librariesDir
                                                  lwjglDir:lwjglDir
-                                           frameworksPath:frameworks];
+                                           frameworksPath:frameworks
+                                            rendererDylib:renderer.identifier];
                 if (vmRC == 0) {
                     return YES;
                 }

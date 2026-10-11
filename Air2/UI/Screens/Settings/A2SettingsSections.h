@@ -48,6 +48,13 @@ NS_ASSUME_NONNULL_BEGIN
 + (A2SettingsSection *)buildWithHost:(UIViewController *)host;
 @end
 
+/// 游戏 —— ★运行环境★：渲染器 + Java 运行时两张列表。
+/// 持久化 = Air2 自己的 NSUserDefaults（键见 A2LaunchContract.h 的两个契约常量）；
+/// 选中未内置项 ⇒ 启动时如实阻断（不静默回退）。接线见 docs/ARCHITECTURE.md [RENDER-SEL]/[JRE-SEL]。
+@interface A2RuntimeSettings : NSObject
++ (A2SettingsSection *)buildWithHost:(UIViewController *)host;
+@end
+
 /// 关于 —— 版本信息、开源许可、运行日志、源代码、更新检查
 @interface A2AboutSettings : NSObject
 + (A2SettingsSection *)buildWithHost:(UIViewController *)host;

@@ -54,4 +54,18 @@ FOUNDATION_EXPORT const NSInteger A2LaunchPlanSchema;
 FOUNDATION_EXPORT NSString *const A2LaunchSysPropGLFWWindowSize;
 FOUNDATION_EXPORT NSString *const A2LaunchSysPropMaximumFramesPerSecond;
 
+/// ★用户选择的渲染后端偏好键（跨层契约：UI 写、Player 读、Bridge 只接收已解析的 dylib 名）★。
+///
+/// 存储：**Air2 自己的 `NSUserDefaults`**（★不是老线 `$POJAV_HOME` 下的 plist★）。
+/// 取值：渲染后端 dylib 的**文件名**（与老线 `runtime_native/Natives/utils.h` 的
+///      `RENDERER_NAME_*` 同一词汇表，如 `libmetallum.dylib`）；键缺失 = 未选择 ⇒ 用主推。
+/// 写入点唯一：`Air2/UI/Screens/Settings/A2RuntimeSettings.m` 的渲染器行 onTap；
+/// 读取点唯一：`Air2/Player/A2LaunchSession.m` 的 `+startCurrentVersionWithCompletion:`。
+FOUNDATION_EXPORT NSString *const A2SelectedRendererPrefKey;
+
+/// ★用户选择的 Java 运行时偏好键★（同上：NSUserDefaults，UI 写、Player 读）。
+/// 取值：`<App>/java_runtimes/` 下的**目录名**（如 `java-25-openjdk`）；键缺失 = 未选择 ⇒ 用主推。
+/// 选中值最终成为启动计划的 `javaHome`（`A2LaunchRunner.javaHome:` 参数）。
+FOUNDATION_EXPORT NSString *const A2SelectedJavaRuntimePrefKey;
+
 NS_ASSUME_NONNULL_END

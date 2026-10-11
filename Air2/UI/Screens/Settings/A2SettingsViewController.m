@@ -113,6 +113,7 @@
     // 索引对应 setupNav 里的分类顺序
     if (index == 0) {
         [_detailStack addArrangedSubview:[A2GameSettings buildWithHost:self]];
+        [_detailStack addArrangedSubview:[A2RuntimeSettings buildWithHost:self]];
     } else if (index == 1) {
         [_detailStack addArrangedSubview:[A2AppearanceSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2AppearanceSettings buildSourceSectionWithHost:self]];
