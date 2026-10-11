@@ -381,7 +381,6 @@ static void A2Main(dispatch_block_t b) {
         return;
     }
 
-    A2GamePath *path = [A2GamePath pathWithGameHome:self.gameHome];
     NSString *gameDir = [self gameDirectoryForCurrentVersion];
 
     [self report:0.5 message:[NSString stringWithFormat:@"正在下载 %lu 个文件…",
@@ -550,7 +549,6 @@ static void A2Main(dispatch_block_t b) {
 
     [self report:0.92 message:@"正在解压整合包覆盖文件…"];
 
-    A2GamePath *path = [A2GamePath pathWithGameHome:self.gameHome];
     NSString *gameDir = [self gameDirectoryForCurrentVersion];
 
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{

@@ -611,6 +611,142 @@ static void A2Main(dispatch_block_t b) {
     });
 }
 
+#pragma mark - OptiFine
+
+/// OptiFine 安装 —— 对照 ZL2 的 Install.OptiFine.kt。
+///
+/// OptiFine 不是标准加载器，它通过 LaunchWrapper 以 Tweaker 方式挂载：
+///   · mainClass 改成 net.minecraft.launchwrapper.Launch
+///   · 加 --tweakClass optifine.OptiFineTweaker
+///     （配合 Forge 时用 optifine.OptiFineForgeTweaker）
+///   · 从 installer 里抽出 OptiFine 的库与 jar
+///
+/// ⚠️ 跳过了需要执行字节码的部分（HMCL 的 transformer-discovery-service
+///    注入）。这会影响 Forge 1.13~1.16 与 OptiFine 的组合，
+///    单独用 OptiFine 不受影响。
+- (void)installOptiFine {
+    [self report:0.1 message:@"正在获取 OptiFine 安装包…"];
+
+    // 官方下载需要页面签名参数，用 BMCLAPI 镜像直链（它做了代理）
+    NSString *fileName = [self optiFineFileNameFromVersion:self.loader.version];
+    NSString *mirrorURL = [NSString stringWithFormat:
+        @"https://bmclapi2.bangbang93.com/optifine/%@/%@",
+        self.mcVersion, fileName];
+
+    NSString *installerPath = [NSTemporaryDirectory() stringByAppendingPathComponent:
+                               [NSString stringWithFormat:@"optifine-%@.jar", self.loader.version]];
+
+    __weak typeof(self) weakSelf = self;
+    [self downloadInstaller:@[mirrorURL] to:installerPath completion:^(BOOL ok, NSError *error) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        if (!ok) {
+            [self failWithMessage:@"OptiFine 安装包下载失败（该版本可能未提供镜像）"];
+            return;
+        }
+        [self report:0.4 message:@"正在解析安装包…"];
+        [self extractOptiFineFromInstaller:installerPath];
+    }];
+}
+
+/// OptiFine 的版本号在文件名里的形态是 "1.20.1_HD_U_I6"。
+/// 我们存的是简写（如 "I6"），拼文件名时要还原完整形态。
+- (NSString *)optiFineFileNameFromVersion:(NSString *)version {
+    if ([version containsString:@"_"]) return version;
+    return [NSString stringWithFormat:@"%@_HD_U_%@", self.mcVersion, version];
+}
+
+/// 从 OptiFine installer 里抽出库与 jar，生成版本 json。
+- (void)extractOptiFineFromInstaller:(NSString *)installerPath {
+    A2ZipReader *zip = [[A2ZipReader alloc] initWithPath:installerPath];
+    if (!zip) {
+        [self failWithMessage:@"安装包无法读取"];
+        return;
+    }
+
+    A2GamePath *path = [A2GamePath pathWithGameHome:self.gameHome];
+    NSString *libDir = [[path librariesHome] stringByAppendingPathComponent:@"optifine"];
+    [NSFileManager.defaultManager createDirectoryAtPath:libDir
+                            withIntermediateDirectories:YES attributes:nil error:nil];
+
+    NSMutableArray<NSString *> *extracted = [NSMutableArray array];
+    for (NSString *entry in zip.entryNames) {
+        if (![entry hasPrefix:@"optifine/"]) continue;
+        if (![entry hasSuffix:@".jar"] && ![entry hasSuffix:@".class"]) continue;
+
+        NSString *dest = [libDir stringByAppendingPathComponent:entry.lastPathComponent];
+        if ([zip extractEntry:entry toPath:dest]) {
+            [extracted addObject:dest];
+        }
+    }
+
+    if (extracted.count == 0) {
+        [self failWithMessage:@"安装包内未找到 OptiFine 文件"];
+        return;
+    }
+
+    [self report:0.7 message:@"正在生成版本配置…"];
+    [self writeOptiFineVersionJSONWithLibs:extracted];
+}
+
+/// 生成 OptiFine 的版本 json。
+///
+/// 关键点：mainClass 必须是 net.minecraft.launchwrapper.Launch，
+/// 否则 OptiFine 的 Tweaker 不会被加载。
+- (void)writeOptiFineVersionJSONWithLibs:(NSArray<NSString *> *)libs {
+    NSMutableArray *libraries = [NSMutableArray array];
+
+    // LaunchWrapper 是 OptiFine 的必需依赖
+    [libraries addObject:@{ @"name": @"net.minecraft:launchwrapper:1.12" }];
+
+    for (NSString *jarPath in libs) {
+        if (![jarPath hasSuffix:@".jar"]) continue;
+        [libraries addObject:@{ @"name": [NSString stringWithFormat:
+            @"optifine:OptiFine:%@", self.loader.version] }];
+    }
+
+    NSDictionary *versionJSON = @{
+        @"id": self.versionName,
+        @"inheritsFrom": self.mcVersion,
+        @"type": @"release",
+        @"mainClass": @"net.minecraft.launchwrapper.Launch",
+        @"libraries": libraries,
+        @"arguments": @{
+            @"game": @[ @"--tweakClass", @"optifine.OptiFineTweaker" ],
+        },
+    };
+
+    A2GamePath *path = [A2GamePath pathWithGameHome:self.gameHome];
+    NSString *versionDir = [path versionPath:self.versionName];
+    [NSFileManager.defaultManager createDirectoryAtPath:versionDir
+                            withIntermediateDirectories:YES attributes:nil error:nil];
+
+    NSData *data = [NSJSONSerialization dataWithJSONObject:versionJSON
+                                                   options:NSJSONWritingPrettyPrinted
+                                                     error:nil];
+    NSString *jsonPath = [path versionJSONPath:self.versionName];
+    if (![data writeToFile:jsonPath atomically:YES]) {
+        [self failWithMessage:@"版本配置写入失败"];
+        return;
+    }
+
+    [A2Logger info:@"A2ModLoaderInstaller"
+           message:[NSString stringWithFormat:@"OptiFine 已安装到 %@", jsonPath]];
+
+    // 复用原版 jar（优先硬链接省磁盘）
+    NSString *baseJar = [path versionJarPath:self.mcVersion];
+    NSString *newJar = [path versionJarPath:self.versionName];
+    if ([NSFileManager.defaultManager fileExistsAtPath:baseJar] &&
+        ![NSFileManager.defaultManager fileExistsAtPath:newJar]) {
+        if (![[NSFileManager defaultManager] linkItemAtPath:baseJar toPath:newJar error:nil]) {
+            [[NSFileManager defaultManager] copyItemAtPath:baseJar toPath:newJar error:nil];
+        }
+    }
+
+    [self report:1.0 message:@"OptiFine 安装完成"];
+    [self finish];
+}
+
 #pragma mark - 工具
 
 - (void)fetchJSON:(NSString *)urlString completion:(void (^)(id, NSError *))completion {

@@ -53,11 +53,6 @@
 static NSString *const kResultCellID = @"A2ResourceResultCell";
 
 /// 下载量易读格式
-static NSString *A2RSFormatCount(long long count) {
-    if (count >= 1000000) return [NSString stringWithFormat:@"%.1fM", count / 1000000.0];
-    if (count >= 1000) return [NSString stringWithFormat:@"%.1fK", count / 1000.0];
-    return [NSString stringWithFormat:@"%lld", count];
-}
 
 /// 结果区状态 —— 各自独立文案
 typedef NS_ENUM(NSInteger, A2ResourceSearchState) {

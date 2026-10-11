@@ -5,6 +5,7 @@
 
 #import "A2ModPackImportViewController.h"
 #import "A2ModPackInstaller.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import "A2InstallingViewController.h"
 #import "A2GlassCard.h"
 #import "A2SettingsSection.h"
@@ -72,9 +73,19 @@
 #pragma mark - 选文件
 
 - (void)presentPicker {
-    UIDocumentPickerViewController *picker =
-        [[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[@"public.data"]
-                                                               inMode:UIDocumentPickerModeImport];
+    // iOS 14 起用 forOpeningContentTypes:，旧的 initWithDocumentTypes:inMode: 已废弃。
+    // 用 UTTypeData 而不是具体类型 —— 整合包扩展名多样（.mrpack / .zip），
+    // 限制死类型反而会选不中。
+    UIDocumentPickerViewController *picker;
+    if (@available(iOS 14.0, *)) {
+        picker = [[UIDocumentPickerViewController alloc]
+                  initForOpeningContentTypes:@[UTTypeData]
+                                     asCopy:YES];
+    } else {
+        picker = [[UIDocumentPickerViewController alloc]
+                  initWithDocumentTypes:@[@"public.data"]
+                                 inMode:UIDocumentPickerModeImport];
+    }
     picker.delegate = self;
     picker.allowsMultipleSelection = NO;
     [self presentViewController:picker animated:YES completion:nil];
