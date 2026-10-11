@@ -34,6 +34,31 @@ static NSString *const kLibrariesBaseURL = @"https://libraries.minecraft.net";
 
 static NSString *const kUserAgent = @"Air-Devs/Air2/0.1.0 (github.com/Air-Devs/Air2)";
 
+// ============================================================
+// [DL-CONC] 安装期批量下载（libraries / assets）的并发度
+// ------------------------------------------------------------
+// ★唯一调参点★：改这里的默认值即可，无需改动任何调用方。
+//   · 默认 3 —— 稳妥起步；
+//   · 建议范围 1..8（上限见 kA2InstallMaxConcurrency）；
+//   · 运行期亦可用 NSUserDefaults 键 "air2.install.concurrency" 覆盖，便于真机试参。
+// 背景：原实现把每个文件串成一条长龙（下完一个才发下一个），
+//   数千个 asset 的网络往返直接线性叠加成总耗时 —— 即用户说的
+//   「一个个下、一个要等一秒多」。改为 completion 驱动的有界并发流水线。
+// ============================================================
+static const NSInteger kA2InstallDefaultConcurrency = 3;
+static const NSInteger kA2InstallMaxConcurrency = 8;
+static NSString *const kA2InstallConcurrencyPrefKey = @"air2.install.concurrency";
+
+/// 解析本次安装实际使用的并发度：默认值 ← 偏好覆盖，并夹到 [1, 上限]
+static NSInteger A2InstallEffectiveConcurrency(void) {
+    NSInteger n = kA2InstallDefaultConcurrency;
+    NSNumber *pref = [[NSUserDefaults standardUserDefaults] objectForKey:kA2InstallConcurrencyPrefKey];
+    if ([pref isKindOfClass:NSNumber.class]) n = pref.integerValue;
+    if (n < 1) n = 1;
+    if (n > kA2InstallMaxConcurrency) n = kA2InstallMaxConcurrency;
+    return n;
+}
+
 static void A2Main(dispatch_block_t block) {
     if ([NSThread isMainThread]) block();
     else dispatch_async(dispatch_get_main_queue(), block);
@@ -52,6 +77,18 @@ static void A2Main(dispatch_block_t block) {
 @property (nonatomic, strong) NSURLSession *session;
 @property (nonatomic, copy, nullable) void (^progressBlock)(A2InstallStage, double, NSString *);
 @property (nonatomic, copy, nullable) void (^completionBlock)(BOOL, NSError *);
+
+// [DL-CONC] 下载辅助（实现见 #pragma mark - 下载辅助）
+- (void)download:(NSArray<NSString *> *)urls
+              to:(NSString *)dest
+      stageLabel:(A2InstallStage)stage
+         message:(NSString *)message
+  reportIntraFile:(BOOL)reportIntraFile
+         thenRun:(void (^)(NSError * _Nullable))then;
+- (void)downloadBatch:(NSArray<NSArray<NSString *> *> *)items
+                stage:(A2InstallStage)stage
+          messageBase:(NSString *)base
+             thenRun:(void (^)(NSError * _Nullable))then;
 @end
 
 @implementation A2InstallRequest
@@ -490,11 +527,25 @@ static void A2Main(dispatch_block_t block) {
 
 #pragma mark - 下载辅助
 
-/// 单文件下载（带校验、断点、镜像）
+/// 单文件下载（带校验、断点、镜像）。阶段内进度按该文件字节推进。
 - (void)download:(NSArray<NSString *> *)urls
               to:(NSString *)dest
       stageLabel:(A2InstallStage)stage
          message:(NSString *)message
+         thenRun:(void (^)(NSError * _Nullable))then {
+    [self download:urls to:dest stageLabel:stage message:message
+   reportIntraFile:YES thenRun:then];
+}
+
+/// 单文件下载核心。
+/// @param reportIntraFile YES=用本文件字节数推进阶段进度（单文件阶段：json / jar / 索引）；
+///                        NO =不推进（批量阶段：进度由 downloadBatch: 按文件数推进，
+///                             否则并行多文件各自的 0..1 会让进度条来回乱跳）。
+- (void)download:(NSArray<NSString *> *)urls
+              to:(NSString *)dest
+      stageLabel:(A2InstallStage)stage
+         message:(NSString *)message
+  reportIntraFile:(BOOL)reportIntraFile
          thenRun:(void (^)(NSError * _Nullable))then {
 
     if (self.cancelled) return;
@@ -510,12 +561,14 @@ static void A2Main(dispatch_block_t block) {
     req.allowZipFallbackCheck = YES;
 
     __weak typeof(self) weakSelf = self;
+    // [DL-CONC] 累计值改为【每次调用独立】。旧实现用函数内 static：
+    //   批量下载时该 static 被所有文件共用 ⇒ 累计值跨文件串味、进度瞬间顶到 1。
+    __block int64_t acc = 0;
     [[A2DownloadEngine sharedClient] startRequest:req
         progress:^(int64_t delta, int64_t total) {
+        if (!reportIntraFile) return;
         __strong typeof(weakSelf) self = weakSelf;
         if (!self || self.cancelled || total <= 0) return;
-        // 用累计值算阶段进度
-        static int64_t acc = 0;
         acc += delta;
         if (acc < 0) acc = 0;
         double p = MIN(1.0, (double)acc / (double)total);
@@ -529,53 +582,97 @@ static void A2Main(dispatch_block_t block) {
     }];
 }
 
-/// 批量下载（逐个串行，避免并发过高被限流）
+/// 批量下载 —— [DL-CONC] completion 驱动的有界并发流水线。
+///
+/// 原实现「逐个串行」：一个文件下完才发下一个 ⇒ N 个文件的网络往返线性叠加，
+/// 数千 asset 时即用户说的「一个个下、一个要等一秒多」。
+///
+/// 现实现：始终维持最多 A2InstallEffectiveConcurrency() 个在途下载，任一完成即从
+/// 队列补位，全程由 completion 回调驱动 —— 无 sleep、无轮询。
+/// · 调度状态（游标/计数）只在串行队列 sched 上访问，故无需额外加锁；
+/// · 进度按「已完成文件数 / 总数」单调推进，不随各文件快慢乱跳；
+/// · 单文件失败不中断整体（依赖库含可选组件），与原行为一致；
+/// · 取消沿用 self.cancelled：不再发起新任务，在途任务自然收尾。
 - (void)downloadBatch:(NSArray<NSArray<NSString *> *> *)items
                 stage:(A2InstallStage)stage
           messageBase:(NSString *)base
              thenRun:(void (^)(NSError * _Nullable))then {
 
-    __block NSUInteger index = 0;
-    __block NSUInteger total = items.count;
+    NSUInteger total = items.count;
+    if (total == 0) {
+        [self report:stage progress:1 message:base];
+        if (then) then(nil);
+        return;
+    }
+
+    NSInteger maxConcurrent = A2InstallEffectiveConcurrency();
+    [A2Log log:@"[DL-CONC] 批量下载开始: %lu 个文件, 并发度=%ld, 阶段=%ld",
+          (unsigned long)total, (long)maxConcurrent, (long)stage];
+
+    dispatch_queue_t sched = dispatch_queue_create("dev.airdevs.air2.installer.batch",
+                                                   DISPATCH_QUEUE_SERIAL);
+    __block NSUInteger nextIndex = 0;   // 下一个待发起的下标
+    __block NSUInteger completed = 0;   // 已收尾（成功+失败）文件数
     __block NSUInteger failed = 0;
+    __block NSUInteger inFlight = 0;    // 在途下载数
+    __block BOOL finished = NO;
 
-    __block void (^next)(void) = nil;
     __weak typeof(self) weakSelf = self;
+    __block void (^pump)(void) = nil;   // 补位调度器（仅在 sched 上执行）
 
-    next = ^{
+    pump = ^{
         __strong typeof(weakSelf) self = weakSelf;
-        if (!self || self.cancelled) return;
-        if (index >= total) {
-            if (then) then(nil);
-            next = nil;
-            return;
+        if (!self || finished) return;
+        if (self.cancelled) return;     // 取消：停止发起新任务（在途任务自会回调收尾）
+
+        // 把在途窗口补满
+        while (inFlight < (NSUInteger)maxConcurrent && nextIndex < total) {
+            NSArray<NSString *> *pair = items[nextIndex];
+            nextIndex++;
+
+            NSString *url = pair.count > 0 ? pair[0] : nil;
+            NSString *dest = pair.count > 1 ? pair[1] : nil;
+            if (!url.length || !dest.length) {
+                completed++;
+                failed++;
+                [self report:stage progress:(double)completed / (double)total
+                     message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
+                              base, (unsigned long)completed, (unsigned long)total]];
+                continue;
+            }
+
+            inFlight++;
+            NSUInteger ordinal = MIN(completed + inFlight, total);
+            [self download:@[url] to:dest stageLabel:stage
+                   message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
+                            base, (unsigned long)ordinal, (unsigned long)total]
+            reportIntraFile:NO
+                   thenRun:^(NSError *error) {
+                dispatch_async(sched, ^{
+                    __strong typeof(weakSelf) s2 = weakSelf;
+                    if (!s2) return;
+                    if (error) failed++;
+                    completed++;
+                    if (inFlight > 0) inFlight--;
+                    [s2 report:stage progress:(double)completed / (double)total
+                         message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
+                                  base, (unsigned long)completed, (unsigned long)total]];
+                    if (pump) pump();
+                });
+            }];
         }
 
-        NSArray<NSString *> *pair = items[index];
-        NSString *url = pair[0];
-        NSString *dest = pair[1];
-        NSUInteger currentIndex = index;
-
-        [self download:@[url] to:dest stageLabel:stage
-               message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
-                        base, (unsigned long)(currentIndex + 1), (unsigned long)total]
-               thenRun:^(NSError *error) {
-            __strong typeof(weakSelf) self = weakSelf;
-            if (!self || self.cancelled) return;
-
-            // 单个文件失败不中断整体 —— 依赖库里有可选组件，
-            // 下载不到不影响启动
-            if (error) failed++;
-
-            index++;
-            [self report:stage progress:(double)index / (double)total
-                 message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
-                          base, (unsigned long)index, (unsigned long)total]];
-            if (next) next();
-        }];
+        // 全部收尾 → 回调（单文件失败不视为整体失败，与旧行为一致）
+        if (completed >= total && !finished) {
+            finished = YES;
+            [A2Log log:@"[DL-CONC] 批量下载结束: %lu 个文件, 失败=%lu",
+                  (unsigned long)total, (unsigned long)failed];
+            if (then) then(nil);
+            pump = nil;   // 打断 pump 的自持有，避免泄漏
+        }
     };
 
-    next();
+    dispatch_async(sched, ^{ if (pump) pump(); });
 }
 
 #pragma mark - 回调
