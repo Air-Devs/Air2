@@ -14,6 +14,7 @@
 //
 
 #import "A2LaunchPlan.h"
+#import "A2LaunchContract.h"   // 契约常量（入口主类名 / --plan / 类加载器名 / schema）
 #import "A2Log.h"
 
 static NSString *const A2LaunchPlanErrorDomain = @"A2LaunchPlan";
