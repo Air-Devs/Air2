@@ -68,6 +68,18 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2Runti
             @"en": @"Becomes the plan's javaHome",
             @"ja": @"起動プランの javaHome になります",
         },
+        @"runtime.row.scale": @{
+            @"zh-Hans": @"渲染分辨率",
+            @"zh-Hant": @"渲染解析度",
+            @"en": @"Render resolution",
+            @"ja": @"レンダリング解像度",
+        },
+        @"runtime.row.scale.detail": @{
+            @"zh-Hans": @"降低内部分辨率以提升帧率（逻辑尺寸不变）",
+            @"zh-Hant": @"降低內部解析度以提升幀率（邏輯尺寸不變）",
+            @"en": @"Lower internal resolution for more fps (logical size unchanged)",
+            @"ja": @"内部解像度を下げてフレームレートを上げます（論理サイズは不変）",
+        },
 
         // ---------------- 档位 / 内置状态 ----------------
         @"runtime.tier.recommended": @{
@@ -137,6 +149,24 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2Runti
             @"zh-Hant": @"取消",
             @"en": @"Cancel",
             @"ja": @"キャンセル",
+        },
+        @"runtime.scale.native": @{
+            @"zh-Hans": @"原生",
+            @"zh-Hant": @"原生",
+            @"en": @"Native",
+            @"ja": @"ネイティブ",
+        },
+        @"runtime.pick.scale.title": @{
+            @"zh-Hans": @"渲染分辨率",
+            @"zh-Hant": @"渲染解析度",
+            @"en": @"Render resolution",
+            @"ja": @"レンダリング解像度",
+        },
+        @"runtime.pick.scale.message": @{
+            @"zh-Hans": @"内部分辨率越低越省性能；逻辑尺寸（界面/触摸）不变",
+            @"zh-Hant": @"內部解析度越低越省效能；邏輯尺寸（介面/觸控）不變",
+            @"en": @"A lower internal resolution costs less; logical size (UI/touch) is unchanged",
+            @"ja": @"内部解像度が低いほど軽くなります（論理サイズ＝UI/タッチは不変）",
         },
         @"runtime.toast.selected": @{
             @"zh-Hans": @"已选择「%@」",

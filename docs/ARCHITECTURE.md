@@ -560,4 +560,60 @@ action sheet 列全部候选，**未内置的项照列但标「未内置」**（
 `EGLNativeWindowType` 取 `layer` 的行为事实、`eglCreateWindowSurface` 带/不带尺寸属性的两种尝试）。
 ★未搬运任何代码★。
 
+### 帧性能判据 + 分辨率缩放（与渲染器无关）—— [FRAME-PERF]
+
+**要解决的是什么**：缺一套「**与后端无关**的帧性能判据」——不依赖任何具体渲染器，
+就能在真机上回答「现在每秒多少帧、每帧多久、提交了多少绘制、纹理/帧缓冲占多少、
+这一帧有没有新建着色器或管线、测量处于预览态还是真实态」；并且能**降内部分辨率**换帧率。
+
+**① 判据行 `[FRAME]`（默认可见，每 N 帧一行，不是每帧一刷）**
+
+```
+[FRAME] 指标口径：★无真实 GPU 时间★ ⇒ cpu_fps/cpu_ms 为 CPU 帧时间…（一次性，附着前打）
+[FRAME] frame=5 phase=preview cpu_fps=59.7 cpu_ms=16.74 draw=1 tex≈6512KB shaderNew=0 presented=1 scale=0.75 px=878x1899 clear=878x1899
+[FRAME] frame=10 phase=preview …
+[FRAME] frames=0 ⇒ ★无帧样本★…（帧生产者未产出帧时如实报，不补默认值）
+```
+
+- `cpu_fps` / `cpu_ms`：**CPU 帧时间**（相邻两帧记录之间的墙钟差及其倒数）。
+  ★拿不到真实 GPU 时间 ⇒ 明确以 `cpu_` 前缀标注为代理指标，不冒充 GPU 时间★。
+- `draw`：本帧提交的绘制/清屏命令数（★代理指标★；帧生产者只清屏 ⇒ 1）。
+- `tex`：drawable 字节**估值**（宽 × 高 × 4，非真实纹理内存占用）。
+- `shaderNew`：本帧是否新建着色器/管线（帧生产者不建 ⇒ 0；由上报方给值，不替它猜）。
+- `phase`：`preview`（附着后的**基线帧**，不代表游戏负载）/ `real`（游戏/渲染器接管后）。
+- `scale=… px=…x… clear=…x…`：渲染倍率、缩放后的 drawable 像素、本帧**实际清屏区域**
+  （scissor 读回 ⇒ 「本帧真的按缩放尺寸清屏」有可核对证据）。
+
+**② 分辨率缩放（render scale）**
+
+| 键 | 取值 | 写点（唯一） | 读点（唯一） |
+|---|---|---|---|
+| `A2SelectedRenderScale`（`A2SelectedRenderScalePrefKey`） | 受支持倍率的十进制字符串（`0.50`/`0.75`/`1.00`） | `A2RuntimeSettings.m` 渲染分辨率行 | `A2LaunchSession.m` |
+
+- 候选与归一化唯一实现在 `Air2/Core/Renderer/A2RenderScaleCatalog.[hm]`（起始三档 0.5/0.75/1.0，
+  默认 1.0）；缺值/非数值/超范围 ⇒ 默认档，★不猜中间值★。
+- 落到表面上的那一步唯一：`A2LaunchRunner.m` 把宿主的**表面像素**乘倍率后交给桥，
+  ★`widthPoints`/`heightPoints`（逻辑尺寸）原样不动★ ⇒ 「逻辑尺寸不变、drawable 像素变小」。
+- 帧侧证据：桥每帧把这些像素设进 `glViewport`/`glScissor` 再清屏，并**读回 scissor box**；
+  该值与缩放后的 drawable 一致才叫「真的按缩放尺寸清屏/呈现」。
+
+**③ 文件与调用点**
+
+| 文件 | 层 | 职责 |
+|---|---|---|
+| `Natives/Renderer/a2_frame_perf.[hm]` | Natives | ★帧判据的唯一实现处★：只收**中立数值**（像素/毫秒/字节/0-1 标志），出 `[FRAME]` 一行。★不含任何后端名★ |
+| `Natives/Renderer/a2_gl_bridge.[hm]` | Natives | 帧动作按缩放尺寸设 viewport/scissor → 清屏 → 读回 scissor box（证据）→ 呈现 → 记数；新增可重复调用的帧生产入口 `a2_gl_bridge_present_frame()` |
+| `Air2/Bridge/A2LaunchRunner.m` | Bridge | 应用倍率（只改像素）→ 设帧判据环境/相位 → 附着 → 驱动一小段**基线帧**（预览态）→ 每 N 帧打一行；交给游戏前切 `real` 相位 |
+| `Air2/Player/A2LaunchSession.m` | Player | 读倍率偏好 → Core 归一化 → 判据行 `[A2-RENDER] chosen=…` → 传给 Bridge |
+| `Air2/UI/Screens/Settings/A2RuntimeSettings.m` | UI | 渲染分辨率行（三档 action sheet）＝ 倍率键的唯一写入点 |
+| `scripts/verify_frame_perf_native.py` | 构建 | 机器自证：本层**后端专有名命中 = 0**（带阴性对照）+ 每个对外函数**有调用点**（禁石山）；挂进 `scripts/lint_structure.sh` §8 |
+| `tests/Natives/`、`tests/Runtime/` | tests | ★真编译 + 真运行★：帧判据行字段/相位/缩放像素/CPU 时间、倍率候选表与归一化、接线自证 |
+
+**边界（本单不做）**：不优化任何具体渲染器；不引入真实帧源（渲染器仍只到「选 + `dlopen`」），
+故本包内 `[FRAME]` 只有 `phase=preview` 的基线帧 —— `real` 相位已接线但无帧样本。
+★真 GPU 时间/真实 draw call/纹理占用需渲染器上报，未做★。
+
+**开关**：无独立开关 —— 相关调用只在自研启动链内发生，链整体由 `debug.rt_p1_runtime`
+（默认关）决定 ⇒ 开箱行为不变（同 [RENDER-WIRE]）。
+
 

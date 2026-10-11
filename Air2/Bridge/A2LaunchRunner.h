@@ -67,6 +67,10 @@ NS_ASSUME_NONNULL_BEGIN
 /// @param rendererDylib ★用户选中的渲染后端 dylib 名★（`A2SelectedRendererPrefKey` 的值；
 ///        可空 ⇒ 主推 `libmetallum.dylib`）。★由 Player 解析好传入，Bridge 不读偏好★ ——
 ///        本层只负责「把它交给 Natives/Renderer/a2_renderer 加载」。
+/// @param renderScale ★渲染分辨率倍率★（`A2SelectedRenderScalePrefKey` 归一化后的值；
+///        1.0 = 原生像素）。★只作用于**表面像素**（drawable）★：逻辑尺寸（点）不变，
+///        drawable 像素 = 表面像素 × 倍率 ⇒ 这是「分辨率缩放」落到桥上的那一处。
+///        ★由 Player 解析好传入，Bridge 不读偏好★；<=0 或 >1 按 1.0 处理（不猜中间值）。
 /// @return `a2_launch_jvm_with_argv` 的返回码（0 成功；负值见 a2_launch.h 契约）；
 ///         ★-10 = 所选渲染后端未内置/加载失败 ⇒ 未进 VM，如实阻断（不静默回退）★；
 ///         ★-12 = 所选渲染后端是 EGL/GL 系但未能建出 GL 上下文（缺库/无表面/EGL 失败）
@@ -82,7 +86,8 @@ NS_ASSUME_NONNULL_BEGIN
             librariesPath:(NSString *)librariesPath
                  lwjglDir:(NSString *)lwjglDir
            frameworksPath:(nullable NSString *)frameworksPath
-            rendererDylib:(nullable NSString *)rendererDylib;
+            rendererDylib:(nullable NSString *)rendererDylib
+              renderScale:(double)renderScale;
 
 @end
 

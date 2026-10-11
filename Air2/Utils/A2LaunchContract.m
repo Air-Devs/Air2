@@ -26,3 +26,4 @@ NSString *const A2LaunchSysPropMaximumFramesPerSecond = @"UIScreen.maximumFrames
 // 读 debug.* 开关同一来源，不是老线 POJAV_HOME 下的 plist）。
 NSString *const A2SelectedRendererPrefKey    = @"A2SelectedRenderer";
 NSString *const A2SelectedJavaRuntimePrefKey = @"A2SelectedJavaRuntime";
+NSString *const A2SelectedRenderScalePrefKey = @"A2SelectedRenderScale";

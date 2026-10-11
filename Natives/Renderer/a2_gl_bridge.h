@@ -107,4 +107,18 @@ int a2_gl_bridge_backend_is_egl(const char *rendererName);
 /// @return 见上方返回码枚举。OK(0)=可用；Skipped(1)=不归本层管（调用方不阻断）；负值=该管没管成（调用方阻断）。
 int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath);
 
+/// ★帧生产入口★（[FRAME-PERF]）：按当前渲染倍率的 drawable 尺寸执行**一次帧动作** ——
+/// 设定 viewport/scissor（= 缩放后的像素区域）→ `glClear` → 读回 scissor box 作为
+/// 「本帧确实按该尺寸清屏」的可核对证据 → 换页（呈现）→ 把本帧的中立数值记进帧性能判据
+/// → 回调宿主帧回调（见 A2GlHostSurface.frameCallback）。
+///
+/// 为什么单列一个入口（而不是只留 attach 里那一帧）：[FRAME-PERF] 要「每 N 帧一行」的
+/// 判据样本，就必须有一个**可重复调用**的帧生产入口；启动链用它驱动一小段基线帧。
+///
+/// 未附着（非 EGL/GL 系后端 ⇒ attach 返回 Skipped）时为**无操作**：不产帧、不记数、不阻断。
+/// 幂等/线程：与调用线程同线程使用（EGL 上下文按线程归属，同 `attach`）。
+///
+/// ★调用点唯一★：`Air2/Bridge/A2LaunchRunner.m` 的 `+launchWithPlanPath:…`（基线帧循环）。
+void a2_gl_bridge_present_frame(void);
+
 #endif /* A2_GL_BRIDGE_H */

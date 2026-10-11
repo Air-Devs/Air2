@@ -20,6 +20,7 @@
 #import "A2Account.h"
 #import "A2Settings.h"
 #import "A2RendererCatalog.h"       // Core/Renderer —— 渲染后端候选表 + 包内存在性（[RENDER-SEL]）
+#import "A2RenderScaleCatalog.h"    // Core/Renderer —— 渲染分辨率倍率候选表 + 归一化（[FRAME-PERF]）
 #import "A2JavaRuntimeCatalog.h"    // Core/Version —— Java 运行时候选表 + 可用性（[JRE-SEL]）
 #import "A2VersionIsolation.h"      // Core/Path —— A2GamePath：实例路径的唯一计算处（[A2-INSTANCE]）
 #import "A2RuntimeStrings.h"        // Player 同层 —— 四语文案（阻断文案 + 判据行的「源」）
@@ -172,6 +173,25 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
                                                                          : @"runtime.source.default")];
     [A2Log log:@"[A2-JRE] chosen=%@(源: %@; source=%@)",
      jreDir, jreSourceWord, jreFromUser ? @"user" : @"default"];
+
+    // ========================================================================
+    // ★[FRAME-PERF] 渲染分辨率倍率：用户选择 → 启动链的表面尺寸★
+    // ------------------------------------------------------------------------
+    // 取值来源：同一个 NSUserDefaults（键 A2SelectedRenderScalePrefKey，写点唯一 =
+    // A2RuntimeSettings 的渲染分辨率行）。缺省/非法 ⇒ 默认档（1.0，原生像素）。
+    // ★判据行★ `[A2-RENDER] chosen=…(源: 用户选择; source=user)` —— 与
+    //   [A2-RENDERER]/[A2-JRE] 同形；实际落到帧上的值另由 `[FRAME] scale=… px=…x…` 证明。
+    // 语义：drawable 像素 = 表面像素 × 倍率（★逻辑尺寸/点不变★）。
+    // ========================================================================
+    NSString *selScale = [NSUserDefaults.standardUserDefaults stringForKey:A2SelectedRenderScalePrefKey];
+    double renderScale = [A2RenderScaleCatalog normalizedScaleForStoredString:selScale];
+    BOOL scaleFromUser = (selScale.length > 0 &&
+                          [A2RenderScaleCatalog isSupportedScale:selScale.doubleValue]);
+    NSString *scaleSourceWord = [A2RuntimeStrings stringForKey:(scaleFromUser
+                                                                 ? @"runtime.source.user"
+                                                                 : @"runtime.source.default")];
+    [A2Log log:@"[A2-RENDER] chosen=%.2f(源: %@; source=%@)",
+     renderScale, scaleSourceWord, scaleFromUser ? @"user" : @"default"];
 
     NSString *userHome = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
                                                              NSUserDomainMask, YES) firstObject];
@@ -342,7 +362,8 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
                                             librariesPath:librariesDir
                                                  lwjglDir:lwjglDir
                                            frameworksPath:frameworks
-                                            rendererDylib:renderer.identifier];
+                                            rendererDylib:renderer.identifier
+                                              renderScale:renderScale];
                 if (vmRC == 0) {
                     return YES;
                 }
