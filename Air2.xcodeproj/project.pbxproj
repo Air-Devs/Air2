@@ -26,12 +26,15 @@
 		A83EEEB1694635A4E2D8A05C /* A2ModLoaderAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */; };
 		06B9E837FB19EE06FB5B8001 /* A2ModLoaderInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */; };
 		B93BF19B9A5817F070177A3E /* A2ModPack.m in Sources */ = {isa = PBXBuildFile; fileRef = 818837C4F3F9187CAE2C7B85 /* A2ModPack.m */; };
+		B4602EB8115274750785754F /* A2ModPackExporter.m in Sources */ = {isa = PBXBuildFile; fileRef = BC9BE22EBF1611FD9317C5F7 /* A2ModPackExporter.m */; };
 		233C8ED69D6FB00835F7FDEF /* A2ModPackInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = F9D1523FC914A5D7AD7339A1 /* A2ModPackInstaller.m */; };
 		4B3530EF7B225032A4145D7C /* A2ModScanner.m in Sources */ = {isa = PBXBuildFile; fileRef = 0D98C9FC5B84AD139084B48A /* A2ModScanner.m */; };
 		FAE87882A16451C5E2E43DDE /* A2ModrinthAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */; };
 		63E842FC660915F96957CD6E /* A2ResourcePack.m in Sources */ = {isa = PBXBuildFile; fileRef = 2A1D6A101DDDB12E54E429AC /* A2ResourcePack.m */; };
 		CEBCE40DED2386E621FE1198 /* A2ResourceScanner.m in Sources */ = {isa = PBXBuildFile; fileRef = 354E0D6D2FD88A0DA1EBAF70 /* A2ResourceScanner.m */; };
 		006F90647E36FA45B54D7B39 /* A2ZipReader.m in Sources */ = {isa = PBXBuildFile; fileRef = C7F15DE318744485CEE00538 /* A2ZipReader.m */; };
+		5DFE00B49A996C511291A505 /* A2ZipWriter.m in Sources */ = {isa = PBXBuildFile; fileRef = 025FEA920C79EED2B15C509E /* A2ZipWriter.m */; };
+		4486969AD52C845F0A5F88A7 /* A2BatchDownloader.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F8A5B15D5AD998096528CD6 /* A2BatchDownloader.m */; };
 		9F125686BA18A3A79AC3C941 /* A2DownloadEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = 1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */; };
 		04806F8C420A200707485301 /* A2DownloadFavorites.m in Sources */ = {isa = PBXBuildFile; fileRef = 3F6494DF9E525C24C5D69098 /* A2DownloadFavorites.m */; };
 		E6679E2C4F527A9777EA6CEC /* A2DownloadManifest.m in Sources */ = {isa = PBXBuildFile; fileRef = 2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */; };
@@ -88,6 +91,7 @@
 		B9AF292E811122649CF9FEE6 /* A2GameInstallOptionsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3448695748B18FEC501E0C2F /* A2GameInstallOptionsViewController.m */; };
 		6C998AE9614B2353B8C03DC2 /* A2GameVersionListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = AD5DE88799682F07A3341134 /* A2GameVersionListViewController.m */; };
 		7344000874E6AFAA9489A939 /* A2InstallingViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */; };
+		36BD9E3D29A1204C4DE1649E /* A2ModPackImportViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = EAF5FDB108BCF648BF323F13 /* A2ModPackImportViewController.m */; };
 		0C5E9A5111CB1B65E9B79ED9 /* A2ResourceDetailViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 39176526660F1CAEC3199C8F /* A2ResourceDetailViewController.m */; };
 		D49F4495BA8F3A147387277B /* A2ResourceSearchViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 98024C5565241D478B54F4D6 /* A2ResourceSearchViewController.m */; };
 		4037C5EBDB3F5A02EBD25E87 /* A2SearchByIdViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = C769776AF3D8703861D81699 /* A2SearchByIdViewController.m */; };
@@ -102,6 +106,7 @@
 		C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB44E450592838BA6F7B061 /* A2GameSettings.m */; };
 		1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */; };
 		F3A3A971AE05998E6D648440 /* A2ModListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 86984D61C69EA55C028368AC /* A2ModListViewController.m */; };
+		9AD821240E44F6B772B2DC0D /* A2VersionExportViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = B49A0AFE2700FB02330057CC /* A2VersionExportViewController.m */; };
 		5C3C3472B73A413C081E753F /* A2VersionListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */; };
 		7635F6BA870CB67CA1FBFDF4 /* A2VersionRowView.m in Sources */ = {isa = PBXBuildFile; fileRef = 8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */; };
 		D33BBA190C82A6A3205F3A9E /* A2VersionSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */; };
@@ -141,12 +146,15 @@
 		A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderAPI.m"; sourceTree = "<group>"; };
 		452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderInstaller.m"; sourceTree = "<group>"; };
 		818837C4F3F9187CAE2C7B85 /* A2ModPack.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPack.m"; sourceTree = "<group>"; };
+		BC9BE22EBF1611FD9317C5F7 /* A2ModPackExporter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPackExporter.m"; sourceTree = "<group>"; };
 		F9D1523FC914A5D7AD7339A1 /* A2ModPackInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPackInstaller.m"; sourceTree = "<group>"; };
 		0D98C9FC5B84AD139084B48A /* A2ModScanner.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModScanner.m"; sourceTree = "<group>"; };
 		B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModrinthAPI.m"; sourceTree = "<group>"; };
 		2A1D6A101DDDB12E54E429AC /* A2ResourcePack.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourcePack.m"; sourceTree = "<group>"; };
 		354E0D6D2FD88A0DA1EBAF70 /* A2ResourceScanner.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceScanner.m"; sourceTree = "<group>"; };
 		C7F15DE318744485CEE00538 /* A2ZipReader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ZipReader.m"; sourceTree = "<group>"; };
+		025FEA920C79EED2B15C509E /* A2ZipWriter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ZipWriter.m"; sourceTree = "<group>"; };
+		6F8A5B15D5AD998096528CD6 /* A2BatchDownloader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BatchDownloader.m"; sourceTree = "<group>"; };
 		1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadEngine.m"; sourceTree = "<group>"; };
 		3F6494DF9E525C24C5D69098 /* A2DownloadFavorites.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadFavorites.m"; sourceTree = "<group>"; };
 		2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadManifest.m"; sourceTree = "<group>"; };
@@ -203,6 +211,7 @@
 		3448695748B18FEC501E0C2F /* A2GameInstallOptionsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameInstallOptionsViewController.m"; sourceTree = "<group>"; };
 		AD5DE88799682F07A3341134 /* A2GameVersionListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameVersionListViewController.m"; sourceTree = "<group>"; };
 		6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2InstallingViewController.m"; sourceTree = "<group>"; };
+		EAF5FDB108BCF648BF323F13 /* A2ModPackImportViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPackImportViewController.m"; sourceTree = "<group>"; };
 		39176526660F1CAEC3199C8F /* A2ResourceDetailViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceDetailViewController.m"; sourceTree = "<group>"; };
 		98024C5565241D478B54F4D6 /* A2ResourceSearchViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceSearchViewController.m"; sourceTree = "<group>"; };
 		C769776AF3D8703861D81699 /* A2SearchByIdViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SearchByIdViewController.m"; sourceTree = "<group>"; };
@@ -217,6 +226,7 @@
 		0FB44E450592838BA6F7B061 /* A2GameSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameSettings.m"; sourceTree = "<group>"; };
 		9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsViewController.m"; sourceTree = "<group>"; };
 		86984D61C69EA55C028368AC /* A2ModListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModListViewController.m"; sourceTree = "<group>"; };
+		B49A0AFE2700FB02330057CC /* A2VersionExportViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionExportViewController.m"; sourceTree = "<group>"; };
 		ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionListViewController.m"; sourceTree = "<group>"; };
 		8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionRowView.m"; sourceTree = "<group>"; };
 		4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionSettingsViewController.m"; sourceTree = "<group>"; };
@@ -248,12 +258,15 @@
 		2CDA5A9BDC1B71E004D187AD /* A2ModLoaderAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderAPI.h"; sourceTree = "<group>"; };
 		D845B0CEB9AEB5591C34C008 /* A2ModLoaderInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderInstaller.h"; sourceTree = "<group>"; };
 		82C5CA51B322A62C9A8716A5 /* A2ModPack.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPack.h"; sourceTree = "<group>"; };
+		C3B88A4174EAA6387B36869D /* A2ModPackExporter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPackExporter.h"; sourceTree = "<group>"; };
 		F9584853622B68DEDF2D6287 /* A2ModPackInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPackInstaller.h"; sourceTree = "<group>"; };
 		735CC9494C232A3CC6864C14 /* A2ModScanner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModScanner.h"; sourceTree = "<group>"; };
 		BEB699597AD1A56E18E868F6 /* A2ModrinthAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModrinthAPI.h"; sourceTree = "<group>"; };
 		14B2141FFF1AB36422F6A31A /* A2ResourcePack.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourcePack.h"; sourceTree = "<group>"; };
 		C1B1480DB49DF49D264D7A98 /* A2ResourceScanner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceScanner.h"; sourceTree = "<group>"; };
 		AFAF6FCA941790ECF1D16844 /* A2ZipReader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ZipReader.h"; sourceTree = "<group>"; };
+		2847F2CA5DB2AC03ADB15B8C /* A2ZipWriter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ZipWriter.h"; sourceTree = "<group>"; };
+		BD5AE965BB08676C6D4D0512 /* A2BatchDownloader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BatchDownloader.h"; sourceTree = "<group>"; };
 		DE956596465BDFF25E578448 /* A2DownloadEngine.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadEngine.h"; sourceTree = "<group>"; };
 		1EDE5D2DBCB81396D185C97D /* A2DownloadFavorites.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadFavorites.h"; sourceTree = "<group>"; };
 		D3ABD890B860FD03E77A2B0C /* A2DownloadManifest.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadManifest.h"; sourceTree = "<group>"; };
@@ -311,6 +324,7 @@
 		A9F54FD3EE4B13741768C5AE /* A2GameInstallOptionsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameInstallOptionsViewController.h"; sourceTree = "<group>"; };
 		202A98989688120E4B50688E /* A2GameVersionListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameVersionListViewController.h"; sourceTree = "<group>"; };
 		C7770877217FAF37A3CE2F32 /* A2InstallingViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InstallingViewController.h"; sourceTree = "<group>"; };
+		13CFDC12BA665812C543D1A4 /* A2ModPackImportViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPackImportViewController.h"; sourceTree = "<group>"; };
 		3EA82DE1C4D37327845A0CE6 /* A2ResourceDetailViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceDetailViewController.h"; sourceTree = "<group>"; };
 		C862BDE71D4C2C8EA8C47AB5 /* A2ResourceSearchViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceSearchViewController.h"; sourceTree = "<group>"; };
 		018CB525E29025D7B9C0B237 /* A2SearchByIdViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SearchByIdViewController.h"; sourceTree = "<group>"; };
@@ -323,6 +337,7 @@
 		A309D45ADA810213043EDE96 /* A2SettingsSections.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsSections.h"; sourceTree = "<group>"; };
 		F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsViewController.h"; sourceTree = "<group>"; };
 		C595542224E314960D0F3C02 /* A2ModListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModListViewController.h"; sourceTree = "<group>"; };
+		830A4845C2484A246469AEE3 /* A2VersionExportViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionExportViewController.h"; sourceTree = "<group>"; };
 		271E6A92F0F655D2A7EA5627 /* A2VersionListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionListViewController.h"; sourceTree = "<group>"; };
 		EF8A5FB174D5923A21B4D162 /* A2VersionRowView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionRowView.h"; sourceTree = "<group>"; };
 		E0C16E70541109926240BD8B /* A2VersionSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionSettingsViewController.h"; sourceTree = "<group>"; };
@@ -471,12 +486,14 @@
 				A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */,
 				452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */,
 				818837C4F3F9187CAE2C7B85 /* A2ModPack.m */,
+				BC9BE22EBF1611FD9317C5F7 /* A2ModPackExporter.m */,
 				F9D1523FC914A5D7AD7339A1 /* A2ModPackInstaller.m */,
 				0D98C9FC5B84AD139084B48A /* A2ModScanner.m */,
 				B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */,
 				2A1D6A101DDDB12E54E429AC /* A2ResourcePack.m */,
 				354E0D6D2FD88A0DA1EBAF70 /* A2ResourceScanner.m */,
 				C7F15DE318744485CEE00538 /* A2ZipReader.m */,
+				025FEA920C79EED2B15C509E /* A2ZipWriter.m */,
 				7452A96D7665BFCA516E1759 /* A2ContentSource.h */,
 				732674FFF97FD95863EEEAC7 /* A2CurseForgeAPI.h */,
 				5755D893F4092F66C2AF4252 /* A2LoaderVersionSource.h */,
@@ -485,12 +502,14 @@
 				2CDA5A9BDC1B71E004D187AD /* A2ModLoaderAPI.h */,
 				D845B0CEB9AEB5591C34C008 /* A2ModLoaderInstaller.h */,
 				82C5CA51B322A62C9A8716A5 /* A2ModPack.h */,
+				C3B88A4174EAA6387B36869D /* A2ModPackExporter.h */,
 				F9584853622B68DEDF2D6287 /* A2ModPackInstaller.h */,
 				735CC9494C232A3CC6864C14 /* A2ModScanner.h */,
 				BEB699597AD1A56E18E868F6 /* A2ModrinthAPI.h */,
 				14B2141FFF1AB36422F6A31A /* A2ResourcePack.h */,
 				C1B1480DB49DF49D264D7A98 /* A2ResourceScanner.h */,
 				AFAF6FCA941790ECF1D16844 /* A2ZipReader.h */,
+				2847F2CA5DB2AC03ADB15B8C /* A2ZipWriter.h */,
 			);
 			path = Addons;
 			sourceTree = "<group>";
@@ -499,11 +518,13 @@
 		6D1D1D1337AE93B0607365A8 /* Download */ = {
 			isa = PBXGroup;
 			children = (
+				6F8A5B15D5AD998096528CD6 /* A2BatchDownloader.m */,
 				1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */,
 				3F6494DF9E525C24C5D69098 /* A2DownloadFavorites.m */,
 				2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */,
 				AE757274F8E1E206F093F68A /* A2DownloadTask.m */,
 				49E73CAF4B5DFDDC5E9F20AF /* A2DownloadTaskCenter.m */,
+				BD5AE965BB08676C6D4D0512 /* A2BatchDownloader.h */,
 				DE956596465BDFF25E578448 /* A2DownloadEngine.h */,
 				1EDE5D2DBCB81396D185C97D /* A2DownloadFavorites.h */,
 				D3ABD890B860FD03E77A2B0C /* A2DownloadManifest.h */,
@@ -726,6 +747,7 @@
 				3448695748B18FEC501E0C2F /* A2GameInstallOptionsViewController.m */,
 				AD5DE88799682F07A3341134 /* A2GameVersionListViewController.m */,
 				6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */,
+				EAF5FDB108BCF648BF323F13 /* A2ModPackImportViewController.m */,
 				39176526660F1CAEC3199C8F /* A2ResourceDetailViewController.m */,
 				98024C5565241D478B54F4D6 /* A2ResourceSearchViewController.m */,
 				C769776AF3D8703861D81699 /* A2SearchByIdViewController.m */,
@@ -735,6 +757,7 @@
 				A9F54FD3EE4B13741768C5AE /* A2GameInstallOptionsViewController.h */,
 				202A98989688120E4B50688E /* A2GameVersionListViewController.h */,
 				C7770877217FAF37A3CE2F32 /* A2InstallingViewController.h */,
+				13CFDC12BA665812C543D1A4 /* A2ModPackImportViewController.h */,
 				3EA82DE1C4D37327845A0CE6 /* A2ResourceDetailViewController.h */,
 				C862BDE71D4C2C8EA8C47AB5 /* A2ResourceSearchViewController.h */,
 				018CB525E29025D7B9C0B237 /* A2SearchByIdViewController.h */,
@@ -797,10 +820,12 @@
 			isa = PBXGroup;
 			children = (
 				86984D61C69EA55C028368AC /* A2ModListViewController.m */,
+				B49A0AFE2700FB02330057CC /* A2VersionExportViewController.m */,
 				ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */,
 				8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */,
 				4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */,
 				C595542224E314960D0F3C02 /* A2ModListViewController.h */,
+				830A4845C2484A246469AEE3 /* A2VersionExportViewController.h */,
 				271E6A92F0F655D2A7EA5627 /* A2VersionListViewController.h */,
 				EF8A5FB174D5923A21B4D162 /* A2VersionRowView.h */,
 				E0C16E70541109926240BD8B /* A2VersionSettingsViewController.h */,
@@ -897,12 +922,15 @@
 				A83EEEB1694635A4E2D8A05C /* A2ModLoaderAPI.m in Sources */,
 				06B9E837FB19EE06FB5B8001 /* A2ModLoaderInstaller.m in Sources */,
 				B93BF19B9A5817F070177A3E /* A2ModPack.m in Sources */,
+				B4602EB8115274750785754F /* A2ModPackExporter.m in Sources */,
 				233C8ED69D6FB00835F7FDEF /* A2ModPackInstaller.m in Sources */,
 				4B3530EF7B225032A4145D7C /* A2ModScanner.m in Sources */,
 				FAE87882A16451C5E2E43DDE /* A2ModrinthAPI.m in Sources */,
 				63E842FC660915F96957CD6E /* A2ResourcePack.m in Sources */,
 				CEBCE40DED2386E621FE1198 /* A2ResourceScanner.m in Sources */,
 				006F90647E36FA45B54D7B39 /* A2ZipReader.m in Sources */,
+				5DFE00B49A996C511291A505 /* A2ZipWriter.m in Sources */,
+				4486969AD52C845F0A5F88A7 /* A2BatchDownloader.m in Sources */,
 				9F125686BA18A3A79AC3C941 /* A2DownloadEngine.m in Sources */,
 				04806F8C420A200707485301 /* A2DownloadFavorites.m in Sources */,
 				E6679E2C4F527A9777EA6CEC /* A2DownloadManifest.m in Sources */,
@@ -959,6 +987,7 @@
 				B9AF292E811122649CF9FEE6 /* A2GameInstallOptionsViewController.m in Sources */,
 				6C998AE9614B2353B8C03DC2 /* A2GameVersionListViewController.m in Sources */,
 				7344000874E6AFAA9489A939 /* A2InstallingViewController.m in Sources */,
+				36BD9E3D29A1204C4DE1649E /* A2ModPackImportViewController.m in Sources */,
 				0C5E9A5111CB1B65E9B79ED9 /* A2ResourceDetailViewController.m in Sources */,
 				D49F4495BA8F3A147387277B /* A2ResourceSearchViewController.m in Sources */,
 				4037C5EBDB3F5A02EBD25E87 /* A2SearchByIdViewController.m in Sources */,
@@ -973,6 +1002,7 @@
 				C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */,
 				1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */,
 				F3A3A971AE05998E6D648440 /* A2ModListViewController.m in Sources */,
+				9AD821240E44F6B772B2DC0D /* A2VersionExportViewController.m in Sources */,
 				5C3C3472B73A413C081E753F /* A2VersionListViewController.m in Sources */,
 				7635F6BA870CB67CA1FBFDF4 /* A2VersionRowView.m in Sources */,
 				D33BBA190C82A6A3205F3A9E /* A2VersionSettingsViewController.m in Sources */,

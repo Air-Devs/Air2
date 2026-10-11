@@ -35,6 +35,7 @@
 
 #import "A2VersionListViewController.h"
 #import "A2VersionSettingsViewController.h"
+#import "A2VersionExportViewController.h"
 #import "A2GameVersionListViewController.h"
 #import "A2InputDialog.h"
 #import "A2TextField.h"
@@ -502,6 +503,19 @@
         __strong typeof(weakSelf) self = weakSelf;
         [self showCopyDialogForVersion:version fromView:source];
     }]];
+    // 导出整合包 —— 把整个版本打包分享给别人
+    [sheet addAction:[UIAlertAction actionWithTitle:@"导出为整合包"
+                                             style:UIAlertActionStyleDefault
+                                           handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+
+        A2VersionExportViewController *vc =
+            [[A2VersionExportViewController alloc] initWithVersionName:version.name
+                                                            versionPath:version.versionPath];
+        [self.navigationController pushViewController:vc animated:YES];
+    }]];
+
     [sheet addAction:[UIAlertAction actionWithTitle:@"删除"
                                               style:UIAlertActionStyleDestructive
                                             handler:^(UIAlertAction *action) {
