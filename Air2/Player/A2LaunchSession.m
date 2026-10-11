@@ -13,7 +13,7 @@
 #import "A2LaunchChain.h"            // ①→②→③ 的顺序与状态（★单一真相源★）
 #import "A2LaunchFailure.h"          // 失败分类 / 判据行 / 用户文案（Player 纯逻辑）
 #import "A2JITEnvironmentProbe.h"    // ② 真调判据（Bridge → Natives/A2JITEnvironment）
-#import "A2JITScriptDelivery.h"      // ① 下发脚本（Bridge → Natives/a2_jit_send_script_safe）
+#import "A2JITScriptDelivery.h"      // ① 下发脚本（Bridge → Natives 的下发原语）
 #import "A2LaunchContract.h"
 #import "A2VersionManager.h"
 #import "A2AccountManager.h"
