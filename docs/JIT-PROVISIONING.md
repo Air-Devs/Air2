@@ -307,15 +307,39 @@ TLS-PSK 隧道、DDI 的真取用（联网个性化请求与 image_mounter 挂�
    绝不猜成匹配（单测覆盖六个分支）；
 2. **判定 Unknown ≠ Missing**：`A2JITDDIVerdictUnknown` 只映射到前置条件 `Unknown`；
    探测未接线 / 目录不可读 / 元数据不足时一律 **Unknown**，★不许升成「已满足」，也不许降成「缺失」★；
-3. **机制未接入就如实阻断**：联网个性化请求与镜像挂载都返回 `NO` 并**点名缺什么**
-   （`Bridge → Natives` 未落地 / 需 image_mounter 服务与特权），★不假成功★。
+3. **机制未接入就如实阻断**：联网获取与镜像挂载都返回 `NO` 并**点名缺什么**，★不假成功★。
 
-★ **「联网取 DDI」的边界★**：★默认关★（偏好键 `debug.jit_ddi_fetch`）。开启后是向
-**Apple 官方 personalization（TSS）端点**请求——★这属于「访问 Apple 官方服务」，不是「上云」★：
-请求直达 Apple，不经任何第三方服务器。★完全离线也能用★：本地发现 + 手动导入两条路都在，不依赖联网。
+★ **「联网取 DDI」的边界（★默认关★，偏好键 `debug.jit_ddi_fetch`）★**：
+开启后才会呼叫机制。★完全离线也能用★：本地发现 + 手动导入两条路都在，不依赖联网。
+
+★ **流程口径（以公开实现的行为为准，见 §3.4 末「与 StikDebug 对照」）★**：
+公开实现（StikDebug）的 DDI 获取**不是**向 Apple 的个性化（TSS）端点申请，而是
+**按系统版本选一种镜像形态**（iOS ≥ 26.4 走 cryptex、否则 personalized）→
+**从固定 HTTPS 直链下载一小撮文件**（BuildManifest.plist / Image.dmg / Image.dmg.trustcache，
+cryptex 另加 cryptex_info 与 root_hash）→ **经 RPPairing 隧道调用设备的 image_mounter 挂载**。
+★它不需要设备标识参与取件★。本仓采用同一套**结构**（选形态 → 取文件集 → 校验 → 挂载），
+但**只把「本地优先」这一段做真**；联网取与挂载是**调用点 + 如实阻断**。
 
 ★ **DDI 的判定口径★**：本项判定 = 「本机（App 视角）是否具备一份与系统匹配的可用 DDI 镜像」；
 **设备侧已挂载**属加分项（可查时才算证据；查不到不影响本地结论，且在取证里写明「设备侧不可查」）。
+公开实现同样把挂载状态做成三态（已挂载 / 未挂载 / **不可达**），与本仓的
+「已就位 / 缺失 / **无法确认**」是一一对应的口径。
+
+### 3.5「与 StikDebug 的对照」（★只参考行为，未采用其代码★）
+
+| 环节 | StikDebug（AGPL-3.0，**只读参考**） | Air2（本单） | 是否采用 |
+|---|---|---|---|
+| 镜像形态选择 | 按系统版本：>26 或 26.x(≥4) ⇒ `cryptex`；否则 `personalized` | ★未做★（不选形态，只做本地镜像的三态判定） | ✗ 未采用（需隧道才谈得上挂载） |
+| 取件来源 | 固定 HTTPS 直链，指向**第三方 GitHub 镜像仓**的 Apple DDI 文件集 | ★未做★（**来源选型未拍板**：第三方镜像 vs Apple 分发） | ✗ 未采用（合规待定） |
+| 取件清单 | `BuildManifest.plist` / `Image.dmg` / `Image.dmg.trustcache`（cryptex 另加 `Image.dmg.cryptex_info`、`Image.dmg.root_hash`） | 本地发现面 = 约定目录 + `Documents/DDI`+`Documents`；写入面 = 单个约定名 | ✓ 结构同形（探测面宽、写入面窄） |
+| 落盘位置 | App `Documents/DDI/`，并写一个 `MountMethod` 标记 | App `Library/Application Support/DDI/` + `ddi.meta.plist`（来源/时间/SHA-256/声明版本） | ✓ 结构同形 |
+| 挂载 | 经 idevice FFI：RPPairing 隧道 + RSD + `image_mounter`（cryptex / personal 两条路） | **调用点**（`mountCurrentImageWithReason:` → Bridge）；★未接线，如实报缺什么★ | ✗ 未采用（机制未落地） |
+| 挂载状态 | 三态：mounted / notMounted / **unreachable** | 三态：已就位 / 缺失 / **无法确认** | ✓ 口径同形 |
+| 设备标识（UDID/芯片 ID） | ★取件与挂载都**不需要**它参与★ | 已按此**移除** `uniqueChipID`（不留无调用方的字段） | ✓ 已对齐 |
+
+★ **红线★**：StikDebug 为 **AGPL-3.0**，本单**只读其公开源码以确认「行为/流程」**，
+**未拷贝任何代码/常量/文件**，也**未引入其依赖**（`libidevice_ffi.a` 未入仓）。
+上表里「结构同形」指的是**独立自研的同一种做法**（探测面宽 / 写入面窄 / 三态口径），不是代码复用。
 
 ---
 

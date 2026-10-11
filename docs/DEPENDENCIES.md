@@ -143,24 +143,29 @@
 | （无） | — | — | — | 本阶段无任何新依赖 | **未引入** |
 
 **材料来源（★只用公开资料★）**：
-- **公开文档 / 公开实现的行为描述**：`mobile_image_mounter`（挂载/查询开发者镜像的锁定服务）、
-  iOS 17+ 的 **个性化 DDI**（按设备标识个性化请求 + 配套 trustcache）、
-  Apple 官方 **personalization（TSS）端点**的行为描述，以及 UDIF（`.dmg`）**尾标块魔数 `koly`**
-  这一公开磁盘映像格式事实。以上均属**公开可查的协议/格式行为**。
-- ★**未拷贝、未搬运任何第三方代码**★：SideInstaller（自定义许可：非商业 + 禁再分发构建）、
-  PocketJ、StikDebug/StikJIT 的代码一律**未引用**；本单只按「行为描述」自研实现
-  （本地镜像校验用公开的 UDIF 尾标事实；判定逻辑全为仓内原创）。
+- **公开文档 / 公开实现的行为描述**：公开 JIT 使能器（StikDebug，AGPL-3.0）的 DDI 获取行为 ——
+  ★只读其公开源码确认「流程/行为」★：按系统版本选镜像形态（cryptex / personalized）→
+  从**固定 HTTPS 直链**下载一小撮文件（`BuildManifest.plist` / `Image.dmg` / `Image.dmg.trustcache`，
+  cryptex 另加 `Image.dmg.cryptex_info` / `Image.dmg.root_hash`）→ 经 **RPPairing 隧道 + 设备的
+  `image_mounter`** 挂载；★其取件与挂载都不需要设备标识参与★。
+- 另有公开的磁盘映像格式事实：UDIF（`.dmg`）**尾标块魔数 `koly`** 与「大小是 512 的整数倍」——
+  本单的本地校验就只用这两条公开事实。
+- ★**未拷贝、未搬运任何第三方代码/常量/文件**★：StikDebug(AGPL-3.0) / StikJIT(MPL-2.0) /
+  PocketJ / SideInstaller（自定义许可：非商业 + 禁再分发构建）一律**未引用**；
+  仓内 `A2JITDDI*` / `A2JITDDIDeviceBridge` 全为**独立自研**（判定逻辑原创；校验只用公开格式事实）。
 
 **合规口径（★必须写清★）**：
 - 仓内新增件 `A2JITDDI` / `A2JITDDIStore` / `A2JITDDIProbe` / `A2JITDDIGuidance` /
   `A2JITDDIDeviceBridge` 全部**自研**，许可随本项目 **GPL-3.0-or-later**（见 `LICENSE`）。
-- **「联网取 DDI」的边界**：★默认关★（偏好键 `debug.jit_ddi_fetch`）。开启后是向
-  **Apple 官方 personalization（TSS）端点**请求 —— ★这属于「访问 Apple 官方服务」，**不是「上云」**★：
-  请求直达 Apple，不经任何第三方服务器。★本单未实现该请求★（Bridge 骨架如实报未接入）。
+- **「联网取 DDI」的边界**：★默认关★（偏好键 `debug.jit_ddi_fetch`）。
+  ★本单未实现该请求★（Bridge 骨架如实报未接入）；且**取件来源尚未拍板** ——
+  公开实现指向的是**第三方镜像仓**（重分发 Apple 的 DDI 文件），
+  与「直接从 Apple 分发获取」在**来源合规**上不是一回事，★须先定来源再落码★。
 - **完全离线可用**：本地发现 + 手动导入两条路都在，不依赖联网。
-- **挂载的边界**：经 `image_mounter` 挂载可能**需要特权**；★当前环境不具备时如实阻断并点名缺什么★，
-  绝不假成功（`A2JITDDIDeviceBridge`）。
-- **本阶段复核**：未引入任何第三方代码/二进制；未改 `Natives/Support/A2JITEnvironment` 判据语义。
+- **挂载的边界**：经 `image_mounter` 挂载需要 **RPPairing 隧道**（与自动配对同一套，本仓尚未落地）；
+  ★当前不具备时如实阻断并点名缺什么★，绝不假成功（`A2JITDDIDeviceBridge`）。
+- **本阶段复核**：未引入任何第三方代码/二进制（★`libidevice_ffi.a` 未入仓★）；
+  未改 `Natives/Support/A2JITEnvironment` 判据语义。
 
 ---
 
