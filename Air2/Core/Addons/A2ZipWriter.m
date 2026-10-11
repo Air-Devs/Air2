@@ -143,7 +143,7 @@ static uint32_t crc32_of(const uint8_t *data, size_t len) {
 - (BOOL)addFileAtPath:(NSString *)filePath entryName:(NSString *)entryName {
     NSData *data = [NSData dataWithContentsOfFile:filePath];
     if (!data) {
-        [A2Logger warn:@"A2ZipWriter"
+        [A2Logger warning:@"A2ZipWriter"
                message:[NSString stringWithFormat:@"读取失败，跳过: %@", filePath]];
         return NO;
     }

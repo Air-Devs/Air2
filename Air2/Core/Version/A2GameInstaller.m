@@ -492,7 +492,7 @@ static void A2Main(dispatch_block_t block) {
         if (!self || self.cancelled) return;
         if (error || versions.count == 0) {
             // API 模组失败不阻断整个安装 —— 用户仍可手动补装
-            [A2Logger warn:@"GameInstaller"
+            [A2Logger warning:@"GameInstaller"
                    message:[NSString stringWithFormat:
                             @"%@ 获取失败，跳过（不影响游戏本体）", apiName]];
             [self report:A2InstallStageInstallLoader progress:1
@@ -525,7 +525,7 @@ static void A2Main(dispatch_block_t block) {
                 completion:^(BOOL success, NSError *apiError) {
             // 失败不阻断 —— 用户仍可手动补装，游戏本体已经装好了
             if (!success) {
-                [A2Logger warn:@"GameInstaller"
+                [A2Logger warning:@"GameInstaller"
                        message:[NSString stringWithFormat:@"%@ 安装失败：%@（不影响游戏本体）",
                                 apiName, apiError.localizedDescription ?: @""]];
             }

@@ -480,7 +480,7 @@ static void A2Main(dispatch_block_t b) {
                                          fileID:file.curseForgeFileID
                                      completion:^(A2CFFile *cf, NSError *error) {
         if (error || !cf) {
-            [A2Logger warn:@"A2ModPackInstaller"
+            [A2Logger warning:@"A2ModPackInstaller"
                    message:[NSString stringWithFormat:@"无法解析 CurseForge 文件 %ld/%ld：%@",
                             (long)file.curseForgeProjectID, (long)file.curseForgeFileID,
                             error.localizedDescription ?: @"未找到"]];
@@ -518,7 +518,7 @@ static void A2Main(dispatch_block_t b) {
         progress:nil speed:nil
         completion:^(BOOL success, NSError *error) {
         if (!success) {
-            [A2Logger warn:@"A2ModPackInstaller"
+            [A2Logger warning:@"A2ModPackInstaller"
                    message:[NSString stringWithFormat:@"下载失败 %@：%@",
                             file.relativePath, error.localizedDescription ?: @""]];
         }

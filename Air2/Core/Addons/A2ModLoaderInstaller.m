@@ -285,7 +285,7 @@ static void A2Main(dispatch_block_t b) {
     // 记录 processors 的存在与否，便于排查
     NSArray *processors = installProfile[@"processors"];
     if ([processors isKindOfClass:NSArray.class] && processors.count > 0) {
-        [A2Logger warn:@"A2ModLoaderInstaller"
+        [A2Logger warning:@"A2ModLoaderInstaller"
                message:[NSString stringWithFormat:
                         @"%@ 的 installer 声明了 %lu 个 processor，"
                         @"这些是字节码变换步骤，需要启动核心就绪后执行；"
