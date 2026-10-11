@@ -42,6 +42,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// 加载图片。urlString 为空时直接显示 placeholder 并返回。
 - (void)setImageURL:(nullable NSString *)urlString placeholder:(nullable UIImage *)placeholder;
 
+/// 首字母兜底文字。设置后，URL 为空或加载失败时会自动画一个
+/// 带主题底色的首字母占位，调用方不必自己准备占位图。
+/// 对应列表页与详情页的「无图标」场景。
+@property (nonatomic, copy, nullable) NSString *fallbackText;
+
 /// 取消当前进行中的加载（cell 复用时调用）
 - (void)cancelLoading;
 

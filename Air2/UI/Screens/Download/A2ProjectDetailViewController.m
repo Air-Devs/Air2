@@ -38,6 +38,7 @@
 #import "A2DownloadEngine.h"
 #import "A2FilterChip.h"
 #import "A2Log.h"
+#import "A2RemoteImageView.h"
 
 static NSString *const kVersionCellID = @"A2ProjectVersionCell";
 
@@ -143,14 +144,16 @@ static NSString *const kVersionCellID = @"A2ProjectVersionCell";
     [self.plainContentView addSubview:card];
     _headerCard = card;
 
-    // 首字母占位（无图库依赖；有 iconURL 也不拉，列表页同样处理）。
-    UILabel *avatar = [[UILabel alloc] initWithFrame:CGRectZero];
+    // 项目图标。之前这里是首字母占位（当时还没做图片加载组件），
+    // 现在接上 A2RemoteImageView —— 无 iconURL 或加载失败时
+    // 组件内部会自动退回首字母，不需要调用方处理。
+    A2RemoteImageView *avatar = [[A2RemoteImageView alloc] initWithFrame:CGRectZero];
     avatar.translatesAutoresizingMaskIntoConstraints = NO;
-    avatar.font = [UIFont systemFontOfSize:28 weight:UIFontWeightBold];
-    avatar.textAlignment = NSTextAlignmentCenter;
-    NSString *first = _project.title.length ? [_project.title substringToIndex:1] : @"?";
-    avatar.text = first.uppercaseString;
-    avatar.textColor = A2ThemeManager.shared.scheme.cPrimary;
+    avatar.cornerRadius = A2RadiusM;
+    avatar.contentMode = UIViewContentModeScaleAspectFill;
+    avatar.clipsToBounds = YES;
+    avatar.fallbackText = _project.title.length ? _project.title : @"?";
+    [avatar setImageURL:_project.iconURL placeholder:nil];
     [card.contentView addSubview:avatar];
 
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectZero];

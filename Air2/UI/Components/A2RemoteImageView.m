@@ -149,6 +149,8 @@ static void A2RemoteImageLogFailure(NSString *urlString) {
 @property (nonatomic, assign) NSUInteger requestToken;
 /// 进行中的下载任务，便于取消。
 @property (nonatomic, strong, nullable) NSURLSessionDataTask *task;
+/// 首字母兜底（对应头文件的 fallbackText）
+@property (nonatomic, copy, nullable) NSString *fallbackTextInternal;
 @end
 
 @implementation A2RemoteImageView
@@ -192,6 +194,54 @@ static void A2RemoteImageLogFailure(NSString *urlString) {
     self.layer.cornerRadius = cornerRadius;
 }
 
+- (void)setFallbackText:(NSString *)fallbackText {
+    _fallbackTextInternal = [fallbackText copy];
+    // 文字变了就要重画占位图
+    self.placeholderImage = [self renderFallbackImage];
+    if (!self.image || self.currentURLString.length == 0) {
+        self.image = self.placeholderImage;
+    }
+}
+
+- (NSString *)fallbackText {
+    return _fallbackTextInternal;
+}
+
+/// 把首字母画成一张带主题底色的图。
+///
+/// 为什么画成图而不是叠一个 UILabel：
+///   这个视图有 clipsToBounds + 圆角，叠 label 需要额外管布局与主题；
+///   画成图后复用现有的 placeholderImage 机制，改动最小。
+- (nullable UIImage *)renderFallbackImage {
+    NSString *text = _fallbackTextInternal;
+    if (text.length == 0) return nil;
+
+    // 取首字母（对中文同样成立）
+    NSString *first = [text substringToIndex:1];
+    first = first.uppercaseString;
+
+    CGFloat side = 128;   // 画大一点，缩小后更清晰
+    CGSize size = CGSizeMake(side, side);
+
+    UIGraphicsBeginImageContextWithOptions(size, NO, 1.0);
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+    [t.cPrimaryContainer setFill];
+    UIRectFill(CGRectMake(0, 0, side, side));
+
+    NSDictionary *attrs = @{
+        NSFontAttributeName: [UIFont systemFontOfSize:side * 0.42 weight:UIFontWeightSemibold],
+        NSForegroundColorAttributeName: t.cOnPrimaryContainer,
+    };
+    CGSize textSize = [first sizeWithAttributes:attrs];
+    CGPoint origin = CGPointMake((side - textSize.width) / 2,
+                                 (side - textSize.height) / 2);
+    [first drawAtPoint:origin withAttributes:attrs];
+
+    UIImage *img = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return img;
+}
+
 #pragma mark - 加载
 
 - (void)setImageURL:(nullable NSString *)urlString placeholder:(nullable UIImage *)placeholder {
@@ -202,7 +252,10 @@ static void A2RemoteImageLogFailure(NSString *urlString) {
     [self.task cancel];
     self.task = nil;
     self.currentURLString = urlString;
-    self.placeholderImage = placeholder;
+
+    // 占位图优先级：显式传入的 placeholder > fallbackText 生成的首字母图。
+    // 两者都没有时 showPlaceholder 会回到语义底色。
+    self.placeholderImage = placeholder ?: [self renderFallbackImage];
 
     if (urlString.length == 0) {
         [self showPlaceholder];

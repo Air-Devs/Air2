@@ -27,6 +27,7 @@
 #import "A2ContentSource.h"
 #import "A2ResourceDetailViewController.h"
 #import "A2GlassCard.h"
+#import "A2ResourceCard.h"
 #import "A2Toast.h"
 #import "A2ThemeManager.h"
 #import "A2Typography.h"
@@ -47,12 +48,14 @@ static NSString *A2FavoriteFormatCount(long long count) {
 
 #pragma mark - 收藏项行
 
+#pragma mark - 收藏行
+//
+//  收藏页与搜索结果页共用 A2ResourceCard ——
+//  对应 ZL2 里两处都用同一个 ResultProjectLayout。
+//  之前这里自绘了一套卡片，导致视觉不一致且没有图标。
+
 @interface A2FavoriteCell : UITableViewCell
-@property (nonatomic, strong) A2GlassCard *card;
-@property (nonatomic, strong) UILabel *titleLabel;
-@property (nonatomic, strong) UILabel *summaryLabel;
-@property (nonatomic, strong) UILabel *statsLabel;
-@property (nonatomic, strong) UILabel *tagLabel;
+@property (nonatomic, strong) A2ResourceCard *card;
 - (void)configureWithFavorite:(A2FavoriteItem *)item;
 @end
 
@@ -64,89 +67,34 @@ static NSString *A2FavoriteFormatCount(long long count) {
     self.backgroundColor = UIColor.clearColor;
     self.selectionStyle = UITableViewCellSelectionStyleNone;
 
-    _card = [[A2GlassCard alloc] initWithFrame:CGRectZero];
-    _card.cornerRadius = A2RadiusL;
-    _card.elevation = A2CardElevationLow;
+    _card = [[A2ResourceCard alloc] initWithFrame:CGRectZero];
     [self.contentView addSubview:_card];
-
-    _titleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _titleLabel.font = [A2Typography titleCard];
-    _titleLabel.numberOfLines = 1;
-
-    _summaryLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _summaryLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _summaryLabel.font = [A2Typography subtitleCard];
-    _summaryLabel.numberOfLines = 2;
-
-    _statsLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _statsLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _statsLabel.font = [A2Typography caption];
-
-    UIStackView *textStack = [[UIStackView alloc] initWithArrangedSubviews:
-                              @[_titleLabel, _summaryLabel, _statsLabel]];
-    textStack.translatesAutoresizingMaskIntoConstraints = NO;
-    textStack.axis = UILayoutConstraintAxisVertical;
-    textStack.spacing = 3;
-
-    _tagLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _tagLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _tagLabel.font = [A2Typography caption];
-    _tagLabel.textAlignment = NSTextAlignmentCenter;
-    _tagLabel.layer.cornerRadius = 8;
-    _tagLabel.layer.cornerCurve = kCACornerCurveContinuous;
-    _tagLabel.clipsToBounds = YES;
-
-    [_card.contentView addSubview:textStack];
-    [_card.contentView addSubview:_tagLabel];
 
     [NSLayoutConstraint activateConstraints:@[
         [_card.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:3],
         [_card.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-3],
         [_card.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
         [_card.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
-
-        [textStack.topAnchor constraintEqualToAnchor:_card.contentView.topAnchor],
-        [textStack.bottomAnchor constraintEqualToAnchor:_card.contentView.bottomAnchor],
-        [textStack.leadingAnchor constraintEqualToAnchor:_card.contentView.leadingAnchor],
-        [textStack.trailingAnchor constraintLessThanOrEqualToAnchor:_tagLabel.leadingAnchor
-                                                           constant:-A2SpaceS],
-
-        [_tagLabel.trailingAnchor constraintEqualToAnchor:_card.contentView.trailingAnchor],
-        [_tagLabel.topAnchor constraintEqualToAnchor:_card.contentView.topAnchor],
-        [_tagLabel.widthAnchor constraintGreaterThanOrEqualToConstant:64],
-        [_tagLabel.heightAnchor constraintEqualToConstant:22],
     ]];
-
-    [self applyTheme];
-    [NSNotificationCenter.defaultCenter addObserver:self
-                                          selector:@selector(applyTheme)
-                                              name:A2ThemeDidChangeNotification
-                                            object:nil];
     return self;
 }
 
-- (void)dealloc {
-    [NSNotificationCenter.defaultCenter removeObserver:self];
-}
+/// 把收藏快照转成卡片需要的 A2ContentItem。
+/// 收藏只存必要字段，这里补上缺的默认值。
+- (void)configureWithFavorite:(A2FavoriteItem *)fav {
+    A2ContentItem *item = [A2ContentItem new];
+    item.platform = fav.platform;
+    item.projectID = fav.projectID;
+    item.title = fav.title;
+    item.summary = fav.summary;
+    item.iconURL = fav.iconURL;
+    item.downloadCount = fav.downloadCount;
+    item.categories = fav.categories;
+    item.downloadable = YES;
 
-- (void)configureWithFavorite:(A2FavoriteItem *)item {
-    _titleLabel.text = item.title.length ? item.title : item.projectID;
-    _summaryLabel.text = item.summary.length ? item.summary : @"暂无简介";
-    _statsLabel.text = [NSString stringWithFormat:@"%@ · %@ 次下载",
-                        A2FavoritePlatformName(item.platform),
-                        A2FavoriteFormatCount(item.downloadCount)];
-    _tagLabel.text = A2FavoritePlatformName(item.platform);
-    [self applyTheme];
-}
-
-- (void)applyTheme {
-    A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    _titleLabel.textColor = t.cOnSurface;
-    _summaryLabel.textColor = t.cOnSurfaceVariant;
-    _statsLabel.textColor = [t.cOnSurfaceVariant colorWithAlphaComponent:0.8];
-    _tagLabel.textColor = t.cPrimary;
-    _tagLabel.backgroundColor = [t.cPrimary colorWithAlphaComponent:0.15];
+    [_card configureWithItem:item];
+    // 收藏页里所有条目当然都是已收藏的
+    _card.favorite = YES;
 }
 
 @end

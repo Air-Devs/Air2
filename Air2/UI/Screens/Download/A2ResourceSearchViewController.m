@@ -38,6 +38,7 @@
 #import "A2DownloadManifest.h"
 #import "A2FilterChip.h"
 #import "A2GlassCard.h"
+#import "A2ResourceCard.h"
 #import "A2Log.h"
 #import "A2Metrics.h"
 #import "A2ModLoaderAPI.h"
@@ -66,16 +67,14 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
 
 #pragma mark - 结果行
 
+#pragma mark - 结果行
+//
+//  搜索结果与收藏页共用 A2ResourceCard ——
+//  对应 ZL2 里两处都用同一个 ResultProjectLayout。
+//  之前这里自绘了一套 158 行的卡片，视觉与收藏页不一致。
+
 @interface A2ResourceResultCell : UITableViewCell
-@property (nonatomic, strong) A2GlassCard *card;
-@property (nonatomic, strong) A2RemoteImageView *iconView;
-@property (nonatomic, strong) UILabel *titleLabel;
-@property (nonatomic, strong) UILabel *authorLabel;
-@property (nonatomic, strong) UILabel *summaryLabel;
-@property (nonatomic, strong) UILabel *metaLabel;
-@property (nonatomic, strong) UILabel *installedBadge;
-@property (nonatomic, strong) UIImageView *starView;
-@property (nonatomic, assign) BOOL favorite;
+@property (nonatomic, strong) A2ResourceCard *card;
 - (void)configureWithItem:(A2ContentItem *)item;
 @end
 
@@ -87,157 +86,26 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     self.backgroundColor = UIColor.clearColor;
     self.selectionStyle = UITableViewCellSelectionStyleNone;
 
-    _card = [[A2GlassCard alloc] initWithFrame:CGRectZero];
-    _card.translatesAutoresizingMaskIntoConstraints = NO;
-    _card.cornerRadius = A2RadiusL;
-    _card.elevation = A2CardElevationLow;
-    _card.contentInsets = UIEdgeInsetsMake(A2SpaceM, A2SpaceM, A2SpaceM, A2SpaceM);
+    _card = [[A2ResourceCard alloc] initWithFrame:CGRectZero];
     [self.contentView addSubview:_card];
-
-    _iconView = [[A2RemoteImageView alloc] initWithFrame:CGRectZero];
-    _iconView.translatesAutoresizingMaskIntoConstraints = NO;
-    _iconView.cornerRadius = A2RadiusM;
-    _iconView.contentMode = UIViewContentModeScaleAspectFill;
-    _iconView.clipsToBounds = YES;
-
-    _starView = [[UIImageView alloc] initWithFrame:CGRectZero];
-    _starView.translatesAutoresizingMaskIntoConstraints = NO;
-    _starView.contentMode = UIViewContentModeCenter;
-
-    _titleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _titleLabel.font = [A2Typography titleCard];
-    _titleLabel.numberOfLines = 1;
-
-    _authorLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _authorLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _authorLabel.font = [A2Typography caption];
-    _authorLabel.numberOfLines = 1;
-
-    _summaryLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _summaryLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _summaryLabel.font = [A2Typography subtitleCard];
-    _summaryLabel.numberOfLines = 2;
-
-    _metaLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _metaLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _metaLabel.font = [A2Typography caption];
-    _metaLabel.numberOfLines = 1;
-    [_metaLabel setContentCompressionResistancePriority:UILayoutPriorityDefaultLow
-                                                forAxis:UILayoutConstraintAxisHorizontal];
-
-    _installedBadge = [[UILabel alloc] initWithFrame:CGRectZero];
-    _installedBadge.translatesAutoresizingMaskIntoConstraints = NO;
-    _installedBadge.font = [A2Typography caption];
-    _installedBadge.text = @"已安装";
-    _installedBadge.textAlignment = NSTextAlignmentCenter;
-    _installedBadge.layer.cornerRadius = 9;
-    _installedBadge.layer.cornerCurve = kCACornerCurveContinuous;
-    _installedBadge.clipsToBounds = YES;
-    _installedBadge.hidden = YES;
-
-    UIStackView *metaRow = [[UIStackView alloc] initWithArrangedSubviews:
-                            @[_installedBadge, _metaLabel]];
-    metaRow.translatesAutoresizingMaskIntoConstraints = NO;
-    metaRow.axis = UILayoutConstraintAxisHorizontal;
-    metaRow.spacing = A2SpaceS;
-    metaRow.alignment = UIStackViewAlignmentCenter;
-
-    UIStackView *textStack = [[UIStackView alloc] initWithArrangedSubviews:
-                              @[_titleLabel, _authorLabel, _summaryLabel, metaRow]];
-    textStack.translatesAutoresizingMaskIntoConstraints = NO;
-    textStack.axis = UILayoutConstraintAxisVertical;
-    textStack.spacing = 3;
-
-    [_card.contentView addSubview:_iconView];
-    [_card.contentView addSubview:_starView];
-    [_card.contentView addSubview:textStack];
 
     [NSLayoutConstraint activateConstraints:@[
         [_card.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:3],
         [_card.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-3],
         [_card.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
         [_card.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
-
-        [_iconView.leadingAnchor constraintEqualToAnchor:_card.contentView.leadingAnchor],
-        [_iconView.centerYAnchor constraintEqualToAnchor:_card.contentView.centerYAnchor],
-        [_iconView.widthAnchor constraintEqualToConstant:56],
-        [_iconView.heightAnchor constraintEqualToConstant:56],
-
-        [_starView.trailingAnchor constraintEqualToAnchor:_card.contentView.trailingAnchor],
-        [_starView.topAnchor constraintEqualToAnchor:_card.contentView.topAnchor],
-        [_starView.widthAnchor constraintEqualToConstant:20],
-        [_starView.heightAnchor constraintEqualToConstant:20],
-
-        [_installedBadge.heightAnchor constraintEqualToConstant:18],
-        [_installedBadge.widthAnchor constraintGreaterThanOrEqualToConstant:44],
-
-        [textStack.leadingAnchor constraintEqualToAnchor:_iconView.trailingAnchor constant:A2SpaceM],
-        [textStack.trailingAnchor constraintEqualToAnchor:_card.contentView.trailingAnchor],
-        [textStack.topAnchor constraintGreaterThanOrEqualToAnchor:_card.contentView.topAnchor],
-        [textStack.bottomAnchor constraintLessThanOrEqualToAnchor:_card.contentView.bottomAnchor],
-        [textStack.centerYAnchor constraintEqualToAnchor:_card.contentView.centerYAnchor],
     ]];
-
-    [self applyTheme];
-    [NSNotificationCenter.defaultCenter addObserver:self
-                                          selector:@selector(applyTheme)
-                                              name:A2ThemeDidChangeNotification
-                                            object:nil];
     return self;
 }
 
-- (void)dealloc {
-    [NSNotificationCenter.defaultCenter removeObserver:self];
-}
-
-- (void)prepareForReuse {
-    [super prepareForReuse];
-    [_iconView cancelLoading];
-    _iconView.image = nil;
-}
-
 - (void)configureWithItem:(A2ContentItem *)item {
-    _titleLabel.text = item.title.length ? item.title : item.projectID;
-    _authorLabel.text = item.author.length ? [@"by " stringByAppendingString:item.author] : @"";
-    _summaryLabel.text = item.summary.length ? item.summary : @"暂无简介";
-
-    // 简介旁的元信息：分类取前 1~2 个 + 下载量
-    NSMutableArray<NSString *> *parts = [NSMutableArray array];
-    for (NSString *category in item.categories) {
-        if (parts.count >= 2) break;
-        [parts addObject:[category capitalizedString]];
-    }
-    NSString *downloads = [A2RSFormatCount(item.downloadCount) stringByAppendingString:@" 次下载"];
-    NSString *cats = [parts componentsJoinedByString:@" · "];
-    _metaLabel.text = cats.length ? [cats stringByAppendingFormat:@"  ·  %@", downloads] : downloads;
-
-    // 已安装角标
-    _installedBadge.hidden = ![A2DownloadManifest.shared isProjectInstalled:item.projectID];
-
-    // 收藏星标：实心 = 已收藏
-    _favorite = [A2DownloadFavorites.shared isFavorite:item.projectID];
-    _starView.image = [UIImage systemImageNamed:(_favorite ? @"star.fill" : @"star")];
-
-    // 图标：复用前先取消上一次请求，避免回调落到新内容上
-    [_iconView cancelLoading];
-    [_iconView setImageURL:item.iconURL placeholder:nil];
-
-    [self applyTheme];
-}
-
-- (void)applyTheme {
-    A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    _titleLabel.textColor = t.cOnSurface;
-    _authorLabel.textColor = t.cOnSurfaceVariant;
-    _summaryLabel.textColor = t.cOnSurfaceVariant;
-    _metaLabel.textColor = [t.cOnSurfaceVariant colorWithAlphaComponent:0.8];
-    _installedBadge.textColor = t.cPrimary;
-    _installedBadge.backgroundColor = [t.cPrimary colorWithAlphaComponent:0.15];
-    _starView.tintColor = _favorite ? t.cPrimary : t.cOnSurfaceVariant;
+    [_card configureWithItem:item];
+    _card.installed = [A2DownloadManifest.shared isProjectInstalled:item.projectID];
+    _card.favorite = [A2DownloadFavorites.shared isFavorite:item.projectID];
 }
 
 @end
+
 
 #pragma mark - 搜索页
 
