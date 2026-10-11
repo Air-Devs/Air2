@@ -62,6 +62,12 @@ typedef NS_ENUM(NSInteger, A2InstallStage) {
 @property (nonatomic, strong, nullable) NSNumber *loaderType;
 /// 加载器版本，nil 表示自动选最新稳定版
 @property (nonatomic, copy, nullable) NSString *loaderVersion;
+
+/// 前置模组类型（Fabric API 等），nil 表示不装。
+/// 对照 ZL2：API 模组在界面上与加载器并列，但下载是独立的一步。
+@property (nonatomic, strong, nullable) NSNumber *apiModType;
+/// 前置模组版本，nil 表示自动选最新
+@property (nonatomic, copy, nullable) NSString *apiModVersion;
 /// 游戏根目录
 @property (nonatomic, copy) NSString *gameHome;
 @end

@@ -41,7 +41,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithMCVersion:(NSString *)mcVersion
                       versionName:(NSString *)versionName
                        loaderType:(nullable NSNumber *)loaderType
-                    loaderVersion:(nullable NSString *)loaderVersion;
+                    loaderVersion:(nullable NSString *)loaderVersion
+                          apiType:(nullable NSNumber *)apiType
+                       apiVersion:(nullable NSString *)apiVersion;
 
 /// 整合包安装模式。
 ///

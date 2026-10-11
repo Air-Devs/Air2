@@ -160,6 +160,8 @@ typedef NS_ENUM(NSInteger, A2InstallStepState) {
 
 @property (nonatomic, strong) A2GameInstaller *installer;
 /// 整合包模式：zip 路径（nil 表示普通安装）
+@property (nonatomic, strong, nullable) NSNumber *apiType;
+@property (nonatomic, copy, nullable) NSString *apiVersion;
 @property (nonatomic, copy, nullable) NSString *modPackPath;
 @property (nonatomic, strong, nullable) A2ModPackInstaller *packInstaller;
 @property (nonatomic, assign) BOOL finished;
@@ -198,13 +200,17 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
 - (instancetype)initWithMCVersion:(NSString *)mcVersion
                       versionName:(NSString *)versionName
                        loaderType:(NSNumber *)loaderType
-                    loaderVersion:(NSString *)loaderVersion {
+                    loaderVersion:(NSString *)loaderVersion
+                          apiType:(NSNumber *)apiType
+                       apiVersion:(NSString *)apiVersion {
     self = [super init];
     if (!self) return nil;
     _mcVersion = [mcVersion copy];
     _versionName = [versionName copy];
     _loaderType = loaderType;
     _loaderVersion = [loaderVersion copy];
+    _apiType = apiType;
+    _apiVersion = [apiVersion copy];
     _stepRows = [NSMutableArray array];
     _installer = [[A2GameInstaller alloc] init];
     _currentStage = A2InstallStageFetchManifest;
@@ -458,6 +464,8 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     req.versionName = _versionName;
     req.loaderType = _loaderType;
     req.loaderVersion = _loaderVersion;
+    req.apiModType = _apiType;
+    req.apiModVersion = _apiVersion;
     req.gameHome = A2VersionManager.shared.gameHome;
 
     __weak typeof(self) weakSelf = self;
