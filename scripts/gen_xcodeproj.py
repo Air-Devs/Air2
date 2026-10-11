@@ -122,6 +122,15 @@ def runtime_stage_script():
         '  [ -f "$f" ] || continue',
         '  cp -f "$f" "$APP/Frameworks/"',
         'done',
+        # ①b [RENDER-SEL] 渲染器的 .framework 依赖（GL4ES → ANGLE：libEGL / libGLESv2）
+        #     ★为什么单独一段★：上面那段只搬**文件**（`[ -f ]`），.framework 是**目录**，
+        #     会被 `[ -f ] || continue` 跳过 ⇒ 兼容底渲染器 dlopen 时会因 @rpath 解析不到
+        #     这两个库而失败。这里按目录整棵 cp -R，语义与 ① 相同（只定目标目录）。
+        'for d in "$LIB"/Frameworks/*.framework; do',
+        '  [ -d "$d" ] || continue',
+        '  rm -rf "$APP/Frameworks/$(basename "$d")"',
+        '  cp -R "$d" "$APP/Frameworks/$(basename "$d")"',
+        'done',
         # ② LWJGL jar → <App>/libs/lwjgl-<ver>/
         'for d in "$LIB"/Jars/lwjgl-*; do',
         '  [ -d "$d" ] || continue',

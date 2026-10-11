@@ -23,7 +23,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-DEST="$ROOT/Libraries/java_runtimes/java-25-openjdk"
+DEST_ROOT="$ROOT/Libraries/java_runtimes"
+DEST="$DEST_ROOT/java-25-openjdk"
 
 CANDIDATES=(
   "${A2_JRE_SRC:-}"
@@ -60,4 +61,38 @@ fi
 echo "==> 自证 OK"
 ls -la "$JVM_LIB"
 du -sh "$DEST"
+
+# ============================================================================
+# ★可选：再就位「用户能在设置里选到的其它档位」★
+# ----------------------------------------------------------------------------
+# 用法（★要加档才跑；不加则包内只有主推那一档★）：
+#     A2_JRE_EXTRA="21 17 8" bash scripts/stage_runtime.sh
+# 语义：把 <同一份本机 artifacts 根>/java-<N>-openjdk 复制到
+#       Libraries/java_runtimes/java-<N>-openjdk，随 gen_xcodeproj.py 的
+#       「Stage Runtime Bundle」阶段入包（= 设置页「Java 运行时」列表里变成「已内置」）。
+# ★体积代价★：每档 ≈ 99~119 MB（未压缩；IPA 内约 +35 MB）。默认**不动**它们 ——
+# 这正是「不做石山」的那条线：要加哪一档由人拍板，不由脚本自作主张。
+# ============================================================================
+if [ -n "${A2_JRE_EXTRA:-}" ]; then
+  # 与主推同源：从主推那一份所在的本机 artifacts 根推同级的 java-<N>-openjdk。
+  ROOTS="$(dirname "$(dirname "$SRC")") ${A2_JRE_ROOT:-}"
+  for v in $A2_JRE_EXTRA; do
+    want="java-${v}-openjdk"
+    extra_src=""
+    for r in $ROOTS; do
+      [ -n "$r" ] || continue
+      if [ -f "$r/$want/lib/server/libjvm.dylib" ]; then extra_src="$r/$want"; break; fi
+    done
+    if [ -z "$extra_src" ]; then
+      echo "警告：本机 artifacts 里没有 $want（跳过；★不下载★）" >&2
+      continue
+    fi
+    rm -rf "$DEST_ROOT/$want"
+    cp -R "$extra_src" "$DEST_ROOT/$want"
+    [ -f "$DEST_ROOT/$want/lib/server/libjvm.dylib" ] || { echo "错误：$want 复制不完整" >&2; exit 1; }
+    echo "==> 已加档 $want"
+    du -sh "$DEST_ROOT/$want"
+  done
+fi
+
 echo "完成。接下来： python3 scripts/gen_xcodeproj.py && <build>"
