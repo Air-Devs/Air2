@@ -16,3 +16,7 @@ NSString *const A2LaunchJavaEntryJarName      = @"air2-launch.jar";
 NSString *const A2LaunchJavaPatchJarName      = @"air2-lwjgl-patch.jar";
 
 const NSInteger A2LaunchPlanSchema = 1;
+
+// ★系统属性名★（读取方 = 复用线覆盖层 GLFW 的静态块；见 A2LaunchContract.h 的注解）
+NSString *const A2LaunchSysPropGLFWWindowSize         = @"glfw.windowSize";
+NSString *const A2LaunchSysPropMaximumFramesPerSecond = @"UIScreen.maximumFramesPerSecond";

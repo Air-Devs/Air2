@@ -43,4 +43,15 @@ FOUNDATION_EXPORT NSString *const A2LaunchJavaPatchJarName;
 /// 启动计划 JSON 的 schema（与 Java 侧 `A2LaunchPlan.SCHEMA_VERSION` 必须一致，否则 Java 侧直接失败）。
 FOUNDATION_EXPORT const NSInteger A2LaunchPlanSchema;
 
+/// ★JVM 系统属性名（ABI 级契约）★ —— 复用线覆盖层 `GLFW.java` 的**静态块**直接读它们：
+///   · `GLFW.java:538`  `System.getProperty("glfw.windowSize").split("x")`   ⇒ 取值必须是 `"<宽>x<高>"`；
+///   · `GLFW.java:557`  `Integer.parseInt(System.getProperty("UIScreen.maximumFramesPerSecond"))`
+///                      ⇒ 取值必须是十进制整数（单位 = 帧/秒）。
+/// 因为读它们的是**类装载时**的静态块，所以只能由 VM 级 `-D` 落下（早于任何类初始化）——
+/// 落点在 `A2LaunchPlan.jvmOptionsWithMemoryMB:`，取值来源见 `A2LaunchRuntimeFacts`。
+/// ★改这里的字面量必须同步改 `JavaApp/src/lwjgl/org/lwjgl/glfw/GLFW.java` 的那两行★
+/// （机器校验：`scripts/verify_launch_planprops.py`）。
+FOUNDATION_EXPORT NSString *const A2LaunchSysPropGLFWWindowSize;
+FOUNDATION_EXPORT NSString *const A2LaunchSysPropMaximumFramesPerSecond;
+
 NS_ASSUME_NONNULL_END
