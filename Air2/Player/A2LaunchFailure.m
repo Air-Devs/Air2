@@ -50,6 +50,25 @@
             evidence.length ? evidence : @"(无取证)"];
 }
 
++ (NSString *)jitvmLineWithStep:(NSString *)step
+                        verdict:(A2JITReadinessVerdict)verdict
+                      enableJIT:(BOOL)enable
+                     reasonText:(nullable NSString *)reasonText
+                       evidence:(nullable NSString *)evidence {
+    // reason 缺省 = 本档的稳定短语（7 档互不相同 ⇒ ★未就绪 / 失败 两路文案天然分开★）。
+    NSString *reason = reasonText.length ? reasonText : [A2JITVerdictGuidance diagnosticForVerdict:verdict];
+    // ★格式串保持纯 ASCII★：这样它在主二进制里是 UTF-8（`strings` 能直接抓到），
+    //   不像含中文的 `[A2-CHAIN] …` 那样被 clang 存成 UTF-16（那时须按三编码扫）。
+    return [NSString stringWithFormat:
+            @"[A2-JITVM] step=%@ verdict=%@(%ld) enable=%d reason=%@ evidence=%@",
+            step,
+            [A2JITVerdictGuidance displayNameForVerdict:verdict],
+            (long)verdict,
+            enable ? 1 : 0,
+            reason.length ? reason : @"(无)",
+            evidence.length ? evidence : @"(无取证)"];
+}
+
 + (NSString *)userMessageForJITVerdict:(A2JITReadinessVerdict)verdict {
     NSString *reason = [A2JITStrings stringForKey:[A2JITVerdictGuidance reasonKeyForVerdict:verdict]];
     NSString *action = [A2JITStrings stringForKey:[A2JITVerdictGuidance actionKeyForVerdict:verdict]];

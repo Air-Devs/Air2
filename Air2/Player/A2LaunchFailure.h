@@ -45,6 +45,28 @@ typedef NS_ENUM(NSInteger, A2LaunchFailureClass) {
 + (NSString *)diagnosticForJITVerdict:(A2JITReadinessVerdict)verdict
                              evidence:(nullable NSString *)evidence;
 
+/// ★[A2-JITVM] 判据行★（默认可见；真机 grep 锚点；★形状固定、每一步一行★）。
+///
+/// 形状：`[A2-JITVM] step=<script|verify|vm|gate> verdict=<Name>(<n>) enable=0/1 reason=<…> evidence=<…>`
+///
+/// ★`enable` 是「本步是否放行 JIT 路径」的唯一显式结论★（=1 仅当 ② 探测通过、verdict=Usable）：
+///   · verdict=Usable                    ⇒ enable=1（② 放行 ⇒ 带 JIT 走 ③ 建 VM 路径）；
+///   · 其余 6 档（未就绪 / 失败）         ⇒ enable=0（如实阻断，★绝不静默降级假装可用★）。
+///
+/// ★「未就绪路径」与「失败路径」靠 verdict + reason 两处同时区分开★：
+///   · 未就绪 = Unknown（尚未探测 / 开关关 —— 还没走到判据）；
+///   · 失败   = NotServiced / LegacySentinel / NoMapping / ZeroSize / NotExecutable
+///              （判据真跑过、不合格；每档原因/动作文案互不相同，见 A2JITVerdictGuidance）。
+///
+/// reason 缺省取本档的稳定短语（A2JITVerdictGuidance.diagnosticForVerdict，7 档各不相同）；
+/// reasonText 非空则覆盖之 —— 用于 step=script / step=vm / step=gate 这类「非判据步」的自述。
+/// ★判据语义一字不改★：本方法只做格式化，不新增任何判定条件。
++ (NSString *)jitvmLineWithStep:(NSString *)step
+                        verdict:(A2JITReadinessVerdict)verdict
+                      enableJIT:(BOOL)enable
+                     reasonText:(nullable NSString *)reasonText
+                       evidence:(nullable NSString *)evidence;
+
 /// ② 的用户文案（四语，按 verdict 分流：原因 + 下一步怎么做）。
 + (NSString *)userMessageForJITVerdict:(A2JITReadinessVerdict)verdict;
 
