@@ -30,8 +30,9 @@
 //    来源：https://jkcoxson.com/blog/rppairing-spec（§3 传输层 / §7 配对文件）——★只取协议事实，未取任何代码★。
 //
 //  ★本阶段范围（如实）★：本文件落地【帧 / 信封 / 标识符 / 配对文件组装 / 握手完成度自检】，
-//  这些是纯逻辑且可自证；★真正的 pair-setup(SRP-3072) 与 pair-verify 消息机、TLS-PSK 隧道、
-//  Bonjour 发现/连接 不在本阶段★（原因见 a2_rppairing_crypto.h 顶部与 docs/JIT-PROVISIONING.md §4.2-a）。
+//  这些是纯逻辑且可自证；★真正的 pair-verify 与 pair-setup(SRP-3072) 消息机已分别落在
+//  a2_rppairing_verify.[hm] 与 a2_rppairing_pairsetup.[hm]★；TLS-PSK 隧道、Bonjour 发现/连接
+//  见 a2_rppairing_rsd.[hm] / a2_tlspsk_*（原因见 a2_rppairing_crypto.h 顶部与 docs/JIT-PROVISIONING.md §4.2-a）。
 //  绝不假成功：未落地的步骤由 A2RPPairingPreflight 如实点名。
 //
 
@@ -109,7 +110,7 @@ typedef NS_ENUM(NSInteger, A2RPPairingBlockedStep) {
     A2RPPairingBlockedStepStreamCipher   = 4,  ///< ChaCha20-Poly1305 AEAD 自检未过
     A2RPPairingBlockedStepPairVerify     = 5,  ///< ★pair-verify 自握手未通过★
     A2RPPairingBlockedStepRsdEndpoint    = 6,  ///< ★本地握手就绪，但缺真 RSD 端点/隧道（Bonjour→连接→TLS-PSK）★
-    A2RPPairingBlockedStepPairSetup      = 7,  ///< SRP-3072 初始配对消息机（★仍未落地★）
+    A2RPPairingBlockedStepPairSetup      = 7,  ///< ★pair-setup(SRP-3072) 消息机自检未过★（实现见 a2_rppairing_pairsetup.[hm]）
 };
 
 /// 自检结果（不可变值对象）。
@@ -127,6 +128,10 @@ typedef NS_ENUM(NSInteger, A2RPPairingBlockedStep) {
 @property (nonatomic, readonly) BOOL pairVerifyOK;
 /// pair-verify 自手写的可读结论（★直接来自真跑★，可进日志）。
 @property (nonatomic, readonly, copy) NSString *pairVerifySummary;
+/// ★pair-setup(SRP-3072) 消息机可用（真跑一次进程内自握手 PS-Msg01..06：双方会话密钥一致、篡改/错码被拒）★。
+@property (nonatomic, readonly) BOOL pairSetupOK;
+/// pair-setup 自手写的可读结论（★直接来自真跑★，可进日志）。
+@property (nonatomic, readonly, copy) NSString *pairSetupSummary;
 /// 首个被阻塞的步骤。
 @property (nonatomic, readonly) A2RPPairingBlockedStep firstBlockedStep;
 /// 可读摘要（供日志 / UI 直接用）。
@@ -155,6 +160,7 @@ typedef NS_ENUM(uint8_t, A2RPTLVType) {
     A2RPTLVTypeState         = 0x06,   ///< 协议状态号
     A2RPTLVTypeError         = 0x07,   ///< 错误指示
     A2RPTLVTypeSignature     = 0x0A,   ///< Ed25519 签名
+    A2RPTLVTypeInfo          = 0x11,   ///< 设备信息（OPack 编码；公开规格 §5 组件表 / §6 OPack）
 };
 
 /// 编码：按传入顺序拼 Type(1B)+Length(1B)+Value；>255 字节的值自动切分成连续同型条目。

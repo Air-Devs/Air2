@@ -19,9 +19,9 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
-//  [JIT-AUTOPAIR-2] Bridge 真接线：前置条件真读 + RPPairing 握手完成度真自检。
-//  ★仍如实★：握手消息机（pair-setup SRP-3072 / pair-verify）与 TLS-PSK 隧道未落地 ⇒
-//  isEngineAvailable 返回 NO，generate 返回 EngineUnavailable 并【点名受阻步骤】—— 绝不假成功。
+//  [JIT-AUTOPAIR-2/3] Bridge 真接线：前置条件真读 + RPPairing 握手完成度真自检。
+//  握手消息机：★pair-verify 与 pair-setup(SRP-3072) 均已落地★（Natives/Support）；
+//  TLS-PSK 隧道仍未打通（见 a2_rppairing_rsd.h 的实测证据）⇒ 不谎报，未就绪项一律点名。
 //
 
 #import "A2JITAutoPairingEngineBridge.h"
@@ -80,12 +80,13 @@ static NSString *A2RPStateName(A2JITAutoPairingPreconditionState state) {
         self.preflight = [A2RPPairingPreflight run];
         NSLog(@"[A2JIT] autopair engine: %@", self.preflight.summary);
         NSLog(@"[A2JIT] autopair engine: pair-verify 自握手自证 ⇒ %@", self.preflight.pairVerifySummary);
+        NSLog(@"[A2JIT] autopair engine: pair-setup 自握手自证 ⇒ %@", self.preflight.pairSetupSummary);
     }
     return self.preflight;
 }
 
 - (BOOL)isEngineAvailable {
-    // ★本地握手链路（原语 + pair-verify 本体）全绿 ⇒ 引擎【已接入】★；
+    // ★本地握手链路（原语 + pair-verify + pair-setup 本体）全绿 ⇒ 引擎【已接入】★；
     // 剩下的卡点是「真 RSD 端点」（Bonjour 发现/连接），那属于运行时环境，不是「未接入」——
     // 所以本方法如实回 YES，由 generate 按步骤点名 DiscoveryFailed / PairVerifyFailed 等。
     return self.preflightResult.firstBlockedStep == A2RPPairingBlockedStepRsdEndpoint
@@ -193,6 +194,61 @@ static NSString *A2RPStateName(A2JITAutoPairingPreconditionState state) {
         }
         return NO;
     }
+
+    // ---- ④a [JIT-AUTOPAIR-3] pair-setup（首次配对；设备不认识本机时的唯一路径）----
+    //  ★谁调它★：就在这里 —— 且只有注入了能承载 pair-setup 的消息传输时才走（真机上是 §2a/§2b RemoteXPC）。
+    //  未注入 ⇒ 如实点名并回落 pair-verify（不谎报：本仓只接了 §2c 裸 socket，而规格明确它不支持 pair-setup）。
+    if (self.pairSetupTransport != nil) {
+        NSData *psKey = nil;
+        NSString *psWhy = nil;
+        BOOL psOK = [A2RPPairSetupSession runHostOverTransport:self.pairSetupTransport
+                                                      identity:localIdentity
+                                                   pinProvider:self.pairSetupPinProvider
+                                                        reason:&psWhy
+                                                    sessionKey:&psKey];
+        NSLog(@"[A2JIT] autopair engine: pair-setup ⇒ %@（%@；会话密钥 %lu 字节）",
+              psOK ? @"完成" : @"失败", psWhy ?: @"-", (unsigned long)psKey.length);
+        if (psOK) {
+            NSData *psFile = [localIdentity pairingFileData];
+            if (psFile.length == 0) {
+                if (whyOut) { *whyOut = @"pair-setup 成功但产不出配对文件字节"; }
+                if (blockerOut) { *blockerOut = A2JITAutoPairingBlockerWriteFailed; }
+                return NO;
+            }
+            if (self.pairingFileStore == nil) {
+                if (whyOut) { *whyOut = @"pair-setup 成功，但未注入配对文件存储 ⇒ 不落盘、不报成功"; }
+                if (blockerOut) { *blockerOut = A2JITAutoPairingBlockerWriteFailed; }
+                return NO;
+            }
+            NSError *psErr = nil;
+            NSString *psWritten = [self.pairingFileStore importData:psFile
+                                                         sourceName:@"RPPairing(pair-setup 首次配对)"
+                                                              error:&psErr];
+            if (psWritten.length == 0) {
+                if (whyOut) {
+                    *whyOut = [NSString stringWithFormat:@"pair-setup 配对文件落盘失败：%@",
+                               psErr.localizedDescription ?: @"未知"];
+                }
+                if (blockerOut) { *blockerOut = A2JITAutoPairingBlockerWriteFailed; }
+                return NO;
+            }
+            self.lastGeneratedPairingFile = psFile;
+            NSLog(@"[A2JIT] autopair engine: ★pair-setup 成功★ ⇒ 配对文件已落盘 path=%@ (%lu 字节) "
+                  @"identifier=%@", psWritten, (unsigned long)psFile.length, localIdentity.identifier);
+            if (blockerOut) { *blockerOut = A2JITAutoPairingBlockerNone; }
+            if (whyOut) {
+                *whyOut = [NSString stringWithFormat:@"pair-setup 成功（%@）；配对文件已写入 %@",
+                           self.preflightResult.pairSetupSummary, psWritten];
+            }
+            return YES;
+        }
+        // pair-setup 未完成：记下原因，继续试 pair-verify（设备也许其实认识本机）。
+        NSLog(@"[A2JIT] autopair engine: pair-setup 未完成 ⇒ 回落 pair-verify（%@）", psWhy ?: @"-");
+    } else {
+        NSLog(@"[A2JIT] autopair engine: ★pair-setup 传输未注入★ ⇒ 跳过首次配对"
+              @"（真机需 §2a/§2b RemoteXPC 传输；§2c 裸 socket 不支持 pair-setup，本仓未实现）");
+    }
+
     if (self.devicePublicKey == nil) {
         NSLog(@"[A2JIT] autopair engine: ★未持有设备 Ed25519 公钥 ⇒ 按规格 §8 Step 6「设备证明可不解」"
               @"跳过身份签名校验★（AEAD 认证与密钥交换仍照做）");

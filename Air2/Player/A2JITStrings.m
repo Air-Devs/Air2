@@ -34,6 +34,80 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
             @"ja": @"取り込みは端末内でのみ検証し、通信は行いません。有効化後は判定カーネルが brk #0x69 の領域証跡で実際に使えるかを再確認します。",
         },
 
+        // ---------------- [JIT-AUTOPAIR-3] 配对码来源（设备内自配对的首配） ----------------
+        @"jit.row.pairpin": @{
+            @"zh-Hans": @"配对码来源",
+            @"zh-Hant": @"配對碼來源",
+            @"en": @"Pairing code source",
+            @"ja": @"ペアリングコードの取得元",
+        },
+        @"jit.pairpin.mode.trust": @{
+            @"zh-Hans": @"信任弹窗档（iOS 常规）：码固定 000000，自动",
+            @"zh-Hant": @"信任彈窗檔（iOS 常規）：碼固定 000000，自動",
+            @"en": @"Trust dialog (usual iOS): fixed code 000000, automatic",
+            @"ja": @"信頼ダイアログ（通常の iOS）：コードは固定 000000、自動",
+        },
+        @"jit.pairpin.mode.device": @{
+            @"zh-Hans": @"设备发起档（iOS 27，推荐）：本机显示 6 位码，你去系统设置里输入",
+            @"zh-Hant": @"裝置發起檔（iOS 27，推薦）：本機顯示 6 位碼，你去系統設定裡輸入",
+            @"en": @"Device-initiated (iOS 27, recommended): we show a 6-digit code; you enter it in Settings",
+            @"ja": @"デバイス主導（iOS 27、推奨）：本機が 6 桁コードを表示し、設定で入力します",
+        },
+        @"jit.pairpin.mode.existing": @{
+            @"zh-Hans": @"已有配对记录档：走 pair-verify 快路径（跳过首配）",
+            @"zh-Hant": @"已有配對記錄檔：走 pair-verify 快路徑（跳過首配）",
+            @"en": @"Existing pairing record: use the pair-verify fast path (skip first pairing)",
+            @"ja": @"既存のペアリング記録：pair-verify の高速経路（初回ペアリングを省略）",
+        },
+        @"jit.pairpin.mode.onscreen": @{
+            @"zh-Hans": @"设备屏显码档（Apple TV / Vision Pro）★未实现★",
+            @"zh-Hant": @"裝置螢幕顯示碼檔（Apple TV / Vision Pro）★未實作★",
+            @"en": @"On-screen code (Apple TV / Vision Pro) ★not implemented★",
+            @"ja": @"画面表示コード（Apple TV / Vision Pro）★未実装★",
+        },
+        @"jit.pairpin.unsupported": @{
+            @"zh-Hans": @"★该档未实现★：选中即拒绝（不静默回退）",
+            @"zh-Hant": @"★該檔未實作★：選中即拒絕（不靜默回退）",
+            @"en": @"★Not implemented★: selecting it is refused (no silent fallback)",
+            @"ja": @"★未実装★：選択しても拒否されます（暗黙のフォールバックなし）",
+        },
+        @"jit.pairpin.notselected": @{
+            @"zh-Hans": @"未选择（未选择 ⇒ 拒绝，不静默回退）",
+            @"zh-Hant": @"未選擇（未選擇 ⇒ 拒絕，不靜默回退）",
+            @"en": @"Not selected (refused; no silent fallback)",
+            @"ja": @"未選択（拒否されます。暗黙のフォールバックなし）",
+        },
+        @"jit.pairpin.row.code": @{
+            @"zh-Hans": @"配对码（输入到设备的系统设置里）",
+            @"zh-Hant": @"配對碼（輸入到裝置的系統設定裡）",
+            @"en": @"Pairing code (enter it in the device's Settings)",
+            @"ja": @"ペアリングコード（デバイスの設定で入力）",
+        },
+        @"jit.pairpin.instruction": @{
+            @"zh-Hans": @"在设备上打开 设置 › 隐私与安全性 › 开发者模式（部分机型为 设置 › 通用 › VPN 与设备管理），点「与 %@ 配对」，输入上面这 6 位码。",
+            @"zh-Hant": @"在裝置上開啟 設定 › 隱私權與安全性 › 開發者模式（部分機型為 設定 › 一般 › VPN 與裝置管理），點「與 %@ 配對」，輸入上面這 6 位碼。",
+            @"en": @"On the device open Settings › Privacy & Security › Developer Mode (on some models Settings › General › VPN & Device Management), tap \"Pair with %@\", and enter the 6-digit code above.",
+            @"ja": @"デバイスで 設定 › プライバシーとセキュリティ › デベロッパモード（機種によっては 設定 › 一般 › VPN とデバイス管理）を開き、「%@ とペアリング」をタップして上記の 6 桁コードを入力してください。",
+        },
+        @"jit.pairpin.row.copy": @{
+            @"zh-Hans": @"点一行复制配对码；切到系统设置后回来仍在（同一码）",
+            @"zh-Hant": @"點一行複製配對碼；切到系統設定後回來仍在（同一碼）",
+            @"en": @"Tap the row to copy the code; it stays the same after you switch to Settings and back",
+            @"ja": @"行をタップでコードをコピー。設定に移動して戻っても同じコードです",
+        },
+        @"jit.pairpin.toast.selected": @{
+            @"zh-Hans": @"配对码来源已设为：%@",
+            @"zh-Hant": @"配對碼來源已設為：%@",
+            @"en": @"Pairing code source set to: %@",
+            @"ja": @"ペアリングコードの取得元を %@ に設定しました",
+        },
+        @"jit.pairpin.cancel": @{
+            @"zh-Hans": @"取消",
+            @"zh-Hant": @"取消",
+            @"en": @"Cancel",
+            @"ja": @"キャンセル",
+        },
+
         // ---------------- 行标题 ----------------
         @"jit.row.status": @{
             @"zh-Hans": @"JIT 状态",

@@ -29,7 +29,8 @@
 //    ⇒ 自握手证的是「本仓握手实现自洽且密码学正确」，★不等于★已与 iOS 27 真机互操作
 //      （后者需要真 RSD 端点，见 docs/JIT-PROVISIONING.md §4.2-a）。
 //
-//  ★仍未落地★：pair-setup(SRP-3072)、TLS-PSK 隧道（§12）、Bonjour/RSD 连接（见 a2_rppairing_rsd.h）。
+//  ★仍未落地★：TLS-PSK 隧道（§12）、Bonjour/RSD 连接（见 a2_rppairing_rsd.h）。
+//  ★pair-setup(SRP-3072) 已落地★：见 a2_rppairing_pairsetup.[hm]（首次配对 / PS-Msg01..06）。
 //
 
 #import <Foundation/Foundation.h>

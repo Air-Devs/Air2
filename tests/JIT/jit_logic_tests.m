@@ -52,6 +52,14 @@
 #import "a2_rppairing_rsd.h"
 // [A2-INTEGRATION] TLS-PSK 隧道门面（可替换后端 / 默认关 / 不上云）—— 真实现直接编译并链接
 #import "a2_tlspsk_tunnel.h"
+// [JIT-AUTOPAIR-3] pair-setup(SRP-3072)：SRP 内核 + 消息机（★真实现直接链接★）；SHA-1 仅用于核对 RFC 5054 向量
+#import "a2_rppairing_srp.h"
+#import "a2_rppairing_pairsetup.h"
+// [JIT-AUTOPAIR-3] 配对码来源（可选项）+ 设备发起档的 6 位码会话 + 契约键
+#import "A2JITPairingPinSource.h"
+#import "A2JITPairingCodeSession.h"
+#import "A2LaunchContract.h"
+#import <CommonCrypto/CommonDigest.h>
 
 static int gPass = 0;
 static int gFail = 0;
@@ -2622,6 +2630,737 @@ static void testLaunchChainJitVmWiring(void) {
 
 }
 
+#pragma mark - ⑲ [JIT-AUTOPAIR-3] pair-setup（SRP-3072 消息机 PS-Msg01..06）
+
+/// 大写十六进制（本文件的 A2RPHexString 是小写；⑲ 的向量来自 RFC/独立参考，用大写便于对拍）。
+static NSString *A2RPTestHexUpper(const uint8_t *b, size_t n) {
+    return [A2RPHexString(b, n) uppercaseString];
+}
+
+/// 单字节 NSData（TLV 值用）。
+static NSData *A2RPTestOneByte(uint8_t b) {
+    return [NSData dataWithBytes:&b length:1];
+}
+/// 16 个 0 字节（构造非法 B/A 用）。
+static const uint8_t *A2RPTestZeroBytes(void) {
+    static const uint8_t z[16] = { 0 };
+    return z;
+}
+
+/// RFC 5054 §Appendix A 的 1024-bit 群（供公开测试向量核对；★逐字符照抄 RFC★）。
+static const char *const kA2TestPSPrime1024 =
+    "EEAF0AB9ADB38DD69C33F80AFA8FC5E86072618775FF3C0B9EA2314C9C256576D674DF7496EA81D3"
+    "383B4813D692C6E0E0D5D8E250B98BE48E495C1D6089DAD15DC7D7B46154D6B6CE8EF4AD69B15D49"
+    "82559B297BCF1885C529F566660E57EC68EDBC3C05726CC02FD4CBF4976EAA9AFD5138FE8376435B"
+    "9FC61D2FC0EB06E3";
+
+/// RFC 5054 §Appendix A 的 3072-bit 群（★逐字符照抄 RFC；用来核对本仓常量未被改坏★）。
+static const char *const kA2TestPSPrime3072 =
+    "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22"
+    "514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6"
+    "F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE649286651ECE45B3D"
+    "C2007CB8A163BF0598DA48361C55D39A69163FA8FD24CF5F83655D23DCA3AD961C62F356208552BB"
+    "9ED529077096966D670C354E4ABC9804F1746C08CA18217C32905E462E36CE3BE39E772C180E86039B"
+    "2783A2EC07A28FB5C55DF06F4C52C9DE2BCBF6955817183995497CEA956AE515D2261898FA05101572"
+    "8E5A8AAAC42DAD33170D04507A33A85521ABDF1CBA64ECFB850458DBEF0A8AEA71575D060C7DB3970F"
+    "85A6E1E4C7ABF5AE8CDB0933D71E8C94E04A25619DCEE3D2261AD2EE6BF12FFA06D98A0864D876027"
+    "33EC86A64521F2B18177B200CBBE117577A615D6C770988C0BAD946E208E24FA074E5AB3143DB5BFC"
+    "E0FD108E4B82D120A93AD2CAFFFFFFFFFFFFFFFF";
+
+/// SHA-1 摘要（★只用于核对 RFC 5054 §Appendix B 的公开向量 —— 生产 SRP 用 SHA-512★）。
+static int A2TestPSSHA1(const uint8_t *in, size_t inLen, uint8_t *out) {
+    CC_SHA1_CTX ctx;
+    CC_SHA1_Init(&ctx);
+    if (inLen > 0 && in != NULL) { CC_SHA1_Update(&ctx, in, (CC_LONG)inLen); }
+    CC_SHA1_Final(out, &ctx);
+    return 1;
+}
+
+static A2RPSRPGroup A2TestPSGroup1024(void) {
+    A2RPSRPGroup g = { kA2TestPSPrime1024, 2, 128 };
+    return g;
+}
+
+/// 把 3072 群 N 的十六进制转成 384 字节（构造非法 B=N 用）。
+static NSData *A2TestPSPrime3072Data(void) {
+    NSMutableData *d = [NSMutableData dataWithCapacity:384];
+    for (size_t i = 0; i < 384; i++) {
+        char pair[3] = { kA2TestPSPrime3072[2 * i], kA2TestPSPrime3072[2 * i + 1], 0 };
+        unsigned v = 0;
+        sscanf(pair, "%2x", &v);
+        uint8_t byte = (uint8_t)v;
+        [d appendBytes:&byte length:1];
+    }
+    return d;
+}
+
+/// 建一对 Host/Device 会话（配对码 123456）。失败即两者为 nil。
+static void A2TestPSMakePair(A2RPPairingIdentity *hid, A2RPPairingIdentity *did,
+                             A2RPPairSetupSession **outH, A2RPPairSetupSession **outD) {
+    NSString *w = nil;
+    A2RPPairSetupPinProvider pin123 = ^NSString *(A2RPPairSetupPinPrompt p) { (void)p; return @"123456"; };
+    *outH = [A2RPPairSetupSession hostSessionWithIdentity:hid pinProvider:pin123 reason:&w];
+    *outD = [A2RPPairSetupSession deviceSessionWithIdentity:did pin:@"123456" reason:&w];
+}
+
+/// 推进到 Host 该发 Msg03（= 已交换 Msg01/Msg02）。失败 ⇒ nil。
+static NSData *A2TestPSAdvanceToMsg03(A2RPPairSetupSession *h, A2RPPairSetupSession *d, NSString **why) {
+    NSData *m1 = [h nextMessageWithReason:why];
+    if (m1 == nil || ![d acceptMessage:m1 reason:why]) { return nil; }
+    NSData *m2 = [d nextMessageWithReason:why];
+    if (m2 == nil || ![h acceptMessage:m2 reason:why]) { return nil; }
+    return [h nextMessageWithReason:why];
+}
+
+/// 进程内「设备」传输：把 TLV 喂给一个 device 会话并取回下一条。
+@interface A2TestPSDeviceTransport : NSObject <A2RPPairSetupMessageTransport>
+@property (nonatomic, strong) A2RPPairSetupSession *device;
+@property (nonatomic) NSInteger exchanges;
+@property (nonatomic) BOOL observedAwaitingConsent;
+@end
+
+@implementation A2TestPSDeviceTransport
+- (NSData *)exchangePairingData:(NSData *)tlv kind:(NSString *)kind
+                       startNew:(BOOL)startNewSession reason:(NSString **)reason {
+    (void)kind; (void)startNewSession;
+    self.exchanges++;
+    if (![self.device acceptMessage:tlv reason:reason]) { return nil; }
+    return [self.device nextMessageWithReason:reason];
+}
+- (BOOL)transportObservedAwaitingUserConsent { return self.observedAwaitingConsent; }
+@end
+
+#pragma mark ⑲a SRP 数学：公开向量逐位核对 + 负例
+
+static void testPairSetupSRPMath(void) {
+    printf("\n-- [JIT-AUTOPAIR-3] SRP 数学（RFC 5054 公开向量 + 3072/SHA-512 交叉向量）--\n");
+    NSString *why = nil;
+
+    // ===== ① RFC 5054 §Appendix B：1024-bit / SHA-1 完整向量（来源：RFC 5054 Appendix B）=====
+    uint8_t salt[16] = { 0 };
+    uint8_t a[32] = { 0 };
+    uint8_t b[32] = { 0 };
+    [A2RPHexData(@"BEB25379D1A8581EB5A727673A2441EE") getBytes:salt length:16];
+    [A2RPHexData(@"60975527035CF2AD1989806F0407210BC81EDC04E2762A56AFD529DDDA2D4393") getBytes:a length:32];
+    [A2RPHexData(@"E487CB59D31AC550471E81F00F6928E01DDA08E974A004F49E61F5D105284D20") getBytes:b length:32];
+    A2RPSRPGroup g1024 = A2TestPSGroup1024();
+    A2RPSRPClient *c1 = A2RPSRPClientCreate(&g1024, A2TestPSSHA1, 20,
+                                            (const uint8_t *)"alice", 5,
+                                            (const uint8_t *)"password123", 11, a, 32, &why);
+    A2RPSRPServer *s1 = A2RPSRPServerCreate(&g1024, A2TestPSSHA1, 20,
+                                            (const uint8_t *)"alice", 5,
+                                            (const uint8_t *)"password123", 11, salt, 16, b, 32, &why);
+    ok(c1 != NULL && s1 != NULL, @"RFC5054 向量：可建 SRP 客户端/服务端（SHA-1/1024）");
+    if (c1 && s1) {
+        size_t bn = 0;
+        const uint8_t *B1 = A2RPSRPServerPublicB(s1, &bn);
+        ok(A2RPSRPClientComputeKey(c1, salt, 16, B1, bn, &why), @"RFC5054 向量：客户端算密钥成功");
+        A2RPSRPTrace t1; memset(&t1, 0, sizeof(t1));
+        A2RPSRPClientTrace(c1, &t1);
+        size_t vn = 0;
+        const uint8_t *v1 = A2RPSRPServerVerifier(s1, &vn);
+        // ★以下 7 条与 RFC 5054 §Appendix B 逐位相同★
+        eqStr(A2RPTestHexUpper(t1.k, t1.kLen),
+              @"7556AA045AEF2CDD07ABAF0F665C3E818913186F", @"★RFC5054 k 逐位相同★");
+        eqStr(A2RPTestHexUpper(t1.x, t1.xLen),
+              @"94B7555AABE9127CC58CCF4993DB6CF84D16C124", @"★RFC5054 x 逐位相同★");
+        eqStr(A2RPTestHexUpper(v1, vn),
+              @"7E273DE8696FFC4F4E337D05B4B375BEB0DDE1569E8FA00A9886D8129BADA1F1822223CA1A605B530E379BA4729FDC59F105B4787E5186F5C671085A1447B52A48CF1970B4FB6F8400BBF4CEBFBB168152E08AB5EA53D15C1AFF87B2B9DA6E04E058AD51CC72BFC9033B564E26480D78E955A5E29E7AB245DB2BE315E2099AFB",
+              @"★RFC5054 v 逐位相同★");
+        size_t an = 0;
+        const uint8_t *A1 = A2RPSRPClientPublicA(c1, &an);
+        eqStr(A2RPTestHexUpper(A1, an),
+              @"61D5E490F6F1B79547B0704C436F523DD0E560F0C64115BB72557EC44352E8903211C04692272D8B2D1A5358A2CF1B6E0BFCF99F921530EC8E39356179EAE45E42BA92AEACED825171E1E8B9AF6D9C03E1327F44BE087EF06530E69F66615261EEF54073CA11CF5858F0EDFDFE15EFEAB349EF5D76988A3672FAC47B0769447B",
+              @"★RFC5054 A 逐位相同★");
+        eqStr(A2RPTestHexUpper(B1, bn),
+              @"BD0C61512C692C0CB6D041FA01BB152D4916A1E77AF46AE105393011BAF38964DC46A0670DD125B95A981652236F99D9B681CBF87837EC996C6DA04453728610D0C6DDB58B318885D7D82C7F8DEB75CE7BD4FBAA37089E6F9C6059F388838E7A00030B331EB76840910440B1B27AAEAEEB4012B7D7665238A8E3FB004B117B58",
+              @"★RFC5054 B 逐位相同★");
+        eqStr(A2RPTestHexUpper(t1.u, t1.uLen),
+              @"CE38B9593487DA98554ED47D70A7AE5F462EF019", @"★RFC5054 u 逐位相同★");
+        eqStr(A2RPTestHexUpper(t1.S, t1.sLen),
+              @"B0DC82BABCF30674AE450C0287745E7990A3381F63B387AAF271A10D233861E359B48220F7C4693C9AE12B0A6F67809F0876E2D013800D6C41BB59B6D5979B5C00A172B4A2A5903A0BDCAF8A709585EB2AFAFA8F3499B200210DCC1F10EB33943CD67FC88A2F39A4BE5BEC4EC0A3212DC346D7E474B29EDE8A469FFECA686E5A",
+              @"★RFC5054 S(premaster) 逐位相同★");
+        ok(A2RPSRPServerComputeKey(s1, A1, an, &why) && A2RPSRPServerVerifyM1(s1, t1.M1, t1.m1Len),
+           @"RFC5054 向量：服务端校验客户端 M1 通过（同一份实现自洽）");
+    }
+    A2RPSRPClientFree(c1);
+    A2RPSRPServerFree(s1);
+
+    // ===== ② 3072-bit 群常量（RFC 5054 §Appendix A）=====
+    const A2RPSRPGroup *g3072 = A2RPSRPGroup3072();
+    ok(g3072 != NULL && g3072->primeHex != NULL, @"3072 群可取");
+    eqInt((NSInteger)strlen(g3072->primeHex), 768, @"N 的十六进制长度 = 768（384 字节 / 3072 位）");
+    ok(strcmp(g3072->primeHex, kA2TestPSPrime3072) == 0, @"★N 与 RFC 5054 §App.A 3072-bit 值逐字符相同★");
+    eqInt((NSInteger)g3072->generator, 5, @"★生成元 g = 5（RFC 5054 §App.A 3072-bit 群）★");
+    eqInt((NSInteger)g3072->primeBytes, 384, @"primeBytes = 384");
+    eqInt((NSInteger)A2RPSRPSHA512DigestLength(), 64, @"生产摘要 = SHA-512（64 字节）");
+
+    // ===== ③ 3072/SHA-512 交叉向量：固定 (salt, a, b, I, P)，对本仓实现逐位核对 =====
+    //  向量来源：与本仓无关的独立 Python(stdlib hashlib+pow) 参考实现；该参考自身已对上 RFC 5054 §App.B。
+    uint8_t salt2[16] = { 0 };
+    [A2RPHexData(@"00112233445566778899AABBCCDDEEFF") getBytes:salt2 length:16];
+    uint8_t a2[32] = { 0 }, b2[32] = { 0 };
+    memset(a2 + 3, 0x11, 29);
+    memset(b2 + 3, 0x22, 29);
+    A2RPSRPClient *c2 = A2RPSRPClientCreate(g3072, A2RPSRPHashSHA512(), 64,
+                                            (const uint8_t *)"Pair-Setup", 10,
+                                            (const uint8_t *)"123456", 6, a2, 32, &why);
+    A2RPSRPServer *s2 = A2RPSRPServerCreate(g3072, A2RPSRPHashSHA512(), 64,
+                                            (const uint8_t *)"Pair-Setup", 10,
+                                            (const uint8_t *)"123456", 6, salt2, 16, b2, 32, &why);
+    ok(c2 != NULL && s2 != NULL, @"3072/SHA-512：可建 SRP 客户端/服务端");
+    if (c2 && s2) {
+        size_t bn = 0;
+        const uint8_t *B2 = A2RPSRPServerPublicB(s2, &bn);
+        ok(A2RPSRPClientComputeKey(c2, salt2, 16, B2, bn, &why), @"3072/SHA-512：客户端算密钥成功");
+        A2RPSRPTrace t2; memset(&t2, 0, sizeof(t2));
+        A2RPSRPClientTrace(c2, &t2);
+        size_t an = 0;
+        const uint8_t *A2p = A2RPSRPClientPublicA(c2, &an);
+        eqStr(A2RPTestHexUpper(t2.k, t2.kLen),
+              @"A9C2E2559BF0EBB53F0CBBF62282906BEDE7F2182F00678211FBD5BDE5B285033A4993503B87397F9BE5EC02080FEDBC0835587AD039060879B8621E8C3659E0",
+              @"3072 k 与独立参考逐位相同");
+        eqStr(A2RPTestHexUpper(t2.x, t2.xLen),
+              @"7EE207B859273D34D83F7EF1A9E5FED45848C7CCD9D99E2768D7CE096C05018AC8B97FFC2B32B953E75F37F013E2C3B726B2440ADB52FBAC6168EA89DEA25F6E",
+              @"3072 x 与独立参考逐位相同");
+        eqStr(A2RPTestHexUpper(t2.u, t2.uLen),
+              @"9EB3569F09F8B04F80F71B9E312A8B62A2D532BE14F246D2F1124DF88435E84FDBEA05A706E0FDFD38D11AB0B7581CA1F6C8E95D0360E28D77322671C1C15DD7",
+              @"3072 u 与独立参考逐位相同");
+        eqStr(A2RPTestHexUpper(A2p, an),
+              @"4B8E8F271694B4805DB6AD0EDD32FC7DFF5B886F1EE6FD6C016DA4185C005FE70BD0D875924B460982D859B348B78987156165EC72D7B9F4DD225DB118FAC05CA6F34D696EEE02445AE3A1EFA123CB3946B5D24D7D3299935B4C9AAB0CED433A9C398ED4F53C603253F37FBB34E23E2CA3CFAD674F7D3998AC4A4447D455A5BA918B37BD088D27C3028E512563549572435F7F5E29B7F51A40158E51C66CBFE324ACE0DF171435E21B0EE8228704BA50047DFFB6FEC4ADB73C97A8EDC147AC1DA28990E5924A6E3EABBD12734AB481258A25FFC0E8DE107C05F5140C4C71574B502A3EE6FF58BECB98393658299E3F17902BD7DB92FA782787E5798262330820AA98538916E46E24603774EB8E2A0A3F5FA573F3E197AC081641DC0BCF68307C929B74215C7491B63E32F845AFF7CD3D3440379A929092D3534A4ED93ADD3D490ABED63FB3394BC2B06F39505354BE30B1B27BE39DD8A968C6B9D1E9C201987042D43426FD1801A2C02CD3D6BCB362A0CC2A78718355DFE9DD766BF130C6EE5C",
+              @"3072 A 与独立参考逐位相同");
+        eqStr(A2RPTestHexUpper(B2, bn),
+              @"5DA1C76D4FB7F0C663624DDF867B1A9476CE8C26837BF852E8C6E79F963ECF39F8C3E956A8EC2EA4961AF7F900566D72E837D489006D25D389F4088BB50E93235D04E427549C89CF8688A07A380E40733D27C9FA51EF7AF400448B24DBD9C8C23CB688C296D813C27576210AE0E418B80D87B0A1B5A86824C095B528B9E726199DA38E4815014F59D46447CBAFCC468821D09D4D5BD492808659ABD398DA70ABBEE3657B4FC28E948B46700E1F4AF6A0F0A616D6DAE5D4E7E8D3EC458F97616FC9BC60778E74FE5EACBC22CEFC572CC8B508FDC80F59ABB1654E18CAA29D8F3EC0CC173BDA15A5E7645CBDB83E2C3FF71DD71ECE7C22562F7D3A51E864153DACD3D98C6C5AB642004DF46D5DB6F50B751AB87C8A06259E6F9B8DFB2DE5D0233FCC5B56F169A07F55BF9647F76D6DCCBE434E80A4374F37D87E1FBBEB4F074703AFD603BE6F5F9D93536D2411002760BECCB0AAAD701A86493B976953FB6A01970F9501B7A543562C4BF43A47E1079D6C42B038FAAE39DED1A3CFE482FB8BD6FE",
+              @"3072 B 与独立参考逐位相同");
+        eqStr(A2RPTestHexUpper(t2.S, t2.sLen),
+              @"66D918CFFA25BECE138DB06CBFF5F795DB86AF3054AC96BD92A942C7A81614EB0908520C3AA00C02F12889E85BFDBAAC7CC8C05C3871C1031D2CC219BEC5CB717FD9ABB9D04AA5A7ECC4AD2D04727B410C25BCA2D11ACC4583A73030DC417C996CAA399824B8E7A685AB5C2B63B52FC9FE030982CDEAA3E5A45542559D75085E11D85C0854CC3E3F1E10931D24433CF2C84D85832401AA24EB727CE2E1243732A9B76AD793F2212B2BCAB4CC04760EDCABCA45A6BC2DC03F0F3D364E453E860D056A2D5D1946CDF8845E21C3CC219A59A23FEF77AA2332690D2A0F9297A861107933847C394C10CF3DE8D4FB2F61890BA7F02659FF6802E045188F8117C4978F7AFAB75D60FAE15CF6A0DE8479612DBDE3A19D47E60455DA1E641A24CBECA0B7F95531DEAF1ED60F232A8EAFF7D900D3D736C80B1DE64FE919AAE62CEAD73B90ECD060686DDF5049BAA6826DE046DC4820035AF40FD8B6CE1B28763C1901FC87BDC2DE274443FFDFB93A402AAD76C32CBE00C5EA4EAE393C9ABEEBE05732E2BE",
+              @"3072 S(premaster) 与独立参考逐位相同");
+        eqStr(A2RPTestHexUpper(t2.K, t2.keyLen),
+              @"770ABD54FE495F462686FF14A669000EA23C852E98836FBB855D1BE6913EAFED64CD8990E3C62C967321E597D825D5283D79613853A8F7D3421A32614949196A",
+              @"3072 K = H(S) 与独立参考逐位相同");
+        eqStr(A2RPTestHexUpper(t2.M1, t2.m1Len),
+              @"20331513B11C334F75480B40EF7864D798AD53CA51925D011A83E791DA42A98452127E9624ED822CA59F56C7039233C1DC91F5656F40EA76A9175DC999DC968C",
+              @"3072 M1 与独立参考逐位相同");
+        ok(A2RPSRPServerComputeKey(s2, A2p, an, &why) && A2RPSRPServerVerifyM1(s2, t2.M1, t2.m1Len),
+           @"3072 服务端校验 M1 通过");
+        size_t m2n = 0;
+        const uint8_t *m2 = A2RPSRPServerProofM2(s2, &m2n);
+        eqStr(A2RPTestHexUpper(m2, m2n),
+              @"065D0E75DDD3EF8AE6E045BC218525C93B034A9262566C3ADEACA6A67F6B0EA5A13C387CFD3384FF24CF372D3BFDD20830914777BCC57B2D5A7B738D47202493",
+              @"3072 M2 与独立参考逐位相同");
+        ok(A2RPSRPClientVerifyM2(c2, m2, m2n), @"3072 客户端校验 M2 通过");
+        size_t ck = 0, sk = 0;
+        const uint8_t *ckp = A2RPSRPClientSessionKey(c2, &ck);
+        const uint8_t *skp = A2RPSRPServerSessionKey(s2, &sk);
+        ok(ck == sk && ck > 0 && memcmp(ckp, skp, ck) == 0, @"3072 双方会话密钥一致");
+    }
+    A2RPSRPClientFree(c2);
+    A2RPSRPServerFree(s2);
+
+    // ===== ④ SRP 负例：非法值一律拒绝 =====
+    uint8_t aBad[16] = { 0 };
+    A2RPSRPClient *cn = A2RPSRPClientCreate(g3072, A2RPSRPHashSHA512(), 64,
+                                            (const uint8_t *)"Pair-Setup", 10,
+                                            (const uint8_t *)"123456", 6, aBad, 16, &why);
+    ok(cn != NULL, @"负例准备：客户端可建");
+    uint8_t saltZ[16] = { 0 };
+    uint8_t zero8[8] = { 0 };
+    why = nil;
+    ok(!A2RPSRPClientComputeKey(cn, saltZ, 16, zero8, 8, &why) && why.length > 0,
+       @"★B = 0 ⇒ 拒绝（点名原因）★");
+    why = nil;
+    NSData *nData = A2TestPSPrime3072Data();
+    ok(!A2RPSRPClientComputeKey(cn, saltZ, 16, nData.bytes, 384, &why) && why.length > 0,
+       @"★B = N ⇒ 拒绝（B >= N）★");
+    why = nil;
+    ok(!A2RPSRPClientComputeKey(cn, NULL, 0, zero8, 8, &why), @"盐为空 ⇒ 拒绝");
+    A2RPSRPServer *sn = A2RPSRPServerCreate(g3072, A2RPSRPHashSHA512(), 64,
+                                            (const uint8_t *)"Pair-Setup", 10,
+                                            (const uint8_t *)"123456", 6, saltZ, 16, aBad, 16, &why);
+    ok(sn != NULL, @"负例准备：服务端可建");
+    why = nil;
+    ok(!A2RPSRPServerComputeKey(sn, zero8, 8, &why) && why.length > 0,
+       @"★A = 0 ⇒ 拒绝（点名原因）★");
+    A2RPSRPClientFree(cn);
+    A2RPSRPServerFree(sn);
+    ok(A2RPSRPClientCreate(g3072, A2RPSRPHashSHA512(), 64,
+                           (const uint8_t *)"I", 1, (const uint8_t *)"P", 1, NULL, 0, &why) == NULL,
+       @"a 为空 ⇒ 建客户端失败（不猜）");
+    ok(A2RPSRPClientCreate(g3072, A2RPSRPHashSHA512(), 7,
+                           (const uint8_t *)"I", 1, (const uint8_t *)"P", 1, aBad, 16, &why) == NULL,
+       @"不支持的摘要长度 ⇒ 建客户端失败");
+}
+
+#pragma mark ⑲b 消息流：PS-Msg01..06 真跑完 + 负例
+
+static void testPairSetupMessageFlow(void) {
+    printf("\n-- [JIT-AUTOPAIR-3] pair-setup 消息流（PS-Msg01..06 + 负例）--\n");
+    NSError *e = nil;
+    A2RPPairingIdentity *hid = [A2RPPairingIdentity identityWithHostName:@"ps-flow-host" error:&e];
+    A2RPPairingIdentity *did = [A2RPPairingIdentity identityWithHostName:@"ps-flow-dev" error:&e];
+    ok(hid != nil && did != nil, @"测试身份可生成");
+
+    // ===== 自测（进程内全链路 + 篡改/错码负例）=====
+    A2RPPairSetupSelfTest *st = [A2RPPairSetupSelfTest runSelfTest];
+    ok(st.ok, @"★pair-setup 自握手整体通过（PS-Msg01..06 + 双方密钥一致）★");
+    eqInt((NSInteger)st.messageSizes.count, 6, @"自握手真的走了 6 条消息");
+    ok(st.sessionKeysEqual, @"★双方 SRP 会话密钥一致★");
+    ok(st.tamperRejected, @"★篡改 Msg03(M1) ⇒ 被拒★");
+    ok(st.wrongPinRejected, @"★配对码不一致 ⇒ 设备拒绝★");
+    ok([st.summary containsString:@"PS-Msg01..06"], @"自握手结论可读（带消息流尺寸）");
+
+    // ===== 逐条消息语义 =====
+    NSString *why = nil;
+    A2RPPairSetupSession *h = nil, *d = nil;
+    A2TestPSMakePair(hid, did, &h, &d);
+    ok(h != nil && d != nil, @"Host/Device 会话可建");
+    NSData *m1 = [h nextMessageWithReason:&why];
+    ok(m1.length > 0 && A2RPTLVStateValue(A2RPTLVDecode(m1, NULL)) == 1, @"Msg01 State=1");
+    ok(A2RPTLVValue(A2RPTLVDecode(m1, NULL), A2RPTLVTypeMethod).length == 1, @"Msg01 含 Method");
+    ok([d acceptMessage:m1 reason:&why], @"Device 接受 Msg01");
+    NSData *m2 = [d nextMessageWithReason:&why];
+    NSDictionary *mm2 = A2RPTLVDecode(m2, NULL);
+    ok(A2RPTLVStateValue(mm2) == 2, @"Msg02 State=2");
+    ok(A2RPTLVValue(mm2, A2RPTLVTypePublicKey).length > 0
+       && A2RPTLVValue(mm2, A2RPTLVTypeSalt).length > 0, @"Msg02 含 Salt + PublicKey(B)");
+    ok([h acceptMessage:m2 reason:&why], @"Host 接受 Msg02（SRP 参数）");
+    NSData *m3 = [h nextMessageWithReason:&why];
+    NSDictionary *mm3 = A2RPTLVDecode(m3, NULL);
+    ok(A2RPTLVStateValue(mm3) == 3, @"Msg03 State=3");
+    ok(A2RPTLVValue(mm3, A2RPTLVTypePublicKey).length == 384, @"Msg03 的 A = 384 字节（3072 位）");
+    ok(A2RPTLVValue(mm3, A2RPTLVTypeProof).length == 64, @"Msg03 的 M1 = 64 字节（SHA-512）");
+    ok([d acceptMessage:m3 reason:&why], @"Device 接受 Msg03（校验 A 与 M1）");
+    NSData *m4 = [d nextMessageWithReason:&why];
+    ok(A2RPTLVStateValue(A2RPTLVDecode(m4, NULL)) == 4, @"Msg04 State=4");
+    ok([h acceptMessage:m4 reason:&why], @"Host 接受 Msg04（校验 M2）");
+    NSData *m5 = [h nextMessageWithReason:&why];
+    NSDictionary *mm5 = A2RPTLVDecode(m5, NULL);
+    ok(A2RPTLVStateValue(mm5) == 5, @"Msg05 State=5");
+    ok(A2RPTLVValue(mm5, A2RPTLVTypeEncryptedData).length > 16, @"Msg05 含 EncryptedData");
+    ok([d acceptMessage:m5 reason:&why], @"Device 接受 Msg05（解密 + 验控制器签名）");
+    ok(d.peerIdentifier.length > 0, @"Device 解出控制器 identifier");
+    NSData *m6 = [d nextMessageWithReason:&why];
+    ok(A2RPTLVStateValue(A2RPTLVDecode(m6, NULL)) == 6, @"Msg06 State=6");
+    ok([h acceptMessage:m6 reason:&why], @"Host 接受 Msg06");
+    ok(h.established && d.established, @"双方进入已建立");
+    ok([h.sessionKey isEqualToData:d.sessionKey] && h.sessionKey.length == 64,
+       @"★双方会话密钥一致且 64 字节★");
+    ok(h.peerIdentifier.length > 0 && h.peerPublicKey.length == 32, @"Host 存下设备记录（identifier + 公钥）");
+    ok([h nextMessageWithReason:&why] == nil, @"已建立后无待发消息（如实返回 nil）");
+
+    // ===== 负例：篡改 / 顺序 / 垃圾 / ErrorResponse / 配对码 =====
+
+    // (1) Msg02 的 B 非法（0）⇒ Host 拒绝
+    {
+        A2RPPairSetupSession *hx = nil, *dx = nil;
+        A2TestPSMakePair(hid, did, &hx, &dx);
+        NSString *w = nil;
+        NSData *x1 = [hx nextMessageWithReason:&w];
+        [dx acceptMessage:x1 reason:&w];
+        NSData *x2 = [dx nextMessageWithReason:&w];
+        NSData *saltV = A2RPTLVValue(A2RPTLVDecode(x2, NULL), A2RPTLVTypeSalt);
+        NSData *badM2 = A2RPTLVEncode(@[ @(A2RPTLVTypeState), @(A2RPTLVTypePublicKey), @(A2RPTLVTypeSalt) ],
+                                      @[ A2RPTestOneByte(0x02),
+                                         [NSData dataWithBytes:A2RPTestZeroBytes() length:8],
+                                         saltV ]);
+        w = nil;
+        ok(![hx acceptMessage:badM2 reason:&w] && w.length > 0, @"★Msg02 的 B 非法(0) ⇒ Host 拒绝★");
+    }
+    // (2) 篡改 Msg03 的 M1 ⇒ Device 拒绝
+    {
+        A2RPPairSetupSession *hx = nil, *dx = nil;
+        A2TestPSMakePair(hid, did, &hx, &dx);
+        NSString *w = nil;
+        NSData *x3 = A2TestPSAdvanceToMsg03(hx, dx, &w);
+        NSMutableData *bad = [x3 mutableCopy];
+        ((uint8_t *)bad.mutableBytes)[bad.length - 1] ^= 0x01;
+        w = nil;
+        ok(![dx acceptMessage:bad reason:&w] && w.length > 0, @"★篡改 Msg03(M1) ⇒ Device 拒绝★");
+    }
+    // (3) 篡改 Msg03 的 A ⇒ Device 拒绝
+    {
+        A2RPPairSetupSession *hx = nil, *dx = nil;
+        A2TestPSMakePair(hid, did, &hx, &dx);
+        NSString *w = nil;
+        NSData *x3 = A2TestPSAdvanceToMsg03(hx, dx, &w);
+        NSMutableData *bad = [x3 mutableCopy];
+        ((uint8_t *)bad.mutableBytes)[5] ^= 0x01;
+        w = nil;
+        ok(![dx acceptMessage:bad reason:&w], @"★篡改 Msg03(A) ⇒ Device 拒绝★");
+    }
+    // (4) 篡改 Msg04 的 M2 ⇒ Host 拒绝
+    {
+        A2RPPairSetupSession *hx = nil, *dx = nil;
+        A2TestPSMakePair(hid, did, &hx, &dx);
+        NSString *w = nil;
+        NSData *x3 = A2TestPSAdvanceToMsg03(hx, dx, &w);
+        [dx acceptMessage:x3 reason:&w];
+        NSData *x4 = [dx nextMessageWithReason:&w];
+        NSMutableData *bad = [x4 mutableCopy];
+        ((uint8_t *)bad.mutableBytes)[bad.length - 1] ^= 0x01;
+        w = nil;
+        ok(![hx acceptMessage:bad reason:&w] && [w containsString:@"M2"], @"★篡改 Msg04(M2) ⇒ Host 拒绝★");
+    }
+    // (5) 篡改 Msg05 密文 ⇒ Device 拒绝（AEAD）
+    {
+        A2RPPairSetupSession *hx = nil, *dx = nil;
+        A2TestPSMakePair(hid, did, &hx, &dx);
+        NSString *w = nil;
+        NSData *x3 = A2TestPSAdvanceToMsg03(hx, dx, &w);
+        [dx acceptMessage:x3 reason:&w];
+        NSData *x4 = [dx nextMessageWithReason:&w];
+        [hx acceptMessage:x4 reason:&w];
+        NSData *x5 = [hx nextMessageWithReason:&w];
+        NSMutableData *bad = [x5 mutableCopy];
+        ((uint8_t *)bad.mutableBytes)[8] ^= 0x01;
+        w = nil;
+        ok(![dx acceptMessage:bad reason:&w] && w.length > 0, @"★篡改 Msg05 密文 ⇒ Device 拒绝（AEAD）★");
+    }
+    // (6) 篡改 Msg06 密文 ⇒ Host 拒绝
+    {
+        A2RPPairSetupSession *hx = nil, *dx = nil;
+        A2TestPSMakePair(hid, did, &hx, &dx);
+        NSString *w = nil;
+        NSData *x3 = A2TestPSAdvanceToMsg03(hx, dx, &w);
+        [dx acceptMessage:x3 reason:&w];
+        NSData *x4 = [dx nextMessageWithReason:&w];
+        [hx acceptMessage:x4 reason:&w];
+        NSData *x5 = [hx nextMessageWithReason:&w];
+        [dx acceptMessage:x5 reason:&w];
+        NSData *x6 = [dx nextMessageWithReason:&w];
+        NSMutableData *bad = [x6 mutableCopy];
+        ((uint8_t *)bad.mutableBytes)[bad.length - 1] ^= 0x01;
+        w = nil;
+        ok(![hx acceptMessage:bad reason:&w], @"★篡改 Msg06 密文 ⇒ Host 拒绝★");
+    }
+    // (7) 顺序错：把 Msg03 直接喂给还没收到 Msg01 的 Device
+    {
+        A2RPPairSetupSession *hx = nil, *dx = nil;
+        A2TestPSMakePair(hid, did, &hx, &dx);
+        NSString *w = nil;
+        NSData *x3 = A2TestPSAdvanceToMsg03(hx, dx, &w);
+        A2RPPairSetupSession *fresh = [A2RPPairSetupSession deviceSessionWithIdentity:did
+                                                                                  pin:@"123456" reason:&w];
+        w = nil;
+        ok(![fresh acceptMessage:x3 reason:&w] && [w containsString:@"顺序"],
+           @"★消息流顺序错 ⇒ 拒绝（点名「顺序」）★");
+    }
+    // (8) 非 TLV 垃圾
+    {
+        A2RPPairSetupSession *hx = nil, *dx = nil;
+        A2TestPSMakePair(hid, did, &hx, &dx);
+        NSString *w = nil;
+        ok(![dx acceptMessage:[@"not-a-tlv" dataUsingEncoding:NSUTF8StringEncoding] reason:&w] && w.length > 0,
+           @"非 TLV8 字节 ⇒ 被拒");
+    }
+    // (9) 对端 ErrorResponse
+    {
+        A2RPPairSetupSession *hx = nil, *dx = nil;
+        A2TestPSMakePair(hid, did, &hx, &dx);
+        NSString *w = nil;
+        NSData *errTlv = A2RPTLVEncode(@[ @(A2RPTLVTypeState), @(A2RPTLVTypeError) ],
+                                       @[ A2RPTestOneByte(0x02), A2RPTestOneByte(0x01) ]);
+        ok(![hx acceptMessage:errTlv reason:&w] && [w containsString:@"ErrorResponse"],
+           @"★对端 ErrorResponse ⇒ 如实失败★");
+    }
+    // (10) 配对码取到空码 ⇒ Host 拒绝
+    {
+        NSString *w = nil;
+        A2RPPairSetupSession *hx = [A2RPPairSetupSession hostSessionWithIdentity:hid
+                                                                    pinProvider:^NSString *(A2RPPairSetupPinPrompt p) {
+            (void)p; return @"";
+        } reason:&w];
+        A2RPPairSetupSession *dx = [A2RPPairSetupSession deviceSessionWithIdentity:did pin:@"123456" reason:&w];
+        NSData *x1 = [hx nextMessageWithReason:&w];
+        [dx acceptMessage:x1 reason:&w];
+        NSData *x2 = [dx nextMessageWithReason:&w];
+        w = nil;
+        ok(![hx acceptMessage:x2 reason:&w] && [w containsString:@"配对码"],
+           @"★配对码来源未注入 / 空码 ⇒ 如实拒绝（点名）★");
+    }
+    // (11) 会话构造侧的拒绝
+    {
+        NSString *w = nil;
+        ok([A2RPPairSetupSession hostSessionWithIdentity:hid pinProvider:nil reason:&w] == nil,
+           @"Host 会话：未注入配对码来源 ⇒ 拒绝建会话");
+        w = nil;
+        ok([A2RPPairSetupSession deviceSessionWithIdentity:did pin:@"" reason:&w] == nil,
+           @"Device 会话：空配对码 ⇒ 拒绝建会话");
+        w = nil;
+        ok([A2RPPairSetupSession hostSessionWithIdentity:nil pinProvider:^NSString *(A2RPPairSetupPinPrompt p) {
+            (void)p; return @"1";
+        } reason:&w] == nil, @"Host 会话：身份缺失 ⇒ 拒绝建会话");
+    }
+    // (12) Device 侧：M1 对不上（Host 用错码）
+    {
+        A2RPPairingIdentity *h2 = [A2RPPairingIdentity identityWithHostName:@"ps-wrongpin-h" error:NULL];
+        A2RPPairingIdentity *d2 = [A2RPPairingIdentity identityWithHostName:@"ps-wrongpin-d" error:NULL];
+        NSString *w = nil;
+        A2RPPairSetupSession *hx = [A2RPPairSetupSession hostSessionWithIdentity:h2
+                                                                    pinProvider:^NSString *(A2RPPairSetupPinPrompt p) {
+            (void)p; return @"000000";
+        } reason:&w];
+        A2RPPairSetupSession *dx = [A2RPPairSetupSession deviceSessionWithIdentity:d2 pin:@"123456" reason:&w];
+        NSData *x3 = A2TestPSAdvanceToMsg03(hx, dx, &w);
+        w = nil;
+        ok(![dx acceptMessage:x3 reason:&w] && [w containsString:@"M1"],
+           @"★配对码不一致 ⇒ M1 校验失败被拒（点名 M1）★");
+    }
+
+    // ===== 传输缝驱动（注入假传输）=====
+    {
+        NSString *w = nil;
+        A2RPPairingIdentity *h3 = [A2RPPairingIdentity identityWithHostName:@"ps-transport-h" error:NULL];
+        A2RPPairingIdentity *d3 = [A2RPPairingIdentity identityWithHostName:@"ps-transport-d" error:NULL];
+        A2RPPairSetupSession *dev = [A2RPPairSetupSession deviceSessionWithIdentity:d3 pin:@"000000" reason:&w];
+        A2TestPSDeviceTransport *tr = [A2TestPSDeviceTransport new];
+        tr.device = dev;
+        __block NSInteger promptSeen = -1;
+        NSData *key = nil;
+        BOOL okRun = [A2RPPairSetupSession runHostOverTransport:tr identity:h3
+                                                     pinProvider:^NSString *(A2RPPairSetupPinPrompt p) {
+            promptSeen = p; return @"000000";
+        } reason:&w sessionKey:&key];
+        ok(okRun, @"★注入传输 ⇒ Host 跑完 pair-setup 成功★");
+        eqInt((NSInteger)tr.exchanges, 3, @"传输层恰好交换 3 次（Msg01/03/05）");
+        eqInt((NSInteger)key.length, 64, @"回填的会话密钥 64 字节");
+        ok(dev.established, @"对端（设备）也进入已建立");
+        ok(promptSeen == A2RPPairSetupPinPromptOnDevice, @"取码场景默认 OnDevice");
+        ok([[h3 pairingFileData] length] > 0, @"Host 身份可产出配对文件字节");
+
+        NSString *w2 = nil;
+        ok(![A2RPPairSetupSession runHostOverTransport:nil identity:h3
+                                           pinProvider:^NSString *(A2RPPairSetupPinPrompt p) {
+            (void)p; return @"1";
+        } reason:&w2 sessionKey:NULL] && w2.length > 0, @"★未注入传输 ⇒ 如实拒绝（点名）★");
+
+        NSString *w3 = nil;
+        A2RPPairSetupSession *dev2 = [A2RPPairSetupSession deviceSessionWithIdentity:d3 pin:@"000000" reason:&w3];
+        A2TestPSDeviceTransport *tr2 = [A2TestPSDeviceTransport new];
+        tr2.device = dev2;
+        tr2.observedAwaitingConsent = YES;
+        __block NSInteger prompt2 = -1;
+        (void)[A2RPPairSetupSession runHostOverTransport:tr2 identity:h3
+                                             pinProvider:^NSString *(A2RPPairSetupPinPrompt p) {
+            prompt2 = p; return @"000000";
+        } reason:&w3 sessionKey:NULL];
+        ok(prompt2 == A2RPPairSetupPinPromptAwaitingConsent, @"传输报到 awaiting consent ⇒ 取码场景用 AwaitingConsent");
+    }
+}
+
+#pragma mark ⑲c 接线：预检真跑 + Bridge 真调 + 诚实口径
+
+static void testPairSetupWiring(void) {
+    printf("\n-- [JIT-AUTOPAIR-3] 接线（预检 / Bridge 真调 / 诚实口径）--\n");
+    A2RPPairingPreflight *pf = [A2RPPairingPreflight run];
+    ok(pf.pairSetupOK, @"★自检：pair-setup 自手写【真跑通过】★");
+    ok([pf.pairSetupSummary containsString:@"pair-setup"], @"pair-setup 自检摘要可读");
+    ok([pf.summary containsString:@"pair-setup 自握手=通过"], @"★总摘要如实写「pair-setup 自握手=通过」★");
+    eqInt((NSInteger)pf.firstBlockedStep, (NSInteger)A2RPPairingBlockedStepRsdEndpoint,
+          @"本地全绿后首阻步骤仍是 RSD 端点（pair-setup 已不再是「未落地」）");
+    eqStr([A2RPPairingPreflight displayNameForBlockedStep:A2RPPairingBlockedStepPairSetup],
+          @"PairSetup(SRP-3072)", @"pair-setup 受阻步骤诊断名稳定");
+    ok(pf.pairVerifyOK, @"pair-verify 自握手仍通过（未回退）");
+
+    // Bridge 源码级不变量（生产接线点）
+    NSString *bridge = [NSString stringWithContentsOfFile:RepoPath(@"Air2/Bridge/A2JITAutoPairingEngineBridge.m")
+                                                 encoding:NSUTF8StringEncoding error:NULL];
+    ok(bridge.length > 0, @"读得到自动配对引擎 Bridge");
+    ok([bridge containsString:@"A2RPPairSetupSession"], @"★Bridge 真接进 pair-setup 消息机★");
+    ok([bridge containsString:@"[A2RPPairSetupSession runHostOverTransport:"],
+       @"★Bridge 真调 pair-setup 驱动（谁调它：generatePairingFileWithinBudget:）★");
+    ok([bridge containsString:@"pairSetupTransport"], @"Bridge 有 pair-setup 传输注入缝");
+    ok([bridge containsString:@"pairSetupPinProvider"], @"Bridge 有配对码注入缝");
+    ok([bridge containsString:@"pair-setup 传输未注入"], @"★未注入传输时如实点名（不谎报）★");
+    ok([bridge containsString:@"RemoteXPC"], @"★Bridge 如实点名真机需 RemoteXPC 传输★");
+
+    NSString *bh = [NSString stringWithContentsOfFile:RepoPath(@"Air2/Bridge/A2JITAutoPairingEngineBridge.h")
+                                             encoding:NSUTF8StringEncoding error:NULL];
+    ok([bh containsString:@"A2RPPairSetupMessageTransport"], @"Bridge 头暴露 pair-setup 传输缝");
+    ok([bh containsString:@"pairSetupPinProvider"], @"Bridge 头暴露配对码注入缝");
+
+    // 测试入口已收录新源文件
+    NSString *runner = [NSString stringWithContentsOfFile:RepoPath(@"tests/JIT/run_jit_tests.py")
+                                                 encoding:NSUTF8StringEncoding error:NULL];
+    ok([runner containsString:@"a2_rppairing_srp.m"], @"测试入口收录 a2_rppairing_srp.m");
+    ok([runner containsString:@"a2_rppairing_pairsetup.m"], @"测试入口收录 a2_rppairing_pairsetup.m");
+    ok([runner containsString:@"mbedtls"], @"测试入口登记 mbedtls 头/库搜索路径");
+}
+
+#pragma mark ⑲d 配对码来源（可选项表 + 解析）+ 设备发起档的 6 位码会话
+
+static void testPairSetupPinSource(void) {
+    printf("\n-- [JIT-AUTOPAIR-3] 配对码来源（可选项 / 解析 / 6 位码会话 / 接线）--\n");
+
+    // ===== ① 候选表：★照列不误，未实现的也入表★ =====
+    NSArray<A2JITPairingPinSourceItem *> *items = [A2JITPairingPinSourceCatalog allItems];
+    eqInt((NSInteger)items.count, 4, @"候选档 4 个（信任弹窗 / 设备发起 / 已有记录 / 屏显码）");
+    eqStr(items[0].identifier, @"trustDialog", @"档 0 = 信任弹窗");
+    eqStr(items[1].identifier, @"deviceInitiated", @"档 1 = 设备发起");
+    eqStr(items[2].identifier, @"existingRecord", @"档 2 = 已有配对记录");
+    eqStr(items[3].identifier, @"onScreenCode", @"档 3 = 设备屏显码");
+    eqInt((NSInteger)items[0].mode, (NSInteger)A2JITPairingPinModeTrustDialog, @"档 0 模式正确");
+    eqInt((NSInteger)items[1].mode, (NSInteger)A2JITPairingPinModeDeviceInitiated, @"档 1 模式正确");
+    eqInt((NSInteger)items[2].mode, (NSInteger)A2JITPairingPinModeExistingRecord, @"档 2 模式正确");
+    eqInt((NSInteger)items[3].mode, (NSInteger)A2JITPairingPinModeOnScreenCode, @"档 3 模式正确");
+    ok(items[0].implemented && items[1].implemented && items[2].implemented,
+       @"前三档已实现");
+    ok(!items[3].implemented, @"★设备屏显码档照列但标记「未实现」★");
+    eqStr([A2JITPairingPinSourceCatalog defaultIdentifier], @"deviceInitiated",
+          @"主推 = 设备发起档（iOS 27）");
+    eqInt([A2JITPairingPinSourceCatalog modeForIdentifier:@""],
+          A2JITPairingPinModeUnselected, @"空标识 ⇒ Unselected");
+    eqInt([A2JITPairingPinSourceCatalog modeForIdentifier:@"nope"],
+          A2JITPairingPinModeUnknown, @"不认识的标识 ⇒ Unknown");
+    ok([A2JITPairingPinSourceCatalog itemForIdentifier:@"onScreenCode"] != nil, @"按标识可取到候选项");
+
+    // ===== ② 解析：选择项 → 配对码 / 或「该走哪条路」=====
+    NSUserDefaults *d = NSUserDefaults.standardUserDefaults;
+    NSString *saved = [d stringForKey:A2SelectedPairingPinSourcePrefKey];
+
+    [d removeObjectForKey:A2SelectedPairingPinSourcePrefKey];
+    eqInt([A2JITPairingPinResolver selectedMode], A2JITPairingPinModeUnselected, @"键缺失 ⇒ 未选择");
+    ok([[A2JITPairingPinResolver criterionLine] hasPrefix:@"[A2-PAIRPIN] source="],
+       @"判据行带 [A2-PAIRPIN] source= 前缀");
+    ok([[A2JITPairingPinResolver criterionLine] containsString:@"mode="], @"判据行含 mode=");
+    {
+        NSString *why = nil;
+        NSString *pin = [A2JITPairingPinResolver resolvedPinForDisplayedCode:nil reason:&why];
+        ok(pin == nil && [why containsString:@"未选择"],
+           @"★未选择 ⇒ 拒绝并点名（不静默回退）★");
+    }
+
+    [d setObject:@"trustDialog" forKey:A2SelectedPairingPinSourcePrefKey];
+    eqInt([A2JITPairingPinResolver selectedMode], A2JITPairingPinModeTrustDialog, @"选中信任弹窗档");
+    {
+        NSString *why = nil;
+        NSString *pin = [A2JITPairingPinResolver resolvedPinForDisplayedCode:nil reason:&why];
+        eqStr(pin, @"000000", @"★信任弹窗档 ⇒ 固定码 000000（协议事实）★");
+    }
+
+    [d setObject:@"deviceInitiated" forKey:A2SelectedPairingPinSourcePrefKey];
+    {
+        NSString *why = nil;
+        eqStr([A2JITPairingPinResolver resolvedPinForDisplayedCode:@"123456" reason:&why], @"123456",
+              @"设备发起档 ⇒ 用本机显示的 6 位码");
+        why = nil;
+        ok([A2JITPairingPinResolver resolvedPinForDisplayedCode:@"12 456" reason:&why] == nil
+           && why.length > 0, @"★非 6 位数字的码 ⇒ 拒绝★");
+        why = nil;
+        ok([A2JITPairingPinResolver resolvedPinForDisplayedCode:nil reason:&why] == nil
+           && why.length > 0, @"★还没生成码 ⇒ 拒绝并点名★");
+    }
+
+    [d setObject:@"existingRecord" forKey:A2SelectedPairingPinSourcePrefKey];
+    {
+        NSString *why = nil;
+        ok([A2JITPairingPinResolver resolvedPinForDisplayedCode:@"123456" reason:&why] == nil
+           && [why containsString:@"pair-verify"], @"★已有记录档 ⇒ 不取码，走 pair-verify 快路径★");
+    }
+
+    [d setObject:@"onScreenCode" forKey:A2SelectedPairingPinSourcePrefKey];
+    {
+        NSString *why = nil;
+        ok([A2JITPairingPinResolver resolvedPinForDisplayedCode:@"123456" reason:&why] == nil
+           && [why containsString:@"未实现"], @"★屏显码档未实现 ⇒ 选中即拒绝并点名★");
+    }
+
+    [d setObject:@"garbage" forKey:A2SelectedPairingPinSourcePrefKey];
+    {
+        NSString *why = nil;
+        ok([A2JITPairingPinResolver selectedMode] == A2JITPairingPinModeUnknown
+           && [A2JITPairingPinResolver resolvedPinForDisplayedCode:nil reason:&why] == nil
+           && why.length > 0, @"★不认识的偏好值 ⇒ 拒绝（不猜）★");
+    }
+
+    // 复原（不给后续/他人留「已选择」假象）
+    if (saved) { [d setObject:saved forKey:A2SelectedPairingPinSourcePrefKey]; }
+    else { [d removeObjectForKey:A2SelectedPairingPinSourcePrefKey]; }
+
+    // ===== ③ 设备发起档的 6 位码会话：生成 / 持久化 / 作废 / 判据行 =====
+    A2JITPairingCodeSession *cs = [A2JITPairingCodeSession sharedSession];
+    NSError *err = nil;
+    ok(![cs beginDeviceInitiatedWithHostName:@"" error:&err] && err != nil,
+       @"★主机名为空 ⇒ 不生成码（不猜主机名）★");
+    err = nil;
+    ok([cs beginDeviceInitiatedWithHostName:@"Air2 (test)" error:&err],
+       @"设备发起档：生成 6 位码成功");
+    eqInt((NSInteger)cs.code.length, 6, @"码是 6 位");
+    {
+        BOOL allDigits = YES;
+        for (NSUInteger i = 0; i < cs.code.length; i++) {
+            unichar c = [cs.code characterAtIndex:i];
+            if (c < '0' || c > '9') { allDigits = NO; }
+        }
+        ok(allDigits, @"★码是 6 位纯数字（可在系统设置里输入）★");
+    }
+    eqInt((NSInteger)cs.state, (NSInteger)A2JITPairingCodeStateAdvertising, @"状态=广告中");
+    eqStr(cs.hostName, @"Air2 (test)", @"主机名可认出（用户要在系统设置里选它）");
+    ok([[A2JITPairingCodeSession criterionLineForState:cs.state host:cs.hostName code:cs.code detail:nil]
+        hasPrefix:@"[A2-PAIRPIN] state="], @"判据行带 [A2-PAIRPIN] state= 前缀");
+    eqStr([A2JITPairingCodeSession stateName:A2JITPairingCodeStateVerifying], @"verifying",
+          @"状态英文名稳定（日志可搜）");
+    eqStr([A2JITPairingCodeSession pairableHostServiceType], @"_remotepairing-pairable-host._tcp",
+          @"广告服务类型（与 Natives/Info.plist 一致）");
+
+    // ★持久化：切到系统设置再回来仍能读到同一个码★
+    A2JITPairingCodeSession *restored = [A2JITPairingCodeSession restoredFromDefaults];
+    ok(restored != nil && [restored.code isEqualToString:cs.code]
+       && [restored.hostName isEqualToString:cs.hostName],
+       @"★切后台/去系统设置后仍能读到【同一个】码（已持久化）★");
+
+    [cs advanceToState:A2JITPairingCodeStateVerifying detail:@"设备已连入并提交码"];
+    eqInt((NSInteger)[A2JITPairingCodeSession restoredFromDefaults].state,
+          (NSInteger)A2JITPairingCodeStateVerifying, @"状态推进也持久化");
+    [cs advanceToState:A2JITPairingCodeStateFailed detail:@"M1 校验失败（码不对）"];
+    ok([[A2JITPairingCodeSession restoredFromDefaults].lastDetail containsString:@"码不对"],
+       @"★失败原因如实持久化（用户可见）★");
+    [cs endPairing];
+    ok(cs.code.length == 0 && [A2JITPairingCodeSession restoredFromDefaults] == nil,
+       @"★作废后清掉显示的码（不留一个已经不能用的码）★");
+
+    // ===== ④ Info.plist 与本档的服务类型一致（防漂移）=====
+    NSString *plistSrc = [NSString stringWithContentsOfFile:RepoPath(@"Air2/Info.plist")
+                                                   encoding:NSUTF8StringEncoding error:NULL];
+    ok([plistSrc containsString:[A2JITPairingCodeSession pairableHostServiceType]],
+       @"★Info.plist 登记了可配对主机服务类型（否则设备发现不到我们）★");
+
+    // ===== ⑤ 用户可见入口 + 接线（源码级不变量）=====
+    NSString *settings = [NSString stringWithContentsOfFile:RepoPath(@"Air2/UI/Screens/Settings/A2JITSettings.m")
+                                                   encoding:NSUTF8StringEncoding error:NULL];
+    ok(settings.length > 0, @"读得到 JIT 设置页");
+    ok([settings containsString:@"jit.row.pairpin"], @"★设置页有「配对码来源」行★");
+    ok([settings containsString:@"A2SelectedPairingPinSourcePrefKey"], @"★设置页是偏好键的写入点★");
+    ok([settings containsString:@"A2JITPairingPinResolver"], @"★设置页真的用解析器（选择项生效）★");
+    ok([settings containsString:@"beginDeviceInitiatedWithHostName"], @"★设置页会生成并显示 6 位码★");
+    ok([settings containsString:@"UIPasteboard"], @"★码行可复制（UIPasteboard）★");
+    ok([settings containsString:@"pairSetupPinProvider"], @"★用户可见选项 → 解析 → 喂 Natives 缝★");
+    ok([settings containsString:@"隐私与安全性"] || [settings containsString:@"jit.pairpin.instruction"],
+       @"设置页给了「去系统设置输入码」的指引（两种入口都提到）");
+
+    NSString *contract = [NSString stringWithContentsOfFile:RepoPath(@"Air2/Utils/A2LaunchContract.m")
+                                                   encoding:NSUTF8StringEncoding error:NULL];
+    ok([contract containsString:@"A2SelectedPairingPinSource"], @"契约常量里登记了配对码来源偏好键");
+
+    // 四语齐全（新 key × 4 语言）
+    NSArray<NSString *> *pairpinKeys = @[ @"jit.row.pairpin", @"jit.pairpin.mode.trust",
+                                          @"jit.pairpin.mode.device", @"jit.pairpin.mode.existing",
+                                          @"jit.pairpin.mode.onscreen", @"jit.pairpin.unsupported",
+                                          @"jit.pairpin.notselected", @"jit.pairpin.row.code",
+                                          @"jit.pairpin.instruction", @"jit.pairpin.row.copy",
+                                          @"jit.pairpin.toast.selected", @"jit.pairpin.cancel" ];
+    NSMutableArray<NSString *> *missing = [NSMutableArray array];
+    for (NSString *k in pairpinKeys) {
+        for (NSInteger li = A2JITLanguageZhHans; li <= A2JITLanguageJapanese; li++) {
+            if ([A2JITStrings stringForKey:k language:(A2JITLanguage)li].length == 0) {
+                [missing addObject:[NSString stringWithFormat:@"%@/%ld", k, (long)li]];
+            }
+        }
+    }
+    if (missing.count) { printf("        缺文案：%s\n", [[missing componentsJoinedByString:@","] UTF8String]); }
+    eqInt((NSInteger)missing.count, 0, @"★配对码来源的新文案四语齐全★");
+}
+
 #pragma mark - main
 
 int main(int argc, const char *argv[]) {
@@ -2645,6 +3384,10 @@ int main(int argc, const char *argv[]) {
         testDDIProbeAndGuidance();
         testRPPairingCore();
         testRPPairingHandshakeBody();
+        testPairSetupSRPMath();
+        testPairSetupMessageFlow();
+        testPairSetupWiring();
+        testPairSetupPinSource();
         testIntegrationTLSPSK();
         testLaunchChainJitVmWiring();
         testWiringInvariants();
