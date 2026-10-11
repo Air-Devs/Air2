@@ -1,10 +1,10 @@
 /*
- * Air2 —— 复用线 Java 覆盖层（JavaApp/src/lwjgl/**）的 native 对端
+ * Air2 —— 复用线 Java 覆盖层（JavaApp/src/lwjgl/（10 类））的 native 对端
  * ============================================================================
  * 文件：Natives/Input/a2_glfw_overlay_bridge.m
- * 归属线：复用线（JavaApp/src/lwjgl/** → air2-lwjgl-patch.jar，classpath 最前，
+ * 归属线：复用线（JavaApp/src/lwjgl/（10 类） → air2-lwjgl-patch.jar，classpath 最前，
  *         由 Air2/Bridge/A2LaunchRunner.m 的 frontItems 排在最前；见 docs/ARCHITECTURE.md [LWJGL-PATCH]）。
- *         与本仓另一条自研线（JavaApp/src/ownglfw/** + Natives/OwnGlfw/a2_own_glfw_bridge.m）
+ *         与本仓另一条自研线（JavaApp/src/ownglfw/（另一条线） + Natives/OwnGlfw/a2_own_glfw_bridge.m）
  *         ★互不混同★：那条线是自己的 GLFW 类与自己的 11 个 `..._GLFW_n*` 符号；
  *         本条线服务的是「覆盖官方同名类」的那 10 个复用类，符号名由它们逐字决定。
  *
