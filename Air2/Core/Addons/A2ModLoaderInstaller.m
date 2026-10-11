@@ -126,10 +126,29 @@ static void A2Main(dispatch_block_t b) {
             break;
 
         case A2ModLoaderTypeOptiFine:
+            // OptiFine 的自动安装【必须能跑 JVM】，不是纯下载能完成的。
+            //
+            // 核对 FoldCraftLauncher（ZL2 的上游）的 OptiFineInstallTask.java：
+            //   OptiFine 的 installer 里带一个 Patcher.class，
+            //   安装时要执行：
+            //       java -cp installer.jar optifine.Patcher \
+            //            {原版jar} {installer.jar} {输出jar}
+            //   它把原版 jar 与 OptiFine 合并成新的库文件。
+            //   不做这步，OptiFine 装不上。
+            //
+            // FCL 还有多版本 JRE 回退链（8 → 17 → 11 → 21），
+            // 说明这个 Patcher 对 Java 版本敏感。
+            //
+            // 所以我们当前确实做不到 —— 等启动核心就绪（能起 JVM）后，
+            // 照 FCL 的流程实现即可，逻辑不复杂。
+            [self failWithMessage:
+                @"OptiFine 需要运行其自带的 Patcher 程序才能安装，"
+                @"当前启动核心尚未就绪，请手动安装"];
+            break;
+
         case A2ModLoaderTypeLiteLoader:
         case A2ModLoaderTypeRift:
-            // 官方无稳定接口 —— 与 ZL2 的 autoDownloadable=false 一致
-            // （OptiFine 与 LiteLoader/Rift 同属 A2ModLoaderSupportsAutoInstall == NO 的一档）
+            // 这两个官方确实没有稳定的自动化接口
             [self failWithMessage:[NSString stringWithFormat:
                 @"%@ 不支持自动安装，请手动下载安装包后放入 versions 目录",
                 [A2ModLoaderAPI displayNameForType:loader.type]]];
