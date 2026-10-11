@@ -40,6 +40,11 @@ FOUNDATION_EXPORT NSString *const A2LaunchJavaEntryJarName;
 /// 必须排在 `libs/lwjgl-<ver>/*` 之前 ⇒ 作为 classpath 最前的 front 项）。
 FOUNDATION_EXPORT NSString *const A2LaunchJavaPatchJarName;
 
+/// 自研 org.lwjgl.glfw.* 最小集 jar 名（[A2-OWNGLFW-1]，随包 `<App>/Java/`）。
+/// 它覆盖官方 `org.lwjgl.glfw.GLFW`/`Callbacks`/`GLFWNativeCocoa`，同样必须在
+/// `libs/lwjgl-<ver>/*` 之前（与补丁 jar 同列 front 项）。缺该 jar 时自动跳过（回退官方实现）。
+FOUNDATION_EXPORT NSString *const A2LaunchJavaOwnGlfwJarName;
+
 /// 启动计划 JSON 的 schema（与 Java 侧 `A2LaunchPlan.SCHEMA_VERSION` 必须一致，否则 Java 侧直接失败）。
 FOUNDATION_EXPORT const NSInteger A2LaunchPlanSchema;
 

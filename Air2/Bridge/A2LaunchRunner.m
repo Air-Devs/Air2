@@ -45,10 +45,23 @@
     int renderRC = a2_renderer_load_metal(frameworksPath);
     [A2Log log:@"[A2-RENDERER] 渲染后端选择完成 rc=%d（0=已加载；-1=未找到/失败，见上一行）", renderRC];
 
-    // ---- front 项：启动核心 jar + LWJGL 补丁 jar（补丁必须最先，才能盖住 libs/lwjgl-<ver>）----
+    // ---- front 项：启动核心 jar + LWJGL 补丁 jar + 自研 GLFW jar ----
+    // 三类都必须最先，才能盖住 libs/lwjgl-<ver>/* 里的官方同名类
+    // （自研 GLFW jar 覆盖 org.lwjgl.glfw.GLFW / Callbacks / GLFWNativeCocoa）。
+    // 自研 GLFW jar 与补丁 jar 同目录（<App>/Java/）⇒ 由 entryJarPath 所在目录推出；
+    // 文件不存在则跳过（回退官方实现，不阻断启动）。
     NSMutableArray<NSString *> *frontItems = [NSMutableArray array];
     if (entryJarPath.length > 0) [frontItems addObject:entryJarPath];
     if (patchJarPath.length > 0) [frontItems addObject:patchJarPath];
+    if (entryJarPath.length > 0) {
+        NSString *ownGlfwJar = [[entryJarPath stringByDeletingLastPathComponent]
+                                stringByAppendingPathComponent:A2LaunchJavaOwnGlfwJarName];
+        if ([NSFileManager.defaultManager fileExistsAtPath:ownGlfwJar]) {
+            [frontItems addObject:ownGlfwJar];
+        } else {
+            [A2Log log:@"[A2-LAUNCH] 自研 GLFW jar 不在包内：%@（回退官方 org.lwjgl.glfw.*）", ownGlfwJar];
+        }
+    }
     NSString *frontJar = [frontItems componentsJoinedByString:@":"];
 
     // ---- R4 唯一拼装点：argv 里的 classpath 与传给 a2_launch 的输入必须是同一份 ----
