@@ -26,24 +26,39 @@
 
 /// 微软 OAuth 端点。
 ///
-/// 必须走 Live Connect（login.live.com），不能换成 AAD 的
-/// login.microsoftonline.com/consumers：客户端 ID 00000000402b5328 是
-/// 注册在 Live Connect 上的应用，AAD 目录里不存在它，请求会直接被拒：
-///   AADSTS700016: Application with identifier '00000000402b5328'
-///   was not found in the directory ...
-static NSString *const kDeviceCodeURL   = @"https://login.live.com/oauth20_connect.srf";
-static NSString *const kTokenURL        = @"https://login.live.com/oauth20_token.srf";
+/// ★两套客户端配置（同一个文件里唯一切换点 = A2MSAApplyProfile）★
+///   公共档(默认)：00000000402b5328 —— 官方公开 ID，注册在 Live Connect，只能配 login.live.com；
+///     现在就能登录，但不干净（可能被限流）。
+///   自用档：Air2-Launcher(3ed5c7e5-…) —— 走 AAD v2.0 的 consumers 端点 + XboxLive.signin，
+///     ⚠️ 通过“Minecraft API app ID 审核”(https://aka.ms/mce-reviewappid) 之前，
+///        MC 侧会回 403 Invalid app registration（已实测：MS/XBL/XSTS 三关都 200，只卡在 MC login）。
+///   ⇒ 审核通过后：把 NSUserDefaults 的 A2MSAUseOwnApp 设为 YES（或加进设置页）即可切换。
+static NSString *kDeviceCodeURL = nil;   // 由 A2MSAApplyProfile() 赋值
+static NSString *kTokenURL      = nil;   // 同上
+static NSString *kScope         = nil;   // 同上
+static NSString *kClientID      = nil;   // 同上
+
+static void A2MSAApplyProfile(void) {
+    BOOL own = [[NSUserDefaults standardUserDefaults] boolForKey:@"A2MSAUseOwnApp"];
+    if (own) {
+        kDeviceCodeURL = @"https://login.microsoftonline.com/consumers/oauth2/v2.0/devicecode";
+        kTokenURL      = @"https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
+        kScope         = @"XboxLive.signin offline_access";
+        kClientID      = @"3ed5c7e5-ede8-447b-967d-68ef780cbaee";
+    } else {
+        kDeviceCodeURL = @"https://login.live.com/oauth20_connect.srf";
+        kTokenURL      = @"https://login.live.com/oauth20_token.srf";
+        kScope         = @"service::user.auth.xboxlive.com::MBI_SSL";
+        kClientID      = @"00000000402b5328";
+    }
+    NSLog(@"[A2-MSA] profile=%s clientID=%@", own ? "own" : "public", kClientID);
+}
 /// Xbox Live 认证
 static NSString *const kXboxAuthURL     = @"https://user.auth.xboxlive.com/user/authenticate";
 static NSString *const kXstsAuthURL     = @"https://xsts.auth.xboxlive.com/xsts/authorize";
 /// Minecraft 服务
 static NSString *const kMCLoginURL      = @"https://api.minecraftservices.com/authentication/login_with_xbox";
 static NSString *const kMCProfileURL    = @"https://api.minecraftservices.com/minecraft/profile";
-
-/// Live Connect 的 Xbox Live 委托 scope。
-/// 这个值对应服务端 user.auth.xboxlive.com，是 Live Connect 这套流程的取值；
-/// AAD 那套（XboxLive.signin offline_access）在这里会被拒。
-static NSString *const kScope = @"service::user.auth.xboxlive.com::MBI_SSL";
 
 /// XSTS 的依赖方标识（Minecraft 专用）
 static NSString *const kRelyingParty = @"rp://api.minecraftservices.com/";
@@ -70,10 +85,9 @@ static void A2Main(dispatch_block_t b) {
 - (instancetype)init {
     self = [super init];
     if (!self) return nil;
-    // 微软公开的、供第三方启动器使用的 Minecraft 客户端 ID。
-    // 它注册在 Live Connect 上，所以只能配 login.live.com 的端点用 ——
-    // 换成 AAD 端点会直接报 AADSTS700016（见文件顶部 kDeviceCodeURL 注释）。
-    _clientID = @"00000000402b5328";
+    // 客户端配置由 A2MSAApplyProfile() 统一决定（默认公共档；详见文件顶部说明）★
+    A2MSAApplyProfile();
+    _clientID = kClientID;
     _session = [NSURLSession sessionWithConfiguration:
                 NSURLSessionConfiguration.defaultSessionConfiguration];
     return self;
