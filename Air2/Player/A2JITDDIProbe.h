@@ -71,10 +71,6 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)fetchPersonalizedImageWithReason:(NSString *_Nullable *_Nullable)reasonOut;
 /// 挂载当前本地镜像的调用点（缺特权 / 未接线 ⇒ NO + 确切缺什么）。
 - (BOOL)mountCurrentImageWithReason:(NSString *_Nullable *_Nullable)reasonOut;
-/// image_mounter 服务是否可用（未接线 ⇒ NO + 原因）。
-- (BOOL)isImageMounterAvailableWithReason:(NSString *_Nullable *_Nullable)reasonOut;
-/// 设备唯一芯片 ID（个性化镜像需要；取不到 ⇒ nil，不编造）。
-- (nullable NSString *)uniqueChipID;
 
 @end
 

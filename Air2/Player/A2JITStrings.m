@@ -618,37 +618,6 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
             @"en": @"DDI state cannot be confirmed (probe not wired / image declares no version / directory unreadable)",
             @"ja": @"DDI の状態を確認できません（検出未接続 / イメージにバージョン宣言なし / ディレクトリ読めず）",
         },
-        // 判定动作
-        @"jit.ddi.verdict.present.action": @{
-            @"zh-Hans": @"无需操作",
-            @"zh-Hant": @"無需操作",
-            @"en": @"No action needed",
-            @"ja": @"操作は不要です",
-        },
-        @"jit.ddi.verdict.missing.action": @{
-            @"zh-Hans": @"导入一份 DDI 镜像，或打开「联网取 DDI」开关",
-            @"zh-Hant": @"匯入一份 DDI 映像，或開啟「連網取 DDI」開關",
-            @"en": @"Import a DDI image, or turn on \"Fetch DDI online\"",
-            @"ja": @"DDI イメージを取り込むか、「DDI をオンライン取得」をオンにします",
-        },
-        @"jit.ddi.verdict.versionMismatch.action": @{
-            @"zh-Hans": @"导入与当前系统匹配的 DDI；或改用外部工具开启 JIT",
-            @"zh-Hant": @"匯入與目前系統相符的 DDI；或改用外部工具開啟 JIT",
-            @"en": @"Import a DDI matching the current OS, or use an external tool to enable JIT",
-            @"ja": @"現在のシステムに一致する DDI を取り込むか、外部ツールで JIT を有効化します",
-        },
-        @"jit.ddi.verdict.stale.action": @{
-            @"zh-Hans": @"重新导入一份 DDI 镜像",
-            @"zh-Hant": @"重新匯入一份 DDI 映像",
-            @"en": @"Import a fresh DDI image",
-            @"ja": @"新しい DDI イメージを取り込み直します",
-        },
-        @"jit.ddi.verdict.unknown.action": @{
-            @"zh-Hans": @"先看日志取证；必要时导入一份带版本声明的 DDI",
-            @"zh-Hant": @"先看日誌取證；必要時匯入一份帶版本宣告的 DDI",
-            @"en": @"Check the log for evidence; if needed, import a DDI that declares its version",
-            @"ja": @"まずログの証跡を確認し、必要ならバージョン宣言付きの DDI を取り込みます",
-        },
         // 下一步动作
         @"jit.ddi.next.ready": @{
             @"zh-Hans": @"DDI 已就位，可继续",
@@ -747,6 +716,12 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
             @"zh-Hant": @"連網取 DDI 失敗",
             @"en": @"Online DDI fetch failed",
             @"ja": @"DDI のオンライン取得に失敗しました",
+        },
+        @"jit.toast.ddiMountOK": @{
+            @"zh-Hans": @"DDI 已挂载",
+            @"zh-Hant": @"DDI 已掛載",
+            @"en": @"DDI mounted",
+            @"ja": @"DDI をマウントしました",
         },
         @"jit.toast.ddiFetchOff": @{
             @"zh-Hans": @"「联网取 DDI」是关着的：先打开开关",

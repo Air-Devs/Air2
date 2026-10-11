@@ -69,6 +69,8 @@ static BOOL A2TailLooksLikeUDIF(NSData *tail, NSString *_Nullable *_Nullable why
 - (nullable NSDictionary<NSString *, id> *)storedMetadata;
 /// 文件名里第一个「版本串[-构建号]」匹配（group 1 = 版本，group 2 = 构建号）。
 + (nullable NSString *)firstMatchInFileName:(NSString *)fileName group:(NSInteger)group;
+/// SHA-256（十六进制小写，流式读取，★不把整份镜像读进内存★）；失败返回 nil。
++ (nullable NSString *)sha256HexOfFile:(NSString *)path;
 /// 摘要 → 十六进制小写。
 + (NSString *)hexFromDigest:(const unsigned char *)digest;
 @end
@@ -242,23 +244,6 @@ static BOOL A2TailLooksLikeUDIF(NSData *tail, NSString *_Nullable *_Nullable why
 
 #pragma mark - 校验
 
-+ (BOOL)looksLikeUDIFDiskImageData:(NSData *)data why:(NSString *_Nullable *_Nullable)whyOut {
-    if (data.length < 512) {
-        if (whyOut) {
-            *whyOut = @"文件小于 512 字节 ⇒ 不是磁盘镜像";
-        }
-        return NO;
-    }
-    if ((data.length % 512) != 0) {
-        if (whyOut) {
-            *whyOut = @"大小不是 512 的整数倍（UDIF 尾标块要求）";
-        }
-        return NO;
-    }
-    NSData *tail = [data subdataWithRange:NSMakeRange(data.length - 512, 512)];
-    return A2TailLooksLikeUDIF(tail, whyOut);
-}
-
 - (BOOL)fileLooksLikeDiskImageAtPath:(NSString *)path why:(NSString *_Nullable *_Nullable)whyOut {
     NSFileManager *fm = NSFileManager.defaultManager;
     NSNumber *sz = [fm attributesOfItemAtPath:path error:NULL][NSFileSize];
@@ -330,77 +315,6 @@ static BOOL A2TailLooksLikeUDIF(NSData *tail, NSString *_Nullable *_Nullable why
 }
 
 #pragma mark - 导入
-
-- (nullable NSString *)importImageData:(NSData *)data
-                              fileName:(nullable NSString *)fileName
-                            sourceName:(nullable NSString *)sourceName
-                                 error:(NSError *_Nullable *_Nullable)error {
-    if (data.length == 0) {
-        if (error) {
-            *error = A2StoreError(A2JITDDIStoreErrorInvalidImage, @"所选镜像为空");
-        }
-        NSLog(@"[A2JIT] ddi-store: 拒绝空文件（source=%@）", sourceName ?: @"(未命名)");
-        return nil;
-    }
-
-    NSString *why = nil;
-    if (![A2JITDDIStore looksLikeUDIFDiskImageData:data why:&why]) {
-        if (error) {
-            *error = A2StoreError(A2JITDDIStoreErrorInvalidImage,
-                                  [NSString stringWithFormat:@"不是可识别的磁盘镜像：%@", why ?: @"未知原因"]);
-        }
-        NSLog(@"[A2JIT] ddi-store: 校验失败 source=%@ reason=%@", sourceName ?: @"(未命名)", why ?: @"?");
-        return nil;
-    }
-
-    NSFileManager *fm = NSFileManager.defaultManager;
-    NSError *dirErr = nil;
-    if (![fm createDirectoryAtPath:self.directory
-       withIntermediateDirectories:YES
-                        attributes:nil
-                             error:&dirErr]) {
-        if (error) {
-            *error = A2StoreError(A2JITDDIStoreErrorWriteFailed,
-                                  [NSString stringWithFormat:@"无法创建目录：%@",
-                                   dirErr.localizedDescription ?: self.directory]);
-        }
-        return nil;
-    }
-
-    NSString *path = [self.directory stringByAppendingPathComponent:[A2JITDDIStore canonicalImageName]];
-    NSError *wErr = nil;
-    if (![data writeToFile:path options:NSDataWritingAtomic error:&wErr]) {
-        if (error) {
-            *error = A2StoreError(A2JITDDIStoreErrorWriteFailed,
-                                  [NSString stringWithFormat:@"写入失败：%@",
-                                   wErr.localizedDescription ?: path]);
-        }
-        return nil;
-    }
-
-    NSString *declaredVersion = [A2JITDDIStore osVersionFromFileName:fileName ?: @""];
-    NSString *declaredBuild = [A2JITDDIStore buildFromFileName:fileName ?: @""];
-
-    NSMutableDictionary<NSString *, id> *meta = [NSMutableDictionary dictionary];
-    meta[A2JITDDIStoreSourceNameKey] = sourceName.length ? sourceName : @"(未命名)";
-    meta[A2JITDDIStoreImportedAtKey] = [NSDate date];
-    meta[A2JITDDIStoreByteSizeKey] = @(data.length);
-    meta[A2JITDDIStoreChecksumKey] = [A2JITDDIStore sha256HexOfData:data] ?: @"";
-    meta[A2JITDDIStoreKindKey] = @"Legacy";
-    if (declaredVersion.length) {
-        meta[A2JITDDIStoreDeclaredOSVersionKey] = declaredVersion;
-    }
-    if (declaredBuild.length) {
-        meta[A2JITDDIStoreDeclaredBuildKey] = declaredBuild;
-    }
-    (void)[meta writeToFile:self.metadataFilePath atomically:YES];
-
-    NSLog(@"[A2JIT] ddi-store: 已导入 path=%@ bytes=%lu declared=%@/%@ sha256=%@",
-          path, (unsigned long)data.length,
-          declaredVersion ?: @"(未声明)", declaredBuild ?: @"(未声明)",
-          meta[A2JITDDIStoreChecksumKey]);
-    return path;
-}
 
 - (nullable NSString *)importImageFromURL:(NSURL *)url
                                sourceName:(nullable NSString *)sourceName
@@ -489,42 +403,7 @@ static BOOL A2TailLooksLikeUDIF(NSData *tail, NSString *_Nullable *_Nullable why
     return dst;
 }
 
-- (BOOL)removeImportedImageWithError:(NSError *_Nullable *_Nullable)error {
-    NSFileManager *fm = NSFileManager.defaultManager;
-    BOOL removedAny = NO;
-    for (NSString *name in [A2JITDDIStore candidateImageNames]) {
-        NSString *p = [self.directory stringByAppendingPathComponent:name];
-        if ([fm fileExistsAtPath:p]) {
-            NSError *e = nil;
-            if ([fm removeItemAtPath:p error:&e]) {
-                removedAny = YES;
-            } else if (error) {
-                *error = A2StoreError(A2JITDDIStoreErrorWriteFailed,
-                                      e.localizedDescription ?: @"删除镜像失败");
-                return NO;
-            }
-        }
-    }
-    if ([fm fileExistsAtPath:self.metadataFilePath]) {
-        [fm removeItemAtPath:self.metadataFilePath error:NULL];
-    }
-    NSLog(@"[A2JIT] ddi-store: 移除已导入镜像（removedAny=%d）", (int)removedAny);
-    if (!removedAny && error) {
-        *error = A2StoreError(A2JITDDIStoreErrorNoStoredImage, @"没有已导入的 DDI 镜像");
-    }
-    return YES;
-}
-
 #pragma mark - 校验和
-
-+ (nullable NSString *)sha256HexOfData:(NSData *)data {
-    if (data.length == 0) {
-        return nil;
-    }
-    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
-    CC_SHA256(data.bytes, (CC_LONG)data.length, digest);
-    return [self hexFromDigest:digest];
-}
 
 + (nullable NSString *)sha256HexOfFile:(NSString *)path {
     NSInputStream *in = [NSInputStream inputStreamWithFileAtPath:path];

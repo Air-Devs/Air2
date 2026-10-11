@@ -24,9 +24,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// 全部判定（稳定顺序：Unknown → Present → Missing → VersionMismatch → Stale，共 5 项）。
 + (NSArray<NSNumber *> *)allVerdicts;
 
-/// 稳定英文名（日志 / 诊断用，非本地化）。
-+ (NSString *)displayNameForVerdict:(A2JITDDIVerdict)verdict;
-
 /// ★判定 → 自动配对的 DDI 前置条件三态★（Unknown 只由 Unknown 判定产生）。
 + (A2JITAutoPairingPreconditionState)preconditionStateForVerdict:(A2JITDDIVerdict)verdict;
 
@@ -34,8 +31,6 @@ NS_ASSUME_NONNULL_BEGIN
 + (NSString *)statusKeyForVerdict:(A2JITDDIVerdict)verdict;
 /// 本地化 key：失败 / 异常原因。
 + (NSString *)reasonKeyForVerdict:(A2JITDDIVerdict)verdict;
-/// 本地化 key：下一步动作（就位时的说明 / 重导入 / 联网取 …）。
-+ (NSString *)actionKeyForVerdict:(A2JITDDIVerdict)verdict;
 
 /// 本地化 key：设置页「下一步动作」行（按判定 + 偏好开关取值）。
 /// @param fetchEnabled 「联网取 DDI」开关是否已打开（默认关）。

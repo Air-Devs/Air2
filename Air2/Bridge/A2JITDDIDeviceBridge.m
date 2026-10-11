@@ -44,20 +44,6 @@ static NSString *const kA2DDIBridgeNotWired =
     return A2JITDDIVerdictUnknown;
 }
 
-- (BOOL)isImageMounterAvailableWithReason:(NSString *_Nullable *_Nullable)reasonOut {
-    NSLog(@"[A2JIT] ddi bridge: isImageMounterAvailable ⇒ NO（未接入）");
-    if (reasonOut) {
-        *reasonOut = @"image_mounter 服务未接入：需经 lockdown / 隧道拿到该服务并具备相应特权"
-                     @"（本进程为沙盒 App，未接线；确认后缺什么会在此点名）";
-    }
-    return NO;
-}
-
-- (nullable NSString *)uniqueChipID {
-    // ★不编造★：取不到就回 nil（个性化镜像需要它，所以这也会让「联网取 DDI」如实不可用）。
-    return nil;
-}
-
 #pragma mark - 机制调用点（全部如实回 NO + 确切缺什么）
 
 - (BOOL)fetchPersonalizedImageForRequirement:(A2JITDDIRequirement *)requirement
@@ -65,10 +51,12 @@ static NSString *const kA2DDIBridgeNotWired =
     NSLog(@"[A2JIT] ddi bridge: fetchPersonalizedImage ⇒ NO（未接入）require=%@",
           [requirement displayVersion]);
     if (reasonOut) {
-        *reasonOut = @"联网取 DDI 未接入：需向 Apple 官方 personalization（TSS）端点提交个性化请求"
-                     @"（★访问 Apple 官方服务，非「上云」★：请求直达 Apple，不经第三方服务器），"
-                     @"并需要设备 UniqueChipID 等个性化参数与返回材料的校验——"
-                     @"机制经 Bridge → Natives 落地（docs/JIT-PROVISIONING.md §4.2）";
+        *reasonOut = @"联网取 DDI 未接入：需要 (1) 与「自动配对」同一套的 RPPairing 隧道"
+                     @"（RSD + pair-verify + TLS-PSK，本仓尚未落地）；"
+                     @"(2) 经该隧道调用设备 image_mounter 的客户端能力；"
+                     @"(3) 镜像文件集来源的选型（★第三方镜像仓 vs Apple 分发，需拍板★）——"
+                     @"三者齐备才谈得上「取到并挂载」，机制经 Bridge → Natives 落地"
+                     @"（docs/JIT-PROVISIONING.md §3.4 / §4.2）";
     }
     return NO;
 }
@@ -79,8 +67,10 @@ static NSString *const kA2DDIBridgeNotWired =
     NSLog(@"[A2JIT] ddi bridge: mountImage ⇒ NO（未接入）path=%@ trustcache=%@",
           imagePath.lastPathComponent, trustcachePath ? @"有" : @"无");
     if (reasonOut) {
-        *reasonOut = @"挂载 DDI 未接入：需 image_mounter 服务（经 lockdown / 隧道）与相应特权；"
-                     @"本进程为沙盒 App，未接线（若确认需要额外特权，会在此点名缺什么）";
+        *reasonOut = @"挂载 DDI 未接入：需经 RPPairing 隧道调用设备的 image_mounter 服务"
+                     @"（cryptex / personalized 两种方式，按系统版本选），"
+                     @"并具备相应能力（本进程为沙盒 App，未接线）——"
+                     @"若确认需要额外特权，会在此点名缺什么";
     }
     return NO;
 }

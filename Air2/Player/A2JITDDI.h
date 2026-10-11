@@ -80,14 +80,10 @@ typedef NS_ENUM(NSInteger, A2JITDDIVerdict) {
 /// 系统构建号（如 24B5084k）。★取不到就是 nil ⇒ 无法按构建号对齐（不猜）★。
 @property (nonatomic, readonly, copy, nullable) NSString *build;
 
-/// 设备唯一芯片 ID（个性化镜像需要）。★取不到就是 nil ⇒ 无法个性化（不猜）★。
-@property (nonatomic, readonly, copy, nullable) NSString *uniqueChipID;
-
 /// 显式构造。
 + (instancetype)requirementWithOSMajorVersion:(NSInteger)majorVersion
                                  minorVersion:(NSInteger)minorVersion
-                                        build:(nullable NSString *)build
-                                 uniqueChipID:(nullable NSString *)uniqueChipID;
+                                        build:(nullable NSString *)build;
 
 /// 版本串（如 "27.2"）。
 - (NSString *)versionString;
@@ -150,12 +146,6 @@ typedef NS_ENUM(NSInteger, A2JITDDIVerdict) {
 /// 设备侧是否已有可用 DDI（如 Xcode 已挂载）。
 /// ★查不到就回 A2JITDDIVerdictUnknown 并在 evidenceOut 写明为什么，不许猜★。
 - (A2JITDDIVerdict)deviceDDIVerdictWithEvidence:(NSString *_Nullable *_Nullable)evidenceOut;
-
-/// image_mounter 服务是否可用（挂载的前置）。缺什么在 reasonOut 里写明。
-- (BOOL)isImageMounterAvailableWithReason:(NSString *_Nullable *_Nullable)reasonOut;
-
-/// 设备唯一芯片 ID（个性化镜像需要）。★取不到回 nil★（不编造）。
-- (nullable NSString *)uniqueChipID;
 
 /// ★联网取 DDI★（默认关；开启后走 Apple 官方端点做个性化请求）。
 /// ★这属于「访问 Apple 官方服务」，不是「上云」★：请求发往 Apple 的 personalization/TSS 端点，
@@ -228,10 +218,8 @@ typedef NS_ENUM(NSInteger, A2JITDDIVerdict) {
 
 /// 稳定英文名（日志 / 诊断用，非本地化）。
 + (NSString *)displayNameForVerdict:(A2JITDDIVerdict)verdict;
-/// 稳定英文名（来源）。
+/// 稳定英文名（来源；日志用，非本地化）。
 + (NSString *)displayNameForSource:(A2JITDDISource)source;
-/// 稳定英文名（形态）。
-+ (NSString *)displayNameForKind:(A2JITDDIKind)kind;
 
 @end
 

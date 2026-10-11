@@ -7,6 +7,7 @@
 
 #import "A2JITDDIProbe.h"
 #import "A2JITDDIStore.h"
+#import "A2JITDDIGuidance.h"   // 统一日志行（唯一实现）
 
 @interface A2JITLocalDDIProbe ()
 // 头文件 readonly，内部可写（单测可调小窗口）。
@@ -125,28 +126,16 @@
                             evidence:(nullable NSString *)evidence {
     NSString *ev = evidence.length ? evidence : @"(无取证记录)";
     // 一行定成败：判定 / 来源 / 系统要求 / 取证（默认可见，便于真机照单核对）。
-    NSLog(@"[A2JIT] ddi provider=本地 DDI 探测 verdict=%@(%ld) source=%@ require=%@ evidence=%@",
-          [A2JITDDI displayNameForVerdict:verdict], (long)verdict,
-          [A2JITDDI displayNameForSource:source],
-          [self.requirement displayVersion], ev);
+    NSString *detail = [NSString stringWithFormat:@"source=%@ require=%@ %@",
+                        [A2JITDDI displayNameForSource:source],
+                        [self.requirement displayVersion], ev];
+    NSLog(@"%@", [A2JITDDIGuidance logLineWithProvider:@"本地 DDI 探测"
+                                              verdict:verdict
+                                             evidence:detail]);
     return [A2JITDDIStatus statusWithVerdict:verdict imagePath:imagePath source:source evidence:ev];
 }
 
 #pragma mark - 机制调用点（全部如实转发；未接线 ⇒ NO + 确切缺什么）
-
-- (BOOL)isImageMounterAvailableWithReason:(NSString *_Nullable *_Nullable)reasonOut {
-    if (self.deviceQuery == nil) {
-        if (reasonOut) {
-            *reasonOut = @"设备侧查询未接线（Bridge → Natives 尚未落地）⇒ 无法使用 image_mounter";
-        }
-        return NO;
-    }
-    return [self.deviceQuery isImageMounterAvailableWithReason:reasonOut];
-}
-
-- (nullable NSString *)uniqueChipID {
-    return [self.deviceQuery uniqueChipID];
-}
 
 - (BOOL)fetchPersonalizedImageWithReason:(NSString *_Nullable *_Nullable)reasonOut {
     if (self.deviceQuery == nil) {

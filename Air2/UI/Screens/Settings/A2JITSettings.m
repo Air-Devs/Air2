@@ -131,6 +131,8 @@
 - (void)presentDDIImportPicker;
 /// [JIT-DDI-1] 「联网取 DDI」：开关关着就提示去开；开着才真呼叫机制（如实失败）。
 - (void)runDDIFetch;
+/// [JIT-DDI-1] 挂载本地 DDI（未接线 / 缺能力 ⇒ 如实失败并点名缺什么）。
+- (void)runDDIMount;
 /// [JIT-DDI-1] DDI 镜像导入落盘（与配对文件同机制）。
 - (void)importDDIImageAtURL:(NSURL *)url;
 /// [JIT-AUTOPAIR-1] 后台队列开展自动配对（有界），完成后回主线程刷新。
@@ -275,11 +277,12 @@
     BOOL fetchOn = [NSUserDefaults.standardUserDefaults boolForKey:@"debug.jit_ddi_fetch"];
     A2JITDDIStatus *st = [probe ddiStatus];
 
-    // 状态（短文案）+ 下一步动作 + 取证（一行定成败，便于照单核对）。
+    // 状态（短文案）+ 原因 + 下一步动作 + 取证（一行定成败，便于照单核对）。
     self.ddiRow.enabled = YES;
     self.ddiRow.valueText = [self text:[A2JITDDIGuidance statusKeyForVerdict:st.verdict]];
+    NSString *reason = [self text:[A2JITDDIGuidance reasonKeyForVerdict:st.verdict]];
     NSString *next = [self text:[A2JITDDIGuidance nextActionKeyForVerdict:st.verdict fetchEnabled:fetchOn]];
-    self.ddiRow.subtitle = [NSString stringWithFormat:@"%@｜%@", next, st.evidence ?: @""];
+    self.ddiRow.subtitle = [NSString stringWithFormat:@"%@；%@｜%@", reason, next, st.evidence ?: @""];
 
     // 导入 DDI 行（与配对文件同机制：系统文档选择器 → 本机校验）。
     self.ddiImportRow.enabled = YES;
@@ -422,6 +425,29 @@
     });
 }
 
+// [JIT-DDI-1] 挂载本地 DDI：未接线 / 缺能力 ⇒ ★如实失败并点名缺什么（不假成功）★。
+- (void)runDDIMount {
+    UIViewController *host = self.host;
+    A2JITLocalDDIProbe *probe = self.ddiProbe;
+    if (probe == nil) {
+        [A2Toast show:[self text:@"jit.ddi.status.unknown"] inView:host.view];
+        [self apply];
+        return;
+    }
+    NSString *why = nil;
+    BOOL ok = [probe mountCurrentImageWithReason:&why];
+    NSString *head = [self text:ok ? @"jit.toast.ddiMountOK" : @"jit.ddi.mount.unavailable.reason"];
+    NSString *detail = @"";
+    if (!ok) {
+        NSString *action = [self text:[A2JITDDIGuidance mountUnavailableActionKey]];
+        detail = [NSString stringWithFormat:@"；%@%@", action,
+                  why.length ? [NSString stringWithFormat:@"（取证：%@）", why] : @""];
+    }
+    NSLog(@"[A2JIT] DDI 挂载结果 ok=%d detail=%@", (int)ok, why ?: @"(无)");
+    [A2Toast show:[NSString stringWithFormat:@"%@%@", head, detail] inView:host.view];
+    [self apply];
+}
+
 - (void)importPairingFileAtURL:(NSURL *)url {
     UIViewController *host = self.host;
     [A2Toast show:[self text:@"jit.toast.importing"] inView:host.view];
@@ -540,8 +566,7 @@
     A2JITDDIRequirement *ddiRequirement =
         [A2JITDDIRequirement requirementWithOSMajorVersion:facts.osMajorVersion
                                               minorVersion:facts.osMinorVersion
-                                                     build:osBuild
-                                              uniqueChipID:[ddiDevice uniqueChipID]];
+                                                     build:osBuild];
     A2JITDDIStore *ddiStore = [A2JITDDIStore defaultStore];
     A2JITLocalDDIProbe *ddiProbe = [[A2JITLocalDDIProbe alloc] initWithStore:ddiStore
                                                                  requirement:ddiRequirement
@@ -636,6 +661,7 @@
     A2SettingsRow *ddiRow = [[A2SettingsRow alloc] init];
     ddiRow.symbolName = @"externaldrive.fill";
     ddiRow.title = [A2JITStrings stringForKey:@"jit.row.ddi"];
+    ddiRow.accessory = A2SettingsRowAccessoryDisclosure;   // 可点：挂载本地 DDI（如实失败也会点名缺什么）
     [section addRow:ddiRow];
 
     A2SettingsRow *ddiImportRow = [[A2SettingsRow alloc] init];
@@ -687,6 +713,9 @@
     };
     ddiImportRow.onTap = ^{
         [weakPresenter presentDDIImportPicker];
+    };
+    ddiRow.onTap = ^{
+        [weakPresenter runDDIMount];
     };
     // ★「联网取 DDI」默认关★：开关只写偏好；打开的那一刻才真呼叫机制
     // （机制未接入时如实失败并点名缺什么——绝不假成功）。

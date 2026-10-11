@@ -17,13 +17,11 @@ static const NSTimeInterval kA2JITDDIDefaultMaxAge = 7.0 * 24.0 * 60.0 * 60.0;
 
 + (instancetype)requirementWithOSMajorVersion:(NSInteger)majorVersion
                                  minorVersion:(NSInteger)minorVersion
-                                        build:(nullable NSString *)build
-                                 uniqueChipID:(nullable NSString *)uniqueChipID {
+                                        build:(nullable NSString *)build {
     A2JITDDIRequirement *r = [A2JITDDIRequirement new];
     r->_osMajorVersion = majorVersion;
     r->_osMinorVersion = minorVersion;
     r->_build = [build copy];
-    r->_uniqueChipID = [uniqueChipID copy];
     return r;
 }
 
@@ -36,11 +34,6 @@ static const NSTimeInterval kA2JITDDIDefaultMaxAge = 7.0 * 24.0 * 60.0 * 60.0;
         return [NSString stringWithFormat:@"%@ (%@)", [self versionString], self.build];
     }
     return [self versionString];
-}
-
-- (NSString *)description {
-    return [NSString stringWithFormat:@"<A2JITDDIRequirement %@ chip=%@>",
-            [self displayVersion], self.uniqueChipID ?: @"(未取到)"];
 }
 
 @end
@@ -72,16 +65,6 @@ static const NSTimeInterval kA2JITDDIDefaultMaxAge = 7.0 * 24.0 * 60.0 * 60.0;
     return img;
 }
 
-- (NSString *)description {
-    return [NSString stringWithFormat:@"<A2JITDDIImage %@ kind=%@ src=%@ bytes=%llu build=%@ ver=%@>",
-            self.filePath.lastPathComponent,
-            [A2JITDDI displayNameForKind:self.kind],
-            [A2JITDDI displayNameForSource:self.source],
-            self.byteSize,
-            self.declaredBuild ?: @"(未声明)",
-            self.declaredOSVersion ?: @"(未声明)"];
-}
-
 @end
 
 #pragma mark - 判定结果
@@ -98,11 +81,6 @@ static const NSTimeInterval kA2JITDDIDefaultMaxAge = 7.0 * 24.0 * 60.0 * 60.0;
     s->_source = source;
     s->_evidence = [evidence copy] ?: @"";
     return s;
-}
-
-- (NSString *)description {
-    return [NSString stringWithFormat:@"<A2JITDDIStatus %@ %@>",
-            [A2JITDDI displayNameForVerdict:self.verdict], self.evidence];
 }
 
 @end
@@ -288,15 +266,6 @@ static const NSTimeInterval kA2JITDDIDefaultMaxAge = 7.0 * 24.0 * 60.0 * 60.0;
         case A2JITDDISourceUserImport: return @"UserImport";
         case A2JITDDISourceDevice:     return @"Device";
         case A2JITDDISourceBundled:    return @"Bundled";
-        default:                       return @"?";
-    }
-}
-
-+ (NSString *)displayNameForKind:(A2JITDDIKind)kind {
-    switch (kind) {
-        case A2JITDDIKindUnknown:      return @"Unknown";
-        case A2JITDDIKindLegacy:       return @"Legacy";
-        case A2JITDDIKindPersonalized: return @"Personalized";
         default:                       return @"?";
     }
 }

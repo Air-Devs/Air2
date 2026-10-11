@@ -29,7 +29,6 @@ FOUNDATION_EXPORT NSString *const A2JITDDIStoreErrorDomain;
 typedef NS_ENUM(NSInteger, A2JITDDIStoreError) {
     A2JITDDIStoreErrorInvalidImage = 1,  ///< 内容不是一份可识别的磁盘镜像（UDIF 尾标校验不过）
     A2JITDDIStoreErrorWriteFailed  = 2,  ///< 目录创建 / 原子写盘 / 写元数据失败
-    A2JITDDIStoreErrorNoStoredImage = 3, ///< 没有已导入的镜像（删除 / 重试用）
 };
 
 // ---------------------------------------------------------------------------
@@ -75,33 +74,16 @@ FOUNDATION_EXPORT NSString *const A2JITDDIStoreTrustcacheNameKey;    ///< 配套
 /// ★真探测★：当前可用的本地镜像（约定目录 → Documents/DDI → Documents；找到并校验过才算）。
 - (nullable A2JITDDIImage *)currentImage;
 
-/// ★手动导入★（内存版；与配对文件的导入同机制）：先校验（本地、不联网）→ 原子写盘 + 写元数据。
-/// @param fileName 来源文件名（用于推断声明的版本/构建号；可空）。
-- (nullable NSString *)importImageData:(NSData *)data
-                              fileName:(nullable NSString *)fileName
-                            sourceName:(nullable NSString *)sourceName
-                                 error:(NSError *_Nullable *_Nullable)error;
-
-/// ★手动导入★（文件版；真机走这一步，避免把数 GB 镜像读进内存）。
+/// ★手动导入★（真机走这一步：★不把数 GB 镜像读进内存★，直接拷贝文件）。
+/// 会先就地校验（UDIF 尾标 `koly`）再落盘 + 写元数据；同名镜像会被覆盖。
 - (nullable NSString *)importImageFromURL:(NSURL *)url
                                sourceName:(nullable NSString *)sourceName
                                     error:(NSError *_Nullable *_Nullable)error;
-
-/// 移除已导入镜像与元数据（「重试」用）。
-- (BOOL)removeImportedImageWithError:(NSError *_Nullable *_Nullable)error;
-
-/// 校验：是不是一份 UDIF 磁盘镜像（尾标块以 'koly' 开头，大小是 512 的整数倍）。
-+ (BOOL)looksLikeUDIFDiskImageData:(NSData *)data why:(NSString *_Nullable *_Nullable)whyOut;
 
 /// 从文件名推断【声明】的系统版本串（如 "27.2"）；推断不出 ⇒ nil。
 + (nullable NSString *)osVersionFromFileName:(NSString *)fileName;
 /// 从文件名推断【声明】的构建号（如 "24B5084k"）；推断不出 ⇒ nil。
 + (nullable NSString *)buildFromFileName:(NSString *)fileName;
-
-/// SHA-256（十六进制小写）；空数据返回 nil。
-+ (nullable NSString *)sha256HexOfData:(NSData *)data;
-/// SHA-256（十六进制小写，流式读取，不把整份镜像读进内存）；失败返回 nil。
-+ (nullable NSString *)sha256HexOfFile:(NSString *)path;
 
 @end
 

@@ -39,10 +39,6 @@ static NSString *A2DDIToken(A2JITDDIVerdict verdict) {
     }
 }
 
-+ (NSString *)displayNameForVerdict:(A2JITDDIVerdict)verdict {
-    return [A2JITDDI displayNameForVerdict:verdict];
-}
-
 + (A2JITAutoPairingPreconditionState)preconditionStateForVerdict:(A2JITDDIVerdict)verdict {
     // 取值约定集中在 A2JITDDI（唯一实现），这里只做类型转换；
     // 上面的 _Static_assert 保证两侧枚举不会漂移。
@@ -56,10 +52,6 @@ static NSString *A2DDIToken(A2JITDDIVerdict verdict) {
 
 + (NSString *)reasonKeyForVerdict:(A2JITDDIVerdict)verdict {
     return [NSString stringWithFormat:@"jit.ddi.verdict.%@.reason", A2DDIToken(verdict)];
-}
-
-+ (NSString *)actionKeyForVerdict:(A2JITDDIVerdict)verdict {
-    return [NSString stringWithFormat:@"jit.ddi.verdict.%@.action", A2DDIToken(verdict)];
 }
 
 + (NSString *)nextActionKeyForVerdict:(A2JITDDIVerdict)verdict fetchEnabled:(BOOL)fetchEnabled {
@@ -84,7 +76,7 @@ static NSString *A2DDIToken(A2JITDDIVerdict verdict) {
     return [NSString stringWithFormat:
             @"[A2JIT] ddi provider=%@ verdict=%@(%ld) evidence=%@",
             providerName,
-            [self displayNameForVerdict:verdict],
+            [A2JITDDI displayNameForVerdict:verdict],
             (long)verdict,
             evidence.length ? evidence : @"(无取证记录)"];
 }
