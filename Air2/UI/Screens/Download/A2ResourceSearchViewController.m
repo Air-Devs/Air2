@@ -39,6 +39,7 @@
 #import "A2FilterChip.h"
 #import "A2GlassCard.h"
 #import "A2ResourceCard.h"
+#import "A2TextField.h"
 #import "A2Log.h"
 #import "A2Metrics.h"
 #import "A2ModLoaderAPI.h"
@@ -64,8 +65,6 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     A2ResourceSearchStateError,
     A2ResourceSearchStateUnsupported,
 };
-
-#pragma mark - 结果行
 
 #pragma mark - 结果行
 //
@@ -113,8 +112,14 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
 
 @property (nonatomic, assign) A2ContentClass contentClass;
 
-// 搜索栏
-@property (nonatomic, strong) UISearchBar *searchBar;
+// 左右分栏
+@property (nonatomic, strong) UIView *resultContainer;
+@property (nonatomic, strong) UIView *sidePanel;
+
+// 筛选栏内容（对照 ZL2 的 SearchFilter）
+@property (nonatomic, strong) A2TextField *searchField;
+@property (nonatomic, strong) A2TextField *gameVersionField;
+@property (nonatomic, strong) UIView *loaderSection;
 
 // 可展开筛选卡
 @property (nonatomic, strong) A2GlassCard *filterCard;
@@ -180,11 +185,11 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     _platform = [self initialPlatform];
     _source = [A2ContentSource sourceForPlatform:_platform];
 
-    [self setupSearchBar];
-    [self setupFilterCard];
-    [self buildLoaderChips];
-    [self buildSortChips];
-    [self renderPlaceholderInStack:_versionChipsStack text:@"版本加载中…"];
+    // 布局对照 ZL2 的 SearchAssetsScreen：
+    //   Row { ResultListLayout(weight=7)  SearchFilter(weight=3) }
+    // 即【左侧结果列表 70%，右侧筛选面板 30%】，筛选是常驻面板而非顶部展开。
+    [self setupSplitLayout];
+    [self buildSidePanel];
     [self setupResultList];
     [self applyTheme];
 
@@ -268,7 +273,6 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     self.source = [A2ContentSource sourceForPlatform:platform];
     if (remember) [A2ContentSource setPreferredPlatform:platform];
     [self selectPlatformControlForPlatform:platform];
-    [self updateFilterSummary];
     [A2Log log:@"resource-search: 平台切换 class=%ld → %@",
           (long)self.contentClass, self.source.displayName];
 
@@ -277,205 +281,124 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     [self reload];
 }
 
-#pragma mark - UI：搜索栏
+#pragma mark - UI：左右分栏
 
-- (void)setupSearchBar {
-    _searchBar = [[UISearchBar alloc] initWithFrame:CGRectZero];
-    _searchBar.translatesAutoresizingMaskIntoConstraints = NO;
-    _searchBar.placeholder = @"搜索资源…";
-    _searchBar.delegate = self;
-    _searchBar.searchBarStyle = UISearchBarStyleMinimal;
-    _searchBar.tintColor = A2ThemeManager.shared.scheme.cPrimary;
-    _searchBar.backgroundImage = [UIImage new];
-    _searchBar.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    _searchBar.autocorrectionType = UITextAutocorrectionTypeNo;
+/// 建立分栏骨架：左侧结果区 + 右侧筛选栏。
+- (void)setupSplitLayout {
+    // 左侧：结果区容器
+    _resultContainer = [[UIView alloc] initWithFrame:CGRectZero];
+    _resultContainer.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.plainContentView addSubview:_resultContainer];
 
-    // 搜索框文字配色（UISearchBar 不跟随我们的色板，需手动设）
-    A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    for (UIView *v in _searchBar.subviews) {
-        for (UIView *sv in v.subviews) {
-            if ([sv isKindOfClass:UITextField.class]) {
-                UITextField *tf = (UITextField *)sv;
-                tf.textColor = t.cOnSurface;
-                tf.attributedPlaceholder =
-                    [[NSAttributedString alloc] initWithString:@"搜索资源…"
-                                                    attributes:@{NSForegroundColorAttributeName:
-                                                                     t.cOnSurfaceVariant}];
-            }
-        }
-    }
-    [self.plainContentView addSubview:_searchBar];
-}
-
-#pragma mark - UI：可展开筛选卡
-
-- (void)setupFilterCard {
-    self.platformOptions = [self supportedPlatforms];
-
-    _filterCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
-    _filterCard.translatesAutoresizingMaskIntoConstraints = NO;
-    _filterCard.cornerRadius = A2RadiusL;
-    _filterCard.elevation = A2CardElevationLow;
-    _filterCard.contentInsets = UIEdgeInsetsMake(A2CardPadding, A2CardPadding, A2CardPadding, A2CardPadding);
-
-    // —— 卡头：一行摘要 + 展开箭头，点这里展开 / 收起 ——
-    UIView *header = [[UIView alloc] initWithFrame:CGRectZero];
-    header.translatesAutoresizingMaskIntoConstraints = NO;
-    header.userInteractionEnabled = YES;
-    [header addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self
-                                                                        action:@selector(toggleFilterExpanded)]];
-
-    _filterSummaryLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _filterSummaryLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _filterSummaryLabel.font = [A2Typography caption];
-    _filterSummaryLabel.numberOfLines = 1;
-
-    _filterChevron = [[UIImageView alloc] initWithFrame:CGRectZero];
-    _filterChevron.translatesAutoresizingMaskIntoConstraints = NO;
-    _filterChevron.contentMode = UIViewContentModeCenter;
-    _filterChevron.image = [UIImage systemImageNamed:@"chevron.down"];
-
-    [header addSubview:_filterSummaryLabel];
-    [header addSubview:_filterChevron];
-
-    // —— 卡体：五组筛选 + 重置 ——
-    _filterBody = [[UIStackView alloc] initWithFrame:CGRectZero];
-    _filterBody.axis = UILayoutConstraintAxisVertical;
-    _filterBody.spacing = A2SpaceM;
-    _filterBody.hidden = YES;
-    [self buildFilterGroups];
-
-    UIStackView *root = [[UIStackView alloc] initWithArrangedSubviews:@[header, _filterBody]];
-    root.translatesAutoresizingMaskIntoConstraints = NO;
-    root.axis = UILayoutConstraintAxisVertical;
-    root.spacing = A2SpaceM;
-    [_filterCard.contentView addSubview:root];
+    // 右侧：筛选栏（不滚动 —— 内容本身放得下，ZL2 也是固定高度）
+    _sidePanel = [[UIView alloc] initWithFrame:CGRectZero];
+    _sidePanel.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.plainContentView addSubview:_sidePanel];
 
     [NSLayoutConstraint activateConstraints:@[
-        [header.heightAnchor constraintGreaterThanOrEqualToConstant:24],
-        [_filterSummaryLabel.leadingAnchor constraintEqualToAnchor:header.leadingAnchor],
-        [_filterSummaryLabel.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
-        [_filterSummaryLabel.trailingAnchor constraintLessThanOrEqualToAnchor:_filterChevron.leadingAnchor
-                                                                    constant:-A2SpaceS],
-        [_filterChevron.trailingAnchor constraintEqualToAnchor:header.trailingAnchor],
-        [_filterChevron.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],
-        [_filterChevron.widthAnchor constraintEqualToConstant:18],
-        [_filterChevron.heightAnchor constraintEqualToConstant:18],
+        // 左 70%
+        [_resultContainer.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_resultContainer.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
+        [_resultContainer.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor],
+        [_resultContainer.widthAnchor constraintEqualToAnchor:self.plainContentView.widthAnchor
+                                                    multiplier:0.7],
 
-        [root.topAnchor constraintEqualToAnchor:_filterCard.contentView.topAnchor],
-        [root.bottomAnchor constraintEqualToAnchor:_filterCard.contentView.bottomAnchor],
-        [root.leadingAnchor constraintEqualToAnchor:_filterCard.contentView.leadingAnchor],
-        [root.trailingAnchor constraintEqualToAnchor:_filterCard.contentView.trailingAnchor],
+        // 右 30%
+        [_sidePanel.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_sidePanel.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
+        [_sidePanel.leadingAnchor constraintEqualToAnchor:_resultContainer.trailingAnchor],
+        [_sidePanel.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
+    ]];
+}
+
+/// 右侧筛选栏的内容。
+///
+/// 对照 ZL2 的 SearchFilter：从上到下依次为
+///   搜索名称输入框 / 游戏版本输入框 / 平台切换 /
+///   排序 / 加载器 / 分类 / 重置
+- (void)buildSidePanel {
+    UIStackView *stack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = A2SpaceL;
+    [_sidePanel addSubview:stack];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [stack.topAnchor constraintEqualToAnchor:_sidePanel.topAnchor constant:A2SpaceM],
+        [stack.bottomAnchor constraintLessThanOrEqualToAnchor:_sidePanel.bottomAnchor
+                                                      constant:-A2SpaceM],
+        [stack.leadingAnchor constraintEqualToAnchor:_sidePanel.leadingAnchor constant:A2SpaceM],
+        [stack.trailingAnchor constraintEqualToAnchor:_sidePanel.trailingAnchor
+                                             constant:-A2PageMargin],
     ]];
 
-    self.filterExpanded = NO;
-    [self updateFilterSummary];
-    [self.plainContentView addSubview:_filterCard];
-}
+    // ---- 搜索名称 ----
+    _searchField = [[A2TextField alloc] initWithLabel:@"搜索资源"];
+    _searchField.translatesAutoresizingMaskIntoConstraints = NO;
+    _searchField.onTextChange = ^(NSString *text) {
+        (void)text;
+    };
+    [stack addArrangedSubview:[self labeledBlock:@"名称" content:_searchField]];
+    // 回车即搜
+    [_searchField setReturnKeyType:UIReturnKeySearch];
 
-- (void)buildFilterGroups {
+    // ---- 游戏版本 ----
+    _gameVersionField = [[A2TextField alloc] initWithLabel:@"游戏版本"];
+    _gameVersionField.translatesAutoresizingMaskIntoConstraints = NO;
+    _gameVersionField.text = _selectedGameVersion ?: @"";
+    __weak typeof(self) weakSelf = self;
+    _gameVersionField.onTextChange = ^(NSString *text) {
+        __strong typeof(weakSelf) self = weakSelf;
+        self.selectedGameVersion = text.length ? text : nil;
+    };
+    _gameVersionField.returnKeyType = UIReturnKeySearch;
+    [stack addArrangedSubview:[self labeledBlock:@"游戏版本" content:_gameVersionField]];
+
+    // ---- 平台切换 ----
     _platformControl = [self makePlatformControl];
-    [_filterBody addArrangedSubview:[self groupTitled:@"平台" content:_platformControl]];
+    _platformControl.selectedSegmentIndex = (_platform == A2ContentPlatformCurseForge) ? 1 : 0;
+    [stack addArrangedSubview:[self labeledBlock:@"平台" content:_platformControl]];
+    _platformControl.translatesAutoresizingMaskIntoConstraints = NO;
 
-    _categoryChipsStack = [self horizontalChipStack];
-    [_filterBody addArrangedSubview:
-        [self groupTitled:@"资源分类" content:[self scrollRowWithStack:_categoryChipsStack]]];
-
-    _loaderChipsStack = [self horizontalChipStack];
-    [_filterBody addArrangedSubview:
-        [self groupTitled:@"加载器" content:[self scrollRowWithStack:_loaderChipsStack]]];
-
-    _versionChipsStack = [self horizontalChipStack];
-    [_filterBody addArrangedSubview:
-        [self groupTitled:@"游戏版本" content:[self scrollRowWithStack:_versionChipsStack]]];
-
+    // ---- 排序 ----
     _sortChipsStack = [self horizontalChipStack];
-    [_filterBody addArrangedSubview:
-        [self groupTitled:@"排序" content:[self scrollRowWithStack:_sortChipsStack]]];
+    [stack addArrangedSubview:[self labeledBlock:@"排序" content:
+                            [self scrollRowWithStack:_sortChipsStack]]];
 
+    // ---- 加载器 ----
+    _loaderChipsStack = [self horizontalChipStack];
+    _loaderSection = [self labeledBlock:@"加载器" content:
+                      [self scrollRowWithStack:_loaderChipsStack]];
+    [stack addArrangedSubview:_loaderSection];
+
+    // ---- 分类 ----
+    _categoryChipsStack = [self horizontalChipStack];
+    [stack addArrangedSubview:[self labeledBlock:@"分类" content:
+                            [self scrollRowWithStack:_categoryChipsStack]]];
+
+    // ---- 重置 ----
     _resetButton = [self makeResetButton];
-    [_filterBody addArrangedSubview:_resetButton];
+    [stack addArrangedSubview:_resetButton];
+
+    // 把筛选构建放在侧栏之后执行（依赖上面的 stack 已就绪）
+    [self buildLoaderChips];
+    [self buildSortChips];
 }
 
-- (UISegmentedControl *)makePlatformControl {
-    UISegmentedControl *control = [[UISegmentedControl alloc] initWithFrame:CGRectZero];
-    control.translatesAutoresizingMaskIntoConstraints = NO;
-    NSInteger index = 0;
-    for (NSNumber *n in _platformOptions) {
-        A2ContentPlatform platform = (A2ContentPlatform)n.integerValue;
-        [control insertSegmentWithTitle:[A2ContentSource sourceForPlatform:platform].displayName
-                                atIndex:index animated:NO];
-        index++;
-    }
-    control.selectedSegmentIndex = [self indexForPlatform:self.platform];
-    [control addTarget:self
-                action:@selector(platformControlChanged)
-      forControlEvents:UIControlEventValueChanged];
-    [control.heightAnchor constraintEqualToConstant:32].active = YES;
-    return control;
-}
-
-/// 一组筛选 = 小标题 + 内容
-- (UIView *)groupTitled:(NSString *)title content:(UIView *)content {
+/// 「小标题 + 内容」的纵向块 —— 筛选栏里每一组的统一样式。
+- (UIView *)labeledBlock:(NSString *)title content:(UIView *)content {
     UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
     label.translatesAutoresizingMaskIntoConstraints = NO;
-    label.font = [A2Typography caption];
+    label.font = [UIFont systemFontOfSize:12 weight:UIFontWeightMedium];
     label.text = title;
-    [self.sectionLabels addObject:label];
+    [_sectionLabels addObject:label];
 
-    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[label, content]];
-    stack.axis = UILayoutConstraintAxisVertical;
-    stack.spacing = 6;
-    return stack;
-}
-
-- (UIStackView *)horizontalChipStack {
-    UIStackView *stack = [[UIStackView alloc] initWithFrame:CGRectZero];
-    stack.axis = UILayoutConstraintAxisHorizontal;
-    stack.spacing = A2SpaceS;
-    stack.alignment = UIStackViewAlignmentCenter;
-    return stack;
-}
-
-/// 把胶囊横向排进一个可横滑的行
-- (UIScrollView *)scrollRowWithStack:(UIStackView *)stack {
-    UIScrollView *scroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
-    scroll.translatesAutoresizingMaskIntoConstraints = NO;
-    scroll.showsHorizontalScrollIndicator = NO;
-    stack.translatesAutoresizingMaskIntoConstraints = NO;
-    [scroll addSubview:stack];
-    [NSLayoutConstraint activateConstraints:@[
-        [stack.topAnchor constraintEqualToAnchor:scroll.topAnchor],
-        [stack.bottomAnchor constraintEqualToAnchor:scroll.bottomAnchor],
-        [stack.leadingAnchor constraintEqualToAnchor:scroll.leadingAnchor],
-        [stack.trailingAnchor constraintEqualToAnchor:scroll.trailingAnchor],
-        [stack.heightAnchor constraintEqualToAnchor:scroll.heightAnchor],
-        [scroll.heightAnchor constraintEqualToConstant:32],
-    ]];
-    return scroll;
-}
-
-- (UIButton *)makeResetButton {
-    UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
-    button.translatesAutoresizingMaskIntoConstraints = NO;
-    [button setTitle:@"重置筛选" forState:UIControlStateNormal];
-    button.titleLabel.font = [A2Typography button];
-    button.layer.cornerRadius = A2RadiusS;
-    button.layer.cornerCurve = kCACornerCurveContinuous;
-    button.layer.borderWidth = 1;
-    [button addTarget:self action:@selector(resetTapped) forControlEvents:UIControlEventTouchUpInside];
-    [button.heightAnchor constraintEqualToConstant:38].active = YES;
-    return button;
-}
-
-- (void)toggleFilterExpanded {
-    self.filterExpanded = !self.filterExpanded;
-    _filterChevron.image = [UIImage systemImageNamed:(self.filterExpanded ? @"chevron.up" : @"chevron.down")];
-    [UIView animateWithDuration:A2AnimDurationFast animations:^{
-        self.filterBody.hidden = !self.filterExpanded;
-        [self.view layoutIfNeeded];
-    }];
-    [A2Log log:@"resource-search: 筛选卡%@", self.filterExpanded ? @"展开" : @"收起"];
+    UIStackView *v = [[UIStackView alloc] initWithArrangedSubviews:@[label, content]];
+    v.translatesAutoresizingMaskIntoConstraints = NO;
+    v.axis = UILayoutConstraintAxisVertical;
+    v.spacing = A2SpaceS;
+    v.alignment = UIStackViewAlignmentFill;
+    return v;
 }
 
 #pragma mark - 筛选：平台 / 加载器 / 游戏版本 / 分类 / 排序
@@ -524,6 +447,104 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
         A2FilterChip *chip = (A2FilterChip *)v;
         chip.selected = NO;
     }
+}
+
+
+#pragma mark - 筛选栏辅助
+
+/// 横向 chip 容器
+- (UIStackView *)horizontalChipStack {
+    UIStackView *stack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    stack.axis = UILayoutConstraintAxisHorizontal;
+    stack.spacing = A2SpaceS;
+    stack.alignment = UIStackViewAlignmentCenter;
+    return stack;
+}
+
+/// 把 chip 容器包进横向滚动区 —— 选项多时（如分类列表）不会挤成一团
+- (UIView *)scrollRowWithStack:(UIStackView *)stack {
+    UIScrollView *scroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    scroll.showsHorizontalScrollIndicator = NO;
+    scroll.alwaysBounceHorizontal = YES;
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    [scroll addSubview:stack];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [scroll.heightAnchor constraintEqualToConstant:34],
+        [stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor],
+        [stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor],
+        [stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor],
+        [stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor],
+        [stack.heightAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.heightAnchor],
+    ]];
+    return scroll;
+}
+
+/// 平台切换控件
+- (UISegmentedControl *)makePlatformControl {
+    NSMutableArray<NSString *> *titles = [NSMutableArray array];
+    for (NSNumber *n in _platformOptions) {
+        [titles addObject:A2PlatformDisplayName((A2ContentPlatform)n.integerValue)];
+    }
+    UISegmentedControl *c = [[UISegmentedControl alloc] initWithItems:titles];
+    c.selectedSegmentIndex = 0;
+    [c addTarget:self action:@selector(platformChanged)
+        forControlEvents:UIControlEventValueChanged];
+    [c.heightAnchor constraintEqualToConstant:32].active = YES;
+    return c;
+}
+
+/// 重置按钮
+- (UIButton *)makeResetButton {
+    UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
+    b.translatesAutoresizingMaskIntoConstraints = NO;
+    [b setTitle:@"重置筛选" forState:UIControlStateNormal];
+    b.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+    b.layer.cornerRadius = A2RadiusM;
+    b.layer.cornerCurve = kCACornerCurveContinuous;
+    b.layer.borderWidth = 1;
+    [b.heightAnchor constraintEqualToConstant:40].active = YES;
+    [b addTarget:self action:@selector(resetAllFilters) forControlEvents:UIControlEventTouchUpInside];
+    return b;
+}
+
+/// 平台显示名（两家平台的中文/英文名）
+static NSString *A2PlatformDisplayName(A2ContentPlatform platform) {
+    return (platform == A2ContentPlatformModrinth) ? @"Modrinth" : @"CurseForge";
+}
+
+#pragma mark - 筛选交互
+
+/// 侧栏的平台切换。
+/// 切换平台后分类体系不同，需要清空已选分类并重新拉取。
+- (void)platformChanged {
+    NSInteger idx = _platformControl.selectedSegmentIndex;
+    if (idx < 0 || idx >= (NSInteger)_platformOptions.count) return;
+
+    A2ContentPlatform picked = (A2ContentPlatform)_platformOptions[idx].integerValue;
+    if (picked == _platform) return;
+
+    _platform = picked;
+    _source = [A2ContentSource sourceForPlatform:picked];
+    [A2ContentSource setPreferredPlatform:picked];
+
+    // 分类标识两家不通用，切换后清空
+    [_selectedCategories removeAllObjects];
+    [self clearCategoryChipSelection];
+
+    [self loadCategories];
+    [self reload];
+}
+
+- (void)resetAllFilters {
+    [_selectedCategories removeAllObjects];
+    _selectedLoader = nil;
+    _selectedGameVersion = nil;
+    _gameVersionField.text = @"";
+    [self clearCategoryChipSelection];
+    [self styleSingleSelectStack:_loaderChipsStack value:nil];
+    [self reload];
 }
 
 - (void)buildLoaderChips {
@@ -635,7 +656,6 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
         [self.selectedCategories addObject:identifier];
     }
     chip.selected = [self.selectedCategories containsObject:identifier];
-    [self updateFilterSummary];
     [A2Log log:@"resource-search: 分类筛选变更 categories=%lu",
           (unsigned long)self.selectedCategories.count];
     [self reload];
@@ -645,7 +665,6 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     NSString *value = chip.filterValue ?: @"";
     self.selectedLoader = value.length ? value : nil;
     [self styleSingleSelectStack:_loaderChipsStack value:value];
-    [self updateFilterSummary];
     [A2Log log:@"resource-search: 加载器筛选 = %@", value.length ? value : @"全部"];
     [self reload];
 }
@@ -654,7 +673,6 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     NSString *value = chip.filterValue ?: @"";
     self.selectedGameVersion = value.length ? value : nil;
     [self styleSingleSelectStack:_versionChipsStack value:value];
-    [self updateFilterSummary];
     [A2Log log:@"resource-search: 游戏版本筛选 = %@", value.length ? value : @"全部"];
     [self reload];
 }
@@ -663,7 +681,6 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     A2ContentSortField field = (A2ContentSortField)chip.tag;
     self.sortField = field;
     [self styleSingleSelectStack:_sortChipsStack value:chip.filterValue];
-    [self updateFilterSummary];
     [A2Log log:@"resource-search: 排序 = %@", A2SortDisplayName(field)];
     [self reload];
 }
@@ -678,21 +695,11 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     [self styleSingleSelectStack:_versionChipsStack value:@""];
     [self styleSingleSelectStack:_sortChipsStack
                            value:[NSString stringWithFormat:@"%ld", (long)self.sortField]];
-    [self updateFilterSummary];
     [A2Log log:@"resource-search: 重置全部筛选"];
     [self reload];
 }
 
-- (void)updateFilterSummary {
-    NSMutableArray<NSString *> *parts = [NSMutableArray array];
-    [parts addObject:self.source.displayName];
-    [parts addObject:A2SortDisplayName(self.sortField)];
-    NSInteger count = self.selectedCategories.count;
-    if (self.selectedLoader.length) count++;
-    if (self.selectedGameVersion.length) count++;
-    [parts addObject:[NSString stringWithFormat:@"筛选 %ld", (long)count]];
-    _filterSummaryLabel.text = [parts componentsJoinedByString:@" · "];
-}
+
 
 #pragma mark - UI：结果列表
 
@@ -700,7 +707,7 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     _countLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _countLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _countLabel.font = [A2Typography caption];
-    [self.plainContentView addSubview:_countLabel];
+    [self.resultContainer addSubview:_countLabel];
 
     _tableView = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
     _tableView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -712,7 +719,7 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     _tableView.contentInset = UIEdgeInsetsMake(0, 0, A2SpaceXXL, 0);
     _tableView.keyboardDismissMode = UIScrollViewKeyboardDismissModeOnDrag;
     [_tableView registerClass:A2ResourceResultCell.class forCellReuseIdentifier:kResultCellID];
-    [self.plainContentView addSubview:_tableView];
+    [self.resultContainer addSubview:_tableView];
 
     _stateLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _stateLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -720,38 +727,35 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     _stateLabel.textAlignment = NSTextAlignmentCenter;
     _stateLabel.numberOfLines = 0;
     _stateLabel.hidden = YES;
-    [self.plainContentView addSubview:_stateLabel];
+    [self.resultContainer addSubview:_stateLabel];
 
     [NSLayoutConstraint activateConstraints:@[
-        [_searchBar.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
-        [_searchBar.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor constant:A2SpaceS],
-        [_searchBar.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor constant:-A2SpaceS],
-        [_searchBar.heightAnchor constraintEqualToConstant:44],
+        [_countLabel.topAnchor constraintEqualToAnchor:self.resultContainer.topAnchor],
 
-        [_filterCard.topAnchor constraintEqualToAnchor:_searchBar.bottomAnchor constant:A2SpaceS],
-        [_filterCard.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
+
+
+
                                                   constant:A2PageMargin],
-        [_filterCard.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
                                                    constant:-A2PageMargin],
 
-        [_countLabel.topAnchor constraintEqualToAnchor:_filterCard.bottomAnchor constant:A2SpaceS],
-        [_countLabel.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
+
+        [_countLabel.leadingAnchor constraintEqualToAnchor:self.resultContainer.leadingAnchor
                                                   constant:A2PageMargin],
-        [_countLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.plainContentView.trailingAnchor
+        [_countLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.resultContainer.trailingAnchor
                                                              constant:-A2PageMargin],
 
         [_tableView.topAnchor constraintEqualToAnchor:_countLabel.bottomAnchor constant:A2SpaceS],
-        [_tableView.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
+        [_tableView.leadingAnchor constraintEqualToAnchor:self.resultContainer.leadingAnchor
                                                  constant:A2PageMargin],
-        [_tableView.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
+        [_tableView.trailingAnchor constraintEqualToAnchor:self.resultContainer.trailingAnchor
                                                   constant:-A2PageMargin],
-        [_tableView.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
+        [_tableView.bottomAnchor constraintEqualToAnchor:self.resultContainer.bottomAnchor],
 
-        [_stateLabel.centerXAnchor constraintEqualToAnchor:self.plainContentView.centerXAnchor],
-        [_stateLabel.centerYAnchor constraintEqualToAnchor:self.plainContentView.centerYAnchor],
-        [_stateLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.plainContentView.leadingAnchor
+        [_stateLabel.centerXAnchor constraintEqualToAnchor:self.resultContainer.centerXAnchor],
+        [_stateLabel.centerYAnchor constraintEqualToAnchor:self.resultContainer.centerYAnchor],
+        [_stateLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.resultContainer.leadingAnchor
                                                                constant:A2PageMargin],
-        [_stateLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.plainContentView.trailingAnchor
+        [_stateLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.resultContainer.trailingAnchor
                                                              constant:-A2PageMargin],
     ]];
 }
@@ -918,22 +922,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
 
-    _searchBar.tintColor = t.cPrimary;
-    for (UIView *v in _searchBar.subviews) {
-        for (UIView *sv in v.subviews) {
-            if ([sv isKindOfClass:UITextField.class]) {
-                UITextField *tf = (UITextField *)sv;
-                tf.textColor = t.cOnSurface;
-                tf.attributedPlaceholder =
-                    [[NSAttributedString alloc] initWithString:@"搜索资源…"
-                                                    attributes:@{NSForegroundColorAttributeName:
-                                                                     t.cOnSurfaceVariant}];
-            }
-        }
-    }
-
-    _filterSummaryLabel.textColor = t.cOnSurfaceVariant;
-    _filterChevron.tintColor = t.cOnSurfaceVariant;
     for (UILabel *label in _sectionLabels) {
         label.textColor = t.cOnSurfaceVariant;
     }
@@ -951,7 +939,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     _countLabel.textColor = t.cOnSurfaceVariant;
     _stateLabel.textColor = t.cOnSurfaceVariant;
 
-    [_filterCard applyTheme];
 }
 
 @end
