@@ -44,6 +44,14 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) NSString *labelText;
 /// 输入内容
 @property (nonatomic, copy) NSString *text;
+
+/// 紧凑单行高度（点）。> 0 时这个实例不再使用标准 MD3 填充式形态
+/// （56pt 框 + 浮动标签），改成「标签只当占位、垂直居中、不上浮」的单行框，
+/// 框高即该值。用于需要与同一行里其它控件等高时。
+/// 调用方：A2GameVersionListViewController `-setupHeader`（「搜索版本号」要 36pt，
+/// 与旁边的版本类型胶囊等高）。
+/// 0（默认）保持标准 MD3 填充式 56pt 形态。
+@property (nonatomic, assign) CGFloat compactHeight;
 /// 是否密码输入（掩码显示）
 @property (nonatomic, assign, getter=isSecure) BOOL secure;
 /// 键盘类型

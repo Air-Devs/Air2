@@ -379,6 +379,63 @@ def check_file(path, defined_classes):
                 f"报 property follows Cocoa naming convention 编译失败。"
                 f"请改名，把族前缀挪到后面（如 copyButton → codeCopyButton）")
 
+    # ---------- NSLayoutAnchor 误用检查 ----------
+    # 位置锚（NSLayoutXAxisAnchor / NSLayoutYAxisAnchor）只能和另一个位置锚配对，
+    # 不能直接约束到常量。写成 `x.topAnchor constraintEqualToConstant:8` 会抛
+    #   NSInvalidArgumentException: ... Location anchors require being paired.
+    # 编译期不报，跑到那一行才崩。只有 NSLayoutDimension（width/height）可以用
+    # 这三种 *EqualToConstant:。
+    location_anchors = (
+        "topAnchor", "bottomAnchor", "leadingAnchor", "trailingAnchor",
+        "leftAnchor", "rightAnchor", "centerXAnchor", "centerYAnchor",
+        "firstBaselineAnchor", "lastBaselineAnchor",
+    )
+    anchor_alt = "|".join(location_anchors)
+    for m in re.finditer(
+            rf'\.({anchor_alt})\s+'
+            rf'constraint(?:GreaterThanOrEqualTo|LessThanOrEqualTo|EqualTo)Constant:',
+            src):
+        line = src[:m.start()].count('\n') + 1
+        errors.append(
+            f"第 {line} 行: {m.group(1)} 是位置锚"
+            f"（NSLayoutXAxisAnchor / NSLayoutYAxisAnchor），"
+            f"不能 constraint*EqualToConstant:，运行时会抛 NSInvalidArgumentException"
+            f"（Location anchors require being paired）。"
+            f"改成与另一个锚配对：constraintEqualToAnchor:… constant:…")
+
+    # ---------- _usesScrollContent 设置时机检查 ----------
+    # A2BaseViewController 在 -viewDidLoad 里按 _usesScrollContent 决定内容容器
+    #（该 ivar 在 -init 里默认为 YES）。子类若把 `self.usesScrollContent = NO;`
+    # 写在 `[super viewDidLoad];` 之后，基类已经建好滚动容器、
+    # _plainContentViewInternal 一直是 nil：于是 self.plainContentView 为 nil，
+    # `[nil addSubview:]` 静默无效，紧接着
+    # `[x.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor …]`
+    # 的目标锚是 nil，CoreAutoLayout 把它当成「把位置锚约束到常量」抛异常，
+    # 进程随后 abort（信号 6）—— 真机崩溃见 A2LogViewController。
+    # 所以所有 usesScrollContent 赋值都必须排在 [super viewDidLoad]; 之前。
+    for m in re.finditer(r'-\s*\(void\)\s*viewDidLoad\s*\{', src):
+        body_start = m.end()
+        nxt = re.search(r'\n-\s*\(|\n@end', src[body_start:])
+        body = src[body_start:body_start + (nxt.start() if nxt else len(src) - body_start)]
+        # 先把注释剔掉再找 [super viewDidLoad]：这条规则的说明性注释本身就
+        # 写着「基类在 [super viewDidLoad] 里…」，不剔注释会把注释误当成调用点。
+        # 用等长空白替换（保留长度与换行），这样后面报的行号仍然对得上原文。
+        def _blank(match):
+            return re.sub(r'[^\n]', ' ', match.group(0))
+        body = re.sub(r'/\*.*?\*/', _blank, body, flags=re.S)
+        body = re.sub(r'//[^\n]*', _blank, body)
+        sup = body.find('[super viewDidLoad]')
+        if sup == -1:
+            continue
+        for am in re.finditer(r'self\.usesScrollContent\s*=', body):
+            if am.start() > sup:
+                line = src[:body_start + am.start()].count('\n') + 1
+                errors.append(
+                    f"第 {line} 行: self.usesScrollContent 必须写在 "
+                    f"[super viewDidLoad]; 之前（基类在 super 里据此建内容容器）。"
+                    f"写在之后会让 plainContentView 为 nil，"
+                    f"后续约束对 nil 锚发约束 → NSInvalidArgumentException 崩溃")
+
     return errors
 
 def main():

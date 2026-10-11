@@ -36,8 +36,16 @@ typedef NS_ENUM(NSInteger, A2MultiplayerTab) {
 #pragma mark - 生命周期
 
 - (void)viewDidLoad {
-    [super viewDidLoad];
+    // 必须在 super 之前设：基类在 -viewDidLoad 里据此决定内容容器
+    //（_usesScrollContent 在 -init 里默认 YES）。写在 super 之后会让
+    // plainContentView 一直是 nil，本页 setupLayout 里所有对
+    // self.plainContentView 的 addSubview/约束都会作用到 nil 上 ——
+    // [nil addSubview:] 静默无效，紧接着的
+    // [x.topAnchor constraintEqualToAnchor:nil.topAnchor …] 会被 CoreAutoLayout
+    // 当成「把位置锚约束到常量」抛 NSInvalidArgumentException 并 abort。
+    // （与新加的 lint 规则「usesScrollContent 必须在 super 之前」一致）
     self.usesScrollContent = NO;
+    [super viewDidLoad];
     self.pageTitle = @"陶瓦联机";
 
     [self setupLayout];

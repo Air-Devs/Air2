@@ -270,7 +270,7 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
 
     _progressBar = [[A2ProgressBar alloc] initWithFrame:CGRectZero];
     _progressBar.translatesAutoresizingMaskIntoConstraints = NO;
-    _progressBar.detailText = @"本阶段 0%";
+    _progressBar.detailText = @"总进度 0%";
 
     // 环形进度要固定尺寸并居中，而堆栈 Fill 对齐会把子视图拉满宽度，
     // 两者冲突。用一个等宽的盒子包住环，盒子随堆栈撑满，环在盒内居中。
@@ -479,8 +479,12 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     double total = ((double)stage + progress) / (double)A2InstallStageCount;
     [_ring setProgress:total animated:YES];
     _ring.centerText = [NSString stringWithFormat:@"%.0f%%", total * 100];
-    [_progressBar setProgress:progress animated:YES];
-    _progressBar.detailText = [NSString stringWithFormat:@"本阶段 %.0f%%", progress * 100];
+    // 两个进度条都显示【总进度】（用户批注：这两个进度条改为显示总进度，
+    // 而不是当前文件下载进度）。环形本来喂的就是 total；
+    // 线性条原来喂的是当前阶段的 progress，所以显示「本阶段 15%」，
+    // 现在同样喂 total，和环上的百分比一致。
+    [_progressBar setProgress:total animated:YES];
+    _progressBar.detailText = [NSString stringWithFormat:@"总进度 %.0f%%", total * 100];
 
     BOOL hasLoader = (_loaderType != nil);
     for (NSUInteger i = 0; i < _stepRows.count; i++) {
@@ -567,7 +571,7 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     [_ring setProgress:0 animated:NO];
     _ring.centerText = @"0%";
     [_progressBar setProgress:0 animated:NO];
-    _progressBar.detailText = @"本阶段 0%";
+    _progressBar.detailText = @"总进度 0%";
 
     [self startInstall];
 }

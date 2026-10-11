@@ -64,6 +64,8 @@
     _contentInsets = UIEdgeInsetsMake(A2SpaceL, A2SpaceL, A2SpaceL, A2SpaceL);
     _elevation = A2CardElevationLow;
     _blurAmount = 0;
+    _drawsBorder = YES;
+    _drawsShadow = YES;
 
     self.clipsToBounds = NO;
     self.backgroundColor = UIColor.clearColor;
@@ -263,14 +265,17 @@
         _blurView.hidden = YES;
     }
 
-    // —— 描边：MD3 用 outlineVariant 做低对比描边 ——
+    // —— 描边：MD3 用 outlineVariant 做低对比描边（可整体关闭）——
+    _borderView.layer.borderWidth = _drawsBorder ? 0.5 : 0.0;
     _borderView.layer.borderColor = [s.cOutlineVariant colorWithAlphaComponent:
                                      tm.isDark ? 0.6 : 0.9].CGColor;
 
     // —— 阴影：MD3 的 elevation 用阴影表达，但暗色下阴影几乎不可见，
     //    所以暗色模式减小阴影、改用描边区分层级 ——
     self.layer.shadowColor = UIColor.blackColor.CGColor;
-    if (tm.isDark) {
+    if (!_drawsShadow) {
+        self.layer.shadowOpacity = 0.0f;
+    } else if (tm.isDark) {
         self.layer.shadowOpacity = 0.0f;
     } else {
         CGFloat opacity;
@@ -289,10 +294,23 @@
     }
 }
 
+/// 关掉描边 / 投影后立即重绘（属性可能在卡片建好后设置）
+- (void)setDrawsBorder:(BOOL)drawsBorder {
+    _drawsBorder = drawsBorder;
+    [self applyTheme];
+}
+
+- (void)setDrawsShadow:(BOOL)drawsShadow {
+    _drawsShadow = drawsShadow;
+    [self applyTheme];
+}
+
 - (void)layoutSubviews {
     [super layoutSubviews];
-    self.layer.shadowPath = [UIBezierPath bezierPathWithRoundedRect:self.bounds
-                                                       cornerRadius:self.cornerRadius].CGPath;
+    self.layer.shadowPath = _drawsShadow
+        ? [UIBezierPath bezierPathWithRoundedRect:self.bounds
+                                     cornerRadius:self.cornerRadius].CGPath
+        : NULL;
 }
 
 @end

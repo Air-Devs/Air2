@@ -38,6 +38,8 @@
 #import "A2Typography.h"
 #import "A2ContentSource.h"
 #import "A2FilterChip.h"
+#import "A2TextField.h"
+#import "A2SegmentedControl.h"
 
 static NSString *const kCellID = @"A2DownloadCell";
 
@@ -172,8 +174,9 @@ static NSString *const kCellID = @"A2DownloadCell";
 
 #pragma mark - 列表页
 
-@interface A2DownloadListViewController () <UITableViewDataSource, UITableViewDelegate, UISearchBarDelegate>
-@property (nonatomic, strong) UISearchBar *searchBar;
+@interface A2DownloadListViewController () <UITableViewDataSource, UITableViewDelegate>
+/// MD3 填充式搜索框（原为 UISearchBar，用户批注：搜索框要 MD3 风格）
+@property (nonatomic, strong) A2TextField *searchField;
 @property (nonatomic, strong) UIView *filterBar;
 /// 主筛选维度（加载器 / 游戏版本）的胶囊容器，数据异步到达后可整体重建
 @property (nonatomic, strong) UIStackView *dimensionStack;
@@ -191,7 +194,8 @@ static NSString *const kCellID = @"A2DownloadCell";
 /// 当前资源来源（Modrinth / CurseForge）
 @property (nonatomic, assign) A2ContentPlatform platform;
 @property (nonatomic, strong) A2ContentSource *source;
-@property (nonatomic, strong) UISegmentedControl *platformSwitch;
+/// MD3 分段按钮（原为 UISegmentedControl，用户批注：搜索源要 MD3 风格）
+@property (nonatomic, strong) A2SegmentedControl *platformSwitch;
 /// 当前排序方式
 @property (nonatomic, assign) A2ContentSortField sortField;
 @property (nonatomic, copy) NSString *gameVersionFilter;
@@ -210,7 +214,7 @@ static NSString *const kCellID = @"A2DownloadCell";
     _selectedDimensionValue = @"";
     self.pageTitle = [self titleForCategory];
 
-    [self setupSearchBar];
+    [self setupSearchField];
     [self setupFilterBar];
     [self setupTable];
 
@@ -247,30 +251,21 @@ static NSString *const kCellID = @"A2DownloadCell";
 
 #pragma mark - UI
 
-- (void)setupSearchBar {
-    _searchBar = [[UISearchBar alloc] initWithFrame:CGRectZero];
-    _searchBar.translatesAutoresizingMaskIntoConstraints = NO;
-    _searchBar.placeholder = @"搜索…";
-    _searchBar.delegate = self;
-    _searchBar.searchBarStyle = UISearchBarStyleMinimal;
-    _searchBar.tintColor = A2ThemeManager.shared.scheme.cPrimary;
-    _searchBar.backgroundImage = [UIImage new];
-
-    // 搜索框文字配色（UISearchBar 不跟随我们的色板，需手动设）
-    A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    for (UIView *v in _searchBar.subviews) {
-        for (UIView *sv in v.subviews) {
-            if ([sv isKindOfClass:UITextField.class]) {
-                UITextField *tf = (UITextField *)sv;
-                tf.textColor = t.cOnSurface;
-                tf.attributedPlaceholder =
-                    [[NSAttributedString alloc] initWithString:@"搜索…"
-                                                    attributes:@{NSForegroundColorAttributeName:
-                                                                     t.cOnSurfaceVariant}];
-            }
-        }
-    }
-    [self.plainContentView addSubview:_searchBar];
+- (void)setupSearchField {
+    // MD3 填充式输入框。原来是 UISearchBar（iOS 原生形态，
+    // 和本站其它页的 MD3 输入框不是一套），用户批注：搜索框要换成 MD3 风格。
+    _searchField = [[A2TextField alloc] initWithLabel:@"搜索…"];
+    _searchField.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    __weak typeof(self) weakSelf = self;
+    _searchField.onTextChange = ^(NSString *text) {
+        // 清空时立刻恢复完整列表（原来 UISearchBarDelegate 的 textDidChange 逻辑）
+        if (text.length == 0) [weakSelf reload];
+    };
+    _searchField.onReturn = ^{
+        [weakSelf.searchField.textField resignFirstResponder];
+        [weakSelf reload];
+    };
+    [self.plainContentView addSubview:_searchField];
 }
 
 - (void)setupFilterBar {
@@ -353,26 +348,29 @@ static NSString *const kCellID = @"A2DownloadCell";
 
 /// 资源来源切换。只有 CurseForge 有 Key 时才可选第二项。
 - (void)setupPlatformSwitch {
-    _platformSwitch = [[UISegmentedControl alloc] initWithItems:@[@"Modrinth", @"CurseForge"]];
-    _platformSwitch.translatesAutoresizingMaskIntoConstraints = NO;
-    _platformSwitch.selectedSegmentIndex = ([A2ContentSource preferredPlatform] == A2ContentPlatformCurseForge) ? 1 : 0;
-    [_platformSwitch addTarget:self action:@selector(platformChanged)
-              forControlEvents:UIControlEventValueChanged];
+    // MD3 分段按钮，替代原来的 UISegmentedControl
+    //（用户批注：搜索源也要换成 MD3 风格）。
+    _platformSwitch = [[A2SegmentedControl alloc] initWithTitles:@[@"Modrinth", @"CurseForge"]];
+    _platformSwitch.selectedIndex =
+        ([A2ContentSource preferredPlatform] == A2ContentPlatformCurseForge) ? 1 : 0;
+    __weak typeof(self) weakSelf = self;
+    _platformSwitch.onSegmentChange = ^(NSInteger index) {
+        [weakSelf platformChanged:index];
+    };
     [self.plainContentView addSubview:_platformSwitch];
 
     [NSLayoutConstraint activateConstraints:@[
-        [_platformSwitch.topAnchor constraintEqualToAnchor:_searchBar.bottomAnchor],
+        [_platformSwitch.topAnchor constraintEqualToAnchor:_searchField.bottomAnchor],
         [_platformSwitch.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
                                                       constant:A2PageMargin],
         [_platformSwitch.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
                                                        constant:-A2PageMargin],
-        [_platformSwitch.heightAnchor constraintEqualToConstant:32]
     ]];
 }
 
-/// 切换资源来源。选择会被记住。
-- (void)platformChanged {
-    A2ContentPlatform picked = (_platformSwitch.selectedSegmentIndex == 0)
+/// 切换资源来源。选择会被记住。index 来自 A2SegmentedControl 的选中项。
+- (void)platformChanged:(NSInteger)index {
+    A2ContentPlatform picked = (index == 0)
         ? A2ContentPlatformModrinth : A2ContentPlatformCurseForge;
     // Key 是内置的，两个平台都开箱可用，不需要拦截。
     [self applyPlatform:picked];
@@ -555,10 +553,9 @@ static NSString *const kCellID = @"A2DownloadCell";
     [self.plainContentView addSubview:_spinner];
 
     [NSLayoutConstraint activateConstraints:@[
-        [_searchBar.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
-        [_searchBar.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor constant:A2SpaceS],
-        [_searchBar.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor constant:-A2SpaceS],
-        [_searchBar.heightAnchor constraintEqualToConstant:44],
+        [_searchField.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_searchField.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor constant:A2PageMargin],
+        [_searchField.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor constant:-A2PageMargin],
 
         [_filterBar.topAnchor constraintEqualToAnchor:_platformSwitch.bottomAnchor
                                             constant:A2SpaceS],
@@ -607,7 +604,7 @@ static NSString *const kCellID = @"A2DownloadCell";
 
     __weak typeof(self) weakSelf = self;
     A2ContentFilter *filter = [A2ContentFilter defaultFilter];
-    filter.query = _searchBar.text;
+    filter.query = _searchField.text;
     filter.gameVersion = _gameVersionFilter;
     filter.loader = _loaderFilter;
     filter.sortField = self.sortField;
@@ -679,16 +676,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     return A2VersionFolderForClass([self contentClass]);
 }
 
-#pragma mark - UISearchBarDelegate
-
-- (void)searchBarSearchButtonClicked:(UISearchBar *)searchBar {
-    [searchBar resignFirstResponder];
-    [self reload];
-}
-
-- (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText {
-    // 清空时立刻恢复完整列表
-    if (searchText.length == 0) [self reload];
-}
+#pragma mark - UISearchBarDelegate 已随 UISearchBar 一起移除 ——
+#pragma mark 搜索走 A2TextField 的 onTextChange / onReturn 回调。
 
 @end

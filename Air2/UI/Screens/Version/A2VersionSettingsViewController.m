@@ -204,7 +204,9 @@
 - (void)setupFolderSection {
     _folderSection = [[A2SettingsSection alloc] initWithTitle:@"版本内容"];
 
-    NSArray<NSString *> *symbols = @[@"puzzlepiece.extension.fill", @"photo.stack.fill",
+    // 与侧栏 / 资源徽标统一：资源包用 iOS 13 就存在的 rectangle.stack.fill
+    //（photo.stack.fill 是 iOS 16 起才有的符号，在 iOS 15 真机上取不到图）。
+    NSArray<NSString *> *symbols = @[@"puzzlepiece.extension.fill", @"rectangle.stack.fill",
                                      @"map.fill", @"sun.max.fill", @"photo.fill"];
 
     for (NSUInteger i = 0; i < A2VersionFolderCount; i++) {

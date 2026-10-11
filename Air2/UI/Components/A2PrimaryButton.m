@@ -205,17 +205,14 @@
 
     switch (_style) {
         case A2ButtonStylePrimary: {
-            _gradientLayer.hidden = NO;
-            _gradientLayer.colors = @[
-                (__bridge id)t.cPrimary.CGColor,
-                (__bridge id)t.cPrimaryContainer.CGColor,
-            ];
-            _gradientLayer.locations = @[@0.0, @1.0];
+            // MD3 的 filled button 是纯主色填充，不做渐变
+            //（用户批注：启动游戏按键不要渐变）。
+            _gradientLayer.hidden = YES;
+            self.backgroundColor = t.cPrimary;
             _titleLabel.textColor = t.cOnPrimary;
             _iconView.tintColor = t.cOnPrimary;
             _spinner.color = t.cOnPrimary;
             self.layer.borderWidth = 0;
-            self.backgroundColor = UIColor.clearColor;
             break;
         }
         case A2ButtonStyleSecondary: {
