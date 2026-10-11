@@ -28,6 +28,8 @@
 #import "a2_rppairing.h"          // [JIT-AUTOPAIR-2] Natives/Support：RPPairing 握手内核 / 完成度自检
 #import "a2_rppairing_verify.h"   // [JIT-AUTOPAIR-2] pair-verify 握手本体（消息流 + 密钥交换）
 #import "a2_rppairing_rsd.h"      // [JIT-AUTOPAIR-2] Bonjour 发现 / 连接 / JSON 帧 / TLS-PSK 口径
+#import "a2_tlspsk_tunnel.h"      // [A2-INTEGRATION] TLS-PSK 隧道门面（可替换后端 / 默认关）
+#import "a2_tlspsk_mbedtls.h"     // [A2-INTEGRATION] mbedTLS 后端注册入口（第三方，Apache-2.0）
 #import "A2JITPairingFileStore.h" // ★配对材料的落盘目标★（同层已有的类，见 docs/ARCHITECTURE.md）
 
 #import <sys/sysctl.h>
@@ -146,6 +148,14 @@ static NSString *A2RPStateName(A2JITAutoPairingPreconditionState state) {
     BOOL pskOK = A2RPRSDPublicTLSPSKPathSufficient(&pskWhy);
     NSLog(@"[A2JIT] autopair engine: TLS-PSK(§12) 公开路径可用=%@ ⇒ %@",
           pskOK ? @"是" : @"否", pskWhy);
+
+    // ---- ②b [A2-INTEGRATION] TLS-PSK 隧道：★真后端★如实口径 ----
+    //  本单接入：可替换门面（a2_tlspsk_tunnel）+ mbedTLS（Apache-2.0）后端（a2_tlspsk_mbedtls）。
+    //  ★默认关★：即便后端就绪，隧道也不会自动启用（enabled 默认 NO）。
+    //  谁调它：此处（生产诊断路径）——注册入口与门面见 Natives/Support/a2_tlspsk_{mbedtls,tunnel}.[hm]。
+    A2TLSPskMbedTLSEnsureRegistered();
+    NSLog(@"[A2JIT] autopair engine: TLS-PSK 隧道（可替换后端）%@",
+          [A2TLSPskTunnel statusLine]);
 
     // ---- ③ 发现（Bonjour）----
     NSArray<NSString *> *types = A2RPRSDDefaultServiceTypes();

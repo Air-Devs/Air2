@@ -311,3 +311,32 @@
 **机器判据**：`JavaApp/Makefile` 的 `verify` 与 `verify-lwjgl` 目标（`jar tf` 扫
 `net/kdt/pojavlaunch|Boardwalk`，命中非 0 即构建失败）；两个 jar 由同一脚本阶段随包。
 
+
+---
+
+## 第三方依赖引入：mbedTLS（TLS-PSK 隧道后端）—— [A2-INTEGRATION]
+
+**登记内容**：本单（集成分支）为「TLS-PSK 隧道」引入**唯一一项第三方依赖** —— mbedTLS。
+按用户拍板：★TLS-PSK 走第三方（mbedTLS 优先：Apache-2.0、~500KB、PSK 成熟），不手写 TLS★。
+
+| 名称 | 版本 | 来源 | 许可 | 用途 | 引入方式 |
+|---|---|---|---|---|---|
+| Mbed TLS（mbedTLS） | 3.6.2（LTS） | 上游 `Mbed-TLS/mbedtls` 标签 `v3.6.2` 源码 tarball | **Apache-2.0**（上游双许可 Apache-2.0 OR GPL-2.0-or-later，本仓选 Apache-2.0） | 仅用于 §12 的 TLS-PSK 隧道（TLS 1.2 / 静态 PSK / 套件 0x00AF,0x008C） | 随仓预编译 iOS arm64 静态库 `Libraries/ThirdParty/mbedtls/{lib,include,LICENSE,NOTICE.md}`；配方 `scripts/build_mbedtls_ios.sh`（★离线★） |
+
+**接口与开关（★可替换 / 默认关 / 不谎报 / 不上云★）**
+- 门面：`Natives/Support/a2_tlspsk_tunnel.[hm]` —— 只暴露「建连 / 发帧 / 收帧 / 关」；
+  `+registerBackend:` 是唯一可替换入口 ⇒ **日后换自写实现不动任何调用方**。
+- 后端：`Natives/Support/a2_tlspsk_mbedtls.[hm]` —— 唯二调用点：
+  ① 生产 `Air2/Bridge/A2JITAutoPairingEngineBridge.m`（TLS-PSK 诊断块）；
+  ② 自证 `tests/JIT/jit_logic_tests.m`。
+- 默认关：`A2TLSPskTunnel.enabled` 默认 **NO**；未开时 `connect…` 一律如实拒绝并点名。
+- 不谎报：无后端 / 未开 / 地址被拒 / 握手失败 ⇒ 一律 `NO` + 具体 reason，绝不静默成功。
+- 不上云：默认主机准入策略 `A2TLSPskDefaultHostPolicy` 只放行
+  **本机 / 私有网段 / 链路本地 / `.local`**；任何公网地址一律拒绝。**不接任何云服务。**
+
+**未引入**：不使用 mbedTLS 的 x509 信任链（PSK 模式 `VERIFY_NONE`）；不引入 OpenSSL / BoringSSL / 任何包管理器；
+不新增任何联网取依赖的构建步骤（tarball 由运维离线提供，见 `NOTICE.md`）。
+
+**机器判据（可逐条核）**：`lipo -info Libraries/ThirdParty/mbedtls/lib/libmbedtls.a` = arm64；
+`nm -gU …libmbedtls.a | grep _mbedtls_ssl_conf_psk` 命中；包内 `nm` 有 `_mbedtls_ssl_conf_psk`（链接真的进去了）；
+`natives` 自证见 `tests/JIT/jit_logic_tests.m` 的 [A2-INTEGRATION] 例。
