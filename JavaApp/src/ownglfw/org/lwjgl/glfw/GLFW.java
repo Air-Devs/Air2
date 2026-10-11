@@ -444,11 +444,21 @@ public class GLFW {
         }
     }
 
+    /**
+     * 存新值、返回「上一个登记的回调」——★仅当旧值确实是该回调的包装类时才返回它★。
+     *
+     * <p>为什么不能直接强转：官方 {@code glfwSet*Callback} 的形参是回调<b>接口</b>
+     * （如 {@code GLFWKeyCallbackI}），MC 传进来的多是无包装的 lambda；把它的返回值当作
+     * 返回类型 {@code GLFWKeyCallback} 会在字节码里插 checkcast ⇒ 第二次登记
+     * （或 {@code Callbacks.glfwFreeCallbacks} 逐项置空）时抛 ClassCastException。
+     * lambda 本就没有可 {@code free()} 的原生包装 ⇒ 返回 null 与官方语义等价
+     * （官方返回的包装是它自己按返回指针现造的）。
+     */
     @SuppressWarnings("unchecked")
-    private static <T> T swap(Object[] slot, Object value) {
-        T prev = (T) slot[0];
+    private static <T> T swapPrev(Object[] slot, Object value, Class<T> type) {
+        Object prev = slot[0];
         slot[0] = value;
-        return prev;
+        return type.isInstance(prev) ? (T) prev : null;
     }
 
     static Window state(long window) {
@@ -492,7 +502,7 @@ public class GLFW {
     }
 
     public static GLFWErrorCallback glfwSetErrorCallback(GLFWErrorCallbackI cbfun) {
-        return swap(CB_ERROR, cbfun);
+        return swapPrev(CB_ERROR, cbfun, GLFWErrorCallback.class);
     }
 
     public static int glfwGetPlatform() {
@@ -705,102 +715,214 @@ public class GLFW {
     // ======================= 回调注册（20 窗口回调 + 3 IME 回调） =======================
     public static GLFWKeyCallback glfwSetKeyCallback(long window, GLFWKeyCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWKeyCallback>swap(w.cbKey, cbfun);
+        return w == null ? null : swapPrev(w.cbKey, cbfun, GLFWKeyCallback.class);
     }
 
     public static GLFWCharCallback glfwSetCharCallback(long window, GLFWCharCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWCharCallback>swap(w.cbChar, cbfun);
+        return w == null ? null : swapPrev(w.cbChar, cbfun, GLFWCharCallback.class);
     }
 
     public static GLFWCharModsCallback glfwSetCharModsCallback(long window, GLFWCharModsCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWCharModsCallback>swap(w.cbCharMods, cbfun);
+        return w == null ? null : swapPrev(w.cbCharMods, cbfun, GLFWCharModsCallback.class);
     }
 
     public static GLFWMouseButtonCallback glfwSetMouseButtonCallback(long window, GLFWMouseButtonCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWMouseButtonCallback>swap(w.cbMouseButton, cbfun);
+        return w == null ? null : swapPrev(w.cbMouseButton, cbfun, GLFWMouseButtonCallback.class);
     }
 
     public static GLFWScrollCallback glfwSetScrollCallback(long window, GLFWScrollCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWScrollCallback>swap(w.cbScroll, cbfun);
+        return w == null ? null : swapPrev(w.cbScroll, cbfun, GLFWScrollCallback.class);
     }
 
     public static GLFWCursorPosCallback glfwSetCursorPosCallback(long window, GLFWCursorPosCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWCursorPosCallback>swap(w.cbCursorPos, cbfun);
+        return w == null ? null : swapPrev(w.cbCursorPos, cbfun, GLFWCursorPosCallback.class);
     }
 
     public static GLFWCursorEnterCallback glfwSetCursorEnterCallback(long window, GLFWCursorEnterCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWCursorEnterCallback>swap(w.cbCursorEnter, cbfun);
+        return w == null ? null : swapPrev(w.cbCursorEnter, cbfun, GLFWCursorEnterCallback.class);
     }
 
     public static GLFWFramebufferSizeCallback glfwSetFramebufferSizeCallback(long window, GLFWFramebufferSizeCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWFramebufferSizeCallback>swap(w.cbFramebufferSize, cbfun);
+        return w == null ? null : swapPrev(w.cbFramebufferSize, cbfun, GLFWFramebufferSizeCallback.class);
     }
 
     public static GLFWWindowSizeCallback glfwSetWindowSizeCallback(long window, GLFWWindowSizeCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWWindowSizeCallback>swap(w.cbWindowSize, cbfun);
+        return w == null ? null : swapPrev(w.cbWindowSize, cbfun, GLFWWindowSizeCallback.class);
     }
 
     public static GLFWWindowPosCallback glfwSetWindowPosCallback(long window, GLFWWindowPosCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWWindowPosCallback>swap(w.cbWindowPos, cbfun);
+        return w == null ? null : swapPrev(w.cbWindowPos, cbfun, GLFWWindowPosCallback.class);
     }
 
     public static GLFWWindowFocusCallback glfwSetWindowFocusCallback(long window, GLFWWindowFocusCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWWindowFocusCallback>swap(w.cbWindowFocus, cbfun);
+        return w == null ? null : swapPrev(w.cbWindowFocus, cbfun, GLFWWindowFocusCallback.class);
     }
 
     public static GLFWWindowRefreshCallback glfwSetWindowRefreshCallback(long window, GLFWWindowRefreshCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWWindowRefreshCallback>swap(w.cbWindowRefresh, cbfun);
+        return w == null ? null : swapPrev(w.cbWindowRefresh, cbfun, GLFWWindowRefreshCallback.class);
     }
 
     public static GLFWWindowCloseCallback glfwSetWindowCloseCallback(long window, GLFWWindowCloseCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWWindowCloseCallback>swap(w.cbWindowClose, cbfun);
+        return w == null ? null : swapPrev(w.cbWindowClose, cbfun, GLFWWindowCloseCallback.class);
     }
 
     public static GLFWWindowIconifyCallback glfwSetWindowIconifyCallback(long window, GLFWWindowIconifyCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWWindowIconifyCallback>swap(w.cbWindowIconify, cbfun);
+        return w == null ? null : swapPrev(w.cbWindowIconify, cbfun, GLFWWindowIconifyCallback.class);
     }
 
     public static GLFWWindowMaximizeCallback glfwSetWindowMaximizeCallback(long window, GLFWWindowMaximizeCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWWindowMaximizeCallback>swap(w.cbWindowMaximize, cbfun);
+        return w == null ? null : swapPrev(w.cbWindowMaximize, cbfun, GLFWWindowMaximizeCallback.class);
     }
 
     public static GLFWWindowContentScaleCallback glfwSetWindowContentScaleCallback(long window, GLFWWindowContentScaleCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWWindowContentScaleCallback>swap(w.cbWindowContentScale, cbfun);
+        return w == null ? null : swapPrev(w.cbWindowContentScale, cbfun, GLFWWindowContentScaleCallback.class);
     }
 
     public static GLFWDropCallback glfwSetDropCallback(long window, GLFWDropCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWDropCallback>swap(w.cbDrop, cbfun);
+        return w == null ? null : swapPrev(w.cbDrop, cbfun, GLFWDropCallback.class);
     }
 
     public static GLFWPreeditCallback glfwSetPreeditCallback(long window, GLFWPreeditCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWPreeditCallback>swap(w.cbPreedit, cbfun);
+        return w == null ? null : swapPrev(w.cbPreedit, cbfun, GLFWPreeditCallback.class);
     }
 
     public static GLFWIMEStatusCallback glfwSetIMEStatusCallback(long window, GLFWIMEStatusCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWIMEStatusCallback>swap(w.cbImeStatus, cbfun);
+        return w == null ? null : swapPrev(w.cbImeStatus, cbfun, GLFWIMEStatusCallback.class);
     }
 
     public static GLFWPreeditCandidateCallback glfwSetPreeditCandidateCallback(long window, GLFWPreeditCandidateCallbackI cbfun) {
         Window w = state(window);
-        return w == null ? null : GLFW.<GLFWPreeditCandidateCallback>swap(w.cbPreeditCandidate, cbfun);
+        return w == null ? null : swapPrev(w.cbPreeditCandidate, cbfun, GLFWPreeditCandidateCallback.class);
+    }
+
+    // ======================= native → Java 事件落地（★全链最后一跳★） =======================
+    // 事件类型编号 = Natives/Input/a2_glfw_window.h 的 A2GlfwEventType（逐值对齐；
+    // 由 JavaApp/scripts/ownglfw_verify.py 的「事件通道对齐」一条机器判据守住，不靠人眼）。
+    /** A2_GLFW_EVENT_CURSOR_POS：d0=x, d1=y（逻辑点）。 */
+    private static final int A2_EV_CURSOR_POS       = 1;
+    /** A2_GLFW_EVENT_MOUSE_BUTTON：i0=button(GLFW_MOUSE_BUTTON_*), i1=action, i2=mods。 */
+    private static final int A2_EV_MOUSE_BUTTON     = 2;
+    /** A2_GLFW_EVENT_KEY：i0=key(GLFW_KEY_*), i1=scancode, i2=action, i3=mods。 */
+    private static final int A2_EV_KEY              = 3;
+    /** A2_GLFW_EVENT_FRAMEBUFFER_SIZE：i0=w(像素), i1=h(像素)。 */
+    private static final int A2_EV_FRAMEBUFFER_SIZE = 4;
+    /** A2_GLFW_EVENT_WINDOW_SIZE：i0=w(点), i1=h(点)。 */
+    private static final int A2_EV_WINDOW_SIZE      = 5;
+    /** A2_GLFW_EVENT_WINDOW_FOCUS：i0=1(获得)/0(失去)。 */
+    private static final int A2_EV_WINDOW_FOCUS     = 6;
+    /** A2_GLFW_EVENT_CONTENT_SCALE：d0=xscale, d1=yscale。 */
+    private static final int A2_EV_CONTENT_SCALE    = 7;
+    /** A2_GLFW_EVENT_CURSOR_ENTER：i0=1(进入)/0(离开)。 */
+    private static final int A2_EV_CURSOR_ENTER     = 8;
+    /** A2_GLFW_EVENT_CHAR：i0=Unicode 码点, i1=mods。 */
+    private static final int A2_EV_CHAR             = 9;
+    /** A2_GLFW_EVENT_SCROLL：d0=xoffset, d1=yoffset。 */
+    private static final int A2_EV_SCROLL           = 10;
+
+    /**
+     * native → Java 的事件派发入口（GLFW 自研全链的最后一跳）。
+     *
+     * <p>调用方：{@code Natives/OwnGlfw/a2_own_glfw_bridge.m} 的 {@code a2_own_glfw_java_sink}
+     * —— 它在 {@code glfwPollEvents}/{@code glfwWaitEvents} 所在线程上按描述符
+     * {@code (JIIIIIDD)V} 静态调用本方法（见该文件 {@code A2_OWN_GLFW_JAVA_SIG}）。
+     *
+     * <p>语义：把一条事件翻译成对应的 LWJGL 回调（{@code glfwSet*Callback} 登记的那批）
+     * 并同步 Java 侧状态（{@code glfwGetKey}/{@code glfwGetMouseButton}/{@code glfwGetCursorPos}
+     * 的读取源）。回调名/签名与官方 LWJGL 3.4.1 一致（以 lwjgl-glfw.jar 的 javap 公共签名为准）。
+     */
+    public static void a2OwnGlfwDispatch(long window, int type, int i0, int i1,
+                                         int i2, int i3, double d0, double d1) {
+        Window w = state(window);
+        if (w == null) {
+            return;
+        }
+        switch (type) {
+            case A2_EV_CURSOR_POS: {
+                w.cursorX = d0;
+                w.cursorY = d1;
+                GLFWCursorPosCallbackI cb = (GLFWCursorPosCallbackI) w.cbCursorPos[0];
+                if (cb != null) cb.invoke(window, d0, d1);
+                break;
+            }
+            case A2_EV_MOUSE_BUTTON: {
+                w.buttons.put(Integer.valueOf(i0), Integer.valueOf(i1));
+                GLFWMouseButtonCallbackI cb = (GLFWMouseButtonCallbackI) w.cbMouseButton[0];
+                if (cb != null) cb.invoke(window, i0, i1, i2);
+                break;
+            }
+            case A2_EV_KEY: {
+                w.keys.put(Integer.valueOf(i0), Integer.valueOf(i2));
+                GLFWKeyCallbackI cb = (GLFWKeyCallbackI) w.cbKey[0];
+                if (cb != null) cb.invoke(window, i0, i1, i2, i3);
+                break;
+            }
+            case A2_EV_CHAR: {
+                GLFWCharCallbackI cb = (GLFWCharCallbackI) w.cbChar[0];
+                if (cb != null) cb.invoke(window, i0);
+                GLFWCharModsCallbackI cbMods = (GLFWCharModsCallbackI) w.cbCharMods[0];
+                if (cbMods != null) cbMods.invoke(window, i0, i1);
+                break;
+            }
+            case A2_EV_SCROLL: {
+                GLFWScrollCallbackI cb = (GLFWScrollCallbackI) w.cbScroll[0];
+                if (cb != null) cb.invoke(window, d0, d1);
+                break;
+            }
+            case A2_EV_FRAMEBUFFER_SIZE: {
+                w.fbWidth = i0;
+                w.fbHeight = i1;
+                GLFWFramebufferSizeCallbackI cb = (GLFWFramebufferSizeCallbackI) w.cbFramebufferSize[0];
+                if (cb != null) cb.invoke(window, i0, i1);
+                break;
+            }
+            case A2_EV_WINDOW_SIZE: {
+                w.width = i0;
+                w.height = i1;
+                GLFWWindowSizeCallbackI cb = (GLFWWindowSizeCallbackI) w.cbWindowSize[0];
+                if (cb != null) cb.invoke(window, i0, i1);
+                break;
+            }
+            case A2_EV_WINDOW_FOCUS: {
+                boolean focused = i0 != 0;
+                w.focused = focused;
+                GLFWWindowFocusCallbackI cb = (GLFWWindowFocusCallbackI) w.cbWindowFocus[0];
+                if (cb != null) cb.invoke(window, focused);
+                break;
+            }
+            case A2_EV_CONTENT_SCALE: {
+                w.scaleX = (float) d0;
+                w.scaleY = (float) d1;
+                GLFWWindowContentScaleCallbackI cb = (GLFWWindowContentScaleCallbackI) w.cbWindowContentScale[0];
+                if (cb != null) cb.invoke(window, (float) d0, (float) d1);
+                break;
+            }
+            case A2_EV_CURSOR_ENTER: {
+                GLFWCursorEnterCallbackI cb = (GLFWCursorEnterCallbackI) w.cbCursorEnter[0];
+                if (cb != null) cb.invoke(window, i0 != 0);
+                break;
+            }
+            default:
+                // 未知类型（native 侧新增而本层未跟）静默忽略：不抛异常，避免打断事件泵。
+                break;
+        }
     }
 
     // ======================= 时间 =======================

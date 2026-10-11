@@ -51,6 +51,66 @@ def java_sources():
     return sorted(out)
 
 
+# ---------------------------------------------------------------------------
+# ⑤ 事件通道对齐（native ⇄ Java 全链的机器判据）
+# ---------------------------------------------------------------------------
+# 两侧的事件类型编号是手写的（native 头里的 A2GlfwEventType vs GLFW.java 的 A2_EV_*），
+# 任何一侧加/改事件而另一侧没跟 ⇒ 事件静默丢失。这里逐名+逐值比对，不靠人眼。
+NATIVE_HEADER = os.path.join(ROOT, "Natives", "Input", "a2_glfw_window.h")
+GLFW_JAVA = os.path.join(SRC, "org", "lwjgl", "glfw", "GLFW.java")
+
+# JNI 描述符首字符 → Java 类型名（只列本链用到的）
+DESC_TYPES = {"J": "long", "I": "int", "D": "double", "F": "float",
+              "Z": "boolean", "B": "byte", "S": "short", "C": "char"}
+
+
+def check_event_channel():
+    fails = []
+    java = open(GLFW_JAVA, encoding="utf-8").read()
+    hdr = open(NATIVE_HEADER, encoding="utf-8").read()
+    bridge = open(NATIVE_M, encoding="utf-8").read()
+
+    native_ev = {m: int(v) for m, v in
+                 re.findall(r"A2_GLFW_EVENT_(\w+)\s*=\s*(\d+)", hdr)}
+    java_ev = {m: int(v) for m, v in re.findall(r"A2_EV_(\w+)\s*=\s*(\d+)", java)}
+    names = sorted(k for k in native_ev if k != "NONE")
+
+    missing = [k for k in names if k not in java_ev]
+    value_bad = [k for k in names if k in java_ev and native_ev[k] != java_ev[k]]
+    case_bad = [k for k in names if ("case A2_EV_%s:" % k) not in java]
+
+    print("[5] 事件通道对齐：native %d 种（不含 NONE）/ Java 常量 %d 个 / 缺 %d / 值错 %d / 无 case %d"
+          % (len(names), len(java_ev), len(missing), len(value_bad), len(case_bad)))
+    if missing:
+        print("    缺 Java 常量:", missing)
+        fails.append("event-const")
+    if value_bad:
+        print("    值不一致:", [(k, native_ev[k], java_ev[k]) for k in value_bad])
+        fails.append("event-value")
+    if case_bad:
+        print("    派发缺 case:", case_bad)
+        fails.append("event-case")
+
+    # 派发入口的签名必须与 native 侧 upcall 的描述符逐位一致（描述符 = 唯一事实源）
+    m = re.search(r'a2OwnGlfwDispatch\s*\(([^)]*)\)', java)
+    sig_m = re.search(r'A2_OWN_GLFW_JAVA_SIG\s+"([^"]+)"', bridge)
+    if not m or not sig_m:
+        print("    找不到派发方法或 native 描述符宏")
+        fails.append("dispatch-sig")
+        return fails
+    params = [p.strip() for p in m.group(1).split(",") if p.strip()]
+    jtypes = [p.split()[0] for p in params]
+    sig = sig_m.group(1)
+    desc_args = sig[1:sig.index(")")]
+    ntypes = [DESC_TYPES.get(c, "?") for c in desc_args]
+    print("    %s 参数 %s / native 描述符 %s ⇒ %s"
+          % ("a2OwnGlfwDispatch", jtypes, sig, ntypes))
+    if jtypes != ntypes:
+        print("    ★签名与描述符不一致★")
+        fails.append("dispatch-sig")
+    return fails
+
+
 def main():
     fails = []
 
@@ -126,6 +186,9 @@ def main():
     if hits:
         print("    命中:", hits)
         fails.append("provenance")
+
+    # ---- ⑤ 事件通道对齐（native ⇄ Java）----
+    fails.extend(check_event_channel())
 
     print("=" * 66)
     print("结果：" + ("全部通过 ✓" if not fails else ("失败 " + ", ".join(fails))))
