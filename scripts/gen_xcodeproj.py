@@ -20,6 +20,28 @@ DEPLOYMENT_TARGET = "14.0"
 MARKETING_VERSION = "0.1.0"
 BUILD_VERSION = "1"
 
+# libterracotta 是「可选二进制依赖」（工程内无 libterracotta.xcframework）。
+# A2Multiplayer.m 以 __attribute__((weak)) 声明其 C ABI，但现代 ld64 对
+# 「任何库都不提供」的符号即使声明为 weak 也不放行 ⇒ 链接期须显式 -Wl,-U,<sym>
+# 放行未定义符号；运行期缺库时这些函数指针为 NULL，
+# [A2Multiplayer checkAvailable] 返回 NO（UI 如实显示「联机组件未就绪」）。
+TERRACOTTA_UNDEFINED_SYMS = [
+    "_terracotta_ios_start",
+    "_terracotta_ios_get_state",
+    "_terracotta_ios_set_waiting",
+    "_terracotta_ios_set_scanning",
+    "_terracotta_ios_start_host_with_port",
+    "_terracotta_ios_set_guesting",
+    "_terracotta_ios_verify_room_code",
+    "_terracotta_ios_get_metadata",
+    "_terracotta_ios_free_string",
+]
+
+
+def terracotta_ldflags():
+    items = ",\n\t\t\t\t\t".join('"-Wl,-U,%s"' % s for s in TERRACOTTA_UNDEFINED_SYMS)
+    return "(\n\t\t\t\t\t" + items + ",\n\t\t\t\t)"
+
 
 def uid(*parts):
     """由内容生成稳定的 24 位十六进制 UUID。
@@ -354,6 +376,7 @@ def build():
                 "GENERATE_INFOPLIST_FILE": "NO",
                 "INFOPLIST_FILE": "Air2/Info.plist",
                 "LD_RUNPATH_SEARCH_PATHS": '(\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t"@executable_path/Frameworks",\n\t\t\t\t)',
+                "OTHER_LDFLAGS": terracotta_ldflags(),
                 "MARKETING_VERSION": MARKETING_VERSION,
                 "PRODUCT_BUNDLE_IDENTIFIER": BUNDLE_ID,
                 "PRODUCT_NAME": "$(TARGET_NAME)",

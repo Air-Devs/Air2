@@ -1070,6 +1070,17 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = "0.1.0";
+				OTHER_LDFLAGS = (
+					"-Wl,-U,_terracotta_ios_start",
+					"-Wl,-U,_terracotta_ios_get_state",
+					"-Wl,-U,_terracotta_ios_set_waiting",
+					"-Wl,-U,_terracotta_ios_set_scanning",
+					"-Wl,-U,_terracotta_ios_start_host_with_port",
+					"-Wl,-U,_terracotta_ios_set_guesting",
+					"-Wl,-U,_terracotta_ios_verify_room_code",
+					"-Wl,-U,_terracotta_ios_get_metadata",
+					"-Wl,-U,_terracotta_ios_free_string",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.airdevs.air2";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = "YES";
@@ -1090,6 +1101,17 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = "0.1.0";
+				OTHER_LDFLAGS = (
+					"-Wl,-U,_terracotta_ios_start",
+					"-Wl,-U,_terracotta_ios_get_state",
+					"-Wl,-U,_terracotta_ios_set_waiting",
+					"-Wl,-U,_terracotta_ios_set_scanning",
+					"-Wl,-U,_terracotta_ios_start_host_with_port",
+					"-Wl,-U,_terracotta_ios_set_guesting",
+					"-Wl,-U,_terracotta_ios_verify_room_code",
+					"-Wl,-U,_terracotta_ios_get_metadata",
+					"-Wl,-U,_terracotta_ios_free_string",
+				);
 				PRODUCT_BUNDLE_IDENTIFIER = "dev.airdevs.air2";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = "YES";
