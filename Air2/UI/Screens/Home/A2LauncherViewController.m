@@ -43,6 +43,7 @@
 #import "A2SkinHeadView.h"
 
 #import "A2AccountViewController.h"
+#import "A2Log.h"
 #import "A2SettingsViewController.h"
 #import "A2VersionListViewController.h"
 #import "A2DownloadViewController.h"
@@ -768,6 +769,9 @@
 #pragma mark - 动作与导航
 
 - (void)launchGame {
+    // 启动实现归启动流程负责人（见 HANDOVER 第六章），此处只保留入口占位：
+    // 点了有明确提示 + 日志，不冒充已接通。
+    [A2Log log:@"home: 点击启动（Bridge 未就绪，等启动流程对接）"];
     _launchButton.loading = YES;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
@@ -800,8 +804,6 @@
     [self pushScreen:[[A2DownloadViewController alloc] init] style:A2TransitionStyleScaleFade];
 }
 
-- (void)openMultiplayer { [A2Toast show:@"联机功能尚未接入" inView:self.view]; }
-- (void)openFiles       { [A2Toast show:@"文件管理尚未接入" inView:self.view]; }
 - (void)openVersionSettings {
     // 齿轮与「版本设置」进当前版本的单版本设置页（真实页面）。
     // 无版本时给提示，不进空页面；只有「游戏目录」进版本管理列表。
