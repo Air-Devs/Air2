@@ -45,7 +45,7 @@ LWJGL_SOURCES := $(shell find $(LWJGL_SRCDIR) -name '*.java' 2>/dev/null)
 LWJGL_CLASSES := $(OUTPUTDIR)/lwjgl-classes
 LWJGL_TARGET  := $(OUTPUTDIR)/$(LWJGL_JARNAME).jar
 
-.PHONY: all lwjgl clean verify verify-lwjgl ownglfw verify-ownglfw
+.PHONY: all lwjgl clean verify verify-lwjgl ownglfw verify-ownglfw overlay verify-overlay
 
 all: $(TARGET) lwjgl
 
@@ -108,6 +108,18 @@ ownglfw: verify-ownglfw
 verify-ownglfw:
 	@echo "==> 自研 GLFW 自证（编译 + 薄 JNI 符号对齐 + 包内自证）"
 	@python3 scripts/ownglfw_verify.py
+
+# ------------------------------------------------------------------
+# [A2-GLFW-OVERLAY-1] 复用线覆盖层（src/lwjgl/**）的 native 对端自证。
+# 与上面自研线互不混同：本 target 校验的是「复用线 Java 声明 ↔ Natives/Input/
+# a2_glfw_overlay_bridge.m 的实现」逐名对齐 + pojav* 契约 + 渲染器解耦 + 判据锚点。
+# 纯文本校验，不需要 javac ⇒ 任何机器可跑。
+# ------------------------------------------------------------------
+overlay: verify-overlay
+
+verify-overlay:
+	@echo "==> 复用线 GLFW 覆盖层 native 自证（JNI 逐名对齐 + pojav* 契约 + 解耦）"
+	@python3 ../scripts/verify_glfw_overlay_native.py
 
 clean:
 	rm -rf $(OUTPUTDIR)

@@ -26,6 +26,7 @@ LAYER_FILES = [
     "Natives/Input/a2_glfw_window.m",
     "Natives/Input/a2_glfw_input.h",
     "Natives/Input/a2_glfw_input.m",
+    "Natives/Input/a2_glfw_overlay_bridge.m",   # 复用线覆盖层的 native 对端（[A2-GLFW-OVERLAY-1]）—— 同一解耦约束
     "Natives/OwnGlfw/a2_own_glfw_bridge.m",
 ]
 PUBLIC_HEADERS = [
