@@ -44,7 +44,9 @@ def collect_resources():
         return resources
     for entry in sorted(os.listdir(assets_dir)):
         if entry.endswith(".xcassets"):
-            resources.append(os.path.join("Assets", entry))
+            # 归一化为 POSIX 分隔符：Windows 下 os.path.join 会产出反斜杠，
+            # 后续 group_tree() 按 "/" 切分，反斜杠会让所有路径落进空路径孤儿组
+            resources.append(os.path.join("Assets", entry).replace(os.sep, "/"))
     return resources
 
 
@@ -55,9 +57,9 @@ def scan_sources():
     for dirpath, _, files in os.walk(base):
         for f in sorted(files):
             if f.endswith(".m") or f.endswith(".mm"):
-                impl.append(os.path.relpath(os.path.join(dirpath, f), ROOT))
+                impl.append(os.path.relpath(os.path.join(dirpath, f), ROOT).replace(os.sep, "/"))
             elif f.endswith(".h"):
-                headers.append(os.path.relpath(os.path.join(dirpath, f), ROOT))
+                headers.append(os.path.relpath(os.path.join(dirpath, f), ROOT).replace(os.sep, "/"))
     return sorted(impl), sorted(headers)
 
 
@@ -143,7 +145,7 @@ def build():
         u = uid("fileref", rpath)
         name = os.path.basename(rpath)
         ftype = "folder.assetcatalog" if name.endswith(".xcassets") else "file"
-        add(f"\t\t{u} /* {name} */ = {{isa = PBXFileReference; lastKnownFileType = {ftype}; path = \"{name}\"; sourceTree = \"<group>\"; }};")
+        add(f"\t\t{u} /* {name} */ = {{isa = PBXFileReference; lastKnownFileType = {ftype}; path = \"{rpath}\"; sourceTree = \"<group>\"; }};")
     add("/* End PBXFileReference section */")
     add("")
 
