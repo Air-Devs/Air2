@@ -62,6 +62,8 @@ SOURCES = [
     os.path.join(ROOT, "Natives", "Support", "a2_rppairing_rsd.m"),
     # --- [A2-INTEGRATION] TLS-PSK 隧道门面（可替换后端 / 默认关 / 不上云；纯逻辑，无第三方）---
     os.path.join(ROOT, "Natives", "Support", "a2_tlspsk_tunnel.m"),
+    # 门面用项目统一的 a2_log_f 记日志 ⇒ 测试里一并链接该纯日志实现（只有 Foundation+stdio）。
+    os.path.join(ROOT, "Natives", "Support", "a2_log.m"),
     os.path.join(HERE, "jit_logic_tests.m"),
 ]
 
