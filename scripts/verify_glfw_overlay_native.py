@@ -78,7 +78,10 @@ def java_pojav_entries():
 def native_defs():
     src = read(NATIVE_M)
     jni = sorted(set(re.findall(r"\bJNIEXPORT\s+[\w\s\*]+?\sJNICALL\s+(\w+)", src)))
-    c_entries = sorted(set(re.findall(r"^\s*(?:jint|jlong|void)\s+(pojav\w+)\s*\(", src, re.M)))
+    # C 入口允许带可见性宏（如 A2_GLFW_ENTRY = __attribute__((visibility("default")))）：
+    # 主可执行文件里「普通全局函数」会被标 N_PEXT（未导出），而 Java 侧是运行期 dlsym 按名字找
+    # ⇒ 这批入口必须显式 default 可见性（本单实测：不加属性时 nm -gU 计 0）。
+    c_entries = sorted(set(re.findall(r"^\s*(?:\w+\s+)?(?:jint|jlong|void)\s+(pojav\w+)\s*\(", src, re.M)))
     return jni, c_entries, src
 
 
