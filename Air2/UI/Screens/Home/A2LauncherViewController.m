@@ -58,7 +58,7 @@
 @property (nonatomic, strong) UIStackView *topTrailingStack;
 
 /// 右侧操作栏
-@property (nonatomic, strong) UIScrollView *panelScroll;
+@property (nonatomic, strong) UIView *panelContainer;
 @property (nonatomic, strong) UIStackView *panelStack;
 
 /// 账户条
@@ -199,18 +199,18 @@
 #pragma mark - 右侧操作栏
 
 - (void)setupSidePanel {
-    _panelScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
-    _panelScroll.translatesAutoresizingMaskIntoConstraints = NO;
-    _panelScroll.showsVerticalScrollIndicator = NO;
-    _panelScroll.alwaysBounceVertical = YES;
-    _panelScroll.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
-    [self.view addSubview:_panelScroll];
+    // ZL2 的侧栏是固定不滚动的（ConstraintLayout + fillMaxSize）。
+    // 之前用 UIScrollView，内容略高就会产生滚动 —— 侧栏本身只有两三张卡，
+    // 不该让人滚动它。
+    _panelContainer = [[UIView alloc] initWithFrame:CGRectZero];
+    _panelContainer.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:_panelContainer];
 
     _panelStack = [[UIStackView alloc] initWithFrame:CGRectZero];
     _panelStack.translatesAutoresizingMaskIntoConstraints = NO;
     _panelStack.axis = UILayoutConstraintAxisVertical;
     _panelStack.spacing = A2CardSpacing;   // 12pt，与卡片内边距一致
-    [_panelScroll addSubview:_panelStack];
+    [_panelContainer addSubview:_panelStack];
 
     // 操作区只放两张卡：账户 + 版本。
     // 之前我额外加了「版本/下载/联机/文件」快捷网格，但它和顶栏入口
@@ -242,22 +242,21 @@
 /// 改成内容自适应后，卡片保持自然比例，下方留白 ——
 /// 留白比拉伸好看。
 - (void)setupPanelPlacement {
-    UILayoutGuide *content = _panelScroll.contentLayoutGuide;
-    UILayoutGuide *frame = _panelScroll.frameLayoutGuide;
-
+    // 侧栏是固定容器，不滚动。
+    // 内容从顶部按 12pt 外边距开始，卡片按内容高度排列。
     [NSLayoutConstraint activateConstraints:@[
-        // 宽度跟随可视区域（只允许垂直滚动）
-        [_panelStack.widthAnchor constraintEqualToAnchor:frame.widthAnchor
-                                               constant:-A2PanelOuterPadding * 2],
-
-        // 顶部对齐，底部按内容自然结束
-        [_panelStack.topAnchor constraintEqualToAnchor:content.topAnchor
-                                              constant:A2PanelOuterPadding],
-        [_panelStack.bottomAnchor constraintLessThanOrEqualToAnchor:content.bottomAnchor
+        [_panelStack.topAnchor constraintEqualToAnchor:_panelContainer.topAnchor
+                                               constant:A2PanelOuterPadding],
+        [_panelStack.leadingAnchor constraintEqualToAnchor:_panelContainer.leadingAnchor
+                                                  constant:A2PanelOuterPadding],
+        [_panelStack.trailingAnchor constraintEqualToAnchor:_panelContainer.trailingAnchor
+                                                   constant:-A2PanelOuterPadding],
+        // 底部用 ≤ 而非 = ：内容短时不被拉伸，内容高时会被裁（侧栏不该滚动）
+        [_panelStack.bottomAnchor constraintLessThanOrEqualToAnchor:_panelContainer.bottomAnchor
                                                            constant:-A2PanelOuterPadding],
     ]];
 
-    // 三张卡都按内容撑高，不互相争抢空间
+    // 卡片按内容撑高，不互相争抢空间
     for (UIView *card in @[_mainCard, _recentCard]) {
         [card setContentHuggingPriority:UILayoutPriorityRequired
                                 forAxis:UILayoutConstraintAxisVertical];
@@ -281,7 +280,7 @@
     // 用 multiplier 而不是算好的固定值 —— 后者在 updateViewConstraints
     // 首次调用时 bounds 还是 0，兜底值会被固化且旋转后不更新。
     NSLayoutConstraint *panelWidth =
-        [_panelScroll.widthAnchor constraintEqualToAnchor:self.view.widthAnchor
+        [_panelContainer.widthAnchor constraintEqualToAnchor:self.view.widthAnchor
                                                multiplier:A2PanelWidthRatio];
 
     [NSLayoutConstraint activateConstraints:@[
@@ -306,17 +305,13 @@
         [_topTrailingStack.centerYAnchor constraintEqualToAnchor:_topBar.centerYAnchor],
 
         // 右侧操作栏
-        [_panelScroll.topAnchor constraintEqualToAnchor:_topBar.bottomAnchor],
-        [_panelScroll.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
-        [_panelScroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [_panelContainer.topAnchor constraintEqualToAnchor:_topBar.bottomAnchor],
+        [_panelContainer.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        [_panelContainer.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
 
-        // 右栏水平边距；垂直定位见 setupPanelPlacement
-        [_panelStack.leadingAnchor constraintEqualToAnchor:_panelScroll.frameLayoutGuide.leadingAnchor
-                                                 constant:A2PanelOuterPadding],
-        [_panelStack.trailingAnchor constraintEqualToAnchor:_panelScroll.frameLayoutGuide.trailingAnchor
-                                                  constant:-A2PanelOuterPadding],
     ]];
 
+    // 侧栏内部的边距与排列在 setupPanelPlacement 里统一处理
     [self setupPanelPlacement];
 
     [super updateViewConstraints];

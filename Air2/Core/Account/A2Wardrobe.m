@@ -222,4 +222,104 @@ static NSString *const kWardrobeCacheDir = @"A2Wardrobe";
     }] resume];
 }
 
+#pragma mark - 本地皮肤
+
+/// 给账号设置本地皮肤。
+///
+/// 离线账号拉不到远端材质（UUID 是本地算的，Mojang 那边不存在），
+/// 但用户可以自己选一张皮肤图 —— 游戏内同样支持本地皮肤。
+///
+/// 图片会被规整到 Minecraft 标准皮肤尺寸再落盘：
+///   64x64（1.8+ 带第二层）或 64x32（旧版）
+/// 直接存原图会让 A2SkinHeadView 的裁剪坐标算错 —— 它按
+/// 标准布局的固定像素位置取头部区域。
+- (void)setLocalSkin:(UIImage *)image
+          forAccount:(A2Account *)account
+          completion:(void (^)(BOOL))completion {
+    if (!image || !account) {
+        if (completion) completion(NO);
+        return;
+    }
+
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        UIImage *normalized = [self normalizeSkinImage:image];
+        NSData *png = UIImagePNGRepresentation(normalized);
+        if (!png) {
+            dispatch_async(dispatch_get_main_queue(), ^{ if (completion) completion(NO); });
+            return;
+        }
+
+        NSString *dir = [self directoryForUUID:account.profileID ?: account.uniqueID];
+        [NSFileManager.defaultManager createDirectoryAtPath:dir
+                                withIntermediateDirectories:YES attributes:nil error:nil];
+
+        NSString *dest = [dir stringByAppendingPathComponent:@"skin.png"];
+        BOOL ok = [png writeToFile:dest atomically:YES];
+        if (ok) account.skinPath = dest;
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (completion) completion(ok);
+        });
+    });
+}
+
+/// 把任意尺寸的图规整成标准皮肤尺寸。
+///
+/// Minecraft 皮肤的标准是 64x64（或旧版 64x32）。
+/// 用户可能给任意尺寸的图，直接存会让头部裁剪取到错位区域。
+/// 这里按「拉伸到 64x64」处理 —— 皮肤图本身就该是正方形比例，
+/// 非标准图拉伸总比裁错位置好。
+- (UIImage *)normalizeSkinImage:(UIImage *)image {
+    CGFloat w = image.size.width;
+    CGFloat h = image.size.height;
+    if (w <= 0 || h <= 0) return image;
+
+    // 已经是标准尺寸就不动
+    if ((w == 64 && h == 64) || (w == 64 && h == 32)) return image;
+
+    // 目标：64x64（现代皮肤格式）
+    CGSize target = CGSizeMake(64, 64);
+    UIGraphicsBeginImageContextWithOptions(target, NO, 1.0);
+    [image drawInRect:CGRectMake(0, 0, target.width, target.height)];
+    UIImage *out = UIGraphicsGetImageFromCurrentImageContext();
+    UIGraphicsEndImageContext();
+    return out ?: image;
+}
+
+- (BOOL)applyLocalSkinFromPath:(NSString *)path forAccount:(A2Account *)account {
+    if (path.length == 0 || !account) return NO;
+    UIImage *img = [UIImage imageWithContentsOfFile:path];
+    if (!img) return NO;
+
+    UIImage *normalized = [self normalizeSkinImage:img];
+    NSData *png = UIImagePNGRepresentation(normalized);
+    if (!png) return NO;
+
+    NSString *dir = [self directoryForUUID:account.profileID ?: account.uniqueID];
+    [NSFileManager.defaultManager createDirectoryAtPath:dir
+                            withIntermediateDirectories:YES attributes:nil error:nil];
+
+    NSString *dest = [dir stringByAppendingPathComponent:@"skin.png"];
+    if (![png writeToFile:dest atomically:YES]) return NO;
+
+    account.skinPath = dest;
+    return YES;
+}
+
+/// 该账号是否有可用皮肤。
+/// 本地文件存在即算有 —— 离线账号的皮肤就是这么来的。
+- (BOOL)hasSkinForAccount:(A2Account *)account {
+    NSString *p = account.skinPath;
+    if (p.length == 0) return NO;
+    return [NSFileManager.defaultManager fileExistsAtPath:p];
+}
+
+- (void)clearLocalSkinForAccount:(A2Account *)account {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSString *dir = [self directoryForUUID:account.profileID ?: account.uniqueID];
+    NSString *skin = [dir stringByAppendingPathComponent:@"skin.png"];
+    [fm removeItemAtPath:skin error:nil];
+    account.skinPath = nil;
+}
+
 @end

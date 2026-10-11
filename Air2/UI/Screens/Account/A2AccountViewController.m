@@ -50,13 +50,16 @@
 #import "A2SettingsSection.h"
 #import "A2SettingsRow.h"
 #import "A2AccountManager.h"
+#import "A2Wardrobe.h"
 #import "A2Account.h"
 #import "A2MicrosoftAuth.h"
 #import "A2LoginViewController.h"
 #import "A2Settings.h"
 #import "A2Log.h"
 
-@interface A2AccountViewController ()
+@interface A2AccountViewController () <UIImagePickerControllerDelegate, UINavigationControllerDelegate>
+/// 正在设置皮肤的账号（选择器回调时用）
+@property (nonatomic, strong, nullable) A2Account *pendingSkinAccount;
 @property (nonatomic, strong) A2GlassCard *listCard;
 @property (nonatomic, strong) UIStackView *accountStack;
 @property (nonatomic, strong) NSMutableArray<A2AccountRowView *> *rows;
@@ -202,11 +205,66 @@
 
 
 /// 账号的更多操作
+/// 选皮肤图并应用。
+///
+/// 用系统相册选择器 —— 皮肤图通常是玩家存的 PNG。
+/// 选好后交给 A2Wardrobe 规整到 64x64 再落盘。
+- (void)presentSkinPickerForAccount:(A2Account *)acc {
+    UIImagePickerController *picker = [[UIImagePickerController alloc] init];
+    picker.sourceType = UIImagePickerControllerSourceTypePhotoLibrary;
+    picker.delegate = self;
+    picker.modalPresentationStyle = UIModalPresentationPopover;
+    picker.popoverPresentationController.sourceView = self.view;
+    picker.popoverPresentationController.sourceRect =
+        CGRectMake(CGRectGetMidX(self.view.bounds), CGRectGetMidY(self.view.bounds), 1, 1);
+
+    _pendingSkinAccount = acc;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+#pragma mark - UIImagePickerControllerDelegate
+
+- (void)imagePickerController:(UIImagePickerController *)picker
+didFinishPickingMediaWithInfo:(NSDictionary<UIImagePickerControllerInfoKey, id> *)info {
+    UIImage *image = info[UIImagePickerControllerOriginalImage];
+    [picker dismissViewControllerAnimated:YES completion:nil];
+
+    A2Account *acc = _pendingSkinAccount;
+    _pendingSkinAccount = nil;
+    if (!image || !acc) return;
+
+    [A2Toast show:@"正在应用皮肤…" inView:self.view];
+    __weak typeof(self) weakSelf = self;
+    [[A2Wardrobe new] setLocalSkin:image forAccount:acc completion:^(BOOL success) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        if (success) {
+            [A2AccountManager.shared persistAccount:acc];
+            [self buildAccounts];
+            [A2Toast show:@"皮肤已更新" inView:self.view];
+        } else {
+            [A2Toast show:@"皮肤应用失败" inView:self.view];
+        }
+    }];
+}
+
+- (void)imagePickerControllerDidCancel:(UIImagePickerController *)picker {
+    [picker dismissViewControllerAnimated:YES completion:nil];
+    _pendingSkinAccount = nil;
+}
+
 - (void)showMoreMenuForAccount:(A2Account *)acc fromView:(UIView *)source {
     UIAlertController *sheet =
         [UIAlertController alertControllerWithTitle:acc.username
                                             message:acc.typeDisplayName
                                      preferredStyle:UIAlertControllerStyleActionSheet];
+
+    // 设置皮肤 —— 离线账号也能用（拉不到远端材质，改用本地图）
+    [sheet addAction:[UIAlertAction actionWithTitle:@"设置皮肤"
+                                             style:UIAlertActionStyleDefault
+                                           handler:^(UIAlertAction *a) {
+        [self presentSkinPickerForAccount:acc];
+    }]];
 
     if (acc.type != A2AccountTypeOffline) {
         [sheet addAction:[UIAlertAction actionWithTitle:@"复制 UUID"
