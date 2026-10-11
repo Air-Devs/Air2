@@ -169,3 +169,30 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 1. 在本文档对应章节补充条目，写明职责与依赖方向
 2. 确认不产生循环依赖
 3. 提交时 PR 描述中引用本节改动
+
+---
+
+## 自研启动链(runtime chain)落地登记 —— [RT-CHAIN]
+
+落位三处：`Natives/Context`、`Natives/Support`、`Air2/Player`。
+依赖严格单向（App → UI → Player → Core → Bridge → Natives）；**Natives 只收已解析参数，不感知版本/账号**。
+
+| 文件 | 层 | 职责 |
+|---|---|---|
+| `Natives/Context/a2_vmloader.[hm]` | Natives/Context | R2：`dlopen(libjvm)` + `JNI_CreateJavaVM`（★同进程，不经 libjli★） |
+| `Natives/Context/a2_argbuilder.[hm]` | Natives/Context | R3：JVM 参数拼装（保序 / `-D` 按 key 去重 / classpath / 主类 / 程序参数） |
+| `Natives/Context/a2_resourcepaths.[hm]` | Natives/Context | R4：资源与类路径注入 + classpath 通配展开（只依赖 Foundation） |
+| `Natives/Context/A2JVMContext.[hm]` | Natives/Context | JVM 创建 / 销毁（ObjC 封装；`-Djava.home` 由上层给出） |
+| `Natives/Support/a2_log.[hm]` | Natives/Support | R7：结构化日志 `[RT]` / `[LAUNCH-PROGRESS 阶段 n/8]` / `[RT-STRICT]`（★无状态★） |
+| `Natives/Support/a2_failbanner.[hm]` | Natives/Support | 失败提示条（JIT / 启动阶段分流文案） |
+| `Natives/Support/A2JITEnvironment.[hm]` | Natives/Support | JIT 环境与判据（`brk #0x69` 区域取证、真写+真执行自证、诊断日志） |
+| `Air2/Player/A2LaunchChain.[hm]` | Player | 启动链顺序编排（发脚本 → 探测 JIT → 建 VM）；步骤由注入 block 提供 |
+| `Natives/Context/a2_launch.[hm]` | Natives/Context | runtime 链 facade 编排：R3→R4→R2→R7，并 dispatch 主类 main；**全链唯一回退点** `a2_fallback_gate` |
+| `Air2/Player/A2JIT*`（Provider/Facts/StrategySelector/StateMachine/Coordinator/LocalFactsSource + 四路 Provider） | Player | JIT 供给编排（纯逻辑，可单测；见 ADR-009 / `docs/JIT-PROVISIONING.md`） |
+| `Air2/Player/A2PairingFile.[hm]` | Player | 配对文件解析与校验（纯 Foundation，可单测） |
+
+**来源**：原 Amethyst 线 `Natives/runtime/*` 的 P1 实现 + P1 之后修复（G1–G7 `[VS-GAP]`、
+`[RT-STRICT]` 严格回退门、`[RT-NOAGENT]` 切片），逐文件搬入并按 Air2 规范归位。
+
+**启动链开关（Debug）**：设置 → 诊断 → 「运行环境 · 启动链」（写 `NSUserDefaults` key `debug.rt_p1_runtime`）。
+ADR 见 `docs/DECISIONS.md` ADR-007 / ADR-008 / ADR-009。
