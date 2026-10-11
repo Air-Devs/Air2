@@ -360,6 +360,7 @@ JRE 缺失时该阶段**只告警不失败**（同树多任务并行时不让别
 | `Air2/Core/Version/A2LaunchPlan.[hm]` | Core | `runtimeFacts` 字段 + `jvmOptionsWithMemoryMB:` 里落成 `-Dglfw.windowSize` / `-DUIScreen.maximumFramesPerSecond`（★取不到就不下发★，不填猜的值） |
 | `Air2/Utils/A2LaunchContract.[hm]` | Utils | 两个系统属性名（ABI 级契约，与 `GLFW.java` 那两行的字面量逐字相同） |
 | `scripts/verify_launch_planprops.py` | 构建 | 机器自证：消费端（Java）↔ 产出端（ObjC）的格式与字面量对齐、接线顺序、**阴性对照**（无「猜的默认值」兜底） |
+| `tests/Plan/` | tests | ★真编译 + 真运行★的单测：把 `A2LaunchPlan` 与 `A2LaunchRuntimeFacts` 真的跑一遍，断言产出的两条 `-D` 字符串、以及★缺真值时一条都不产出★（入口 `run_plan_tests.py`） |
 
 **为什么采集在 Bridge（而不是 UI/Core）**：`Core` 明文不得 import UIKit
 （§Core「可单测，不依赖 UIKit」）；`Player` 也不感知 UIKit（同层 `A2JITLocalFactsSource`
