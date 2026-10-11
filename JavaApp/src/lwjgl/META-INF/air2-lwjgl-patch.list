@@ -1,0 +1,28 @@
+Air2 —— org.lwjgl.* 补丁类清单（jar 内随包自证）
+=================================================
+
+归属决策：Java 侧、独立 jar（air2-lwjgl-patch.jar），classpath 最前（先于 libs/lwjgl-<ver>/*）。
+理由与规范依据见 docs/ARCHITECTURE.md [LWJGL-PATCH] 与 D:\CTF\_AIR2_LAUNCH_PATH.md §①。
+
+本 jar 当前【已实现】的类（★非官方类，零遮蔽风险★）：
+  org/lwjgl/glfw/CallbackBridge.class        输入桥 Java 壳（native 符号宿主 = 主可执行文件）
+  org/lwjgl/glfw/GLFWWindowProperties.class  GLFW 窗口属性数据持有者
+
+【未实现 · 剩余清单】（均为官方同名类 ⇒ 落位时会遮蔽官方实现，必须与 Natives 输入桥
+符号一起做，否则会把 LWJGL 类初始化打坏；逐条排在下面，按「启动/首帧必需」优先级排序）：
+
+  1. org/lwjgl/glfw/GLFW.java                ★首帧必需★ 官方 iOS 构建缺 GLFW 原生实现，
+                                             MC 的 Display/Window 初始化第一个撞它
+  2. org/lwjgl/glfw/Callbacks.java           GLFW 回调转发（与 CallbackBridge 配对）
+  3. org/lwjgl/glfw/GLFWNativeCocoa.java     平台壳（剪贴板/窗口）
+  4. org/lwjgl/glfw/GLFWNativeEGL.java       平台壳（EGL/GL 绑定）
+  5. org/lwjgl/glfw/GLFWVulkan.java          Vulkan 平台壳（MoltenVK 路径；主推 Metal 后可缓）
+  6. org/lwjgl/system/Callback.java          ★首帧必需★ LWJGL 回调基类（GC 锚点机制）
+  7. org/lwjgl/system/CallbackI.java         ★首帧必需★ 回调接口（Pointer 子类型）
+  8. org/lwjgl/system/APIUtil.java           LWJGL 属性/诊断辅助（iOS 上 apiCheck 行为需改）
+  9. org/lwjgl/input/*.java                  输入（如 InfdevMouse；触控层用）
+ 10. org/lwjgl/stb/STBImageResize.java       贴图缩放 native 壳（字体/图标路径）
+
+另需（不属 org.lwjgl，但是同一条「首帧」路径）：
+     Natives/Input 的 CallbackBridge native 符号实现（nativeClipboard/nativeSetGrabbing/
+     nativeSetModifiers 等）—— 目前 Natives/Input 只有 .gitkeep。

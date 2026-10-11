@@ -27,6 +27,7 @@
 //
 
 #import "A2LauncherViewController.h"
+#import "A2LaunchSession.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
@@ -844,11 +845,20 @@
 
 - (void)launchGame {
     _launchButton.loading = YES;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
+    // 自研启动链默认关 ⇒ 结果恒为「未启用」，下面仍弹原来那句提示，**开箱行为不变**。
+    [A2LaunchSession startCurrentVersionWithCompletion:^(A2LaunchSessionResult *result) {
         self.launchButton.loading = NO;
-        [A2Toast show:@"启动流程尚未接入" inView:self.view];
-    });
+        if (result.started) {
+            [A2Toast show:@"启动链已返回（见日志 [A2-LAUNCH]）" inView:self.view];
+            return;
+        }
+        if ([result.message hasPrefix:@"自研启动链未启用"]) {
+            // 保持与「未接入」时代完全一致的过渡文案（链未启用时零行为变化）。
+            [A2Toast show:@"启动流程尚未接入" inView:self.view];
+        } else {
+            [A2Toast show:result.message inView:self.view];
+        }
+    }];
 }
 
 - (void)pushScreen:(UIViewController *)vc style:(A2TransitionStyle)style {

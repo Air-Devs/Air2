@@ -41,15 +41,19 @@ NATIVES_INCLUDE_DIRS = [
 #   jar 是构建产物，生成 pbxproj 时它在磁盘上还不存在，而 collect_resources() 是按
 #   磁盘现状扫描的 —— 列进去会让 verify_pbxproj.py 判「工程声明路径在磁盘上不存在」。
 #   脚本阶段既能把 jar 编出来又能拷进 bundle，且不依赖生成时的文件存在性。
-# 拷贝目标：<Air2.app>/Java/air2-launch.jar（IPA 内为 Payload/Air2.app/Java/…）。
+# 拷贝目标：<Air2.app>/Java/{air2-launch.jar, air2-lwjgl-patch.jar}（IPA 内为 Payload/Air2.app/Java/…）。
 JAVA_PHASE_NAME = "Build Java Launch Core"
 JAVA_JAR_NAME = "air2-launch.jar"
+# ★决策（org.lwjgl.* 补丁类归属）★：补丁类在 Java 侧、独立 jar，随包到同一目录；
+# Bridge 组 classpath 时把它放在最前（先于 libs/lwjgl-<ver>/*）。见 docs/ARCHITECTURE.md [LWJGL-PATCH]。
+JAVA_PATCH_JAR_NAME = "air2-lwjgl-patch.jar"
 JAVA_PHASE_SCRIPT = (
     "set -e\n"
     "cd \"$SRCROOT/JavaApp\"\n"
     "BOOT=$(/usr/libexec/java_home -v 1.8 2>/dev/null || true)\n"
-    "make -s all BOOTJDK=\"$BOOT\"\n"
+    "make -s all BOOTJDK=\"$BOOT\"\n"          # all ⇒ air2-launch.jar + air2-lwjgl-patch.jar
     "make -s verify BOOTJDK=\"$BOOT\"\n"
+    "make -s verify-lwjgl BOOTJDK=\"$BOOT\"\n"
     # CONTENTS_FOLDER_PATH 在 -target 构建下可能为空 ⇒ 显式兜底，避免把 jar 写到
     # BUILT_PRODUCTS_DIR 根上（那样 IPA 里没有它，且构建不报错 —— 静默失败最难查）。
     "CFP=\"$CONTENTS_FOLDER_PATH\"\n"
@@ -58,7 +62,10 @@ JAVA_PHASE_SCRIPT = (
     "mkdir -p \"$DEST\"\n"
     "cp -f build/" + JAVA_JAR_NAME + " \"$DEST/\"\n"
     "test -f \"$DEST/" + JAVA_JAR_NAME + "\"\n"
+    "cp -f build/" + JAVA_PATCH_JAR_NAME + " \"$DEST/\"\n"
+    "test -f \"$DEST/" + JAVA_PATCH_JAR_NAME + "\"\n"
     "echo \"note: Java 启动核心 -> $DEST/" + JAVA_JAR_NAME + "\"\n"
+    "echo \"note: LWJGL 补丁类 -> $DEST/" + JAVA_PATCH_JAR_NAME + "\"\n"
 )
 
 

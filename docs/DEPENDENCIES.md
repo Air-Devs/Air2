@@ -192,3 +192,29 @@
 `libs/lwjgl-333/lwjgl.jar`（10.4 MB，与 3.4.1 重复）、着色器编译链（`libglslang*` / `libshaderc*` /
 `libspirv-cross*` / `libspvc`）等。
 
+---
+
+## 启动计划与自研链入口接线 —— [LAUNCH-PLAN]（登记）
+
+**登记内容**：新增 8 个 ObjC 文件 / 2 个 Java 文件（均**本单新写**，无第三方依赖），
+以及「Java 侧多出一个 jar」这一交付形态变化。落位与加载者见 `docs/ARCHITECTURE.md` 的
+「[LAUNCH-PLAN]」「[LWJGL-PATCH]」两节。
+
+| 名称 | 版本 | 来源 | 许可 | 用途 | 引入方式 |
+|---|---|---|---|---|---|
+| `Air2/Utils/A2LaunchContract.[hm]` | — | 本单新写 | 随本仓 GPL-3.0-or-later | 跨层契约常量（入口主类名 / `--plan` / 类加载器名 / jar 名 / plan schema） | 随仓（源码） |
+| `Air2/Core/Version/A2LaunchPlan.[hm]` | — | 本单新写（净室） | 同上 | 启动计划产出（版本 JSON 合并/rules/占位符/库表 + 账号取值） | 随仓（源码） |
+| `Air2/Bridge/A2LaunchRunner.[hm]` | — | 本单新写（净室） | 同上 | 组 margv 并调 `a2_launch_jvm_with_argv`；转发开关 | 随仓（源码） |
+| `Air2/Player/A2LaunchSession.[hm]` | — | 本单新写（净室） | 同上 | 一次启动的编排（默认关 ⇒ 零副作用） | 随仓（源码） |
+| `air2-lwjgl-patch.jar`（源 `JavaApp/src/lwjgl/**`） | 随本仓 | 本单新写（净室）；`org.lwjgl.glfw.CallbackBridge` / `GLFWWindowProperties` 为**非官方同名**类 | 随本仓 GPL-3.0-or-later（LWJGL 本体仍是 BSD-3，见上表） | `org.lwjgl.*` 补丁类容器（层 2，逐片落位） | 随仓（源码）→ 构建产物 `<App>/Java/` |
+
+**未引入**：本组**没有**新增任何第三方库 / 二进制 / 下载步骤；`JavaApp/` 下仍无 `libs/`。
+
+**净室口径（★不许当免罪符★）**：`JavaApp/src/lwjgl/` 下两个类的**接口形状**（常量值、native 方法签名）
+取自老树 `src/lwjgl/` 的既有约定（任务明确允许「读老树取行为/接口约定」），实现为本单新写、
+不 import 任何 `net.kdt` / `Boardwalk` 包。同源代码风险不可排除 ⇒ 结论按 GPL 走：
+本仓整体仍为 **GPL-3.0-or-later**，PojavLauncher 的 GPL-3.0 义务**继续被遵守**，不主张额外豁免。
+
+**机器判据**：`JavaApp/Makefile` 的 `verify` 与 `verify-lwjgl` 目标（`jar tf` 扫
+`net/kdt/pojavlaunch|Boardwalk`，命中非 0 即构建失败）；两个 jar 由同一脚本阶段随包。
+

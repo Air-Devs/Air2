@@ -288,3 +288,58 @@ ADR 见 `docs/DECISIONS.md` ADR-007 / ADR-008 / ADR-009。
 JRE 缺失时该阶段**只告警不失败**（同树多任务并行时不让别人的构建变红）；包内完整性由出包后的逐项断言兜底。
 
 **开关**：无 —— 运行时随包是常态；「走不走自研启动链」仍只由 `debug.rt_p1_runtime` 决定。
+
+### 启动计划产出方 + 自研链入口接线 —— [LAUNCH-PLAN]
+
+**决策（两条归属）**：
+
+1. ★**启动计划由 `Core` 产出**★，不由 native 自研链产出。理由：计划内容 = 版本 JSON 语义
+   （`mainClass` / `arguments` / `libraries` / `assetIndex` / `inheritsFrom` 合并 / `rules` 求值）
+   + 账号取值 ⇒ 是**业务**；而分层规范写明 `Natives`「只接收已解析好的参数，不感知版本/账号」，
+   `a2_launch.h` / `A2JVMContext.h` 也把「javaHome 与启动选项由上层（Player → Core）解析后传入」
+   写成契约 ⇒ native 链保持**纯消费者**。
+2. ★**调用 `a2_launch_jvm_with_argv` 只能发生在 `Bridge`**★：Bridge 是唯一与 Natives 相邻的层
+   （同 [JIT-IMPL-2] 的理由）。Player 与 UI 只见纯 ObjC 签名。
+
+依赖方向不变：`UI → Player → Core → Bridge → Natives`；`Utils` 提供跨层契约常量（叶子层）。
+
+| 文件 | 层 | 职责 |
+|---|---|---|
+| `Air2/Utils/A2LaunchContract.[hm]` | Utils | 跨层契约常量：入口主类名 / `--plan` / 系统类加载器名 / 两个 jar 名 / plan schema |
+| `Air2/Core/Version/A2LaunchPlan.[hm]` | Core | ★计划产出方★：版本 JSON（`inheritsFrom` 合并、`rules` 子集求值、`arguments` 占位符替换、`libraries` → 显式 jar 列表）+ 账号取值 → 计划对象与 JSON；另出 VM 级选项与程序参数 |
+| `Air2/Bridge/A2LaunchRunner.[hm]` | **Bridge** | ★唯一调用 `a2_launch_jvm_with_argv` 的地方★：组 margv（`<java> [选项] -cp <cp> <A2Entry> --plan <json>`）、用 R4 单点拼 classpath、转发开关 `a2_launch_runtime_enabled` |
+| `Air2/Player/A2LaunchSession.[hm]` | Player | 一次启动的编排：解析目录/账号（Core）→ 产出计划（Core）→ 组命令行（Bridge）→ 建 VM；★开关默认关★，关时零副作用 |
+
+**与既有实现的边界**：本组**不新建任何启动语义** —— 主类名、classpath 形态、
+资源注入、回退门、严格门、`[VS-GAP]` 校验一律沿用 `Natives/Context/a2_launch.[hm]` 的既有契约。
+`classpath` 仍只由 `a2_resourcepaths.m` 的 `a2_paths_build_classpath` 一处拼装（Core 不 import Natives，
+故由 Bridge 组 argv 时调用，并把同一份 `frontJar/librariesPath/lwjglDir` 传给 `A2LaunchInput`
+—— 否则 `a2_launch` 的漂移校验会返回 `-9` 阻断启动）。
+
+**开关**：`debug.rt_p1_runtime`（设置 → 诊断 → 运行环境 · 启动链）/ env `RT_P1_RUNTIME` /
+标志文件 `$POJAV_HOME/rt_p1_runtime.enable`。默认关 ⇒ 首页「启动游戏」行为不变。
+
+**来源**：`D:\CTF\_AIR2_LAUNCH_PATH.md`。
+
+### LWJGL 补丁类归属 —— [LWJGL-PATCH]
+
+**决策**：`org.lwjgl.*` 补丁类放 **Java 侧、独立 jar**（`air2-lwjgl-patch.jar`，源在
+`JavaApp/src/lwjgl/`），在 classpath 上排**最前**（先于 `libs/lwjgl-<ver>/*`，同名类覆盖）。
+
+理由：① 它们是 **Java 类**，MC 按**类名**引用 ⇒ 不可能放 Natives；② `Bridge` 依规范只是
+「ObjC ↔ Natives 的类型转换与生命周期转发」通道，不是字节码容器 ⇒ 放 Bridge 会让它承担
+「Java 类宿主」职责；③ 与自研启动核心（`air2-launch.jar`）是**两件事**，共用一个名字会让
+「哪一半在包里」说不清（见 §JavaApp）。
+
+| 路径 | 层 | 职责 | 随包目标 |
+|---|---|---|---|
+| `JavaApp/src/lwjgl/**` | JavaApp | LWJGL 补丁源码（层 2） | `build/air2-lwjgl-patch.jar` → `<App>/Java/` |
+| `JavaApp/src/lwjgl/META-INF/air2-lwjgl-patch.list` | JavaApp | ★已落 / 剩余清单★（包内可判） | 同 jar 内 |
+
+**现状**：已落 2 个**非官方类**（`org.lwjgl.glfw.CallbackBridge`、`org.lwjgl.glfw.GLFWWindowProperties`
+—— 官方 LWJGL 无同名类 ⇒ 放最前零遮蔽风险）；**会覆盖官方同名类的 10 个类逐条列在
+jar 内 `META-INF/air2-lwjgl-patch.list`**，需与 `Natives/Input` 的 native 符号一起落位
+（一次塞半成品覆盖类会把 LWJGL 类初始化打坏）。
+
+**构建**：`JavaApp/Makefile` 的 `lwjgl` / `verify-lwjgl` 目标；
+随包由 `scripts/gen_xcodeproj.py` 的「Build Java Launch Core」脚本阶段完成（两个 jar 同一阶段）。
