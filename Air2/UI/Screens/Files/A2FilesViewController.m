@@ -200,15 +200,30 @@ trailingSwipeActionsForRowAtIndexPath:(NSIndexPath *)indexPath {
         ? [_relativePath stringByAppendingPathComponent:e.name] : e.name;
 
     UIContextualAction *del = [UIContextualAction contextualActionWithStyle:UIContextualActionStyleDestructive
-                                                                     title:@"删除"
-                                                                   handler:^(UIContextualAction *a, UIView *v,
-                                                                             void (^done)(BOOL)) {
-        NSError *err = nil;
-        if ([self.store deleteEntryAt:target error:&err]) {
-            [self reload];
-        } else {
-            [A2Toast show:(err.localizedDescription ?: @"删除失败") inView:self.view];
-        }
+                                                                      title:@"删除"
+                                                                    handler:^(UIContextualAction *a, UIView *v,
+                                                                              void (^done)(BOOL)) {
+        // 滑动即删太容易手滑：先问一句，确认后进废纸篓（可恢复），不是直接删除。
+        __weak typeof(self) weakSelf = self;
+        UIAlertController *alert =
+            [UIAlertController alertControllerWithTitle:@"删除"
+                                                message:[NSString stringWithFormat:
+                    @"将“%@”移到废纸篓。", e.name]
+                                         preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"取消"
+                                                style:UIAlertActionStyleCancel handler:nil]];
+        [alert addAction:[UIAlertAction actionWithTitle:@"删除"
+                                                 style:UIAlertActionStyleDestructive
+                                               handler:^(UIAlertAction *action) {
+            __strong typeof(weakSelf) self = weakSelf;
+            NSError *err = nil;
+            if ([self.store deleteEntryAt:target error:&err]) {
+                [self reload];
+            } else {
+                [A2Toast show:(err.localizedDescription ?: @"删除失败") inView:self.view];
+            }
+        }]];
+        [self presentViewController:alert animated:YES completion:nil];
         done(YES);
     }];
 
