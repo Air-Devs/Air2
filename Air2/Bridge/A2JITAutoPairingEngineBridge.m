@@ -30,6 +30,21 @@
 #import <Security/Security.h>
 #import <sys/sysctl.h>
 
+// ★构建阻塞修复（非本线代码，仅补类型/原型声明，行为不变）★
+//   iPhoneOS SDK 里【没有】SecTask.h（SecTask 是 macOS 公开、iOS 未导出头），
+//   但 Security.framework 的 Security.tbd 里确实有 SecTaskCreateFromSelf /
+//   SecTaskCopyValueForEntitlement 的导出符号（可链接）⇒ 按 macOS SecTask.h 的签名
+//   自行声明，使本文件在 `-sdk iphoneos` 下也能编过。
+//   行为不变：函数取不到值/报错时，下面的代码仍按本文件契约回 Unknown（绝不猜）。
+#if __has_include(<Security/SecTask.h>)
+#import <Security/SecTask.h>
+#else
+typedef struct __SecTask *SecTaskRef;
+extern SecTaskRef SecTaskCreateFromSelf(CFAllocatorRef allocator);
+extern CFTypeRef SecTaskCopyValueForEntitlement(SecTaskRef task, CFStringRef entitlement,
+                                                CFErrorRef *error);
+#endif
+
 #pragma mark - 前置条件真读（取不到一律 Unknown，绝不猜）
 
 /// Developer Mode：sysctl `security.mac.amfi.developer_mode_status`（非 0 = 已开）。
