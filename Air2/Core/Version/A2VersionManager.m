@@ -22,6 +22,7 @@
 
 #import "A2VersionManager.h"
 #import "A2Settings.h"
+#import "A2Trash.h"
 #import "A2Log.h"
 #import "A2VersionIsolation.h"
 
@@ -416,11 +417,10 @@ static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *n
     if (!version) return NO;
     NSString *path = [version versionPath];
 
-    // 隔离开启时，版本文件夹里有用户的 mods/saves，删除是不可逆的。
-    // 这里只删版本本体，用户内容（如果需要保留）应由上层先迁移。
+    // 版本文件夹里可能有用户的 mods/saves，进废纸篓（可恢复），绝不直接删除。
     [A2Log log:@"version: 删除 %@", version.name];
-    NSError *opErr = nil;
-    BOOL ok = [NSFileManager.defaultManager removeItemAtPath:path error:&opErr];
+    NSError *trashErr = nil;
+    BOOL ok = [A2Trash trashItemAtPath:path error:&trashErr];
     if (ok) {
         if ([_currentVersion.name isEqualToString:version.name]) {
             _currentVersion = nil;
@@ -429,9 +429,9 @@ static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *n
         [self reload];
         [A2Log log:@"version: 删除完成 %@", version.name];
     } else {
-        if (error) *error = opErr;
+        if (error) *error = trashErr;
         [A2Log log:@"version: 删除失败 %@（%@）",
-                 version.name, opErr.localizedDescription ?: @"未知错误"];
+                 version.name, trashErr.localizedDescription ?: @"未知错误"];
     }
     return ok;
 }
@@ -574,7 +574,13 @@ static BOOL A2CopyVersionPayloadFiles(NSString *srcPath, NSString *dstPath,
             return NO;
         }
         if (!A2CopyVersionPayloadFiles(srcPath, dstPath, version.name, trimmed, error)) {
-            [fm removeItemAtPath:dstPath error:nil];
+            // 清理的是本次复制写一半的产物（源版本未动），不是用户原有数据，
+            // 故直接删除；但返回值要查，残留要记，否则下次同名复制被半截目录挡住。
+            NSError *cleanupErr = nil;
+            if (![fm removeItemAtPath:dstPath error:&cleanupErr]) {
+                [A2Log log:@"version: 复制失败后清理半截目录失败 %@（%@）",
+                          dstPath, cleanupErr.localizedDescription ?: @"未知错误"];
+            }
             return NO;
         }
     }
