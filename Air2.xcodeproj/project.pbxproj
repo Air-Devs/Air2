@@ -267,6 +267,7 @@
 		C4CDABCCADEE50C7FF0835B2 /* A2APIModDownloader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2APIModDownloader.h"; sourceTree = "<group>"; };
 		7452A96D7665BFCA516E1759 /* A2ContentSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ContentSource.h"; sourceTree = "<group>"; };
 		732674FFF97FD95863EEEAC7 /* A2CurseForgeAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CurseForgeAPI.h"; sourceTree = "<group>"; };
+		0979A41483D76B482C1D92D2 /* A2LoaderVersionSource+Forge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoaderVersionSource+Forge.h"; sourceTree = "<group>"; };
 		5755D893F4092F66C2AF4252 /* A2LoaderVersionSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoaderVersionSource.h"; sourceTree = "<group>"; };
 		FFA1FB938552D628B2FCD93E /* A2LocalMod.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LocalMod.h"; sourceTree = "<group>"; };
 		D10B30C91899E9D94389EF4D /* A2MirrorResolver.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MirrorResolver.h"; sourceTree = "<group>"; };
@@ -520,6 +521,7 @@
 				C4CDABCCADEE50C7FF0835B2 /* A2APIModDownloader.h */,
 				7452A96D7665BFCA516E1759 /* A2ContentSource.h */,
 				732674FFF97FD95863EEEAC7 /* A2CurseForgeAPI.h */,
+				0979A41483D76B482C1D92D2 /* A2LoaderVersionSource+Forge.h */,
 				5755D893F4092F66C2AF4252 /* A2LoaderVersionSource.h */,
 				FFA1FB938552D628B2FCD93E /* A2LocalMod.h */,
 				D10B30C91899E9D94389EF4D /* A2MirrorResolver.h */,
