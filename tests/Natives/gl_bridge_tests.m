@@ -37,11 +37,12 @@ static void eqStr(NSString *got, NSString *want, NSString *what) {
        [NSString stringWithFormat:@"%@（得到 %@，期望 %@）", what, got, want]);
 }
 
-/// …/tests/Natives/gl_bridge_tests.m → …/tests → 仓根
+/// …/tests/Natives/gl_bridge_tests.m → …/tests/Natives → …/tests → 仓根
 static NSString *RepoPath(NSString *relative) {
     NSString *here = [NSString stringWithUTF8String:__FILE__];
-    NSString *testsDir = [here stringByDeletingLastPathComponent];
-    NSString *root = [testsDir stringByDeletingLastPathComponent];
+    NSString *nativesDir = [here stringByDeletingLastPathComponent];     // …/tests/Natives
+    NSString *testsDir   = [nativesDir stringByDeletingLastPathComponent]; // …/tests
+    NSString *root       = [testsDir stringByDeletingLastPathComponent];   // 仓根
     return [root stringByAppendingPathComponent:relative];
 }
 
