@@ -111,6 +111,7 @@
 		C754280DF19913731620CE6A /* A2Log.m in Sources */ = {isa = PBXBuildFile; fileRef = CE8E02818B37C0AFFABF71D5 /* A2Log.m */; };
 		6B1CD1AC96CD93B7EE0847A4 /* A2MurmurHash2.m in Sources */ = {isa = PBXBuildFile; fileRef = 70E537F57063CE783BE3A38B /* A2MurmurHash2.m */; };
 		173CB61901164D888C0739BA /* A2Strings.m in Sources */ = {isa = PBXBuildFile; fileRef = 7EC0262DD08DEE92A0AD385D /* A2Strings.m */; };
+		9125C410E01A25F3CF17833A /* A2Trash.m in Sources */ = {isa = PBXBuildFile; fileRef = 74810475EA690B4FDFFD94E8 /* A2Trash.m */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -220,6 +221,7 @@
 		CE8E02818B37C0AFFABF71D5 /* A2Log.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Log.m"; sourceTree = "<group>"; };
 		70E537F57063CE783BE3A38B /* A2MurmurHash2.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MurmurHash2.m"; sourceTree = "<group>"; };
 		7EC0262DD08DEE92A0AD385D /* A2Strings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Strings.m"; sourceTree = "<group>"; };
+		74810475EA690B4FDFFD94E8 /* A2Trash.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Trash.m"; sourceTree = "<group>"; };
 		52E0A8862124FBDB57E8C690 /* A2AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AppDelegate.h"; sourceTree = "<group>"; };
 		6A39662C0840C98AB5D33038 /* A2CrashGuard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CrashGuard.h"; sourceTree = "<group>"; };
 		FFF83F1A982D07C7CBBF5C78 /* A2NavigationController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2NavigationController.h"; sourceTree = "<group>"; };
@@ -322,6 +324,7 @@
 		A0A4BD66A8E2E70961D106B2 /* A2Log.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Log.h"; sourceTree = "<group>"; };
 		089E9C0B1F10F5FF4BE351B0 /* A2MurmurHash2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MurmurHash2.h"; sourceTree = "<group>"; };
 		A817F7F6D7CB98164433DEE3 /* A2Strings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Strings.h"; sourceTree = "<group>"; };
+		F960747F27DA5E33E8E3F8B3 /* A2Trash.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Trash.h"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -417,9 +420,11 @@
 				CE8E02818B37C0AFFABF71D5 /* A2Log.m */,
 				70E537F57063CE783BE3A38B /* A2MurmurHash2.m */,
 				7EC0262DD08DEE92A0AD385D /* A2Strings.m */,
+				74810475EA690B4FDFFD94E8 /* A2Trash.m */,
 				A0A4BD66A8E2E70961D106B2 /* A2Log.h */,
 				089E9C0B1F10F5FF4BE351B0 /* A2MurmurHash2.h */,
 				A817F7F6D7CB98164433DEE3 /* A2Strings.h */,
+				F960747F27DA5E33E8E3F8B3 /* A2Trash.h */,
 			);
 			path = Utils;
 			sourceTree = "<group>";
@@ -920,6 +925,7 @@
 				C754280DF19913731620CE6A /* A2Log.m in Sources */,
 				6B1CD1AC96CD93B7EE0847A4 /* A2MurmurHash2.m in Sources */,
 				173CB61901164D888C0739BA /* A2Strings.m in Sources */,
+				9125C410E01A25F3CF17833A /* A2Trash.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

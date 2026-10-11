@@ -81,8 +81,8 @@ extern NSNotificationName const A2AccountsDidChangeNotification;
 /// 添加账号（重复的会替换）
 - (void)addAccount:(A2Account *)account;
 
-/// 移除账号
-- (void)removeAccount:(A2Account *)account;
+/// 移除账号：文件先进废纸篓（可恢复），失败返回 NO 且列表不动。
+- (BOOL)removeAccount:(A2Account *)account error:(NSError **)error;
 
 /// 切换当前账号。
 /// 命名同 selectCurrentVersion: —— 不用 set 开头，

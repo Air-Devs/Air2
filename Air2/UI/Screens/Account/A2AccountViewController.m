@@ -218,12 +218,34 @@
     }
 
     [sheet addAction:[UIAlertAction actionWithTitle:@"移除账号"
-                                             style:UIAlertActionStyleDestructive
-                                           handler:^(UIAlertAction *a) {
-        [A2Log log:@"AccountVC: 移除账号 %@", acc.username];
-        [A2AccountManager.shared removeAccount:acc];
-        [self buildAccounts];
-        [A2Toast show:@"已移除" inView:self.view];
+                                              style:UIAlertActionStyleDestructive
+                                            handler:^(UIAlertAction *a) {
+        // 菜单点一下就删太容易手滑：再问一句，确认后文件进废纸篓（可恢复）。
+        __weak typeof(self) weakSelf = self;
+        UIAlertController *confirm =
+            [UIAlertController alertControllerWithTitle:@"移除账号"
+                                                message:[NSString stringWithFormat:
+                    @"将 %@ 的本地账号文件移到废纸篓。", acc.username]
+                                         preferredStyle:UIAlertControllerStyleAlert];
+        [confirm addAction:[UIAlertAction actionWithTitle:@"取消"
+                                                   style:UIAlertActionStyleCancel handler:nil]];
+        [confirm addAction:[UIAlertAction actionWithTitle:@"移除"
+                                                   style:UIAlertActionStyleDestructive
+                                                 handler:^(UIAlertAction *c) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (!self) return;
+            NSError *err = nil;
+            if ([A2AccountManager.shared removeAccount:acc error:&err]) {
+                [A2Log log:@"AccountVC: 移除账号 %@", acc.username];
+                [self buildAccounts];
+                [A2Toast show:@"已移除" inView:self.view];
+            } else {
+                [A2Log log:@"AccountVC: 移除账号失败 %@（%@）",
+                            acc.username, err.localizedDescription ?: @"未知错误"];
+                [A2Toast show:(err.localizedDescription ?: @"移除失败") inView:self.view];
+            }
+        }]];
+        [self presentViewController:confirm animated:YES completion:nil];
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
                                              style:UIAlertActionStyleCancel

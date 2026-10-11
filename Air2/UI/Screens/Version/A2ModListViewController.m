@@ -409,14 +409,14 @@ static NSString *A2ModRowMeta(A2LocalMod *mod) {
     }
 }
 
-/// 删除二次确认（mods 可重下，但手滑不可撤销，先问一句）。
+/// 删除二次确认（mods 可重下，删除先进废纸篓，先问一句）。
 - (void)confirmDeleteMod:(A2LocalMod *)mod {
     if (!self.files) return;
     __weak typeof(self) weakSelf = self;
     UIAlertController *alert =
         [UIAlertController alertControllerWithTitle:@"删除模组"
                                             message:[NSString stringWithFormat:
-                @"将删除 %@，不可撤销。", mod.displayName]
+                @"将 %@ 移到废纸篓。", mod.displayName]
                                      preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"删除" style:UIAlertActionStyleDestructive

@@ -31,9 +31,16 @@
 static NSString *const kLegacyGameHomeDirName = @".minecraft";
 
 /// 目录是否为空（不存在也算空）。只看第一层，不递归统计。
+/// 列目录失败时按非空处理：读不到不等于没有，误删不可逆，宁可不动。
 static BOOL A2DirIsEmpty(NSString *path) {
+    NSError *listErr = nil;
     NSArray<NSString *> *contents =
-        [NSFileManager.defaultManager contentsOfDirectoryAtPath:path error:nil];
+        [NSFileManager.defaultManager contentsOfDirectoryAtPath:path error:&listErr];
+    if (contents == nil) {
+        [A2Log log:@"gamedir-migration: 列目录失败，按非空处理 %@（%@）",
+                    path, listErr.localizedDescription ?: @"未知错误"];
+        return NO;
+    }
     return contents.count == 0;
 }
 
@@ -52,24 +59,37 @@ static BOOL A2DirIsEmpty(NSString *path) {
     if (![fm fileExistsAtPath:legacyPath]) return;
 
     // 旧目录是空的 → 直接删掉，不占位置也不改名。
+    // 空目录删除失败不致命，但要记日志（否则下次启动静默重试，用户永远不知道）。
     if (A2DirIsEmpty(legacyPath)) {
-        [fm removeItemAtPath:legacyPath error:nil];
-        [A2Log log:@"gamedir-migration: 删除空的旧目录 %@", legacyPath];
+        NSError *rmErr = nil;
+        if ([fm removeItemAtPath:legacyPath error:&rmErr]) {
+            [A2Log log:@"gamedir-migration: 删除空的旧目录 %@", legacyPath];
+        } else {
+            [A2Log log:@"gamedir-migration: 删除空旧目录失败 %@（%@），下次启动重试",
+                        legacyPath, rmErr.localizedDescription ?: @"未知错误"];
+        }
         return;
     }
 
     BOOL currentExists = [fm fileExistsAtPath:currentPath];
 
-    // 新旧都在且新目录非空 → 冲突，按约定丢弃旧目录，保留新目录。
+    // 新旧都在且新目录非空 → 冲突，两边都不动。
+    // 绝不自动丢弃任一边：旧目录可能是老存档，新目录可能是新装的数据，
+    // 程序无法判断哪边对用户更重要，删错不可逆。需用户手动处理。
     if (currentExists && !A2DirIsEmpty(currentPath)) {
-        [fm removeItemAtPath:legacyPath error:nil];
-        [A2Log log:@"gamedir-migration: 新旧目录都有内容，删除旧目录 %@", legacyPath];
+        [A2Log log:@"gamedir-migration: 新旧目录都有内容，两边保留，需用户手动处理（旧 %@，新 %@）",
+                    legacyPath, currentPath];
         return;
     }
 
     // 新目录不存在或为空 → 让路，把旧目录改名过来（保数据）。
     if (currentExists) {
-        [fm removeItemAtPath:currentPath error:nil];
+        NSError *rmErr = nil;
+        if (![fm removeItemAtPath:currentPath error:&rmErr]) {
+            [A2Log log:@"gamedir-migration: 让路失败，空新目录删不掉 %@（%@），本次不动",
+                        currentPath, rmErr.localizedDescription ?: @"未知错误"];
+            return;
+        }
         [A2Log log:@"gamedir-migration: 删除空的新目录 %@", currentPath];
     }
 

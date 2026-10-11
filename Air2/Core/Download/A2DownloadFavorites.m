@@ -23,6 +23,7 @@
 //
 
 #import "A2DownloadFavorites.h"
+#import "A2Log.h"
 #import "A2VersionIsolation.h"
 
 NSNotificationName const A2FavoritesDidChangeNotification = @"A2FavoritesDidChangeNotification";
@@ -128,7 +129,12 @@ NSNotificationName const A2FavoritesDidChangeNotification = @"A2FavoritesDidChan
     NSData *data = [NSData dataWithContentsOfFile:[self favoritesPath]];
     if (!data) return;
     id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-    if (![json isKindOfClass:NSArray.class]) return;
+    // 损坏的收藏不崩、不覆盖：直接返回，磁盘原文件保留待查，原因记下来。
+    // 注意下次 persist 会用内存（空）覆盖此文件，查日志要趁早。
+    if (![json isKindOfClass:NSArray.class]) {
+        [A2Log log:@"download-favorites: 收藏文件损坏，本次按空处理"];
+        return;
+    }
     for (id entry in (NSArray *)json) {
         if (![entry isKindOfClass:NSDictionary.class]) continue;
         A2FavoriteItem *item = [A2FavoriteItem fromDictionary:(NSDictionary *)entry];

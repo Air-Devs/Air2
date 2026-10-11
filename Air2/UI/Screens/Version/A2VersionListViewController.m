@@ -589,13 +589,13 @@
     }
 }
 
-/// 删除二次确认：版本目录含用户存档模组，不可撤销。
+/// 删除二次确认：版本目录含用户存档模组，进废纸篓（可恢复）。
 - (void)showDeleteConfirmForVersion:(A2Version *)version {
     __weak typeof(self) weakSelf = self;
     UIAlertController *alert =
         [UIAlertController alertControllerWithTitle:@"删除版本"
                                             message:[NSString stringWithFormat:
-                @"将删除 %@ 及其所有文件，不可撤销。", version.name]
+                @"将 %@ 及其所有文件移到废纸篓。", version.name]
                                      preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
     [alert addAction:[UIAlertAction actionWithTitle:@"删除" style:UIAlertActionStyleDestructive

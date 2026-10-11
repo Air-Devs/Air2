@@ -75,6 +75,7 @@ typedef NS_ENUM(NSInteger, A2GameFilesError) {
 - (BOOL)renameEntryAt:(NSString *)relativePath
                toName:(NSString *)newName
                 error:(NSError **)error;
+/// 删除 = 移到系统废纸篓（可恢复），不是直接删除。见 A2Trash。
 - (BOOL)deleteEntryAt:(NSString *)relativePath
                 error:(NSError **)error;
 

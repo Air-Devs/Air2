@@ -24,6 +24,7 @@
 #import "A2MicrosoftAuth.h"
 #import "A2Wardrobe.h"
 #import "A2Settings.h"
+#import "A2Trash.h"
 #import "A2Log.h"
 #import <CommonCrypto/CommonDigest.h>
 
@@ -325,14 +326,23 @@ static void A2Main(dispatch_block_t b) {
                 account.uniqueID, kAccountFileExtension];
 }
 
-/// 删除账号对应的文件。
-- (void)deleteFileForAccount:(A2Account *)account {
-    if (account.uniqueID.length == 0) return;
+/// 删除账号对应的文件：进废纸篓（可恢复），不用直接删除。
+/// 无 uniqueID 时无文件可删，视为成功。
+- (BOOL)deleteFileForAccount:(A2Account *)account error:(NSError **)error {
+    if (account.uniqueID.length == 0) return YES;
 
-    [[NSFileManager defaultManager] removeItemAtPath:[self filePathForAccount:account]
-                                              error:nil];
-    [A2Log log:@"AccountManager: 删除账号文件 %@.%@",
+    NSString *path = [self filePathForAccount:account];
+    NSError *trashErr = nil;
+    if (![A2Trash trashItemAtPath:path error:&trashErr]) {
+        if (error) *error = trashErr;
+        [A2Log log:@"AccountManager: 账号文件进废纸篓失败 %@.%@（%@）",
+                    account.uniqueID, kAccountFileExtension,
+                    trashErr.localizedDescription ?: @"未知错误"];
+        return NO;
+    }
+    [A2Log log:@"AccountManager: 账号文件已进废纸篓 %@.%@",
                 account.uniqueID, kAccountFileExtension];
+    return YES;
 }
 
 - (void)notify {
@@ -375,18 +385,24 @@ static void A2Main(dispatch_block_t b) {
     [self notify];
 }
 
-- (void)removeAccount:(A2Account *)account {
-    if (!account) return;
+- (BOOL)removeAccount:(A2Account *)account error:(NSError **)error {
+    if (!account) return NO;
     NSMutableArray<A2Account *> *list = [_accounts mutableCopy];
     A2Account *found = nil;
     for (A2Account *a in list) {
         if ([a.uniqueID isEqualToString:account.uniqueID]) { found = a; break; }
     }
-    if (!found) return;
+    if (!found) return NO;
+
+    // 先进废纸篓再改内存列表：文件删不掉就整体失败，内存与磁盘保持一致。
+    NSError *trashErr = nil;
+    if (![self deleteFileForAccount:found error:&trashErr]) {
+        if (error) *error = trashErr;
+        return NO;
+    }
 
     [list removeObject:found];
     _accounts = [list copy];
-    [self deleteFileForAccount:found];
 
     if (_currentAccount && [_currentAccount.uniqueID isEqualToString:account.uniqueID]) {
         _currentAccount = _accounts.count > 0 ? _accounts.firstObject : nil;
@@ -394,7 +410,9 @@ static void A2Main(dispatch_block_t b) {
         A2Settings.shared.currentAccountID = _currentAccount.uniqueID;
     }
 
+    [A2Log log:@"AccountManager: 已移除账号 %@", found.username];
     [self notify];
+    return YES;
 }
 
 - (BOOL)selectCurrentAccount:(A2Account *)account {

@@ -24,6 +24,7 @@
 //
 
 #import "A2Wardrobe.h"
+#import "A2Log.h"
 
 NSString *const A2SkinModelClassic = @"classic";
 NSString *const A2SkinModelSlim = @"slim";
@@ -209,12 +210,28 @@ static NSString *const kWardrobeCacheDir = @"A2Wardrobe";
         NSError *moveErr = nil;
         // 先落 .part 再搬，避免半截 PNG 覆盖好文件。
         if (![fm moveItemAtPath:loc.path toPath:part error:&moveErr]) {
+            [A2Log log:@"wardrobe: 皮肤落盘失败 %@（%@）", dest.lastPathComponent, moveErr.localizedDescription ?: @"未知错误"];
             completion(NO);
             return;
         }
-        [fm removeItemAtPath:dest error:nil];
-        if (![fm moveItemAtPath:part toPath:dest error:nil]) {
+        // 原子替换：旧文件要么完整保留、要么被完整新文件替换，
+        // 不会出现“旧的删了、新的没搬过来”的中间态。
+        // 首次下载无旧文件时 replace 会失败，走直搬（目标本就不存在，无覆盖风险）。
+        NSError *replaceErr = nil;
+        BOOL replaced;
+        if ([fm fileExistsAtPath:dest]) {
+            replaced = [fm replaceItemAtURL:[NSURL fileURLWithPath:dest]
+                              withItemAtURL:[NSURL fileURLWithPath:part]
+                             backupItemName:nil
+                                    options:0
+                           resultingItemURL:NULL
+                                      error:&replaceErr];
+        } else {
+            replaced = [fm moveItemAtPath:part toPath:dest error:&replaceErr];
+        }
+        if (!replaced) {
             [fm removeItemAtPath:part error:nil];
+            [A2Log log:@"wardrobe: 皮肤替换失败 %@（%@），旧文件保留", dest.lastPathComponent, replaceErr.localizedDescription ?: @"未知错误"];
             completion(NO);
             return;
         }

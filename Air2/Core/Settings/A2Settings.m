@@ -26,6 +26,7 @@
 //
 
 #import "A2Settings.h"
+#import "A2Log.h"
 
 NSNotificationName const A2SettingsDidChangeNotification = @"A2SettingsDidChangeNotification";
 NSString *const A2SettingsChangedKeyKey = @"key";
@@ -114,9 +115,16 @@ static NSArray<NSString *> *A2SettingsAllKeys(void) {
         id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
         if ([json isKindOfClass:NSDictionary.class]) return json;
         // 坏文件不崩：改名备份后从空开始，避免每次读写都失败。
+        // 设置会被重置为默认值，原因要记下来，否则用户只看到“设置丢了”。
         NSString *broken = [path stringByAppendingString:@".broken"];
         [NSFileManager.defaultManager removeItemAtPath:broken error:nil];
-        [NSFileManager.defaultManager moveItemAtPath:path toPath:broken error:nil];
+        NSError *quarantineErr = nil;
+        if ([NSFileManager.defaultManager moveItemAtPath:path toPath:broken error:&quarantineErr]) {
+            [A2Log log:@"settings: 配置损坏，已隔离到 %@，从默认值开始", broken.lastPathComponent];
+        } else {
+            [A2Log log:@"settings: 配置损坏且隔离失败（%@），本次用默认值",
+                        quarantineErr.localizedDescription ?: @"未知错误"];
+        }
     }
     NSMutableDictionary<NSString *, id> *migrated = [NSMutableDictionary dictionary];
     NSUserDefaults *d = NSUserDefaults.standardUserDefaults;

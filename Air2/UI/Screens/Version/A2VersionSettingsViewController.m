@@ -358,14 +358,14 @@
     A2SettingsRow *deleteRow = [[A2SettingsRow alloc] init];
     deleteRow.symbolName = @"trash";
     deleteRow.title = @"删除此版本";
-    deleteRow.subtitle = @"该操作不可撤销";
+    deleteRow.subtitle = @"删除后可在废纸篓找回";
     deleteRow.destructive = YES;
     deleteRow.onTap = ^{
         __weak typeof(self) weakSelf = self;
         UIAlertController *alert =
             [UIAlertController alertControllerWithTitle:@"删除版本"
                                                 message:[NSString stringWithFormat:
-                    @"将删除 %@ 及其所有文件，不可撤销。", weakSelf.version.name]
+                    @"将 %@ 及其所有文件移到废纸篓。", weakSelf.version.name]
                                          preferredStyle:UIAlertControllerStyleAlert];
         [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
         [alert addAction:[UIAlertAction actionWithTitle:@"删除" style:UIAlertActionStyleDestructive

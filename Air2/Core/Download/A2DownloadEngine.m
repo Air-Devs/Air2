@@ -41,6 +41,7 @@
 //
 
 #import "A2DownloadEngine.h"
+#import "A2Log.h"
 #import <CommonCrypto/CommonDigest.h>
 #import <zlib.h>
 
@@ -226,6 +227,7 @@ didReceiveResponse:(NSURLResponse *)response
         completionHandler(NSURLSessionResponseCancel);
         NSError *err = [self errorWithCode:A2DownloadErrorNetworkFailure
                                    message:[NSString stringWithFormat:@"HTTP %ld", (long)code]];
+        [A2Log log:@"download: %@ 返回 HTTP %ld，进入失败重试", self.request.destinationPath.lastPathComponent, (long)code];
         dispatch_async(self.queue, ^{ [self handleCandidateFailure:err]; });
         return;
     }
@@ -234,6 +236,8 @@ didReceiveResponse:(NSURLResponse *)response
     if (code == 206 && self.receivedBytes > 0) {
         if (![self validateResumeResponse:http]) {
             // 校验不过 → 丢弃断点，从头下
+            [A2Log log:@"download: %@ 断点校验不过（已收 %lld 字节），丢弃从头下",
+                        self.request.destinationPath.lastPathComponent, (long long)self.receivedBytes];
             dispatch_async(self.queue, ^{
                 [self discardPartialDownload];
                 completionHandler(NSURLSessionResponseCancel);
@@ -244,6 +248,8 @@ didReceiveResponse:(NSURLResponse *)response
     } else if (code == 200) {
         // 200：服务端返回全量。若本地有半成品，说明服务端不支持续传或内容已变
         if (self.receivedBytes > 0) {
+            [A2Log log:@"download: %@ 服务端回 200 全量，丢弃 %lld 字节半成品",
+                        self.request.destinationPath.lastPathComponent, (long long)self.receivedBytes];
             dispatch_async(self.queue, ^{
                 // 上报负增量，让调用方的累计值回退到真实进度
                 if (self.progressHandler) self.progressHandler(-self.receivedBytes, -1);
@@ -393,7 +399,10 @@ didReceiveResponse:(NSURLResponse *)response
     @try {
         [self.fileHandle writeData:self.writeBuffer];
     } @catch (NSException *e) {
-        // 磁盘写失败
+        // 磁盘写失败：本次缓冲丢失，后续校验会拦截坏文件，但原因要记下来。
+        [A2Log log:@"download: %@ 写盘异常 %@（缓冲 %lu 字节丢失）",
+                    self.request.destinationPath.lastPathComponent, e.reason ?: @"未知",
+                    (unsigned long)self.writeBuffer.length];
     }
     [self.writeBuffer setLength:0];
 }
@@ -429,6 +438,8 @@ didCompleteWithError:(NSError *)error {
         NSString *actual = [self sha1OfFile:partPath];
         if (!actual || [actual caseInsensitiveCompare:self.request.expectedSHA1] != NSOrderedSame) {
             [[NSFileManager defaultManager] removeItemAtPath:partPath error:nil];
+            [A2Log log:@"download: %@ SHA1 校验失败，换源重试",
+                        self.request.destinationPath.lastPathComponent];
             NSError *err = [self errorWithCode:A2DownloadErrorChecksumMismatch
                                        message:@"SHA1 校验失败"];
             [self handleCandidateFailure:err];
@@ -442,6 +453,8 @@ didCompleteWithError:(NSError *)error {
         if (([ext isEqualToString:@"zip"] || [ext isEqualToString:@"jar"])
             && ![self hasValidZipEOCD:partPath]) {
             [[NSFileManager defaultManager] removeItemAtPath:partPath error:nil];
+            [A2Log log:@"download: %@ 压缩包结构损坏，换源重试",
+                        self.request.destinationPath.lastPathComponent];
             NSError *err = [self errorWithCode:A2DownloadErrorChecksumMismatch
                                        message:@"压缩包结构损坏"];
             [self handleCandidateFailure:err];
@@ -454,6 +467,8 @@ didCompleteWithError:(NSError *)error {
         NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:partPath error:nil];
         if ([attrs[NSFileSize] longLongValue] != self.request.expectedSize) {
             [[NSFileManager defaultManager] removeItemAtPath:partPath error:nil];
+            [A2Log log:@"download: %@ 文件大小不符（期望 %lld），换源重试",
+                        self.request.destinationPath.lastPathComponent, (long long)self.request.expectedSize];
             [self handleCandidateFailure:[self errorWithCode:A2DownloadErrorChecksumMismatch
                                                      message:@"文件大小不符"]];
             return;
@@ -485,6 +500,9 @@ didCompleteWithError:(NSError *)error {
     if (self.retryCount < kBackoffCount) {
         NSTimeInterval delay = kBackoffSeconds[self.retryCount];
         self.retryCount++;
+        [A2Log log:@"download: %@ 第 %d 次重试（%.0fs 后，%@）",
+                    self.request.destinationPath.lastPathComponent,
+                    self.retryCount, delay, error.localizedDescription ?: @"未知错误"];
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
                        self.queue, ^{
             if (!self.finished) [self startCurrentCandidate];
@@ -493,6 +511,9 @@ didCompleteWithError:(NSError *)error {
     }
 
     // 该候选耗尽，记下错误并换源
+    [A2Log log:@"download: %@ 当前源耗尽，换下一个源（%@）",
+                self.request.destinationPath.lastPathComponent,
+                error.localizedDescription ?: @"未知错误"];
     [self.candidateErrors addObject:error];
     self.retryCount = 0;
     self.candidateIndex++;
@@ -543,6 +564,7 @@ didCompleteWithError:(NSError *)error {
     [self stopSpeedTimer];
     [self.session invalidateAndCancel];
 
+    [A2Log log:@"download: %@ 下载完成", self.request.destinationPath.lastPathComponent];
     A2DownloadCompletion cb = self.completion;
     if (cb) cb(YES, nil);
 }
@@ -555,6 +577,9 @@ didCompleteWithError:(NSError *)error {
     [self.session invalidateAndCancel];
     self.operation.state = A2DownloadStateFailed;
 
+    [A2Log log:@"download: %@ 最终失败（%@）",
+                self.request.destinationPath.lastPathComponent,
+                error.localizedDescription ?: @"未知错误"];
     A2DownloadCompletion cb = self.completion;
     if (cb) cb(NO, error);
 }
@@ -592,7 +617,10 @@ didCompleteWithError:(NSError *)error {
 
 - (void)closeFileHandle {
     if (!self.fileHandle) return;
-    @try { [self.fileHandle closeFile]; } @catch (NSException *e) {}
+    @try { [self.fileHandle closeFile]; }
+    @catch (NSException *e) {
+        [A2Log log:@"download: %@ 关闭文件句柄异常 %@", self.request.destinationPath.lastPathComponent, e.reason ?: @"未知"];
+    }
     self.fileHandle = nil;
 }
 

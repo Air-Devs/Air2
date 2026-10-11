@@ -13,13 +13,12 @@ Documents/minecraft。老用户首次启动时由 A2GameDirMigration 迁移。
     · 只有新目录 → 不动
     · 两者都在   → 旧为空则删旧；
                    否则新为空就删新再把旧改名过来；
-                   两个都非空则丢弃旧目录，保留新目录
+                   两个都非空则两边都不动（拒绝自动删，需用户手动处理）
 
 与 test_version_isolation.py 的纯逻辑复刻不同，这里在临时目录里真实建出
 目录结构跑一遍，直接检查迁移后的文件系统状态。
 """
 import os
-import shutil
 import tempfile
 
 LEGACY = ".minecraft"
@@ -44,7 +43,7 @@ def migrate(docs):
         os.rmdir(legacy)
         return
     if os.path.exists(current) and not is_empty(current):
-        shutil.rmtree(legacy)
+        # 双非空冲突：两边都不动，绝不自动删，需用户手动处理。
         return
     if os.path.exists(current):
         os.rmdir(current)
@@ -133,14 +132,15 @@ with tempfile.TemporaryDirectory() as docs:
     all_ok &= check("新目录已就位", exists(docs, CURRENT), True)
     all_ok &= check("数据保留", entries(docs, CURRENT), ["saves", "versions"])
 
-# ---- 7. 两者都有内容：删旧，保新（核心约定）----
-print("\n[7] 两者都有内容 → 删除旧目录，保留新目录")
+# ---- 7. 两者都有内容：两边都不动（拒绝自动删）----
+print("\n[7] 两者都有内容 → 两边保留，需用户手动处理")
 with tempfile.TemporaryDirectory() as docs:
     build(docs, {LEGACY: ["old-saves"], CURRENT: ["new-saves"]})
     migrate(docs)
-    all_ok &= check("旧目录已删除", exists(docs, LEGACY), False)
+    all_ok &= check("旧目录保留", exists(docs, LEGACY), True)
     all_ok &= check("新目录仍在", exists(docs, CURRENT), True)
-    all_ok &= check("保留的是新目录数据", entries(docs, CURRENT), ["new-saves"])
+    all_ok &= check("旧目录数据保留", entries(docs, LEGACY), ["old-saves"])
+    all_ok &= check("新目录数据保留", entries(docs, CURRENT), ["new-saves"])
 
 # ---- 8. 幂等：迁移完成后再跑一次不改变结果 ----
 print("\n[8] 幂等：连续迁移两次结果不变")

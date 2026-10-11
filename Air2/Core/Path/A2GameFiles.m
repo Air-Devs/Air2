@@ -24,6 +24,8 @@
 //
 
 #import "A2GameFiles.h"
+#import "A2Trash.h"
+#import "A2Log.h"
 
 NSString *const A2GameFilesErrorDomain = @"A2GameFiles";
 
@@ -210,11 +212,14 @@ NSString *const A2GameFilesErrorDomain = @"A2GameFiles";
                                             userInfo:@{NSLocalizedDescriptionKey: @"不能删除根目录"}];
         return NO;
     }
-    NSError *ioErr = nil;
-    if (![NSFileManager.defaultManager removeItemAtPath:target error:&ioErr]) {
-        if (error) *error = [self ioError:ioErr message:@"删除失败"];
+    NSError *trashErr = nil;
+    if (![A2Trash trashItemAtPath:target error:&trashErr]) {
+        if (error) *error = [self ioError:trashErr message:@"删除失败"];
+        [A2Log log:@"gamefiles: 删除失败 %@（%@）",
+                    relativePath, trashErr.localizedDescription ?: @"未知错误"];
         return NO;
     }
+    [A2Log log:@"gamefiles: 已移到废纸篓 %@", relativePath];
     return YES;
 }
 
