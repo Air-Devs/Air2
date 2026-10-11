@@ -75,7 +75,7 @@
     updateRow.symbolName = @"arrow.triangle.2.circlepath";
     updateRow.title = @"检查更新";
     updateRow.accessory = A2SettingsRowAccessoryDisclosure;
-    updateRow.showsBottomSeparator = NO;
+    updateRow.showsSeparator = NO;
     updateRow.onTap = ^{
         [A2Toast show:@"更新检查尚未实现" inView:host.view];
     };

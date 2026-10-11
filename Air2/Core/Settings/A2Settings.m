@@ -168,6 +168,16 @@ static NSArray<NSString *> *A2SettingsAllKeys(void) {
     return def;
 }
 
+/// 对外短名（供 A2MultiplayerViewController 等调用方使用），语义同 boolForKey:defaultValue:。
+- (BOOL)boolForKey:(NSString *)key default:(BOOL)def {
+    return [self boolForKey:key defaultValue:def];
+}
+
+/// 对外布尔写入（等价 setObject:@(value) forKey:），写穿透 config.json + 发变更通知。
+- (void)setBool:(BOOL)value forKey:(NSString *)key {
+    [self setObject:@(value) forKey:key];
+}
+
 - (NSInteger)integerForKey:(NSString *)key defaultValue:(NSInteger)def {
     id v = [self objectForKey:key];
     if ([v isKindOfClass:NSNumber.class]) return [v integerValue];

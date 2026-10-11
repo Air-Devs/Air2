@@ -81,6 +81,13 @@ static const NSInteger A2SettingsMinRAMMB = 256;
 /// 清掉全部托管 key，回到默认值（注销/恢复默认用）。
 - (void)resetAllToDefaults;
 
+/// 读布尔设置（缺 key 或类型不符时返回 def）。允许读未登记 key（如联机用 terracottaEnabled）。
+/// 与内部私有 helper `boolForKey:defaultValue:` 同语义，对外暴露短名以匹配调用方。
+- (BOOL)boolForKey:(NSString *)key default:(BOOL)def;
+
+/// 写布尔设置（写穿透到 config.json 并 post A2SettingsDidChangeNotification）。
+- (void)setBool:(BOOL)value forKey:(NSString *)key;
+
 /// 全局版本隔离档位（见上方取值常量）。默认「仅 Mod」。
 /// 旧版本用的是布尔开关 A2SettingsKeyVersionIsolation，读取时自动迁移：
 /// 开过隔离 → 全部，其余 → 仅 Mod。
