@@ -326,30 +326,6 @@ static NSString *const A2JITCoordinatorErrorDomain = @"A2JITCoordinatorError";
     return NO;
 }
 
-#pragma mark - 「先 JIT 后启 JVM」钩子
-
-- (BOOL)prepareJITThenRunLaunchChain:(A2LaunchChain *)chain
-                               error:(NSError *_Nullable *_Nullable)error {
-    NSParameterAssert(chain);
-
-    if (!self.readyToRunGame) {
-        [self enableJITWithError:NULL];
-    }
-
-    if (!self.readyToRunGame) {
-        NSLog(@"[A2JIT] JIT 未就绪，已阻止启动链（绝不带病建 VM）: %@", self.statusDetail);
-        if (error) {
-            *error = [NSError errorWithDomain:A2JITCoordinatorErrorDomain
-                                         code:self.failureReason
-                                     userInfo:@{ NSLocalizedDescriptionKey: self.statusDetail }];
-        }
-        return NO;
-    }
-
-    NSLog(@"[A2JIT] JIT 已启用，交给启动链（先 JIT 后启 JVM）");
-    return [chain runWithError:error];
-}
-
 #pragma mark - 错误
 
 - (BOOL)failWithReason:(A2JITFailureReason)reason

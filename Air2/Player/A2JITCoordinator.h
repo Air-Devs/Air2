@@ -22,8 +22,8 @@
 //  与既有 A2LaunchChain 的分工：
 //    · A2JITCoordinator 负责【取得 JIT】：配对材料就绪 → 开启 → 进程获得 JIT；
 //    · A2LaunchChain 负责【用完 JIT 建 VM】：① 下发脚本 → ② 探测 → ③ 建 JVM。
-//    本单只接【一个钩子】prepareJITThenRunLaunchChain:error: —— 先确保 JIT 已启用，
-//    再把控制权交给 A2LaunchChain，★不修改 A2LaunchChain 的任何公开行为★。
+//    ★JIT 门禁（未就绪绝不建 VM）已由 A2LaunchSession 在启动链里承担★；
+//    Coordinator 只负责【取得 JIT】(状态机 + 各 Provider 激活/取配对)。
 //
 //  分级策略与取得路径优先级（见 docs/JIT-PROVISIONING.md；用户拍板 / ADR-009）：
 //    · iOS 26    ：内置手动（导入配对 → 连 LocalDevVPN → 内置开启）
@@ -124,11 +124,6 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// 开启 JIT：已配对 → 等待开启 → 已启用。
 - (BOOL)enableJITWithError:(NSError *_Nullable *_Nullable)error;
-
-/// ★「先 JIT 后启 JVM」钩子★：确保 JIT 已启用后，把控制权交给 A2LaunchChain；
-/// 未就绪则【不运行启动链】（绝不带病建 VM，否则首帧 JIT 取指 SIGBUS）。
-- (BOOL)prepareJITThenRunLaunchChain:(A2LaunchChain *)chain
-                               error:(NSError *_Nullable *_Nullable)error;
 
 @end
 

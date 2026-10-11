@@ -675,24 +675,6 @@ static void testCoordinator(void) {
     eqInt(co4.state, A2JITStateWaitingActivation, @"失败后停留 WaitingActivation");
     eqInt(co4.failureReason, A2JITFailureReasonActivationFailed, @"原因 = ActivationFailed");
 
-    // 「先 JIT 后启 JVM」钩子：未就绪 ⇒ 阻止启动链
-    __block BOOL ranDeliver = NO, ranVerify = NO, ranVM = NO;
-    A2LaunchChain *chain = [A2LaunchChain chainWithDeliverScript:^BOOL(NSError **e) { ranDeliver = YES; return YES; }
-                                                          verify:^BOOL(NSString **r) { ranVerify = YES; return YES; }
-                                                       createJVM:^BOOL(NSError **e) { ranVM = YES; return YES; }];
-    ok(![co3 prepareJITThenRunLaunchChain:chain error:NULL], @"未就绪 → 钩子返回 NO");
-    ok(!ranDeliver && !ranVerify && !ranVM, @"★未就绪时启动链完全未运行★");
-
-    // 就绪 ⇒ 钩子放行启动链
-    FakeProvider *imp5 = [[FakeProvider alloc] init];
-    imp5.kind = A2JITProviderKindImportedPairing;
-    imp5.available = YES;
-    imp5.pairingReady = YES;
-    imp5.activateResult = YES;
-    A2JITCoordinator *co5 = [[A2JITCoordinator alloc] initWithFacts:FactsPairing(26, 0, A2JITEnvironmentKindPlain, YES)
-                                                        providers:@[ imp5 ]];
-    ok([co5 prepareJITThenRunLaunchChain:chain error:NULL], @"已启用 → 钩子放行并跑启动链");
-    ok(ranDeliver && ranVerify && ranVM, @"启动链三步都跑到");
 }
 
 #pragma mark - ⑥ [JIT-IMPL-2] 判据分流（A2JITVerdictGuidance）
@@ -2638,10 +2620,6 @@ static void testLaunchChainJitVmWiring(void) {
     ok([deliverSrc containsString:@"a2_jit_send_script_safe"], @"★① 真调 Natives 下发原语★");
     ok([deliverSrc containsString:@"AmethystJIT69"], @"① 下发的是随包自包含脚本");
 
-    // ⑧ 承接检查：[JIT-ORDER] 的「先 JIT 后启 JVM」钩子仍在（未回退、未被本单顶掉）
-    NSString *coordSrc = [NSString stringWithContentsOfFile:RepoPath(@"Air2/Player/A2JITCoordinator.m")
-                                                   encoding:NSUTF8StringEncoding error:NULL];
-    ok([coordSrc containsString:@"prepareJITThenRunLaunchChain"], @"「先 JIT 后启 JVM」钩子仍在");
 }
 
 #pragma mark - main
