@@ -21,6 +21,7 @@
 //
 
 #import "A2GameInstaller.h"
+#import "A2Logger.h"
 #import "A2VersionIsolation.h"
 #import "A2ModLoaderInstaller.h"
 #import "A2APIModDownloader.h"
