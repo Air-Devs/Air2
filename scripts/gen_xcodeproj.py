@@ -25,6 +25,10 @@ BUILD_VERSION = "1"
 # 现在两端都扫：Air2（应用主体）与 Natives（原生层）——同一 target、同一 Sources 阶段。
 SOURCE_ROOTS = ("Air2", "Natives")
 
+# [A2-INTEGRATION] 第三方 mbedTLS（Apache-2.0）—— TLS-PSK 隧道后端。
+# 头在 Libraries/ThirdParty/mbedtls/include；静态库链接见下方 MBEDTLS_LDFLAGS。
+MBEDTLS_INCLUDE_DIR = "$(SRCROOT)/Libraries/ThirdParty/mbedtls/include"
+
 # 原生层的头搜索路径：Natives 代码按「裸文件名」互相引用
 # （`#include "jni.h"`、`#import "a2_log.h"`、`#import "A2JITEnvironment.h"`），
 # 而这些文件分处 Natives/Context 与 Natives/Support ⇒ 需要把各目录加入搜索路径。
@@ -37,6 +41,8 @@ NATIVES_INCLUDE_DIRS = [
     # Natives/Input：自研 GLFW 窗口/事件/输入层（[A2-OWNGLFW-NATIVE-1]）。
     # a2_own_glfw_bridge.m 以裸文件名 #include "a2_glfw_window.h"，须能被解析。
     "$(SRCROOT)/Natives/Input",
+    # [A2-INTEGRATION] 第三方 mbedTLS 头（TLS-PSK 隧道后端；<mbedtls/ssl.h> 等）。
+    MBEDTLS_INCLUDE_DIR,
 ]
 
 # ----------------------------------------------------------------------------
@@ -155,9 +161,27 @@ TERRACOTTA_UNDEFINED_SYMS = [
 ]
 
 
-def terracotta_ldflags():
-    items = ",\n\t\t\t\t\t".join('"-Wl,-U,%s"' % s for s in TERRACOTTA_UNDEFINED_SYMS)
-    return "(\n\t\t\t\t\t" + items + ",\n\t\t\t\t)"
+# [A2-INTEGRATION] 第三方 mbedTLS（Apache-2.0）静态库 —— TLS-PSK 隧道后端
+# （Natives/Support/a2_tlspsk_mbedtls.m 用；见 docs/DEPENDENCIES.md）。
+# ★随仓预编译★（Libraries/ThirdParty/mbedtls/lib/*.a），
+# 由 scripts/build_mbedtls_ios.sh 在 Mac 上离线重建（★不上云、不引入包管理器★）。
+# 链接顺序固定 mbedtls → mbedx509 → mbedcrypto（被依赖者靠后）。
+MBEDTLS_LDFLAGS = [
+    "-L$(SRCROOT)/Libraries/ThirdParty/mbedtls/lib",
+    "-lmbedtls",
+    "-lmbedx509",
+    "-lmbedcrypto",
+]
+
+
+def target_ldflags():
+    """目标的 OTHER_LDFLAGS：
+      ① terracotta 未定义符号放行（既有）；
+      ② [A2-INTEGRATION] 第三方 mbedTLS 静态库（TLS-PSK 隧道后端）。
+    """
+    items = ['"-Wl,-U,%s"' % s for s in TERRACOTTA_UNDEFINED_SYMS]
+    items += ['"%s"' % s for s in MBEDTLS_LDFLAGS]
+    return "(\n\t\t\t\t\t" + ",\n\t\t\t\t\t".join(items) + ",\n\t\t\t\t)"
 
 
 def uid(*parts):
@@ -556,7 +580,7 @@ def build():
                 "GENERATE_INFOPLIST_FILE": "NO",
                 "INFOPLIST_FILE": "Air2/Info.plist",
                 "LD_RUNPATH_SEARCH_PATHS": '(\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t"@executable_path/Frameworks",\n\t\t\t\t)',
-                "OTHER_LDFLAGS": terracotta_ldflags(),
+                "OTHER_LDFLAGS": target_ldflags(),
                 "MARKETING_VERSION": MARKETING_VERSION,
                 "PRODUCT_BUNDLE_IDENTIFIER": BUNDLE_ID,
                 "PRODUCT_NAME": "$(TARGET_NAME)",

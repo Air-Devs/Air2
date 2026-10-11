@@ -15,6 +15,10 @@
 *.dylib
 *.so
 !Libraries/**/*.dylib
+# ★第三方预编译静态库随仓★（mbedTLS Apache-2.0 / TLS-PSK 隧道后端）——
+#   与上面「构建产物不入 git」相反：这是**随仓的第三方依赖**（同 Libraries/**/*.dylib 的待遇），
+#   由 scripts/build_mbedtls_ios.sh 在 Mac 上离线重建（★不上云、不引入包管理器★）。
+!Libraries/ThirdParty/**/*.a
 
 # ★ JVM 运行时（java_runtimes，~119 MB）不入 git —— 「防石山」；
 #   由 scripts/stage_runtime.sh 从本机 Amethyst 构建产物就位（★不上云★）。
