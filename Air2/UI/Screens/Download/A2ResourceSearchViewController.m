@@ -735,14 +735,6 @@ static NSString *A2PlatformDisplayName(A2ContentPlatform platform) {
 
     [NSLayoutConstraint activateConstraints:@[
         [_countLabel.topAnchor constraintEqualToAnchor:self.resultContainer.topAnchor],
-
-
-
-
-                                                 constant:A2PageMargin],
-                                                  constant:-A2PageMargin],
-
-
         [_countLabel.leadingAnchor constraintEqualToAnchor:self.resultContainer.leadingAnchor
                                                   constant:A2PageMargin],
         [_countLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.resultContainer.trailingAnchor
