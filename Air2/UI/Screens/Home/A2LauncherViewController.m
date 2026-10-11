@@ -30,6 +30,7 @@
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
+#import "A2Icon.h"
 #import "A2GlassCard.h"
 #import "A2BackgroundView.h"
 #import "A2VersionCard.h"
@@ -756,15 +757,26 @@
 
     _versionNameLabel.text = current.name;
 
-    // 版本图标：约定放在版本的私有数据目录里（.air_version/VersionIcon.png）。
-    // 没有就让 A2VersionCard 那套的方块图标兜底。
+    // 版本图标优先顺序：
+    //   1. 用户自定义图标（.air_version/VersionIcon.png）
+    //   2. 加载器图标（Fabric/Forge/NeoForge/Quilt/OptiFine 的品牌图）
+    //   3. 草方块（原版）
     NSString *iconPath = [current.launcherDataPath stringByAppendingPathComponent:@"VersionIcon.png"];
+    UIImage *icon = nil;
+
     if (iconPath.length && [NSFileManager.defaultManager fileExistsAtPath:iconPath]) {
-        UIImage *icon = [UIImage imageWithContentsOfFile:iconPath];
-        if (icon) {
-            _versionIcon.image = icon;
-            _versionIcon.backgroundColor = UIColor.clearColor;
-        }
+        icon = [UIImage imageWithContentsOfFile:iconPath];
+    }
+    if (!icon && current.loaderInfo.length) {
+        icon = [A2Icon loaderIconForLoaderInfo:current.loaderInfo];
+    }
+    if (!icon) {
+        icon = [A2Icon vanillaIcon];
+    }
+
+    if (icon) {
+        _versionIcon.image = icon;
+        _versionIcon.backgroundColor = UIColor.clearColor;
     }
 
     NSMutableArray<NSString *> *parts = [NSMutableArray array];

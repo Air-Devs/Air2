@@ -39,6 +39,7 @@
 #import "A2PrimaryButton.h"
 #import "A2Toast.h"
 #import "A2ThemeManager.h"
+#import "A2Icon.h"
 #import "A2ColorScheme.h"
 #import "A2Typography.h"
 #import "A2Metrics.h"
@@ -296,34 +297,28 @@ static NSString *A2VersionSymbolForType(NSString *type) {
 ///   release            → primary 系
 ///   snapshot           → tertiary 系
 ///   old_beta/old_alpha → surfaceVariant 系
+/// 图标：优先用草方块位图（对照 ZL2 的视觉），
+/// 没有资源时回退到按类型区分的 SF Symbol。
 - (void)applyIconForType:(NSString *)type scheme:(A2ColorScheme *)t {
-    UIColor *boxColor;
-    UIColor *symbolColor;
-    if ([type isEqualToString:@"release"]) {
-        boxColor = t.cPrimaryContainer;
-        symbolColor = t.cPrimary;
-    } else if ([type isEqualToString:@"snapshot"]) {
-        boxColor = t.cTertiaryContainer;
-        symbolColor = t.cTertiary;
-    } else {
-        boxColor = t.cSurfaceVariant;
-        symbolColor = t.cOnSurfaceVariant;
+    UIImage *vanilla = [A2Icon vanillaIcon];
+    if (vanilla) {
+        _iconView.image = vanilla;
+        _iconView.tintColor = nil;          // 位图用原色
+        _iconBox.backgroundColor = UIColor.clearColor;
+        return;
     }
-    _iconBox.backgroundColor = boxColor;
 
+    _iconBox.backgroundColor = [A2Icon boxColorForVersionType:type];
     UIImageSymbolConfiguration *cfg =
         [UIImageSymbolConfiguration configurationWithPointSize:kA2VersionIconPointSize
                                                         weight:UIImageSymbolWeightMedium];
-    _iconView.image = [UIImage systemImageNamed:A2VersionSymbolForType(type) withConfiguration:cfg];
-    _iconView.tintColor = symbolColor;
+    _iconView.image = [UIImage systemImageNamed:[A2Icon symbolForVersionType:type]
+                              withConfiguration:cfg];
+    _iconView.tintColor = [A2Icon symbolColorForVersionType:type];
 }
 
 + (NSString *)displayNameForType:(NSString *)type {
-    if ([type isEqualToString:@"release"]) return @"正式版";
-    if ([type isEqualToString:@"snapshot"]) return @"快照";
-    if ([type isEqualToString:@"old_beta"]) return @"旧版 Beta";
-    if ([type isEqualToString:@"old_alpha"]) return @"旧版 Alpha";
-    return type;
+    return [A2Icon displayNameForVersionType:type];
 }
 
 @end

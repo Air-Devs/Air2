@@ -34,6 +34,7 @@
 #import "A2PrimaryButton.h"
 #import "A2Toast.h"
 #import "A2ThemeManager.h"
+#import "A2Icon.h"
 #import "A2Metrics.h"
 #import "A2ModLoaderAPI.h"
 #import "A2ModLoaderInstaller.h"

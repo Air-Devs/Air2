@@ -107,6 +107,7 @@
 		27702DAD22876D499AD213EF /* A2ColorScheme.m in Sources */ = {isa = PBXBuildFile; fileRef = 93BF612ED3930C6A33249855 /* A2ColorScheme.m */; };
 		141BC76960489907EC08BDBA /* A2ColorTheme+Seed.m in Sources */ = {isa = PBXBuildFile; fileRef = 25966F1F7F932D2795B0F1A8 /* A2ColorTheme+Seed.m */; };
 		86D43CE5B95D29876BF7D34D /* A2ColorTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = 82FE348CB0D3A5CE4DD665A1 /* A2ColorTheme.m */; };
+		1C9990B0808AD8111308F4AB /* A2Icon.m in Sources */ = {isa = PBXBuildFile; fileRef = CF7A0935F86AC60F1DFD3B1B /* A2Icon.m */; };
 		01294C3B04FD73AA638FC63E /* A2Metrics.m in Sources */ = {isa = PBXBuildFile; fileRef = C144BE68C9BFFFAA61A92B1A /* A2Metrics.m */; };
 		4BE5F7816DB3CEF6CBE3809A /* A2PaletteStyle.m in Sources */ = {isa = PBXBuildFile; fileRef = E6F6FA4C47FD771177075404 /* A2PaletteStyle.m */; };
 		7B7A47F5F8AA510170F1A159 /* A2ThemeManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */; };
@@ -114,6 +115,7 @@
 		C754280DF19913731620CE6A /* A2Log.m in Sources */ = {isa = PBXBuildFile; fileRef = CE8E02818B37C0AFFABF71D5 /* A2Log.m */; };
 		6B1CD1AC96CD93B7EE0847A4 /* A2MurmurHash2.m in Sources */ = {isa = PBXBuildFile; fileRef = 70E537F57063CE783BE3A38B /* A2MurmurHash2.m */; };
 		173CB61901164D888C0739BA /* A2Strings.m in Sources */ = {isa = PBXBuildFile; fileRef = 7EC0262DD08DEE92A0AD385D /* A2Strings.m */; };
+		FC6E8A547C179CC55A247D57 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F6B4BAFE39547DFF98D20300 /* Images.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -219,6 +221,7 @@
 		93BF612ED3930C6A33249855 /* A2ColorScheme.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorScheme.m"; sourceTree = "<group>"; };
 		25966F1F7F932D2795B0F1A8 /* A2ColorTheme+Seed.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorTheme+Seed.m"; sourceTree = "<group>"; };
 		82FE348CB0D3A5CE4DD665A1 /* A2ColorTheme.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorTheme.m"; sourceTree = "<group>"; };
+		CF7A0935F86AC60F1DFD3B1B /* A2Icon.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Icon.m"; sourceTree = "<group>"; };
 		C144BE68C9BFFFAA61A92B1A /* A2Metrics.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Metrics.m"; sourceTree = "<group>"; };
 		E6F6FA4C47FD771177075404 /* A2PaletteStyle.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PaletteStyle.m"; sourceTree = "<group>"; };
 		5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ThemeManager.m"; sourceTree = "<group>"; };
@@ -324,6 +327,7 @@
 		DAC23739A567EAE9F7189258 /* A2ColorScheme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorScheme.h"; sourceTree = "<group>"; };
 		89FE8C9FAF9D157BFC4F8D14 /* A2ColorTheme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorTheme.h"; sourceTree = "<group>"; };
 		7CD8335A45FF442EAEDE63C3 /* A2ColorTheme_Internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorTheme_Internal.h"; sourceTree = "<group>"; };
+		93A43777F7CA812D51F8D65F /* A2Icon.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Icon.h"; sourceTree = "<group>"; };
 		E61D2D443ACA03984F35EFCA /* A2Metrics.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Metrics.h"; sourceTree = "<group>"; };
 		812104F4721E701E0A31697D /* A2PaletteStyle.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PaletteStyle.h"; sourceTree = "<group>"; };
 		789AF4E406F5B8122812523E /* A2ThemeManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ThemeManager.h"; sourceTree = "<group>"; };
@@ -331,6 +335,7 @@
 		A0A4BD66A8E2E70961D106B2 /* A2Log.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Log.h"; sourceTree = "<group>"; };
 		089E9C0B1F10F5FF4BE351B0 /* A2MurmurHash2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MurmurHash2.h"; sourceTree = "<group>"; };
 		A817F7F6D7CB98164433DEE3 /* A2Strings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Strings.h"; sourceTree = "<group>"; };
+		F6B4BAFE39547DFF98D20300 /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Images.xcassets"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -661,6 +666,7 @@
 				93BF612ED3930C6A33249855 /* A2ColorScheme.m */,
 				25966F1F7F932D2795B0F1A8 /* A2ColorTheme+Seed.m */,
 				82FE348CB0D3A5CE4DD665A1 /* A2ColorTheme.m */,
+				CF7A0935F86AC60F1DFD3B1B /* A2Icon.m */,
 				C144BE68C9BFFFAA61A92B1A /* A2Metrics.m */,
 				E6F6FA4C47FD771177075404 /* A2PaletteStyle.m */,
 				5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */,
@@ -668,6 +674,7 @@
 				DAC23739A567EAE9F7189258 /* A2ColorScheme.h */,
 				89FE8C9FAF9D157BFC4F8D14 /* A2ColorTheme.h */,
 				7CD8335A45FF442EAEDE63C3 /* A2ColorTheme_Internal.h */,
+				93A43777F7CA812D51F8D65F /* A2Icon.h */,
 				E61D2D443ACA03984F35EFCA /* A2Metrics.h */,
 				812104F4721E701E0A31697D /* A2PaletteStyle.h */,
 				789AF4E406F5B8122812523E /* A2ThemeManager.h */,
@@ -857,6 +864,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				FC6E8A547C179CC55A247D57 /* Images.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -967,6 +975,7 @@
 				27702DAD22876D499AD213EF /* A2ColorScheme.m in Sources */,
 				141BC76960489907EC08BDBA /* A2ColorTheme+Seed.m in Sources */,
 				86D43CE5B95D29876BF7D34D /* A2ColorTheme.m in Sources */,
+				1C9990B0808AD8111308F4AB /* A2Icon.m in Sources */,
 				01294C3B04FD73AA638FC63E /* A2Metrics.m in Sources */,
 				4BE5F7816DB3CEF6CBE3809A /* A2PaletteStyle.m in Sources */,
 				7B7A47F5F8AA510170F1A159 /* A2ThemeManager.m in Sources */,

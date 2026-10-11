@@ -31,6 +31,23 @@ def uid(*parts):
     return h[:24].upper()
 
 
+def collect_resources():
+    """
+    收集需要打进 app 包的资源。
+
+    当前只处理 Assets/ 下的 .xcassets（图标、颜色集）。
+    本地化文件（.lproj）将来也在这里收集。
+    """
+    resources = []
+    assets_dir = os.path.join(ROOT, "Assets")
+    if not os.path.isdir(assets_dir):
+        return resources
+    for entry in sorted(os.listdir(assets_dir)):
+        if entry.endswith(".xcassets"):
+            resources.append(os.path.join("Assets", entry))
+    return resources
+
+
 def scan_sources():
     """扫描 Air2/ 下的所有编译单元与头文件"""
     impl, headers = [], []
@@ -92,6 +109,11 @@ def build():
         u = uid("buildfile", f)
         name = os.path.basename(f)
         add(f"\t\t{u} /* {name} in Sources */ = {{isa = PBXBuildFile; fileRef = {uid('fileref', f)} /* {name} */; }};")
+    # 资源文件也要有 BuildFile 条目，否则只在 Resources 阶段列出而不会被打包
+    for rpath in collect_resources():
+        u = uid("buildfile", rpath)
+        name = os.path.basename(rpath)
+        add(f"\t\t{u} /* {name} in Resources */ = {{isa = PBXBuildFile; fileRef = {uid('fileref', rpath)} /* {name} */; }};")
     add("/* End PBXBuildFile section */")
     add("")
 
@@ -114,6 +136,13 @@ def build():
         # path 一律加引号：文件名可能含 + - # 等字符
         #（如 A2LauncherViewController+Actions.m），
         # 不加引号会让 Xcode 的旧式 plist 解析器在遇到特殊字符时中断
+        add(f"\t\t{u} /* {name} */ = {{isa = PBXFileReference; lastKnownFileType = {ftype}; path = \"{name}\"; sourceTree = \"<group>\"; }};")
+
+    # 资源文件的引用（.xcassets 用 folder.assetcatalog 类型，Xcode 才会编译成 Assets.car）
+    for rpath in collect_resources():
+        u = uid("fileref", rpath)
+        name = os.path.basename(rpath)
+        ftype = "folder.assetcatalog" if name.endswith(".xcassets") else "file"
         add(f"\t\t{u} /* {name} */ = {{isa = PBXFileReference; lastKnownFileType = {ftype}; path = \"{name}\"; sourceTree = \"<group>\"; }};")
     add("/* End PBXFileReference section */")
     add("")
@@ -281,16 +310,22 @@ def build():
     add("")
 
     # ---------------- PBXResourcesBuildPhase ----------------
+    # 收集 Assets/ 下的资源目录（.xcassets 与散落的 bundle 文件）。
+    # 图标、本地化都在这里，不加入 Resources 阶段的话不会打进 app 包。
+    resource_files = collect_resources()
     add("/* Begin PBXResourcesBuildPhase section */")
     add(f"\t\t{resources_phase} /* Resources */ = {{")
     add("\t\t\tisa = PBXResourcesBuildPhase;")
     add("\t\t\tbuildActionMask = 2147483647;")
     add("\t\t\tfiles = (")
+    for rpath in resource_files:
+        add(f"\t\t\t\t{uid('buildfile', rpath)} /* {os.path.basename(rpath)} in Resources */,")
     add("\t\t\t);")
     add("\t\t\trunOnlyForDeploymentPostprocessing = 0;")
     add("\t\t};")
     add("/* End PBXResourcesBuildPhase section */")
     add("")
+
 
     # ---------------- PBXSourcesBuildPhase ----------------
     add("/* Begin PBXSourcesBuildPhase section */")
