@@ -1,12 +1,21 @@
 # tests/JIT —— JIT 纯逻辑单元测试
 
-覆盖 `Air2/Player` 下的四件纯逻辑（★编译并运行**真实实现**，非 Python 镜像★）：
+覆盖 `Air2/Player` 下的纯逻辑（★编译并运行**真实实现**，非 Python 镜像★）：
 
 - `A2JITStrategySelector` —— 分级表（26 内置手动 / 27 自动 / 17.4+ 导入 / 内核 / 17.0–17.3 不可用）
   与 Provider 尝试顺序、失败原因；
 - `A2PairingFile` —— 配对文件解析/校验（合法样本 / 缺字段 / 非法字段 / 损坏 base64 / 空文件）；
 - `A2JITStateMachine` —— 合法迁移链 + 非法迁移被拒（含终态 `Enabled`）；
-- `A2JITFacts` —— 注入假 `A2JITFactsSource` 后的能力判定。
+- `A2JITFacts` —— 注入假 `A2JITFactsSource` 后的能力判定；
+- `A2JITCoordinator` + `A2LaunchChain` —— 编排端到端 + 「先 JIT 后启 JVM」门禁；
+- **`[JIT-IMPL-2]`** `A2JITVerdictGuidance` —— 判据分流（7 档原因/动作 key 互不相同）；
+- **`[JIT-IMPL-2]`** `A2JITStrings` —— 四语齐全（每个 key × zh-Hans/zh-Hant/en/ja 全量断言）；
+- **`[JIT-IMPL-2]`** `A2JITPairingFileStore` —— 导入落盘 + 元数据（来源/时间/SHA-256）+ 拒垃圾；
+- **`[JIT-IMPL-2]`** `A2JITExternalToolProvider` —— 拉起 + **有界等待** + 轮询判据（含超时即失败）；
+- **`[JIT-IMPL-2]`** `A2JITImportedPairingProvider` —— 就绪真探测 + **真调判据**（注入假 probe）；
+- **`[JIT-IMPL-2]`** 接线不变量 —— `A2JITReadinessVerdict` 与 Natives 的 `A2JITRegionVerdict`
+  逐值相等、scheme 清单与 `Air2/Info.plist` 一致、★Player 不得 import Natives 判据头★、
+  Bridge 确实调用了 `A2JITEnvironment`。
 
 ## 运行（macOS：需 Xcode 命令行工具的 clang）
 
@@ -17,7 +26,7 @@ python3 tests/JIT/run_jit_tests.py
 输出每例一行 `PASS` / `FAIL`，末尾给计数：
 
 ```
-TOTAL pass=85 fail=0
+TOTAL pass=265 fail=0
 [runner] 全部通过 ✓
 ```
 
@@ -25,3 +34,5 @@ TOTAL pass=85 fail=0
 
 > 为什么是真编译：版本隔离那套用 Python 镜像，是因为当年 iSH 里没有 ObjC 编译器；
 > 本机有 clang + Foundation，直接编译**被测的真实源文件**严格强于镜像。
+> ★测试还会用 `-I Natives/Support` 读 `A2JITEnvironment.h` 的枚举值做跨层镜像断言
+> （只读头，不链接该 `.m` —— 其实现含 arm64 裸 `brk`，不能在 macOS 上跑）★。

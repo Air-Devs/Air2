@@ -14,6 +14,9 @@
 #import "A2JITImportedPairingProvider.h"
 #import "A2JITExternalToolProvider.h"
 #import "A2JITKernelJITProvider.h"
+#import "A2JITReadinessProbe.h"
+#import "A2JITExternalToolLauncher.h"
+#import "A2JITPairingFileStore.h"
 #import "A2LaunchChain.h"
 
 static NSString *const A2JITCoordinatorErrorDomain = @"A2JITCoordinatorError";
@@ -86,10 +89,26 @@ static NSString *const A2JITCoordinatorErrorDomain = @"A2JITCoordinatorError";
 }
 
 + (NSArray<id<A2JITProvider>> *)defaultProvidersWithFacts:(A2JITFacts *)facts {
+    // 不注入机制依赖：能力检测与就绪判定照常，开启会如实失败（不假装成功）。
+    return [self providersWithFacts:facts probe:nil launcher:nil pairingFileStore:nil];
+}
+
++ (NSArray<id<A2JITProvider>> *)providersWithFacts:(A2JITFacts *)facts
+                                             probe:(nullable id<A2JITReadinessProbe>)probe
+                                          launcher:(nullable id<A2JITExternalToolLauncher>)launcher
+                                 pairingFileStore:(nullable A2JITPairingFileStore *)store {
+    NSParameterAssert(facts);
+    // ★[JIT-IMPL-2]★ 判据内核（probe）同时注入 ② 导入 / ③ 外部 / ④ 内核三条路径：
+    // 它们都要靠 A2JITEnvironment 的真实判据说话，而不是靠「能力声明」。
+    A2JITPairingFileStore *fileStore = store ?: [A2JITPairingFileStore defaultStore];
     return @[ [[A2JITAutomaticPairingProvider alloc] initWithFacts:facts],
-              [[A2JITImportedPairingProvider alloc] initWithFacts:facts],
-              [[A2JITExternalToolProvider alloc] initWithFacts:facts],
-              [[A2JITKernelJITProvider alloc] initWithFacts:facts] ];
+              [[A2JITImportedPairingProvider alloc] initWithFacts:facts store:fileStore probe:probe],
+              [[A2JITExternalToolProvider alloc] initWithFacts:facts
+                                                      launcher:launcher
+                                                         probe:probe
+                                                    waitBudget:0
+                                                  pollInterval:0],
+              [[A2JITKernelJITProvider alloc] initWithFacts:facts probe:probe] ];
 }
 
 - (BOOL)readyToRunGame {
@@ -163,6 +182,12 @@ static NSString *const A2JITCoordinatorErrorDomain = @"A2JITCoordinatorError";
 
     self.hasActiveProvider = YES;
     self.activeProviderKind = provider.kind;
+
+    // ★[JIT-IMPL-2] 状态机 ↔ 真实事件对齐★：每轮评估都留一行「选了哪条路、档位、就绪否」。
+    NSLog(@"[A2JIT] 选中取得路径=%@(kind=%ld) 档位=%@ 配对就绪=%d",
+          provider.displayName, (long)provider.kind,
+          [A2JITStrategySelector displayNameForStrategy:self.strategy],
+          (int)provider.isPairingReady);
 
     if (!provider.isPairingReady) {
         [self settle:A2JITStateWaitingPairing

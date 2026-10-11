@@ -18,11 +18,16 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SRC_ROOT = os.path.join(ROOT, "Air2")
 
 # 工程里所有头文件的 basename
+# ★判定范围★ = Air2/** 与 Natives/**：scripts/gen_xcodeproj.py 把两者收进同一个
+# target（SOURCE_ROOTS），Natives 的头也是「本地头」（裸文件名互相引用）。
+# Bridge 层 #import "A2JITEnvironment.h" 正是靠这一段才不被误报为缺失。
+AVAILABLE_ROOTS = [os.path.join(ROOT, "Air2"), os.path.join(ROOT, "Natives")]
 available = set()
-for dirpath, _, files in os.walk(SRC_ROOT):
-    for f in files:
-        if f.endswith(".h"):
-            available.add(f)
+for _root in AVAILABLE_ROOTS:
+    for dirpath, _, files in os.walk(_root):
+        for f in files:
+            if f.endswith(".h"):
+                available.add(f)
 
 # 也把系统框架的常见头文件排除掉（这些可能被写成 "xxx.h" 形式）
 SYSTEM_LIKE = {

@@ -39,8 +39,17 @@ SOURCES = [
     os.path.join(PLAYER, "A2JITImportedPairingProvider.m"),
     os.path.join(PLAYER, "A2JITExternalToolProvider.m"),
     os.path.join(PLAYER, "A2JITKernelJITProvider.m"),
+    os.path.join(PLAYER, "A2JITLocalFactsSource.m"),
+    # --- [JIT-IMPL-2] 本单新增的纯逻辑件（判据缝 / 分流表 / 四语文案 / 配对文件存储）---
+    os.path.join(PLAYER, "A2JITVerdictGuidance.m"),
+    os.path.join(PLAYER, "A2JITStrings.m"),
+    os.path.join(PLAYER, "A2JITPairingFileStore.m"),
     os.path.join(HERE, "jit_logic_tests.m"),
 ]
+
+# 额外头搜索路径：测试要用 Natives 的判据枚举做「跨层镜像」的运行期断言
+# （★只读头文件里的枚举值，不链接 A2JITEnvironment.m★ —— 后者的实现含 arm64 裸 brk）。
+EXTRA_INCLUDES = [os.path.join(ROOT, "Natives", "Support")]
 
 
 def find_clang():
@@ -73,8 +82,11 @@ def main():
     tmpdir = tempfile.mkdtemp(prefix="a2jit_tests_")
     binary = os.path.join(tmpdir, "jit_logic_tests")
 
-    cmd = [clang, "-fobjc-arc", "-fblocks", "-Wall", "-Wno-unused-parameter",
-           "-I", PLAYER, "-framework", "Foundation", "-o", binary] + SOURCES
+    includes = ["-I", PLAYER]
+    for inc in EXTRA_INCLUDES:
+        includes += ["-I", inc]
+    cmd = [clang, "-fobjc-arc", "-fblocks", "-Wall", "-Wno-unused-parameter"] + \
+          includes + ["-framework", "Foundation", "-o", binary] + SOURCES
     print("compile: clang -fobjc-arc -I Air2/Player ... -o jit_logic_tests")
     ci = subprocess.run(cmd, capture_output=True, text=True)
     if ci.stderr.strip():

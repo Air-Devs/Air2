@@ -9,6 +9,10 @@
 //  ★本单只落能力检测与占位★：真实实现第二阶段接入（需 vendor idevice(MIT) 做 RSD/TLS-PSK 隧道；
 //  ★不得使用 SideInstaller 代码★——其许可为自定义、禁止再分发，只可参考协议思路）。
 //
+//  [JIT-IMPL-2] 本 Provider ★仍为占位★（本单不做 iOS 27 自动配对：那是 10–15 人日的
+//  独立一单，见 docs/JIT-PROVISIONING.md §4.2）。此处只补一行默认可见日志，
+//  让状态机的「降级到 ② 导入」在真机日志里有迹可循。
+//
 
 #import <Foundation/Foundation.h>
 #import "A2JITProvider.h"

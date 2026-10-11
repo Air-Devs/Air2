@@ -34,13 +34,18 @@
 
 #import <Foundation/Foundation.h>
 #import "A2JITProvider.h"
-#import "A2JITStateMachine.h"   // [JIT-IMPL] A2JITState / A2JITFailureReason 定义处
+#import "A2JITStateMachine.h"       // [JIT-IMPL] A2JITState / A2JITFailureReason 定义处
+// [JIT-IMPL-2] 装配用工厂的形参类型（★只依赖协议，不依赖实现★）。
+// 注：协议声明一律走 import，不做前置声明 —— 仓内 lint_objc.py 按配对计数，前置声明会被误判。
+#import "A2JITReadinessProbe.h"
+#import "A2JITExternalToolLauncher.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
 @class A2JITFacts;
 @class A2LaunchChain;
 @class A2JITStateMachine;
+@class A2JITPairingFileStore;
 
 /// JIT 编排器：按系统分级选择策略，在策略内按优先级推进状态。
 @interface A2JITCoordinator : NSObject
@@ -72,7 +77,17 @@ NS_ASSUME_NONNULL_BEGIN
                     providers:(NSArray<id<A2JITProvider>> *)providers;
 
 /// 装配便利：按默认四路 Provider 构造（App 装配处调用；★非单例★）。
+/// ★不注入判据内核 / 拉起器 / 存储★：等价于 providersWithFacts:probe:launcher:pairingFileStore:
+/// 全传 nil（四路仍可做【能力检测与就绪判定】，但开启会如实失败，不会假装成功）。
 + (NSArray<id<A2JITProvider>> *)defaultProvidersWithFacts:(A2JITFacts *)facts;
+
+/// ★[JIT-IMPL-2] 装配用★：把判据内核（Bridge → Natives/A2JITEnvironment）、外部工具拉起器
+/// （UI → UIApplication）与配对文件存储（Player，容器约定位置）一并注入四路 Provider。
+/// ★本方法只依赖协议★：真机实现由 App / UI / Bridge 提供，单测传假实现。
++ (NSArray<id<A2JITProvider>> *)providersWithFacts:(A2JITFacts *)facts
+                                             probe:(nullable id<A2JITReadinessProbe>)probe
+                                          launcher:(nullable id<A2JITExternalToolLauncher>)launcher
+                                 pairingFileStore:(nullable A2JITPairingFileStore *)store;
 
 /// 重新评估环境并推进状态（★不触发 JIT 开启★）。用于设置页出现 / App 回前台。
 - (void)refreshState;

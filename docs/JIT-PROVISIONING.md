@@ -62,7 +62,7 @@
 | **前置条件** | ① 已装外部工具（URL scheme 可打开）；② `get-task-allow`（外部工具要 attach 主 App） |
 | **取得路径** | **② 导入配对文件** + **③ 外部工具**开启（`stikdebug://` / `stikjit://` / `sidestore://`） |
 | **失败回退** | 无外部工具 ⇒ `Unavailable` + 文案「安装 StikDebug / SideStore…」 |
-| **entitlement / 签名** | `get-task-allow`（必需）；scheme 探测需 `LSApplicationQueriesSchemes` 白名单（第二阶段加） |
+| **entitlement / 签名** | `get-task-allow`（必需）；scheme 探测需 `LSApplicationQueriesSchemes` 白名单（★[JIT-IMPL-2] 已落地★：stikdebug / stikjit / sidestore / stosdebug，见 `Air2/Info.plist`） |
 | **状态分支** | `WaitingPairing`→`Paired`→`WaitingActivation`→`Enabled`；Provider 优先 `A2JITImportedPairingProvider`，开启逐级回退到 `A2JITExternalToolProvider` |
 | **许可** | **零 vendor**：只走外部 App 的 URL scheme，不派生其代码 |
 
@@ -147,9 +147,13 @@ Provider 自报不可用 ⇒ 最终 `Unavailable`。这是**如实口径**，不
 | Provider | `isAvailable` | `isPairingReady` | 适用策略 |
 |---|---|---|---|
 | `A2JITAutomaticPairingProvider` | `supportsAutomaticPairing`（≥27） | 占位 NO（自动生成未接） | `Automatic` |
-| `A2JITImportedPairingProvider` | `supportsRemoteDebugJIT`（≥17.4） | `hasImportedPairingFile` | `BuiltInManual` / `Automatic` / `ImportedExternal` |
-| `A2JITExternalToolProvider` | `supportsRemoteDebugJIT`（≥17.4） | `hasExternalEnablerInstalled` | `BuiltInManual` / `Automatic` / `ImportedExternal` |
+| `A2JITImportedPairingProvider` | `supportsRemoteDebugJIT`（≥17.4） | ★真探测★ `A2JITPairingFileStore.hasUsablePairingFile`（容器约定位置找 + 解析） | `BuiltInManual` / `Automatic` / `ImportedExternal` |
+| `A2JITExternalToolProvider` | ★`supportsRemoteDebugJIT && hasExternalEnablerInstalled`★（未安装 ⇒ 不可用，编排层不选、设置页置灰写「未安装」） | `hasExternalEnablerInstalled` | `BuiltInManual` / `Automatic` / `ImportedExternal` |
 | `A2JITKernelJITProvider` | `hasKernelJITEnvironment` | = `isAvailable`（无需配对） | `Kernel` |
+
+★ **[JIT-IMPL-2] 开启一律以「真能力」为准**：②③④ 三条路径的 `activateJITWithError:` 都经
+注入的 `A2JITReadinessProbe`（真机 = `Bridge/A2JITEnvironmentProbe` → `Natives/Support/A2JITEnvironment`）
+复验，按 `A2JITRegionVerdict` 如实判成败；★未注入判据内核时如实失败，不假装成功★。
 
 策略 → 尝试顺序（`A2JITStrategySelector.orderedProviderKindsForStrategy:`）：
 
@@ -199,9 +203,11 @@ UI（启动按钮）
 | `Air2/Player/A2JIT{AutomaticPairing,ImportedPairing,ExternalTool,KernelJIT}Provider.h/.m` | 四路 Provider（**占位 + 能力检测**） |
 | `Air2/Player/A2JITCoordinator.h/.m` | 状态机 + 逐级回退 + 「先 JIT 后启 JVM」钩子 |
 
-**本单边界**：四路 Provider 的 `preparePairingWithError:` / `activateJITWithError:` **一律为占位**
+**本单边界**：四路 Provider 的 `preparePairingWithError:` / `activateJITWithError:` 一律为占位
 （返回 NO + 可读原因），因此本单**不会真正开启 JIT**；带来的是：**分级策略可判定、状态机可跑、
 回退顺序可观测、UI 文案可按原因分流**。
+（★[JIT-IMPL-2] 已把 ②导入 / ③外部 / ④内核 三条路径改为真实现，见 §3.2；
+① 自动配对仍为占位★。）
 
 ### 3.1【JIT-IMPL】纯逻辑件实现 + 单测（后续一轮）
 
@@ -223,6 +229,31 @@ UI（启动按钮）
 `python3 tests/JIT/run_jit_tests.py` ⇒ 每例 PASS/FAIL 与计数。
 ★仍未做★：真实 XPC / RPPairing 隧道 / 自动配对 / 越狱·巨魔·entitlement 的真机取证
 （属 §4 第二阶段）。
+
+### 3.2【JIT-IMPL-2】iOS 26 主线打通（判据接线 + 导入 + 外部工具 + 面板/四语/单测）
+
+在 §3.1 的纯逻辑之上，把「判据内核」真正接到四路 Provider 上（★仍不 vendor 任何第三方★）：
+
+| 文件 | 层 | 变更 |
+|---|---|---|
+| `Air2/Player/A2JITReadinessProbe.h` | Player | **新增**：判据注入缝（协议）+ `A2JITReadinessVerdict`（逐值镜像 `A2JITRegionVerdict`）|
+| `Air2/Player/A2JITExternalToolLauncher.h` | Player | **新增**：外部工具拉起缝（协议；真机实现用 UIApplication）|
+| `Air2/Player/A2JITVerdictGuidance.h/.m` | Player | **新增**：★判据分流表★（verdict → 失败原因 / 下一步动作 / 本地化 key / 日志行）|
+| `Air2/Player/A2JITStrings.h/.m` | Player | **新增**：面板四语文案表（zh-Hans / zh-Hant / en / ja；key 稳定，便于日后迁 `.lproj`）|
+| `Air2/Player/A2JITPairingFileStore.h/.m` | Player | **新增**：导入落盘（约定位置 `Library/Application Support/Pairing/pairingFile.plist`）+ 元数据（来源 / 时间 / SHA-256 / 格式 / 设备标识）|
+| `Air2/Bridge/A2JITEnvironmentProbe.h/.m` | **Bridge** | **新增**：★真调判据的那一层★——逐字转发 `A2JITEnvironment.ensureVerifiedWithinBudget:reason:`，实时读 `lastRegionVerdict` / `regionEvidence`；带 `_Static_assert` 镜像防线 |
+| `Air2/UI/Components/A2JITSystemToolLauncher.h/.m` | UI | **新增**：`UIApplication` 拉起 `stikdebug://enable-jit` 等 |
+| `Air2/Player/A2JITImportedPairingProvider.h/.m` | Player | 占位 → 真实现：就绪=真探测文件；开启=真调判据；失败文案按 verdict 分流 |
+| `Air2/Player/A2JITExternalToolProvider.h/.m` | Player | 占位 → 真实现：未安装即不可用；拉起 + ★有界等待★（轮询判据，超时即失败）|
+| `Air2/Player/A2JITKernelJITProvider.h/.m` | Player | 占位 → 真调判据【复验】（★不做内核级启用★）|
+| `Air2/Player/A2JITCoordinator.h/.m` | Player | 新增装配工厂 `providersWithFacts:probe:launcher:pairingFileStore:`；评估时输出「选中路径」日志 |
+| `Air2/UI/Screens/Settings/A2JITSettings.m` | UI | 面板重做：状态 / 档位 / 下一步动作 / 判据取证（★按 verdict 分流★）/ 导入（`UIDocumentPicker`）/ 外部工具（未安装置灰）/ 开启（后台队列）|
+| `Air2/Info.plist` | — | 新增 `LSApplicationQueriesSchemes`（stikdebug / stikjit / sidestore / stosdebug）|
+| `tests/JIT/*` | tests | 新增 ⑥–⑪ 共 ~158 例（判据分流 / 四语齐全 / 落盘记录 / 外部工具有界等待 / 真调判据 / 接线不变量）|
+
+★ **仍未做（本单明确不做）★**：iOS 27 设备内自动配对（§4.2）、iOS 26 内置 helper
+（ExtensionKit XPC，§4.1）、内核级 JIT 的真实启用、TrollStore 自开 JIT，
+以及 `A2JITEnvironment` 判据语义的任何改动。
 
 ---
 

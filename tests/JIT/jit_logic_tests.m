@@ -23,6 +23,17 @@
 #import "A2PairingFile.h"
 #import "A2JITCoordinator.h"
 #import "A2LaunchChain.h"
+// [JIT-IMPL-2] 本单新增：判据缝 / 分流表 / 四语文案 / 配对文件存储 / 两条真实现 Provider
+#import "A2JITReadinessProbe.h"
+#import "A2JITExternalToolLauncher.h"
+#import "A2JITVerdictGuidance.h"
+#import "A2JITStrings.h"
+#import "A2JITPairingFileStore.h"
+#import "A2JITImportedPairingProvider.h"
+#import "A2JITExternalToolProvider.h"
+#import "A2JITLocalFactsSource.h"
+// ★跨层镜像的运行期断言用★：直接读 Natives 的判据枚举（-I Natives/Support，不链接其实现）。
+#import "A2JITEnvironment.h"
 
 static int gPass = 0;
 static int gFail = 0;
@@ -49,6 +60,79 @@ static void eqStr(NSString *got, NSString *want, NSString *name) {
     if (!c) printf("        got=%s want=%s\n",
                    got ? got.UTF8String : "(nil)", want ? want.UTF8String : "(nil)");
 }
+
+#pragma mark - [JIT-IMPL-2] 测试夹具：假拉起器 / 假判据 / 仓内文件路径
+
+/// 仓内文件的绝对路径（测试直接读源码与 Info.plist，防止「两处漂移」）。
+static NSString *RepoPath(NSString *relative) {
+    // …/tests/JIT/jit_logic_tests.m → …/tests → 仓根
+    NSString *here = [NSString stringWithUTF8String:__FILE__];
+    NSString *testsDir = [[here stringByDeletingLastPathComponent] stringByDeletingLastPathComponent];
+    NSString *root = [testsDir stringByDeletingLastPathComponent];
+    return [root stringByAppendingPathComponent:relative];
+}
+
+static NSString *TempDir(void) {
+    return [NSTemporaryDirectory() stringByAppendingPathComponent:
+            [NSString stringWithFormat:@"a2jit_store_%@", NSUUID.UUID.UUIDString]];
+}
+
+/// 假拉起器：记录被拉起的 URL，按白名单回答 canOpen。
+@interface FakeLauncher : NSObject <A2JITExternalToolLauncher>
+@property (nonatomic, strong) NSMutableSet<NSString *> *openableSchemes;
+@property (nonatomic, strong) NSMutableArray<NSURL *> *openedURLs;
+@property (nonatomic, assign) BOOL openResult;
+@end
+
+@implementation FakeLauncher
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _openableSchemes = [NSMutableSet set];
+        _openedURLs = [NSMutableArray array];
+        _openResult = YES;
+    }
+    return self;
+}
+- (BOOL)canOpenToolURL:(NSURL *)url { return [self.openableSchemes containsObject:url.scheme]; }
+- (BOOL)openToolURL:(NSURL *)url {
+    [self.openedURLs addObject:url];
+    return self.openResult;
+}
+@end
+
+/// 假判据：前 failTimes 次返回 NO，之后返回 YES；alwaysFail 时恒 NO。
+@interface FakeProbe : NSObject <A2JITReadinessProbe>
+@property (nonatomic, assign) NSInteger failTimes;
+@property (nonatomic, assign) NSInteger calls;
+@property (nonatomic, assign) BOOL alwaysFail;
+@property (nonatomic, assign) A2JITReadinessVerdict verdict;
+@property (nonatomic, copy) NSString *evidence;
+@property (nonatomic, assign) NSInteger invalidateCalls;
+@end
+
+@implementation FakeProbe
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _evidence = @"fake-evidence";
+        _verdict = A2JITReadinessVerdictNotServiced;
+    }
+    return self;
+}
+- (BOOL)ensureJITUsableWithinBudget:(NSTimeInterval)budget reason:(NSString *_Nullable *_Nullable)whyOut {
+    (void)budget;
+    self.calls += 1;
+    BOOL usable = (!self.alwaysFail && self.calls > self.failTimes);
+    if (whyOut) *whyOut = self.evidence;
+    return usable;
+}
+- (A2JITReadinessVerdict)lastVerdict {
+    return self.alwaysFail ? self.verdict : A2JITReadinessVerdictUsable;
+}
+- (nullable NSString *)lastEvidence { return self.evidence; }
+- (void)invalidateCache { self.invalidateCalls += 1; }
+@end
 
 #pragma mark - 假的本机事实来源（验证「探测可注入」）
 
@@ -462,6 +546,442 @@ static void testCoordinator(void) {
     ok(ranDeliver && ranVerify && ranVM, @"启动链三步都跑到");
 }
 
+#pragma mark - ⑥ [JIT-IMPL-2] 判据分流（A2JITVerdictGuidance）
+
+static void testVerdictGuidance(void) {
+    printf("\n=== ⑥ 判据分流（A2JITVerdictGuidance：7 档不混为一谈）===\n");
+
+    ok([A2JITVerdictGuidance isUsable:A2JITReadinessVerdictUsable], @"Usable → isUsable = YES");
+    ok(![A2JITVerdictGuidance isUsable:A2JITReadinessVerdictNotServiced], @"NotServiced → isUsable = NO");
+    ok(![A2JITVerdictGuidance isUsable:A2JITReadinessVerdictLegacySentinel], @"LegacySentinel → isUsable = NO");
+    ok(![A2JITVerdictGuidance isUsable:A2JITReadinessVerdictNotExecutable], @"NotExecutable → isUsable = NO");
+
+    eqInt([A2JITVerdictGuidance failureReasonForVerdict:A2JITReadinessVerdictUsable],
+          A2JITFailureReasonNone, @"Usable → 状态机原因 None");
+    eqInt([A2JITVerdictGuidance failureReasonForVerdict:A2JITReadinessVerdictNotServiced],
+          A2JITFailureReasonActivationFailed, @"NotServiced → ActivationFailed");
+    eqInt([A2JITVerdictGuidance failureReasonForVerdict:A2JITReadinessVerdictLegacySentinel],
+          A2JITFailureReasonActivationFailed, @"LegacySentinel → ActivationFailed");
+
+    // ★原因 / 动作 key 必须一档一个★（否则「四种原因四种动作」退化成万能文案）
+    NSMutableSet<NSString *> *reasonKeys = [NSMutableSet set];
+    NSMutableSet<NSString *> *actionKeys = [NSMutableSet set];
+    for (NSInteger v = A2JITReadinessVerdictUnknown; v <= A2JITReadinessVerdictNotExecutable; v++) {
+        NSString *rk = [A2JITVerdictGuidance reasonKeyForVerdict:(A2JITReadinessVerdict)v];
+        NSString *ak = [A2JITVerdictGuidance actionKeyForVerdict:(A2JITReadinessVerdict)v];
+        ok(rk.length > 0, [NSString stringWithFormat:@"verdict %ld 有原因 key", (long)v]);
+        ok(ak.length > 0, [NSString stringWithFormat:@"verdict %ld 有动作 key", (long)v]);
+        [reasonKeys addObject:rk];
+        [actionKeys addObject:ak];
+    }
+    eqInt((NSInteger)reasonKeys.count, 7, @"★7 档原因 key 互不相同★");
+    eqInt((NSInteger)actionKeys.count, 7, @"★7 档动作 key 互不相同★");
+
+    ok([A2JITVerdictGuidance diagnosticForVerdict:A2JITReadinessVerdictLegacySentinel].length > 0,
+       @"诊断短语非空");
+    ok([[A2JITVerdictGuidance displayNameForVerdict:A2JITReadinessVerdictNoMapping] isEqualToString:@"NoMapping"],
+       @"英文名稳定（日志可搜）");
+
+    // 默认可见日志行：Provider / 档位 / verdict / 取证
+    NSString *line = [A2JITVerdictGuidance logLineWithProvider:@"外部工具"
+                                                     strategy:A2JITStrategyBuiltInManual
+                                                      verdict:A2JITReadinessVerdictNotServiced
+                                                     evidence:@"brk #0x69 未服务"];
+    ok([line hasPrefix:@"[A2JIT]"], @"日志行以 [A2JIT] 开头");
+    ok([line containsString:@"provider=外部工具"], @"日志行含 Provider 名");
+    ok([line containsString:@"verdict=NotServiced"], @"日志行含 verdict");
+    ok([line containsString:@"brk #0x69 未服务"], @"日志行含取证摘要");
+}
+
+#pragma mark - ⑦ [JIT-IMPL-2] 四语文案（A2JITStrings）
+
+static void testStrings(void) {
+    printf("\n=== ⑦ 四语文案（A2JITStrings：zh-Hans / zh-Hant / en / ja）===\n");
+
+    NSArray<NSString *> *codes = [A2JITStrings allLanguageCodes];
+    eqInt((NSInteger)codes.count, 4, @"四门语言");
+    ok([codes containsObject:@"zh-Hans"] && [codes containsObject:@"zh-Hant"] &&
+       [codes containsObject:@"en"] && [codes containsObject:@"ja"], @"语言代码齐备");
+
+    NSArray<NSString *> *keys = [A2JITStrings allKeys];
+    ok(keys.count >= 30, @"文案 key 数量 >= 30");
+
+    // ★四语齐全★：每个 key × 每门语言都必须非空
+    NSMutableArray<NSString *> *missing = [NSMutableArray array];
+    for (NSString *key in keys) {
+        for (NSInteger li = A2JITLanguageZhHans; li <= A2JITLanguageJapanese; li++) {
+            NSString *s = [A2JITStrings stringForKey:key language:(A2JITLanguage)li];
+            if (s.length == 0) {
+                [missing addObject:[NSString stringWithFormat:@"%@ / %@", key,
+                                    [A2JITStrings codeForLanguage:(A2JITLanguage)li]]];
+            }
+        }
+    }
+    if (missing.count) {
+        printf("        缺文案：%s\n", [[missing componentsJoinedByString:@", "] UTF8String]);
+    }
+    eqInt((NSInteger)missing.count, 0, @"★每个 key 在四语里都存在且非空★");
+
+    // 判据分流用的 14 个 key 必须都在表里
+    for (NSInteger v = A2JITReadinessVerdictUnknown; v <= A2JITReadinessVerdictNotExecutable; v++) {
+        NSString *rk = [A2JITVerdictGuidance reasonKeyForVerdict:(A2JITReadinessVerdict)v];
+        NSString *ak = [A2JITVerdictGuidance actionKeyForVerdict:(A2JITReadinessVerdict)v];
+        ok([keys containsObject:rk], [NSString stringWithFormat:@"表里有原因 key：%@", rk]);
+        ok([keys containsObject:ak], [NSString stringWithFormat:@"表里有动作 key：%@", ak]);
+    }
+
+    // 简体下 7 档原因文案必须互不相同（按 verdict 分流，不是同句复用）
+    NSMutableSet<NSString *> *zhReasons = [NSMutableSet set];
+    for (NSInteger v = A2JITReadinessVerdictUnknown; v <= A2JITReadinessVerdictNotExecutable; v++) {
+        [zhReasons addObject:[A2JITStrings stringForKey:[A2JITVerdictGuidance reasonKeyForVerdict:(A2JITReadinessVerdict)v]
+                                              language:A2JITLanguageZhHans]];
+    }
+    eqInt((NSInteger)zhReasons.count, 7, @"★简体：7 档原因文案互不相同★");
+
+    ok([A2JITStrings stringForKey:@"jit.row.status"].length > 0, @"按系统语言取文案非空");
+    ok([[A2JITStrings stringForKey:@"no.such.key"] isEqualToString:@"no.such.key"], @"缺 key 回退为 key 本身（不返回空串）");
+    ok([A2JITStrings stringForKey:@"jit.row.status" language:A2JITLanguageJapanese].length > 0, @"指定语言取文案");
+    eqStr([A2JITStrings codeForLanguage:A2JITLanguageZhHant], @"zh-Hant", @"codeForLanguage 映射");
+    eqStr([A2JITStrings displayNameForLanguage:A2JITLanguageEnglish], @"en", @"displayNameForLanguage 映射");
+}
+
+#pragma mark - ⑧ [JIT-IMPL-2] 配对文件导入 / 落盘 / 记录
+
+static void testPairingFileStore(void) {
+    printf("\n=== ⑧ 配对文件导入（A2JITPairingFileStore：校验 → 落盘 → 记录）===\n");
+
+    NSString *dir = TempDir();
+    A2JITPairingFileStore *store = [[A2JITPairingFileStore alloc] initWithDirectory:dir];
+
+    ok(!store.hasUsablePairingFile, @"空目录 → 未就绪");
+    ok(store.importedFilePath == nil, @"空目录 → 无路径");
+    ok(store.importedMetadata == nil, @"空目录 → 无元数据");
+
+    NSData *good = PlistData(RemotePairingSample());
+    NSError *err = nil;
+    NSString *path = [store importData:good sourceName:@"StikDebug-pairing.mobiledevicepairing" error:&err];
+    ok(path != nil, @"合法配对文件导入成功");
+    ok([NSFileManager.defaultManager fileExistsAtPath:path], @"文件真的落盘了");
+    eqStr([path lastPathComponent], @"pairingFile.plist", @"落盘用约定文件名");
+    ok(store.hasUsablePairingFile, @"导入后 → 就绪（真的解析了一遍）");
+
+    NSDictionary<NSString *, id> *meta = store.importedMetadata;
+    ok(meta != nil, @"写了元数据");
+    eqStr(meta[A2JITPairingFileStoreSourceNameKey], @"StikDebug-pairing.mobiledevicepairing", @"元数据：来源文件名");
+    ok([meta[A2JITPairingFileStoreImportedAtKey] isKindOfClass:NSDate.class], @"元数据：导入时间");
+    eqStr(meta[A2JITPairingFileStoreChecksumKey], [A2JITPairingFileStore sha256HexOfData:good], @"元数据：SHA-256");
+    eqInt([meta[A2JITPairingFileStoreByteSizeKey] integerValue], (NSInteger)good.length, @"元数据：字节数");
+    eqStr(meta[A2JITPairingFileStoreFormatKey], @"RemotePairing", @"元数据：格式");
+    eqStr(meta[A2JITPairingFileStoreDeviceIdentifierKey], @"00008030-001A2B3C4D5E6F70", @"元数据：设备标识");
+
+    // SHA-256 已知向量（防止「写了个假的校验和」）
+    NSData *abc = [@"abc" dataUsingEncoding:NSUTF8StringEncoding];
+    eqStr([A2JITPairingFileStore sha256HexOfData:abc],
+          @"ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad", @"SHA-256(abc) 已知向量");
+    ok([A2JITPairingFileStore sha256HexOfData:[NSData data]] == nil, @"空数据 → SHA-256 = nil");
+
+    // 垃圾 / 空文件必须被拒（且不破坏已导入的那份）
+    err = nil;
+    ok([store importData:[@"<not a pairing file>" dataUsingEncoding:NSUTF8StringEncoding]
+              sourceName:@"junk.txt"
+                   error:&err] == nil, @"垃圾文件被拒");
+    eqInt(err.code, A2JITPairingFileStoreErrorInvalidPairingFile, @"垃圾文件错误码 = InvalidPairingFile");
+    err = nil;
+    ok([store importData:[NSData data] sourceName:nil error:&err] == nil, @"空文件被拒");
+    eqInt(err.code, A2JITPairingFileStoreErrorInvalidPairingFile, @"空文件错误码");
+    ok(store.hasUsablePairingFile, @"被拒后，原来导入的那份仍在");
+
+    // 移除（「重试」用）
+    err = nil;
+    ok([store removeImportedPairingFileWithError:&err], @"移除成功");
+    ok(!store.hasUsablePairingFile, @"移除后 → 未就绪");
+    ok(![NSFileManager.defaultManager fileExistsAtPath:path], @"文件真的删了");
+
+    // ★约定位置必须与事实探测的候选表一致★（否则「导入了但探测说没有」）
+    BOOL inCandidates = NO;
+    for (NSString *p in [A2JITLocalFactsSource candidatePairingFilePaths]) {
+        if ([p hasSuffix:@"Application Support/Pairing/pairingFile.plist"]) {
+            inCandidates = YES;
+        }
+    }
+    ok(inCandidates, @"★约定目录 + 文件名落在 A2JITLocalFactsSource 候选表里★");
+    ok([[A2JITPairingFileStore defaultDirectory] hasSuffix:@"Application Support/Pairing"],
+       @"默认目录 = Library/Application Support/Pairing");
+}
+
+#pragma mark - ⑨ [JIT-IMPL-2] 外部工具：拉起 + 有界等待 + 轮询判据
+
+static A2JITFacts *FactsEnabler(NSInteger maj, NSInteger min, BOOL installed) {
+    return [A2JITFacts factsWithOSMajorVersion:maj
+                                  minorVersion:min
+                                   environment:A2JITEnvironmentKindPlain
+                      hasImportedPairingFile:NO
+                 hasExternalEnablerInstalled:installed
+                              hasGetTaskAllow:NO
+                        hasDynamicCodesigning:NO];
+}
+
+static void testExternalToolProvider(void) {
+    printf("\n=== ⑨ 外部工具（A2JITExternalToolProvider：拉起 → 有界等待 → 轮询判据）===\n");
+
+    // ---- ① 未安装：整条路径不可用（不展示 / 置灰 + 写「未安装」）----
+    FakeLauncher *l0 = [[FakeLauncher alloc] init];
+    A2JITExternalToolProvider *p0 =
+        [[A2JITExternalToolProvider alloc] initWithFacts:FactsEnabler(18, 0, NO)
+                                                launcher:l0
+                                                   probe:[[FakeProbe alloc] init]
+                                              waitBudget:0.2
+                                            pollInterval:0.02];
+    ok(!p0.isAvailable, @"未安装 → isAvailable = NO（编排层不选它）");
+    ok(!p0.isPairingReady, @"未安装 → isPairingReady = NO");
+    NSError *err = nil;
+    ok(![p0 activateJITWithError:&err], @"未安装 → 开启失败");
+    ok([err.localizedDescription containsString:@"未安装"], @"错误文案点名「未安装」");
+    eqInt((NSInteger)l0.openedURLs.count, 0, @"未安装 → ★不尝试拉起★");
+
+    // ---- ② 已安装 + 前两发判据未通过、第三发通过 ⇒ 成功 ----
+    FakeLauncher *l1 = [[FakeLauncher alloc] init];
+    [l1.openableSchemes addObject:@"stikdebug"];
+    FakeProbe *probe1 = [[FakeProbe alloc] init];
+    probe1.failTimes = 2;
+    A2JITExternalToolProvider *p1 =
+        [[A2JITExternalToolProvider alloc] initWithFacts:FactsEnabler(18, 2, YES)
+                                                launcher:l1
+                                                   probe:probe1
+                                              waitBudget:5.0
+                                            pollInterval:0.01];
+    ok(p1.isAvailable, @"已安装 → isAvailable = YES");
+    eqStr(p1.firstLaunchableURL.absoluteString, @"stikdebug://enable-jit", @"首选拉起 URL = stikdebug://enable-jit");
+    err = nil;
+    ok([p1 activateJITWithError:&err], @"轮询到判据通过 → 开启成功");
+    eqInt((NSInteger)l1.openedURLs.count, 1, @"只拉起一次");
+    eqStr(l1.openedURLs.firstObject.absoluteString, @"stikdebug://enable-jit", @"拉起的 URL 正确");
+    eqInt(probe1.calls, 3, @"★轮询判据 3 次（前两发未通过）★");
+    ok(probe1.invalidateCalls >= 1, @"拉起前先作废判据缓存（从外部工具切回前台）");
+    eqInt(p1.lastVerdict, A2JITReadinessVerdictUsable, @"成功后 verdict = Usable");
+
+    // ---- ③ 恒不可用 ⇒ 超时即失败（★有界，不无限等★）----
+    FakeLauncher *l2 = [[FakeLauncher alloc] init];
+    [l2.openableSchemes addObject:@"sidestore"];
+    FakeProbe *probe2 = [[FakeProbe alloc] init];
+    probe2.alwaysFail = YES;
+    probe2.verdict = A2JITReadinessVerdictLegacySentinel;
+    probe2.evidence = @"brk #0x69 返回 legacy 哨兵 0xE0000069";
+    A2JITExternalToolProvider *p2 =
+        [[A2JITExternalToolProvider alloc] initWithFacts:FactsEnabler(17, 5, YES)
+                                                launcher:l2
+                                                   probe:probe2
+                                              waitBudget:0.15
+                                            pollInterval:0.02];
+    NSDate *t0 = [NSDate date];
+    err = nil;
+    ok(![p2 activateJITWithError:&err], @"恒不可用 → 开启失败");
+    NSTimeInterval spent = -[t0 timeIntervalSinceNow];
+    ok(spent < 1.0, @"★有界等待：耗时 < 1s（超时即失败）★");
+    ok(spent >= 0.10, @"确实等过一段预算（不是立即返回）");
+    ok([err.localizedDescription containsString:@"超时"], @"错误文案点名「超时」");
+    ok([err.localizedDescription containsString:@"0xE0000069"], @"★失败文案按 verdict 分流（legacy 哨兵）★");
+    eqInt(p2.lastVerdict, A2JITReadinessVerdictLegacySentinel, @"记录最后 verdict");
+    ok([p2.lastEvidence containsString:@"0xE0000069"], @"记录最后取证");
+
+    // ---- ④ 装了但 scheme 打不开（白名单没登记）----
+    FakeLauncher *l3 = [[FakeLauncher alloc] init];   // openableSchemes 为空
+    A2JITExternalToolProvider *p3 =
+        [[A2JITExternalToolProvider alloc] initWithFacts:FactsEnabler(18, 0, YES)
+                                                launcher:l3
+                                                   probe:[[FakeProbe alloc] init]
+                                              waitBudget:0.2
+                                            pollInterval:0.02];
+    ok(p3.firstLaunchableURL == nil, @"都打不开时 firstLaunchableURL = nil");
+    err = nil;
+    ok(![p3 activateJITWithError:&err], @"无可拉起 scheme → 失败");
+    ok([err.localizedDescription containsString:@"LSApplicationQueriesSchemes"], @"错误文案指向白名单");
+
+    // ---- ⑤ 拉起请求本身失败 ----
+    FakeLauncher *l4 = [[FakeLauncher alloc] init];
+    [l4.openableSchemes addObject:@"stikdebug"];
+    l4.openResult = NO;
+    A2JITExternalToolProvider *p4 =
+        [[A2JITExternalToolProvider alloc] initWithFacts:FactsEnabler(18, 0, YES)
+                                                launcher:l4
+                                                   probe:[[FakeProbe alloc] init]
+                                              waitBudget:0.2
+                                            pollInterval:0.02];
+    err = nil;
+    ok(![p4 activateJITWithError:&err], @"拉起失败 → 开启失败");
+    ok([err.localizedDescription containsString:@"拉起"], @"错误文案点名拉起失败");
+
+    // ---- ⑥ 装配缺失（无判据内核）⇒ ★不假装成功★ ----
+    A2JITExternalToolProvider *p5 =
+        [[A2JITExternalToolProvider alloc] initWithFacts:FactsEnabler(18, 0, YES)
+                                                launcher:[[FakeLauncher alloc] init]
+                                                   probe:nil
+                                              waitBudget:0.2
+                                            pollInterval:0.02];
+    err = nil;
+    ok(![p5 activateJITWithError:&err], @"无判据内核 → 开启失败（不假装成功）");
+    ok([err.localizedDescription containsString:@"未注入"], @"文案说明装配缺失");
+
+    // ---- ⑦ 取配对：已安装即就绪 ----
+    err = nil;
+    ok([p1 preparePairingWithError:&err], @"已安装 → 取配对成功");
+    err = nil;
+    ok(![p0 preparePairingWithError:&err], @"未安装 → 取配对失败");
+
+    // 默认预算/轮询可读（设置页据此提示「最多等 N 秒」）
+    A2JITExternalToolProvider *pDefault =
+        [[A2JITExternalToolProvider alloc] initWithFacts:FactsEnabler(18, 0, YES) launcher:nil probe:nil waitBudget:0 pollInterval:0];
+    ok(pDefault.activationWaitBudget >= 10.0, @"默认等待预算合理（>=10s）");
+    ok(pDefault.pollInterval > 0, @"默认轮询间隔 > 0");
+}
+
+#pragma mark - ⑩ [JIT-IMPL-2] 导入配对：就绪真探测 + 真调判据
+
+static void testImportedPairingProvider(void) {
+    printf("\n=== ⑩ 导入配对（A2JITImportedPairingProvider：真探测 + 真调判据）===\n");
+
+    NSString *dir = TempDir();
+    A2JITPairingFileStore *store = [[A2JITPairingFileStore alloc] initWithDirectory:dir];
+    A2JITFacts *f26 = [A2JITFacts factsWithOSMajorVersion:26 minorVersion:0
+                                              environment:A2JITEnvironmentKindPlain
+                                 hasImportedPairingFile:NO
+                            hasExternalEnablerInstalled:NO
+                                         hasGetTaskAllow:NO
+                                   hasDynamicCodesigning:NO];
+
+    FakeProbe *probe = [[FakeProbe alloc] init];   // failTimes = 0 ⇒ 首次即通过
+    A2JITImportedPairingProvider *p =
+        [[A2JITImportedPairingProvider alloc] initWithFacts:f26 store:store probe:probe];
+    eqInt(p.kind, A2JITProviderKindImportedPairing, @"kind = 导入配对");
+    ok(p.isAvailable, @"iOS 26 → isAvailable = YES（17.4+ 路径）");
+    ok(!p.isPairingReady, @"未导入 → 未就绪（★真探测，不是恒 NO 也不是恒 YES★）");
+    ok(p.pairingFilePath == nil, @"未导入 → 无路径");
+    eqInt(p.lastVerdict, A2JITReadinessVerdictUnknown, @"初始 verdict = Unknown");
+
+    NSError *err = nil;
+    ok(![p preparePairingWithError:&err], @"无文件 → 取配对失败");
+    ok([err.localizedDescription containsString:@"导入"], @"失败文案指向「导入」");
+
+    NSString *path = [store importData:PlistData(RemotePairingSample()) sourceName:@"from-StikDebug.plist" error:&err];
+    ok(path != nil, @"导入配对文件成功");
+    ok(p.isPairingReady, @"导入后 → 就绪（★真的去容器里找 + 解析★）");
+    eqStr(p.pairingFilePath, path, @"路径来自 A2JITPairingFileStore");
+    ok([p preparePairingWithError:&err], @"就绪 → 取配对成功");
+
+    // ★真调判据：判据未通过 ⇒ 失败，且文案按 verdict 分流★
+    FakeProbe *probeFail = [[FakeProbe alloc] init];
+    probeFail.alwaysFail = YES;
+    probeFail.verdict = A2JITReadinessVerdictNotServiced;
+    probeFail.evidence = @"brk #0x69 未被服务（无调试器应答）";
+    A2JITImportedPairingProvider *pFail =
+        [[A2JITImportedPairingProvider alloc] initWithFacts:f26 store:store probe:probeFail];
+    err = nil;
+    ok(![pFail activateJITWithError:&err], @"判据未通过 → 开启失败");
+    eqInt(pFail.lastVerdict, A2JITReadinessVerdictNotServiced, @"记录 verdict = NotServiced");
+    eqStr(pFail.lastEvidence, @"brk #0x69 未被服务（无调试器应答）", @"记录取证");
+    ok([err.localizedDescription containsString:@"brk #0x69"], @"★失败文案按 verdict 分流★");
+    ok(probeFail.calls >= 1, @"★真的调了判据内核（ensureJITUsableWithinBudget）★");
+
+    // 判据通过 ⇒ 成功
+    err = nil;
+    ok([p activateJITWithError:&err], @"判据通过 → 开启成功");
+    eqInt(p.lastVerdict, A2JITReadinessVerdictUsable, @"verdict = Usable");
+    ok(probe.calls >= 1, @"判据被调用");
+
+    // 未注入判据 ⇒ ★如实失败，不假装成功★
+    A2JITImportedPairingProvider *pNil =
+        [[A2JITImportedPairingProvider alloc] initWithFacts:f26 store:store probe:nil];
+    err = nil;
+    ok(![pNil activateJITWithError:&err], @"无判据内核 → 开启失败（不假装成功）");
+
+    // iOS 17.5（无内置 helper）⇒ 归一为「交给外部工具」
+    A2JITFacts *f175 = [A2JITFacts factsWithOSMajorVersion:17 minorVersion:5
+                                               environment:A2JITEnvironmentKindPlain
+                                  hasImportedPairingFile:YES
+                             hasExternalEnablerInstalled:NO
+                                          hasGetTaskAllow:NO
+                                    hasDynamicCodesigning:NO];
+    A2JITImportedPairingProvider *p175 =
+        [[A2JITImportedPairingProvider alloc] initWithFacts:f175 store:store probe:probe];
+    err = nil;
+    ok(![p175 activateJITWithError:&err], @"17.5 无内置开启 → 失败");
+    ok([err.localizedDescription containsString:@"外部工具"], @"文案指向外部工具");
+}
+
+#pragma mark - ⑪ [JIT-IMPL-2] 接线不变量（跨层镜像 / 白名单 / 分层纪律）
+
+static void testWiringInvariants(void) {
+    printf("\n=== ⑪ 接线不变量（镜像 / 白名单 / 分层 / 真调证据）===\n");
+
+    // ① A2JITReadinessVerdict 必须与 A2JITRegionVerdict 逐值相等
+    //   （编译期另有 Bridge 里的 _Static_assert 兜底；这里再跑一遍运行期断言）
+    eqInt((NSInteger)A2JITReadinessVerdictUnknown,        (NSInteger)A2JITRegionVerdictUnknown,        @"镜像：Unknown");
+    eqInt((NSInteger)A2JITReadinessVerdictUsable,         (NSInteger)A2JITRegionVerdictUsable,         @"镜像：Usable");
+    eqInt((NSInteger)A2JITReadinessVerdictNotServiced,    (NSInteger)A2JITRegionVerdictNotServiced,    @"镜像：NotServiced");
+    eqInt((NSInteger)A2JITReadinessVerdictLegacySentinel, (NSInteger)A2JITRegionVerdictLegacySentinel, @"镜像：LegacySentinel");
+    eqInt((NSInteger)A2JITReadinessVerdictNoMapping,      (NSInteger)A2JITRegionVerdictNoMapping,      @"镜像：NoMapping");
+    eqInt((NSInteger)A2JITReadinessVerdictZeroSize,       (NSInteger)A2JITRegionVerdictZeroSize,       @"镜像：ZeroSize");
+    eqInt((NSInteger)A2JITReadinessVerdictNotExecutable,  (NSInteger)A2JITRegionVerdictNotExecutable,  @"镜像：NotExecutable");
+
+    // ② 登记的 scheme 必须与 Info.plist 白名单一致（两处同源，防漂移）
+    NSData *plistData = [NSData dataWithContentsOfFile:RepoPath(@"Air2/Info.plist")];
+    ok(plistData.length > 0, @"读得到 Air2/Info.plist");
+    NSDictionary *plist = [NSPropertyListSerialization propertyListWithData:plistData
+                                                                   options:0
+                                                                    format:NULL
+                                                                     error:NULL];
+    NSArray<NSString *> *whitelist = plist[@"LSApplicationQueriesSchemes"];
+    NSArray<NSString *> *registered = [A2JITExternalToolProvider registeredToolSchemes];
+    ok(whitelist.count > 0, @"Info.plist 有 LSApplicationQueriesSchemes");
+    eqInt((NSInteger)whitelist.count, (NSInteger)registered.count, @"白名单条数 = 登记条数");
+    for (NSString *scheme in registered) {
+        ok([whitelist containsObject:scheme],
+           [NSString stringWithFormat:@"Info.plist 已登记 scheme：%@", scheme]);
+    }
+
+    // ③ 分层纪律：Player 的 .m 一处都不得 import Natives 判据头（只能经 Bridge）
+    NSString *playerDir = RepoPath(@"Air2/Player");
+    NSArray<NSString *> *files = [NSFileManager.defaultManager contentsOfDirectoryAtPath:playerDir error:NULL];
+    NSInteger leaks = 0;
+    NSInteger implCount = 0;
+    for (NSString *f in files) {
+        if (![f hasSuffix:@".m"]) {
+            continue;
+        }
+        implCount++;
+        NSString *src = [NSString stringWithContentsOfFile:[playerDir stringByAppendingPathComponent:f]
+                                                  encoding:NSUTF8StringEncoding
+                                                     error:NULL];
+        if ([src containsString:@"#import \"A2JITEnvironment.h\""]) {
+            leaks++;
+            printf("        ★Player 越界 import：%s\n", f.UTF8String);
+        }
+    }
+    ok(implCount >= 10, @"扫到 Player 的多个 .m 文件");
+    eqInt(leaks, 0, @"★Player 无一处 import Natives 判据头（单向分层）★");
+
+    // ④ Bridge 才是「真调判据」的落点：必须 import 判据头并真的调用它
+    NSString *bridgeSrc = [NSString stringWithContentsOfFile:RepoPath(@"Air2/Bridge/A2JITEnvironmentProbe.m")
+                                                   encoding:NSUTF8StringEncoding
+                                                      error:NULL];
+    ok(bridgeSrc.length > 0, @"读得到 Bridge 的 probe 实现");
+    ok([bridgeSrc containsString:@"#import \"A2JITEnvironment.h\""], @"Bridge probe import 判据头");
+    ok([bridgeSrc containsString:@"[A2JITEnvironment ensureVerifiedWithinBudget:"],
+       @"★Bridge 真的调了 A2JITEnvironment.ensureVerifiedWithinBudget:（真调判据）★");
+    ok([bridgeSrc containsString:@"lastRegionVerdict"], @"Bridge 读真 verdict");
+    ok([bridgeSrc containsString:@"regionEvidence"], @"Bridge 读取证文本");
+
+    // ⑤ 设置页接线（源码级断言：文案 / 选择器 / 判据内核都真的接上了）
+    NSString *settingsSrc = [NSString stringWithContentsOfFile:RepoPath(@"Air2/UI/Screens/Settings/A2JITSettings.m")
+                                                      encoding:NSUTF8StringEncoding
+                                                         error:NULL];
+    ok(settingsSrc.length > 0, @"读得到设置页实现");
+    ok([settingsSrc containsString:@"UIDocumentPickerViewController"], @"设置页接入系统文档选择器");
+    ok([settingsSrc containsString:@"A2JITEnvironmentProbe"], @"设置页注入真判据内核");
+    ok([settingsSrc containsString:@"A2JITStrings"], @"设置页使用四语文案表");
+    ok([settingsSrc containsString:@"dispatch_get_global_queue"], @"开启动作在后台队列（不卡界面）");
+}
+
 #pragma mark - main
 
 int main(int argc, const char *argv[]) {
@@ -474,6 +994,12 @@ int main(int argc, const char *argv[]) {
         testStateMachine();
         testFactsProbe();
         testCoordinator();
+        testVerdictGuidance();
+        testStrings();
+        testPairingFileStore();
+        testExternalToolProvider();
+        testImportedPairingProvider();
+        testWiringInvariants();
 
         printf("\n----------------------------------------\n");
         printf("TOTAL pass=%d fail=%d\n", gPass, gFail);

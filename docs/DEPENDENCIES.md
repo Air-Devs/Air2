@@ -79,6 +79,24 @@
 走「源码 + CI 构建」。iOS 27 自动配对另需 Info.plist 的 `NSLocalNetworkUsageDescription` 与
 `NSBonjourServices`（本单未改 Info.plist）。
 
+### [JIT-IMPL-2] 外部工具（★仍零 vendor★）
+
+本单**没有引入任何第三方代码/二进制**。②导入 / ③外部 / ④内核 三条取得路径的实现全部自研，
+外部使能器只经 **URL scheme** 触达（外部 App，用户自装）：
+
+| 名称 | 版本 | 来源 | 许可 | 用途 | 引入方式 |
+|---|---|---|---|---|---|
+| StikDebug（外部 App） | — | https://github.com/StikDebug/StikDebug | AGPL-3.0（★只可当外部 App★） | `stikdebug://enable-jit` 拉起 | 外部依赖（用户自装，**不 vendor**） |
+| SideStore（外部 App） | — | https://github.com/SideStore/SideStore | 见上游 | `sidestore://` 拉起 | 外部依赖（用户自装，**不 vendor**） |
+
+上游依赖已由 ②/④ 带入 registry：`stikdebug` / `stikjit` / `sidestore` / `stosdebug`
+（见 `Air2/Info.plist` 的 `LSApplicationQueriesSchemes`；★清单唯一真相源★ =
+`A2JITExternalToolProvider.registeredToolSchemes`，`tests/JIT` 会逐项比对防漂移）。
+
+**判据内核**：`Natives/Support/A2JITEnvironment`（★仓内自研★，搬运自 `feat/runtime-native`，
+许可随本项目 GPL-3.0-or-later，见 `LICENSE`）——本单只接线，不改其语义。
+**合规复核**：本单**未**引入 StikJIT(MPL-2.0) / idevice(MIT) / SideInstaller(禁抄) 的任何代码。
+
 ## 运行时(启动链)
 
 | 名称 | 版本 | 来源 | 许可 | 用途 | 引入方式 |

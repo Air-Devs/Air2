@@ -46,6 +46,10 @@ FOUNDATION_EXPORT NSString *const A2JITProviderErrorDomain;
 /// 构造一个「能力已检测、机制尚未接入」的错误（占位实现统一用它，便于日志分流）。
 FOUNDATION_EXPORT NSError *A2JITProviderNotImplementedError(NSString *reason);
 
+/// [JIT-IMPL-2] 构造一个「机制已接入、本次【真实执行】失败」的错误
+/// （真调判据未通过 / 拉起超时 / 文件未导入等用它；与「未接入」区分开）。
+FOUNDATION_EXPORT NSError *A2JITProviderFailureError(NSString *reason);
+
 /// 【注入点】单条 JIT 取得路径。
 ///
 /// UI / 编排层只面对本协议；真机实现经 Bridge 落到 Natives/Support。

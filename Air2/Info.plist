@@ -105,6 +105,21 @@
     <key>LSSupportsOpeningDocumentsInPlace</key>
     <true/>
 
+    <!-- ============================================================
+         JIT 外部工具 URL scheme 白名单 [JIT-IMPL-2]
+         canOpenURL: 只对登记在此的 scheme 返回 YES（未登记会被系统静默拒绝）。
+         ★清单唯一真相源★ = A2JITExternalToolProvider.registeredToolSchemes
+         （tests/JIT 会读本文件逐项比对，防两处漂移）。
+         这些都是【外部 App】，本仓不 vendor、不派生其代码（见 docs/DEPENDENCIES.md）。
+         ============================================================ -->
+    <key>LSApplicationQueriesSchemes</key>
+    <array>
+        <string>stikdebug</string>
+        <string>stikjit</string>
+        <string>sidestore</string>
+        <string>stosdebug</string>
+    </array>
+
     <!-- 相册访问：自定义背景选图 -->
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Air2 需要访问相册，以便你选择一张图片作为启动器背景。</string>

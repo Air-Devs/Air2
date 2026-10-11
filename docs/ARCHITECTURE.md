@@ -191,7 +191,24 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 | `Air2/Player/A2JIT*`（Provider/Facts/StrategySelector/StateMachine/Coordinator/LocalFactsSource + 四路 Provider） | Player | JIT 供给编排（纯逻辑，可单测；见 ADR-009 / `docs/JIT-PROVISIONING.md`） |
 | `Air2/Player/A2PairingFile.[hm]` | Player | 配对文件解析与校验（纯 Foundation，可单测） |
 
-**来源**：原 Amethyst 线 `Natives/runtime/*` 的 P1 实现 + P1 之后修复（G1–G7 `[VS-GAP]`、
+### JIT 判据接线与取得路径真实现 —— [JIT-IMPL-2]
+
+依赖严格单向（App → UI → Player → Core → Bridge → Natives）。★Natives 只收已解析参数、不感知版本/账号★；
+★Bridge 是唯一与 Natives 相邻的层★，所以「跨到 Natives 取 JIT 判据」只能发生在 Bridge。
+
+| 文件 | 层 | 职责 |
+|---|---|---|
+| `Air2/Player/A2JITReadinessProbe.h` | Player | 判据注入缝（协议）+ `A2JITReadinessVerdict`（逐值镜像 Natives 的 `A2JITRegionVerdict`）|
+| `Air2/Player/A2JITExternalToolLauncher.h` | Player | 外部工具拉起缝（协议）|
+| `Air2/Player/A2JITVerdictGuidance.[hm]` | Player | 判据分流表：verdict → 失败原因 / 动作 / 本地化 key / 日志行 |
+| `Air2/Player/A2JITStrings.[hm]` | Player | JIT 面板四语文案表（zh-Hans / zh-Hant / en / ja）|
+| `Air2/Player/A2JITPairingFileStore.[hm]` | Player | 导入配对文件落盘与记录（容器约定位置；来源/时间/SHA-256/格式/设备标识）|
+| `Air2/Bridge/A2JITEnvironmentProbe.[hm]` | **Bridge** | ★真调判据★：转发 `Natives/Support/A2JITEnvironment`（`ensureVerifiedWithinBudget:reason:` + 实时 verdict/取证）|
+| `Air2/UI/Components/A2JITSystemToolLauncher.[hm]` | UI | 拉起缝真机实现（`UIApplication` URL scheme；白名单见 `Air2/Info.plist`）|
+
+**来源**：`docs/JIT-PROVISIONING.md` §3.2；判据内核 `Natives/Support/A2JITEnvironment.[hm]`（ADR-007，本单不改其语义）。
+
+**来源（上一节 [RT-CHAIN]）**：原 Amethyst 线 `Natives/runtime/*` 的 P1 实现 + P1 之后修复（G1–G7 `[VS-GAP]`、
 `[RT-STRICT]` 严格回退门、`[RT-NOAGENT]` 切片），逐文件搬入并按 Air2 规范归位。
 
 **启动链开关（Debug）**：设置 → 诊断 → 「运行环境 · 启动链」（写 `NSUserDefaults` key `debug.rt_p1_runtime`）。
