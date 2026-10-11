@@ -10,8 +10,8 @@
 
 | 名称 | 版本 | 来源 | 许可 | 用途 |
 |---|---|---|---|---|
-| Amethyst-iOS-MyRemastered | — | https://github.com/herbrine8403/Amethyst-iOS-MyRemastered | 见上游 | iOS 端 pojav 后端实现参考与复用 |
-| PojavLauncher | — | https://github.com/PojavLauncherTeam/PojavLauncher | GPL-3.0 | 原始启动核心与 Boardwalk 设计 |
+| Amethyst-iOS-MyRemastered | — | https://github.com/herbrine8403/Amethyst-iOS-MyRemastered | 见上游 | iOS 端 pojav 后端**行为/接口参考**（★不随包、不引用其代码★） |
+| PojavLauncher | — | https://github.com/PojavLauncherTeam/PojavLauncher | GPL-3.0 | ★**设计参考**（启动核心分层、Boardwalk 思路）；**Java 侧已换成自研，不再拷其类**★ |
 | ZalithLauncher2 | — | https://github.com/ZalithLauncher/ZalithLauncher2 | GPL-3.0 | 架构分层与功能设计参考 |
 
 ## Java 运行时
@@ -103,3 +103,42 @@
 |---|---|---|---|---|---|
 | libjvm.dylib | JDK 8/17/21/25 | 包内 `java_runtimes/*-openjdk`(OpenJDK 官方构建) | GPL-2.0+CE | JVM 本体 | app_bundle 内随包 |
 | AmethystJIT69.js | 1.0 | 自研(基于上游 UniversalJIT26 的 base+Extension 合并) | 跟随上游 | 服务传统 brk #0x69 交付可执行区 | `Assets/` 静态资源 |
+
+---
+
+## Java 侧自研替换（★替掉 Pojav 传承的 Java 类★）—— [OWN-JAVA]
+
+**变更**：启动核心的 **Java 侧整块换成自研**。原 `runtime_native`（Amethyst/Pojav 线）的
+`JavaApp/src/launcher/net/kdt/pojavlaunch/**`（43 个 .java 中 25 个在此包）与
+`JavaApp/src/lwjgl/org/lwjgl/**`（LWJGL 补丁）**一律不随本仓交付**；
+本仓 `JavaApp/src/launcher/dev/airdevs/air2/launch/**` 为**本单新写**的 9 个类
+（见 `docs/ARCHITECTURE.md` §JavaApp §[OWN-JAVA]、规格 `D:\CTF\_AIR2_OWN_JAVA.md`）。
+
+| 名称 | 版本 | 来源 | 许可 | 用途 | 引入方式 |
+|---|---|---|---|---|---|
+| Air2 Java 启动核心（`air2-launch.jar`） | 1.0 | **本仓自研**（`JavaApp/src/launcher/dev/airdevs/air2/launch/**`） | 随本仓 `LICENSE`（GPL-3.0-or-later） | 入口 / 启动计划消费 / 类路径追加 / 主类派发 | Xcode 脚本阶段编入 `Air2.app/Java/`，不 vendor 第三方 |
+
+**净室口径（★必须如实读★）**
+
+- 新增的 9 个类**没有**逐行搬运 Pojav 的类：包名、类名、文件组织、公开接口全部是新的；
+  它们**没有**实现 Pojav 的业务（版本 JSON 语义、账号、下载、UI）—— 那些留在 native/Core。
+- 但**这不构成法律意义上的「净室」**：实现者（本单）在写之前**读过**老树的
+  `net/kdt/pojavlaunch/**` 以取得**行为/接口约定**（这是任务明确允许的），
+  没有「写规格的人」与「写代码的人」分离，因此**同源代码风险不能被排除**。
+  ⇒ 结论按 GPL 走，不按「重新开发」免罪：本仓整体仍是 **GPL-3.0-or-later**（`LICENSE`/`COPYING`），
+  PojavLauncher 的 GPL-3.0 义务**继续被遵守**，不主张任何额外豁免。
+
+**转换后的剩余 GPL 来源**（本单**未**消除，也不打算在本单消除）
+
+| 来源 | 许可 | 现状 |
+|---|---|---|
+| 本仓整体（含 `Air2/`、`Natives/` 自研代码） | GPL-3.0-or-later | 随包，`LICENSE`/`COPYING` 已随仓 |
+| OpenJDK iOS 构建（`libjvm.dylib`） | GPL-2.0 + Classpath Exception | 随包（层 1 运行时），CE 使「非 GPL 应用」可用 |
+| PojavLauncher / Boardwalk **设计** | GPL-3.0 | ★仅参考，仓内不含其代码★；`Air2/UI/Screens/About/A2LicenseViewController.m` 仍保留对 PojavLauncher 的**署名**（署名不是代码引用） |
+| LWJGL | BSD-3 | 层 2，尚未随包 |
+| Amethyst-iOS-MyRemastered | 见上游 | 仅行为参考，不 vendor |
+
+**未引入**：本单**没有**新增任何第三方库、二进制或源码；`JavaApp/` 无 `libs/`。
+**零 Pojav 判据**：`JavaApp/Makefile` 的 `verify` 目标用 `jar tf` 扫
+`net/kdt/pojavlaunch|Boardwalk`，命中非 0 即构建失败；Xcode 脚本阶段会连带跑它。
+

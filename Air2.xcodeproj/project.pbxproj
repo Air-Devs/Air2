@@ -1009,6 +1009,7 @@
 				E9AC67C993D2511BDAD48561 /* Sources */,
 				B365BE9502C3128F5D540532 /* Frameworks */,
 				483A0E0C9C74F0CBD6A612E6 /* Resources */,
+				CA2D8552372D18FA547FE855 /* Build Java Launch Core */,
 			);
 			buildRules = (
 			);
@@ -1063,6 +1064,24 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		CA2D8552372D18FA547FE855 /* Build Java Launch Core */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Build Java Launch Core";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\ncd \"$SRCROOT/JavaApp\"\nBOOT=$(/usr/libexec/java_home -v 1.8 2>/dev/null || true)\nmake -s all BOOTJDK=\"$BOOT\"\nmake -s verify BOOTJDK=\"$BOOT\"\nDEST=\"$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH/Java\"\nmkdir -p \"$DEST\"\ncp -f build/air2-launch.jar \"$DEST/\"\necho \"note: Java 启动核心 -> $DEST/air2-launch.jar\"\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		E9AC67C993D2511BDAD48561 /* Sources */ = {
@@ -1286,6 +1305,7 @@
 				CODE_SIGN_STYLE = "Automatic";
 				CURRENT_PROJECT_VERSION = "1";
 				DEAD_CODE_STRIPPING = "NO";
+				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1324,6 +1344,7 @@
 				CODE_SIGN_STYLE = "Automatic";
 				CURRENT_PROJECT_VERSION = "1";
 				DEAD_CODE_STRIPPING = "NO";
+				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",

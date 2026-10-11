@@ -34,6 +34,36 @@ NATIVES_INCLUDE_DIRS = [
     "$(SRCROOT)/Natives/Support",
 ]
 
+# ----------------------------------------------------------------------------
+# Java 启动核心（JavaApp/）随包阶段
+# ----------------------------------------------------------------------------
+# 为什么是「脚本阶段」而不是把 jar 列进 Resources 阶段：
+#   jar 是构建产物，生成 pbxproj 时它在磁盘上还不存在，而 collect_resources() 是按
+#   磁盘现状扫描的 —— 列进去会让 verify_pbxproj.py 判「工程声明路径在磁盘上不存在」。
+#   脚本阶段既能把 jar 编出来又能拷进 bundle，且不依赖生成时的文件存在性。
+# 拷贝目标：<Air2.app>/Java/air2-launch.jar（IPA 内为 Payload/Air2.app/Java/…）。
+JAVA_PHASE_NAME = "Build Java Launch Core"
+JAVA_JAR_NAME = "air2-launch.jar"
+JAVA_PHASE_SCRIPT = (
+    "set -e\n"
+    "cd \"$SRCROOT/JavaApp\"\n"
+    "BOOT=$(/usr/libexec/java_home -v 1.8 2>/dev/null || true)\n"
+    "make -s all BOOTJDK=\"$BOOT\"\n"
+    "make -s verify BOOTJDK=\"$BOOT\"\n"
+    "DEST=\"$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH/Java\"\n"
+    "mkdir -p \"$DEST\"\n"
+    "cp -f build/" + JAVA_JAR_NAME + " \"$DEST/\"\n"
+    "echo \"note: Java 启动核心 -> $DEST/" + JAVA_JAR_NAME + "\"\n"
+)
+
+
+def pbx_escape_script(text):
+    """转义 pbxproj 里 shellScript 的字符串字面量（反斜杠、引号、换行、制表）。"""
+    return (text.replace("\\", "\\\\")
+                .replace('"', '\\"')
+                .replace("\n", "\\n")
+                .replace("\t", "\\t"))
+
 # libterracotta 是「可选二进制依赖」（工程内无 libterracotta.xcframework）。
 # A2Multiplayer.m 以 __attribute__((weak)) 声明其 C ABI，但现代 ld64 对
 # 「任何库都不提供」的符号即使声明为 weak 也不放行 ⇒ 链接期须显式 -Wl,-U,<sym>
@@ -299,6 +329,7 @@ def build():
     target = uid("target", PROJECT_NAME)
     sources_phase = uid("phase", "sources")
     resources_phase = uid("phase", "resources")
+    java_phase = uid("phase", "java-launch-core")
     project_obj = uid("project", PROJECT_NAME)
 
     add("/* Begin PBXNativeTarget section */")
@@ -309,6 +340,7 @@ def build():
     add(f"\t\t\t\t{sources_phase} /* Sources */,")
     add(f"\t\t\t\t{frameworks_phase} /* Frameworks */,")
     add(f"\t\t\t\t{resources_phase} /* Resources */,")
+    add(f"\t\t\t\t{java_phase} /* {JAVA_PHASE_NAME} */,")
     add("\t\t\t);")
     add("\t\t\tbuildRules = (")
     add("\t\t\t);")
@@ -372,6 +404,26 @@ def build():
     add("/* End PBXResourcesBuildPhase section */")
     add("")
 
+    # ---------------- PBXShellScriptBuildPhase ----------------
+    # Java 启动核心：编 → 自证（jar 内不得有 Pojav/Boardwalk 类）→ 拷进 Air2.app/Java/。
+    add("/* Begin PBXShellScriptBuildPhase section */")
+    add(f"\t\t{java_phase} /* {JAVA_PHASE_NAME} */ = {{")
+    add("\t\t\tisa = PBXShellScriptBuildPhase;")
+    add("\t\t\talwaysOutOfDate = 1;")
+    add("\t\t\tbuildActionMask = 2147483647;")
+    add("\t\t\tfiles = (")
+    add("\t\t\t);")
+    add("\t\t\tinputPaths = (")
+    add("\t\t\t);")
+    add(f"\t\t\tname = \"{JAVA_PHASE_NAME}\";")
+    add("\t\t\toutputPaths = (")
+    add("\t\t\t);")
+    add("\t\t\trunOnlyForDeploymentPostprocessing = 0;")
+    add("\t\t\tshellPath = /bin/sh;")
+    add(f"\t\t\tshellScript = \"{pbx_escape_script(JAVA_PHASE_SCRIPT)}\";")
+    add("\t\t};")
+    add("/* End PBXShellScriptBuildPhase section */")
+    add("")
 
     # ---------------- PBXSourcesBuildPhase ----------------
     add("/* Begin PBXSourcesBuildPhase section */")
@@ -400,6 +452,9 @@ def build():
                 #   入口整段剥掉，产物包里扫不到（「编了也不进包」）。这里关闭
                 #   dead_strip，确保原生层真正随包；待 Bridge 接线后即可恢复默认。
                 "DEAD_CODE_STRIPPING": "NO",
+                # ★ 脚本阶段要跑 make/javac 并把 jar 写进 .app ⇒ 必须关掉用户脚本沙箱，
+                #   否则 Xcode 26 默认在沙箱里执行脚本，写 $BUILT_PRODUCTS_DIR 会被拒。
+                "ENABLE_USER_SCRIPT_SANDBOXING": "NO",
                 # 原生层头搜索路径（Natives 代码按裸文件名互相引用）。
                 "HEADER_SEARCH_PATHS": "(\n\t\t\t\t\t\"$(inherited)\",\n\t\t\t\t\t"
                     + ",\n\t\t\t\t\t".join('"%s"' % d for d in NATIVES_INCLUDE_DIRS)

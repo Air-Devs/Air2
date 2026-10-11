@@ -109,11 +109,45 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 
 | 路径 | 职责 |
 |---|---|
-| `src/launcher/` | 启动器 Java 代码（主类、参数拼装、类路径） |
-| `src/lwjgl/` | LWJGL 补丁源码（GLFW 回调、输入桥、平台适配） |
+| `src/launcher/` | 启动核心 Java 代码（入口、启动计划消费、类路径追加、主类派发） |
+| `src/lwjgl/` | LWJGL 补丁源码（GLFW 回调、输入桥、平台适配）★层 2，尚未落★ |
 | `libs/` | 预编译 Java 库（不修改的上游 jar） |
 
-产物为 `lwjgl.jar`，由 Xcode 构建阶段复制进 app bundle。
+产物为 `build/air2-launch.jar`（★旧文写的 `lwjgl.jar` 已作废：自研启动核心与 LWJGL 补丁
+是两件事，前者已落、后者未落，共用一个名字会让「哪一半在包里」说不清★），
+由 Xcode 的 `Build Java Launch Core` 脚本阶段（`scripts/gen_xcodeproj.py` 生成）
+编出来并复制到 `Air2.app/Java/`。
+
+### 自研启动核心（Java 侧）—— [OWN-JAVA]
+
+**定位**：native 侧 `a2_launch`（R2/R3/R4/R7）已经把「建 VM、JVM 参数、classpath、资源路径」
+这一整块自研掉了；Java 侧只保留**只有 Java 能做**的最小胶水，且**不承载任何业务**
+（版本 JSON 语义、账号、下载、UI 都不在这里）。
+
+| 文件 | 职责 |
+|---|---|
+| `dev/airdevs/air2/launch/A2Entry.java` | 入口：`a2_run_main` 的派发目标；四步顺序（load 符号宿主 → 落系统属性 → 追加类路径 → 派发主类） |
+| `dev/airdevs/air2/launch/A2LaunchPlan.java` | 启动计划（JSON, schema=1）读取与校验 —— Java 侧唯一输入 |
+| `dev/airdevs/air2/launch/A2Json.java` | 极简 JSON 读取器（自研，避免引入 gson 等第三方库） |
+| `dev/airdevs/air2/launch/A2JvmProperties.java` | 系统属性落地（LWJGL/Vulkan/spvc/libffi/allocator 约定；须在类初始化前） |
+| `dev/airdevs/air2/launch/A2NativeLibrary.java` | 「主可执行文件即 JNI 符号宿主」约定的落地（`System.load`） |
+| `dev/airdevs/air2/launch/A2GameClasspath.java` | 计划里的类路径条目 → URL（**不做通配展开**：那是 R4 的唯一实现） |
+| `dev/airdevs/air2/launch/A2GameClassLoader.java` | 运行期可追加类路径的系统类加载器（`JNI_CreateJavaVM` 之后唯一时机） |
+| `dev/airdevs/air2/launch/A2MainDispatcher.java` | 主类派发（与 `a2_run_main` 同语义），解包 `InvocationTargetException` |
+| `dev/airdevs/air2/launch/A2LaunchFailure.java` | 启动期失败类型（带可读原因，供 failbanner 分流） |
+
+**分工边界（为什么只有这样切）**
+
+- 计划里的 `arguments` **已完全替换占位符**：占位符取值要读账号与版本 JSON ⇒ 属业务 ⇒ 留 native。
+- 计划里的 `classpath` 是**显式 jar 列表**，无 `*`：通配展开的唯一实现是
+  `Natives/Context/a2_resourcepaths.m` 的 `a2_paths_expand_classpath_wildcards`。
+- Java 侧**不解析版本 JSON**：`A2VersionInfo` 只解决「是哪版 + 有没有加载器」；
+  MC 的 `mainClass` / `arguments` / `libraries` 由 native/Core 解析后写进启动计划。
+
+**规格来源**：`D:\CTF\_AIR2_OWN_JAVA.md`。
+
+**来源**：本单为净室实现（见 `docs/DEPENDENCIES.md`「Java 侧自研替换」一节）。
+
 
 ---
 
