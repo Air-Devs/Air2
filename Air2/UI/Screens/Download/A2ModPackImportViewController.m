@@ -46,7 +46,7 @@
     pickRow.title = @"选择整合包文件";
     pickRow.subtitle = @"从「文件」App 中选取 .mrpack 或 .zip";
     pickRow.accessory = A2SettingsRowAccessoryDisclosure;
-    pickRow.showsBottomSeparator = NO;
+    pickRow.showsSeparator = NO;
     __weak typeof(self) weakSelf = self;
     pickRow.onTap = ^{
         __strong typeof(weakSelf) self = weakSelf;
@@ -155,7 +155,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
         row.title = rows[i][0];
         row.valueText = rows[i][1];
         row.accessory = A2SettingsRowAccessoryNone;
-        if (i == rows.count - 1) row.showsBottomSeparator = NO;
+        if (i == rows.count - 1) row.showsSeparator = NO;
         [_infoSection addRow:row];
     }
 }

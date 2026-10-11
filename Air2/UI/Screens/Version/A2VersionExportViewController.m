@@ -70,7 +70,7 @@
     _formatRow.title = @"格式";
     _formatRow.valueText = @"Modrinth (.mrpack)";
     _formatRow.accessory = A2SettingsRowAccessoryDropdown;
-    _formatRow.showsBottomSeparator = NO;
+    _formatRow.showsSeparator = NO;
 
     __weak typeof(self) weakSelf = self;
     _formatRow.onTap = ^{
@@ -134,7 +134,7 @@
         row.title = title;
         row.valueText = value.length ? value : @"未填写";
         row.accessory = A2SettingsRowAccessoryDisclosure;
-        if (i == fields.count - 1) row.showsBottomSeparator = NO;
+        if (i == fields.count - 1) row.showsSeparator = NO;
 
         __weak typeof(self) weakSelf = self;
         NSString *capturedTitle = [title copy];
