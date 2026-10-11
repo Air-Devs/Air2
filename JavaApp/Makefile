@@ -45,7 +45,7 @@ LWJGL_SOURCES := $(shell find $(LWJGL_SRCDIR) -name '*.java' 2>/dev/null)
 LWJGL_CLASSES := $(OUTPUTDIR)/lwjgl-classes
 LWJGL_TARGET  := $(OUTPUTDIR)/$(LWJGL_JARNAME).jar
 
-.PHONY: all lwjgl clean verify verify-lwjgl
+.PHONY: all lwjgl clean verify verify-lwjgl ownglfw verify-ownglfw
 
 all: $(TARGET) lwjgl
 
@@ -98,6 +98,16 @@ verify-lwjgl: $(LWJGL_TARGET)
 	   $(JARTOOL) tf $(LWJGL_TARGET) | grep -qx "$$c" || { echo "错误：补丁 jar 缺 $$c"; exit 1; }; \
 	 done; \
 	 echo "    已落 10 个类（含编译期注解补丁）"
+
+# ------------------------------------------------------------------
+# [A2-OWNGLFW-1] 自研 org.lwjgl.glfw.* 最小集（净室线，独立于上面的复用线补丁 jar）。
+# 与复用线的 air2-lwjgl-patch.jar 并存但互不混同：本 jar 用于日后「整块替换」。
+# 编译期需要官方 jar 提供 SPI/Struct 类型；运行时由 libs/lwjgl-<ver>/* 提供。
+ownglfw: verify-ownglfw
+
+verify-ownglfw:
+	@echo "==> 自研 GLFW 自证（编译 + 薄 JNI 符号对齐 + 包内自证）"
+	@python3 scripts/ownglfw_verify.py
 
 clean:
 	rm -rf $(OUTPUTDIR)
