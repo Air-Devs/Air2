@@ -13,6 +13,7 @@
 		1D4ED46FBFBF946134C72573 /* A2RootViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E0A962942F56F74CF7617780 /* A2RootViewController.m */; };
 		84C22A76F0D470DBB7E9248C /* A2SceneDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */; };
 		B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 36F3AADE4F4508F86A2F0505 /* main.m */; };
+		3DC62EC42493E34A7FE0CD9A /* A2JITAutoPairingEngineBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 8A86B0EB9F210F46C62DF394 /* A2JITAutoPairingEngineBridge.m */; };
 		AB17E2917848DAC7334D207F /* A2JITEnvironmentProbe.m in Sources */ = {isa = PBXBuildFile; fileRef = DF50AF123A46B36A8F8C89D7 /* A2JITEnvironmentProbe.m */; };
 		434831579F14E55A1DF7A0D1 /* A2Account.m in Sources */ = {isa = PBXBuildFile; fileRef = 88C69537AF21F68A7B1456D3 /* A2Account.m */; };
 		0B32EEA9A11A39AA5D315041 /* A2AccountManager.m in Sources */ = {isa = PBXBuildFile; fileRef = FBBBB4EFA2B5334A45EA3C4E /* A2AccountManager.m */; };
@@ -46,6 +47,8 @@
 		42E2F81428F01FB2F3F912BC /* A2RemoteVersions.m in Sources */ = {isa = PBXBuildFile; fileRef = C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */; };
 		2BC4E80EA8F83E9426E4BA2E /* A2VersionInfo.m in Sources */ = {isa = PBXBuildFile; fileRef = 3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */; };
 		7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 643B820206971C227F265607 /* A2VersionManager.m */; };
+		3D698AEC99288C8B58464366 /* A2JITAutoPairing.m in Sources */ = {isa = PBXBuildFile; fileRef = 18B7D2DD895DA60F26493682 /* A2JITAutoPairing.m */; };
+		312B23955EC5772A74497AAC /* A2JITAutoPairingGuidance.m in Sources */ = {isa = PBXBuildFile; fileRef = F9506EEE484EF49DB95F1BEE /* A2JITAutoPairingGuidance.m */; };
 		667F2E16A26101EDC1C24664 /* A2JITAutomaticPairingProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = C70E67F4DF02B704BF27F382 /* A2JITAutomaticPairingProvider.m */; };
 		CF0651A1E55C83EC183CFC89 /* A2JITCoordinator.m in Sources */ = {isa = PBXBuildFile; fileRef = ADF3CAB08288C6F624B9D5A6 /* A2JITCoordinator.m */; };
 		0A2D456E706B33C74139D9C1 /* A2JITExternalToolProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = 0A6367E9BEBCFE9B36016095 /* A2JITExternalToolProvider.m */; };
@@ -156,6 +159,7 @@
 		E0A962942F56F74CF7617780 /* A2RootViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RootViewController.m"; sourceTree = "<group>"; };
 		B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SceneDelegate.m"; sourceTree = "<group>"; };
 		36F3AADE4F4508F86A2F0505 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "main.m"; sourceTree = "<group>"; };
+		8A86B0EB9F210F46C62DF394 /* A2JITAutoPairingEngineBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITAutoPairingEngineBridge.m"; sourceTree = "<group>"; };
 		DF50AF123A46B36A8F8C89D7 /* A2JITEnvironmentProbe.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITEnvironmentProbe.m"; sourceTree = "<group>"; };
 		88C69537AF21F68A7B1456D3 /* A2Account.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Account.m"; sourceTree = "<group>"; };
 		FBBBB4EFA2B5334A45EA3C4E /* A2AccountManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountManager.m"; sourceTree = "<group>"; };
@@ -189,6 +193,8 @@
 		C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RemoteVersions.m"; sourceTree = "<group>"; };
 		3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionInfo.m"; sourceTree = "<group>"; };
 		643B820206971C227F265607 /* A2VersionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionManager.m"; sourceTree = "<group>"; };
+		18B7D2DD895DA60F26493682 /* A2JITAutoPairing.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITAutoPairing.m"; sourceTree = "<group>"; };
+		F9506EEE484EF49DB95F1BEE /* A2JITAutoPairingGuidance.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITAutoPairingGuidance.m"; sourceTree = "<group>"; };
 		C70E67F4DF02B704BF27F382 /* A2JITAutomaticPairingProvider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITAutomaticPairingProvider.m"; sourceTree = "<group>"; };
 		ADF3CAB08288C6F624B9D5A6 /* A2JITCoordinator.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITCoordinator.m"; sourceTree = "<group>"; };
 		0A6367E9BEBCFE9B36016095 /* A2JITExternalToolProvider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITExternalToolProvider.m"; sourceTree = "<group>"; };
@@ -291,6 +297,7 @@
 		FFF83F1A982D07C7CBBF5C78 /* A2NavigationController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2NavigationController.h"; sourceTree = "<group>"; };
 		2C58D391DAC32B55049E9809 /* A2RootViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RootViewController.h"; sourceTree = "<group>"; };
 		1185FA48A6FE1AB2F1E312DE /* A2SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SceneDelegate.h"; sourceTree = "<group>"; };
+		02A33E6F66321118391D8A93 /* A2JITAutoPairingEngineBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITAutoPairingEngineBridge.h"; sourceTree = "<group>"; };
 		67DCD48F239FE7B9F8C521E0 /* A2JITEnvironmentProbe.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITEnvironmentProbe.h"; sourceTree = "<group>"; };
 		748747C748D79B3DAEEDB5CF /* A2Account.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Account.h"; sourceTree = "<group>"; };
 		1EB22C948F38C8AEC14F9AB3 /* A2AccountManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountManager.h"; sourceTree = "<group>"; };
@@ -324,6 +331,8 @@
 		797843066906C8A344CE1344 /* A2RemoteVersions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RemoteVersions.h"; sourceTree = "<group>"; };
 		CE5120FF6E52910A07272F53 /* A2VersionInfo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionInfo.h"; sourceTree = "<group>"; };
 		8566CA5C1C5F50A603ACC370 /* A2VersionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionManager.h"; sourceTree = "<group>"; };
+		CA0687F92F8D64A528BB58E0 /* A2JITAutoPairing.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITAutoPairing.h"; sourceTree = "<group>"; };
+		72B64FC645965E7FC0D6F76A /* A2JITAutoPairingGuidance.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITAutoPairingGuidance.h"; sourceTree = "<group>"; };
 		B1C425BBB279B3D1FE23B0C2 /* A2JITAutomaticPairingProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITAutomaticPairingProvider.h"; sourceTree = "<group>"; };
 		7D7F0D5221FD49CD23A915CB /* A2JITCoordinator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITCoordinator.h"; sourceTree = "<group>"; };
 		F2117AEADBABDD99F4572B0F /* A2JITExternalToolLauncher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITExternalToolLauncher.h"; sourceTree = "<group>"; };
@@ -505,7 +514,9 @@
 		AF3C312EE434E6DB4EE1B1EB /* Bridge */ = {
 			isa = PBXGroup;
 			children = (
+				8A86B0EB9F210F46C62DF394 /* A2JITAutoPairingEngineBridge.m */,
 				DF50AF123A46B36A8F8C89D7 /* A2JITEnvironmentProbe.m */,
+				02A33E6F66321118391D8A93 /* A2JITAutoPairingEngineBridge.h */,
 				67DCD48F239FE7B9F8C521E0 /* A2JITEnvironmentProbe.h */,
 			);
 			path = Bridge;
@@ -532,6 +543,8 @@
 		BB2DECA4B69E986999FF31DD /* Player */ = {
 			isa = PBXGroup;
 			children = (
+				18B7D2DD895DA60F26493682 /* A2JITAutoPairing.m */,
+				F9506EEE484EF49DB95F1BEE /* A2JITAutoPairingGuidance.m */,
 				C70E67F4DF02B704BF27F382 /* A2JITAutomaticPairingProvider.m */,
 				ADF3CAB08288C6F624B9D5A6 /* A2JITCoordinator.m */,
 				0A6367E9BEBCFE9B36016095 /* A2JITExternalToolProvider.m */,
@@ -547,6 +560,8 @@
 				3E3FDFB8F4E3D5FDEDD6221C /* A2JITVerdictGuidance.m */,
 				5BA8D2CBACEBC7883477ABED /* A2LaunchChain.m */,
 				60C0C052E83B35A8E83733BC /* A2PairingFile.m */,
+				CA0687F92F8D64A528BB58E0 /* A2JITAutoPairing.h */,
+				72B64FC645965E7FC0D6F76A /* A2JITAutoPairingGuidance.h */,
 				B1C425BBB279B3D1FE23B0C2 /* A2JITAutomaticPairingProvider.h */,
 				7D7F0D5221FD49CD23A915CB /* A2JITCoordinator.h */,
 				F2117AEADBABDD99F4572B0F /* A2JITExternalToolLauncher.h */,
@@ -1094,6 +1109,7 @@
 				1D4ED46FBFBF946134C72573 /* A2RootViewController.m in Sources */,
 				84C22A76F0D470DBB7E9248C /* A2SceneDelegate.m in Sources */,
 				B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */,
+				3DC62EC42493E34A7FE0CD9A /* A2JITAutoPairingEngineBridge.m in Sources */,
 				AB17E2917848DAC7334D207F /* A2JITEnvironmentProbe.m in Sources */,
 				434831579F14E55A1DF7A0D1 /* A2Account.m in Sources */,
 				0B32EEA9A11A39AA5D315041 /* A2AccountManager.m in Sources */,
@@ -1127,6 +1143,8 @@
 				42E2F81428F01FB2F3F912BC /* A2RemoteVersions.m in Sources */,
 				2BC4E80EA8F83E9426E4BA2E /* A2VersionInfo.m in Sources */,
 				7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */,
+				3D698AEC99288C8B58464366 /* A2JITAutoPairing.m in Sources */,
+				312B23955EC5772A74497AAC /* A2JITAutoPairingGuidance.m in Sources */,
 				667F2E16A26101EDC1C24664 /* A2JITAutomaticPairingProvider.m in Sources */,
 				CF0651A1E55C83EC183CFC89 /* A2JITCoordinator.m in Sources */,
 				0A2D456E706B33C74139D9C1 /* A2JITExternalToolProvider.m in Sources */,
