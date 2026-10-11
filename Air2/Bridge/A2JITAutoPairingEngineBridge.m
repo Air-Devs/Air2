@@ -30,6 +30,8 @@
 #import "a2_rppairing_rsd.h"      // [JIT-AUTOPAIR-2] Bonjour 发现 / 连接 / JSON 帧 / TLS-PSK 口径
 #import "a2_tlspsk_tunnel.h"      // [A2-INTEGRATION] TLS-PSK 隧道门面（可替换后端 / 默认关）
 #import "a2_tlspsk_mbedtls.h"     // [A2-INTEGRATION] mbedTLS 后端注册入口（第三方，Apache-2.0）
+// ★[A2-RXPC] 本单新增：传输层判据行（只加一行调用点，见下；不改既有逻辑）★
+#import "a2_rppairing_pairable_host.h"
 #import "A2JITPairingFileStore.h" // ★配对材料的落盘目标★（同层已有的类，见 docs/ARCHITECTURE.md）
 
 #import <sys/sysctl.h>
@@ -172,6 +174,11 @@ static NSString *A2RPStateName(A2JITAutoPairingPreconditionState state) {
     A2TLSPskMbedTLSEnsureRegistered();
     NSLog(@"[A2JIT] autopair engine: TLS-PSK 隧道（可替换后端）%@",
           [A2TLSPskTunnel statusLine]);
+
+    // ---- ②c [A2-RXPC] 传输层就绪度 + 有界自证（★只加不改：无网络动作、无副作用、不做等待★）----
+    //  谁调它：A2RXPCReportLayerReadiness（Natives/Support/a2_rppairing_pairable_host.m）——
+    //  输出判据行 [RXPC]：§2a/§2b/§2c/pairable-host 盘点 + 帧/HPACK/XPC/authTag 的有界自证。
+    A2RXPCReportLayerReadiness();
 
     // ---- ③ 发现（Bonjour）----
     NSArray<NSString *> *types = A2RPRSDDefaultServiceTypes();
