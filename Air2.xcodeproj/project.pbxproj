@@ -1025,6 +1025,7 @@
 				B365BE9502C3128F5D540532 /* Frameworks */,
 				483A0E0C9C74F0CBD6A612E6 /* Resources */,
 				CA2D8552372D18FA547FE855 /* Build Java Launch Core */,
+				26F00CCBB4C89AA09B7D6BE0 /* Stage Runtime Bundle */,
 			);
 			buildRules = (
 			);
@@ -1095,6 +1096,22 @@
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
 			shellScript = "set -e\ncd \"$SRCROOT/JavaApp\"\nBOOT=$(/usr/libexec/java_home -v 1.8 2>/dev/null || true)\nmake -s all BOOTJDK=\"$BOOT\"\nmake -s verify BOOTJDK=\"$BOOT\"\nCFP=\"$CONTENTS_FOLDER_PATH\"\n[ -n \"$CFP\" ] || CFP=\"Air2.app\"\nDEST=\"$BUILT_PRODUCTS_DIR/$CFP/Java\"\nmkdir -p \"$DEST\"\ncp -f build/air2-launch.jar \"$DEST/\"\ntest -f \"$DEST/air2-launch.jar\"\necho \"note: Java 启动核心 -> $DEST/air2-launch.jar\"\n";
+		};
+
+		26F00CCBB4C89AA09B7D6BE0 /* Stage Runtime Bundle */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputPaths = (
+			);
+			name = "Stage Runtime Bundle";
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "set -e\nAPP=\"$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH\"\nLIB=\"$SRCROOT/Libraries\"\nmkdir -p \"$APP/Frameworks\" \"$APP/libs\" \"$APP/java_runtimes\"\nfor f in \"$LIB\"/Renderers/*.dylib \"$LIB\"/Frameworks/lib*; do\n  [ -f \"$f\" ] || continue\n  cp -f \"$f\" \"$APP/Frameworks/\"\ndone\nfor d in \"$LIB\"/Jars/lwjgl-*; do\n  [ -d \"$d\" ] || continue\n  mkdir -p \"$APP/libs/$(basename \"$d\")\"\n  cp -f \"$d\"/*.jar \"$APP/libs/$(basename \"$d\")/\"\ndone\nif [ -d \"$LIB/java_runtimes\" ]; then\n  for r in \"$LIB\"/java_runtimes/*; do\n    [ -d \"$r\" ] || continue\n    rm -rf \"$APP/java_runtimes/$(basename \"$r\")\"\n    cp -R \"$r\" \"$APP/java_runtimes/$(basename \"$r\")\"\n  done\nelse\n  echo \"warning: Libraries/java_runtimes 缺失 —— 先跑 scripts/stage_runtime.sh 再出包\" >&2\nfi\necho \"note: runtime bundle -> $APP/{Frameworks,libs,java_runtimes}\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
