@@ -394,6 +394,12 @@ def build():
             s.update({
                 "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
                 "CODE_SIGN_STYLE": "Automatic",
+                # ★ 保留原生层符号：Air2/Bridge 目前为空（启动链尚未接线），
+                #   a2_launch_* / A2JVMContext / A2ArgBuilder 等**暂时没有调用者**，
+                #   而 Xcode Release 默认 DEAD_CODE_STRIPPING=YES ⇒ 链接期把这些
+                #   入口整段剥掉，产物包里扫不到（「编了也不进包」）。这里关闭
+                #   dead_strip，确保原生层真正随包；待 Bridge 接线后即可恢复默认。
+                "DEAD_CODE_STRIPPING": "NO",
                 # 原生层头搜索路径（Natives 代码按裸文件名互相引用）。
                 "HEADER_SEARCH_PATHS": "(\n\t\t\t\t\t\"$(inherited)\",\n\t\t\t\t\t"
                     + ",\n\t\t\t\t\t".join('"%s"' % d for d in NATIVES_INCLUDE_DIRS)
