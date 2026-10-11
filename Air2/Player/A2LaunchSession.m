@@ -21,6 +21,7 @@
 #import "A2Settings.h"
 #import "A2RendererCatalog.h"       // Core/Renderer —— 渲染后端候选表 + 包内存在性（[RENDER-SEL]）
 #import "A2JavaRuntimeCatalog.h"    // Core/Version —— Java 运行时候选表 + 可用性（[JRE-SEL]）
+#import "A2VersionIsolation.h"      // Core/Path —— A2GamePath：实例路径的唯一计算处（[A2-INSTANCE]）
 #import "A2RuntimeStrings.h"        // Player 同层 —— 四语文案（阻断文案 + 判据行的「源」）
 #import "A2Log.h"
 
@@ -106,8 +107,13 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
     NSString *bundle = NSBundle.mainBundle.bundlePath;
     NSString *gameHome = A2VersionManager.shared.gameHome ?: @"";
     NSString *gameDir = version.gameDirectory ?: gameHome;
-    NSString *librariesDir = [gameHome stringByAppendingPathComponent:@"libraries"];
-    NSString *assetsDir = [gameHome stringByAppendingPathComponent:@"assets"];
+    // ★实例路径的唯一计算处（[A2-INSTANCE]）★
+    //   libraries/ 与 assets/ 也由 A2GamePath 给出 —— 安装侧的落点（同一对象的
+    //   librariesHome/assetsHome）就是这么算的；此前这里手拼了同一对字符串，
+    //   虽与本处取值相同，但那是「同一知识的两份拷贝」⇒ 收敛到一处。
+    A2GamePath *canonicalPath = [A2GamePath pathWithGameHome:gameHome];
+    NSString *librariesDir = [canonicalPath librariesHome];
+    NSString *assetsDir = [canonicalPath assetsHome];
     NSString *versionJar = [version.versionPath stringByAppendingPathComponent:
                             [version.name stringByAppendingPathExtension:@"jar"]];
     NSString *javaJarDir = [bundle stringByAppendingPathComponent:@"Java"];
@@ -200,6 +206,39 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
     }
     if (lwjglDir.length == 0) {
         finish(NO, 0, @"包内没有 libs/lwjgl-<ver>/");
+        return;
+    }
+
+    // ========================================================================
+    // ★[A2-INSTANCE] 实例落位判据行（启动侧）★
+    // ------------------------------------------------------------------------
+    // 判据 = 安装收尾判的同一对文件，且**同一处计算**：A2GamePath 的
+    //        versionJSONPath: / versionJarPath: ⇒ 写（安装落点）读（启动）
+    //        两处逐字一致，不在这里另拼一份路径。
+    // · pathMatch=1 ⇒ 真正交给启动计划的那条 jar（上面的 versionJar，
+    //   由 version.versionPath 拼出）与落盘那条是同一字符串。
+    // · ★判据为假 ⇒ 如实阻断★（不给计划、不建 VM），并说清缺的是哪一份。
+    // ========================================================================
+    NSString *instanceJSON = [canonicalPath versionJSONPath:version.name];
+    NSString *instanceJar = [canonicalPath versionJarPath:version.name];
+    BOOL instanceJSONExists = [NSFileManager.defaultManager fileExistsAtPath:instanceJSON];
+    BOOL instanceJarExists = [NSFileManager.defaultManager fileExistsAtPath:instanceJar];
+    BOOL instanceOK = instanceJSONExists && instanceJarExists;
+
+    // ★可 grep 的判据行（默认可见）★
+    [A2Log log:@"[A2-INSTANCE] id=%@ jar=%@ json=%@ exists=%d stage=launch pathMatch=%d assets=%@ libraries=%@",
+     version.name, instanceJar, instanceJSON, instanceOK ? 1 : 0,
+     [versionJar isEqualToString:instanceJar] ? 1 : 0, assetsDir, librariesDir];
+
+    if (!instanceOK) {
+        NSMutableArray<NSString *> *missing = [NSMutableArray array];
+        if (!instanceJSONExists) [missing addObject:[version.name stringByAppendingPathExtension:@"json"]];
+        if (!instanceJarExists) [missing addObject:[version.name stringByAppendingPathExtension:@"jar"]];
+        [A2Log log:@"[A2-INSTANCE] ★阻断启动★：versions/%@ 缺 %@",
+         version.name, [missing componentsJoinedByString:@"、"]];
+        finish(NO, 0, [NSString stringWithFormat:
+                       @"实例不完整：versions/%@ 缺 %@（请重新安装该版本）",
+                       version.name, [missing componentsJoinedByString:@"、"]]);
         return;
     }
 

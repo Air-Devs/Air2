@@ -74,8 +74,13 @@ du -sh "$DEST"
 # 这正是「不做石山」的那条线：要加哪一档由人拍板，不由脚本自作主张。
 # ============================================================================
 if [ -n "${A2_JRE_EXTRA:-}" ]; then
-  # 与主推同源：从主推那一份所在的本机 artifacts 根推同级的 java-<N>-openjdk。
-  ROOTS="$(dirname "$(dirname "$SRC")") ${A2_JRE_ROOT:-}"
+  # 与主推同源：从**主推那一份所在的目录**（主推 = <artifacts>/java_runtimes/java-25-openjdk）
+  #   推同级的 java-<N>-openjdk，即 <artifacts>/java_runtimes/java-<N>-openjdk。
+  # ★修正★：原先取 dirname 两次 ⇒ 得到 <artifacts>/（少一级 java_runtimes），
+  #   实测 `A2_JRE_EXTRA="21" bash scripts/stage_runtime.sh` 在本机产物布局下
+  #   恒判「本机 artifacts 里没有 java-21-openjdk（跳过）」。现在把两级都列进候选
+  #   （正确的那一级在前），A2_JRE_ROOT 覆盖仍然有效。
+  ROOTS="$(dirname "$SRC") $(dirname "$(dirname "$SRC")") ${A2_JRE_ROOT:-}"
   for v in $A2_JRE_EXTRA; do
     want="java-${v}-openjdk"
     extra_src=""
