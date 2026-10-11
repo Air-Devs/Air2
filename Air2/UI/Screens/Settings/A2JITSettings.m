@@ -46,6 +46,10 @@
 #import "A2JITSystemToolLauncher.h"
 #import "A2JITEnvironmentProbe.h"
 #import "A2JITAutoPairingEngineBridge.h"
+// [JIT-AUTOPAIR-3] 配对码来源（可选项表）与设备发起档的 6 位码会话
+#import "A2JITPairingPinSource.h"
+#import "A2JITPairingCodeSession.h"
+#import "A2LaunchContract.h"   // A2SelectedPairingPinSourcePrefKey（写入点=本文件）
 // [JIT-DDI-1] DDI：本地镜像存储 / 判定缝 / 分流表 / 设备侧 Bridge 骨架
 #import "A2JITDDI.h"
 #import "A2JITDDIStore.h"
@@ -110,6 +114,9 @@
 @property (nonatomic, weak, nullable) A2SettingsRow *strategyRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *nextRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *autopairRow;
+// [JIT-AUTOPAIR-3] 配对码来源行 + 设备发起档的 6 位码显示行
+@property (nonatomic, weak, nullable) A2SettingsRow *pairpinRow;
+@property (nonatomic, weak, nullable) A2SettingsRow *paircodeRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *ddiRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *ddiImportRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *ddiFetchRow;
@@ -559,6 +566,20 @@
     // ★[JIT-AUTOPAIR-2] 把落盘目标注入引擎★：pair-verify 成功后由 Bridge 直接写进容器约定位置
     // （Provider 侧仍会独立复验 store.hasUsablePairingFile —— 不凭引擎一面之词）。
     autoEngine.pairingFileStore = store;
+    // ★[JIT-AUTOPAIR-3] 把「配对码来源」这一【用户可见选项】解析成 Natives 的 pin provider★
+    // （用户口径：底层保留 A2RPPairSetupPinProvider 缝，但入口必须是可选择项 —— 选择项 → 解析 → 喂缝）。
+    // ★未选择 / 选到未实现的档 ⇒ 返回 nil（Bridge 会如实拒绝并点名）★，绝不静默回退。
+    autoEngine.pairSetupPinProvider = ^NSString *(A2RPPairSetupPinPrompt prompt) {
+        (void)prompt;
+        NSString *why = nil;
+        NSString *pin = [A2JITPairingPinResolver resolvedPinForDisplayedCode:
+                         [A2JITPairingCodeSession sharedSession].code reason:&why];
+        // ★不把码本身写进日志★（只记长度 / 是否取到）。
+        NSLog(@"[A2JIT] pair-setup 取配对码：%@ ⇒ %@", [A2JITPairingPinResolver criterionLine],
+              pin.length > 0 ? [NSString stringWithFormat:@"用码（%lu 位）", (unsigned long)pin.length]
+                             : [NSString stringWithFormat:@"拒绝（%@）", why ?: @"-"]);
+        return pin;
+    };
     A2JITAutoPairingPreconditions *preconditions = [autoEngine readPreconditions];
 
     // ★[JIT-DDI-1] DDI 真探测★：本地镜像存储（容器约定目录）+ 设备侧查询（Bridge 骨架）+ 系统要求。
@@ -750,6 +771,124 @@
         [NSUserDefaults.standardUserDefaults setBool:isOn forKey:@"debug.rt_p1_runtime"];
     };
     [section addRow:chainRow];
+
+    // ---- [JIT-AUTOPAIR-3] 配对码来源（★用户可见的可选项，不是代码缝★）+ 设备发起档的 6 位码显示 ----
+    A2SettingsRow *pairpinRow = [[A2SettingsRow alloc] init];
+    pairpinRow.symbolName = @"number.square.fill";
+    pairpinRow.title = [A2JITStrings stringForKey:@"jit.row.pairpin"];
+    pairpinRow.accessory = A2SettingsRowAccessoryDisclosure;
+    [section addRow:pairpinRow];
+
+    A2SettingsRow *paircodeRow = [[A2SettingsRow alloc] init];
+    paircodeRow.symbolName = @"key.horizontal.fill";
+    paircodeRow.title = [A2JITStrings stringForKey:@"jit.pairpin.row.code"];
+    [section addRow:paircodeRow];
+
+    __weak A2SettingsRow *weakPairpin = pairpinRow;
+    __weak A2SettingsRow *weakPaircode = paircodeRow;
+    // 主机名要能认出是 Air2（用户要在系统设置的配对列表里选它）。
+    NSString *pairableHostName = [NSString stringWithFormat:@"Air2 (%@)",
+                                  NSProcessInfo.processInfo.hostName ?: @"iPhone"];
+    void (^refreshPairpin)(void) = ^{
+        A2JITPairingPinMode mode = [A2JITPairingPinResolver selectedMode];
+        NSString *sel = [NSUserDefaults.standardUserDefaults stringForKey:A2SelectedPairingPinSourcePrefKey] ?: @"";
+        A2JITPairingPinSourceItem *item = [A2JITPairingPinSourceCatalog itemForIdentifier:sel];
+        NSString *label = item ? [A2JITStrings stringForKey:item.nameKey]
+                               : [A2JITStrings stringForKey:@"jit.pairpin.notselected"];
+        A2SettingsRow *pr = weakPairpin;
+        pr.valueText = [A2JITPairingPinSourceCatalog displayNameForMode:mode];
+        pr.subtitle = [NSString stringWithFormat:@"%@｜%@", label, [A2JITPairingPinResolver criterionLine]];
+
+        // 码行：只有设备发起档且已生成码才可点（点=复制）；否则如实写清楚。
+        A2JITPairingCodeSession *cs = A2JITPairingCodeSession.sharedSession;
+        A2JITPairingCodeSession *persisted = [A2JITPairingCodeSession restoredFromDefaults];
+        NSString *shown = cs.code.length > 0 ? cs.code : (persisted.code ?: @"");
+        NSString *host = cs.hostName.length > 0 ? cs.hostName : (persisted.hostName ?: pairableHostName);
+        A2SettingsRow *cr = weakPaircode;
+        if (mode == A2JITPairingPinModeDeviceInitiated && shown.length == 6) {
+            cr.enabled = YES;
+            cr.valueText = shown;   // ★6 位码：大字号显示（行内 valueText）★
+            cr.subtitle = [NSString stringWithFormat:@"%@｜%@",
+                           [NSString stringWithFormat:[A2JITStrings stringForKey:@"jit.pairpin.instruction"], host],
+                           [A2JITStrings stringForKey:@"jit.pairpin.row.copy"]];
+        } else if (mode == A2JITPairingPinModeDeviceInitiated) {
+            cr.enabled = YES;
+            cr.valueText = @"";
+            cr.subtitle = [NSString stringWithFormat:@"%@｜%@", host,
+                           [A2JITStrings stringForKey:@"jit.pairpin.row.copy"]];
+        } else {
+            cr.enabled = NO;
+            cr.valueText = @"";
+            cr.subtitle = [A2JITStrings stringForKey:@"jit.pairpin.notselected"];
+        }
+    };
+    refreshPairpin();
+
+    __weak UIViewController *weakHostVC = host;
+    pairpinRow.onTap = ^{
+        UIViewController *hvc = weakHostVC;
+        if (hvc == nil) return;
+        UIAlertController *sheet =
+            [UIAlertController alertControllerWithTitle:[A2JITStrings stringForKey:@"jit.row.pairpin"]
+                                                message:[A2JITPairingPinResolver criterionLine]
+                                         preferredStyle:UIAlertControllerStyleActionSheet];
+        NSString *cur = [NSUserDefaults.standardUserDefaults stringForKey:A2SelectedPairingPinSourcePrefKey] ?: @"";
+        for (A2JITPairingPinSourceItem *it in [A2JITPairingPinSourceCatalog allItems]) {
+            NSString *title = [A2JITStrings stringForKey:it.nameKey];
+            if (!it.implemented) {
+                title = [NSString stringWithFormat:@"%@（%@）", title,
+                         [A2JITStrings stringForKey:@"jit.pairpin.unsupported"]];
+            }
+            if ([it.identifier isEqualToString:cur]) { title = [@"✓ " stringByAppendingString:title]; }
+            [sheet addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault
+                                                   handler:^(UIAlertAction *a) {
+                // ★写入点唯一点★：偏好键 = A2SelectedPairingPinSourcePrefKey。
+                [NSUserDefaults.standardUserDefaults setObject:it.identifier
+                                                        forKey:A2SelectedPairingPinSourcePrefKey];
+                NSLog(@"[A2JIT] settings: 配对码来源 → %@", [A2JITPairingPinResolver criterionLine]);
+                if (it.mode == A2JITPairingPinModeDeviceInitiated) {
+                    // 设备发起档：立刻生成并显示 6 位码（用户要切到系统设置去输）。
+                    NSError *e = nil;
+                    [A2JITPairingCodeSession.sharedSession beginDeviceInitiatedWithHostName:pairableHostName error:&e];
+                } else if (!it.implemented) {
+                    // ★未实现的档：选中即如实拒绝并点名（不静默回退）★。
+                    NSString *why = nil;
+                    (void)[A2JITPairingPinResolver resolvedPinForDisplayedCode:nil reason:&why];
+                    [A2Toast show:[NSString stringWithFormat:@"%@", why ?: @""] inView:hvc.view];
+                }
+                refreshPairpin();
+                [A2Toast show:[NSString stringWithFormat:[A2JITStrings stringForKey:@"jit.pairpin.toast.selected"],
+                               [A2JITPairingPinSourceCatalog displayNameForMode:it.mode]]
+                       inView:hvc.view];
+            }]];
+        }
+        [sheet addAction:[UIAlertAction actionWithTitle:[A2JITStrings stringForKey:@"jit.pairpin.cancel"]
+                                                 style:UIAlertActionStyleCancel handler:nil]];
+        A2SettingsRow *r = weakPairpin;
+        sheet.popoverPresentationController.sourceView = r ?: hvc.view;
+        sheet.popoverPresentationController.sourceRect = r ? r.bounds : hvc.view.bounds;
+        [hvc presentViewController:sheet animated:YES completion:nil];
+    };
+
+    paircodeRow.onTap = ^{
+        UIViewController *hvc = weakHostVC;
+        A2JITPairingCodeSession *cs = A2JITPairingCodeSession.sharedSession;
+        A2JITPairingCodeSession *persisted = [A2JITPairingCodeSession restoredFromDefaults];
+        NSString *shown = cs.code.length > 0 ? cs.code : (persisted.code ?: @"");
+        if (shown.length != 6) {
+            // 还没生成 ⇒ 现场生成（等价于点「设备发起档」的第一次）。
+            NSError *e = nil;
+            [cs beginDeviceInitiatedWithHostName:pairableHostName error:&e];
+            shown = cs.code;
+        }
+        UIPasteboard.generalPasteboard.string = shown;
+        [A2Toast show:[NSString stringWithFormat:@"%@: %@", [A2JITStrings stringForKey:@"jit.pairpin.row.copy"], shown]
+               inView:hvc.view];
+        refreshPairpin();
+    };
+
+    presenter.pairpinRow = pairpinRow;
+    presenter.paircodeRow = paircodeRow;
 
     [presenter apply];
     return section;

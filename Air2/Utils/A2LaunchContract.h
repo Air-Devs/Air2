@@ -73,4 +73,16 @@ FOUNDATION_EXPORT NSString *const A2SelectedRendererPrefKey;
 /// 选中值最终成为启动计划的 `javaHome`（`A2LaunchRunner.javaHome:` 参数）。
 FOUNDATION_EXPORT NSString *const A2SelectedJavaRuntimePrefKey;
 
+/// ★用户选择的「配对码来源」偏好键★（[JIT-AUTOPAIR-3]；同上：NSUserDefaults，UI 写、Player 读）。
+///
+/// 取值 = 候选标识（见 `A2JITPairingPinSourceCatalog`）：
+///   · `trustDialog`     —— 信任弹窗档（iOS 常规）：PIN 固定 `000000`，自动；
+///   · `deviceInitiated` —— 设备发起档（iOS 27，★主推★）：本机显示 6 位码，用户在系统设置里输入；
+///   · `existingRecord`  —— 已有配对记录档：走 pair-verify 快路径（跳过 pair-setup）；
+///   · `onScreenCode`    —— 设备屏显码档（Apple TV / Vision Pro）：★照列、未实现★。
+/// ★键缺失 = 未选择 ⇒ 一律如实拒绝（不静默回退到别的档）★。
+/// 写入点唯一：`Air2/UI/Screens/Settings/A2JITSettings.m` 的「配对码来源」行；
+/// 读取点唯一：`Air2/Player/A2JITPairingPinSource.m` 的 `A2JITPairingPinResolver`。
+FOUNDATION_EXPORT NSString *const A2SelectedPairingPinSourcePrefKey;
+
 NS_ASSUME_NONNULL_END

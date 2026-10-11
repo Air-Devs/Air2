@@ -49,6 +49,11 @@ SOURCES = [
     # --- [JIT-AUTOPAIR-1] 自动配对（iOS 27+，自研 RPPairing）的类型 / 前置条件 / 分流表 ---
     os.path.join(PLAYER, "A2JITAutoPairing.m"),
     os.path.join(PLAYER, "A2JITAutoPairingGuidance.m"),
+    # --- [JIT-AUTOPAIR-3] 配对码来源（可选项表 + 解析）+ 设备发起档的 6 位码会话 ---
+    os.path.join(PLAYER, "A2JITPairingPinSource.m"),
+    os.path.join(PLAYER, "A2JITPairingCodeSession.m"),
+    # 跨层契约常量（A2SelectedPairingPinSourcePrefKey 的唯一定义点）
+    os.path.join(ROOT, "Air2", "Utils", "A2LaunchContract.m"),
     # --- [JIT-DDI-1] DDI（Developer Disk Image）：类型 / 纯逻辑 / 本地镜像存储 / 判定合成 / 分流表 ---
     os.path.join(PLAYER, "A2JITDDI.m"),
     os.path.join(PLAYER, "A2JITDDIStore.m"),
@@ -62,6 +67,10 @@ SOURCES = [
     os.path.join(ROOT, "Natives", "Support", "a2_rppairing_ed25519.m"),
     os.path.join(ROOT, "Natives", "Support", "a2_rppairing_verify.m"),
     os.path.join(ROOT, "Natives", "Support", "a2_rppairing_rsd.m"),
+    # --- [JIT-AUTOPAIR-3] pair-setup：SRP-3072 内核 + PS-Msg01..06 消息机
+    #     （真实现；大数模幂用随仓第三方 mbedTLS 的 mbedtls_mpi —— 见下方 MBEDTLS_MACOS_LIB）---
+    os.path.join(ROOT, "Natives", "Support", "a2_rppairing_srp.m"),
+    os.path.join(ROOT, "Natives", "Support", "a2_rppairing_pairsetup.m"),
     # --- [A2-INTEGRATION] TLS-PSK 隧道门面（可替换后端 / 默认关 / 不上云；纯逻辑，无第三方）---
     os.path.join(ROOT, "Natives", "Support", "a2_tlspsk_tunnel.m"),
     # 门面用项目统一的 a2_log_f 记日志 ⇒ 测试里一并链接该纯日志实现（只有 Foundation+stdio）。
@@ -71,7 +80,20 @@ SOURCES = [
 
 # 额外头搜索路径：测试要用 Natives 的判据枚举做「跨层镜像」的运行期断言
 # （★只读头文件里的枚举值，不链接 A2JITEnvironment.m★ —— 后者的实现含 arm64 裸 brk）。
-EXTRA_INCLUDES = [os.path.join(ROOT, "Natives", "Support")]
+EXTRA_INCLUDES = [os.path.join(ROOT, "Natives", "Support"),
+                  # [JIT-AUTOPAIR-3] 跨层契约常量（A2SelectedPairingPinSourcePrefKey 等）
+                  os.path.join(ROOT, "Air2", "Utils")]
+
+# ---------------------------------------------------------------------------
+# [JIT-AUTOPAIR-3] 随仓第三方 mbedTLS（Apache-2.0）—— a2_rppairing_srp.m 用 mbedtls_mpi 做模幂。
+#   头：Libraries/ThirdParty/mbedtls/include
+#   库：Libraries/ThirdParty/mbedtls/lib-macos/libmbedcrypto.a
+#       ★macOS(x86_64+arm64) 专用★，供本测试在 Mac 上真链接；由
+#       scripts/build_mbedtls_macos_tests.sh 离线重建（与 iOS 版同源 3.6.2）。
+# ---------------------------------------------------------------------------
+MBEDTLS_DIR = os.path.join(ROOT, "Libraries", "ThirdParty", "mbedtls")
+MBEDTLS_INCLUDE = os.path.join(MBEDTLS_DIR, "include")
+MBEDTLS_MACOS_LIB = os.path.join(MBEDTLS_DIR, "lib-macos")
 
 
 def find_clang():
@@ -107,10 +129,22 @@ def main():
     includes = ["-I", PLAYER]
     for inc in EXTRA_INCLUDES:
         includes += ["-I", inc]
+    # [JIT-AUTOPAIR-3] mbedTLS（a2_rppairing_srp.m 的 mbedtls_mpi）—— 头 + macOS 库。
+    if not os.path.isdir(MBEDTLS_INCLUDE):
+        print("缺少 mbedTLS 头目录: %s" % MBEDTLS_INCLUDE)
+        return 1
+    mbedcrypto = os.path.join(MBEDTLS_MACOS_LIB, "libmbedcrypto.a")
+    if not os.path.exists(mbedcrypto):
+        print("缺少 macOS mbedcrypto: %s" % mbedcrypto)
+        print("  → 先在 Mac 上跑：bash scripts/build_mbedtls_macos_tests.sh <mbedtls-3.6.2 源码目录>")
+        return 1
+    includes += ["-I", MBEDTLS_INCLUDE]
     cmd = [clang, "-fobjc-arc", "-fblocks", "-Wall", "-Wno-unused-parameter"] + \
           includes + ["-framework", "Foundation", "-framework", "Security",
                       # RSD 层用 Bonjour 发现/连接（NWBrowser/NWConnection）⇒ 需要 Network
                       "-framework", "Network",
+                      # [JIT-AUTOPAIR-3] 链 macOS 版 mbedcrypto（静态；只被 mbedtls_mpi 用到）
+                      "-L", MBEDTLS_MACOS_LIB, "-lmbedcrypto",
                       "-o", binary] + SOURCES
     print("compile: clang -fobjc-arc -I Air2/Player ... -o jit_logic_tests")
     ci = subprocess.run(cmd, capture_output=True, text=True)

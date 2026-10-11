@@ -10,6 +10,7 @@
 
 #import "a2_rppairing.h"
 #import "a2_rppairing_verify.h"     // [JIT-AUTOPAIR-2] pair-verify 自握手（自检里真跑一次）
+#import "a2_rppairing_pairsetup.h"  // [JIT-AUTOPAIR-3] pair-setup(SRP-3072) 自握手（自检里真跑一次）
 
 #include <string.h>
 
@@ -398,6 +399,8 @@ NSInteger A2RPTLVStateValue(NSDictionary<NSNumber *, NSData *> *tlv) {
 @property (nonatomic, readwrite) BOOL streamCipherOK;
 @property (nonatomic, readwrite) BOOL pairVerifyOK;
 @property (nonatomic, readwrite, copy) NSString *pairVerifySummary;
+@property (nonatomic, readwrite) BOOL pairSetupOK;
+@property (nonatomic, readwrite, copy) NSString *pairSetupSummary;
 @property (nonatomic, readwrite) A2RPPairingBlockedStep firstBlockedStep;
 @property (nonatomic, readwrite, copy) NSString *summary;
 @end
@@ -459,9 +462,15 @@ static BOOL A2RPX25519AgreementSelfTest(void) {
         A2RPPairVerifySelfTest *st = [A2RPPairVerifySelfTest runSelfTest];
         p.pairVerifyOK = st.ok;
         p.pairVerifySummary = st.summary;
+        // [JIT-AUTOPAIR-3] pair-setup（SRP-3072）消息机自证：真跑 PS-Msg01..06。
+        A2RPPairSetupSelfTest *ps = [A2RPPairSetupSelfTest runSelfTest];
+        p.pairSetupOK = ps.ok;
+        p.pairSetupSummary = ps.summary;
     } else {
         p.pairVerifyOK = NO;
         p.pairVerifySummary = @"未跑 pair-verify 自握手（前置原语未全绿）";
+        p.pairSetupOK = NO;
+        p.pairSetupSummary = @"未跑 pair-setup 自握手（前置原语未全绿）";
     }
 
     A2RPPairingBlockedStep blocked = A2RPPairingBlockedStepNone;
@@ -475,21 +484,25 @@ static BOOL A2RPX25519AgreementSelfTest(void) {
         blocked = A2RPPairingBlockedStepStreamCipher;
     } else if (!p.pairVerifyOK) {
         blocked = A2RPPairingBlockedStepPairVerify;
+    } else if (!p.pairSetupOK) {
+        blocked = A2RPPairingBlockedStepPairSetup;
     } else {
         // ★本地能做的都做完了★：剩下的卡点是「真 RSD 端点」——
         // Bonjour 发现 / 连接 / TLS-PSK 隧道（见 a2_rppairing_rsd.h），不是本地原语。
+        // （pair-setup 的传输在真机上走 §2a/§2b RemoteXPC，§2c 裸 socket 不支持它 —— 见 pairsetup 头。）
         blocked = A2RPPairingBlockedStepRsdEndpoint;
     }
     p.firstBlockedStep = blocked;
 
     p.summary = [NSString stringWithFormat:
                  @"RPPairing 握手自检：CSPRNG=%@ X25519/HKDF=%@ Ed25519=%@ ChaCha20-Poly1305=%@ "
-                 @"pair-verify 自握手=%@ ⇒ 首个受阻步骤=%@",
+                 @"pair-verify 自握手=%@ pair-setup 自握手=%@ ⇒ 首个受阻步骤=%@",
                  p.randomOK ? @"可用" : @"不可用",
                  p.keyAgreementOK ? @"可用（双向一致）" : @"不可用",
                  p.signingOK ? @"可用（签/验/拒坏签名）" : @"自检未过",
                  p.streamCipherOK ? @"可用（往返/拒坏 tag）" : @"自检未过",
                  p.pairVerifyOK ? @"通过" : @"未通过",
+                 p.pairSetupOK ? @"通过" : @"未通过",
                  [self displayNameForBlockedStep:blocked]];
     return p;
 }

@@ -37,8 +37,14 @@
 //         → pair-verify(M1..M4，真 X25519/Ed25519/ChaCha20-Poly1305/HKDF) → 新身份 → 写入注入的存储。
 //       每一步失败都按语义分类：DiscoveryFailed / PairVerifyFailed / WriteFailed / EngineUnavailable，
 //       ★并点名卡在哪一步★。没落盘就【不】返回成功。
-//    4. ★仍未落地★：pair-setup(SRP-3072)（真正的「首次自配对」需要它）、
-//       TLS-PSK 隧道（§12 要的两个套件不在公开 TLS API 的枚举里 —— 见 a2_rppairing_rsd.h 的实测证据）、
+//    4. [JIT-AUTOPAIR-3] pair-setup（SRP-3072，真正的「首次自配对」）★消息机已落地★
+//       （Natives/Support/a2_rppairing_pairsetup.[hm]，PS-Msg01..06）：
+//         · 自检阶段真跑一次进程内自握手自证（A2RPPairingPreflight.pairSetupOK/summary）；
+//         · generate 里：★注入 pairSetupTransport 时★先跑 pair-setup（设备不认识本机时的唯一路径），
+//           成功即落盘并返回；未注入 ⇒ ★如实点名「缺 pair-setup 传输」并回落 pair-verify★（不谎报）。
+//         · ★传输仍缺★：真机上 pair-setup 走 §2a/§2b RemoteXPC，本仓只接了 §2c 裸 socket（规格明确它
+//           **不支持 pair-setup**）⇒ 生产上 pairSetupTransport 为 nil，该步在真机上仍不能真正首配。
+//    5. ★仍未落地★：TLS-PSK 隧道（§12 要的两个套件不在公开 TLS API 的枚举里 —— 见 a2_rppairing_rsd.h 的实测证据）、
 //       RemoteXPC 那条连接路径（§2a/2b）。缺口与判据见 docs/JIT-PROVISIONING.md §4.2-a。
 //
 //  ★绝不假成功，也绝不把「没探测到」报成「已满足」★。
@@ -48,6 +54,7 @@
 
 #import <Foundation/Foundation.h>
 #import "A2JITAutoPairing.h"
+#import "a2_rppairing_pairsetup.h"   // [JIT-AUTOPAIR-3] Bridge 唯一相邻 Natives 层 ⇒ 直接引用其传输缝/配对码缝
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -64,6 +71,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// ★公开规格 §8 Step 6 明确写着设备那份证明「可不解」★ ⇒ 允许为 nil：
 /// 此时握手仍会做完密钥交换与 AEAD 认证，但不做设备身份签名校验（会如实写进日志与原因）。
 @property (nonatomic, copy, nullable) NSData *devicePublicKey;
+
+/// [JIT-AUTOPAIR-3] pair-setup（SRP-3072）的【消息传输】。
+/// ★真机上必须走 §2a/§2b 的 RemoteXPC（§2c 裸 socket 按规格不支持 pair-setup）★ ——
+/// 本仓尚未实现 RemoteXPC 传输 ⇒ 生产上此属性为 nil，generate 会如实点名「缺 pair-setup 传输」并回落 pair-verify。
+/// 单测 / 自证里注入进程内传输即可把「首次配对」这条链真正跑通（谁调它：generatePairingFileWithinBudget:）。
+@property (nonatomic, strong, nullable) id<A2RPPairSetupMessageTransport> pairSetupTransport;
+
+/// [JIT-AUTOPAIR-3] 配对码来源（★可注入★；未注入 / 返回空 ⇒ pair-setup 如实拒绝，不猜不默认）。
+@property (nonatomic, copy, nullable) A2RPPairSetupPinProvider pairSetupPinProvider;
 
 /// 最近一次成功生成的配对文件字节（诊断 / 自证用；nil = 还没成功过）。
 @property (nonatomic, readonly, copy, nullable) NSData *lastGeneratedPairingFile;
