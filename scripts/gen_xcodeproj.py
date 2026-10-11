@@ -16,7 +16,7 @@ import hashlib
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT_NAME = "Air2"
 BUNDLE_ID = "dev.airdevs.air2"
-DEPLOYMENT_TARGET = "15.0"
+DEPLOYMENT_TARGET = "14.0"
 MARKETING_VERSION = "0.1.0"
 BUILD_VERSION = "1"
 
