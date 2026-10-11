@@ -299,6 +299,8 @@
 | `Air2/Core/Version/A2LaunchPlan.[hm]` | — | 本单新写（净室） | 同上 | 启动计划产出（版本 JSON 合并/rules/占位符/库表 + 账号取值） | 随仓（源码） |
 | `Air2/Bridge/A2LaunchRunner.[hm]` | — | 本单新写（净室） | 同上 | 组 margv 并调 `a2_launch_jvm_with_argv`；转发开关 | 随仓（源码） |
 | `Air2/Player/A2LaunchSession.[hm]` | — | 本单新写（净室） | 同上 | 一次启动的编排（默认关 ⇒ 零副作用） | 随仓（源码） |
+| `Air2/Bridge/A2JITScriptDelivery.[hm]` | — | [JIT-VM-WIRE] 本单新写（净室） | 随本仓 GPL-3.0-or-later | ① 唯一调用 `a2_jit_send_script_safe` 的地方（下发随包 `AmethystJIT69.js`，失败不拦路） | 随仓（源码） |
+| `Air2/Player/A2LaunchFailure.[hm]` | — | [JIT-VM-WIRE] 本单新写（净室） | 同上 | 启动链失败分类 + 判据行 + 用户文案（复用 `A2JITVerdictGuidance` / `A2JITStrings`） | 随仓（源码） |
 | `air2-lwjgl-patch.jar`（源 `JavaApp/src/lwjgl/**`） | 随本仓 | 本单新写（净室）；`org.lwjgl.glfw.CallbackBridge` / `GLFWWindowProperties` 为**非官方同名**类 | 随本仓 GPL-3.0-or-later（LWJGL 本体仍是 BSD-3，见上表） | `org.lwjgl.*` 补丁类容器（层 2，逐片落位） | 随仓（源码）→ 构建产物 `<App>/Java/` |
 
 **未引入**：本组**没有**新增任何第三方库 / 二进制 / 下载步骤；`JavaApp/` 下仍无 `libs/`。

@@ -344,6 +344,32 @@ JRE 缺失时该阶段**只告警不失败**（同树多任务并行时不让别
 
 **来源**：`D:\CTF\_AIR2_LAUNCH_PATH.md`。
 
+### JIT ↔ 建 VM 串联 —— [JIT-VM-WIRE]
+
+**要接的是什么**：启动时按住「**① 下发 JIT 脚本 → ② 探 JIT 可用 → ③ 建 VM**」的顺序走；
+★JIT 不可用 ⇒ 如实阻断并告知怎么开（不静默回退）★。此前 `A2LaunchSession` 直接调
+`A2LaunchRunner`（**跳过**了 `A2LaunchChain` 的 ①②）⇒「建 VM 前没有 JIT 前置」。
+
+依赖严格单向（App → UI → Player → Core → Bridge → Natives）；★Bridge 是唯一与 Natives 相邻的层★，
+所以 ①（`a2_jit_send_script_safe`）与 ③（`a2_launch_jvm_with_argv`）的调用点都只在 Bridge。
+
+| 文件 | 层 | 职责 |
+|---|---|---|
+| `Air2/Player/A2LaunchChain.[hm]` | Player | ★顺序与状态的唯一真相源★：`stage` / `failureReason`；① 失败不拦路、② 失败拦路（绝不进 ③）。本单**零改动** |
+| `Air2/Bridge/A2JITScriptDelivery.[hm]` | **Bridge** | ① ★唯一调用 `a2_jit_send_script_safe` 的地方★：定位随包 `AmethystJIT69.js` 并下发（失败不拦路）|
+| `Air2/Bridge/A2JITEnvironmentProbe.[hm]` | **Bridge** | ② 真调判据（**已有**；本单不改其语义）|
+| `Air2/Bridge/A2LaunchRunner.[hm]` | **Bridge** | ③ ★唯一调用 `a2_launch_jvm_with_argv` 的地方★（**已有**）|
+| `Air2/Player/A2LaunchFailure.[hm]` | Player | ★失败分类唯一实现★：`chain.stage` ⇒ 4 类；② 的判据行 / 用户文案按 7 档 verdict 分流（复用 `A2JITVerdictGuidance` + `A2JITStrings`，不另造表）|
+| `Air2/Player/A2LaunchSession.[hm]` | Player | 编排改动：开关两条判据行 + 组装并 `runWithError:` 上链（后台队列）|
+
+**★单一真相源★**：「走到哪一步 / 为什么停」只由 `A2LaunchChain.stage` + `.failureReason` 一处持有；
+JIT 是否可用只由 `A2JITEnvironment.lastRegionVerdict`（经 probe）一处给出。
+★禁止★ 各路径用局部 BOOL 记 JIT 状态（历史误判形态）—— `tests/JIT/jit_logic_tests.m` §⑱ 有源码级回归断言。
+
+**开关**：沿用 `debug.rt_p1_runtime`（**默认关** ⇒ 首页行为与旧版逐字相同）；开 / 关两条路都有判据行 `[A2-CHAIN] 开关=…`。
+
+**来源**：`D:\CTF\_AIR2_JITVM.md`；设计口径见 `docs/JIT-PROVISIONING.md` §2.4（「先 JIT 后启 JVM」）。
+
 ### LWJGL 补丁类归属 —— [LWJGL-PATCH]
 
 **决策**：`org.lwjgl.*` 补丁类放 **Java 侧、独立 jar**（`air2-lwjgl-patch.jar`，源在
