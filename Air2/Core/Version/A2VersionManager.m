@@ -21,6 +21,7 @@
 //
 
 #import "A2VersionManager.h"
+#import "A2Logger.h"
 #import "A2Settings.h"
 #import "A2Log.h"
 #import "A2VersionIsolation.h"
@@ -353,6 +354,10 @@ static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *n
 }
 
 - (void)notify {
+    [A2Logger info:@"A2VersionManager"
+           message:[NSString stringWithFormat:@"扫描到 %lu 个版本，当前选中 %@",
+                    (unsigned long)_versions.count, _currentVersion.name ?: @"(无)"]];
+
     [NSNotificationCenter.defaultCenter postNotificationName:A2VersionsDidChangeNotification
                                                       object:self];
 }

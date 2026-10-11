@@ -24,6 +24,7 @@
 #import "A2ModrinthAPI.h"
 #import "A2CurseForgeAPI.h"
 #import "A2MirrorResolver.h"
+#import "A2Logger.h"
 #import "A2Settings.h"
 
 // 首选平台 key 收敛到 A2Settings，不再本地定义。
@@ -254,6 +255,10 @@ NSArray<NSNumber *> *A2AllContentClasses(void) {
 - (void)searchWithFilter:(A2ContentFilter *)filter
             contentClass:(A2ContentClass)contentClass
               completion:(void (^)(NSArray<A2ContentItem *> *, NSError *))completion {
+
+    [A2Logger debug:@"A2ContentSource"
+            message:[NSString stringWithFormat:@"搜索 %@ class=%ld query=%@",
+                     self.displayName, (long)contentClass, filter.query ?: @""]];
 
     if (!self.isAvailable) {
         if (completion) {

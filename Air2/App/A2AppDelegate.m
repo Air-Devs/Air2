@@ -24,6 +24,7 @@
 #import "A2AppDelegate.h"
 #import "A2SceneDelegate.h"
 #import "A2ThemeManager.h"
+#import "A2Logger.h"
 #import "A2Settings.h"
 #import "A2AccountManager.h"
 #import "A2GameDirMigration.h"

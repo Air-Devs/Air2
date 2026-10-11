@@ -22,6 +22,7 @@
 
 #import "A2AccountManager.h"
 #import "A2MicrosoftAuth.h"
+#import "A2Logger.h"
 #import "A2Wardrobe.h"
 #import "A2Settings.h"
 #import "A2Log.h"
@@ -344,6 +345,11 @@ static void A2Main(dispatch_block_t b) {
 
 - (void)addAccount:(A2Account *)account {
     if (!account) return;
+
+    // 只记用户名与类型，绝不记 token
+    [A2Logger info:@"A2AccountManager"
+           message:[NSString stringWithFormat:@"添加账号: %@ (%@)",
+                    account.username, account.typeDisplayName]];
     NSMutableArray<A2Account *> *list = [_accounts mutableCopy];
 
     // 同一账号（类型 + profileID 相同）则替换，避免重复

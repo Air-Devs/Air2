@@ -43,6 +43,8 @@
 #import "A2SkinHeadView.h"
 
 #import "A2AccountViewController.h"
+#import "A2MultiplayerViewController.h"
+#import "A2Multiplayer.h"
 #import "A2SettingsViewController.h"
 #import "A2VersionListViewController.h"
 #import "A2DownloadViewController.h"
@@ -800,7 +802,12 @@
     [self pushScreen:[[A2DownloadViewController alloc] init] style:A2TransitionStyleScaleFade];
 }
 
-- (void)openMultiplayer { [A2Toast show:@"联机功能尚未接入" inView:self.view]; }
+- (void)openMultiplayer {
+    // 确保联机模块已初始化
+    [A2Multiplayer.shared initializeIfNeeded];
+    A2MultiplayerViewController *vc = [[A2MultiplayerViewController alloc] init];
+    [self pushScreen:vc style:A2TransitionStyleScaleFade];
+}
 - (void)openFiles       { [A2Toast show:@"文件管理尚未接入" inView:self.view]; }
 - (void)openVersionSettings {
     // 齿轮与「版本设置」进当前版本的单版本设置页（真实页面）。
