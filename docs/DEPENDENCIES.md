@@ -11,8 +11,45 @@
 | 名称 | 版本 | 来源 | 许可 | 用途 |
 |---|---|---|---|---|
 | Amethyst-iOS-MyRemastered | — | https://github.com/herbrine8403/Amethyst-iOS-MyRemastered | 见上游 | iOS 端 pojav 后端**行为/接口参考**（★不随包、不引用其代码★） |
-| PojavLauncher | — | https://github.com/PojavLauncherTeam/PojavLauncher | GPL-3.0 | ★**设计参考**（启动核心分层、Boardwalk 思路）；**Java 侧已换成自研，不再拷其类**★ |
+| PojavLauncher | — | https://github.com/PojavLauncherTeam/PojavLauncher | GPL-3.0 | ★**设计参考**（启动核心分层、Boardwalk 思路）；★Java 侧见下节：本轮改为**逐文件复用**老树 overlay，不再净室重写★ |
 | ZalithLauncher2 | — | https://github.com/ZalithLauncher/ZalithLauncher2 | GPL-3.0 | 架构分层与功能设计参考 |
+
+---
+
+## 启动核心后端 · 自研替换 —— 复用登记 ★[A2-GLFW-REUSE-1]★
+
+> **背景（用户拍板）**：本项目本身是 **GPL-3.0**（见 `LICENSE` / `COPYING`），
+> 老树（`D:\CTF\_510src\runtime_native`，Amethyst-iOS / PojavLauncher 系，同 GPL-3.0）
+> 的 GLFW/输入栈**可以合法复用**。故本轮**废弃「净室重写」路线**，改为逐文件复用；
+> 评估重点转为**可维护性**（见 `D:\CTF\_AIR2_GLFW.md` §①）。
+> 之前的「Java 侧已换成自研，不再拷其类」口径自本单起**作废**。
+
+**许可义务（已履行）**：复用文件逐个保留上游版权/许可头；另在文件头加一段来源标注
+（`★复用自【老树】…★`，含源路径、许可、落位、Air2 适配清单）。GPL-3.0 要求的分发即开源、
+保留声明、同许可，均满足；无宽松许可片段被并入。
+
+| 名称 | 版本 | 来源 | 许可 | 用途 | 引入方式 |
+|---|---|---|---|---|---|
+| Amethyst overlay · Java LWJGL 层（9 类） | 老树 `runtime_native`（只读） | `JavaApp/src/lwjgl/org/lwjgl/**`（同 GPL-3.0 家族） | **GPL-3.0-or-later**（随本仓 `LICENSE`） | MC 侧 GLFW/回调/STB 覆盖类（首帧必需） | ★已引入★ 落位 `Air2/JavaApp/src/lwjgl/`，产出 `air2-lwjgl-patch.jar` |
+
+**逐文件来源与 Air2 适配**（★可追溯到文件:行★）：
+
+| Air2 落位 | 老树源路径 | 改动标记 |
+|---|---|---|
+| `JavaApp/src/lwjgl/org/lwjgl/glfw/GLFW.java` | 同路径（1440 行） | ★A2-LWJGL-2★ 5 点：删 `android.util.*`（ArrayMap→HashMap/LinkedHashMap，4 处）、保留 `javax.annotation.*`（由随包声明提供）、删死 import `Tools`、system.load 段改写、`UIKit.updateMCGuiScale` 待回填 |
+| `JavaApp/src/lwjgl/org/lwjgl/glfw/GLFWWindowProperties.java` | 同路径（22 行） | ★A2-LWJGL-3★ 删死 import `net.kdt.pojavlaunch.Tools` |
+| `JavaApp/src/lwjgl/org/lwjgl/glfw/{CallbackBridge,Callbacks,GLFWNativeCocoa,GLFWNativeEGL}.java` | 同路径 | 逐字节（仅加来源头） |
+| `JavaApp/src/lwjgl/org/lwjgl/stb/STBImageResize.java` | 同路径（290 行） | 逐字节（仅加来源头） |
+| `JavaApp/src/lwjgl/org/lwjgl/system/{Callback,CallbackI}.java` | 同路径 | 逐字节（仅加来源头） |
+| `JavaApp/src/lwjgl/javax/annotation/Nullable.java` | ★Air2 新增（非拷自老树）★ | ★A2-LWJGL-1★ JSR-305 最小声明；老树 overlay 用 50 处，本仓 LWJGL jar 未随 |
+
+**未引入（含原因，非待办空话）**：`GLFWVulkan.java`（需官方 org.lwjgl.vulkan，本仓 lwjgl-341 未随）、
+`APIUtil.java`（第 180 行 `MemoryUtil.wrap(Class,long,int)` 仅老树自带 jar 有）、
+`InfdevMouse.java`（需 Caciocavallo `net.java.openjdk.cacio.ctc`）。
+清单与判据同时写进包内 `air2-lwjgl-patch.list`（出包可核）。
+
+**native 侧（`input_bridge_v3.m` / `egl_bridge.m` / `KeyboardInput.m` / `glfw_keycodes.h`）**：
+本轮**未引入**。逐点耦合与「为什么整搬=两套并行维护」见 `D:\CTF\_AIR2_GLFW.md` §①/§②。
 
 ## Java 运行时
 

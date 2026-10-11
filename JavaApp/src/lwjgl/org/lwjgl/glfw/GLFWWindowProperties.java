@@ -1,36 +1,29 @@
+/*
+ * ★复用自【老树】D:\CTF\_510src\runtime_native（Amethyst-iOS / Pojav 系，GPL-3.0）★
+ *   源路径: JavaApp/src/lwjgl/org/lwjgl/glfw/GLFWWindowProperties.java
+ *   许可: GPL-3.0-or-later（与本仓 LICENSE 一致）；上游版权声明原样保留在本文件正文。
+ *   落位: Air2 JavaApp/src/lwjgl/ → air2-lwjgl-patch.jar（classpath 最前；见 docs/ARCHITECTURE.md [LWJGL-PATCH]）
+ *   Air2 适配: 见本文件内 ★A2-LWJGL-*★ 标记；无标记即与上游逐字节相同。
+ */
 package org.lwjgl.glfw;
 
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
+// ★A2-LWJGL-3★ 删上游的 `import net.kdt.pojavlaunch.Tools;`：老树启动器类，本文件实下未使用（死 import）。
 
-/**
- * Air2 —— LWJGL 补丁类第一片：GLFW 窗口属性数据持有者。
- *
- * <p>同 {@link CallbackBridge}：这是<b>非官方类</b>（官方 LWJGL 里没有同名类），
- * 放在 classpath 最前不可能遮蔽官方实现 ⇒ 零回归风险。补丁版 {@code GLFW} 会用它记录
- * 窗口尺寸/位置/输入模式；本类只做数据，不含任何原生调用。
- *
- * <p>归属与剩余清单见 jar 内 {@code META-INF/air2-lwjgl-patch.list}。
- * 本文件为净室实现（不 import 任何启动器/游戏包）。
- */
-public final class GLFWWindowProperties {
-
-    public int width;
-    public int height;
-    public float x;
-    public float y;
+public class GLFWWindowProperties {
+    public int width, height;
+    public float x, y;
     public CharSequence title;
-    public boolean shouldClose;
-    public boolean isInitialSizeCalled;
-    public boolean isCursorEntered;
+    public boolean shouldClose, isInitialSizeCalled, isCursorEntered;
     public long monitor;
-
-    public final Map<Integer, Integer> inputModes = new HashMap<Integer, Integer>();
-    public final Map<Integer, Integer> windowAttribs = new HashMap<Integer, Integer>();
-
+    public Map<Integer, Integer> inputModes = new HashMap<>();
+    public Map<Integer, Integer> windowAttribs = new HashMap<>();
+    
     @Override
     public String toString() {
-        return "GLFWWindowProperties{width=" + width + ", height=" + height
-                + ", x=" + x + ", y=" + y + "}";
+        return "width=" + width + ", " +
+          "height=" + height + ", " +
+          "x=" + x + ", " +
+          "y=" + y + ", ";
     }
 }

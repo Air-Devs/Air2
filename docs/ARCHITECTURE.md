@@ -110,7 +110,7 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 | 路径 | 职责 |
 |---|---|
 | `src/launcher/` | 启动核心 Java 代码（入口、启动计划消费、类路径追加、主类派发） |
-| `src/lwjgl/` | LWJGL 补丁源码（GLFW 回调、输入桥、平台适配）★层 2，尚未落★ |
+| `src/lwjgl/` | LWJGL 补丁源码（GLFW 回调、输入桥、平台适配）★层 2；[A2-GLFW-REUSE-1] 已复用老树 9 类 + 1 注解补丁★ |
 | `libs/` | 预编译 Java 库（不修改的上游 jar） |
 
 产物为 `build/air2-launch.jar`（★旧文写的 `lwjgl.jar` 已作废：自研启动核心与 LWJGL 补丁
@@ -355,10 +355,15 @@ JRE 缺失时该阶段**只告警不失败**（同树多任务并行时不让别
 | `JavaApp/src/lwjgl/**` | JavaApp | LWJGL 补丁源码（层 2） | `build/air2-lwjgl-patch.jar` → `<App>/Java/` |
 | `JavaApp/src/lwjgl/META-INF/air2-lwjgl-patch.list` | JavaApp | ★已落 / 剩余清单★（包内可判） | 同 jar 内 |
 
-**现状**：已落 2 个**非官方类**（`org.lwjgl.glfw.CallbackBridge`、`org.lwjgl.glfw.GLFWWindowProperties`
-—— 官方 LWJGL 无同名类 ⇒ 放最前零遮蔽风险）；**会覆盖官方同名类的 10 个类逐条列在
-jar 内 `META-INF/air2-lwjgl-patch.list`**，需与 `Natives/Input` 的 native 符号一起落位
-（一次塞半成品覆盖类会把 LWJGL 类初始化打坏）。
+**现状（★[A2-GLFW-REUSE-1]：路线由「净室重写」改为「复用老树」★）**：已落 **10 个类** ——
+复用老树（`D:\CTF\_510src\runtime_native`，GPL-3.0）的 9 个覆盖类
+（`GLFW` / `Callbacks` / `GLFWNativeCocoa` / `GLFWNativeEGL` / `CallbackBridge` /
+`GLFWWindowProperties` / `STBImageResize` / `Callback` / `CallbackI`）
++ 1 个 Air2 新增的编译期注解补丁（`javax/annotation/Nullable`，★A2-LWJGL-1★，理由见文件头）。
+逐文件来源/许可/适配登记在 `docs/DEPENDENCIES.md`「自研替换 · 复用登记」；
+包内清单 `META-INF/air2-lwjgl-patch.list` 记录「已落 + 未落及原因」。
+未落 3 个（`GLFWVulkan` 缺 lwjgl-vulkan jar、`APIUtil` 签名属老树自带 jar、`InfdevMouse` 需 Caciocavallo）。
+★仍需与 `Natives/Input` 的 native 符号一起落位才是完整通路★（见 `D:\CTF\_AIR2_GLFW.md` §①/§③）。
 
 **构建**：`JavaApp/Makefile` 的 `lwjgl` / `verify-lwjgl` 目标；
 随包由 `scripts/gen_xcodeproj.py` 的「Build Java Launch Core」脚本阶段完成（两个 jar 同一阶段）。

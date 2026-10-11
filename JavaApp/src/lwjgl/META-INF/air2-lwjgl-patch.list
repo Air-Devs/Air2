@@ -4,25 +4,43 @@ Air2 —— org.lwjgl.* 补丁类清单（jar 内随包自证）
 归属决策：Java 侧、独立 jar（air2-lwjgl-patch.jar），classpath 最前（先于 libs/lwjgl-<ver>/*）。
 理由与规范依据见 docs/ARCHITECTURE.md [LWJGL-PATCH] 与 D:\CTF\_AIR2_LAUNCH_PATH.md §①。
 
-本 jar 当前【已实现】的类（★非官方类，零遮蔽风险★）：
-  org/lwjgl/glfw/CallbackBridge.class        输入桥 Java 壳（native 符号宿主 = 主可执行文件）
-  org/lwjgl/glfw/GLFWWindowProperties.class  GLFW 窗口属性数据持有者
+★本轮变更（[A2-GLFW-REUSE-1]）：按用户拍板改走【复用老树】路线★
+  老树 = D:\CTF\_510src\runtime_native（Amethyst-iOS / Pojav 系，GPL-3.0）。
+  项目本身是 GPL-3.0 ⇒ 复用合法；评估重点由「净室怎么写」转为「好不好维护」。
+  逐文件来源/适配见 docs/DEPENDENCIES.md「启动核心后端 · 自研替换」一节。
 
-【未实现 · 剩余清单】（均为官方同名类 ⇒ 落位时会遮蔽官方实现，必须与 Natives 输入桥
-符号一起做，否则会把 LWJGL 类初始化打坏；逐条排在下面，按「启动/首帧必需」优先级排序）：
+本 jar 当前【已实现】的类（10 个）：
 
-  1. org/lwjgl/glfw/GLFW.java                ★首帧必需★ 官方 iOS 构建缺 GLFW 原生实现，
-                                             MC 的 Display/Window 初始化第一个撞它
-  2. org/lwjgl/glfw/Callbacks.java           GLFW 回调转发（与 CallbackBridge 配对）
-  3. org/lwjgl/glfw/GLFWNativeCocoa.java     平台壳（剪贴板/窗口）
-  4. org/lwjgl/glfw/GLFWNativeEGL.java       平台壳（EGL/GL 绑定）
-  5. org/lwjgl/glfw/GLFWVulkan.java          Vulkan 平台壳（MoltenVK 路径；主推 Metal 后可缓）
-  6. org/lwjgl/system/Callback.java          ★首帧必需★ LWJGL 回调基类（GC 锚点机制）
-  7. org/lwjgl/system/CallbackI.java         ★首帧必需★ 回调接口（Pointer 子类型）
-  8. org/lwjgl/system/APIUtil.java           LWJGL 属性/诊断辅助（iOS 上 apiCheck 行为需改）
-  9. org/lwjgl/input/*.java                  输入（如 InfdevMouse；触控层用）
- 10. org/lwjgl/stb/STBImageResize.java       贴图缩放 native 壳（字体/图标路径）
+  复用自老树（9 个，均带来源/许可头，改动见 ★A2-LWJGL-*★ 标记）：
+    org/lwjgl/glfw/GLFW.class                 ★首帧必需★ GLFW 全量 iOS 实现；★改动★ A2-LWJGL-2
+    org/lwjgl/glfw/Callbacks.class            GLFW 回调转发（与 CallbackBridge 配对）     逐字节
+    org/lwjgl/glfw/GLFWNativeCocoa.class      平台壳（剪贴板/窗口）                       逐字节
+    org/lwjgl/glfw/GLFWNativeEGL.class        平台壳（空壳兼容类）                       逐字节
+    org/lwjgl/glfw/CallbackBridge.class       输入桥 Java 壳（JNI 符号宿主=主可执行文件）  逐字节
+    org/lwjgl/glfw/GLFWWindowProperties.class GLFW 窗口属性数据持有者；★改动★ A2-LWJGL-3
+    org/lwjgl/stb/STBImageResize.class        贴图缩放 native 壳（字体/图标路径）         逐字节
+    org/lwjgl/system/Callback.class           LWJGL 回调基类（GC 锚点机制）              逐字节
+    org/lwjgl/system/CallbackI.class          回调接口（Pointer 子类型）                 逐字节
+
+  Air2 新增（1 个，非官方类，零遮蔽风险）：
+    javax/annotation/Nullable.class           ★A2-LWJGL-1★ 编译期注解补丁（JSR-305）
+                                              为什么：老树 overlay 用 javax.annotation.Nullable（50 处），
+                                              而本仓 Libraries/Jars/lwjgl-341/* 未随该注解（已逐个 unzip -l 核对）。
+
+【未落 · 剩余清单】（带「不落原因」，非待办空话）：
+  A. org/lwjgl/glfw/GLFWVulkan.java   —— 需官方 org.lwjgl.vulkan.*（VkInstance/VkPhysicalDevice/
+     VkAllocationCallbacks/VkSurfaceKHR 与 EXTMetalSurface）。本仓 Libraries/Jars/lwjgl-341/ 只有
+     lwjgl / lwjgl-glfw / lwjgl-opengl / lwjgl-stb 四个 jar，无 lwjgl-vulkan ⇒ 现在落会编不过。
+     Air2 主推渲染后端是 libmetallum.dylib（Metal），Vulkan 路径非首帧必需 ⇒ 缓（与老树 META-INF 第 5 条一致）。
+  B. org/lwjgl/system/APIUtil.java    —— 老树版第 180 行调 MemoryUtil.wrap(Class,long,int)，
+     该签名只在老树自带的老版 lwjgl.jar 里；本仓 lwjgl-341 的 MemoryUtil 无此重载 ⇒ 需按 3.4.1 签名改 1 行
+     （属「按老树语义重写」而非逐字节复用，故本轮不落，登记在此）。
+  C. org/lwjgl/input/InfdevMouse.java —— 依赖 net.java.openjdk.cacio.ctc.{ExternalMouseReader,
+     InfdevGrabHandler}（Caciocavallo，老树 AWT 路径）。本仓无该依赖，且服务的是老版本 MC 的
+     LWJGL2 org.lwjgl.input.Mouse 路径，与「进主界面」无关 ⇒ 不复用。
 
 另需（不属 org.lwjgl，但是同一条「首帧」路径）：
-     Natives/Input 的 CallbackBridge native 符号实现（nativeClipboard/nativeSetGrabbing/
-     nativeSetModifiers 等）—— 目前 Natives/Input 只有 .gitkeep。
+     Natives/Input 的 native 符号实现（Java_org_lwjgl_glfw_GLFW_nglfwSet*Callback 10 个、
+     nglfwGetCursorPos(A)、glfwSetCursorPos、CallbackBridge_native{Clipboard,SetGrabbing,SetModifiers}、
+     nglfwSetShowingWindow、ThreadLocalUtil_nsetupEnvData）—— ★本轮未落★，
+     原因与逐点耦合见 D:\CTF\_AIR2_GLFW.md §①/§③；目前 Natives/Input 只有 .gitkeep。
