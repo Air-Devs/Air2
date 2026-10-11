@@ -60,6 +60,22 @@ NS_ASSUME_NONNULL_BEGIN
 
 @class A2JITPairingFileStore;   // ★只前向声明★：头文件不引入 Player 的实现头（.m 里才 import）
 
+#pragma mark - [JIT-AUTOPAIR-4] 设备发起档（iOS 27）的阶段
+
+/// 「设备发起档」的可观测阶段（设置页的状态文字直接由它上来；★四语文案在 UI 侧★）。
+typedef NS_ENUM(NSInteger, A2JITDeviceInitiatedPairingStage) {
+    A2JITDeviceInitiatedPairingStageIdle        = 0,  ///< 未开始
+    A2JITDeviceInitiatedPairingStagePreparing   = 1,  ///< 生成本轮主机身份 / 码
+    A2JITDeviceInitiatedPairingStageAdvertising = 2,  ///< 已起广告，★等设备连入★（用户此刻去系统设置）
+    A2JITDeviceInitiatedPairingStageConnected   = 3,  ///< ★设备已连入★
+    A2JITDeviceInitiatedPairingStageVerifying   = 4,  ///< 正在验码（PS-Msg01..06）
+    A2JITDeviceInitiatedPairingStageSucceeded   = 5,  ///< 配对成功（配对文件已落盘）
+    A2JITDeviceInitiatedPairingStageFailed      = 6,  ///< 失败（原因在 detail）
+    A2JITDeviceInitiatedPairingStageCancelled   = 7,  ///< 已取消
+};
+/// 阶段稳定英文名（日志可搜）。
+NSString *A2JITDeviceInitiatedPairingStageName(A2JITDeviceInitiatedPairingStage stage);
+
 /// 自动配对引擎的 Bridge（RPPairing 真实现经 Bridge → Natives 落地）。
 @interface A2JITAutoPairingEngineBridge : NSObject <A2JITAutoPairingEngine>
 
@@ -83,6 +99,40 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// 最近一次成功生成的配对文件字节（诊断 / 自证用；nil = 还没成功过）。
 @property (nonatomic, readonly, copy, nullable) NSData *lastGeneratedPairingFile;
+
+#pragma mark - [JIT-AUTOPAIR-4] 设备发起档（iOS 27）★唯一驱动入口★
+
+/// 是否正在跑一轮「设备发起配对」。
+@property (nonatomic, readonly) BOOL deviceInitiatedPairingRunning;
+
+/// ★[JIT-AUTOPAIR-4] 设备发起档的★唯一驱动入口★★（谁调它：设置页的「开始配对」按钮那一条链）。
+///
+/// 做什么（按顺序，全部在这一处）：
+///   ② 起 `_remotepairing-pairable-host._tcp` 广告并等系统连入（Natives: A2RPPairableHostAdvertiser）；
+///   ③ 用被接受的字节通道建 pair-setup 消息传输（RemoteXPC，originatedBy=device）；
+///   ④ 用★device/accessory 侧★会话驱动 PS-Msg01..06（★先收后发★）；
+///   ⑤ 成功后把配对文件写进注入的 `pairingFileStore`（沿用既有落盘）；
+///   ⑥ 失败按类分流（failureNameOut 给出稳定的失败类名；原因串在 reason）。
+///
+/// ①（生成 6 位码并交给已有 UI/持久化）★不在这里★：它由既有的 `A2JITPairingCodeSession`（Player 层）
+/// 承担，调用方把**正在显示的码**经 displayedCode 传进来 —— Bridge 不得反向依赖 Player（ADR-002）。
+///
+/// ★阻塞★：整段是同步的（广告等待最长 budget 秒）⇒ 调用方必须在后台队列调用，
+/// 并在 stageHandler 里回主线程刷新 UI。
+/// @param displayedCode 本机正在显示的 6 位码（★空 ⇒ 立即失败，不猜不默认★）。
+/// @param stageHandler  阶段回调（可在任意线程被调用；实现方自行回主线程）。可为 nil。
+/// @return 成功（配对文件已落盘）YES；否则 NO 并回填 reason / failureNameOut。
+- (BOOL)startDeviceInitiatedPairingWithHostName:(NSString *)hostName
+                                  displayedCode:(NSString *)displayedCode
+                                         budget:(NSTimeInterval)budget
+                                   stageHandler:(nullable void (^)(A2JITDeviceInitiatedPairingStage stage,
+                                                                   NSString *detail))stageHandler
+                                         reason:(NSString *_Nullable *_Nullable)whyOut
+                                    failureName:(NSString *_Nullable *_Nullable)failureNameOut;
+
+/// 请求取消正在跑的那一轮（★协作式★：置标志；当前阻塞的广告等待会在其预算内返回后停下 —— 
+/// 不声称能瞬间中断系统调用，也不跨线程去拆正在等待的 listener，那会踩 use-after-stop）。
+- (void)cancelDeviceInitiatedPairing;
 
 @end
 

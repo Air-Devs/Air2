@@ -19,6 +19,8 @@
 #if __has_include("a2_rppairing_pairsetup.h")
 #import "a2_rppairing_pairsetup.h"
 @interface A2RPPairSetupRemoteXPCTransport () <A2RPPairSetupMessageTransport>
+/// ★[A2-PAIRWIRE] 缝的可选属性★：由最近一次原语调用的 RemoteXPC 错误分类翻译而来。
+@property (nonatomic, readwrite) A2RPPairSetupTransportFailure lastFailureKind;
 @end
 #endif
 
@@ -242,6 +244,9 @@ BOOL A2RPPairSetupUSBPathAvailable(NSString **reason) {
 @interface A2RPPairSetupRemoteXPCTransport ()
 @property (nonatomic, strong) A2RemoteXPCSession *session;
 @property (nonatomic, copy) NSString *hostName;
+@property (nonatomic, copy) NSString *originatedBy;
+/// ★[A2-PAIRWIRE] 最近一次原语调用的 RemoteXPC 错误分类★（翻成缝的 lastFailureKind）。
+@property (nonatomic) A2RemoteXPCErrorKind lastRemoteXPCError;
 @end
 
 @implementation A2RPPairSetupRemoteXPCTransport
@@ -250,7 +255,24 @@ BOOL A2RPPairSetupUSBPathAvailable(NSString **reason) {
                                hostName:(NSString *)hostName
                             wireVersion:(NSUInteger)wireVersion
                                 timeout:(NSTimeInterval)timeout
-                                 reason:(NSString **)reason
+                                 reason:(NSString **_Nullable)reason
+                                  error:(A2RemoteXPCErrorKind *)errorOut {
+    // ★既有语义不变★：本方法恒以 originatedBy="host" 构造（就是它原来的行为）。
+    return [self transportOverByteStream:stream
+                            originatedBy:@"host"
+                                hostName:hostName
+                             wireVersion:wireVersion
+                                 timeout:timeout
+                                  reason:reason
+                                   error:errorOut];
+}
+
++ (instancetype)transportOverByteStream:(id<A2RPByteStream>)stream
+                           originatedBy:(NSString *)originatedBy
+                               hostName:(NSString *)hostName
+                            wireVersion:(NSUInteger)wireVersion
+                                timeout:(NSTimeInterval)timeout
+                                 reason:(NSString **_Nullable)reason
                                   error:(A2RemoteXPCErrorKind *)errorOut {
     if (stream == nil) {
         if (reason) {
@@ -259,10 +281,11 @@ BOOL A2RPPairSetupUSBPathAvailable(NSString **reason) {
         if (errorOut) { *errorOut = A2RemoteXPCErrorNotConnected; }
         return nil;
     }
+    NSString *by = originatedBy.length > 0 ? originatedBy : @"host";
     A2RemoteXPCSession *session =
         [[A2RemoteXPCSession alloc] initWithStream:stream
                                wireProtocolVersion:wireVersion
-                                      originatedBy:@"host"];   // 本侧当 rppairing 的 host/控制器
+                                      originatedBy:by];
     NSString *why = nil;
     A2RemoteXPCErrorKind err = A2RemoteXPCErrorNone;
     if (![session connectAndHandshakeWithTimeout:timeout reason:&why error:&err]) {
@@ -276,8 +299,10 @@ BOOL A2RPPairSetupUSBPathAvailable(NSString **reason) {
     A2RPPairSetupRemoteXPCTransport *t = [[A2RPPairSetupRemoteXPCTransport alloc] init];
     t.session = session;
     t.hostName = [hostName copy] ?: @"air2-rppairing";
-    A2RXPCLog([NSString stringWithFormat:@"传输就绪 路径=RemoteXPC(§2a/§2b) 角色=host 主机名=%@ wire=%lu",
-               t.hostName, (unsigned long)wireVersion]);
+    t.originatedBy = by;
+    t.lastRemoteXPCError = A2RemoteXPCErrorNone;
+    A2RXPCLog([NSString stringWithFormat:@"传输就绪 路径=RemoteXPC(§2a/§2b) 角色=%@ 主机名=%@ wire=%lu",
+               by, t.hostName, (unsigned long)wireVersion]);
     return t;
 }
 
@@ -297,6 +322,7 @@ BOOL A2RPPairSetupUSBPathAvailable(NSString **reason) {
         if (reason) {
             *reason = @"传输未就绪（会话为 nil）";
         }
+        self.lastRemoteXPCError = A2RemoteXPCErrorNotConnected;
         return nil;
     }
     A2RemoteXPCErrorKind err = A2RemoteXPCErrorNone;
@@ -306,12 +332,85 @@ BOOL A2RPPairSetupUSBPathAvailable(NSString **reason) {
                                            startNew:startNewSession
                                              reason:&why
                                               error:&err];
+    self.lastRemoteXPCError = (out != nil) ? A2RemoteXPCErrorNone : err;
     if (out == nil && reason) {
         *reason = [NSString stringWithFormat:@"交换失败（class=%@）：%@",
                    A2RemoteXPCErrorKindName(err), why ?: @"原因未记录"];
     }
     return out;
 }
+
+#pragma mark - [A2-PAIRWIRE] 响应方（accessory）原语
+
+- (BOOL)sendPairingData:(NSData *)tlv
+                   kind:(NSString *)kind
+               startNew:(BOOL)startNewSession
+                 reason:(NSString **)reason {
+    if (self.session == nil) {
+        if (reason) {
+            *reason = @"传输未就绪（会话为 nil）";
+        }
+        self.lastRemoteXPCError = A2RemoteXPCErrorNotConnected;
+        return NO;
+    }
+    A2RemoteXPCErrorKind err = A2RemoteXPCErrorNone;
+    NSString *why = nil;
+    BOOL ok = [self.session sendPairingData:tlv
+                                       kind:kind
+                                   startNew:startNewSession
+                                     reason:&why
+                                      error:&err];
+    self.lastRemoteXPCError = ok ? A2RemoteXPCErrorNone : err;
+    if (!ok && reason) {
+        *reason = [NSString stringWithFormat:@"发送失败（class=%@）：%@",
+                   A2RemoteXPCErrorKindName(err), why ?: @"原因未记录"];
+    }
+    return ok;
+}
+
+- (NSData *)receivePairingDataWithKind:(NSString *)kind
+                               timeout:(NSTimeInterval)timeout
+                                reason:(NSString **)reason {
+    if (self.session == nil) {
+        if (reason) {
+            *reason = @"传输未就绪（会话为 nil）";
+        }
+        self.lastRemoteXPCError = A2RemoteXPCErrorNotConnected;
+        return nil;
+    }
+    A2RemoteXPCErrorKind err = A2RemoteXPCErrorNone;
+    NSString *why = nil;
+    NSData *in = [self.session receivePairingDataWithKind:kind
+                                                  timeout:timeout
+                                                   reason:&why
+                                                    error:&err];
+    self.lastRemoteXPCError = (in != nil) ? A2RemoteXPCErrorNone : err;
+    if (in == nil && reason) {
+        *reason = [NSString stringWithFormat:@"接收失败（class=%@）：%@",
+                   A2RemoteXPCErrorKindName(err), why ?: @"原因未记录"];
+    }
+    return in;
+}
+
+#if __has_include("a2_rppairing_pairsetup.h")
+/// 把 RemoteXPC 的错误分类翻成缝的失败分类（★可选属性 lastFailureKind 的取值口径★）。
+static A2RPPairSetupTransportFailure A2RPPWMapRemoteXPCError(A2RemoteXPCErrorKind k) {
+    switch (k) {
+        case A2RemoteXPCErrorNone:               return A2RPPairSetupTransportFailureNone;
+        case A2RemoteXPCErrorReceiveTimeout:
+        case A2RemoteXPCErrorConnectTimeout:
+        case A2RemoteXPCErrorHandshakeTimeout:   return A2RPPairSetupTransportFailureTimeout;
+        case A2RemoteXPCErrorPeerClosed:         return A2RPPairSetupTransportFailurePeerClosed;
+        case A2RemoteXPCErrorFrameFormat:
+        case A2RemoteXPCErrorXPCDecode:          return A2RPPairSetupTransportFailureFormat;
+        default:                                 return A2RPPairSetupTransportFailureOther;
+    }
+}
+
+- (A2RPPairSetupTransportFailure)lastFailureKind {
+    return A2RPPWMapRemoteXPCError(self.lastRemoteXPCError);
+}
+#endif
 
 - (void)close {
     [self.session close];

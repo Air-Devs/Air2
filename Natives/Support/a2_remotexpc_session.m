@@ -411,24 +411,24 @@ static NSData *A2RXPCFindPairingData(id node, NSUInteger depth,
     return nil;
 }
 
-- (NSData *)exchangePairingData:(NSData *)tlv
-                           kind:(NSString *)kind
-                       startNew:(BOOL)startNewSession
-                         reason:(NSString **)reason
-                          error:(A2RemoteXPCErrorKind *)error {
+- (BOOL)sendPairingData:(NSData *)tlv
+                   kind:(NSString *)kind
+               startNew:(BOOL)startNewSession
+                 reason:(NSString **)reason
+                  error:(A2RemoteXPCErrorKind *)error {
     if (!self.handshakeComplete) {
         if (reason) {
             *reason = @"RemoteXPC 会话尚未完成初始化握手";
         }
         A2RXPCRecordError(error, A2RemoteXPCErrorNotConnected);
-        return nil;
+        return NO;
     }
     if (tlv == nil) {
         if (reason) {
             *reason = @"要发的 TLV 为 nil";
         }
         A2RXPCRecordError(error, A2RemoteXPCErrorSendFailed);
-        return nil;
+        return NO;
     }
 
     NSUInteger seq = self.sequenceNumber;
@@ -455,20 +455,36 @@ static NSData *A2RXPCFindPairingData(id node, NSUInteger depth,
         A2RXPCLog([NSString stringWithFormat:@"错误分类=%@ 步骤=tx pairingData seq=%lu",
                    A2RemoteXPCErrorKindName(error ? *error : A2RemoteXPCErrorNone),
                    (unsigned long)seq]);
-        return nil;
+        return NO;
     }
     self.sequenceNumber = seq + 1;
+    return YES;
+}
+
+- (NSData *)receivePairingDataWithKind:(NSString *)kind
+                               timeout:(NSTimeInterval)timeout
+                                reason:(NSString **)reason
+                                 error:(A2RemoteXPCErrorKind *)error {
+    (void)kind;
+    if (!self.handshakeComplete) {
+        if (reason) {
+            *reason = @"RemoteXPC 会话尚未完成初始化握手";
+        }
+        A2RXPCRecordError(error, A2RemoteXPCErrorNotConnected);
+        return nil;
+    }
 
     // ---- 读回复：DATA 帧 → XPC 消息 → 值树里找 pairingData ----
-    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:self.exchangeTimeout];
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:timeout];
     while (YES) {
         if ([deadline timeIntervalSinceNow] <= 0) {
             if (reason) {
-                *reason = [NSString stringWithFormat:@"等对端回复超时（%.1fs）", self.exchangeTimeout];
+                *reason = [NSString stringWithFormat:@"等对端回复超时（%.1fs）", timeout];
             }
             A2RXPCRecordError(error, A2RemoteXPCErrorReceiveTimeout);
             A2RXPCLog([NSString stringWithFormat:@"错误分类=%@ 步骤=rx pairingData seq=%lu",
-                       A2RemoteXPCErrorKindName(A2RemoteXPCErrorReceiveTimeout), (unsigned long)seq]);
+                       A2RemoteXPCErrorKindName(A2RemoteXPCErrorReceiveTimeout),
+                       (unsigned long)self.sequenceNumber]);
             return nil;
         }
         NSString *why = nil;
@@ -574,11 +590,24 @@ static NSData *A2RXPCFindPairingData(id node, NSUInteger depth,
         }
         if (found != nil) {
             A2RXPCLog([NSString stringWithFormat:@"rx pairingData seq=%lu 收到 %lu 字节",
-                       (unsigned long)seq, (unsigned long)found.length]);
+                       (unsigned long)self.sequenceNumber, (unsigned long)found.length]);
             return found;
         }
         // 与本协议无关的消息 ⇒ 继续读
     }
+}
+
+/// ★既有语义保持不动★：发一条 pairingData TLV，同步取回对端的下一条。
+/// 现在 = sendPairingData: + receivePairingDataWithKind:timeout:reason:（同一份实现，无复制）。
+- (NSData *)exchangePairingData:(NSData *)tlv
+                           kind:(NSString *)kind
+                       startNew:(BOOL)startNewSession
+                         reason:(NSString **)reason
+                          error:(A2RemoteXPCErrorKind *)error {
+    if (![self sendPairingData:tlv kind:kind startNew:startNewSession reason:reason error:error]) {
+        return nil;
+    }
+    return [self receivePairingDataWithKind:kind timeout:self.exchangeTimeout reason:reason error:error];
 }
 
 @end

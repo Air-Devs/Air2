@@ -32,6 +32,8 @@
 #import "a2_tlspsk_mbedtls.h"     // [A2-INTEGRATION] mbedTLS 后端注册入口（第三方，Apache-2.0）
 // ★[A2-RXPC] 本单新增：传输层判据行（只加一行调用点，见下；不改既有逻辑）★
 #import "a2_rppairing_pairable_host.h"
+// ★[JIT-AUTOPAIR-4] 设备发起档（iOS 27）的★唯一驱动函数★：广告 → 连入 → 建传输 → accessory 侧 PS-Msg01..06
+#import "a2_rppairing_pairsetup_accessory.h"
 #import "A2JITPairingFileStore.h" // ★配对材料的落盘目标★（同层已有的类，见 docs/ARCHITECTURE.md）
 
 #import <sys/sysctl.h>
@@ -81,11 +83,29 @@ static NSString *A2RPStateName(A2JITAutoPairingPreconditionState state) {
     }
 }
 
+/// [JIT-AUTOPAIR-4] 设备发起档的阶段稳定名（日志可搜；★四语文案在 UI 侧★）。
+NSString *A2JITDeviceInitiatedPairingStageName(A2JITDeviceInitiatedPairingStage stage) {
+    switch (stage) {
+        case A2JITDeviceInitiatedPairingStageIdle:        return @"idle";
+        case A2JITDeviceInitiatedPairingStagePreparing:   return @"preparing";
+        case A2JITDeviceInitiatedPairingStageAdvertising: return @"advertising";
+        case A2JITDeviceInitiatedPairingStageConnected:   return @"connected";
+        case A2JITDeviceInitiatedPairingStageVerifying:   return @"verifying";
+        case A2JITDeviceInitiatedPairingStageSucceeded:   return @"succeeded";
+        case A2JITDeviceInitiatedPairingStageFailed:      return @"failed";
+        case A2JITDeviceInitiatedPairingStageCancelled:   return @"cancelled";
+    }
+    return @"unknown";
+}
+
 @interface A2JITAutoPairingEngineBridge ()
 /// 惰性缓存（自检只跑一次；读取无副作用）。
 @property (nonatomic, strong, nullable) A2RPPairingPreflight *preflight;
 @property (nonatomic, strong, nullable) A2JITAutoPairingPreconditions *cachedPreconditions;
 @property (nonatomic, readwrite, copy, nullable) NSData *lastGeneratedPairingFile;
+/// [JIT-AUTOPAIR-4] 设备发起档：运行标志 + 协作式取消标志（★原子★：取消可能从主线程置位）。
+@property (nonatomic, readwrite) BOOL deviceInitiatedPairingRunning;
+@property (atomic) BOOL deviceInitiatedCancelled;
 @end
 
 @implementation A2JITAutoPairingEngineBridge
@@ -341,6 +361,125 @@ static NSString *A2RPStateName(A2JITAutoPairingPreconditionState state) {
         *whyOut = [NSString stringWithFormat:@"pair-verify 成功（%@）；配对文件已写入 %@",
                    pf.pairVerifySummary, written];
     }
+    return YES;
+}
+
+#pragma mark - [JIT-AUTOPAIR-4] 设备发起档（iOS 27）：★唯一驱动入口★
+
+- (void)cancelDeviceInitiatedPairing {
+    self.deviceInitiatedCancelled = YES;
+    NSLog(@"[A2JIT] 设备发起档：已请求取消（★协作式★；当前阻塞的等待会在其预算内返回后才停下）");
+}
+
+- (BOOL)startDeviceInitiatedPairingWithHostName:(NSString *)hostName
+                                  displayedCode:(NSString *)displayedCode
+                                         budget:(NSTimeInterval)budget
+                                   stageHandler:(void (^)(A2JITDeviceInitiatedPairingStage, NSString *))stageHandler
+                                         reason:(NSString *_Nullable *_Nullable)whyOut
+                                    failureName:(NSString *_Nullable *_Nullable)failureNameOut {
+    if (failureNameOut) { *failureNameOut = nil; }
+
+    // ---- ① 前置校验：码必须是本机【正在显示】的 6 位码（★不猜、不默认★）----
+    //  ①「生成 6 位码并交给已有 UI/持久化」由既有的 A2JITPairingCodeSession（Player 层）在做 ——
+    //  Bridge 不得反向依赖 Player（ADR-002），所以这里消费它显示出来的那一个码。
+    if (hostName.length == 0) {
+        if (whyOut) { *whyOut = @"主机名为空 ⇒ 设备在系统设置列表里认不出本机，拒绝开始"; }
+        if (failureNameOut) {
+            *failureNameOut = A2RPPairSetupAccessoryFailureName(A2RPPairSetupAccessoryFailurePublishFailed);
+        }
+        return NO;
+    }
+    NSString *code = displayedCode ?: @"";
+    BOOL sixDigits = (code.length == 6);
+    for (NSUInteger i = 0; sixDigits && i < code.length; i++) {
+        unichar c = [code characterAtIndex:i];
+        if (c < '0' || c > '9') { sixDigits = NO; }
+    }
+    if (!sixDigits) {
+        if (whyOut) {
+            *whyOut = @"本机尚未显示 6 位码 ⇒ 先在「配对码来源」里选设备发起档，让码显示出来";
+        }
+        if (failureNameOut) {
+            *failureNameOut = A2RPPairSetupAccessoryFailureName(A2RPPairSetupAccessoryFailurePinMissing);
+        }
+        return NO;
+    }
+    if (self.deviceInitiatedPairingRunning) {
+        if (whyOut) { *whyOut = @"已有一轮设备发起配对在跑 ⇒ 先取消或等它结束"; }
+        if (failureNameOut) { *failureNameOut = @"AlreadyRunning"; }
+        return NO;
+    }
+
+    self.deviceInitiatedCancelled = NO;
+    self.deviceInitiatedPairingRunning = YES;
+
+    A2JITDeviceInitiatedPairingStage (^stageForPhase)(A2RPPairSetupAccessoryPhase) =
+        ^A2JITDeviceInitiatedPairingStage(A2RPPairSetupAccessoryPhase p) {
+        switch (p) {
+            case A2RPPairSetupAccessoryPhaseStarting:    return A2JITDeviceInitiatedPairingStagePreparing;
+            case A2RPPairSetupAccessoryPhaseAdvertising: return A2JITDeviceInitiatedPairingStageAdvertising;
+            case A2RPPairSetupAccessoryPhaseConnected:   return A2JITDeviceInitiatedPairingStageConnected;
+            case A2RPPairSetupAccessoryPhaseVerifying:   return A2JITDeviceInitiatedPairingStageVerifying;
+            case A2RPPairSetupAccessoryPhaseSucceeded:   return A2JITDeviceInitiatedPairingStageSucceeded;
+            case A2RPPairSetupAccessoryPhaseFailed:      return A2JITDeviceInitiatedPairingStageFailed;
+            case A2RPPairSetupAccessoryPhaseCancelled:   return A2JITDeviceInitiatedPairingStageCancelled;
+        }
+        return A2JITDeviceInitiatedPairingStageIdle;
+    };
+
+    NSLog(@"[A2JIT] 设备发起档：开始（主机名=%@ 码长=%lu 位 budget=%.1fs）",
+          hostName, (unsigned long)code.length, budget);
+
+    // ---- ②③④⑤⑥ 全在 Natives 的★唯一驱动函数★里（本处是它唯一的生产调用点）----
+    A2RPPairSetupAccessoryRun *run =
+        [A2RPPairSetupAccessory runWithHostName:hostName
+                                            pin:code
+                                         budget:budget
+                                       observer:^(A2RPPairSetupAccessoryPhase phase,
+                                                  A2RPPairSetupStep step, NSString *line) {
+        (void)step;
+        if (stageHandler) { stageHandler(stageForPhase(phase), line ?: @""); }
+    }
+                                    isCancelled:^BOOL { return self.deviceInitiatedCancelled; }];
+
+    self.deviceInitiatedPairingRunning = NO;
+
+    if (!run.succeeded) {
+        if (failureNameOut) { *failureNameOut = A2RPPairSetupAccessoryFailureName(run.failure); }
+        if (whyOut) {
+            *whyOut = [NSString stringWithFormat:@"设备发起配对未成（class=%@）：%@",
+                       A2RPPairSetupAccessoryFailureName(run.failure), run.detail ?: @"原因未记录"];
+        }
+        NSLog(@"[A2JIT] 设备发起档：失败 class=%@ detail=%@",
+              A2RPPairSetupAccessoryFailureName(run.failure), run.detail ?: @"-");
+        return NO;
+    }
+
+    // ---- ⑤ 落盘（★沿用既有 store★；没注入 store 就不返回成功 —— 不假成功）----
+    if (self.pairingFileStore == nil) {
+        if (whyOut) { *whyOut = @"配对成功，但未注入配对文件存储（pairingFileStore=nil）⇒ 不落盘、不报成功"; }
+        if (failureNameOut) { *failureNameOut = @"WriteFailed"; }
+        return NO;
+    }
+    NSError *importErr = nil;
+    NSString *written = [self.pairingFileStore importData:run.pairingFileData
+                                               sourceName:@"RPPairing(设备发起配对，accessory 侧 pair-setup)"
+                                                    error:&importErr];
+    if (written.length == 0) {
+        if (whyOut) {
+            *whyOut = [NSString stringWithFormat:@"配对文件落盘失败：%@",
+                       importErr.localizedDescription ?: @"未知"];
+        }
+        if (failureNameOut) { *failureNameOut = @"WriteFailed"; }
+        return NO;
+    }
+    self.lastGeneratedPairingFile = run.pairingFileData;
+    NSLog(@"[A2JIT] 设备发起档：★成功★ 配对文件已落盘 path=%@（%lu 字节）identifier=%@",
+          written, (unsigned long)run.pairingFileData.length, run.identifier ?: @"-");
+    if (whyOut) {
+        *whyOut = [NSString stringWithFormat:@"设备发起配对成功；配对文件已写入 %@", written];
+    }
+    if (failureNameOut) { *failureNameOut = nil; }
     return YES;
 }
 

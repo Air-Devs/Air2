@@ -108,6 +108,98 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
             @"ja": @"キャンセル",
         },
 
+        // ---------------- [JIT-AUTOPAIR-4] 设备发起配对：最后一跳的按钮与状态（四语齐） ----------------
+        @"jit.pairwire.row.start": @{
+            @"zh-Hans": @"开始配对（设备发起档）",
+            @"zh-Hant": @"開始配對（裝置發起檔）",
+            @"en": @"Start pairing (device-initiated)",
+            @"ja": @"ペアリングを開始（デバイス主導）",
+        },
+        @"jit.pairwire.row.cancel": @{
+            @"zh-Hans": @"取消配对",
+            @"zh-Hant": @"取消配對",
+            @"en": @"Cancel pairing",
+            @"ja": @"ペアリングを中止",
+        },
+        @"jit.pairwire.stage.idle": @{
+            @"zh-Hans": @"未开始",
+            @"zh-Hant": @"未開始",
+            @"en": @"Idle",
+            @"ja": @"未開始",
+        },
+        @"jit.pairwire.stage.preparing": @{
+            @"zh-Hans": @"准备中（生成本轮主机身份）",
+            @"zh-Hant": @"準備中（產生本輪主機身分）",
+            @"en": @"Preparing (new host identity for this round)",
+            @"ja": @"準備中（今回のホスト ID を生成）",
+        },
+        @"jit.pairwire.stage.advertising": @{
+            @"zh-Hans": @"等待设备连入",
+            @"zh-Hant": @"等待裝置連入",
+            @"en": @"Waiting for the device to connect",
+            @"ja": @"デバイスの接続を待機中",
+        },
+        @"jit.pairwire.stage.connected": @{
+            @"zh-Hans": @"设备已连入",
+            @"zh-Hant": @"裝置已連入",
+            @"en": @"Device connected",
+            @"ja": @"デバイスが接続しました",
+        },
+        @"jit.pairwire.stage.verifying": @{
+            @"zh-Hans": @"等设备输码 / 正在验码",
+            @"zh-Hant": @"等裝置輸入碼 / 正在驗碼",
+            @"en": @"Waiting for the code / verifying",
+            @"ja": @"コード入力を待機 / 検証中",
+        },
+        @"jit.pairwire.stage.succeeded": @{
+            @"zh-Hans": @"已配对（配对文件已落盘）",
+            @"zh-Hant": @"已配對（配對檔已落盤）",
+            @"en": @"Paired (pairing file written)",
+            @"ja": @"ペアリング完了（ファイル保存済み）",
+        },
+        @"jit.pairwire.stage.failed": @{
+            @"zh-Hans": @"失败",
+            @"zh-Hant": @"失敗",
+            @"en": @"Failed",
+            @"ja": @"失敗",
+        },
+        @"jit.pairwire.stage.cancelled": @{
+            @"zh-Hans": @"已取消",
+            @"zh-Hant": @"已取消",
+            @"en": @"Cancelled",
+            @"ja": @"中止しました",
+        },
+        @"jit.pairwire.toast.started": @{
+            @"zh-Hans": @"已开始：广告已起，去 设置 › 通用 › VPN 与设备管理 点「与 Air2… 配对」并输入上面 6 位码",
+            @"zh-Hant": @"已開始：廣告已起，去 設定 › 一般 › VPN 與裝置管理 點「與 Air2… 配對」並輸入上面 6 位碼",
+            @"en": @"Started: advertisement is up. In Settings › General › VPN & Device Management tap \"Pair with Air2…\" and enter the 6-digit code above.",
+            @"ja": @"開始しました。設定 › 一般 › VPN とデバイス管理 で「Air2… とペアリング」をタップし、上記の 6 桁コードを入力してください。",
+        },
+        @"jit.pairwire.toast.nocode": @{
+            @"zh-Hans": @"还没显示 6 位码 ⇒ 先选「设备发起档」让码显示出来",
+            @"zh-Hant": @"還沒顯示 6 位碼 ⇒ 先選「裝置發起檔」讓碼顯示出來",
+            @"en": @"No 6-digit code is displayed yet: pick the device-initiated mode first",
+            @"ja": @"6 桁コードが未表示です。先にデバイス主導モードを選択してください",
+        },
+        @"jit.pairwire.toast.cancelRequested": @{
+            @"zh-Hans": @"已请求取消（协作式：当前等待会在其预算内返回后停下）",
+            @"zh-Hant": @"已請求取消（協作式：目前等待會在其預算內返回後停下）",
+            @"en": @"Cancellation requested (cooperative: the current wait stops when it returns within its budget)",
+            @"ja": @"中止を要求しました（協調的：現在の待機は予算内で戻り次第停止します）",
+        },
+        @"jit.pairwire.toast.done": @{
+            @"zh-Hans": @"配对成功：配对文件已落盘",
+            @"zh-Hant": @"配對成功：配對檔已落盤",
+            @"en": @"Paired: the pairing file has been written",
+            @"ja": @"ペアリング成功：ファイルを保存しました",
+        },
+        @"jit.pairwire.toast.failed": @{
+            @"zh-Hans": @"配对失败",
+            @"zh-Hant": @"配對失敗",
+            @"en": @"Pairing failed",
+            @"ja": @"ペアリング失敗",
+        },
+
         // ---------------- 行标题 ----------------
         @"jit.row.status": @{
             @"zh-Hans": @"JIT 状态",

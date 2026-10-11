@@ -72,6 +72,17 @@ BOOL A2RPPairSetupUSBPathAvailable(NSString *_Nullable *_Nullable reason);
                                           reason:(NSString *_Nullable *_Nullable)reason
                                            error:(A2RemoteXPCErrorKind *_Nullable)errorOut;
 
+/// ★[A2-PAIRWIRE] 同上，但显式指定 `originatedBy`（"host" / "device"）★。
+/// 设备发起配对的路径里本机是 accessory ⇒ 传 "device"（既有方法恒传 "host"，语义未改）。
+/// ★该字段的取值口径以真机对拍为准（本会话无真机，见报告）★。
++ (nullable instancetype)transportOverByteStream:(nullable id<A2RPByteStream>)stream
+                                    originatedBy:(NSString *)originatedBy
+                                        hostName:(NSString *)hostName
+                                     wireVersion:(NSUInteger)wireVersion
+                                         timeout:(NSTimeInterval)timeout
+                                          reason:(NSString *_Nullable *_Nullable)reason
+                                           error:(A2RemoteXPCErrorKind *_Nullable)errorOut;
+
 /// 缝方法（★无条件实现★）。nil ⇒ 失败，原因写进 reason。
 - (NSData *_Nullable)exchangePairingData:(NSData *)tlv
                                     kind:(NSString *)kind

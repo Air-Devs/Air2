@@ -88,6 +88,28 @@ typedef NS_ENUM(NSInteger, A2RPPairSetupPinPrompt) {
 /// 配对码提供者。★可注入★：返回 nil / 空串 ⇒ 会话如实失败（不猜、不默认）。
 typedef NSString *_Nullable (^A2RPPairSetupPinProvider)(A2RPPairSetupPinPrompt prompt);
 
+/// 驱动模式的失败分类（"谁先发"由驱动方决定；失败也必须能归到一类）。
+/// ★Host 侧的 runHostOverTransport: 不产出本枚举（保持原签名不动）★；
+/// 本枚举只服务于 [A2-PAIRWIRE] 的 accessory/device 侧驱动。
+typedef NS_ENUM(NSInteger, A2RPPairSetupDriveFailure) {
+    A2RPPairSetupDriveFailureNone = 0,
+    A2RPPairSetupDriveFailurePinMissing,      ///< 配对码为空 / 未注入
+    A2RPPairSetupDriveFailurePeerRejected,    ///< 对端证明校验不过（码不对 / 被篡改）⇒ 拒绝
+    A2RPPairSetupDriveFailureProtocol,        ///< 非 TLV8 / 缺字段 / 乱序 / 签名不过
+    A2RPPairSetupDriveFailureTransport,       ///< 传输未提供所需原语 / 发失败 / 对端关闭
+    A2RPPairSetupDriveFailureTransportTimeout,///< 等对端超时
+    A2RPPairSetupDriveFailureNotEstablished,  ///< 走完消息流仍不在已建立态
+};
+
+/// 传输原语的失败分类（★可选能力★：实现方给出 ⇒ 上层能把「超时」与其它错分开）。
+typedef NS_ENUM(NSInteger, A2RPPairSetupTransportFailure) {
+    A2RPPairSetupTransportFailureNone = 0,
+    A2RPPairSetupTransportFailureTimeout,      ///< 等对端超时
+    A2RPPairSetupTransportFailurePeerClosed,   ///< 对端关闭
+    A2RPPairSetupTransportFailureFormat,       ///< 帧/载荷格式错
+    A2RPPairSetupTransportFailureOther,        ///< 其它（未分类）
+};
+
 #pragma mark - 消息传输缝（pair-setup 在真机上走 RemoteXPC；本缝由调用方实现）
 
 @protocol A2RPPairSetupMessageTransport <NSObject>
@@ -95,6 +117,7 @@ typedef NSString *_Nullable (^A2RPPairSetupPinProvider)(A2RPPairSetupPinPrompt p
 /// @param kind           "setupManualPairing"（规格 §9）
 /// @param startNewSession 首条 true，其后 false
 /// @return nil ⇒ 失败，原因写进 reason。
+/// ★语义不变★：发起方（Host/controller）侧驱动继续用本方法（先发后收）。
 - (NSData *_Nullable)exchangePairingData:(NSData *)tlv
                                     kind:(NSString *)kind
                                 startNew:(BOOL)startNewSession
@@ -104,6 +127,27 @@ typedef NSString *_Nullable (^A2RPPairSetupPinProvider)(A2RPPairSetupPinPrompt p
 /// 传输层是否观察到设备在等用户同意（规格 §9 Phase 1 的 awaitingUserConsent）。
 /// 置 YES ⇒ Host 取配对码时用 A2RPPairSetupPinPromptAwaitingConsent。
 - (BOOL)transportObservedAwaitingUserConsent;
+
+/// ★[A2-PAIRWIRE] 只收对端的下一条 pairingData（不发送）★。
+/// 响应方（accessory/device 侧）的会话★由对端发起★ ⇒ 必须先收 PS-Msg01 再回 PS-Msg02。
+/// ★不实现本方法的传输 ⇒ accessory 侧驱动如实失败（不假装能收）★；
+/// ★Host 侧一个字都不用改★（它压根不调本方法）。
+- (NSData *_Nullable)receivePairingDataWithKind:(NSString *)kind
+                                        timeout:(NSTimeInterval)timeout
+                                         reason:(NSString *_Nullable *_Nullable)reason;
+
+/// ★[A2-PAIRWIRE] 只发一条 pairingData（不等回复）★。
+/// 响应方的★最后一条★（PS-Msg06）之后对端不再回 ⇒ 用 exchange 会被迫等到超时；
+/// 用本原语「发完即收工」，既不会把成功当超时，也不会把发失败当成功。
+- (BOOL)sendPairingData:(NSData *)tlv
+                   kind:(NSString *)kind
+               startNew:(BOOL)startNewSession
+                 reason:(NSString *_Nullable *_Nullable)reason;
+
+/// ★[A2-PAIRWIRE] 最近一次原语调用的失败分类★（可选）：给出它，上层就能把
+/// 「等对端超时」与「格式/连接错」分开（判据行与 UI 分流都要）。
+/// ★不实现 ⇒ 视为 Other★（仍如实失败，只是分类粗一档）。
+@property (nonatomic, readonly) A2RPPairSetupTransportFailure lastFailureKind;
 @end
 
 #pragma mark - 会话
@@ -149,6 +193,20 @@ typedef NSString *_Nullable (^A2RPPairSetupPinProvider)(A2RPPairSetupPinPrompt p
                  pinProvider:(A2RPPairSetupPinProvider)pinProvider
                       reason:(NSString *_Nullable *_Nullable)reason
                   sessionKey:(NSData *_Nullable *_Nullable)sessionKeyOut;
+
+/// ★[A2-PAIRWIRE] Device/accessory 侧一次性驱动★（★先收后发★，与上面 Host 侧相反）。
+/// 会话由对端（rppairing host/controller）发起：先收 PS-Msg01，再回 PS-Msg02……直到 PS-Msg06。
+/// @param pin          本机正在显示的 6 位码（★空 ⇒ 立即失败 PinMissing★，不猜不默认）。
+/// @param stepObserver 每条消息进/出后回调（step=会话当前步，line=判据行内容）；可为 nil。
+/// @param failureOut   失败分类（可为 NULL）；成功时回填 None。
+/// 成功 ⇒ YES，sessionKeyOut 回填 SRP 会话密钥；配对文件由调用方从 identity 取。
++ (BOOL)runAccessoryOverTransport:(id<A2RPPairSetupMessageTransport>)transport
+                         identity:(A2RPPairingIdentity *)identity
+                              pin:(NSString *)pin
+                     stepObserver:(nullable void (^)(A2RPPairSetupStep step, NSString *line))stepObserver
+                           reason:(NSString *_Nullable *_Nullable)reason
+                     failureKind:(A2RPPairSetupDriveFailure *_Nullable)failureOut
+                       sessionKey:(NSData *_Nullable *_Nullable)sessionKeyOut;
 
 @end
 

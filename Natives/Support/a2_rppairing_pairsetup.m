@@ -26,6 +26,11 @@ static const char *const kA2RPPSCtrlSignInfo   = "Pair-Setup-Controller-Sign-Inf
 static const char *const kA2RPPSAccSignSalt    = "Pair-Setup-Accessory-Sign-Salt";
 static const char *const kA2RPPSAccSignInfo    = "Pair-Setup-Accessory-Sign-Info";
 
+/// ★[A2-PAIRWIRE] 设备侧「M1 校验失败」的稳定标记★（与下面 deviceAcceptState: 里那条 reason 同源）。
+/// 用途唯一：accessory 侧驱动据此把「★码不对★」与「协议/字段错」分开（判据行与 UI 分流都要）。
+/// ★它是本仓自造的判据文本，不是协议常量★；改这里必须同步改生成处（同一常量引用，编译器兜底）。
+static NSString *const kA2RPPSM1ProofRejectMarker = @"M1 校验失败";
+
 /// 12 字节 nonce = 4×0x00 || ASCII(tag8)（规格 §9 / §Appendix B 常量表）。
 static NSData *A2RPPNonce(const char *tag8) {
     NSMutableData *d = [NSMutableData dataWithLength:A2RP_AEAD_NONCE_BYTES];
@@ -550,7 +555,8 @@ static NSData *A2RPOPackDeviceInfo(NSString *identifier, NSString *hostName) {
             return NO;
         }
         if (!A2RPSRPServerVerifyM1(self.srpServer, m1.bytes, m1.length)) {
-            if (reason) { *reason = @"客户端证明 M1 校验失败 ⇒ 拒绝（配对码不对？）"; }
+            if (reason) { *reason = [NSString stringWithFormat:@"客户端证明%@ ⇒ 拒绝（配对码不对？）",
+                                     kA2RPPSM1ProofRejectMarker]; }
             return NO;
         }
         self.peerProofVerified = YES;
@@ -668,6 +674,129 @@ static NSData *A2RPOPackDeviceInfo(NSString *identifier, NSString *hostName) {
         return NO;
     }
     if (sessionKeyOut) { *sessionKeyOut = session.sessionKey; }
+    return YES;
+}
+
+#pragma mark - 一次性驱动（Device/accessory 侧，★先收后发★）
+
+/// 把传输层的失败分类翻成驱动分类（★可选能力：传输不给 lastFailureKind 就只归到 Transport★）。
+static A2RPPairSetupDriveFailure A2RPPSClassifyTransportFailure(id<A2RPPairSetupMessageTransport> t) {
+    if ([t respondsToSelector:@selector(lastFailureKind)]) {
+        switch ([t lastFailureKind]) {
+            case A2RPPairSetupTransportFailureTimeout:
+                return A2RPPairSetupDriveFailureTransportTimeout;
+            case A2RPPairSetupTransportFailureFormat:
+                return A2RPPairSetupDriveFailureProtocol;
+            case A2RPPairSetupTransportFailurePeerClosed:
+            case A2RPPairSetupTransportFailureOther:
+            case A2RPPairSetupTransportFailureNone:
+            default:
+                return A2RPPairSetupDriveFailureTransport;
+        }
+    }
+    return A2RPPairSetupDriveFailureTransport;
+}
+
++ (BOOL)runAccessoryOverTransport:(id<A2RPPairSetupMessageTransport>)transport
+                         identity:(A2RPPairingIdentity *)identity
+                              pin:(NSString *)pin
+                     stepObserver:(void (^)(A2RPPairSetupStep, NSString *))stepObserver
+                           reason:(NSString *_Nullable *_Nullable)reason
+                     failureKind:(A2RPPairSetupDriveFailure *_Nullable)failureOut
+                       sessionKey:(NSData *_Nullable *_Nullable)sessionKeyOut {
+    A2RPPairSetupDriveFailure fail = A2RPPairSetupDriveFailureNone;
+    if (failureOut) { *failureOut = A2RPPairSetupDriveFailureNone; }
+
+    /// 所有失败出口共用：回填分类与原因后返回 NO（绝不半信、绝不假成功）。
+    #define A2RPS_ACC_FAIL(KIND, MSG)                                              \
+        do {                                                                       \
+            fail = (KIND);                                                         \
+            if (reason) { *reason = (MSG); }                                       \
+            if (failureOut) { *failureOut = fail; }                                \
+            return NO;                                                             \
+        } while (0)
+
+    if (transport == nil) {
+        A2RPS_ACC_FAIL(A2RPPairSetupDriveFailureTransport, @"未提供 pair-setup 传输（transport=nil）⇒ 拒绝");
+    }
+    // ★响应方原语★：缺任一 ⇒ 如实失败（★不靠偷改 exchangePairingData: 的语义来适配★）。
+    BOOL hasRecv = [transport respondsToSelector:@selector(receivePairingDataWithKind:timeout:reason:)];
+    BOOL hasSend = [transport respondsToSelector:@selector(sendPairingData:kind:startNew:reason:)];
+    if (!hasRecv || !hasSend) {
+        A2RPS_ACC_FAIL(A2RPPairSetupDriveFailureTransport,
+                       [NSString stringWithFormat:@"传输未提供 responder 原语（收=%@ 发=%@）⇒ 无法驱动 accessory 侧",
+                        hasRecv ? @"有" : @"缺", hasSend ? @"有" : @"缺"]);
+    }
+    if (pin.length == 0) {
+        A2RPS_ACC_FAIL(A2RPPairSetupDriveFailurePinMissing, @"本机没有可用的 6 位码 ⇒ 拒绝（不猜、不默认）");
+    }
+    if (identity == nil || identity.privateKey.length != A2RP_ED25519_KEY_BYTES) {
+        A2RPS_ACC_FAIL(A2RPPairSetupDriveFailureProtocol, @"本方身份缺失或 Ed25519 私钥长度不是 32 字节");
+    }
+
+    NSString *why = nil;
+    A2RPPairSetupSession *session = [A2RPPairSetupSession deviceSessionWithIdentity:identity
+                                                                                pin:pin
+                                                                             reason:&why];
+    if (session == nil) {
+        A2RPS_ACC_FAIL(A2RPPairSetupDriveFailurePinMissing, why ?: @"建设备侧 pair-setup 会话失败");
+    }
+
+    // ★显式驱动循环：「谁先发」写死在这里★ —— 对端(host/controller)先发，本方(accessory)收完先回。
+    //   三轮 = {收 Msg01→回 Msg02} / {收 Msg03→回 Msg04} / {收 Msg05→回 Msg06}；
+    //   最后一轮的对端不再回 ⇒ 用「只发」原语收工（用 exchange 会被迫等到超时）。
+    const NSTimeInterval rxTimeout = 30.0;
+    for (int round = 0; round < 3; round++) {
+        // ---- ① 先收 ----
+        NSString *rwhy = nil;
+        NSData *in = [transport receivePairingDataWithKind:@(kA2RPPSKind)
+                                                   timeout:rxTimeout
+                                                    reason:&rwhy];
+        if (in == nil) {
+            A2RPS_ACC_FAIL(A2RPPSClassifyTransportFailure(transport),
+                           [NSString stringWithFormat:@"收第 %d 条失败：%@", round * 2 + 1, rwhy ?: @"原因未记录"]);
+        }
+        NSString *awhy = nil;
+        if (![session acceptMessage:in reason:&awhy]) {
+            // 「码不对」与「协议错」分开：M1 证明不过是有稳定标记的（见 kA2RPPSM1ProofRejectMarker）。
+            A2RPPairSetupDriveFailure kind =
+                (awhy != nil && [awhy rangeOfString:kA2RPPSM1ProofRejectMarker].location != NSNotFound)
+                    ? A2RPPairSetupDriveFailurePeerRejected
+                    : A2RPPairSetupDriveFailureProtocol;
+            A2RPS_ACC_FAIL(kind, awhy ?: @"对端消息被拒");
+        }
+        if (stepObserver) {
+            stepObserver(session.step,
+                         [NSString stringWithFormat:@"会话步进 step=%ld 收到对端第 %d 条（%lu 字节）",
+                          (long)session.step, round * 2 + 1, (unsigned long)in.length]);
+        }
+
+        // ---- ② 再发 ----
+        NSString *nwhy = nil;
+        NSData *out = [session nextMessageWithReason:&nwhy];
+        if (out == nil) {
+            A2RPS_ACC_FAIL(A2RPPairSetupDriveFailureNotEstablished, nwhy ?: @"本方无待发消息（消息机状态异常）");
+        }
+        BOOL isLast = (session.step == A2RPPairSetupStepEstablished);
+        NSString *swhy = nil;
+        if (![transport sendPairingData:out kind:@(kA2RPPSKind) startNew:NO reason:&swhy]) {
+            A2RPS_ACC_FAIL(A2RPPSClassifyTransportFailure(transport),
+                           [NSString stringWithFormat:@"发第 %d 条失败：%@", round * 2 + 2, swhy ?: @"原因未记录"]);
+        }
+        if (stepObserver) {
+            stepObserver(session.step,
+                         [NSString stringWithFormat:@"会话步进 step=%ld 发出本方第 %d 条（%lu 字节%@）",
+                          (long)session.step, round * 2 + 2, (unsigned long)out.length,
+                          isLast ? @"，末条不等回复" : @""]);
+        }
+    }
+
+    if (!session.established) {
+        A2RPS_ACC_FAIL(A2RPPairSetupDriveFailureNotEstablished, @"pair-setup 未进入已建立状态");
+    }
+    if (sessionKeyOut) { *sessionKeyOut = session.sessionKey; }
+    if (failureOut) { *failureOut = A2RPPairSetupDriveFailureNone; }
+    #undef A2RPS_ACC_FAIL
     return YES;
 }
 

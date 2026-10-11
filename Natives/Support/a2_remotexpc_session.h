@@ -112,11 +112,28 @@ NSString *A2RemoteXPCErrorKindName(A2RemoteXPCErrorKind kind);
 /// 发一条 pairingData TLV，同步取回对端的下一条 pairingData TLV。
 /// @param fromPeerOut 回填「这条对端消息是从哪条流来的」（诊断用；可为 NULL）。
 /// @return nil ⇒ 失败，reason 写明原因、error 给出分类。
+/// ★语义不变★：本方法现在由下面两个原语组合而成（无复制实现）。
 - (NSData *_Nullable)exchangePairingData:(NSData *)tlv
                                     kind:(NSString *)kind
                                 startNew:(BOOL)startNewSession
                                   reason:(NSString *_Nullable *_Nullable)reason
                                    error:(A2RemoteXPCErrorKind *_Nullable)errorOut;
+
+/// ★[A2-PAIRWIRE] 只发一条 pairingData（不等回复）★。
+/// 响应方（accessory）的末条消息之后对端不再回 ⇒ 用本原语「发完即收工」，
+/// 既不会把成功当超时（等不到回复），也不会把发失败当成功。
+- (BOOL)sendPairingData:(NSData *)tlv
+                   kind:(NSString *)kind
+               startNew:(BOOL)startNewSession
+                 reason:(NSString *_Nullable *_Nullable)reason
+                  error:(A2RemoteXPCErrorKind *_Nullable)errorOut;
+
+/// ★[A2-PAIRWIRE] 只收对端的下一条 pairingData（不发送）★。
+/// 响应方的会话由对端发起 ⇒ 必须先收 PS-Msg01 再回 PS-Msg02。
+- (NSData *_Nullable)receivePairingDataWithKind:(NSString *)kind
+                                        timeout:(NSTimeInterval)timeout
+                                         reason:(NSString *_Nullable *_Nullable)reason
+                                          error:(A2RemoteXPCErrorKind *_Nullable)errorOut;
 
 /// 关闭（幂等）。
 - (void)close;

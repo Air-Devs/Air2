@@ -96,6 +96,21 @@
 
 #pragma mark - 面板呈现器（行引用 + 动作 + 文案）
 
+/// [JIT-AUTOPAIR-4] 设备发起配对阶段 → 四语文案 key（★四语齐：见 A2JITStrings 的 jit.pairwire.stage.*★）。
+static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
+    switch (stage) {
+        case A2JITDeviceInitiatedPairingStageIdle:        return @"jit.pairwire.stage.idle";
+        case A2JITDeviceInitiatedPairingStagePreparing:   return @"jit.pairwire.stage.preparing";
+        case A2JITDeviceInitiatedPairingStageAdvertising: return @"jit.pairwire.stage.advertising";
+        case A2JITDeviceInitiatedPairingStageConnected:   return @"jit.pairwire.stage.connected";
+        case A2JITDeviceInitiatedPairingStageVerifying:   return @"jit.pairwire.stage.verifying";
+        case A2JITDeviceInitiatedPairingStageSucceeded:   return @"jit.pairwire.stage.succeeded";
+        case A2JITDeviceInitiatedPairingStageFailed:      return @"jit.pairwire.stage.failed";
+        case A2JITDeviceInitiatedPairingStageCancelled:   return @"jit.pairwire.stage.cancelled";
+    }
+    return @"jit.pairwire.stage.idle";
+}
+
 @interface A2JITPanelPresenter : NSObject <UIDocumentPickerDelegate>
 
 @property (nonatomic, weak, nullable) UIViewController *host;
@@ -105,6 +120,8 @@
 @property (nonatomic, strong, nullable) id<A2JITReadinessProbe> probe;
 /// [JIT-AUTOPAIR-1] ① 自动配对 Provider（用于显示前置 / 新鲜度 / 失败分类）。
 @property (nonatomic, strong, nullable) A2JITAutomaticPairingProvider *autoProvider;
+/// [JIT-AUTOPAIR-4] ② 自动配对引擎（设备发起档的★唯一驱动入口★就在这里）。
+@property (nonatomic, strong, nullable) A2JITAutoPairingEngineBridge *autoEngine;
 /// [JIT-DDI-1] DDI 判定（本地镜像 + 设备侧骨架）与本地镜像存储。
 @property (nonatomic, strong, nullable) A2JITLocalDDIProbe *ddiProbe;
 @property (nonatomic, strong, nullable) A2JITDDIStore *ddiStore;
@@ -624,7 +641,7 @@
 
     return [self buildWithHost:host facts:facts coordinator:coordinator store:store
                          probe:probe launcher:launcher autoProvider:autoProvider
-                      ddiProbe:ddiProbe ddiStore:ddiStore];
+                      autoEngine:autoEngine ddiProbe:ddiProbe ddiStore:ddiStore];
 }
 
 /// 可注入重载（单测 / 装配处可传自制事实、编排器、存储、判据、拉起器与 DDI 探测）。
@@ -635,6 +652,7 @@
                                probe:(nullable id<A2JITReadinessProbe>)probe
                             launcher:(nullable id<A2JITExternalToolLauncher>)launcher
                         autoProvider:(nullable A2JITAutomaticPairingProvider *)autoProvider
+                          autoEngine:(nullable A2JITAutoPairingEngineBridge *)autoEngine
                             ddiProbe:(nullable A2JITLocalDDIProbe *)ddiProbe
                             ddiStore:(nullable A2JITDDIStore *)ddiStore {
     A2JITPanelPresenter *presenter = [[A2JITPanelPresenter alloc] init];
@@ -644,6 +662,7 @@
     presenter.store = store;
     presenter.probe = probe;
     presenter.autoProvider = autoProvider;
+    presenter.autoEngine = autoEngine;   // ★[JIT-AUTOPAIR-4] 设备发起档的★唯一驱动入口★载体★
     presenter.ddiProbe = ddiProbe;
     presenter.ddiStore = ddiStore;
     (void)launcher;   // 拉起器只被 Provider 使用；此处保留形参便于装配处换实现。
@@ -885,6 +904,132 @@
         [A2Toast show:[NSString stringWithFormat:@"%@: %@", [A2JITStrings stringForKey:@"jit.pairpin.row.copy"], shown]
                inView:hvc.view];
         refreshPairpin();
+    };
+
+    // ---- [JIT-AUTOPAIR-4] 设备发起档：★真实的「开始配对 / 取消」按钮 + 状态文字（四语齐）★ ----
+    //   ① 生成 6 位码并交给已有 UI/持久化 = 上面那两行在用的 A2JITPairingCodeSession（Player 层）；
+    //   ②–⑥ 全在 Bridge 的★唯一驱动入口★ startDeviceInitiatedPairingWithHostName:… 里。
+    A2SettingsRow *pairwireStartRow = [[A2SettingsRow alloc] init];
+    pairwireStartRow.symbolName = @"dot.radiowaves.left.and.right";
+    pairwireStartRow.title = [A2JITStrings stringForKey:@"jit.pairwire.row.start"];
+    pairwireStartRow.accessory = A2SettingsRowAccessoryDisclosure;
+    [section addRow:pairwireStartRow];
+
+    A2SettingsRow *pairwireCancelRow = [[A2SettingsRow alloc] init];
+    pairwireCancelRow.symbolName = @"xmark.circle";
+    pairwireCancelRow.title = [A2JITStrings stringForKey:@"jit.pairwire.row.cancel"];
+    pairwireCancelRow.destructive = YES;
+    [section addRow:pairwireCancelRow];
+
+    __weak A2SettingsRow *weakPWStart = pairwireStartRow;
+    __weak A2SettingsRow *weakPWCancel = pairwireCancelRow;
+    __weak A2JITAutoPairingEngineBridge *weakPWEngine = presenter.autoEngine;
+
+    // 阶段 → UI（★块可在任意线程被调用 ⇒ 内部自己回主线程★）。
+    void (^applyPairwireStage)(A2JITDeviceInitiatedPairingStage, NSString *_Nullable) =
+        ^(A2JITDeviceInitiatedPairingStage stage, NSString *detail) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            A2SettingsRow *s = weakPWStart;
+            A2SettingsRow *c = weakPWCancel;
+            if (s == nil || c == nil) { return; }
+            BOOL running = (stage == A2JITDeviceInitiatedPairingStagePreparing ||
+                            stage == A2JITDeviceInitiatedPairingStageAdvertising ||
+                            stage == A2JITDeviceInitiatedPairingStageConnected ||
+                            stage == A2JITDeviceInitiatedPairingStageVerifying);
+            s.valueText = [A2JITStrings stringForKey:A2JITPairWireStageKey(stage)];
+            s.subtitle = detail.length ? detail
+                : [NSString stringWithFormat:[A2JITStrings stringForKey:@"jit.pairpin.instruction"], host];
+            s.enabled = !running;
+            c.enabled = running;
+
+            // ★同步到既有 A2JITPairingCodeSession（不改它的语义；顺带打出它的 [A2-PAIRPIN] 判据行）★
+            A2JITPairingCodeSession *cs = A2JITPairingCodeSession.sharedSession;
+            switch (stage) {
+                case A2JITDeviceInitiatedPairingStageAdvertising:
+                    [cs advanceToState:A2JITPairingCodeStateAdvertising detail:detail]; break;
+                case A2JITDeviceInitiatedPairingStageConnected:
+                    [cs advanceToState:A2JITPairingCodeStateConnected detail:detail]; break;
+                case A2JITDeviceInitiatedPairingStageVerifying:
+                    [cs advanceToState:A2JITPairingCodeStateVerifying detail:detail]; break;
+                case A2JITDeviceInitiatedPairingStageSucceeded:
+                    [cs advanceToState:A2JITPairingCodeStateSucceeded detail:detail]; break;
+                case A2JITDeviceInitiatedPairingStageFailed:
+                    [cs advanceToState:A2JITPairingCodeStateFailed detail:detail]; break;
+                case A2JITDeviceInitiatedPairingStageCancelled:
+                    // 码会话没有「取消」态 ⇒ 回到 Idle（★码仍显示，可重试★），并如实记一条。
+                    [cs advanceToState:A2JITPairingCodeStateIdle
+                                detail:detail.length ? detail : @"已取消（码仍在显示，可重试）"]; break;
+                case A2JITDeviceInitiatedPairingStageIdle:
+                case A2JITDeviceInitiatedPairingStagePreparing:
+                default:
+                    break;
+            }
+        });
+    };
+    applyPairwireStage(A2JITDeviceInitiatedPairingStageIdle, nil);
+    pairwireCancelRow.enabled = NO;   // 没在跑时「取消」不可点（不做点了没反应的按钮）
+
+    pairwireStartRow.onTap = ^{
+        UIViewController *hvc = weakHostVC;
+        A2JITAutoPairingEngineBridge *engine = weakPWEngine;
+        if (hvc == nil) { return; }
+        if (engine == nil) {
+            [A2Toast show:[A2JITStrings stringForKey:@"jit.pairwire.toast.nocode"] inView:hvc.view];
+            return;
+        }
+        // ① 生成并显示 6 位码（★沿用既有件★：用户要切到系统设置去输这个码）
+        A2JITPairingCodeSession *cs = A2JITPairingCodeSession.sharedSession;
+        A2JITPairingCodeSession *persisted = [A2JITPairingCodeSession restoredFromDefaults];
+        NSString *shown = cs.code.length > 0 ? cs.code : (persisted.code ?: @"");
+        if (shown.length != 6) {
+            NSError *e = nil;
+            [cs beginDeviceInitiatedWithHostName:pairableHostName error:&e];
+            shown = cs.code;
+        }
+        refreshPairpin();
+        if (shown.length != 6) {
+            [A2Toast show:[A2JITStrings stringForKey:@"jit.pairwire.toast.nocode"] inView:hvc.view];
+            return;
+        }
+        applyPairwireStage(A2JITDeviceInitiatedPairingStagePreparing, nil);
+        [A2Toast show:[A2JITStrings stringForKey:@"jit.pairwire.toast.started"] inView:hvc.view];
+
+        // ②–⑥ ★唯一驱动入口★（★必须在后台队列★：广告等待最长 budget 秒，主线程会卡界面）
+        NSString *hostName = NSProcessInfo.processInfo.hostName ?: @"iPhone";
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            NSString *why = nil;
+            NSString *failure = nil;
+            BOOL ok = [engine startDeviceInitiatedPairingWithHostName:hostName
+                                                        displayedCode:shown
+                                                               budget:300.0
+                                                         stageHandler:^(A2JITDeviceInitiatedPairingStage stage,
+                                                                        NSString *detail) {
+                applyPairwireStage(stage, detail);
+            }
+                                                               reason:&why
+                                                          failureName:&failure];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                NSLog(@"[A2JIT] 设备发起配对结果 ok=%d failure=%@ detail=%@",
+                      (int)ok, failure ?: @"-", why ?: @"-");
+                UIViewController *h = weakHostVC;
+                if (h == nil) { return; }
+                if (ok) {
+                    [A2Toast show:[A2JITStrings stringForKey:@"jit.pairwire.toast.done"] inView:h.view];
+                } else {
+                    [A2Toast show:[NSString stringWithFormat:@"%@：%@",
+                                   [A2JITStrings stringForKey:@"jit.pairwire.toast.failed"], why ?: @""]
+                           inView:h.view];
+                }
+            });
+        });
+    };
+
+    pairwireCancelRow.onTap = ^{
+        UIViewController *hvc = weakHostVC;
+        A2JITAutoPairingEngineBridge *engine = weakPWEngine;
+        if (hvc == nil || engine == nil) { return; }
+        [engine cancelDeviceInitiatedPairing];
+        [A2Toast show:[A2JITStrings stringForKey:@"jit.pairwire.toast.cancelRequested"] inView:hvc.view];
     };
 
     presenter.pairpinRow = pairpinRow;
