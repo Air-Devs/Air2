@@ -824,7 +824,8 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
         NSString *shown = cs.code.length > 0 ? cs.code : (persisted.code ?: @"");
         NSString *host = cs.hostName.length > 0 ? cs.hostName : (persisted.hostName ?: pairableHostName);
         A2SettingsRow *cr = weakPaircode;
-        if (mode == A2JITPairingPinModeDeviceInitiated && shown.length == 6) {
+        // ★[PAIRWIRE-FIX] 有码就显示(不再绑死档位):真机反馈点了开始配对看不到码。★
+    if (shown.length == 6) {
             cr.enabled = YES;
             cr.valueText = shown;   // ★6 位码：大字号显示（行内 valueText）★
             cr.subtitle = [NSString stringWithFormat:@"%@｜%@",
@@ -971,11 +972,20 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
 
     pairwireStartRow.onTap = ^{
         UIViewController *hvc = weakHostVC;
+        A2JITPairingPinMode modeForThisRow = [A2JITPairingPinResolver selectedMode];
         A2JITAutoPairingEngineBridge *engine = weakPWEngine;
         if (hvc == nil) { return; }
         if (engine == nil) {
             [A2Toast show:[A2JITStrings stringForKey:@"jit.pairwire.toast.nocode"] inView:hvc.view];
             return;
+        }
+        // ★[PAIRWIRE-FIX]「开始配对」这个按钮本身就是【设备发起档】的流程 ⇒
+        //   先把来源档写成该档:否则 refreshPairpin() 里「码行只在设备发起档显示」的条件不成立,
+        //   码虽然生成了但用户看不到(真机反馈:点了开始配对看不到 6 位码)。
+        if (modeForThisRow != A2JITPairingPinModeDeviceInitiated) {
+            [NSUserDefaults.standardUserDefaults setObject:[A2JITPairingPinSourceCatalog defaultIdentifier]
+                                                    forKey:A2SelectedPairingPinSourcePrefKey];
+            NSLog(@"[A2JIT] settings: 开始配对 ⇒ 自动把来源档写成设备发起档（否则码行不显示）");
         }
         // ① 生成并显示 6 位码（★沿用既有件★：用户要切到系统设置去输这个码）
         A2JITPairingCodeSession *cs = A2JITPairingCodeSession.sharedSession;
@@ -985,6 +995,15 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
             NSError *e = nil;
             [cs beginDeviceInitiatedWithHostName:pairableHostName error:&e];
             shown = cs.code;
+            if (shown.length != 6 && e != nil) {
+                // ★把真实错误报出来(而不是笼统的 nocode)★ —— 真机定位用。
+                NSLog(@"[A2JIT] 生成配对码失败: %@", e.localizedDescription ?: @"(无详情)");
+                [A2Toast show:[NSString stringWithFormat:@"生成配对码失败：%@",
+                               e.localizedDescription ?: @"(无详情)"]
+                        inView:hvc.view];
+                refreshPairpin();
+                return;
+            }
         }
         refreshPairpin();
         if (shown.length != 6) {
