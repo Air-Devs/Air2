@@ -48,4 +48,9 @@ NS_ASSUME_NONNULL_BEGIN
 + (A2SettingsSection *)buildWithHost:(UIViewController *)host;
 @end
 
+/// 关于 —— 版本信息、开源许可、运行日志、源代码、更新检查
+@interface A2AboutSettings : NSObject
++ (A2SettingsSection *)buildWithHost:(UIViewController *)host;
+@end
+
 NS_ASSUME_NONNULL_END

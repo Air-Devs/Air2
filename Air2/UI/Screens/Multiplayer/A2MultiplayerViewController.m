@@ -108,7 +108,7 @@ typedef NS_ENUM(NSInteger, A2MultiplayerTab) {
     A2SettingsRow *aboutRow = [[A2SettingsRow alloc] init];
     aboutRow.title = @"关于 EasyTier";
     aboutRow.accessory = A2SettingsRowAccessoryDisclosure;
-    aboutRow.showsBottomSeparator = NO;
+    aboutRow.showsSeparator = NO;
     aboutRow.onTap = ^{
         NSURL *url = [NSURL URLWithString:@"https://github.com/EasyTier/EasyTier"];
         if (url) [UIApplication.sharedApplication openURL:url options:@{} completionHandler:nil];

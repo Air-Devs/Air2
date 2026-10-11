@@ -5,6 +5,7 @@
 
 #import "A2Multiplayer.h"
 #import "A2Logger.h"
+#import <UIKit/UIKit.h>
 
 NSNotificationName const A2MultiplayerStateDidChangeNotification = @"A2MultiplayerStateDidChangeNotification";
 

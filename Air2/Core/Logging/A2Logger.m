@@ -4,6 +4,7 @@
 //
 
 #import "A2Logger.h"
+#import <UIKit/UIKit.h>
 #import <os/log.h>
 
 /// 内存缓冲上限（写盘失败时降级用）—— ZL2 是 1MB
