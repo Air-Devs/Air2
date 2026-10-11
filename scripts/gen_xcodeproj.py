@@ -32,6 +32,8 @@ NATIVES_INCLUDE_DIRS = [
     "$(SRCROOT)/Natives",
     "$(SRCROOT)/Natives/Context",
     "$(SRCROOT)/Natives/Support",
+    # Natives/Renderer：a2_renderer.h 被 Bridge 的 A2LaunchRunner.m 以裸文件名引用（[RENDER-WIRE]）。
+    "$(SRCROOT)/Natives/Renderer",
 ]
 
 # ----------------------------------------------------------------------------

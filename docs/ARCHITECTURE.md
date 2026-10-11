@@ -360,3 +360,26 @@ jar 内 `META-INF/air2-lwjgl-patch.list`**，需与 `Natives/Input` 的 native �
 
 **构建**：`JavaApp/Makefile` 的 `lwjgl` / `verify-lwjgl` 目标；
 随包由 `scripts/gen_xcodeproj.py` 的「Build Java Launch Core」脚本阶段完成（两个 jar 同一阶段）。
+
+### 渲染后端「显式选择 + 加载」接线 —— [RENDER-WIRE]
+
+**缺口（接线前）**：`Libraries/Renderers/libmetallum.dylib` 虽随包（见 [RT-BUNDLE]），
+但启动链里**没有任何一步引用它** —— 出包后主二进制里扫不到这个渲染器名。
+
+**接线**（★只新增，不改既有段落★）：
+
+| 文件 | 层 | 职责 |
+|---|---|---|
+| `Natives/Renderer/a2_renderer.[hm]` | Natives | 单一职责：**选后端 + `dlopen`**。不解析版本/账号、不拼路径（frameworksPath 由上层按「路径只由一处拼装」传入）、不含 Metal 具体逻辑 |
+| `Air2/Bridge/A2LaunchRunner.m` | Bridge | ★唯一调用点★：组 java 命令行**之前**调 `a2_renderer_load_metal(frameworksPath)`。理由同 [LAUNCH-PLAN] 决策 2 —— Bridge 是唯一与 Natives 相邻的层 |
+| `scripts/gen_xcodeproj.py` | 构建 | `NATIVES_INCLUDE_DIRS` 增 `$(SRCROOT)/Natives/Renderer`（Bridge 以裸文件名 import 它，与 Natives/Context、Natives/Support 同款做法） |
+
+**判据（机器可查，非推断）**：出包后主二进制内可扫到 `libmetallum.dylib`
+（常量 `A2RendererMetalDylibName`）+ 运行期日志行
+`[A2-RENDERER] 已显式选择并加载 Metal 后端：libmetallum.dylib <- …`。
+
+**开关**：**无独立开关** —— 该调用只在自研启动链内发生，而链整体由 `debug.rt_p1_runtime`
+（默认关）决定 ⇒ 开箱行为不变（同 [LAUNCH-PLAN]）。
+
+**边界（本单未做）**：只做「选择 + 加载」这一步，**不含** Metal 后端与 JVM 侧的对接
+（出画面不在本单范围）；`libmetallum.dylib` 本体仍是既存随包物，未改动字节。

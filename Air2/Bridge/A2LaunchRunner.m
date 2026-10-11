@@ -14,6 +14,7 @@
 
 #import "a2_launch.h"          // Natives/Context —— facade 与开关（Bridge → Natives 是允许方向）
 #import "a2_resourcepaths.h"   // Natives/Context —— R4 classpath 唯一拼装点
+#import "a2_renderer.h"        // Natives/Renderer —— 渲染后端「选 + 加载」入口（见 docs/ARCHITECTURE.md [RENDER-WIRE]）
 
 @implementation A2LaunchRunner
 
@@ -36,6 +37,13 @@
         [A2Log log:@"[A2-LAUNCH] 组命令行失败：planPath/javaHome 为空"];
         return -8;
     }
+
+    // ---- ★[RENDER-WIRE] 显式选择 + 加载渲染后端★ ----
+    // 为什么在这里：Bridge 是唯一与 Natives 相邻的层（同 [LAUNCH-PLAN] 决策 2）；
+    // 且本函数只在自研链里被调用 ⇒ 开关（debug.rt_p1_runtime，默认关）关时零副作用。
+    // 判据：主二进制可扫到 A2RendererMetalDylibName（"libmetallum.dylib"）。
+    int renderRC = a2_renderer_load_metal(frameworksPath);
+    [A2Log log:@"[A2-RENDERER] 渲染后端选择完成 rc=%d（0=已加载；-1=未找到/失败，见上一行）", renderRC];
 
     // ---- front 项：启动核心 jar + LWJGL 补丁 jar（补丁必须最先，才能盖住 libs/lwjgl-<ver>）----
     NSMutableArray<NSString *> *frontItems = [NSMutableArray array];
