@@ -111,6 +111,14 @@ int main(int argc, const char *argv[]) {
            [NSString stringWithFormat:@"含 \"%@\"", wantFps]);
         ok(ArrayContains(opts, @"-Xmx2048M"), @"原有 -Xmx 未受影响");
         ok(ArrayHasPrefix(opts, @"-Djava.system.class.loader="), @"原有系统类加载器选项未受影响");
+        // ★copy 属性契约★：runtimeFacts 头文件里是 copy 属性（与计划其余字段同风格），
+        //   其 setter 会对值发 copyWithZone: ⇒ 值对象必须实现 NSCopying。
+        //   本单首跑就是在这里炸的（-[A2LaunchRuntimeFacts copyWithZone:]: unrecognized selector），
+        //   这条断言把它钉住。
+        ok(plan.runtimeFacts != nil,
+           @"★计划收下了 runtimeFacts（copy 属性 ⇒ 值对象实现了 NSCopying）★");
+        ok([plan.runtimeFacts.glfwWindowSizeValue isEqualToString:@"2436x1125"],
+           @"收下的对象内容与传入一致");
         ok([A2LaunchSysPropGLFWWindowSize isEqualToString:@"glfw.windowSize"],
            @"契约常量的字面量 = \"glfw.windowSize\"（与 GLFW.java:538 一致）");
         ok([A2LaunchSysPropMaximumFramesPerSecond isEqualToString:@"UIScreen.maximumFramesPerSecond"],

@@ -27,7 +27,10 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
-@interface A2LaunchRuntimeFacts : NSObject
+/// 不可变值对象 ⇒ 实现 NSCopying：`A2LaunchPlan.runtimeFacts` 是 `copy` 属性
+/// （与计划里其余字段同风格），而 `copy` 属性在 setter 里会对值发 `copyWithZone:` ——
+/// 不实现就会在运行时抛 unrecognized selector（本单 2026-10-11 的 tests/Plan 首跑即抓到）。
+@interface A2LaunchRuntimeFacts : NSObject <NSCopying>
 
 /// 渲染宿主表面的★像素★宽（= `宿主窗口 bounds.宽 × 屏幕 scale`；0 = 没取到）。
 @property (nonatomic, assign, readonly) NSInteger surfaceWidthPixels;

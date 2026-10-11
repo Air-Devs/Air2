@@ -34,6 +34,15 @@
     return (self.surfaceWidthPixels > 0) && (self.surfaceHeightPixels > 0);
 }
 
+#pragma mark - NSCopying
+
+/// 本类不可变（字段全部 readonly）⇒ copy 即自身，符合 Foundation 对不可变值的约定。
+/// 调用点：`A2LaunchPlan` 的 `runtimeFacts` 是 `copy` 属性，其 setter 会走这里。
+- (id)copyWithZone:(nullable NSZone *)zone {
+    (void)zone;
+    return self;
+}
+
 - (BOOL)hasMaximumFramesPerSecond {
     return self.maximumFramesPerSecond > 0;
 }
