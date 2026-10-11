@@ -684,7 +684,7 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
         @"jit.ddi.fetch.disabled.reason": @{
             @"zh-Hans": @"「联网取 DDI」当前是关闭的",
             @"zh-Hant": @"「連網取 DDI」目前是關閉的",
-            @"en": "\"Fetch DDI online\" is currently off",
+            @"en": @"\"Fetch DDI online\" is currently off",
             @"ja": @"「DDI をオンライン取得」は現在オフです",
         },
         @"jit.ddi.fetch.disabled.action": @{
@@ -751,7 +751,7 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
         @"jit.toast.ddiFetchOff": @{
             @"zh-Hans": @"「联网取 DDI」是关着的：先打开开关",
             @"zh-Hant": @"「連網取 DDI」是關著的：先開啟開關",
-            @"en": "\"Fetch DDI online\" is off: turn it on first",
+            @"en": @"\"Fetch DDI online\" is off: turn it on first",
             @"ja": @"「DDI をオンライン取得」はオフです。先にオンにしてください",
         },
         };

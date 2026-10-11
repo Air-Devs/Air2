@@ -258,8 +258,16 @@ static const NSTimeInterval kA2JITDDIDefaultMaxAge = 7.0 * 24.0 * 60.0 * 60.0;
         }
         return inner;
     }
-    // 形态二：直接就是构建号（如 "24B5084k"）——只在明显像构建号时才认。
-    return [self buildFromFileName:versionString];
+    // 形态二：直接就是构建号（如 "24B5084k"；形如 数字+字母的构建号才认）。
+    NSRegularExpression *bre =
+        [NSRegularExpression regularExpressionWithPattern:@"^[0-9]{2}[A-Z][0-9A-Za-z]{2,}$"
+                                                  options:0
+                                                    error:NULL];
+    if ([bre firstMatchInString:versionString options:0
+                          range:NSMakeRange(0, versionString.length)] != nil) {
+        return versionString;
+    }
+    return nil;
 }
 
 + (NSString *)displayNameForVerdict:(A2JITDDIVerdict)verdict {

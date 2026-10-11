@@ -1630,10 +1630,10 @@ static void testDDILogicAndStore(void) {
     // ---- 本地存储：校验 ----
     NSString *w = nil;
     ok([A2JITDDIStore looksLikeUDIFDiskImageData:UDIFSample(2) why:&w], @"合法 UDIF 样本通过校验");
-    ok(![A2JITDDIStore looksLikeUDIFDiskImageData:[NSData dataWithLength:256] why:&w], @"<512 字节 ⇒ 拒绝");
-    ok(![A2JITDDIStore looksLikeUDIFDiskImageData:[NSData dataWithLength:1024 + 100] why:&w],
+    ok(![A2JITDDIStore looksLikeUDIFDiskImageData:[NSMutableData dataWithLength:256] why:&w], @"<512 字节 ⇒ 拒绝");
+    ok(![A2JITDDIStore looksLikeUDIFDiskImageData:[NSMutableData dataWithLength:1024 + 100] why:&w],
        @"非 512 整数倍 ⇒ 拒绝");
-    ok(![A2JITDDIStore looksLikeUDIFDiskImageData:[NSData dataWithLength:1024] why:&w],
+    ok(![A2JITDDIStore looksLikeUDIFDiskImageData:[NSMutableData dataWithLength:1024] why:&w],
        @"尾标不是 'koly' ⇒ 拒绝");
 
     // 文件名里的显式声明（★只有显式声明才认★）
@@ -1649,7 +1649,7 @@ static void testDDILogicAndStore(void) {
     ok([store currentImage] == nil, @"空目录 ⇒ 无镜像");
     ok(![store importImageData:[NSData data] fileName:@"x.dmg" sourceName:@"x" error:NULL],
        @"空数据 ⇒ 拒绝导入");
-    ok(![store importImageData:[NSData dataWithLength:1024] fileName:@"x.dmg" sourceName:@"x" error:NULL],
+    ok(![store importImageData:[NSMutableData dataWithLength:1024] fileName:@"x.dmg" sourceName:@"x" error:NULL],
        @"非镜像 ⇒ 拒绝导入");
     NSString *p = [store importImageData:UDIFSample(4)
                                 fileName:@"DeveloperDiskImage-27.2-24B5084k.dmg"
