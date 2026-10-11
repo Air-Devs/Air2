@@ -344,6 +344,34 @@ JRE 缺失时该阶段**只告警不失败**（同树多任务并行时不让别
 
 **来源**：`D:\CTF\_AIR2_LAUNCH_PATH.md`。
 
+#### 启动时运行时事实 → 两个 VM 级 `-D` —— [LAUNCH-PLAN-FACTS]
+
+**要修的是什么**：复用线覆盖层 `GLFW.java` 读两个 JVM 系统属性，且读它们的地方是
+`static { … }` **静态块**（`:538` `getProperty("glfw.windowSize").split("x")`、
+`:557` `Integer.parseInt(getProperty("UIScreen.maximumFramesPerSecond"))`）——
+`glfw.windowSize` 直接决定 MC 认到的帧缓冲尺寸（见 `_AIR2_GLFWNATIVE.md` §⑦-6）。
+装 GLFW 类那一刻就跑 ⇒ 任何「晚于 VM 启动」的注入（如 `A2Entry` 落属性）都赶不上 ⇒
+**只能由 VM 级 `-D` 落下**。此前全仓无人设置 ⇒ 真机装载 GLFW 类即 NPE。
+
+| 文件 | 层 | 职责 |
+|---|---|---|
+| `Air2/Utils/A2LaunchRuntimeFacts.[hm]` | Utils | ★运行时事实值对象★（屏幕像素尺寸 / 系统最大帧率）；`"<宽>x<高>"` 格式的**唯一实现处**；`0`/`nil` = 没取到。放 Utils 是因为它要跨 Bridge（产出）/Player（中转）/Core（消费）三层，而 Core 与 Bridge 互不可见（严格单向） |
+| `Air2/Bridge/A2LaunchRunner.[hm]` | Bridge | ★真来源★：`+currentRuntimeFacts` 读宿主窗口像素尺寸（`bounds × screen.scale`，与老树 `SurfaceViewController::updateSavedResolution` 同口径）与 `UIScreen.mainScreen.maximumFramesPerSecond`；调用点唯一 = `A2LaunchSession` 的计划产出段 |
+| `Air2/Core/Version/A2LaunchPlan.[hm]` | Core | `runtimeFacts` 字段 + `jvmOptionsWithMemoryMB:` 里落成 `-Dglfw.windowSize` / `-DUIScreen.maximumFramesPerSecond`（★取不到就不下发★，不填猜的值） |
+| `Air2/Utils/A2LaunchContract.[hm]` | Utils | 两个系统属性名（ABI 级契约，与 `GLFW.java` 那两行的字面量逐字相同） |
+| `scripts/verify_launch_planprops.py` | 构建 | 机器自证：消费端（Java）↔ 产出端（ObjC）的格式与字面量对齐、接线顺序、**阴性对照**（无「猜的默认值」兜底） |
+
+**为什么采集在 Bridge（而不是 UI/Core）**：`Core` 明文不得 import UIKit
+（§Core「可单测，不依赖 UIKit」）；`Player` 也不感知 UIKit（同层 `A2JITLocalFactsSource`
+把 UIKit 探测留给更上层）；Bridge 是启动链唯一与 Natives 相邻的跨层入口，
+链上只有它读 UIKit 不越界。**取值来源是系统真实值，不是估算**。
+
+**开关**：无独立开关 —— 只走 `debug.rt_p1_runtime` 那条自研链。
+
+**未做/前提**：Air2 的游戏 surface 尚未落地（渲染器只到「选 + `dlopen`」，见 [RENDER-WIRE]），
+故现取「承载游戏的宿主窗口」的像素尺寸；专用 surface 落地后只需改
+`+currentRuntimeFacts` 一处。详见 `D:\CTF\_AIR2_PLANPROPS.md` §⑦。
+
 ### JIT ↔ 建 VM 串联 —— [JIT-VM-WIRE]
 
 **要接的是什么**：启动时按住「**① 下发 JIT 脚本 → ② 探 JIT 可用 → ③ 建 VM**」的顺序走；
