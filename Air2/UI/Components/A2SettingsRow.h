@@ -80,6 +80,9 @@ typedef NS_ENUM(NSInteger, A2SettingsRowAccessory) {
 /// 背景层级
 @property (nonatomic, assign) BOOL useHighContainer;
 
+/// 是否可用（继承自 `UIControl.enabled`，默认 YES）。为 NO 时整行变暗且不响应点击/开关。
+/// 用于按状态启停的设置项（如 JIT 面板按策略启用的按钮）—— [JIT-IMPL]。
+
 - (void)applyTheme;
 
 @end
