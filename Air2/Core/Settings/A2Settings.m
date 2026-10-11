@@ -34,6 +34,7 @@ NSString *const A2SettingsKeyVersionIsolation = @"A2GlobalVersionIsolation";
 NSString *const A2SettingsKeyVersionIsolationMode = @"A2VersionIsolationMode";
 NSString *const A2SettingsKeySkipIntegrityCheck = @"A2GlobalSkipIntegrityCheck";
 NSString *const A2SettingsKeyRAMAllocationMB = @"A2GlobalRAM";
+NSString *const A2SettingsKeyMemoryMode = @"A2GlobalRAMMode";
 NSString *const A2SettingsKeyRenderer = @"A2GlobalRenderer";
 NSString *const A2SettingsKeyPreferredContentPlatform = @"A2PreferredContentPlatform";
 NSString *const A2SettingsKeyMirrorPriority = @"A2MirrorPriority";
@@ -49,6 +50,7 @@ static NSArray<NSString *> *A2SettingsAllKeys(void) {
         A2SettingsKeyVersionIsolationMode,
         A2SettingsKeySkipIntegrityCheck,
         A2SettingsKeyRAMAllocationMB,
+        A2SettingsKeyMemoryMode,
         A2SettingsKeyRenderer,
         A2SettingsKeyPreferredContentPlatform,
         A2SettingsKeyMirrorPriority,
@@ -131,6 +133,7 @@ static NSArray<NSString *> *A2SettingsAllKeys(void) {
     _versionIsolationMode = [self isolationModeFromStore];
     _skipIntegrityCheck = [self boolForKey:A2SettingsKeySkipIntegrityCheck defaultValue:NO];
     _ramAllocationMB = [self ramFromStore];
+    _memoryMode = [self memoryModeFromStore];
     _renderer = [self stringForKey:A2SettingsKeyRenderer];
     _preferredContentPlatform = [self integerForKey:A2SettingsKeyPreferredContentPlatform
                                       defaultValue:A2SettingsPlatformModrinth];
@@ -197,6 +200,15 @@ static NSArray<NSString *> *A2SettingsAllKeys(void) {
     return MAX([v integerValue], A2SettingsMinRAMMB);
 }
 
+- (A2LaunchMemoryMode)memoryModeFromStore {
+    // 缺省「自动」（本设置页新增的默认值）；只认两个合法档位，脏数据回落到「自动」。
+    id v = [self objectForKey:A2SettingsKeyMemoryMode];
+    if ([v isKindOfClass:NSNumber.class] && [v integerValue] == A2LaunchMemoryModeManual) {
+        return A2LaunchMemoryModeManual;
+    }
+    return A2LaunchMemoryModeAuto;
+}
+
 - (NSInteger)isolationModeFromStore {
     // 新 key 优先。脏数据（越界值）回落到「仅 Mod」，避免解析出非法档位。
     id stored = [self objectForKey:A2SettingsKeyVersionIsolationMode];
@@ -253,6 +265,13 @@ static NSArray<NSString *> *A2SettingsAllKeys(void) {
     v = MAX(v, A2SettingsMinRAMMB);
     _ramAllocationMB = v;
     [self setObject:@(v) forKey:A2SettingsKeyRAMAllocationMB];
+}
+
+- (void)setMemoryMode:(A2LaunchMemoryMode)v {
+    // 只接受两个合法档位，脏数据回落到「自动」。
+    if (v != A2LaunchMemoryModeManual) v = A2LaunchMemoryModeAuto;
+    _memoryMode = v;
+    [self setObject:@(v) forKey:A2SettingsKeyMemoryMode];
 }
 
 - (void)setRenderer:(NSString *)v {

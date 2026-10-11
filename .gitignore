@@ -107,3 +107,7 @@ config.local.h
 # ---------- CI 临时文件 ----------
 /ci-logs/
 *.xcresult
+
+# ---------- Python 字节码（跑 tests/ 与 scripts/ 的 .py 时产生） ----------
+__pycache__/
+*.pyc

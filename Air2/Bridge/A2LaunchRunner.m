@@ -14,6 +14,7 @@
 
 #import <UIKit/UIKit.h>        // ★只有本文件（Bridge 的启动链入口）读 UIKit★ —— 见 +currentRuntimeFacts 的注解
 #import <math.h>              // lround（与 Natives/Input 的取整口径一致）
+#import <os/proc.h>           // os_proc_available_memory() —— ★[MEM] 内存探测的唯一系统调用点★
 
 #import "a2_launch.h"          // Natives/Context —— facade 与开关（Bridge → Natives 是允许方向）
 #import "a2_resourcepaths.h"   // Natives/Context —— R4 classpath 唯一拼装点
@@ -142,6 +143,31 @@ static void A2RunnerFrameCallback(void *user) {
     return [A2LaunchRuntimeFacts factsWithSurfaceWidthPixels:wpx
                                                 heightPixels:hpx
                                        maximumFramesPerSecond:fps];
+}
+
++ (A2MemoryProbe *)currentMemoryProbe {
+    // ---- 真来源 1/2：★进程可安全申请内存★（iOS 13+）----
+    // 口径：os_proc_available_memory() 返回「本进程在被 jetsam 干掉之前还能申请多少字节」，
+    // 比物理内存比例更贴近 iOS 的真实约束。出处：老线 Natives/LauncherPreferences.m:56
+    // （老线实测 iPhone X：available=1807MB ⇒ 安全堆顶 607MB）。
+    // ★取不到就是 0★（老系统/模拟器）⇒ 底层走 default 回退，不伪造读数。
+    NSInteger availMB = 0;
+    if (@available(iOS 13.0, *)) {
+        uint64_t avail = os_proc_available_memory();
+        if (avail > 0) availMB = (NSInteger)(avail >> 20);
+    }
+
+    // ---- 真来源 2/2：★物理内存★（fallback 用；永远取得到，但比 available 粗糙）----
+    NSInteger physMB = (NSInteger)(NSProcessInfo.processInfo.physicalMemory >> 20);
+
+    A2MemoryProbe *probe = [A2MemoryProbe probeWithAvailableMB:availMB physicalMB:physMB];
+
+    // ★判据行（第 1 行）★：这一次探测到手的量级 —— 真机 grep `[MEM] probe` 即可对上。
+    //   第 2 行（ceiling → -Xmx 的决策行）在 Player 的 A2LaunchSession（那里才知道档位）。
+    [A2Log log:@"[MEM] probe available=%ldMB physical=%ldMB source=%@",
+     (long)availMB, (long)physMB, probe.source];
+
+    return probe;
 }
 
 + (int)launchWithPlanPath:(NSString *)planPath

@@ -48,6 +48,13 @@ NS_ASSUME_NONNULL_BEGIN
 + (A2SettingsSection *)buildWithHost:(UIViewController *)host;
 @end
 
+/// 游戏 —— ★内存档位（自动/手动）+ 手动堆上限预设★。
+/// 持久化 = A2Settings（memoryMode / ramAllocationMB）；消费点 = Player 的启动会话
+/// （自动 ⇒ 按设备可用内存动态算 -Xmx，见 A2LaunchMemory）。真机判据行 `[MEM] ceiling=… -> -Xmx…`。
+@interface A2MemorySettings : NSObject
++ (A2SettingsSection *)buildWithHost:(UIViewController *)host;
+@end
+
 /// 游戏 —— ★运行环境★：渲染器 + Java 运行时两张列表。
 /// 持久化 = Air2 自己的 NSUserDefaults（键见 A2LaunchContract.h 的两个契约常量）；
 /// 选中未内置项 ⇒ 启动时如实阻断（不静默回退）。接线见 docs/ARCHITECTURE.md [RENDER-SEL]/[JRE-SEL]。

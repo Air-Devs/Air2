@@ -15,6 +15,7 @@
 
 #import "A2LaunchPlan.h"
 #import "A2LaunchContract.h"   // 契约常量（入口主类名 / --plan / 类加载器名 / schema）
+#import "A2LaunchMemory.h"     // Utils 叶子层 —— ★Java 档位判据的唯一实现★（见 usesG1TuningForJavaMajorVersion:）
 #import "A2Log.h"
 
 static NSString *const A2LaunchPlanErrorDomain = @"A2LaunchPlan";
@@ -375,11 +376,51 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     return ok;
 }
 
-- (NSArray<NSString *> *)jvmOptionsWithMemoryMB:(NSInteger)memoryMB {
+- (NSArray<NSString *> *)jvmOptionsWithMemoryMB:(NSInteger)memoryMB
+                                javaMajorVersion:(NSInteger)javaMajorVersion {
     NSMutableArray<NSString *> *options = [NSMutableArray array];
+
+    // ---- ① 堆：初始堆小、上限由调用方按设备预算给出（见 A2LaunchMemory + Player 的 [MEM] 判据行）----
+    //   · -Xms128M：出处老线 JavaLauncher.m:1958。初始堆压小 ⇒ 启动/常驻 footprint 低；
+    //     与「-Xms≈-Xmx 减少伸缩抖动」相斥，老线选了前者（低内存设备上常驻更重要）。
+    //   · memoryMB<=0 ⇒ 两条都不下发（既有语义：没有堆指令就交给 JVM 默认）。
     if (memoryMB > 0) {
+        [options addObject:@"-Xms128M"];
         [options addObject:[NSString stringWithFormat:@"-Xmx%ldM", (long)memoryMB]];
     }
+
+    // ---- ② 非堆上限：这几项 JVM 默认「无上限」，长时间玩会缓慢涨（方法清单 §A6）----
+    //   · MaxMetaspaceSize=192M：元数据常驻上限；默认无上限 ⇒ 类加载泄漏时无界增长。MC + 加载器
+    //     （Forge/Fabric）的类元数据量级，192M 是给足余量的封顶。
+    //   · CompressedClassSpaceSize=128M：压缩类指针区（arm64 堆 < 32G 时生效）的保留区大小。
+    //   · ReservedCodeCacheSize=64M：JIT 代码缓存；默认 240M（64 位）在手机上过大，64M 够 MC 用。
+    //   · MaxDirectMemorySize=512M：NIO 直接内存（LWJGL/纹理上传会走）。默认 = -Xmx ⇒ 手机上等于
+    //     把堆预算又复制一份，必须显式封顶。
+    //   ★四个值均为「按量级封顶」的保守取值，出处 D:\CTF\_MEM_OPT.md §A6；★未真机标定★。★
+    [options addObject:@"-XX:MaxMetaspaceSize=192M"];
+    [options addObject:@"-XX:CompressedClassSpaceSize=128M"];
+    [options addObject:@"-XX:ReservedCodeCacheSize=64M"];
+    [options addObject:@"-XX:MaxDirectMemorySize=512M"];
+
+    // ---- ③ 线程栈 + 软引用宽限（出处：老线 JavaLauncher.m:2429-2430）----
+    //   · -Xss1m：JVM 在本平台每线程 commit 2MB，而 MC 线程多、栈深用不到 ⇒ 压到桌面 Linux 默认 1MB。
+    //   · SoftRefLRUPolicyMSPerMB=250：软引用（材质/模型缓存）宽限从每 MB 空闲堆 1s 降到 250ms，
+    //     压力下及时释放而不是 GC 空转。两项与 GC 选择无关，Java 8/17+ 通用。
+    [options addObject:@"-Xss1m"];
+    [options addObject:@"-XX:SoftRefLRUPolicyMSPerMB=250"];
+
+    // ---- ④ GC：★按 Java 档位分参数集★（档位判据的唯一实现 = A2LaunchMemory）----
+    //   Java 17+ ⇒ G1 调优；Java 8（及未知档）⇒ 一条 GC 参数都不加，保持 JVM 默认 GC。
+    //   出处：老线 JavaLauncher.m:2407+ —— 「仅对 Java 17+ 启用 G1GC 调优；Java 8 的 G1GC 不够成熟，
+    //   保持默认」。★未知档按 8 处理★是安全侧选择：给 Java 8 加 G1 参数会让 JVM 直接起不来。
+    //   · UseStringDeduplication 是实验特性 ⇒ 需先 UnlockExperimentalVMOptions（老线同款）。
+    if ([A2LaunchMemory usesG1TuningForJavaMajorVersion:javaMajorVersion]) {
+        [options addObject:@"-XX:+UnlockExperimentalVMOptions"];
+        [options addObject:@"-XX:+UseG1GC"];
+        [options addObject:@"-XX:MaxGCPauseMillis=50"];       // 目标停顿 50ms（默认 200ms）；软目标，不强制
+        [options addObject:@"-XX:+UseStringDeduplication"];   // MC 大量重复字符串；G1 特性，仅 G1 下有
+    }
+
     // ★追加类路径的唯一可行方式（Java 9+）：必须带，否则 A2Entry 追加 MC 库时被模块系统挡下。
     [options addObject:[NSString stringWithFormat:@"-Djava.system.class.loader=%@", A2LaunchGameClassLoaderName]];
 
