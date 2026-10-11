@@ -24,6 +24,8 @@
 
 #import <Foundation/Foundation.h>
 
+#import "A2LaunchRuntimeFacts.h"   // Utils —— ★运行时事实值对象★（屏幕像素尺寸 / 系统最大帧率）
+
 NS_ASSUME_NONNULL_BEGIN
 
 @interface A2LaunchRunner : NSObject
@@ -31,6 +33,22 @@ NS_ASSUME_NONNULL_BEGIN
 /// 自研启动链是否启用（薄转发 Natives 的 `a2_launch_runtime_enabled`；默认关）。
 /// 真值来源见 a2_launch.h：env RT_P1_RUNTIME / 标志文件 / 设置项 debug.rt_p1_runtime。
 + (BOOL)runtimeChainEnabled;
+
+/// ★采集「启动时的屏幕运行时事实」★（宿主窗口像素尺寸 + 系统最大帧率）。
+///
+/// 为什么在 Bridge：这两个值来自 UIKit，而 `Core` 明文不得 import UIKit
+/// （docs/ARCHITECTURE.md §Core：「可单测，不依赖 UIKit」）、`Player` 也不感知 UIKit
+/// （同层 A2JITLocalFactsSource 把 UIKit 探测留给更上层）；Bridge 是启动链唯一
+/// 与 Natives 相邻的跨层入口，链上只有它读 UIKit 不越界。
+///
+/// ★调用点只有一处★：`Air2/Player/A2LaunchSession.m` 的
+/// `+startCurrentVersionWithCompletion:`（在产出启动计划**之前**，同一线程；
+/// 该路径由 UI 主线程进入 ⇒ UIKit 查询落在主线程）。采集结果经
+/// `A2LaunchPlan` 的 `runtimeFacts` 字段落成 VM 级 `-D`。
+///
+/// ★不猜★：任一项取不到 ⇒ 对应字段为 0，底层据此**不下发**该 `-D`
+/// （宁可让 Java 侧如实抛错，也不填一个默认值把问题盖住）。
++ (A2LaunchRuntimeFacts *)currentRuntimeFacts;
 
 /// 以已解析好的取值组成 java 命令行并调用自研链（**同步阻塞**：会建 VM 并派发主类 main，
 /// 调用方须放到后台队列）。

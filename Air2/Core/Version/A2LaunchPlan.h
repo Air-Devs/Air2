@@ -28,6 +28,8 @@
 
 #import <Foundation/Foundation.h>
 
+#import "A2LaunchRuntimeFacts.h"   // Utils —— ★运行时事实★（屏幕像素尺寸 / 系统最大帧率）
+
 NS_ASSUME_NONNULL_BEGIN
 
 /// 启动计划（schema=1）。字段与 JavaApp/src/launcher/dev/airdevs/air2/launch/A2LaunchPlan.java 一一对应。
@@ -45,6 +47,16 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, readonly) NSArray<NSString *> *classpath;
 /// JNI 符号宿主（主可执行文件绝对路径；空则 Java 侧跳过 System.load）。
 @property (nonatomic, copy, readonly, nullable) NSString *nativeLibrary;
+/// ★启动时的运行时事实★（屏幕像素尺寸 / 系统最大帧率）；nil = 调用方没提供。
+///
+/// 它是计划里唯一「非版本 JSON 语义」的一类取值 —— 来源是 UI 层事实
+/// （见 `A2LaunchRunner.currentRuntimeFacts`；Core 不 import UIKit，故由调用方如实传入）。
+/// 消费点：`jvmOptionsWithMemoryMB:` 把其中【已取到】的项落成 VM 级 `-D`
+/// （复用线覆盖层 `GLFW.java:538/557` 的静态块会在装载 GLFW 类时直接读，
+/// 所以必须走 `-D`，不能等 A2Entry 落属性）。
+/// ★不进计划 JSON★：schema 保持 1，Java 侧的 `A2LaunchPlan.java` 不认识它
+/// （读这两个值的是 JVM 本身，不是 Java 代码）。
+@property (nonatomic, copy, readonly, nullable) A2LaunchRuntimeFacts *runtimeFacts;
 
 /// 由【已合并 inheritsFrom】的版本 JSON 产出计划。
 /// @param json         合并后的版本 JSON
@@ -54,6 +66,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// @param assetsDir    assets 目录（--assetsDir）
 /// @param librariesDir libraries 目录（classpath 里各 jar 的根）
 /// @param versionJarPath 版本客户端 jar（`{versionPath}/{name}.jar`，可空）
+/// @param runtimeFacts ★启动时运行时事实★（可空 ⇒ 两项 `-D` 都不下发；见属性注解）
 + (nullable instancetype)planFromVersionJSON:(NSDictionary *)json
                                    versionID:(NSString *)versionID
                                  accountDict:(NSDictionary<NSString *, NSString *> *)account
@@ -61,6 +74,7 @@ NS_ASSUME_NONNULL_BEGIN
                                    assetsDir:(NSString *)assetsDir
                                 librariesDir:(NSString *)librariesDir
                               versionJarPath:(nullable NSString *)versionJarPath
+                                runtimeFacts:(nullable A2LaunchRuntimeFacts *)runtimeFacts
                                        error:(NSError *_Nullable *_Nullable)error;
 
 /// 便捷：从 `<versionDir>/<versionID>.json` 起，沿 inheritsFrom 合并后产出计划。
@@ -71,6 +85,7 @@ NS_ASSUME_NONNULL_BEGIN
                                        assetsDir:(NSString *)assetsDir
                                     librariesDir:(NSString *)librariesDir
                                   versionJarPath:(nullable NSString *)versionJarPath
+                                    runtimeFacts:(nullable A2LaunchRuntimeFacts *)runtimeFacts
                                            error:(NSError *_Nullable *_Nullable)error;
 
 /// 沿 inheritsFrom 链合并版本 JSON（父在前、子覆盖；libraries 追加、arguments 追加）。

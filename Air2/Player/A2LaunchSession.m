@@ -138,6 +138,16 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
         default: accountDict[@"userType"] = @"legacy"; break;
     }
 
+    // ★启动时的运行时事实（屏幕像素尺寸 / 系统最大帧率）★
+    //   ★为什么在产出计划之前★：它要进计划（plan.runtimeFacts）⇒ 由计划落成 VM 级 -D。
+    //     顺序不能反 —— 复用线覆盖层 GLFW 的静态块在「装载 GLFW 类」时就读这两个属性，
+    //     晚于 VM 启动的注入（如 A2Entry 落属性）赶不上。
+    //   ★为什么取在 Bridge★：Core 明文不 import UIKit（docs/ARCHITECTURE.md §Core），
+    //     Player 也不感知 UIKit（同层 A2JITLocalFactsSource 把 UIKit 探测留给更上层），
+    //     而 Bridge 是启动链唯一与 Natives 相邻的跨层入口 ⇒ 由它采集、本层递进计划。
+    //   ★不写猜的值★：取不到就是 0/nil ⇒ 计划那步一条 -D 都不下发，让 Java 侧如实报错。
+    A2LaunchRuntimeFacts *runtimeFacts = [A2LaunchRunner currentRuntimeFacts];
+
     // 计划产出（Core/Version）
     NSError *planError = nil;
     A2LaunchPlan *plan = [A2LaunchPlan planForVersionDirectory:version.versionPath
@@ -147,6 +157,7 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
                                                      assetsDir:assetsDir
                                                   librariesDir:librariesDir
                                                 versionJarPath:versionJar
+                                                  runtimeFacts:runtimeFacts
                                                          error:&planError];
     if (plan == nil) {
         finish(NO, 0, [NSString stringWithFormat:@"启动计划产出失败：%@",

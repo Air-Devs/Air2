@@ -113,6 +113,7 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
 @property (nonatomic, copy, readwrite) NSDictionary<NSString *, NSString *> *properties;
 @property (nonatomic, copy, readwrite) NSArray<NSString *> *classpath;
 @property (nonatomic, copy, readwrite, nullable) NSString *nativeLibrary;
+@property (nonatomic, copy, readwrite, nullable) A2LaunchRuntimeFacts *runtimeFacts;
 
 @end
 
@@ -210,6 +211,7 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
                                        assetsDir:(NSString *)assetsDir
                                     librariesDir:(NSString *)librariesDir
                                   versionJarPath:(nullable NSString *)versionJarPath
+                                    runtimeFacts:(nullable A2LaunchRuntimeFacts *)runtimeFacts
                                            error:(NSError *_Nullable *_Nullable)error {
     NSDictionary *json = [self mergedVersionJSONFromDirectory:versionDir
                                                    versionID:versionID
@@ -222,6 +224,7 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
                            assetsDir:assetsDir
                         librariesDir:librariesDir
                       versionJarPath:versionJarPath
+                        runtimeFacts:runtimeFacts
                                error:error];
 }
 
@@ -232,6 +235,7 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
                                    assetsDir:(NSString *)assetsDir
                                 librariesDir:(NSString *)librariesDir
                               versionJarPath:(nullable NSString *)versionJarPath
+                                runtimeFacts:(nullable A2LaunchRuntimeFacts *)runtimeFacts
                                        error:(NSError *_Nullable *_Nullable)error {
     NSString *mainClass = A2PlanString(json[@"mainClass"]);
     if (mainClass.length == 0) {
@@ -324,6 +328,9 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     // ---- properties：需要「在 MC / LWJGL 任何类加载之前」落下的系统属性 ----
     // ★只放能给出真值的条目★：渲染器/后端相关的属性取值依赖 Core/Renderer 的选择，
     //   本单未接线 ⇒ 这里保持空表，宁可让 Java 侧什么都不设，也不写一个猜的值。
+    //   ★注意：屏幕相关的两项（glfw.windowSize / UIScreen.maximumFramesPerSecond）不走这里★ ——
+    //   它们读起来是**类装载时**的静态块（GLFW.java:538/557），必须早于 A2Entry 落属性，
+    //   所以由 VM 级 `-D` 下发（见 runtimeFacts 与 jvmOptionsWithMemoryMB:）。
     NSDictionary<NSString *, NSString *> *properties = @{};
 
     A2LaunchPlan *plan = [[A2LaunchPlan alloc] init];
@@ -333,6 +340,7 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     plan.properties = properties;
     plan.classpath = classpath;
     plan.nativeLibrary = NSBundle.mainBundle.executablePath;
+    plan.runtimeFacts = runtimeFacts;   // ★原样持有；nil 就在 -D 那步什么都不下发★
     return plan;
 }
 
@@ -374,6 +382,24 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     }
     // ★追加类路径的唯一可行方式（Java 9+）：必须带，否则 A2Entry 追加 MC 库时被模块系统挡下。
     [options addObject:[NSString stringWithFormat:@"-Djava.system.class.loader=%@", A2LaunchGameClassLoaderName]];
+
+    // ---- ★运行时事实 ⇒ VM 级 -D★（Bridge 的 A2LaunchRunner 会把本数组原样注入 argv）----
+    // 为什么是 `-D` 而不是 plan.properties：
+    //   复用线覆盖层 `GLFW.java:538/557` 读这两个属性的地方是**静态块** —— 装载 GLFW 类
+    //   的那一刻就跑；`-D` 在 VM 初始化时生效，早于任何类加载，是唯一可靠的落点。
+    // ★不写猜的值★：拿不到真值就一条都不下发 —— 让 Java 侧如实抛错（GLFW.<clinit> 的 NPE），
+    //   而不是填个默认值把问题盖住（同本文件 properties 的「只放能给出真值的条目」原则）。
+    A2LaunchRuntimeFacts *facts = self.runtimeFacts;
+    NSString *windowSizeValue = facts.glfwWindowSizeValue;   // "WxH"（像素）；格式的唯一实现处
+    if (windowSizeValue.length > 0) {
+        [options addObject:[NSString stringWithFormat:@"-D%@=%@",
+                            A2LaunchSysPropGLFWWindowSize, windowSizeValue]];
+    }
+    if (facts.hasMaximumFramesPerSecond) {
+        [options addObject:[NSString stringWithFormat:@"-D%@=%ld",
+                            A2LaunchSysPropMaximumFramesPerSecond,
+                            (long)facts.maximumFramesPerSecond]];
+    }
     return options;
 }
 

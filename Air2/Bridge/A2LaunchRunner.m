@@ -12,6 +12,9 @@
 #import "A2LaunchContract.h"
 #import "A2Log.h"
 
+#import <UIKit/UIKit.h>        // ★只有本文件（Bridge 的启动链入口）读 UIKit★ —— 见 +currentRuntimeFacts 的注解
+#import <math.h>              // lround（与 Natives/Input 的取整口径一致）
+
 #import "a2_launch.h"          // Natives/Context —— facade 与开关（Bridge → Natives 是允许方向）
 #import "a2_resourcepaths.h"   // Natives/Context —— R4 classpath 唯一拼装点
 #import "a2_renderer.h"        // Natives/Renderer —— 渲染后端「选 + 加载」入口（见 docs/ARCHITECTURE.md [RENDER-WIRE]）
@@ -20,6 +23,63 @@
 
 + (BOOL)runtimeChainEnabled {
     return a2_launch_runtime_enabled() ? YES : NO;
+}
+
++ (A2LaunchRuntimeFacts *)currentRuntimeFacts {
+    // UIKit 查询契约要求主线程。调用点（A2LaunchSession 的计划产出段）由 UI 主线程进入；
+    // 万一将来有人从后台线程调，如实记一行 —— 不静默（值可能不准，但不伪造）。
+    if (!NSThread.isMainThread) {
+        [A2Log log:@"[A2-LAUNCH] ★运行时事实采集不在主线程★（UIKit 查询契约要求主线程；取值可能不准）"];
+    }
+
+    // ---- 真来源 1/2：★渲染宿主表面的实际像素尺寸★ ----
+    // 口径与老树 `runtime_native/Natives/SurfaceViewController.m:1455-1456` 一致：
+    //     physicalWidth = round(表面宽 × 屏幕 scale)
+    // 那份值同时也是 CAMetalLayer.drawableSize 与 launchJVM 告知 MC 的尺寸
+    // （三处同源，见同文件 1474-1475 的定案注释）。
+    // ★Air2 现状★：游戏 surface 还没落地（渲染器只到「选 + dlopen」，见 [RENDER-WIRE]）
+    // ⇒ 启动时可得的真实表面就是「承载游戏的宿主窗口」（全屏）。
+    // 待专用 surface 视图落地后，本函数换成读它的尺寸即可（唯一改点，见 _AIR2_PLANPROPS.md §⑦-4）。
+    UIWindowScene *activeScene = nil;
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if ([scene isKindOfClass:UIWindowScene.class] &&
+            scene.activationState == UISceneActivationStateForegroundActive) {
+            activeScene = (UIWindowScene *)scene;
+            break;
+        }
+    }
+    UIWindow *host = nil;
+    for (UIWindow *w in activeScene.windows) {
+        if (w.isKeyWindow) { host = w; break; }
+    }
+    if (host == nil) {
+        host = activeScene.windows.firstObject;   // 无 key window 时的兜底（同一 scene 内的首个窗口）
+    }
+
+    NSInteger wpx = 0;
+    NSInteger hpx = 0;
+    CGFloat   scale = 0.0;
+    if (host != nil) {
+        UIScreen *screen = (activeScene.screen != nil) ? activeScene.screen : UIScreen.mainScreen;
+        scale = screen.scale;                     // ★老树同口径★（screen.scale，不是 nativeScale）
+        CGRect b = host.bounds;
+        wpx = (NSInteger)lround(b.size.width  * scale);
+        hpx = (NSInteger)lround(b.size.height * scale);
+    }
+
+    // ---- 真来源 2/2：★系统最大帧率★（与老树 JavaLauncher.m:1988 的表达式逐字同源）----
+    NSInteger fps = (NSInteger)UIScreen.mainScreen.maximumFramesPerSecond;
+
+    // ★判据行★（真机 grep 锚点）：缺哪一项就在这里如实写出来，不掩盖、不补默认值。
+    [A2Log log:@"[A2-LAUNCH] 运行时事实采集：窗口=%p 表面像素=%ldx%ld scale=%.2f 最大帧率=%ld ⇒ %@",
+     host, (long)wpx, (long)hpx, (double)scale, (long)fps,
+     ((wpx > 0 && hpx > 0 && fps > 0)
+      ? @"两项齐备，将由启动计划落成 -D"
+      : @"★有缺项：缺的那一项不下发 -D（不写猜的值）★")];
+
+    return [A2LaunchRuntimeFacts factsWithSurfaceWidthPixels:wpx
+                                                heightPixels:hpx
+                                       maximumFramesPerSecond:fps];
 }
 
 + (int)launchWithPlanPath:(NSString *)planPath
