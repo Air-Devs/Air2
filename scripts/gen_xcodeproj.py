@@ -34,6 +34,9 @@ NATIVES_INCLUDE_DIRS = [
     "$(SRCROOT)/Natives/Support",
     # Natives/Renderer：a2_renderer.h 被 Bridge 的 A2LaunchRunner.m 以裸文件名引用（[RENDER-WIRE]）。
     "$(SRCROOT)/Natives/Renderer",
+    # Natives/Input：自研 GLFW 窗口/事件/输入层（[A2-OWNGLFW-NATIVE-1]）。
+    # a2_own_glfw_bridge.m 以裸文件名 #include "a2_glfw_window.h"，须能被解析。
+    "$(SRCROOT)/Natives/Input",
 ]
 
 # ----------------------------------------------------------------------------

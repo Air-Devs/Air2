@@ -1,0 +1,272 @@
+// ============================================================================
+//  Natives/Input/a2_glfw_input.m
+//  Air2 —— 自研 GLFW 输入层（阶段 A）· 实现
+// ----------------------------------------------------------------------------
+//  职责：把 iOS 的触摸与**外接**键盘事件，翻译成 GLFW 语义事件并投进事件总线。
+//    · 触摸 → 光标位置 + 鼠标左键（GLFW 语义：一根主触摸 = 指针）
+//    · 外接键盘按下/抬起 → GLFW_KEY_*（HID usage → GLFW 键码，紧凑标准表）
+//  软键盘文本输入（字符/文本/IME）是阶段 B，本文件不做。
+//
+//  ★为什么用「一根主触摸 = 指针」★
+//    GLFW 的输入模型是「一个鼠标 + 一个光标」。iOS 没有鼠标，最贴近的映射是
+//    把主触摸当作指针：位置 → CURSOR_POS，按下/抬起 → MOUSE_BUTTON(左键)。
+//    MC 的 MouseHandler / InputConstants 正是按这套语义工作的。
+//
+//  净室：独立编写，未参考 Pojav / Boardwalk / Amethyst / LWJGL 源码。
+//    HID→GLFW 键码表依据的是 **USB HID Usage Tables**（公开标准）与
+//    GLFW 官方 glfw3.h 的键码数值（公开事实数据）。
+// ============================================================================
+#import "a2_glfw_input.h"
+#import "a2_glfw_window.h"
+#import "a2_log.h"
+
+#import <UIKit/UIKit.h>
+#import <string.h>
+
+// 鼠标左键（官方 glfw3.h：GLFW_MOUSE_BUTTON_LEFT = GLFW_MOUSE_BUTTON_1 = 0）
+#define A2_GLFW_MOUSE_BUTTON_LEFT 0
+
+// ============================================================================
+//  HID usage → GLFW 键码（紧凑标准表）
+// ============================================================================
+// UIKeyboardHIDUsage 就是 USB HID Keyboard/Keypad usage ID（公开标准）。
+// 覆盖主界面所需：字母/数字/标点/编辑键/方向键/F 键/修饰键。
+// ★完整表（含各国布局与多媒体键）属阶段 B 补全★ —— 本表已足够「进主界面 + 基本操作」。
+static int a2_glfw_key_from_hid(long hid) {
+    // USB HID 0x04..0x1D = 字母 a..z ⇒ GLFW_KEY_A(65)..GLFW_KEY_Z(90)（连续）
+    if (hid >= 0x04 && hid <= 0x1D) {
+        return 65 + (int) (hid - 0x04);
+    }
+    // USB HID 0x1E..0x26 = 数字 1..9 ⇒ GLFW_KEY_1(49)..GLFW_KEY_9(57)
+    if (hid >= 0x1E && hid <= 0x26) {
+        return 49 + (int) (hid - 0x1E);
+    }
+    switch (hid) {
+        case 0x27: return 48;   // 0      -> GLFW_KEY_0
+        case 0x28: return 257;  // Return -> GLFW_KEY_ENTER
+        case 0x29: return 256;  // Escape -> GLFW_KEY_ESCAPE
+        case 0x2A: return 259;  // Delete/Backspace -> GLFW_KEY_BACKSPACE
+        case 0x2B: return 258;  // Tab    -> GLFW_KEY_TAB
+        case 0x2C: return 32;   // Space  -> GLFW_KEY_SPACE
+        case 0x2D: return 45;   // -      -> GLFW_KEY_MINUS
+        case 0x2E: return 61;   // =      -> GLFW_KEY_EQUAL
+        case 0x2F: return 91;   // [      -> GLFW_KEY_LEFT_BRACKET
+        case 0x30: return 93;   // ]      -> GLFW_KEY_RIGHT_BRACKET
+        case 0x31: return 92;   // \      -> GLFW_KEY_BACKSLASH
+        case 0x33: return 59;   // ;      -> GLFW_KEY_SEMICOLON
+        case 0x34: return 39;   // '      -> GLFW_KEY_APOSTROPHE
+        case 0x35: return 96;   // `      -> GLFW_KEY_GRAVE_ACCENT
+        case 0x36: return 44;   // ,      -> GLFW_KEY_COMMA
+        case 0x37: return 46;   // .      -> GLFW_KEY_PERIOD
+        case 0x38: return 47;   // /      -> GLFW_KEY_SLASH
+        case 0x39: return 280;  // CapsLock -> GLFW_KEY_CAPS_LOCK
+        case 0x46: return 283;  // PrintScreen -> GLFW_KEY_PRINT_SCREEN
+        case 0x47: return 281;  // ScrollLock  -> GLFW_KEY_SCROLL_LOCK
+        case 0x48: return 284;  // Pause       -> GLFW_KEY_PAUSE
+        case 0x49: return 260;  // Insert      -> GLFW_KEY_INSERT
+        case 0x4A: return 268;  // Home        -> GLFW_KEY_HOME
+        case 0x4B: return 266;  // PageUp      -> GLFW_KEY_PAGE_UP
+        case 0x4C: return 261;  // DeleteFwd   -> GLFW_KEY_DELETE
+        case 0x4D: return 269;  // End         -> GLFW_KEY_END
+        case 0x4E: return 267;  // PageDown    -> GLFW_KEY_PAGE_DOWN
+        case 0x4F: return 262;  // Right       -> GLFW_KEY_RIGHT
+        case 0x50: return 263;  // Left        -> GLFW_KEY_LEFT
+        case 0x51: return 264;  // Down        -> GLFW_KEY_DOWN
+        case 0x52: return 265;  // Up          -> GLFW_KEY_UP
+        case 0x53: return 282;  // NumLock     -> GLFW_KEY_NUM_LOCK
+        case 0xE0: return 341;  // LCtrl  -> GLFW_KEY_LEFT_CONTROL
+        case 0xE1: return 340;  // LShift -> GLFW_KEY_LEFT_SHIFT
+        case 0xE2: return 342;  // LAlt   -> GLFW_KEY_LEFT_ALT
+        case 0xE3: return 343;  // LGUI   -> GLFW_KEY_LEFT_SUPER
+        case 0xE4: return 345;  // RCtrl  -> GLFW_KEY_RIGHT_CONTROL
+        case 0xE5: return 344;  // RShift -> GLFW_KEY_RIGHT_SHIFT
+        case 0xE6: return 346;  // RAlt   -> GLFW_KEY_RIGHT_ALT
+        case 0xE7: return 347;  // RGUI   -> GLFW_KEY_RIGHT_SUPER
+        default: break;
+    }
+    // F1..F12：HID 0x3A..0x45 ⇒ GLFW_KEY_F1(290)..F12(301)（连续）
+    if (hid >= 0x3A && hid <= 0x45) {
+        return 290 + (int) (hid - 0x3A);
+    }
+    return -1;   // GLFW_KEY_UNKNOWN（官方值为 -1）
+}
+
+// UIKeyModifierFlags → GLFW mods 位（官方 glfw3.h：SHIFT=1, CONTROL=2, ALT=4, SUPER=8）
+static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
+    int mods = 0;
+    if (flags & UIKeyModifierShift)     mods |= 0x0001;
+    if (flags & UIKeyModifierControl)   mods |= 0x0002;
+    if (flags & UIKeyModifierAlternate) mods |= 0x0004;
+    if (flags & UIKeyModifierCommand)   mods |= 0x0008;
+    if (flags & UIKeyModifierAlphaShift) mods |= 0x0010;  // CapsLock
+    return mods;
+}
+
+// ============================================================================
+//  宿主视图：触摸 + 外接键盘
+// ============================================================================
+@interface A2GlfwView : UIView
+@property (nonatomic, assign) long  window;
+@property (nonatomic, assign) NSInteger activeTouches;
+@property (nonatomic, assign) BOOL  touchLogged;
+@end
+
+@implementation A2GlfwView
+
+- (instancetype)initWithWindowHandle:(long)window {
+    self = [super initWithFrame:CGRectZero];
+    if (self != nil) {
+        _window = window;
+        self.multipleTouchEnabled = YES;
+        self.backgroundColor = [UIColor blackColor];
+        self.opaque = YES;
+    }
+    return self;
+}
+
+- (BOOL)canBecomeFirstResponder {
+    return YES;
+}
+
+// ---- 投递助手 ----
+- (void)postCursor:(CGPoint)p {
+    A2GlfwEvent ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.window = self.window;
+    ev.type = A2_GLFW_EVENT_CURSOR_POS;
+    ev.d0 = (double) p.x;
+    ev.d1 = (double) p.y;
+    a2_glfw_event_post(&ev);
+}
+
+- (void)postButton:(int)button action:(int)action mods:(int)mods {
+    A2GlfwEvent ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.window = self.window;
+    ev.type = A2_GLFW_EVENT_MOUSE_BUTTON;
+    ev.i0 = button;
+    ev.i1 = action;
+    ev.i2 = mods;
+    a2_glfw_event_post(&ev);
+}
+
+- (void)postEnter:(int)entered {
+    A2GlfwEvent ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.window = self.window;
+    ev.type = A2_GLFW_EVENT_CURSOR_ENTER;
+    ev.i0 = entered;
+    a2_glfw_event_post(&ev);
+}
+
+- (void)noteFirstTouch:(CGPoint)p {
+    if (!self.touchLogged) {
+        self.touchLogged = YES;
+        a2_log_f(@"[A2-GLFW] 首次触摸已到达输入层 window=%ld at=(%.0f,%.0f)（触摸→光标/左键通道通则）",
+                 self.window, (double) p.x, (double) p.y);
+    }
+}
+
+// ---- 触摸 ----
+- (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    (void) event;
+    UITouch *t = [touches anyObject];
+    if (t == nil) {
+        return;
+    }
+    CGPoint p = [t locationInView:self];
+    BOOL wasIdle = (self.activeTouches == 0);
+    self.activeTouches += (NSInteger) touches.count;
+    [self noteFirstTouch:p];
+    [self postCursor:p];
+    if (wasIdle) {
+        [self postEnter:1];
+        [self postButton:A2_GLFW_MOUSE_BUTTON_LEFT action:A2_GLFW_PRESS mods:0];
+    }
+}
+
+- (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    (void) event;
+    UITouch *t = [touches anyObject];
+    if (t == nil) {
+        return;
+    }
+    [self postCursor:[t locationInView:self]];
+}
+
+- (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    (void) event;
+    UITouch *t = [touches anyObject];
+    if (t != nil) {
+        [self postCursor:[t locationInView:self]];
+    }
+    self.activeTouches -= (NSInteger) touches.count;
+    if (self.activeTouches <= 0) {
+        self.activeTouches = 0;
+        [self postButton:A2_GLFW_MOUSE_BUTTON_LEFT action:A2_GLFW_RELEASE mods:0];
+        [self postEnter:0];
+    }
+}
+
+- (void)touchesCancelled:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
+    [self touchesEnded:touches withEvent:event];
+}
+
+// ---- 外接键盘（按下/抬起）----
+- (void)pressesBegan:(NSSet<UIPress *> *)presses withEvent:(UIPressesEvent *)event {
+    for (UIPress *pr in presses) {
+        UIKey *key = pr.key;
+        if (key == nil) {
+            continue;
+        }
+        int gkey = a2_glfw_key_from_hid((long) key.keyCode);
+        if (gkey < 0) {
+            continue;   // 未覆盖的键：跳过（阶段 B 补全表）
+        }
+        A2GlfwEvent ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.window = self.window;
+        ev.type = A2_GLFW_EVENT_KEY;
+        ev.i0 = gkey;
+        ev.i1 = (int) key.keyCode;                      // scancode = HID usage
+        ev.i2 = A2_GLFW_PRESS;
+        ev.i3 = a2_glfw_mods_from_flags(event.modifierFlags);
+        a2_glfw_event_post(&ev);
+    }
+}
+
+- (void)pressesEnded:(NSSet<UIPress *> *)presses withEvent:(UIPressesEvent *)event {
+    for (UIPress *pr in presses) {
+        UIKey *key = pr.key;
+        if (key == nil) {
+            continue;
+        }
+        int gkey = a2_glfw_key_from_hid((long) key.keyCode);
+        if (gkey < 0) {
+            continue;
+        }
+        A2GlfwEvent ev;
+        memset(&ev, 0, sizeof(ev));
+        ev.window = self.window;
+        ev.type = A2_GLFW_EVENT_KEY;
+        ev.i0 = gkey;
+        ev.i1 = (int) key.keyCode;
+        ev.i2 = A2_GLFW_RELEASE;
+        ev.i3 = a2_glfw_mods_from_flags(event.modifierFlags);
+        a2_glfw_event_post(&ev);
+    }
+}
+
+- (void)pressesCancelled:(NSSet<UIPress *> *)presses withEvent:(UIPressesEvent *)event {
+    [self pressesEnded:presses withEvent:event];
+}
+
+@end
+
+// ============================================================================
+//  工厂
+// ============================================================================
+UIView *a2_glfw_input_make_view(long window) {
+    A2GlfwView *view = [[A2GlfwView alloc] initWithWindowHandle:window];
+    return view;
+}
