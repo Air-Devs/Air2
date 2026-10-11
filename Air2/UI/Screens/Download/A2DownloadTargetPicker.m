@@ -307,7 +307,7 @@
 
 /// 依赖块 —— 列出前置项，让用户决定一起装
 - (UIView *)buildDependencyBlock {
-    UIStackView *stack = [[UIStackView alloc] initWithFrame:CursorZero()];
+    UIStackView *stack = [[UIStackView alloc] initWithFrame:CGRectZero];
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     stack.axis = UILayoutConstraintAxisVertical;
     stack.spacing = A2SpaceS;
