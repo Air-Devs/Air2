@@ -7,8 +7,8 @@
 //  触摸/按键的翻译在 a2_glfw_input.m。
 //
 //  ★渲染器解耦（本层硬约束）★
-//    本文件不 include 任何图形后端头，不出现 Metal / MoltenVK / ANGLE / GL4ES /
-//    EGL / OpenGL 符号。渲染器要接进来时，只用 a2_glfw_window_surface() 拿到
+//    本文件不 include 任何图形后端头，源码里不出现任何后端专有名（机器判据见
+//    scripts/verify_ownglfw_native.py）。渲染器要接进来时，只用 a2_glfw_window_surface() 拿到
 //    A2GlfwSurface（原生视图句柄 + 尺寸 + 缩放），自己决定挂什么 layer。
 //
 //  ★线程模型（关键，写在最前）★

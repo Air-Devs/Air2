@@ -7,7 +7,7 @@
  * ★本文件只做一件事：把 Java 侧 org.lwjgl.glfw.GLFW 的 11 个私有 native
  *   原样转发给 Natives/Input 的自研窗口/事件/输入层，并把事件 upcall 回 Java。★
  *   本文件不含任何窗口/输入逻辑本身（那些在 Natives/Input 下的 .m 里），也不认识
- *   任何渲染后端（Metal/MoltenVK/ANGLE/GL4ES… 一字不提）。
+ *   任何渲染后端（后端专有名一字不提；机器判据见 scripts/verify_ownglfw_native.py）。
  *
  * 与 Java 的一一对应（调用点 = JavaApp/src/ownglfw/org/lwjgl/glfw/GLFW.java 的声明）：
  *   nInit                -> 注册事件 sink + a2_glfw_window_platform_init
