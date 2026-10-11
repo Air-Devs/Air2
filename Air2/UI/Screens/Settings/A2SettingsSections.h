@@ -48,4 +48,10 @@ NS_ASSUME_NONNULL_BEGIN
 + (A2SettingsSection *)buildWithHost:(UIViewController *)host;
 @end
 
+/// 运行环境 · 启动链 —— JIT 供给状态 + 分级策略 + 新链开关
+/// （★骨架：不实现真实隧道 / 开启机制；开启会如实走到「等待开启 + 原因」★）。
+@interface A2JITSettings : NSObject
++ (A2SettingsSection *)buildWithHost:(UIViewController *)host;
+@end
+
 NS_ASSUME_NONNULL_END

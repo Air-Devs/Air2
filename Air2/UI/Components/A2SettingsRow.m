@@ -292,6 +292,13 @@
     [self applyTheme];
 }
 
+/// [JIT-IMPL] 启用/禁用（继承 UIControl.enabled）：置 NO 时整行变暗且不响应交互。
+/// 供 JIT 面板按策略启用/禁用「导入配对文件」「开启 JIT」等行。
+- (void)setEnabled:(BOOL)enabled {
+    [super setEnabled:enabled];
+    [self applyTheme];
+}
+
 /// 有图标时文字后移
 - (void)updateTextLeading {
     CGFloat leading = _iconBox.hidden ? A2SpaceL : (A2SpaceL + 28 + A2SpaceM);
@@ -327,6 +334,7 @@
 
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     [super touchesBegan:touches withEvent:event];
+    if (!self.isEnabled) return;   // [JIT-IMPL] 禁用行整行不响应
     if (_accessory == A2SettingsRowAccessorySwitch) return;
     [UIView animateWithDuration:A2AnimDurationFast animations:^{
         self.fillView.backgroundColor = [self.fillView.backgroundColor
@@ -337,6 +345,7 @@
 - (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     [super touchesEnded:touches withEvent:event];
     [self applyTheme];
+    if (!self.isEnabled) return;   // [JIT-IMPL] 禁用行不触发 onTap / onToggle
 
     if (_accessory == A2SettingsRowAccessorySwitch) {
         // 点整行也能切开关
@@ -371,6 +380,9 @@
 
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
+
+    // [JIT-IMPL] 禁用态视觉：整行变暗（UIControl.enabled 的视觉落地）。
+    self.alpha = self.isEnabled ? 1.0 : 0.4;
 
     // 背景：按层级取值，圆角按位置
     UIColor *fill = _useHighContainer ? t.cSurfaceContainerHigh : t.cSurfaceContainerLow;
