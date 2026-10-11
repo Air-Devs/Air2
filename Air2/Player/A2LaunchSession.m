@@ -84,6 +84,13 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
     if (![self runtimeChainEnabled]) {
         // ★开关=关的判据行★（默认关 ⇒ 与旧版零行为差异）
         [A2Log log:@"[A2-CHAIN] 开关=关（debug.rt_p1_runtime / RT_P1_RUNTIME / 标志文件）⇒ 零副作用返回，行为与旧版一致"];
+        // ★[A2-JITVM] 判据行（gate 步）★：属于「未就绪路径」—— 还没走到判据
+        //   （verdict=Unknown）且 enable=0，与「失败路径」（判据跑过、不合格）在 verdict/reason 两处分得开。
+        [A2Log log:@"%@", [A2LaunchFailure jitvmLineWithStep:@"gate"
+                                                      verdict:A2JITReadinessVerdictUnknown
+                                                    enableJIT:NO
+                                                   reasonText:@"自研启动链未启用（开关=关）"
+                                                     evidence:nil]];
         finish(NO, 0, @"自研启动链未启用（设置 → 诊断 → 运行环境 · 启动链）");
         return;
     }
@@ -257,14 +264,34 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
         A2LaunchChain *chain = [A2LaunchChain
             chainWithDeliverScript:^BOOL(NSError **deliverError) {
                 // ① 实现 = Bridge 的 A2JITScriptDelivery（Natives 下发原语只在 Bridge 里调）；失败【不拦路】。
-                return [A2JITScriptDelivery deliverSelfContainedScriptWithError:deliverError];
+                BOOL ok = [A2JITScriptDelivery deliverSelfContainedScriptWithError:deliverError];
+                [A2Log log:@"%@", [A2LaunchFailure jitvmLineWithStep:@"script"
+                                                             verdict:A2JITReadinessVerdictUnknown
+                                                           enableJIT:NO
+                                                          reasonText:(ok ? @"JIT 脚本已下发"
+                                                                        : @"JIT 脚本未下发（不拦路；② 会兜底）")
+                                                            evidence:nil]];
+                return ok;
             }
             verify:^BOOL(NSString **reason) {
                 // ② Bridge 真调 Natives/A2JITEnvironment（brk #0x69 区域取证）。
-                return [probe ensureJITUsableWithinBudget:A2LaunchJITVerifyBudget reason:reason];
+                BOOL ok = [probe ensureJITUsableWithinBudget:A2LaunchJITVerifyBudget reason:reason];
+                // ★这一行就是「JIT 就绪结论」★：verdict / enable（是否放行建 VM）/ reason / 取证 齐备，
+                //   供真机一眼判成败（未就绪=verdict Unknown；失败=其余 6 档）。
+                [A2Log log:@"%@", [A2LaunchFailure jitvmLineWithStep:@"verify"
+                                                             verdict:probe.lastVerdict
+                                                           enableJIT:ok
+                                                          reasonText:nil
+                                                            evidence:probe.lastEvidence]];
+                return ok;
             }
             createJVM:^BOOL(NSError **vmError) {
-                // ③ Bridge 唯一调 a2_launch_jvm_with_argv 的地方。
+                // ③ Bridge 唯一调 a2_launch_jvm_with_argv 的地方（★只有 ② 放行才会走到这里★）。
+                [A2Log log:@"%@", [A2LaunchFailure jitvmLineWithStep:@"vm"
+                                                             verdict:probe.lastVerdict
+                                                           enableJIT:YES
+                                                          reasonText:@"JIT 已就绪 ⇒ 走带 JIT 的启动参数路径"
+                                                            evidence:probe.lastEvidence]];
                 vmRC = [A2LaunchRunner launchWithPlanPath:planPath
                                              entryJarPath:entryJar
                                            patchJarPath:patchJar
