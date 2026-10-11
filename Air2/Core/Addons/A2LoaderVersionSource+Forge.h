@@ -5,7 +5,7 @@
 //  Forge / NeoForge 版本列表获取（实现见 A2LoaderVersionSource+Forge.m）。
 //  单独建这个分类头，是为了让 A2LoaderVersionSource.m 能看见这两个方法
 //  —— 它们的实现在分类里，此前没有任何头文件声明，导致主 .m 调用时报
-//  “no visible @interface … declares the selector”。
+//  “no visible 声明 … declares the selector”。
 //
 
 #import "A2LoaderVersionSource.h"
