@@ -430,7 +430,9 @@ static NSNumber *A2CFModLoaderTypeForIdentifier(NSString *identifier) {
         }
     }
 
-    [self GET:@"/mods" query:items completion:^(id json, NSError *error) {
+    // 搜索端点是 /mods/search，不是 /mods。
+    // /mods 是「按 id 批量取模组」，不接搜索参数，会返回 404。
+    [self GET:@"/mods/search" query:items completion:^(id json, NSError *error) {
         if (error) { if (completion) completion(nil, error); return; }
 
         NSDictionary *dict = [json isKindOfClass:NSDictionary.class] ? json : nil;
