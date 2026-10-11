@@ -6,6 +6,7 @@
 //
 
 #import "A2LoaderVersionSource.h"
+#import "A2LoaderVersionSource+Forge.h"
 #import "A2MirrorResolver.h"
 #import "A2Logger.h"
 

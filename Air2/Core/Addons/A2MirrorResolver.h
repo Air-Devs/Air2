@@ -65,6 +65,11 @@ typedef NS_ENUM(NSInteger, A2MirrorPriority) {
 /// 该地址是否可被镜像
 + (BOOL)isMirrorableURL:(NSString *)url;
 
+/// 是否中国大陆网络（用于选择 BMCLAPI 等镜像源）。
+/// 实现在 A2MirrorResolver.m:85；此前未在头文件声明，调用方会报
+/// “no known class method for selector 'isChinaMainland'”。
++ (BOOL)isChinaMainland;
+
 @end
 
 NS_ASSUME_NONNULL_END
