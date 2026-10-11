@@ -265,6 +265,10 @@ ADR 见 `docs/DECISIONS.md` ADR-007 / ADR-008 / ADR-009。
 | `Natives/Support/a2_rppairing_verify.[hm]` | **Natives** | **[JIT-AUTOPAIR-2] pair-verify 握手本体**：Host/Device 双角色会话 + M1→M4 状态机 + `shared_secret`(=PSK) + HKDF 派生 + §10 主密钥；**进程内自握手自证** `A2RPPairVerifySelfTest`
 | `Natives/Support/a2_rppairing_rsd.[hm]` | **Natives** | **[JIT-AUTOPAIR-2] 发现/连接层**：Bonjour 服务类型与传输路径映射、流式帧读取器、hostOptions/pairingData/createListener 信封、NWBrowser 发现 + NWConnection 连接 + 真跑 pair-verify、TLS-PSK 配置与**能力如实点名** |
 | `Natives/Support/a2_rppairing.[hm]` | **Natives** | RPPairing 线上编解码（帧 / 信封）+ 配对文件（RpPairingFile）组装 + 握手完成度自检 `A2RPPairingPreflight` |
+| `Natives/Support/a2_remotexpc_framing.[hm]` | **Natives** | **[A2-RXPC] RemoteXPC 编解码**（公开规格 §4）：HTTP/2 帧（前导/SETTINGS/WINDOW_UPDATE/HEADERS/DATA）+ HPACK（静态表 + 不索引字面量；★不做 Huffman/动态表★）+ XPC 消息与对象（Null/Bool/Int64/UInt64/Double/Date/Data/String/UUID/Dict/Array）；判据行出口 `A2RXPCLog` |
+| `Natives/Support/a2_remotexpc_session.[hm]` | **Natives** | **[A2-RXPC] RemoteXPC 会话**：可注入字节通道 `A2RPByteStream` + 初始化握手（§4 七步）+ `exchangePairingData:kind:startNew:reason:`（发一条 pairingData TLV、同步取回下一条）+ 错误分类 `A2RemoteXPCErrorKind` + 内存字节通道（单测用） |
+| `Natives/Support/a2_rppairing_pairsetup_transport.[hm]` | **Natives** | **[A2-RXPC] 传输实现**：NWConnection 字节通道（§2b 建连 / 被接受）+ 缝 `A2RPPairSetupMessageTransport` 在 RemoteXPC 之上的实现 `A2RPPairSetupRemoteXPCTransport`（同仓存在 `a2_rppairing_pairsetup.h` 时条件声明遵守）+ §2a 可用性如实回报 |
+| `Natives/Support/a2_rppairing_pairable_host.[hm]` | **Natives** | **[A2-RXPC] iOS 27 设备发起配对**：`_remotepairing-pairable-host._tcp` 通告契约（SipHash-2-4 → `authTag`、TXT 记录、服务名截断、协议版本 26）+ NWListener 真广告/真接受 + 四类失败分类 + 整层判据行 `A2RXPCReportLayerReadiness` |
 
 **来源**：`docs/JIT-PROVISIONING.md` §1.2 / §3.3 / §3.6；许可口径见 `docs/DEPENDENCIES.md`「JIT 自动配对」节
 （★自研；只参考公开协议描述，未用任何第三方代码★）。

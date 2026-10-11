@@ -399,6 +399,50 @@ Bonjour 发现/连接 + 线上 JSON 信封**，并把上一阶段卡住的两个
 
 ---
 
+### 3.7【A2-RXPC】传输层：RemoteXPC（§2a/§2b）+ 设备发起配对（pairable host）
+
+§3.6 把「握手本体」做真之后，还剩两个缺口：**pair-setup 在真机上走哪条传输**，以及 **iOS 27 的设备发起配对长什么样**。
+本节只做【传输层】——SRP/PS-Msg 本体属 [JIT-AUTOPAIR-3]（另一单），本层给它留缝。
+
+| 文件 | 层 | 变更 |
+|---|---|---|
+| `Natives/Support/a2_remotexpc_framing.[hm]` | **Natives** | **新增**：RemoteXPC（公开规格 §4）编解码 —— HTTP/2 帧 + HPACK（静态表/不索引字面量）+ XPC 消息与对象 |
+| `Natives/Support/a2_remotexpc_session.[hm]` | **Natives** | **新增**：RemoteXPC 会话（初始化握手 + pairingData 交换 + 错误分类 + 超时；字节通道可注入） |
+| `Natives/Support/a2_rppairing_pairsetup_transport.[hm]` | **Natives** | **新增**：真网络字节通道（NWConnection）+ 缝 `A2RPPairSetupMessageTransport` 的实现 + §2a 如实回报 |
+| `Natives/Support/a2_rppairing_pairable_host.[hm]` | **Natives** | **新增**：`_remotepairing-pairable-host._tcp` 通告契约（authTag/TXT）+ NWListener 真广告/真接受 + 四类失败分类 |
+| `docs/ARCHITECTURE.md` / `docs/JIT-PROVISIONING.md` | docs | 登记与本节 |
+| `tests/JIT/remotexpc_tests.m` + `run_remotexpc_tests.py` | tests | **新增**：60+ 例（帧/HPACK/XPC/会话/传输缝/pairable-host 契约） |
+
+★ **哪条路支持 pair-setup（公开规格 §2 原文口径）★**：
+| 路径 | 传输 | 支持 pair-setup？ |
+|---|---|---|
+| §2a `com.apple.internal.devicecompute.CoreDeviceProxy`（USB） | RemoteXPC（经 CDTunnel + 用户态 TCP + RSD） | 是（但★本仓在 iOS App 内做不到★，见下） |
+| §2b `_remoted._tcp` | RemoteXPC（HTTP/2 + XPC；需设备侧 ncm） | 是 |
+| §2c `_remotepairing._tcp` | 裸 RPPairing socket（JSON 帧） | ★否★（规格原文：需既有配对文件，只支持 pair-verify） |
+| `_remotepairing-pairable-host._tcp`（iOS 27 设备发起） | 裸 RPPairing socket（设备当 host、本机当 accessory） | 是（★这是 iOS 27 在设备内自配对的主路★） |
+
+★ **§2a 为什么不做（如实）★**：链路要求「宿主电脑」角色（USB → usbmuxd → lockdownd → CoreDeviceProxy）；
+iOS App 没有 USB 主机权限、拿不到 usbmuxd/lockdownd 的进程通道；而本仓目标是**设备内回环自配对**，
+USB 前提根本不存在 ⇒ `A2RPPairSetupUSBPathAvailable()` 如实回 `NO` 并点名原因。
+
+★ **仍未做 / 需拍板（如实点名）★**：
+1. **与 iOS 27 真设备互操作未验证**（本会话无真机）—— 本层只证「按公开规格自洽」（帧/HPACK/XPC 往返、
+   authTag 用公开测试向量）。
+2. **HPACK 不做 Huffman 与动态表** —— 解码遇 Huffman / 动态表索引一律如实报错（不猜）；编码从不产出
+   Huffman。若真机头块用了 Huffman，需补这一块。
+3. **`.pairing.session` 后台保活**（用户进设置期间保活）属 **App 层接线**（需 Info.plist 的
+   `BGTaskSchedulerPermittedIdentifiers` + UIApplication 的 background task）；本层只做超时中止与
+   「被挂起」的可观察分类，★不假装自己保活了★。
+4. **pairable-host 的会话方向与缝相反**：该路径上【设备】是 rppairing 的 host（发 `originatedBy: "host"`）、
+   本机是 accessory ⇒ 驱动的是 **device 侧**（收先发后），而缝 `A2RPPairSetupMessageTransport` 是
+   **host 侧**语义（发先收后）。本层把「发一条 TLV / 收下一条」做真并暴露双向能力；**由 [JIT-AUTOPAIR-3]
+   的 device 侧会话驱动**（`deviceSessionWithIdentity:pin:` 那一路）。这一处是两单的**接口接缝**，需对齐。
+
+★ **许可★**：零 vendor。只读公开规格与公开实现的**行为/接口/常量**（服务类型、TXT 键、authTag 算法、
+协议版本号），未搬运任何代码。
+
+---
+
 ## 4. 第二阶段工作拆分与工作量估算（★本单不实现★）
 
 > 估算单位＝**人日**（含真机调试，不含外部等待/审核）。★每项标注许可红线★。

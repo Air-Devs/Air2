@@ -168,10 +168,14 @@
 		64A34223B7AA99D70C1B8233 /* UIKit+hook.m in Sources */ = {isa = PBXBuildFile; fileRef = 1E8D565EEE899288910F94F0 /* UIKit+hook.m */; };
 		0EE14820F3619D81DD29FB1A /* a2_failbanner.m in Sources */ = {isa = PBXBuildFile; fileRef = 41F40768EE993D4FDD8EF834 /* a2_failbanner.m */; };
 		6CF98CDCF8BDE70CD592CD7E /* a2_log.m in Sources */ = {isa = PBXBuildFile; fileRef = C8C11BDFE3957C1F2DD76E10 /* a2_log.m */; };
+		3815B18505F9F4B8D0D791A7 /* a2_remotexpc_framing.m in Sources */ = {isa = PBXBuildFile; fileRef = BF51D5FB2AFC9D3F65FF85CA /* a2_remotexpc_framing.m */; };
+		DCD6B1D79209867F0C77EC2D /* a2_remotexpc_session.m in Sources */ = {isa = PBXBuildFile; fileRef = FD379B598D86FE65BF565BA7 /* a2_remotexpc_session.m */; };
 		5D0A7B6650F9BB442AF56D46 /* a2_rppairing.m in Sources */ = {isa = PBXBuildFile; fileRef = 99BE0D1D25B3F375B5327D61 /* a2_rppairing.m */; };
 		042FCAD5611485D151E5D79F /* a2_rppairing_chacha.m in Sources */ = {isa = PBXBuildFile; fileRef = AF816B85E1C455E511AC3B0A /* a2_rppairing_chacha.m */; };
 		212CC2B590E73733FC492C45 /* a2_rppairing_crypto.m in Sources */ = {isa = PBXBuildFile; fileRef = 61AFC07262B2A26D0B531D85 /* a2_rppairing_crypto.m */; };
 		E07E486F2F322557DE9BB97C /* a2_rppairing_ed25519.m in Sources */ = {isa = PBXBuildFile; fileRef = BB39CD8A99C42623B61DDF56 /* a2_rppairing_ed25519.m */; };
+		2938FADF387CF104B5DDC809 /* a2_rppairing_pairable_host.m in Sources */ = {isa = PBXBuildFile; fileRef = 07E08CF29323DC1338BC640A /* a2_rppairing_pairable_host.m */; };
+		76DE2B4705BD41CD96AE2C46 /* a2_rppairing_pairsetup_transport.m in Sources */ = {isa = PBXBuildFile; fileRef = 63F6ABC34B3800F1BDA1A521 /* a2_rppairing_pairsetup_transport.m */; };
 		6DF36811EF63088DA46ACD61 /* a2_rppairing_rsd.m in Sources */ = {isa = PBXBuildFile; fileRef = 8DD4A4A3EE7CD77E6B14110F /* a2_rppairing_rsd.m */; };
 		072BE91496C49D3121A7E288 /* a2_rppairing_verify.m in Sources */ = {isa = PBXBuildFile; fileRef = 6DB059C24F4995B6CD32CFC3 /* a2_rppairing_verify.m */; };
 		5E6D2E22D7E3C8631CBE7CFF /* a2_tlspsk_mbedtls.m in Sources */ = {isa = PBXBuildFile; fileRef = 497444A01DBBFD2FAACE0D50 /* a2_tlspsk_mbedtls.m */; };
@@ -344,10 +348,14 @@
 		1E8D565EEE899288910F94F0 /* UIKit+hook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "UIKit+hook.m"; sourceTree = "<group>"; };
 		41F40768EE993D4FDD8EF834 /* a2_failbanner.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_failbanner.m"; sourceTree = "<group>"; };
 		C8C11BDFE3957C1F2DD76E10 /* a2_log.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_log.m"; sourceTree = "<group>"; };
+		BF51D5FB2AFC9D3F65FF85CA /* a2_remotexpc_framing.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_remotexpc_framing.m"; sourceTree = "<group>"; };
+		FD379B598D86FE65BF565BA7 /* a2_remotexpc_session.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_remotexpc_session.m"; sourceTree = "<group>"; };
 		99BE0D1D25B3F375B5327D61 /* a2_rppairing.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing.m"; sourceTree = "<group>"; };
 		AF816B85E1C455E511AC3B0A /* a2_rppairing_chacha.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_chacha.m"; sourceTree = "<group>"; };
 		61AFC07262B2A26D0B531D85 /* a2_rppairing_crypto.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_crypto.m"; sourceTree = "<group>"; };
 		BB39CD8A99C42623B61DDF56 /* a2_rppairing_ed25519.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_ed25519.m"; sourceTree = "<group>"; };
+		07E08CF29323DC1338BC640A /* a2_rppairing_pairable_host.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_pairable_host.m"; sourceTree = "<group>"; };
+		63F6ABC34B3800F1BDA1A521 /* a2_rppairing_pairsetup_transport.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_pairsetup_transport.m"; sourceTree = "<group>"; };
 		8DD4A4A3EE7CD77E6B14110F /* a2_rppairing_rsd.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_rsd.m"; sourceTree = "<group>"; };
 		6DB059C24F4995B6CD32CFC3 /* a2_rppairing_verify.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_verify.m"; sourceTree = "<group>"; };
 		497444A01DBBFD2FAACE0D50 /* a2_tlspsk_mbedtls.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_tlspsk_mbedtls.m"; sourceTree = "<group>"; };
@@ -509,10 +517,14 @@
 		79E2BBD2EFDC35F97EB8D2C4 /* UIKit+hook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UIKit+hook.h"; sourceTree = "<group>"; };
 		C18D94535AB7474923C21B8E /* a2_failbanner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_failbanner.h"; sourceTree = "<group>"; };
 		385B60A0F03909DA9353A26C /* a2_log.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_log.h"; sourceTree = "<group>"; };
+		AE33275B1332C1E9705E3BCD /* a2_remotexpc_framing.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_remotexpc_framing.h"; sourceTree = "<group>"; };
+		86F4679CCBD5F653F726894F /* a2_remotexpc_session.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_remotexpc_session.h"; sourceTree = "<group>"; };
 		4CFA3629507F02280EFEA4E7 /* a2_rppairing.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing.h"; sourceTree = "<group>"; };
 		C956A5D34A820BE0A4BFCD9F /* a2_rppairing_chacha.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_chacha.h"; sourceTree = "<group>"; };
 		79B56484F1E69AA6295350B5 /* a2_rppairing_crypto.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_crypto.h"; sourceTree = "<group>"; };
 		A09AED31B25AF3A3729E20AE /* a2_rppairing_ed25519.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_ed25519.h"; sourceTree = "<group>"; };
+		7020DE052BE01500DD8B6917 /* a2_rppairing_pairable_host.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_pairable_host.h"; sourceTree = "<group>"; };
+		380BF3751376F74E7DBB6D46 /* a2_rppairing_pairsetup_transport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_pairsetup_transport.h"; sourceTree = "<group>"; };
 		8F192F1BB49B9590F2CC25C4 /* a2_rppairing_rsd.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_rsd.h"; sourceTree = "<group>"; };
 		019E9238E2D1750A6A7D9686 /* a2_rppairing_verify.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_verify.h"; sourceTree = "<group>"; };
 		C52AE90AEBDB81EA09AD9E93 /* a2_tlspsk_mbedtls.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_tlspsk_mbedtls.h"; sourceTree = "<group>"; };
@@ -783,10 +795,14 @@
 				1E8D565EEE899288910F94F0 /* UIKit+hook.m */,
 				41F40768EE993D4FDD8EF834 /* a2_failbanner.m */,
 				C8C11BDFE3957C1F2DD76E10 /* a2_log.m */,
+				BF51D5FB2AFC9D3F65FF85CA /* a2_remotexpc_framing.m */,
+				FD379B598D86FE65BF565BA7 /* a2_remotexpc_session.m */,
 				99BE0D1D25B3F375B5327D61 /* a2_rppairing.m */,
 				AF816B85E1C455E511AC3B0A /* a2_rppairing_chacha.m */,
 				61AFC07262B2A26D0B531D85 /* a2_rppairing_crypto.m */,
 				BB39CD8A99C42623B61DDF56 /* a2_rppairing_ed25519.m */,
+				07E08CF29323DC1338BC640A /* a2_rppairing_pairable_host.m */,
+				63F6ABC34B3800F1BDA1A521 /* a2_rppairing_pairsetup_transport.m */,
 				8DD4A4A3EE7CD77E6B14110F /* a2_rppairing_rsd.m */,
 				6DB059C24F4995B6CD32CFC3 /* a2_rppairing_verify.m */,
 				497444A01DBBFD2FAACE0D50 /* a2_tlspsk_mbedtls.m */,
@@ -796,10 +812,14 @@
 				79E2BBD2EFDC35F97EB8D2C4 /* UIKit+hook.h */,
 				C18D94535AB7474923C21B8E /* a2_failbanner.h */,
 				385B60A0F03909DA9353A26C /* a2_log.h */,
+				AE33275B1332C1E9705E3BCD /* a2_remotexpc_framing.h */,
+				86F4679CCBD5F653F726894F /* a2_remotexpc_session.h */,
 				4CFA3629507F02280EFEA4E7 /* a2_rppairing.h */,
 				C956A5D34A820BE0A4BFCD9F /* a2_rppairing_chacha.h */,
 				79B56484F1E69AA6295350B5 /* a2_rppairing_crypto.h */,
 				A09AED31B25AF3A3729E20AE /* a2_rppairing_ed25519.h */,
+				7020DE052BE01500DD8B6917 /* a2_rppairing_pairable_host.h */,
+				380BF3751376F74E7DBB6D46 /* a2_rppairing_pairsetup_transport.h */,
 				8F192F1BB49B9590F2CC25C4 /* a2_rppairing_rsd.h */,
 				019E9238E2D1750A6A7D9686 /* a2_rppairing_verify.h */,
 				C52AE90AEBDB81EA09AD9E93 /* a2_tlspsk_mbedtls.h */,
@@ -1452,10 +1472,14 @@
 				64A34223B7AA99D70C1B8233 /* UIKit+hook.m in Sources */,
 				0EE14820F3619D81DD29FB1A /* a2_failbanner.m in Sources */,
 				6CF98CDCF8BDE70CD592CD7E /* a2_log.m in Sources */,
+				3815B18505F9F4B8D0D791A7 /* a2_remotexpc_framing.m in Sources */,
+				DCD6B1D79209867F0C77EC2D /* a2_remotexpc_session.m in Sources */,
 				5D0A7B6650F9BB442AF56D46 /* a2_rppairing.m in Sources */,
 				042FCAD5611485D151E5D79F /* a2_rppairing_chacha.m in Sources */,
 				212CC2B590E73733FC492C45 /* a2_rppairing_crypto.m in Sources */,
 				E07E486F2F322557DE9BB97C /* a2_rppairing_ed25519.m in Sources */,
+				2938FADF387CF104B5DDC809 /* a2_rppairing_pairable_host.m in Sources */,
+				76DE2B4705BD41CD96AE2C46 /* a2_rppairing_pairsetup_transport.m in Sources */,
 				6DF36811EF63088DA46ACD61 /* a2_rppairing_rsd.m in Sources */,
 				072BE91496C49D3121A7E288 /* a2_rppairing_verify.m in Sources */,
 				5E6D2E22D7E3C8631CBE7CFF /* a2_tlspsk_mbedtls.m in Sources */,
