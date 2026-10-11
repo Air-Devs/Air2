@@ -36,7 +36,7 @@ LWJGL_SOURCES := $(shell find $(LWJGL_SRCDIR) -name '*.java' 2>/dev/null)
 LWJGL_CLASSES := $(OUTPUTDIR)/lwjgl-classes
 LWJGL_TARGET  := $(OUTPUTDIR)/$(LWJGL_JARNAME).jar
 
-.PHONY: all lwjgl clean verify verify-lwjgl
+.PHONY: all lwjgl clean verify verify-lwjgl ownglfw verify-ownglfw
 
 all: $(TARGET) lwjgl
 
@@ -78,6 +78,16 @@ verify-lwjgl: $(LWJGL_TARGET)
 	@hits=$$( $(JARTOOL) tf $(LWJGL_TARGET) | grep -cE 'net/kdt/pojavlaunch|Boardwalk' || true ); \
 	 echo "    命中 = $$hits"; \
 	 [ "$$hits" = "0" ] || { echo "错误：补丁 jar 内仍有 Pojav/Boardwalk 传承类"; exit 1; }
+
+# ------------------------------------------------------------------
+# [A2-OWNGLFW-1] 自研 org.lwjgl.glfw.* 最小集（净室线，独立于上面的复用线补丁 jar）。
+# 与复用线的 air2-lwjgl-patch.jar 并存但互不混同：本 jar 用于日后「整块替换」。
+# 编译期需要官方 jar 提供 SPI/Struct 类型；运行时由 libs/lwjgl-<ver>/* 提供。
+ownglfw: verify-ownglfw
+
+verify-ownglfw:
+	@echo "==> 自研 GLFW 自证（编译 + 薄 JNI 符号对齐 + 包内自证）"
+	@python3 scripts/ownglfw_verify.py
 
 clean:
 	rm -rf $(OUTPUTDIR)

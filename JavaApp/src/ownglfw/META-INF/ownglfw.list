@@ -1,0 +1,36 @@
+Air2 —— 自研 org.lwjgl.glfw.* 最小集（阶段 1）· 包内清单
+=========================================================
+归属决策：Java 侧独立 jar（air2-ownglfw.jar），classpath 最前（先于 libs/lwjgl-<ver>/*）。
+分支：feat/ownglfw（工作树 D:\CTF\_510src\Air2_ownglfw，与 Air2_full 完全隔离）。
+标记：[A2-OWNGLFW-1]。
+
+★这是【自研净室】线，与【复用老树】线互不混同★
+  复用线（Air2_full / air2-lwjgl-patch.jar）：沿用 runtime_native（Amethyst/Pojav 系，GPLv3）。
+  自研线（本 jar）：只依据公开资料独立编写，无 GPL 血缘，日后用于整块替换复用线。
+
+本 jar 当前【已实现】的类（4 个）：
+  org/lwjgl/glfw/GLFW.class                 自研 GLFW 最小集；337 个 GLFW_* 常量 + 若干 public 方法
+  org/lwjgl/glfw/GLFW$Window.class          Java 侧窗口状态持有者（私有嵌套类）
+  org/lwjgl/glfw/Callbacks.class            自研 glfwFreeCallbacks(long)
+  org/lwjgl/glfw/GLFWNativeCocoa.class      iOS 替身：glfwGetCocoaWindow/View/Monitor 返回 0
+
+编译依赖（编译期，运行时由官方层提供）：
+  Libraries/Jars/lwjgl-341/lwjgl-glfw.jar   提供回调 SPI 类型（GLFWKeyCallbackI 等）与 Struct 类型
+  Libraries/Jars/lwjgl-341/lwjgl.jar        提供 org.lwjgl.PointerBuffer / system.MemoryUtil
+
+【未落 · 剩余清单】（带原因，非待办空话）：
+  A. org/lwjgl/glfw/GLFWVulkan.java —— 官方签名含 org.lwjgl.vulkan.{VkInstance,VkPhysicalDevice,
+     VkAllocationCallbacks}；本仓 Libraries/Jars/lwjgl-341/ 无 lwjgl-vulkan jar ⇒ 现在落会编不过。
+     Air2 主推渲染后端是 Metal（libmetallum.dylib），Vulkan 路径非「进主界面」必需 ⇒ 缓。
+  B. org/lwjgl/glfw/GLFWNativeEGL.java —— ★经核实：官方 lwjgl-glfw.jar 内【不存在】该类★
+     （仅老树/Pojav 为 LabyMod 加的空壳）。vanilla MC 不引用 ⇒ 不复刻。
+  C. org/lwjgl/system/{Callback,CallbackI,APIUtil}.java —— 本仓 Libraries 的官方 3.4.1 jar 已随
+     （老树那份是「iOS 旧版 Callback + 3.4.1 Descriptor」双实现补丁）。★本自研线只在
+     官方 SPI 上编译，不覆盖 system/*；是否需覆盖待阶段 2 与真机行为对齐后再定★。
+  D. 手柄/光标高级接口（Joystick/Gamepad 全量、GLFWImage 光标）—— 非「进主界面」必需 ⇒ 缓。
+
+native 侧（本阶段只做「能编译 + 最小窗口/上下文」）：
+  Natives/OwnGlfw/a2_own_glfw_bridge.m —— 11 个 JNI 符号，与 GLFW.java 的私有 native 一一对应：
+    nInit nTerminate nCreateWindow nDestroyWindow nMakeContextCurrent
+    nSwapBuffers nSwapInterval nPollEvents nWaitEvents nWaitEventsTimeout nPostEmptyEvent
+  自证：JavaApp/scripts/ownglfw_verify.py 抽 JNI 头 vs .m，断言两侧符号逐名相等。
