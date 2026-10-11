@@ -182,6 +182,11 @@ typedef NS_ENUM(NSInteger, A2InstallStepState) {
 
 @property (nonatomic, assign) A2InstallStage currentStage;
 
+// 安装日志卡片（A2InstallingViewController.m:250/335 使用 _logOutput/_logCard）
+// —— 此前只写了使用点、漏了属性声明，导致 CI 报 “use of undeclared identifier”。
+@property (nonatomic, strong) A2TaskLogOutput *logOutput;
+@property (nonatomic, strong) A2TaskLogCard *logCard;
+
 @end
 
 @implementation A2InstallingViewController
