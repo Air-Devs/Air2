@@ -334,7 +334,6 @@ static NSString *A2VersionSymbolForType(NSString *type) {
 @property (nonatomic, strong) NSMutableSet<NSString *> *selectedTypes;
 @property (nonatomic, strong) A2TextField *searchField;
 @property (nonatomic, strong) UIButton *refreshButton;
-@property (nonatomic, strong) UIView *divider;
 @property (nonatomic, strong) UITableView *tableView;
 @property (nonatomic, strong) UIActivityIndicatorView *spinner;
 
@@ -447,10 +446,6 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
              forControlEvents:UIControlEventTouchUpInside];
     [_headerRow addSubview:_refreshButton];
 
-    _divider = [[UIView alloc] initWithFrame:CGRectZero];
-    _divider.translatesAutoresizingMaskIntoConstraints = NO;
-    [host addSubview:_divider];
-
     UILayoutGuide *chipContent = _chipScroll.contentLayoutGuide;
 
     // 胶囊区优先贴合自身内容宽度；放不下时才在六成宽处截断并横向滚动。
@@ -496,11 +491,6 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
         [_refreshButton.trailingAnchor constraintEqualToAnchor:_headerRow.trailingAnchor],
         [_refreshButton.widthAnchor constraintEqualToConstant:A2MinTouchTarget],
         [_refreshButton.heightAnchor constraintEqualToConstant:A2MinTouchTarget],
-
-        [_divider.topAnchor constraintEqualToAnchor:_headerRow.bottomAnchor constant:A2SpaceM],
-        [_divider.leadingAnchor constraintEqualToAnchor:host.leadingAnchor],
-        [_divider.trailingAnchor constraintEqualToAnchor:host.trailingAnchor],
-        [_divider.heightAnchor constraintEqualToConstant:1],
     ]];
 }
 
@@ -527,7 +517,8 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
     [self.plainContentView addSubview:_spinner];
 
     [NSLayoutConstraint activateConstraints:@[
-        [_tableView.topAnchor constraintEqualToAnchor:_divider.bottomAnchor],
+        [_tableView.topAnchor constraintEqualToAnchor:_headerRow.bottomAnchor
+                                        constant:A2SpaceM],
         [_tableView.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor],
         [_tableView.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
         [_tableView.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
@@ -760,7 +751,6 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
 
     _spinner.color = t.cPrimary;
-    _divider.backgroundColor = t.cOutlineVariant;
     _stateTitleLabel.textColor = t.cOnSurface;
     _stateDetailLabel.textColor = t.cOnSurfaceVariant;
 
