@@ -25,6 +25,7 @@
 //
 
 #import "A2DownloadTask.h"
+#import "A2TaskLogOutput.h"
 
 @implementation A2DownloadTask
 

@@ -34,6 +34,8 @@
 #import "A2Metrics.h"
 #import "A2GameInstaller.h"
 #import "A2ModPackInstaller.h"
+#import "A2TaskLogOutput.h"
+#import "A2TaskLogCard.h"
 #import "A2VersionManager.h"
 #import "A2ModLoaderAPI.h"
 #import "A2Log.h"
@@ -245,8 +247,11 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
         }
     };
 
+    _logOutput = [[A2TaskLogOutput alloc] initWithTitle:[NSString stringWithFormat:@"安装 %@", _versionName]];
+
     [self setupProgressCard];
     [self setupStepList];
+    [self setupLogCard];
     [self setupCancelButton];
     [self setupFailureCard];
     [self setupSuccessCard];
@@ -324,6 +329,17 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     ]];
 
     [self addSection:card];
+}
+
+- (void)setupLogCard {
+    _logCard = [[A2TaskLogCard alloc] initWithFrame:CGRectZero];
+    _logCard.logOutput = _logOutput;
+    [self addSection:_logCard];
+
+    // 日志区要占满剩余空间 —— 它是这个页面信息量最大的部分
+    [NSLayoutConstraint activateConstraints:@[
+        [_logCard.heightAnchor constraintGreaterThanOrEqualToConstant:140],
+    ]];
 }
 
 - (void)setupStepList {
@@ -523,11 +539,31 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     [self handleCompletion:success error:error];
 }
 
+/// 阶段的中文名（日志里用）
+- (NSString *)stageDisplayName:(A2InstallStage)stage {
+    switch (stage) {
+        case A2InstallStageFetchManifest:     return @"[清单]";
+        case A2InstallStageDownloadJSON:      return @"[版本信息]";
+        case A2InstallStageDownloadJar:       return @"[客户端]";
+        case A2InstallStageDownloadLibraries: return @"[依赖库]";
+        case A2InstallStageDownloadAssets:    return @"[资源]";
+        case A2InstallStageInstallLoader:     return @"[加载器]";
+        case A2InstallStageFinalize:          return @"[收尾]";
+        default:                              return @"[安装]";
+    }
+}
+
 - (void)updateForStage:(A2InstallStage)stage progress:(double)progress message:(NSString *)message {
     _currentStage = stage;
     _stageLabel.text = message.length ? message : @"安装中…";
     [A2Log log:@"download: 安装阶段 %ld 进度 %.0f%% %@",
         (long)stage, progress * 100, message ?: @""];
+
+    // 阶段切换时写一行明确的日志；阶段内的高频进度用覆盖式
+    NSString *stageName = [self stageDisplayName:stage];
+    if (message.length > 0) {
+        [_logOutput appendProgress:[NSString stringWithFormat:@"%@ %@", stageName, message]];
+    }
 
     double total = ((double)stage + progress) / (double)A2InstallStageCount;
     [_ring setProgress:total animated:YES];

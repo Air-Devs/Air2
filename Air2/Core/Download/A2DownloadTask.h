@@ -29,6 +29,7 @@
 //
 
 #import <Foundation/Foundation.h>
+@class A2TaskLogOutput;
 #import "A2DownloadEngine.h"
 
 NS_ASSUME_NONNULL_BEGIN

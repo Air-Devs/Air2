@@ -78,6 +78,8 @@
 		7CA4100025A1D308742A0665 /* A2Slider.m in Sources */ = {isa = PBXBuildFile; fileRef = 6BDEC3121EF50CDEC377E4D1 /* A2Slider.m */; };
 		A4CACC82C3345A217BD692ED /* A2Switch.m in Sources */ = {isa = PBXBuildFile; fileRef = 5B4EAC862A2B3BE1D9BCE6AE /* A2Switch.m */; };
 		5B82BB5F439B75DE2AE64C6A /* A2TaskDrawer.m in Sources */ = {isa = PBXBuildFile; fileRef = DA139E80AEDB846DE5191C14 /* A2TaskDrawer.m */; };
+		7F8920718F6CBE61B4ED89D1 /* A2TaskLogCard.m in Sources */ = {isa = PBXBuildFile; fileRef = F28792134BA46DD0000ECBF4 /* A2TaskLogCard.m */; };
+		AC8960E2417781EC601BFB8F /* A2TaskLogOutput.m in Sources */ = {isa = PBXBuildFile; fileRef = 2576FD4E0A0CB52A36078469 /* A2TaskLogOutput.m */; };
 		464FCB1D2C9D4FA080A24820 /* A2TaskProgressView.m in Sources */ = {isa = PBXBuildFile; fileRef = ADC4C42CB382EAFDCA556C09 /* A2TaskProgressView.m */; };
 		FD82F8F78F3C230BEBAE1F4B /* A2TextField.m in Sources */ = {isa = PBXBuildFile; fileRef = B498358055FFAD0453CC27C7 /* A2TextField.m */; };
 		5A0A0E6AE2BBFCAD8A947CA9 /* A2Toast.m in Sources */ = {isa = PBXBuildFile; fileRef = F3C972A56B473038ED5074FD /* A2Toast.m */; };
@@ -202,6 +204,8 @@
 		6BDEC3121EF50CDEC377E4D1 /* A2Slider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Slider.m"; sourceTree = "<group>"; };
 		5B4EAC862A2B3BE1D9BCE6AE /* A2Switch.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Switch.m"; sourceTree = "<group>"; };
 		DA139E80AEDB846DE5191C14 /* A2TaskDrawer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskDrawer.m"; sourceTree = "<group>"; };
+		F28792134BA46DD0000ECBF4 /* A2TaskLogCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskLogCard.m"; sourceTree = "<group>"; };
+		2576FD4E0A0CB52A36078469 /* A2TaskLogOutput.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskLogOutput.m"; sourceTree = "<group>"; };
 		ADC4C42CB382EAFDCA556C09 /* A2TaskProgressView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskProgressView.m"; sourceTree = "<group>"; };
 		B498358055FFAD0453CC27C7 /* A2TextField.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TextField.m"; sourceTree = "<group>"; };
 		F3C972A56B473038ED5074FD /* A2Toast.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Toast.m"; sourceTree = "<group>"; };
@@ -319,6 +323,8 @@
 		1B05CA50E9E749359B69AC20 /* A2Slider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Slider.h"; sourceTree = "<group>"; };
 		AE6A61B881AF3636A3DEC7FB /* A2Switch.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Switch.h"; sourceTree = "<group>"; };
 		86BA725A974D441AEC4C7082 /* A2TaskDrawer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskDrawer.h"; sourceTree = "<group>"; };
+		0F1C782604967DC873EB6421 /* A2TaskLogCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskLogCard.h"; sourceTree = "<group>"; };
+		4F66F4146C5DB99558B1EFD9 /* A2TaskLogOutput.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskLogOutput.h"; sourceTree = "<group>"; };
 		1D0B896EEB924745CE5C4038 /* A2TaskProgressView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskProgressView.h"; sourceTree = "<group>"; };
 		46EB509F1EF9D56C1DD81B78 /* A2TextField.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TextField.h"; sourceTree = "<group>"; };
 		DBF31C9D8FD1524E6BEB2D62 /* A2Toast.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Toast.h"; sourceTree = "<group>"; };
@@ -649,6 +655,8 @@
 				6BDEC3121EF50CDEC377E4D1 /* A2Slider.m */,
 				5B4EAC862A2B3BE1D9BCE6AE /* A2Switch.m */,
 				DA139E80AEDB846DE5191C14 /* A2TaskDrawer.m */,
+				F28792134BA46DD0000ECBF4 /* A2TaskLogCard.m */,
+				2576FD4E0A0CB52A36078469 /* A2TaskLogOutput.m */,
 				ADC4C42CB382EAFDCA556C09 /* A2TaskProgressView.m */,
 				B498358055FFAD0453CC27C7 /* A2TextField.m */,
 				F3C972A56B473038ED5074FD /* A2Toast.m */,
@@ -679,6 +687,8 @@
 				1B05CA50E9E749359B69AC20 /* A2Slider.h */,
 				AE6A61B881AF3636A3DEC7FB /* A2Switch.h */,
 				86BA725A974D441AEC4C7082 /* A2TaskDrawer.h */,
+				0F1C782604967DC873EB6421 /* A2TaskLogCard.h */,
+				4F66F4146C5DB99558B1EFD9 /* A2TaskLogOutput.h */,
 				1D0B896EEB924745CE5C4038 /* A2TaskProgressView.h */,
 				46EB509F1EF9D56C1DD81B78 /* A2TextField.h */,
 				DBF31C9D8FD1524E6BEB2D62 /* A2Toast.h */,
@@ -994,6 +1004,8 @@
 				7CA4100025A1D308742A0665 /* A2Slider.m in Sources */,
 				A4CACC82C3345A217BD692ED /* A2Switch.m in Sources */,
 				5B82BB5F439B75DE2AE64C6A /* A2TaskDrawer.m in Sources */,
+				7F8920718F6CBE61B4ED89D1 /* A2TaskLogCard.m in Sources */,
+				AC8960E2417781EC601BFB8F /* A2TaskLogOutput.m in Sources */,
 				464FCB1D2C9D4FA080A24820 /* A2TaskProgressView.m in Sources */,
 				FD82F8F78F3C230BEBAE1F4B /* A2TextField.m in Sources */,
 				5A0A0E6AE2BBFCAD8A947CA9 /* A2Toast.m in Sources */,
