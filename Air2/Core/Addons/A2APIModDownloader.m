@@ -157,7 +157,6 @@ static void A2Main(dispatch_block_t b) {
             : [NSString stringWithFormat:@"%@.jar", slug];
 
         // 目标：#版本目录/mods/ —— 前置模组要落在游戏能加载到的地方
-        // 目标：#版本目录/mods/ —— 前置模组要落在游戏能加载到的地方
         A2GamePath *path = [A2GamePath pathWithGameHome:gameHome];
         A2IsolationMode mode = A2IsolationModeFull;
         for (A2Version *v in A2VersionManager.shared.versions) {
@@ -167,7 +166,8 @@ static void A2Main(dispatch_block_t b) {
             }
         }
         NSString *modsDir = [path modsDirectoryForVersion:versionName mode:mode];
-                                withIntermediateDirectories:YES attributes:nil error:nil];
+        [NSFileManager.defaultManager createDirectoryAtPath:modsDir
+                                 withIntermediateDirectories:YES attributes:nil error:nil];
 
         NSString *dest = [modsDir stringByAppendingPathComponent:fileName];
 
