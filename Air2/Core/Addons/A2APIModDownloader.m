@@ -3,6 +3,8 @@
 //  Air2
 //
 
+#import "A2VersionManager.h"
+#import "A2Version.h"
 #import "A2APIModDownloader.h"
 #import "A2ModrinthAPI.h"
 #import "A2DownloadEngine.h"
@@ -156,11 +158,16 @@ static void A2Main(dispatch_block_t b) {
             : [NSString stringWithFormat:@"%@.jar", slug];
 
         // 目标：#版本目录/mods/ —— 前置模组要落在游戏能加载到的地方
+        // 目标：#版本目录/mods/ —— 前置模组要落在游戏能加载到的地方
         A2GamePath *path = [A2GamePath pathWithGameHome:gameHome];
-        NSString *gameDir = [path gameDirectoryForVersion:versionName
-                                                isolation:[A2VersionIsolation new]];
-        NSString *modsDir = [gameDir stringByAppendingPathComponent:@"mods"];
-        [NSFileManager.defaultManager createDirectoryAtPath:modsDir
+        A2IsolationMode mode = A2IsolationModeFull;
+        for (A2Version *v in A2VersionManager.shared.versions) {
+            if ([v.name isEqualToString:versionName]) {
+                mode = [v effectiveIsolationMode];
+                break;
+            }
+        }
+        NSString *modsDir = [path modsDirectoryForVersion:versionName mode:mode];
                                 withIntermediateDirectories:YES attributes:nil error:nil];
 
         NSString *dest = [modsDir stringByAppendingPathComponent:fileName];
