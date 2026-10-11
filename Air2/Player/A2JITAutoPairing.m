@@ -8,10 +8,11 @@
 
 #import "A2JITAutoPairing.h"
 
-const NSInteger A2JITAutoPairingPreconditionCount = 4;
+const NSInteger A2JITAutoPairingPreconditionCount = A2JIT_AUTOPAIR_PRECONDITION_COUNT;
 
 @implementation A2JITAutoPairingPreconditions {
-    A2JITAutoPairingPreconditionState _states[A2JITAutoPairingPreconditionCount];
+    // 固定大小数组（用编译期常量，避免 VLA 扩展警告）；数量见 A2JIT_AUTOPAIR_PRECONDITION_COUNT。
+    A2JITAutoPairingPreconditionState _states[A2JIT_AUTOPAIR_PRECONDITION_COUNT];
 }
 
 + (instancetype)preconditionsWithDeveloperMode:(A2JITAutoPairingPreconditionState)developerMode

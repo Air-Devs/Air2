@@ -40,7 +40,10 @@ typedef NS_ENUM(NSInteger, A2JITAutoPairingPrecondition) {
     A2JITAutoPairingPreconditionDDI           = 3,  ///< ④（首次）联网取 DDI（Developer Disk Image）
 };
 
-/// 前置条件数量（遍历用；勿改语义）。
+/// 前置条件数量的【编译期常量】（同时用于固定大小的内部数组，避免 VLA 扩展警告）。
+#define A2JIT_AUTOPAIR_PRECONDITION_COUNT 4
+
+/// 前置条件数量（遍历用；★值必须等于宏，勿改语义★）。
 FOUNDATION_EXPORT const NSInteger A2JITAutoPairingPreconditionCount;
 
 /// 单条前置条件的判定态。
