@@ -63,6 +63,7 @@
 		350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */ = {isa = PBXBuildFile; fileRef = A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */; };
 		C5F3C56FAA94C667A202A766 /* A2InputDialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 1AAD1DB8B8E6685A93FA2940 /* A2InputDialog.m */; };
 		2C9CD0FA185D54ECBE085D43 /* A2LoaderCard.m in Sources */ = {isa = PBXBuildFile; fileRef = 139430B14A933139D8C20D5C /* A2LoaderCard.m */; };
+		C01154913A58826D1288C208 /* A2PaginationBar.m in Sources */ = {isa = PBXBuildFile; fileRef = 94C422B51FBF07CB2AAA7C12 /* A2PaginationBar.m */; };
 		552EA36099808FC6CF1AF68C /* A2PrimaryButton.m in Sources */ = {isa = PBXBuildFile; fileRef = EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */; };
 		8ABD4DA07F7A241239D71053 /* A2ProgressBar.m in Sources */ = {isa = PBXBuildFile; fileRef = EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */; };
 		ED8B276093698A47A8E600CB /* A2QuickActionCard.m in Sources */ = {isa = PBXBuildFile; fileRef = BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */; };
@@ -87,6 +88,7 @@
 		912C3DEC9D63AE689DA1F2DE /* A2AccountRowView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */; };
 		AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */; };
 		FB68423E2789A6F0A08E6E54 /* A2LoginViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */; };
+		D01CFE8588165E1AE9ED7AD1 /* A2DownloadTargetPicker.m in Sources */ = {isa = PBXBuildFile; fileRef = 94B3587CBA8EF148D0A0ACD3 /* A2DownloadTargetPicker.m */; };
 		F2AE6F53868183175D2DEFAD /* A2DownloadTasksViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = FCF786571196D883A85C10CF /* A2DownloadTasksViewController.m */; };
 		AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */; };
 		EBFE6778C18900FDF0942172 /* A2FavoritesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 82DAFF5D1DF928F825EA8452 /* A2FavoritesViewController.m */; };
@@ -185,6 +187,7 @@
 		A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GlassCard.m"; sourceTree = "<group>"; };
 		1AAD1DB8B8E6685A93FA2940 /* A2InputDialog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2InputDialog.m"; sourceTree = "<group>"; };
 		139430B14A933139D8C20D5C /* A2LoaderCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoaderCard.m"; sourceTree = "<group>"; };
+		94C422B51FBF07CB2AAA7C12 /* A2PaginationBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PaginationBar.m"; sourceTree = "<group>"; };
 		EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PrimaryButton.m"; sourceTree = "<group>"; };
 		EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ProgressBar.m"; sourceTree = "<group>"; };
 		BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2QuickActionCard.m"; sourceTree = "<group>"; };
@@ -209,6 +212,7 @@
 		2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountRowView.m"; sourceTree = "<group>"; };
 		CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountViewController.m"; sourceTree = "<group>"; };
 		1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoginViewController.m"; sourceTree = "<group>"; };
+		94B3587CBA8EF148D0A0ACD3 /* A2DownloadTargetPicker.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadTargetPicker.m"; sourceTree = "<group>"; };
 		FCF786571196D883A85C10CF /* A2DownloadTasksViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadTasksViewController.m"; sourceTree = "<group>"; };
 		58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadViewController.m"; sourceTree = "<group>"; };
 		82DAFF5D1DF928F825EA8452 /* A2FavoritesViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2FavoritesViewController.m"; sourceTree = "<group>"; };
@@ -299,6 +303,7 @@
 		011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GlassCard.h"; sourceTree = "<group>"; };
 		51D0A8ACF4410E0B1AC0B915 /* A2InputDialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InputDialog.h"; sourceTree = "<group>"; };
 		0AE3E9A2D83CB6D50AE64979 /* A2LoaderCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoaderCard.h"; sourceTree = "<group>"; };
+		5740BE3FAEB8059D8A26D5A4 /* A2PaginationBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PaginationBar.h"; sourceTree = "<group>"; };
 		F483F847F6597D3BD17BBBA5 /* A2PrimaryButton.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PrimaryButton.h"; sourceTree = "<group>"; };
 		A2C65A10681693BAA019E065 /* A2ProgressBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ProgressBar.h"; sourceTree = "<group>"; };
 		D771FB41CA40081650206A01 /* A2ProgressView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ProgressView.h"; sourceTree = "<group>"; };
@@ -324,6 +329,7 @@
 		0D773FDDDB48AA7436E8FAA5 /* A2AccountRowView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountRowView.h"; sourceTree = "<group>"; };
 		6D2B976BBD0701B19B6533DD /* A2AccountViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountViewController.h"; sourceTree = "<group>"; };
 		52F4C13395826CC0FD71F073 /* A2LoginViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoginViewController.h"; sourceTree = "<group>"; };
+		27A67636607C66ADDEAFFE18 /* A2DownloadTargetPicker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTargetPicker.h"; sourceTree = "<group>"; };
 		AC97C75576BC6EEE17640A0E /* A2DownloadTasksViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTasksViewController.h"; sourceTree = "<group>"; };
 		A7D45435EB1780C938976BA4 /* A2DownloadViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadViewController.h"; sourceTree = "<group>"; };
 		E9C2A18759AEABAB3EAE0B16 /* A2FavoritesViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2FavoritesViewController.h"; sourceTree = "<group>"; };
@@ -628,6 +634,7 @@
 				A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */,
 				1AAD1DB8B8E6685A93FA2940 /* A2InputDialog.m */,
 				139430B14A933139D8C20D5C /* A2LoaderCard.m */,
+				94C422B51FBF07CB2AAA7C12 /* A2PaginationBar.m */,
 				EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */,
 				EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */,
 				BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */,
@@ -656,6 +663,7 @@
 				011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */,
 				51D0A8ACF4410E0B1AC0B915 /* A2InputDialog.h */,
 				0AE3E9A2D83CB6D50AE64979 /* A2LoaderCard.h */,
+				5740BE3FAEB8059D8A26D5A4 /* A2PaginationBar.h */,
 				F483F847F6597D3BD17BBBA5 /* A2PrimaryButton.h */,
 				A2C65A10681693BAA019E065 /* A2ProgressBar.h */,
 				D771FB41CA40081650206A01 /* A2ProgressView.h */,
@@ -751,6 +759,7 @@
 		55AB3FA6D6516DF096EA9950 /* Download */ = {
 			isa = PBXGroup;
 			children = (
+				94B3587CBA8EF148D0A0ACD3 /* A2DownloadTargetPicker.m */,
 				FCF786571196D883A85C10CF /* A2DownloadTasksViewController.m */,
 				58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */,
 				82DAFF5D1DF928F825EA8452 /* A2FavoritesViewController.m */,
@@ -761,6 +770,7 @@
 				39176526660F1CAEC3199C8F /* A2ResourceDetailViewController.m */,
 				98024C5565241D478B54F4D6 /* A2ResourceSearchViewController.m */,
 				C769776AF3D8703861D81699 /* A2SearchByIdViewController.m */,
+				27A67636607C66ADDEAFFE18 /* A2DownloadTargetPicker.h */,
 				AC97C75576BC6EEE17640A0E /* A2DownloadTasksViewController.h */,
 				A7D45435EB1780C938976BA4 /* A2DownloadViewController.h */,
 				E9C2A18759AEABAB3EAE0B16 /* A2FavoritesViewController.h */,
@@ -969,6 +979,7 @@
 				350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */,
 				C5F3C56FAA94C667A202A766 /* A2InputDialog.m in Sources */,
 				2C9CD0FA185D54ECBE085D43 /* A2LoaderCard.m in Sources */,
+				C01154913A58826D1288C208 /* A2PaginationBar.m in Sources */,
 				552EA36099808FC6CF1AF68C /* A2PrimaryButton.m in Sources */,
 				8ABD4DA07F7A241239D71053 /* A2ProgressBar.m in Sources */,
 				ED8B276093698A47A8E600CB /* A2QuickActionCard.m in Sources */,
@@ -993,6 +1004,7 @@
 				912C3DEC9D63AE689DA1F2DE /* A2AccountRowView.m in Sources */,
 				AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */,
 				FB68423E2789A6F0A08E6E54 /* A2LoginViewController.m in Sources */,
+				D01CFE8588165E1AE9ED7AD1 /* A2DownloadTargetPicker.m in Sources */,
 				F2AE6F53868183175D2DEFAD /* A2DownloadTasksViewController.m in Sources */,
 				AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */,
 				EBFE6778C18900FDF0942172 /* A2FavoritesViewController.m in Sources */,

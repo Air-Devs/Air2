@@ -40,6 +40,7 @@
 #import "A2GlassCard.h"
 #import "A2ResourceCard.h"
 #import "A2TextField.h"
+#import "A2PaginationBar.h"
 #import "A2Log.h"
 #import "A2Metrics.h"
 #import "A2ModLoaderAPI.h"
@@ -150,6 +151,10 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
 @property (nonatomic, assign) NSInteger offset;
 @property (nonatomic, assign) BOOL loading;
 @property (nonatomic, assign) BOOL reachedEnd;
+/// 分页控件（对照 ZL2 的经典分页，取代原先的无限滚动）
+@property (nonatomic, strong) A2PaginationBar *paginationBar;
+/// 页面缓存：页号 → 结果（已看过的页不重查）
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, NSArray<A2ContentItem *> *> *pageCache;
 @property (nonatomic, strong, nullable) NSError *lastError;
 
 @property (nonatomic, copy) NSArray<NSString *> *gameVersionOptions;
@@ -191,6 +196,7 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     [self setupSplitLayout];
     [self buildSidePanel];
     [self setupResultList];
+    [self setupPaginationBar];
     [self applyTheme];
 
     [self loadCategories];
@@ -703,6 +709,42 @@ static NSString *A2PlatformDisplayName(A2ContentPlatform platform) {
 
 #pragma mark - UI：结果列表
 
+- (void)setupPaginationBar {
+    _pageCache = [NSMutableDictionary dictionary];
+
+    _paginationBar = [[A2PaginationBar alloc] initWithFrame:CGRectZero];
+    __weak typeof(self) weakSelf = self;
+    _paginationBar.onNavigate = ^(NSInteger page) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self loadPage:page];
+    };
+    [self.resultContainer addSubview:_paginationBar];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [_paginationBar.leadingAnchor constraintEqualToAnchor:self.resultContainer.leadingAnchor],
+        [_paginationBar.trailingAnchor constraintEqualToAnchor:self.resultContainer.trailingAnchor],
+        [_paginationBar.bottomAnchor constraintEqualToAnchor:self.resultContainer.bottomAnchor],
+    ]];
+}
+
+/// 加载指定页。命中缓存就直接用 —— 这是分页相对无限滚动的优势：
+/// 回退时不必重新请求。
+- (void)loadPage:(NSInteger)page {
+    if (page < 1) return;
+
+    NSArray<A2ContentItem *> *cached = _pageCache[@(page)];
+    if (cached) {
+        _items = [cached mutableCopy];
+        [_tableView reloadData];
+        [_paginationBar setCurrentPage:page totalPages:0];
+        return;
+    }
+
+    // 未缓存则请求。offset = (page - 1) * pageSize
+    _offset = (page - 1) * 20;
+    [self loadMoreWithPage:page];
+}
+
 - (void)setupResultList {
     _countLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _countLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -770,6 +812,57 @@ static NSString *A2PlatformDisplayName(A2ContentPlatform platform) {
     [_items removeAllObjects];
     [_tableView reloadData];
     [self loadMore];
+}
+
+/// 加载指定页（分页模式）。
+/// 与 loadMore 的区别：这里【替换】结果而不是追加，且结果会写进缓存。
+- (void)loadMoreWithPage:(NSInteger)page {
+    if (_loading) return;
+    if (!self.source.isAvailable) { [self updateStateView]; return; }
+    if (![self.source supportsContentClass:self.contentClass]) {
+        [self updateStateView]; return;
+    }
+
+    _loading = YES;
+    [self updateStateView];
+
+    A2ContentFilter *filter = [A2ContentFilter defaultFilter];
+    filter.query = self.searchBar.text.length ? self.searchBar.text : nil;
+    filter.gameVersion = self.selectedGameVersion;
+    filter.loader = self.selectedLoader;
+    filter.categories = self.selectedCategories.allObjects;
+    filter.sortField = self.sortField;
+    filter.offset = (page - 1) * 20;
+    filter.limit = 20;
+
+    __weak typeof(self) weakSelf = self;
+    [self.source searchWithFilter:filter
+                     contentClass:self.contentClass
+                       completion:^(NSArray<A2ContentItem *> *results, NSError *error) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        self.loading = NO;
+
+        if (error) {
+            [self updateStateView];
+            return;
+        }
+
+        // 结果不足一页说明到底了
+        BOOL lastPage = (results.count < 20);
+        self.paginationBar.isLastPage = lastPage;
+
+        // 写缓存 —— 回退时不必重查
+        self.pageCache[@(page)] = results ?: @[];
+
+        self.items = [results mutableCopy] ?: [NSMutableArray array];
+        [self.tableView reloadData];
+        [self.paginationBar setCurrentPage:page totalPages:0];
+        [self updateStateView];
+
+        // 回到顶部
+        [self.tableView setContentOffset:CGPointZero animated:NO];
+    }];
 }
 
 - (void)loadMore {
