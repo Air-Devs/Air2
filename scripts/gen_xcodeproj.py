@@ -20,6 +20,20 @@ DEPLOYMENT_TARGET = "14.0"
 MARKETING_VERSION = "0.1.0"
 BUILD_VERSION = "1"
 
+# 参与编译的源码根目录。原脚本只扫 Air2/，于是 Natives/ 下的自研启动链
+# （a2_launch / a2_argbuilder / A2JVMContext …）永远进不了 target ⇒ 编了也不进包。
+# 现在两端都扫：Air2（应用主体）与 Natives（原生层）——同一 target、同一 Sources 阶段。
+SOURCE_ROOTS = ("Air2", "Natives")
+
+# 原生层的头搜索路径：Natives 代码按「裸文件名」互相引用
+# （`#include "jni.h"`、`#import "a2_log.h"`、`#import "A2JITEnvironment.h"`），
+# 而这些文件分处 Natives/Context 与 Natives/Support ⇒ 需要把各目录加入搜索路径。
+NATIVES_INCLUDE_DIRS = [
+    "$(SRCROOT)/Natives",
+    "$(SRCROOT)/Natives/Context",
+    "$(SRCROOT)/Natives/Support",
+]
+
 # libterracotta 是「可选二进制依赖」（工程内无 libterracotta.xcframework）。
 # A2Multiplayer.m 以 __attribute__((weak)) 声明其 C ABI，但现代 ld64 对
 # 「任何库都不提供」的符号即使声明为 weak 也不放行 ⇒ 链接期须显式 -Wl,-U,<sym>
@@ -65,7 +79,12 @@ def collect_resources():
     if not os.path.isdir(assets_dir):
         return resources
     for entry in sorted(os.listdir(assets_dir)):
-        if entry.endswith(".xcassets"):
+        if entry.startswith("."):
+            continue
+        full = os.path.join(assets_dir, entry)
+        # 资源目录（.xcassets 资产目录 / .lproj 本地化）或散落的资源文件。
+        # 后者用于 AmethystJIT69.js（自包含 JIT 脚本，必须随包下发）。
+        if entry.endswith(".xcassets") or entry.endswith(".lproj") or os.path.isfile(full):
             # 归一化为 POSIX 分隔符：Windows 下 os.path.join 会产出反斜杠，
             # 后续 group_tree() 按 "/" 切分，反斜杠会让所有路径落进空路径孤儿组
             resources.append(os.path.join("Assets", entry).replace(os.sep, "/"))
@@ -73,15 +92,18 @@ def collect_resources():
 
 
 def scan_sources():
-    """扫描 Air2/ 下的所有编译单元与头文件"""
+    """扫描 SOURCE_ROOTS（Air2/ 与 Natives/）下的所有编译单元与头文件"""
     impl, headers = [], []
-    base = os.path.join(ROOT, "Air2")
-    for dirpath, _, files in os.walk(base):
-        for f in sorted(files):
-            if f.endswith(".m") or f.endswith(".mm"):
-                impl.append(os.path.relpath(os.path.join(dirpath, f), ROOT).replace(os.sep, "/"))
-            elif f.endswith(".h"):
-                headers.append(os.path.relpath(os.path.join(dirpath, f), ROOT).replace(os.sep, "/"))
+    for top in SOURCE_ROOTS:
+        base = os.path.join(ROOT, top)
+        if not os.path.isdir(base):
+            continue
+        for dirpath, _, files in os.walk(base):
+            for f in sorted(files):
+                if f.endswith(".m") or f.endswith(".mm"):
+                    impl.append(os.path.relpath(os.path.join(dirpath, f), ROOT).replace(os.sep, "/"))
+                elif f.endswith(".h"):
+                    headers.append(os.path.relpath(os.path.join(dirpath, f), ROOT).replace(os.sep, "/"))
     return sorted(impl), sorted(headers)
 
 
@@ -166,7 +188,12 @@ def build():
     for rpath in collect_resources():
         u = uid("fileref", rpath)
         name = os.path.basename(rpath)
-        ftype = "folder.assetcatalog" if name.endswith(".xcassets") else "file"
+        if name.endswith(".xcassets"):
+            ftype = "folder.assetcatalog"
+        elif name.endswith(".js"):
+            ftype = "sourcecode.javascript"
+        else:
+            ftype = "file"
         add(f"\t\t{u} /* {name} */ = {{isa = PBXFileReference; lastKnownFileType = {ftype}; path = \"{rpath}\"; sourceTree = \"<group>\"; }};")
     add("/* End PBXFileReference section */")
     add("")
@@ -189,12 +216,17 @@ def build():
 
     main_group = uid("group", "main")
     products_group = uid("group", "Products")
-    app_group = uid("group", "Air2")
+
+    # 目录组：按真实目录层级嵌套。Air2/ 与 Natives/ 各自一棵子树，都挂在主组下。
+    groups = group_tree(all_files)
+    all_dirs = sorted(set(list(groups.keys()) + list(SOURCE_ROOTS)), key=lambda x: (x.count("/"), x))
+    dir_group_ids = {g: uid("group", g) for g in all_dirs}
 
     add(f"\t\t{main_group} = {{")
     add("\t\t\tisa = PBXGroup;")
     add("\t\t\tchildren = (")
-    add(f"\t\t\t\t{app_group} /* {PROJECT_NAME} */,")
+    for top in SOURCE_ROOTS:
+        add(f"\t\t\t\t{dir_group_ids[top]} /* {top} */,")
     add(f"\t\t\t\t{products_group} /* Products */,")
     add("\t\t\t);")
     add("\t\t\tsourceTree = \"<group>\";")
@@ -211,20 +243,14 @@ def build():
     add("\t\t};")
     add("")
 
-    # Air2 组：按真实目录层级嵌套。
+    # 目录组：按真实目录层级嵌套。
     #
     # 关键：PBXGroup 的 path 是相对父组的。之前我把所有目录都平铺挂在
     # Air2 组下、path 只写目录名，Xcode 拼出来是 Air2/Version/，
     # 而实际文件在 Air2/UI/Screens/Version/ —— 于是报
     # "Build input file cannot be found"。
     # 必须按真实层级逐层嵌套，每层 path 只写自己那一级。
-    groups = group_tree(all_files)
-
-    # 计算每个目录组的父组
-    def parent_group(g):
-        if g == "Air2" or "/" not in g:
-            return "Air2"
-        return g.rsplit("/", 1)[0]
+    # （groups / all_dirs / dir_group_ids 已在主组处算好，Air2 与 Natives 各自一棵子树。）
 
     def child_groups(g):
         """g 的直接子目录组"""
@@ -235,13 +261,9 @@ def build():
                 out.append(g2)
         return out
 
-    # 所有目录组（含 Air2 自身）
-    all_dirs = sorted(set(list(groups.keys()) + ["Air2"]), key=lambda x: (x.count("/"), x))
-    dir_group_ids = {g: uid("group", g) for g in all_dirs}
-
     for g in all_dirs:
         gid = dir_group_ids[g]
-        name = "Air2" if g == "Air2" else os.path.basename(g)
+        name = os.path.basename(g)
 
         add(f"\t\t{gid} /* {name} */ = {{")
         add("\t\t\tisa = PBXGroup;")
@@ -372,6 +394,10 @@ def build():
             s.update({
                 "ASSETCATALOG_COMPILER_APPICON_NAME": "AppIcon",
                 "CODE_SIGN_STYLE": "Automatic",
+                # 原生层头搜索路径（Natives 代码按裸文件名互相引用）。
+                "HEADER_SEARCH_PATHS": "(\n\t\t\t\t\t\"$(inherited)\",\n\t\t\t\t\t"
+                    + ",\n\t\t\t\t\t".join('"%s"' % d for d in NATIVES_INCLUDE_DIRS)
+                    + ",\n\t\t\t\t)",
                 "CURRENT_PROJECT_VERSION": BUILD_VERSION,
                 "GENERATE_INFOPLIST_FILE": "NO",
                 "INFOPLIST_FILE": "Air2/Info.plist",
