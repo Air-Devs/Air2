@@ -19,6 +19,8 @@
 		B70F2470805980B206B1EAF8 /* A2Wardrobe.m in Sources */ = {isa = PBXBuildFile; fileRef = 1FCEEB9DA67A103C2B6DBA4A /* A2Wardrobe.m */; };
 		514C73BF78432EFA524E3D87 /* A2ContentSource.m in Sources */ = {isa = PBXBuildFile; fileRef = 1701CD5F8C697E4FB0EA95CC /* A2ContentSource.m */; };
 		0D17D81407F6A22D20B89620 /* A2CurseForgeAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = B9FA6C49037A18A6B1E59FD5 /* A2CurseForgeAPI.m */; };
+		7BC46830363BB7D24F1EB261 /* A2LoaderVersionSource+Forge.m in Sources */ = {isa = PBXBuildFile; fileRef = CAF1C722D6447EBFD3DE5AC9 /* A2LoaderVersionSource+Forge.m */; };
+		3D236CA3B00131FA0DD8C841 /* A2LoaderVersionSource.m in Sources */ = {isa = PBXBuildFile; fileRef = C5DA9E2487D36C274C80ACB0 /* A2LoaderVersionSource.m */; };
 		6520EA8C1584C6879CBE5834 /* A2LocalMod.m in Sources */ = {isa = PBXBuildFile; fileRef = 3EB242919BB0D524E0F04E05 /* A2LocalMod.m */; };
 		178E4C042E711E4F72FAAAED /* A2MirrorResolver.m in Sources */ = {isa = PBXBuildFile; fileRef = C4D9FC19281C2C7616C83363 /* A2MirrorResolver.m */; };
 		A83EEEB1694635A4E2D8A05C /* A2ModLoaderAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */; };
@@ -134,6 +136,8 @@
 		1FCEEB9DA67A103C2B6DBA4A /* A2Wardrobe.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Wardrobe.m"; sourceTree = "<group>"; };
 		1701CD5F8C697E4FB0EA95CC /* A2ContentSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ContentSource.m"; sourceTree = "<group>"; };
 		B9FA6C49037A18A6B1E59FD5 /* A2CurseForgeAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CurseForgeAPI.m"; sourceTree = "<group>"; };
+		CAF1C722D6447EBFD3DE5AC9 /* A2LoaderVersionSource+Forge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoaderVersionSource+Forge.m"; sourceTree = "<group>"; };
+		C5DA9E2487D36C274C80ACB0 /* A2LoaderVersionSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoaderVersionSource.m"; sourceTree = "<group>"; };
 		3EB242919BB0D524E0F04E05 /* A2LocalMod.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LocalMod.m"; sourceTree = "<group>"; };
 		C4D9FC19281C2C7616C83363 /* A2MirrorResolver.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MirrorResolver.m"; sourceTree = "<group>"; };
 		A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderAPI.m"; sourceTree = "<group>"; };
@@ -242,6 +246,7 @@
 		BE140C5384D36CE4A510C926 /* A2Wardrobe.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Wardrobe.h"; sourceTree = "<group>"; };
 		7452A96D7665BFCA516E1759 /* A2ContentSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ContentSource.h"; sourceTree = "<group>"; };
 		732674FFF97FD95863EEEAC7 /* A2CurseForgeAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CurseForgeAPI.h"; sourceTree = "<group>"; };
+		5755D893F4092F66C2AF4252 /* A2LoaderVersionSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoaderVersionSource.h"; sourceTree = "<group>"; };
 		FFA1FB938552D628B2FCD93E /* A2LocalMod.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LocalMod.h"; sourceTree = "<group>"; };
 		D10B30C91899E9D94389EF4D /* A2MirrorResolver.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MirrorResolver.h"; sourceTree = "<group>"; };
 		2CDA5A9BDC1B71E004D187AD /* A2ModLoaderAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderAPI.h"; sourceTree = "<group>"; };
@@ -465,6 +470,8 @@
 			children = (
 				1701CD5F8C697E4FB0EA95CC /* A2ContentSource.m */,
 				B9FA6C49037A18A6B1E59FD5 /* A2CurseForgeAPI.m */,
+				CAF1C722D6447EBFD3DE5AC9 /* A2LoaderVersionSource+Forge.m */,
+				C5DA9E2487D36C274C80ACB0 /* A2LoaderVersionSource.m */,
 				3EB242919BB0D524E0F04E05 /* A2LocalMod.m */,
 				C4D9FC19281C2C7616C83363 /* A2MirrorResolver.m */,
 				A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */,
@@ -478,6 +485,7 @@
 				C7F15DE318744485CEE00538 /* A2ZipReader.m */,
 				7452A96D7665BFCA516E1759 /* A2ContentSource.h */,
 				732674FFF97FD95863EEEAC7 /* A2CurseForgeAPI.h */,
+				5755D893F4092F66C2AF4252 /* A2LoaderVersionSource.h */,
 				FFA1FB938552D628B2FCD93E /* A2LocalMod.h */,
 				D10B30C91899E9D94389EF4D /* A2MirrorResolver.h */,
 				2CDA5A9BDC1B71E004D187AD /* A2ModLoaderAPI.h */,
@@ -892,6 +900,8 @@
 				B70F2470805980B206B1EAF8 /* A2Wardrobe.m in Sources */,
 				514C73BF78432EFA524E3D87 /* A2ContentSource.m in Sources */,
 				0D17D81407F6A22D20B89620 /* A2CurseForgeAPI.m in Sources */,
+				7BC46830363BB7D24F1EB261 /* A2LoaderVersionSource+Forge.m in Sources */,
+				3D236CA3B00131FA0DD8C841 /* A2LoaderVersionSource.m in Sources */,
 				6520EA8C1584C6879CBE5834 /* A2LocalMod.m in Sources */,
 				178E4C042E711E4F72FAAAED /* A2MirrorResolver.m in Sources */,
 				A83EEEB1694635A4E2D8A05C /* A2ModLoaderAPI.m in Sources */,
