@@ -66,7 +66,9 @@
 		8164B55A050F723821A91945 /* A2JITImportedPairingProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = 17042A3BE2D68D12388647BD /* A2JITImportedPairingProvider.m */; };
 		DA1E568049E2C81A8B3DDC42 /* A2JITKernelJITProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = CA4B1A0C07D533AA69631300 /* A2JITKernelJITProvider.m */; };
 		DA5E317BAF677DC5A916CD68 /* A2JITLocalFactsSource.m in Sources */ = {isa = PBXBuildFile; fileRef = 4F4F56BC74A3F09CA3D897B6 /* A2JITLocalFactsSource.m */; };
+		0624EA462AB41F16343DCF3A /* A2JITPairingCodeSession.m in Sources */ = {isa = PBXBuildFile; fileRef = E5989B73B4E48FAA7EDC7840 /* A2JITPairingCodeSession.m */; };
 		EB030928A82A513DD9864E90 /* A2JITPairingFileStore.m in Sources */ = {isa = PBXBuildFile; fileRef = 3BF0DA9193E70CCA033570E0 /* A2JITPairingFileStore.m */; };
+		A901EB1B5A1E689BF6143703 /* A2JITPairingPinSource.m in Sources */ = {isa = PBXBuildFile; fileRef = 53B592B9B4BEF494E5BE01E3 /* A2JITPairingPinSource.m */; };
 		0C93DD6BAA11EF16713ADC84 /* A2JITProvider.m in Sources */ = {isa = PBXBuildFile; fileRef = 2D6918C01335A072F8DD093E /* A2JITProvider.m */; };
 		4838532D80277850A79C105B /* A2JITStateMachine.m in Sources */ = {isa = PBXBuildFile; fileRef = 06D7BD5F6D88905112F197A8 /* A2JITStateMachine.m */; };
 		349881CC525759AC6BD5202D /* A2JITStrategySelector.m in Sources */ = {isa = PBXBuildFile; fileRef = 9AEFB11C2421A6A801BA8DA9 /* A2JITStrategySelector.m */; };
@@ -175,8 +177,10 @@
 		212CC2B590E73733FC492C45 /* a2_rppairing_crypto.m in Sources */ = {isa = PBXBuildFile; fileRef = 61AFC07262B2A26D0B531D85 /* a2_rppairing_crypto.m */; };
 		E07E486F2F322557DE9BB97C /* a2_rppairing_ed25519.m in Sources */ = {isa = PBXBuildFile; fileRef = BB39CD8A99C42623B61DDF56 /* a2_rppairing_ed25519.m */; };
 		2938FADF387CF104B5DDC809 /* a2_rppairing_pairable_host.m in Sources */ = {isa = PBXBuildFile; fileRef = 07E08CF29323DC1338BC640A /* a2_rppairing_pairable_host.m */; };
+		29C3641F12813D9EF7C9C0F1 /* a2_rppairing_pairsetup.m in Sources */ = {isa = PBXBuildFile; fileRef = B6CB3E3E25542FA51ACAF960 /* a2_rppairing_pairsetup.m */; };
 		76DE2B4705BD41CD96AE2C46 /* a2_rppairing_pairsetup_transport.m in Sources */ = {isa = PBXBuildFile; fileRef = 63F6ABC34B3800F1BDA1A521 /* a2_rppairing_pairsetup_transport.m */; };
 		6DF36811EF63088DA46ACD61 /* a2_rppairing_rsd.m in Sources */ = {isa = PBXBuildFile; fileRef = 8DD4A4A3EE7CD77E6B14110F /* a2_rppairing_rsd.m */; };
+		BCFA6A08AE7E19583E7842EA /* a2_rppairing_srp.m in Sources */ = {isa = PBXBuildFile; fileRef = CB8B91449CF1FC489DA86CBC /* a2_rppairing_srp.m */; };
 		072BE91496C49D3121A7E288 /* a2_rppairing_verify.m in Sources */ = {isa = PBXBuildFile; fileRef = 6DB059C24F4995B6CD32CFC3 /* a2_rppairing_verify.m */; };
 		5E6D2E22D7E3C8631CBE7CFF /* a2_tlspsk_mbedtls.m in Sources */ = {isa = PBXBuildFile; fileRef = 497444A01DBBFD2FAACE0D50 /* a2_tlspsk_mbedtls.m */; };
 		E3CF259BD6AAF19109CDA83D /* a2_tlspsk_tunnel.m in Sources */ = {isa = PBXBuildFile; fileRef = 407ECB99D6941017E615F9DA /* a2_tlspsk_tunnel.m */; };
@@ -246,7 +250,9 @@
 		17042A3BE2D68D12388647BD /* A2JITImportedPairingProvider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITImportedPairingProvider.m"; sourceTree = "<group>"; };
 		CA4B1A0C07D533AA69631300 /* A2JITKernelJITProvider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITKernelJITProvider.m"; sourceTree = "<group>"; };
 		4F4F56BC74A3F09CA3D897B6 /* A2JITLocalFactsSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITLocalFactsSource.m"; sourceTree = "<group>"; };
+		E5989B73B4E48FAA7EDC7840 /* A2JITPairingCodeSession.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITPairingCodeSession.m"; sourceTree = "<group>"; };
 		3BF0DA9193E70CCA033570E0 /* A2JITPairingFileStore.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITPairingFileStore.m"; sourceTree = "<group>"; };
+		53B592B9B4BEF494E5BE01E3 /* A2JITPairingPinSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITPairingPinSource.m"; sourceTree = "<group>"; };
 		2D6918C01335A072F8DD093E /* A2JITProvider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITProvider.m"; sourceTree = "<group>"; };
 		06D7BD5F6D88905112F197A8 /* A2JITStateMachine.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITStateMachine.m"; sourceTree = "<group>"; };
 		9AEFB11C2421A6A801BA8DA9 /* A2JITStrategySelector.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITStrategySelector.m"; sourceTree = "<group>"; };
@@ -355,8 +361,10 @@
 		61AFC07262B2A26D0B531D85 /* a2_rppairing_crypto.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_crypto.m"; sourceTree = "<group>"; };
 		BB39CD8A99C42623B61DDF56 /* a2_rppairing_ed25519.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_ed25519.m"; sourceTree = "<group>"; };
 		07E08CF29323DC1338BC640A /* a2_rppairing_pairable_host.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_pairable_host.m"; sourceTree = "<group>"; };
+		B6CB3E3E25542FA51ACAF960 /* a2_rppairing_pairsetup.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_pairsetup.m"; sourceTree = "<group>"; };
 		63F6ABC34B3800F1BDA1A521 /* a2_rppairing_pairsetup_transport.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_pairsetup_transport.m"; sourceTree = "<group>"; };
 		8DD4A4A3EE7CD77E6B14110F /* a2_rppairing_rsd.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_rsd.m"; sourceTree = "<group>"; };
+		CB8B91449CF1FC489DA86CBC /* a2_rppairing_srp.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_srp.m"; sourceTree = "<group>"; };
 		6DB059C24F4995B6CD32CFC3 /* a2_rppairing_verify.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_verify.m"; sourceTree = "<group>"; };
 		497444A01DBBFD2FAACE0D50 /* a2_tlspsk_mbedtls.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_tlspsk_mbedtls.m"; sourceTree = "<group>"; };
 		407ECB99D6941017E615F9DA /* a2_tlspsk_tunnel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_tlspsk_tunnel.m"; sourceTree = "<group>"; };
@@ -419,7 +427,9 @@
 		0DE10BB62ADB1C381BFDEC6E /* A2JITImportedPairingProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITImportedPairingProvider.h"; sourceTree = "<group>"; };
 		F34CD4D808A542C69B1DD1D4 /* A2JITKernelJITProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITKernelJITProvider.h"; sourceTree = "<group>"; };
 		A32D17DF8527A2734A3FAD03 /* A2JITLocalFactsSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITLocalFactsSource.h"; sourceTree = "<group>"; };
+		0DC9748DE7CD2503B493CBE3 /* A2JITPairingCodeSession.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITPairingCodeSession.h"; sourceTree = "<group>"; };
 		3487F43C84AD94F2C96EF10A /* A2JITPairingFileStore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITPairingFileStore.h"; sourceTree = "<group>"; };
+		FB9703C3CF427D94254069F1 /* A2JITPairingPinSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITPairingPinSource.h"; sourceTree = "<group>"; };
 		5F0683F8CA13308C3E599E19 /* A2JITProvider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITProvider.h"; sourceTree = "<group>"; };
 		6DAF1048CF668F8F6D357FA5 /* A2JITReadinessProbe.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITReadinessProbe.h"; sourceTree = "<group>"; };
 		5222687EA5235C5BF8ACF2C9 /* A2JITStateMachine.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITStateMachine.h"; sourceTree = "<group>"; };
@@ -524,8 +534,10 @@
 		79B56484F1E69AA6295350B5 /* a2_rppairing_crypto.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_crypto.h"; sourceTree = "<group>"; };
 		A09AED31B25AF3A3729E20AE /* a2_rppairing_ed25519.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_ed25519.h"; sourceTree = "<group>"; };
 		7020DE052BE01500DD8B6917 /* a2_rppairing_pairable_host.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_pairable_host.h"; sourceTree = "<group>"; };
+		A36999C5D2FE22C4776CDA3F /* a2_rppairing_pairsetup.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_pairsetup.h"; sourceTree = "<group>"; };
 		380BF3751376F74E7DBB6D46 /* a2_rppairing_pairsetup_transport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_pairsetup_transport.h"; sourceTree = "<group>"; };
 		8F192F1BB49B9590F2CC25C4 /* a2_rppairing_rsd.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_rsd.h"; sourceTree = "<group>"; };
+		67DB864B3937EC9666BF3926 /* a2_rppairing_srp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_srp.h"; sourceTree = "<group>"; };
 		019E9238E2D1750A6A7D9686 /* a2_rppairing_verify.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_verify.h"; sourceTree = "<group>"; };
 		C52AE90AEBDB81EA09AD9E93 /* a2_tlspsk_mbedtls.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_tlspsk_mbedtls.h"; sourceTree = "<group>"; };
 		6979441440A7FA3BCE8069E0 /* a2_tlspsk_tunnel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_tlspsk_tunnel.h"; sourceTree = "<group>"; };
@@ -664,7 +676,9 @@
 				17042A3BE2D68D12388647BD /* A2JITImportedPairingProvider.m */,
 				CA4B1A0C07D533AA69631300 /* A2JITKernelJITProvider.m */,
 				4F4F56BC74A3F09CA3D897B6 /* A2JITLocalFactsSource.m */,
+				E5989B73B4E48FAA7EDC7840 /* A2JITPairingCodeSession.m */,
 				3BF0DA9193E70CCA033570E0 /* A2JITPairingFileStore.m */,
+				53B592B9B4BEF494E5BE01E3 /* A2JITPairingPinSource.m */,
 				2D6918C01335A072F8DD093E /* A2JITProvider.m */,
 				06D7BD5F6D88905112F197A8 /* A2JITStateMachine.m */,
 				9AEFB11C2421A6A801BA8DA9 /* A2JITStrategySelector.m */,
@@ -689,7 +703,9 @@
 				0DE10BB62ADB1C381BFDEC6E /* A2JITImportedPairingProvider.h */,
 				F34CD4D808A542C69B1DD1D4 /* A2JITKernelJITProvider.h */,
 				A32D17DF8527A2734A3FAD03 /* A2JITLocalFactsSource.h */,
+				0DC9748DE7CD2503B493CBE3 /* A2JITPairingCodeSession.h */,
 				3487F43C84AD94F2C96EF10A /* A2JITPairingFileStore.h */,
+				FB9703C3CF427D94254069F1 /* A2JITPairingPinSource.h */,
 				5F0683F8CA13308C3E599E19 /* A2JITProvider.h */,
 				6DAF1048CF668F8F6D357FA5 /* A2JITReadinessProbe.h */,
 				5222687EA5235C5BF8ACF2C9 /* A2JITStateMachine.h */,
@@ -802,8 +818,10 @@
 				61AFC07262B2A26D0B531D85 /* a2_rppairing_crypto.m */,
 				BB39CD8A99C42623B61DDF56 /* a2_rppairing_ed25519.m */,
 				07E08CF29323DC1338BC640A /* a2_rppairing_pairable_host.m */,
+				B6CB3E3E25542FA51ACAF960 /* a2_rppairing_pairsetup.m */,
 				63F6ABC34B3800F1BDA1A521 /* a2_rppairing_pairsetup_transport.m */,
 				8DD4A4A3EE7CD77E6B14110F /* a2_rppairing_rsd.m */,
+				CB8B91449CF1FC489DA86CBC /* a2_rppairing_srp.m */,
 				6DB059C24F4995B6CD32CFC3 /* a2_rppairing_verify.m */,
 				497444A01DBBFD2FAACE0D50 /* a2_tlspsk_mbedtls.m */,
 				407ECB99D6941017E615F9DA /* a2_tlspsk_tunnel.m */,
@@ -819,8 +837,10 @@
 				79B56484F1E69AA6295350B5 /* a2_rppairing_crypto.h */,
 				A09AED31B25AF3A3729E20AE /* a2_rppairing_ed25519.h */,
 				7020DE052BE01500DD8B6917 /* a2_rppairing_pairable_host.h */,
+				A36999C5D2FE22C4776CDA3F /* a2_rppairing_pairsetup.h */,
 				380BF3751376F74E7DBB6D46 /* a2_rppairing_pairsetup_transport.h */,
 				8F192F1BB49B9590F2CC25C4 /* a2_rppairing_rsd.h */,
+				67DB864B3937EC9666BF3926 /* a2_rppairing_srp.h */,
 				019E9238E2D1750A6A7D9686 /* a2_rppairing_verify.h */,
 				C52AE90AEBDB81EA09AD9E93 /* a2_tlspsk_mbedtls.h */,
 				6979441440A7FA3BCE8069E0 /* a2_tlspsk_tunnel.h */,
@@ -1370,7 +1390,9 @@
 				8164B55A050F723821A91945 /* A2JITImportedPairingProvider.m in Sources */,
 				DA1E568049E2C81A8B3DDC42 /* A2JITKernelJITProvider.m in Sources */,
 				DA5E317BAF677DC5A916CD68 /* A2JITLocalFactsSource.m in Sources */,
+				0624EA462AB41F16343DCF3A /* A2JITPairingCodeSession.m in Sources */,
 				EB030928A82A513DD9864E90 /* A2JITPairingFileStore.m in Sources */,
+				A901EB1B5A1E689BF6143703 /* A2JITPairingPinSource.m in Sources */,
 				0C93DD6BAA11EF16713ADC84 /* A2JITProvider.m in Sources */,
 				4838532D80277850A79C105B /* A2JITStateMachine.m in Sources */,
 				349881CC525759AC6BD5202D /* A2JITStrategySelector.m in Sources */,
@@ -1479,8 +1501,10 @@
 				212CC2B590E73733FC492C45 /* a2_rppairing_crypto.m in Sources */,
 				E07E486F2F322557DE9BB97C /* a2_rppairing_ed25519.m in Sources */,
 				2938FADF387CF104B5DDC809 /* a2_rppairing_pairable_host.m in Sources */,
+				29C3641F12813D9EF7C9C0F1 /* a2_rppairing_pairsetup.m in Sources */,
 				76DE2B4705BD41CD96AE2C46 /* a2_rppairing_pairsetup_transport.m in Sources */,
 				6DF36811EF63088DA46ACD61 /* a2_rppairing_rsd.m in Sources */,
+				BCFA6A08AE7E19583E7842EA /* a2_rppairing_srp.m in Sources */,
 				072BE91496C49D3121A7E288 /* a2_rppairing_verify.m in Sources */,
 				5E6D2E22D7E3C8631CBE7CFF /* a2_tlspsk_mbedtls.m in Sources */,
 				E3CF259BD6AAF19109CDA83D /* a2_tlspsk_tunnel.m in Sources */,
