@@ -30,9 +30,6 @@ static void A2Main(dispatch_block_t b) {
 
 #pragma mark - 模型
 
-@implementation A2ModPackFile
-@end
-
 @implementation A2ModPackManifest
 @end
 
