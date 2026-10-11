@@ -643,8 +643,8 @@ static void TestChainCancellation(void) {
         return polls >= 2;   // 第 1 次（进广告前）不取消，第 2 次（连入后）取消
     }];
     T("取消：连入后取消 ⇒ Cancelled", r2.failure == A2RPPairSetupAccessoryFailureCancelled);
-    T("取消：连入后取消 ⇒ 已连入且已退订传输", r2.connected && r2.pairingFileData == nil);
-    T("取消：广告确实起过", ls.advertiseCallCount == 2);
+    T("取消：连入后取消 ⇒ 已连入且无配对文件", r2.connected && r2.pairingFileData == nil);
+    T("取消：取消那轮广告确实起过（上一轮没起）", ls.advertiseCallCount == 1);
 }
 
 static void TestChainFileBearingRunFields(void) {

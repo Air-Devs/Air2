@@ -269,9 +269,21 @@ ADR 见 `docs/DECISIONS.md` ADR-007 / ADR-008 / ADR-009。
 | `Natives/Support/a2_remotexpc_session.[hm]` | **Natives** | **[A2-RXPC] RemoteXPC 会话**：可注入字节通道 `A2RPByteStream` + 初始化握手（§4 七步）+ `exchangePairingData:kind:startNew:reason:`（发一条 pairingData TLV、同步取回下一条）+ 错误分类 `A2RemoteXPCErrorKind` + 内存字节通道（单测用） |
 | `Natives/Support/a2_rppairing_pairsetup_transport.[hm]` | **Natives** | **[A2-RXPC] 传输实现**：NWConnection 字节通道（§2b 建连 / 被接受）+ 缝 `A2RPPairSetupMessageTransport` 在 RemoteXPC 之上的实现 `A2RPPairSetupRemoteXPCTransport`（同仓存在 `a2_rppairing_pairsetup.h` 时条件声明遵守）+ §2a 可用性如实回报 |
 | `Natives/Support/a2_rppairing_pairable_host.[hm]` | **Natives** | **[A2-RXPC] iOS 27 设备发起配对**：`_remotepairing-pairable-host._tcp` 通告契约（SipHash-2-4 → `authTag`、TXT 记录、服务名截断、协议版本 26）+ NWListener 真广告/真接受 + 四类失败分类 + 整层判据行 `A2RXPCReportLayerReadiness` |
+| `Natives/Support/a2_rppairing_pairsetup_accessory.[hm]` | **Natives** | **[JIT-AUTOPAIR-4] 设备发起配对的★最后一跳★**：把 pairable-host 广告与 pair-setup 的 **accessory/device 侧**会话接到一起 —— 新主机身份/altIRK → 广告 → 等连入 → 建传输 → ★先收后发★ 驱动 PS-Msg01..06 → 交出配对文件字节；阶段观察者（starting/advertising/connected/verifying/succeeded/failed/cancelled）+ 逐条判据行 `[A2-PAIRPIN]`；单测用假广告器 + 假传输在 macOS 上把整条链真跑（`tests/JIT/pairwire_tests.m`） |
 
 **来源**：`docs/JIT-PROVISIONING.md` §1.2 / §3.3 / §3.6；许可口径见 `docs/DEPENDENCIES.md`「JIT 自动配对」节
 （★自研；只参考公开协议描述，未用任何第三方代码★）。
+
+**[JIT-AUTOPAIR-4] 的设备发起档接线（★改点清单，共 6 处★）**：`A2JITAutoPairingEngineBridge`
+（★唯一驱动入口★ `startDeviceInitiatedPairingWithHostName:displayedCode:budget:stageHandler:reason:failureName:`
++ `cancelDeviceInitiatedPairing`）→ `a2_rppairing_pairsetup_accessory`（上表）→
+`A2RPPairSetupSession.runAccessoryOverTransport:…`（★先收后发★的 accessory 侧驱动，落在
+`a2_rppairing_pairsetup.[hm]`）→ 缝 `A2RPPairSetupMessageTransport` 的**两个可选原语**
+（`receivePairingDataWithKind:timeout:reason:` / `sendPairingData:kind:startNew:reason:`；
+★既有 `exchangePairingData:` 的语义一个字没改★）→ `A2RPPairSetupRemoteXPCTransport` 与
+`A2RemoteXPCSession`（收/发两半，exchange = 发 + 收）→ 设置页 `Air2/UI/Screens/Settings/A2JITSettings.m`
+的「开始配对 / 取消 / 状态」两行。①「生成 6 位码并交给已有 UI/持久化」仍由既有
+`A2JITPairingCodeSession`（Player）承担 —— Bridge 不得反向依赖 Player（ADR-002），故驱动入口**消费**它显示的码。
 
 ### DDI（Developer Disk Image）取得与三态判定 —— [JIT-DDI-1]
 

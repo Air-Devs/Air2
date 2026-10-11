@@ -162,10 +162,12 @@ static A2RPPairSetupAccessoryTransportFactory const A2RPPWProductionTransportFac
     };
 
     // 失败出口（★所有失败都走这里：回填分类 + 打判据行 + 上报阶段★）。
+    //   ★detail 里带上稳定类名★：UI 的「失败原因」与真机判据都要能直接看到 class=…
     #define A2RPPW_FAIL(KIND, MSG)                                             \
         do {                                                                   \
             run.failure = (KIND);                                              \
-            run.detail = (MSG);                                                \
+            run.detail = [NSString stringWithFormat:@"[%@] %@",                \
+                          A2RPPairSetupAccessoryFailureName(run.failure), (MSG)];\
             emit(A2RPPairSetupAccessoryPhaseFailed, run.lastStep,               \
                  [NSString stringWithFormat:                                   \
                   @"配对失败 class=%@ identifier=%@ 主机名=%@ 已连入=%@ 原因=%@",  \
