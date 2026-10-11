@@ -36,6 +36,11 @@
 #import "A2JITAutoPairing.h"
 #import "A2JITAutoPairingGuidance.h"
 #import "A2JITAutomaticPairingProvider.h"
+// [JIT-DDI-1] DDI：类型 / 纯逻辑 / 本地镜像存储 / 判定合成 / 分流表
+#import "A2JITDDI.h"
+#import "A2JITDDIStore.h"
+#import "A2JITDDIProbe.h"
+#import "A2JITDDIGuidance.h"
 // ★跨层镜像的运行期断言用★：直接读 Natives 的判据枚举（-I Natives/Support，不链接其实现）。
 #import "A2JITEnvironment.h"
 
@@ -186,6 +191,82 @@ static NSDictionary *RemotePairingSample(void);
     return YES;
 }
 @end
+
+/// [JIT-DDI-1] 假设备侧查询：可配置"设备侧判定 / 能力 / 调用结果"，并记录调用次数。
+@interface FakeDDIDeviceQuery : NSObject <A2JITDDIDeviceQuery>
+@property (nonatomic, assign) A2JITDDIVerdict deviceVerdict;
+@property (nonatomic, copy) NSString *deviceEvidence;
+@property (nonatomic, assign) BOOL mounterAvailable;
+@property (nonatomic, assign) BOOL fetchResult;
+@property (nonatomic, copy) NSString *fetchReason;
+@property (nonatomic, copy) NSString *mountReason;
+@property (nonatomic, assign) NSInteger fetchCalls;
+@property (nonatomic, assign) NSInteger mountCalls;
+@property (nonatomic, copy, nullable) NSString *chipID;
+@end
+
+@implementation FakeDDIDeviceQuery
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _deviceVerdict = A2JITDDIVerdictUnknown;
+        _deviceEvidence = @"fake 设备侧：不可查";
+        _mounterAvailable = NO;
+        _fetchResult = NO;
+        _fetchReason = @"fake 未接入";
+        _mountReason = @"fake 缺特权";
+    }
+    return self;
+}
+- (A2JITDDIVerdict)deviceDDIVerdictWithEvidence:(NSString *_Nullable *_Nullable)evidenceOut {
+    if (evidenceOut) *evidenceOut = self.deviceEvidence;
+    return self.deviceVerdict;
+}
+- (BOOL)isImageMounterAvailableWithReason:(NSString *_Nullable *_Nullable)reasonOut {
+    if (reasonOut) *reasonOut = self.mounterAvailable ? @"fake 可用" : @"fake image_mounter 未接入";
+    return self.mounterAvailable;
+}
+- (nullable NSString *)uniqueChipID { return self.chipID; }
+- (BOOL)fetchPersonalizedImageForRequirement:(A2JITDDIRequirement *)requirement
+                                      reason:(NSString *_Nullable *_Nullable)reasonOut {
+    (void)requirement;
+    self.fetchCalls += 1;
+    if (reasonOut) *reasonOut = self.fetchReason;
+    return self.fetchResult;
+}
+- (BOOL)mountImageAtPath:(NSString *)imagePath
+           trustcachePath:(nullable NSString *)trustcachePath
+                  reason:(NSString *_Nullable *_Nullable)reasonOut {
+    (void)imagePath;
+    (void)trustcachePath;
+    self.mountCalls += 1;
+    if (reasonOut) *reasonOut = self.mountReason;
+    return NO;
+}
+@end
+
+/// 一份最小「合法 UDIF 磁盘镜像」样本（512 的整数倍 + 尾标块以 'koly' 开头）。
+static NSData *UDIFSample(NSUInteger blocks) {
+    if (blocks < 2) {
+        blocks = 2;
+    }
+    NSMutableData *d = [NSMutableData dataWithLength:blocks * 512];
+    uint8_t *p = (uint8_t *)d.mutableBytes;
+    NSUInteger trailer = (blocks - 1) * 512;
+    p[trailer + 0] = 'k';
+    p[trailer + 1] = 'o';
+    p[trailer + 2] = 'l';
+    p[trailer + 3] = 'y';
+    return d;
+}
+
+/// 写 [dir]/ddi.meta.plist（用于把 importedAt 改到过去，验「过期」）。
+static void WriteDDIMeta(A2JITDDIStore *store, NSDate *importedAt) {
+    NSDictionary *meta = @{ A2JITDDIStoreSourceNameKey: @"t.dmg",
+                            A2JITDDIStoreImportedAtKey: importedAt,
+                            A2JITDDIStoreKindKey: @"Legacy" };
+    [PlistData(meta) writeToFile:store.metadataFilePath atomically:YES];
+}
 
 #pragma mark - 假的本机事实来源（验证「探测可注入」）
 
@@ -1074,6 +1155,52 @@ static void testWiringInvariants(void) {
     ok([autoSrc containsString:@"hasFreshUsablePairingFile"], @"就绪判据 = 新鲜可用文件");
     ok([autoSrc containsString:@"A2JITProviderNotImplementedError"], @"引擎未接入 ⇒ NotImplemented（与真失败分开）");
     ok([autoSrc containsString:@"不视为成功"], @"★引擎报成功但无文件 ⇒ 不视为成功（不谎报）★");
+
+    // ⑩ ★[JIT-DDI-1] 设置页接入 DDI + Bridge 骨架如实报 + 分层纪律★
+    ok([settingsSrc containsString:@"A2JITDDIStore"], @"设置页接入 DDI 本地镜像存储");
+    ok([settingsSrc containsString:@"A2JITLocalDDIProbe"], @"设置页接入 DDI 判定缝（真三态）");
+    ok([settingsSrc containsString:@"jit.row.ddiFetch"], @"设置页有「联网取 DDI」开关行");
+    ok([settingsSrc containsString:@"debug.jit_ddi_fetch"], @"开关走偏好键（★默认关★）");
+    ok([settingsSrc containsString:@"runDDIFetch"], @"设置页有「联网取 DDI」的调用点");
+    ok([settingsSrc containsString:@"presentDDIImportPicker"], @"设置页有 DDI 导入入口");
+    ok([settingsSrc containsString:@"A2JITDDIDeviceBridge"], @"设置页注入 DDI 设备侧 Bridge（骨架）");
+    ok([settingsSrc containsString:@"ddiProbe:ddiProbe"], @"设置页把 DDI 探测注入 Provider 装配");
+
+    NSString *ddiBridgeSrc = [NSString stringWithContentsOfFile:RepoPath(@"Air2/Bridge/A2JITDDIDeviceBridge.m")
+                                                      encoding:NSUTF8StringEncoding
+                                                         error:NULL];
+    ok(ddiBridgeSrc.length > 0, @"读得到 DDI 设备侧 Bridge");
+    ok([ddiBridgeSrc containsString:@"return A2JITDDIVerdictUnknown;"], @"★骨架设备侧判定如实回 Unknown（不猜）★");
+    ok([ddiBridgeSrc containsString:@"return NO;"], @"骨架能力查询如实回 NO");
+    ok([ddiBridgeSrc containsString:@"fetchPersonalizedImage"], @"骨架有「联网取 DDI」调用点");
+    ok([ddiBridgeSrc containsString:@"mountImageAtPath"], @"骨架有挂载调用点");
+    ok([ddiBridgeSrc containsString:@"Apple"], @"★文案点名「访问 Apple 官方服务」（非「上云」）★");
+    ok(![ddiBridgeSrc containsString:@"#import \"A2JITEnvironment.h\""], @"DI 骨架不 import Natives 判据头");
+
+    // ★Player 无一处 import Bridge（含 DDI 设备侧 Bridge）★
+    NSInteger ddiBridgeLeaks = 0;
+    for (NSString *f in files) {
+        if (![f hasSuffix:@".m"]) {
+            continue;
+        }
+        NSString *src = [NSString stringWithContentsOfFile:[playerDir stringByAppendingPathComponent:f]
+                                                  encoding:NSUTF8StringEncoding
+                                                     error:NULL];
+        if ([src containsString:@"#import \"A2JITDDIDeviceBridge.h\""]) {
+            ddiBridgeLeaks++;
+            printf("        ★Player 越界 import DDI Bridge：%s\n", f.UTF8String);
+        }
+    }
+    eqInt(ddiBridgeLeaks, 0, @"★Player 无一处 import DDI 设备侧 Bridge（单向分层）★");
+
+    // ★DDI 探测实现不得 import Bridge / Natives 头★
+    NSString *ddiProbeSrc = [NSString stringWithContentsOfFile:RepoPath(@"Air2/Player/A2JITDDIProbe.m")
+                                                     encoding:NSUTF8StringEncoding
+                                                        error:NULL];
+    ok(ddiProbeSrc.length > 0, @"读得到 DDI 判定合成实现");
+    ok([ddiProbeSrc containsString:@"deviceDDIVerdictWithEvidence"] ||
+       [ddiProbeSrc containsString:@"ddiStatus"], @"DDI 判定合成真调注入的设备侧查询");
+    ok(![ddiProbeSrc containsString:@"#import \"A2JITDDIDeviceBridge.h\""], @"DDI 判定合成不 import Bridge");
 }
 
 #pragma mark - ⑫ [JIT-AUTOPAIR-1] 自动配对 Provider（能力 + 前置 + 新鲜度 + 有界生成）
@@ -1393,6 +1520,453 @@ static void testAutoPairingGuidance(void) {
     ok([line containsString:@"step=Tunnel"], @"日志行含步骤");
 }
 
+#pragma mark - ⑭ [JIT-DDI-1] DDI 纯逻辑 + 本地镜像存储
+
+/// 构造一份镜像值对象（测试用；字段直给，便于逐分支）。
+static A2JITDDIImage *DDIImage(NSString *path, A2JITDDIKind kind, A2JITDDISource src,
+                               unsigned long long size, NSDate *importedAt,
+                               NSString *declaredBuild, NSString *declaredVersion) {
+    return [A2JITDDIImage imageWithFilePath:path
+                             trustcachePath:nil
+                                       kind:kind
+                                     source:src
+                                   byteSize:size
+                                     sha256:nil
+                                 importedAt:importedAt
+                              declaredBuild:declaredBuild
+                          declaredOSVersion:declaredVersion];
+}
+
+static void testDDILogicAndStore(void) {
+    printf("\n=== ⑭ DDI 纯逻辑 + 本地镜像存储 ===\n");
+
+    A2JITDDIRequirement *req = [A2JITDDIRequirement requirementWithOSMajorVersion:27
+                                                                    minorVersion:2
+                                                                           build:@"24B5084k"
+                                                                    uniqueChipID:@"CHIP-1"];
+    eqStr([req versionString], @"27.2", @"requirement versionString");
+    eqStr([req displayVersion], @"27.2 (24B5084k)", @"requirement displayVersion");
+
+    // 稳定英文名（日志可搜）
+    eqStr([A2JITDDI displayNameForVerdict:A2JITDDIVerdictVersionMismatch], @"VersionMismatch", @"判定英文名稳定");
+    eqStr([A2JITDDI displayNameForSource:A2JITDDISourceUserImport], @"UserImport", @"来源英文名稳定");
+    eqStr([A2JITDDI displayNameForKind:A2JITDDIKindPersonalized], @"Personalized", @"形态英文名稳定");
+
+    // 系统构建号解析（NSProcessInfo 形态）
+    eqStr([A2JITDDI buildFromOperatingSystemVersionString:@"Version 27.2 (Build 24B5084k)"],
+          @"24B5084k", @"从 operatingSystemVersionString 取构建号");
+    eqStr([A2JITDDI buildFromOperatingSystemVersionString:@"Version 14.5 (Build 23F79)"],
+          @"23F79", @"短构建号也认");
+    ok([A2JITDDI buildFromOperatingSystemVersionString:@""] == nil, @"空串取不到构建号 ⇒ nil（不猜）");
+
+    // ---- ★版本对齐三态★ ----
+    NSString *why = nil;
+    NSDate *now = [NSDate date];
+    A2JITDDIImage *imgBuildOK = DDIImage(@"/x/a.dmg", A2JITDDIKindPersonalized, A2JITDDISourceContainer,
+                                         4096, now, @"24B5084k", @"27.2");
+    A2JITDDIImage *imgBuildBad = DDIImage(@"/x/b.dmg", A2JITDDIKindPersonalized, A2JITDDISourceContainer,
+                                          4096, now, @"24A1111x", @"27.2");
+    A2JITDDIImage *imgVerOK = DDIImage(@"/x/c.dmg", A2JITDDIKindLegacy, A2JITDDISourceContainer,
+                                       4096, now, nil, @"27.2");
+    A2JITDDIImage *imgVerBad = DDIImage(@"/x/d.dmg", A2JITDDIKindLegacy, A2JITDDISourceContainer,
+                                        4096, now, nil, @"26.0");
+    A2JITDDIImage *imgNoDecl = DDIImage(@"/x/e.dmg", A2JITDDIKindUnknown, A2JITDDISourceContainer,
+                                        4096, now, nil, nil);
+
+    eqInt([A2JITDDI matchOfImage:imgBuildOK withRequirement:req why:&why], A2JITDDIMatchMatched,
+          @"构建号一致 ⇒ Matched");
+    eqInt([A2JITDDI matchOfImage:imgBuildBad withRequirement:req why:&why], A2JITDDIMatchMismatched,
+          @"构建号不一致 ⇒ Mismatched");
+    A2JITDDIRequirement *reqNoBuild = [A2JITDDIRequirement requirementWithOSMajorVersion:27
+                                                                           minorVersion:2
+                                                                                  build:nil
+                                                                           uniqueChipID:nil];
+    eqInt([A2JITDDI matchOfImage:imgBuildOK withRequirement:reqNoBuild why:&why], A2JITDDIMatchUnknown,
+          @"★系统构建号取不到 ⇒ Unknown（不猜成匹配）★");
+    eqInt([A2JITDDI matchOfImage:imgVerOK withRequirement:req why:&why], A2JITDDIMatchMatched,
+          @"版本串一致 ⇒ Matched");
+    eqInt([A2JITDDI matchOfImage:imgVerBad withRequirement:req why:&why], A2JITDDIMatchMismatched,
+          @"版本串不一致 ⇒ Mismatched");
+    eqInt([A2JITDDI matchOfImage:imgNoDecl withRequirement:req why:&why], A2JITDDIMatchUnknown,
+          @"★镜像未声明版本/构建号 ⇒ Unknown（不猜）★");
+
+    // ---- ★综合判定五态★ ----
+    NSTimeInterval maxAge = [A2JITDDI defaultMaxAge];
+    eqInt([A2JITDDI verdictForImage:nil withRequirement:req maxAge:maxAge now:now why:&why],
+          A2JITDDIVerdictMissing, @"无镜像 ⇒ Missing（明确缺失）");
+    eqInt([A2JITDDI verdictForImage:imgBuildOK withRequirement:req maxAge:3600 now:now why:&why],
+          A2JITDDIVerdictPresent, @"匹配 + 新鲜 ⇒ Present");
+    eqInt([A2JITDDI verdictForImage:imgBuildBad withRequirement:req maxAge:3600 now:now why:&why],
+          A2JITDDIVerdictVersionMismatch, @"不匹配 ⇒ VersionMismatch");
+    eqInt([A2JITDDI verdictForImage:imgNoDecl withRequirement:req maxAge:3600 now:now why:&why],
+          A2JITDDIVerdictUnknown, @"★未声明 ⇒ Unknown（绝不猜成 Present）★");
+    A2JITDDIImage *imgNoDate = DDIImage(@"/x/f.dmg", A2JITDDIKindPersonalized, A2JITDDISourceContainer,
+                                        4096, nil, @"24B5084k", @"27.2");
+    eqInt([A2JITDDI verdictForImage:imgNoDate withRequirement:req maxAge:3600 now:now why:&why],
+          A2JITDDIVerdictUnknown, @"★无导入时间 ⇒ 无法判新鲜度 ⇒ Unknown★");
+    A2JITDDIImage *imgOld = DDIImage(@"/x/g.dmg", A2JITDDIKindPersonalized, A2JITDDISourceContainer,
+                                     4096, [NSDate dateWithTimeIntervalSinceNow:-8.0 * 24.0 * 3600.0],
+                                     @"24B5084k", @"27.2");
+    eqInt([A2JITDDI verdictForImage:imgOld withRequirement:req maxAge:maxAge now:now why:&why],
+          A2JITDDIVerdictStale, @"超出窗口 ⇒ Stale");
+    A2JITDDIImage *imgEmpty = DDIImage(@"/x/h.dmg", A2JITDDIKindUnknown, A2JITDDISourceContainer,
+                                       0, now, @"24B5084k", @"27.2");
+    eqInt([A2JITDDI verdictForImage:imgEmpty withRequirement:req maxAge:3600 now:now why:&why],
+          A2JITDDIVerdictUnknown, @"空/不可读镜像 ⇒ Unknown");
+
+    // ---- ★三态映射：Unknown 只由 Unknown 产生★ ----
+    eqInt([A2JITDDI preconditionStateValueForVerdict:A2JITDDIVerdictPresent],
+          A2JITAutoPairingPreconditionStateSatisfied, @"Present ⇒ Satisfied");
+    eqInt([A2JITDDI preconditionStateValueForVerdict:A2JITDDIVerdictMissing],
+          A2JITAutoPairingPreconditionStateUnsatisfied, @"Missing ⇒ Unsatisfied");
+    eqInt([A2JITDDI preconditionStateValueForVerdict:A2JITDDIVerdictVersionMismatch],
+          A2JITAutoPairingPreconditionStateUnsatisfied, @"VersionMismatch ⇒ Unsatisfied");
+    eqInt([A2JITDDI preconditionStateValueForVerdict:A2JITDDIVerdictStale],
+          A2JITAutoPairingPreconditionStateUnsatisfied, @"Stale ⇒ Unsatisfied");
+    eqInt([A2JITDDI preconditionStateValueForVerdict:A2JITDDIVerdictUnknown],
+          A2JITAutoPairingPreconditionStateUnknown, @"★Unknown ⇒ Unknown（不许升成满足/缺失）★");
+    ok([A2JITDDI defaultMaxAge] >= 6.0 * 24.0 * 3600.0, @"默认新鲜度窗口 ≥ 6 天");
+
+    // ---- 本地存储：校验 ----
+    NSString *w = nil;
+    ok([A2JITDDIStore looksLikeUDIFDiskImageData:UDIFSample(2) why:&w], @"合法 UDIF 样本通过校验");
+    ok(![A2JITDDIStore looksLikeUDIFDiskImageData:[NSData dataWithLength:256] why:&w], @"<512 字节 ⇒ 拒绝");
+    ok(![A2JITDDIStore looksLikeUDIFDiskImageData:[NSData dataWithLength:1024 + 100] why:&w],
+       @"非 512 整数倍 ⇒ 拒绝");
+    ok(![A2JITDDIStore looksLikeUDIFDiskImageData:[NSData dataWithLength:1024] why:&w],
+       @"尾标不是 'koly' ⇒ 拒绝");
+
+    // 文件名里的显式声明（★只有显式声明才认★）
+    eqStr([A2JITDDIStore osVersionFromFileName:@"DeveloperDiskImage-27.2-24B5084k.dmg"], @"27.2",
+          @"文件名取版本串");
+    eqStr([A2JITDDIStore buildFromFileName:@"DeveloperDiskImage-27.2-24B5084k.dmg"], @"24B5084k",
+          @"文件名取构建号");
+    ok([A2JITDDIStore buildFromFileName:@"DeveloperDiskImage.dmg"] == nil, @"无声明 ⇒ 构建号 nil（不猜）");
+
+    // ---- 本地存储：导入 / 发现 / 过期 / 删除 ----
+    A2JITDDIStore *store = [[A2JITDDIStore alloc] initWithDirectory:TempDir()];
+    ok([store isStoreReadable], @"目录尚未创建 ⇒ 可读（= 确定没有镜像）");
+    ok([store currentImage] == nil, @"空目录 ⇒ 无镜像");
+    ok(![store importImageData:[NSData data] fileName:@"x.dmg" sourceName:@"x" error:NULL],
+       @"空数据 ⇒ 拒绝导入");
+    ok(![store importImageData:[NSData dataWithLength:1024] fileName:@"x.dmg" sourceName:@"x" error:NULL],
+       @"非镜像 ⇒ 拒绝导入");
+    NSString *p = [store importImageData:UDIFSample(4)
+                                fileName:@"DeveloperDiskImage-27.2-24B5084k.dmg"
+                              sourceName:@"t.dmg"
+                                   error:NULL];
+    ok(p.length > 0, @"合法镜像 ⇒ 导入成功");
+    A2JITDDIImage *cur = [store currentImage];
+    ok(cur != nil, @"导入后 ⇒ currentImage 真探测到");
+    eqStr(cur.declaredOSVersion, @"27.2", @"落盘后取到声明的版本串");
+    eqStr(cur.declaredBuild, @"24B5084k", @"落盘后取到声明的构建号");
+    eqInt(cur.source, A2JITDDISourceContainer, @"来源 = 容器");
+    ok(cur.sha256.length == 64, @"记录 SHA-256（64 hex）");
+
+    WriteDDIMeta(store, [NSDate dateWithTimeIntervalSinceNow:-8.0 * 24.0 * 3600.0]);
+    NSString *why2 = nil;
+    eqInt([A2JITDDI verdictForImage:[store currentImage]
+                    withRequirement:req
+                             maxAge:maxAge
+                                now:[NSDate date]
+                                why:&why2],
+          A2JITDDIVerdictStale, @"元数据改到 8 天前 ⇒ Stale");
+
+    ok([store removeImportedImageWithError:NULL], @"删除成功");
+    ok([store currentImage] == nil, @"删除后 ⇒ 无镜像");
+
+    // ★目录不可读 ⇒ isStoreReadable = NO（判定只能报「无法确认」）★
+    NSString *filePath = [TempDir() stringByAppendingPathComponent:@"notadir"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:filePath.stringByDeletingLastPathComponent
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:NULL];
+    [@"x" writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+    A2JITDDIStore *fileStore = [[A2JITDDIStore alloc] initWithDirectory:filePath];
+    ok(![fileStore isStoreReadable], @"★目录位置是文件 ⇒ 不可读 ⇒ 只能报无法确认★");
+
+    // SHA-256 工具
+    ok([A2JITDDIStore sha256HexOfData:[@"abc" dataUsingEncoding:NSUTF8StringEncoding]].length == 64,
+       @"sha256HexOfData ⇒ 64 hex");
+    ok([A2JITDDIStore sha256HexOfData:[NSData data]] == nil, @"空数据 ⇒ nil");
+}
+
+#pragma mark - ⑮ [JIT-DDI-1] DDI 判定合成 + 分流表四语 + Provider 接线
+
+static void testDDIProbeAndGuidance(void) {
+    printf("\n=== ⑮ DDI 判定合成 + 分流表（四语）+ Provider 接线 ===\n");
+
+    A2JITDDIRequirement *req = [A2JITDDIRequirement requirementWithOSMajorVersion:27
+                                                                    minorVersion:2
+                                                                           build:@"24B5084k"
+                                                                    uniqueChipID:nil];
+
+    // ---- 分流表 ----
+    NSArray<NSNumber *> *verdicts = [A2JITDDIGuidance allVerdicts];
+    eqInt((NSInteger)verdicts.count, 5, @"5 档 DDI 判定");
+    eqStr([A2JITDDIGuidance displayNameForVerdict:A2JITDDIVerdictMissing], @"Missing", @"判定英文名稳定");
+    eqInt([A2JITDDIGuidance preconditionStateForVerdict:A2JITDDIVerdictPresent],
+          A2JITAutoPairingPreconditionStateSatisfied, @"分流表：Present ⇒ Satisfied");
+    eqInt([A2JITDDIGuidance preconditionStateForVerdict:A2JITDDIVerdictUnknown],
+          A2JITAutoPairingPreconditionStateUnknown, @"★分流表：Unknown ⇒ Unknown★");
+    eqInt([A2JITDDIGuidance preconditionStateForVerdict:A2JITDDIVerdictStale],
+          A2JITAutoPairingPreconditionStateUnsatisfied, @"分流表：Stale ⇒ Unsatisfied");
+
+    // 每档的 status / reason / action key 互不相同，且四语齐全
+    NSMutableSet<NSString *> *statusKeys = [NSMutableSet set];
+    NSMutableSet<NSString *> *reasonKeys = [NSMutableSet set];
+    NSMutableSet<NSString *> *actionKeys = [NSMutableSet set];
+    NSMutableArray<NSString *> *missing = [NSMutableArray array];
+    for (NSNumber *v in verdicts) {
+        A2JITDDIVerdict dv = (A2JITDDIVerdict)v.integerValue;
+        NSString *sk = [A2JITDDIGuidance statusKeyForVerdict:dv];
+        NSString *rk = [A2JITDDIGuidance reasonKeyForVerdict:dv];
+        NSString *ak = [A2JITDDIGuidance actionKeyForVerdict:dv];
+        [statusKeys addObject:sk];
+        [reasonKeys addObject:rk];
+        [actionKeys addObject:ak];
+        for (NSString *k in @[ sk, rk, ak ]) {
+            for (NSInteger li = A2JITLanguageZhHans; li <= A2JITLanguageJapanese; li++) {
+                if ([A2JITStrings stringForKey:k language:(A2JITLanguage)li].length == 0) {
+                    [missing addObject:[NSString stringWithFormat:@"%@ / %ld", k, (long)li]];
+                }
+            }
+        }
+    }
+    if (missing.count) {
+        printf("        缺 DDI 文案：%s\n", [[missing componentsJoinedByString:@", "] UTF8String]);
+    }
+    eqInt((NSInteger)statusKeys.count, 5, @"★5 档状态 key 互不相同★");
+    eqInt((NSInteger)reasonKeys.count, 5, @"★5 档原因 key 互不相同★");
+    eqInt((NSInteger)actionKeys.count, 5, @"★5 档动作 key 互不相同★");
+    eqInt((NSInteger)missing.count, 0, @"★DDI 状态/原因/动作 key 四语齐全且非空★");
+
+    // ★机制阻塞文案（联网取 / 挂载）四语齐全★
+    NSArray<NSString *> *blockerKeys = @[
+        [A2JITDDIGuidance fetchDisabledReasonKey], [A2JITDDIGuidance fetchDisabledActionKey],
+        [A2JITDDIGuidance fetchUnsupportedReasonKey], [A2JITDDIGuidance fetchUnsupportedActionKey],
+        [A2JITDDIGuidance mountUnavailableReasonKey], [A2JITDDIGuidance mountUnavailableActionKey],
+    ];
+    NSMutableArray<NSString *> *bmissing = [NSMutableArray array];
+    for (NSString *k in blockerKeys) {
+        for (NSInteger li = A2JITLanguageZhHans; li <= A2JITLanguageJapanese; li++) {
+            if ([A2JITStrings stringForKey:k language:(A2JITLanguage)li].length == 0) {
+                [bmissing addObject:k];
+            }
+        }
+    }
+    eqInt((NSInteger)bmissing.count, 0, @"★联网取 / 挂载的阻塞文案四语齐全★");
+
+    // 「下一步动作」按判定 + 开关取值
+    eqStr([A2JITDDIGuidance nextActionKeyForVerdict:A2JITDDIVerdictPresent fetchEnabled:NO],
+          @"jit.ddi.next.ready", @"就位 ⇒ ready");
+    eqStr([A2JITDDIGuidance nextActionKeyForVerdict:A2JITDDIVerdictMissing fetchEnabled:NO],
+          @"jit.ddi.next.enableFetch", @"缺失 + 开关关 ⇒ 去开开关");
+    eqStr([A2JITDDIGuidance nextActionKeyForVerdict:A2JITDDIVerdictMissing fetchEnabled:YES],
+          @"jit.ddi.next.fetch", @"缺失 + 开关开 ⇒ 去联网取");
+    eqStr([A2JITDDIGuidance nextActionKeyForVerdict:A2JITDDIVerdictStale fetchEnabled:YES],
+          @"jit.ddi.next.reimport", @"过期 ⇒ 重新导入");
+    eqStr([A2JITDDIGuidance nextActionKeyForVerdict:A2JITDDIVerdictUnknown fetchEnabled:YES],
+          @"jit.ddi.next.unconfirmed", @"无法确认 ⇒ 先看取证");
+
+    // 统一日志行
+    NSString *line = [A2JITDDIGuidance logLineWithProvider:@"本地 DDI 探测"
+                                                   verdict:A2JITDDIVerdictMissing
+                                                  evidence:@"本地未发现 DDI 镜像"];
+    ok([line hasPrefix:@"[A2JIT]"], @"DDI 日志行以 [A2JIT] 开头");
+    ok([line containsString:@"ddi"], @"DDI 日志行含 ddi");
+    ok([line containsString:@"verdict=Missing"], @"DDI 日志行含判定");
+
+    // ---- 判定合成 ----
+    A2JITDDIStore *emptyStore = [[A2JITDDIStore alloc] initWithDirectory:TempDir()];
+    FakeDDIDeviceQuery *dev = [[FakeDDIDeviceQuery alloc] init];   // 设备侧 Unknown
+    A2JITLocalDDIProbe *probeEmpty = [[A2JITLocalDDIProbe alloc] initWithStore:emptyStore
+                                                                  requirement:req
+                                                                  deviceQuery:dev];
+    A2JITDDIStatus *st = [probeEmpty ddiStatus];
+    eqInt(st.verdict, A2JITDDIVerdictMissing, @"本地无镜像 + 设备不可查 ⇒ Missing");
+    ok(st.evidence.length > 0, @"判定必带取证文本");
+    eqInt([probeEmpty localVerdictWithEvidence:NULL], A2JITDDIVerdictMissing, @"只跑本地那一半也 ⇒ Missing");
+
+    // 本地有匹配镜像 ⇒ Present
+    A2JITDDIStore *okStore = [[A2JITDDIStore alloc] initWithDirectory:TempDir()];
+    [okStore importImageData:UDIFSample(4)
+                    fileName:@"DeveloperDiskImage-27.2-24B5084k.dmg"
+                  sourceName:@"t.dmg"
+                       error:NULL];
+    A2JITLocalDDIProbe *probeOK = [[A2JITLocalDDIProbe alloc] initWithStore:okStore
+                                                               requirement:req
+                                                               deviceQuery:dev];
+    A2JITDDIStatus *stOK = [probeOK ddiStatus];
+    eqInt(stOK.verdict, A2JITDDIVerdictPresent, @"本地匹配 + 新鲜 ⇒ Present");
+    ok(stOK.imagePath.length > 0, @"Present 带上镜像路径");
+
+    // 本地不可用但设备侧确认有 ⇒ Present（来源 Device）
+    dev.deviceVerdict = A2JITDDIVerdictPresent;
+    dev.deviceEvidence = @"设备侧报告已有可用 DDI";
+    A2JITDDIStore *empty2 = [[A2JITDDIStore alloc] initWithDirectory:TempDir()];
+    A2JITLocalDDIProbe *probeDev = [[A2JITLocalDDIProbe alloc] initWithStore:empty2
+                                                                requirement:req
+                                                                deviceQuery:dev];
+    A2JITDDIStatus *stDev = [probeDev ddiStatus];
+    eqInt(stDev.verdict, A2JITDDIVerdictPresent, @"设备侧确认有 ⇒ Present");
+    eqInt(stDev.source, A2JITDDISourceDevice, @"来源标 Device");
+
+    // 设备侧 Unknown + 本地镜像未声明版本 ⇒ Unknown（★不许猜★）
+    dev.deviceVerdict = A2JITDDIVerdictUnknown;
+    dev.deviceEvidence = @"fake 设备侧：不可查";
+    A2JITDDIStore *noDeclStore = [[A2JITDDIStore alloc] initWithDirectory:TempDir()];
+    [noDeclStore importImageData:UDIFSample(4) fileName:@"DeveloperDiskImage.dmg" sourceName:@"t.dmg" error:NULL];
+    A2JITLocalDDIProbe *probeNoDecl = [[A2JITLocalDDIProbe alloc] initWithStore:noDeclStore
+                                                                   requirement:req
+                                                                   deviceQuery:dev];
+    A2JITDDIStatus *stNoDecl = [probeNoDecl ddiStatus];
+    eqInt(stNoDecl.verdict, A2JITDDIVerdictUnknown, @"★镜像未声明版本 ⇒ Unknown（不猜成 Present）★");
+    ok([stNoDecl.evidence containsString:@"无法"], @"★取证写明「无法对齐」★");
+
+    // 目录不可读 ⇒ Unknown
+    NSString *filePath = [TempDir() stringByAppendingPathComponent:@"notadir"];
+    [[NSFileManager defaultManager] createDirectoryAtPath:filePath.stringByDeletingLastPathComponent
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:NULL];
+    [@"x" writeToFile:filePath atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+    A2JITDDIStore *fileStore = [[A2JITDDIStore alloc] initWithDirectory:filePath];
+    A2JITLocalDDIProbe *probeBad = [[A2JITLocalDDIProbe alloc] initWithStore:fileStore
+                                                                requirement:req
+                                                                deviceQuery:dev];
+    eqInt([probeBad ddiStatus].verdict, A2JITDDIVerdictUnknown, @"★目录不可读 ⇒ Unknown★");
+
+    // 无设备查询（未接线）⇒ 本地结论，如实
+    A2JITLocalDDIProbe *probeNoDev = [[A2JITLocalDDIProbe alloc] initWithStore:okStore
+                                                                  requirement:req
+                                                                  deviceQuery:nil];
+    eqInt([probeNoDev ddiStatus].verdict, A2JITDDIVerdictPresent, @"无设备查询但本地已就位 ⇒ Present");
+    ok([probeNoDev uniqueChipID] == nil, @"未接线 ⇒ 芯片 ID 取不到（nil，不编造）");
+    NSString *r1 = nil;
+    ok(![probeNoDev fetchPersonalizedImageWithReason:&r1], @"未接线 ⇒ 联网取 DDI 失败");
+    ok([r1 containsString:@"未接线"], @"★并点名缺什么（未接线）★");
+    ok(![probeNoDev isImageMounterAvailableWithReason:&r1], @"未接线 ⇒ image_mounter 不可用");
+    ok(![probeNoDev mountCurrentImageWithReason:&r1], @"未接线 ⇒ 挂载不可用");
+    ok([r1 containsString:@"未接线"] || [r1 containsString:@"image_mounter"], @"★挂载失败也点名原因★");
+
+    // 接了设备侧（假）⇒ 真转发调用（不是空操作）
+    dev.fetchResult = NO;
+    dev.fetchReason = @"TSS 未接入";
+    A2JITLocalDDIProbe *probeForward = [[A2JITLocalDDIProbe alloc] initWithStore:okStore
+                                                                    requirement:req
+                                                                    deviceQuery:dev];
+    ok(![probeForward fetchPersonalizedImageWithReason:&r1], @"接了但机制未接入 ⇒ 仍失败");
+    eqInt(dev.fetchCalls, 1, @"★真转发了调用（不是空操作）★");
+    ok([r1 containsString:@"TSS"], @"转发回来的原因被带出");
+
+    // ---- ★Provider 接线：DDI 真三态进入前置条件★ ----
+    A2JITFacts *f27 = Facts(27, 0, A2JITEnvironmentKindPlain);
+    FakeAutoPairingEngine *eng = [[FakeAutoPairingEngine alloc] init];
+    eng.engineAvailable = YES;
+    eng.succeed = YES;
+    A2JITAutoPairingPreconditions *base = [A2JITAutoPairingPreconditions
+        preconditionsWithDeveloperMode:A2JITAutoPairingPreconditionStateSatisfied
+                          localNetwork:A2JITAutoPairingPreconditionStateSatisfied
+                          getTaskAllow:A2JITAutoPairingPreconditionStateSatisfied
+                                   ddi:A2JITAutoPairingPreconditionStateUnknown];
+
+    // 不注入 ddiProbe ⇒ DDI 保持 Unknown（行为与上一版一致，无回退）
+    A2JITAutomaticPairingProvider *p0 =
+        [[A2JITAutomaticPairingProvider alloc] initWithFacts:f27
+                                               preconditions:base
+                                                      engine:eng
+                                                       store:[[A2JITPairingFileStore alloc] initWithDirectory:TempDir()]
+                                                       probe:nil];
+    eqInt([p0.effectivePreconditions stateForPrecondition:A2JITAutoPairingPreconditionDDI],
+          A2JITAutoPairingPreconditionStateUnknown, @"★无探测 ⇒ DDI 保持 Unknown★");
+    ok(p0.ddiStatus == nil, @"无探测 ⇒ ddiStatus 为 nil");
+
+    // 注入「缺失」探测 ⇒ DDI = Unsatisfied（真三态的「缺失」）
+    FakeDDIDeviceQuery *devUnknown = [[FakeDDIDeviceQuery alloc] init];
+    A2JITDDIStore *eStore = [[A2JITDDIStore alloc] initWithDirectory:TempDir()];
+    A2JITLocalDDIProbe *pMissing = [[A2JITLocalDDIProbe alloc] initWithStore:eStore
+                                                                 requirement:req
+                                                                 deviceQuery:devUnknown];
+    A2JITAutomaticPairingProvider *p1 =
+        [[A2JITAutomaticPairingProvider alloc] initWithFacts:f27
+                                               preconditions:base
+                                                      engine:eng
+                                                    ddiProbe:pMissing
+                                                       store:[[A2JITPairingFileStore alloc] initWithDirectory:TempDir()]
+                                                       probe:nil];
+    eqInt([p1.effectivePreconditions stateForPrecondition:A2JITAutoPairingPreconditionDDI],
+          A2JITAutoPairingPreconditionStateUnsatisfied, @"★探测「缺失」⇒ DDI = Unsatisfied★");
+    ok(p1.ddiStatus != nil, @"注入后 ddiStatus 非 nil");
+    eqInt([[p1 firstBlockingPrecondition] integerValue], A2JITAutoPairingPreconditionDDI, @"空缺项 = DDI");
+    eqStr([p1 blockingPreconditionReasonKey], @"jit.row.autopair.precondMissing", @"★缺失 ⇒ precondMissing★");
+    NSError *err = nil;
+    ok(![p1 preparePairingWithError:&err], @"DDI 缺失 ⇒ 取配对失败");
+    eqInt(p1.lastBlocker, A2JITAutoPairingBlockerDDIMissing, @"blocker = DDIMissing");
+    ok([err.localizedDescription containsString:@"DDI"], @"★错误文案点名 DDI★");
+    ok([err.localizedDescription containsString:@"Missing"], @"★并带上判定名与取证（不谎报）★");
+
+    // 注入「无法确认」探测 ⇒ DDI 保持 Unknown（★不许猜成缺失或满足★）
+    A2JITDDIStore *uStore = [[A2JITDDIStore alloc] initWithDirectory:TempDir()];
+    [uStore importImageData:UDIFSample(4) fileName:@"DeveloperDiskImage.dmg" sourceName:@"t.dmg" error:NULL];
+    A2JITLocalDDIProbe *pUnknown = [[A2JITLocalDDIProbe alloc] initWithStore:uStore
+                                                                 requirement:req
+                                                                 deviceQuery:devUnknown];
+    A2JITAutomaticPairingProvider *p2 =
+        [[A2JITAutomaticPairingProvider alloc] initWithFacts:f27
+                                               preconditions:base
+                                                      engine:eng
+                                                    ddiProbe:pUnknown
+                                                       store:[[A2JITPairingFileStore alloc] initWithDirectory:TempDir()]
+                                                       probe:nil];
+    eqInt([p2.effectivePreconditions stateForPrecondition:A2JITAutoPairingPreconditionDDI],
+          A2JITAutoPairingPreconditionStateUnknown, @"★探测「无法确认」⇒ DDI = Unknown★");
+    eqStr([p2 blockingPreconditionReasonKey], @"jit.row.autopair.precondUnknown",
+          @"★无法确认 ⇒ precondUnknown（不说成未满足）★");
+    err = nil;
+    ok(![p2 preparePairingWithError:&err], @"无法确认 ⇒ 不生成（不假成功）");
+    eqInt(p2.lastBlocker, A2JITAutoPairingBlockerPreconditionUnconfirmed, @"blocker = PreconditionUnconfirmed");
+    ok([err.localizedDescription containsString:@"无法确认"], @"★文案「无法确认」★");
+
+    // 注入「已就位」探测 ⇒ DDI = Satisfied（前置全绿 + 引擎接入 ⇒ 可生成 ⇒ 端到端成功）
+    A2JITPairingFileStore *pfStore = [[A2JITPairingFileStore alloc] initWithDirectory:TempDir()];
+    FakeAutoPairingEngine *eng2 = [[FakeAutoPairingEngine alloc] init];
+    eng2.engineAvailable = YES;
+    eng2.succeed = YES;
+    eng2.writeFileWhenSucceed = YES;
+    eng2.store = pfStore;
+    A2JITLocalDDIProbe *pOK = [[A2JITLocalDDIProbe alloc] initWithStore:okStore
+                                                            requirement:req
+                                                            deviceQuery:devUnknown];
+    A2JITAutomaticPairingProvider *p3 =
+        [[A2JITAutomaticPairingProvider alloc] initWithFacts:f27
+                                               preconditions:base
+                                                      engine:eng2
+                                                    ddiProbe:pOK
+                                                       store:pfStore
+                                                       probe:nil];
+    eqInt([p3.effectivePreconditions stateForPrecondition:A2JITAutoPairingPreconditionDDI],
+          A2JITAutoPairingPreconditionStateSatisfied, @"★探测「已就位」⇒ DDI = Satisfied★");
+    ok(p3.canGeneratePairingFile, @"前置全绿 + 引擎接入 ⇒ 可生成");
+    ok([p3 preparePairingWithError:NULL], @"★端到端：DDI 就位后可生成★");
+
+    // 交叉：预置 ddi:Unsatisfied 但探测说 Present ⇒ ★以探测为准★
+    A2JITAutoPairingPreconditions *preUnsatisfied = [A2JITAutoPairingPreconditions
+        preconditionsWithDeveloperMode:A2JITAutoPairingPreconditionStateSatisfied
+                          localNetwork:A2JITAutoPairingPreconditionStateSatisfied
+                          getTaskAllow:A2JITAutoPairingPreconditionStateSatisfied
+                                   ddi:A2JITAutoPairingPreconditionStateUnsatisfied];
+    A2JITAutomaticPairingProvider *p4 =
+        [[A2JITAutomaticPairingProvider alloc] initWithFacts:f27
+                                               preconditions:preUnsatisfied
+                                                      engine:eng2
+                                                    ddiProbe:pOK
+                                                       store:pfStore
+                                                       probe:nil];
+    eqInt([p4.effectivePreconditions stateForPrecondition:A2JITAutoPairingPreconditionDDI],
+          A2JITAutoPairingPreconditionStateSatisfied, @"★有探测 ⇒ 以探测为准（覆盖注入值）★");
+}
+
 #pragma mark - main
 
 int main(int argc, const char *argv[]) {
@@ -1412,6 +1986,8 @@ int main(int argc, const char *argv[]) {
         testImportedPairingProvider();
         testAutomaticPairingProvider();
         testAutoPairingGuidance();
+        testDDILogicAndStore();
+        testDDIProbeAndGuidance();
         testWiringInvariants();
 
         printf("\n----------------------------------------\n");

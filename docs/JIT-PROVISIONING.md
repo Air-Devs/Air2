@@ -46,7 +46,7 @@
 
 | 项 | 内容 |
 |---|---|
-| **前置条件** | ① Developer Mode 开启；② 本地网络权限（Bonjour 广告）；③ `get-task-allow`；④（首次）联网取 DDI |
+| **前置条件** | ① Developer Mode 开启；② 本地网络权限（Bonjour 广告）；③ `get-task-allow`；④（首次）联网取 DDI ★[JIT-DDI-1] ④ 已升级为【真三态探测】：已就位 / 缺失 / 无法确认（见 §3.4）★ |
 | **取得路径** | **① 设备内自动配对**（自研 RPPairing：RSD host + pair-verify + TLS-PSK 隧道）→ App 内开启 JIT |
 | **失败回退** | ① 失败/未接入 ⇒ ② 导入 ⇒ ③ 外部工具 ⇒ `Unavailable` |
 | **entitlement / 签名** | 同 1.1，另加 Info.plist `NSLocalNetworkUsageDescription` + `NSBonjourServices`（**不需** multicast entitlement） |
@@ -279,7 +279,43 @@ UI（启动按钮）
 3. 引擎报成功但容器里没有可解析的配对文件 ⇒ **不视为成功**（报 `WriteFailed`）。
 
 ★ **仍未做（属 §4.2 下一阶段）★**：Bonjour 广告与设备发现、RSD 连接、pair-verify、
-TLS-PSK 隧道、DDI 真取用、`readPreconditions` 的真读实现（Developer Mode / 本地网络 / DDI）。
+TLS-PSK 隧道、DDI 的真取用（联网个性化请求与 image_mounter 挂载）、
+`readPreconditions` 其余三项的真读实现（Developer Mode / 本地网络 / get-task-allow）。
+
+### 3.4【JIT-DDI-1】DDI（Developer Disk Image）—— 本地优先的取得与三态判定
+
+把 ① 自动配对前置条件里的 **④ DDI** 从「一律 Unknown（探测未接线）」做成 **真三态**
+（**已就位 / 缺失 / 无法确认**）。★本单只做到【本地优先 + 如实阻断】★：
+真正的【联网个性化请求】与【image_mounter 挂载】属 §4.2 下一阶段，
+在仓内以 **Bridge 骨架**如实报「未接入 / 缺什么」，★绝不假成功★。
+
+| 文件 | 层 | 变更 |
+|---|---|---|
+| `Air2/Player/A2JITDDI.h/.m` | Player | **新增**：类型（来源 / 形态 / 5 态判定 / 三态对齐）+ `A2JITDDIRequirement`、`A2JITDDIImage`、`A2JITDDIStatus` 值对象 + 纯逻辑（版本对齐、新鲜度、判定 → 前置条件三态）+ 设备侧查询协议 `A2JITDDIDeviceQuery` |
+| `Air2/Player/A2JITDDIStore.h/.m` | Player | **新增**：本地镜像的发现 / 校验（UDIF 尾标 `koly`）/ **手动导入**（与配对文件同机制）/ 落盘记录（来源 / 时间 / SHA-256 / 声明版本） |
+| `Air2/Player/A2JITDDIProbe.h/.m` | Player | **新增**：判定合成（本地镜像 + 设备侧查询 ⇒ 三态），★唯一实现★；另有「联网取 / 挂载」的调用点（如实转发） |
+| `Air2/Player/A2JITDDIGuidance.h/.m` | Player | **新增**：DDI 分流表（5 态 → 前置条件三态 / 本地化 key / 稳定诊断名 / 日志行） |
+| `Air2/Bridge/A2JITDDIDeviceBridge.h/.m` | **Bridge** | **新增**：设备侧查询的【接线点骨架】——设备侧判定回 `Unknown`、能力查询回 `NO`、联网取与挂载回 `NO` + 确切缺什么（如实报未接入） |
+| `Air2/Player/A2JITAutomaticPairingProvider.h/.m` | Player | 新增 `ddiProbe:` 注入；**生效前置条件** = 注入值 +（有探测时）以探测结果覆盖 DDI 那一项 |
+| `Air2/Player/A2JITCoordinator.h/.m` | Player | 新增装配工厂 `providersWithFacts:preconditions:engine:ddiProbe:probe:launcher:pairingFileStore:`（旧签名等价于 ddiProbe 传 nil） |
+| `Air2/Player/A2JITStrings.m` | Player | 新增 **约 37 个 key × 4 语**（DDI 行 / 开关行 / 5 态状态·原因·动作 / 下一步动作 / 机制阻塞 / 提示） |
+| `Air2/UI/Screens/Settings/A2JITSettings.m` | UI | 新增「DDI」状态行、「导入 DDI 镜像」行、「**联网取 DDI**」开关行（★默认关★）+ 失败分流文案 |
+| `tests/JIT/*` | tests | 新增 ⑭⑮ 两组 + 接线不变量 ⑩（DDI 纯逻辑 / 本地存储 / 判定合成 / 四语 / Provider 接线 / 分层纪律）|
+
+★ **「不谎报」的三条硬判据（真机可核对）★**：
+1. **版本对齐是三态**：镜像未声明版本/构建号、或系统构建号取不到 ⇒ 一律 **不匹配「无法确认」**，
+   绝不猜成匹配（单测覆盖六个分支）；
+2. **判定 Unknown ≠ Missing**：`A2JITDDIVerdictUnknown` 只映射到前置条件 `Unknown`；
+   探测未接线 / 目录不可读 / 元数据不足时一律 **Unknown**，★不许升成「已满足」，也不许降成「缺失」★；
+3. **机制未接入就如实阻断**：联网个性化请求与镜像挂载都返回 `NO` 并**点名缺什么**
+   （`Bridge → Natives` 未落地 / 需 image_mounter 服务与特权），★不假成功★。
+
+★ **「联网取 DDI」的边界★**：★默认关★（偏好键 `debug.jit_ddi_fetch`）。开启后是向
+**Apple 官方 personalization（TSS）端点**请求——★这属于「访问 Apple 官方服务」，不是「上云」★：
+请求直达 Apple，不经任何第三方服务器。★完全离线也能用★：本地发现 + 手动导入两条路都在，不依赖联网。
+
+★ **DDI 的判定口径★**：本项判定 = 「本机（App 视角）是否具备一份与系统匹配的可用 DDI 镜像」；
+**设备侧已挂载**属加分项（可查时才算证据；查不到不影响本地结论，且在取证里写明「设备侧不可查」）。
 
 ---
 
@@ -317,7 +353,11 @@ TLS-PSK 隧道、DDI 真取用、`readPreconditions` 的真读实现（Developer
 ★ **进度（[JIT-AUTOPAIR-1]，§3.3）**：本节的**前置条件 + 能力探测 + 配对文件新鲜度 +
 有界生成调用点**已落第一阶段（引擎以 Bridge 骨架如实报「未接入」）；
 **尚未做**的是 4.2-a（RSD/TLS-PSK 握手）、4.2-b 的真读（Developer Mode / 本地网络 / DDI）与 4.2-d/e。
-★本节不动分级口径：iOS 27+ 仍= `A2JITStrategyAutomatic`（与 `Air2/Player/A2JITStrategySelector.m` 同改）★。
+★ **进度（[JIT-DDI-1]，§3.4）**：4.2-d 的 **DDI 本地优先取得（发现 / 校验 / 手动导入）+ 三态判定 +
+版本匹配与新鲜度** 已落；4.2-b 的 **DDI 一项** 已真读（不再是 Unknown 占位）。
+★仍未做★：**联网个性化请求（Apple personalization / TSS）与 image_mounter 挂载**
+（属 4.2-a 的一部分；需设备标识、网络与特权，仓内以 Bridge 骨架如实报未接入）。
+★本节不动分级口径：iOS 27+ 仍 = `A2JITStrategyAutomatic`（与 `Air2/Player/A2JITStrategySelector.m` 同改）★。
 
 ### 4.3 ③ iOS 17 / 18 导入 UI + 外部工具拉起
 

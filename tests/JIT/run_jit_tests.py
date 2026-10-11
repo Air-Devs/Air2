@@ -47,6 +47,11 @@ SOURCES = [
     # --- [JIT-AUTOPAIR-1] 自动配对（iOS 27+，自研 RPPairing）的类型 / 前置条件 / 分流表 ---
     os.path.join(PLAYER, "A2JITAutoPairing.m"),
     os.path.join(PLAYER, "A2JITAutoPairingGuidance.m"),
+    # --- [JIT-DDI-1] DDI（Developer Disk Image）：类型 / 纯逻辑 / 本地镜像存储 / 判定合成 / 分流表 ---
+    os.path.join(PLAYER, "A2JITDDI.m"),
+    os.path.join(PLAYER, "A2JITDDIStore.m"),
+    os.path.join(PLAYER, "A2JITDDIProbe.m"),
+    os.path.join(PLAYER, "A2JITDDIGuidance.m"),
     os.path.join(HERE, "jit_logic_tests.m"),
 ]
 

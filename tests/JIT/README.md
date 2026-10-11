@@ -17,10 +17,17 @@
   配对文件**新鲜度** + ★有界★生成调用点 + **不谎报**（引擎未接入 / 报成功但无文件一律失败）；
 - **`[JIT-AUTOPAIR-1]`** `A2JITAutoPairingGuidance` + `A2JITAutoPairingPreconditions` ——
   14 档 blocker → 现有 `A2JITFailureReason` 的映射、四语分流文案、三态（Unknown≠满足）语义；
+- **`[JIT-DDI-1]`** `A2JITDDI` + `A2JITDDIStore` —— DDI 纯逻辑（版本对齐**三态**：Matched / Mismatched /
+  **Unknown**；综合判定五态）、UDIF 尾标校验、手动导入落盘 + 元数据、过期判定；
+- **`[JIT-DDI-1]`** `A2JITDDIProbe` + `A2JITDDIGuidance` —— DDI 判定合成（本地镜像 + 设备侧查询 ⇒
+  **已就位 / 缺失 / 无法确认**）、★`Unknown ⇒ Unknown`（不许升成满足、也不许降成缺失）★、
+  5 档状态/原因/动作 key × 四语、联网取 / 挂载的如实阻断、**Provider 接线**（DDI 真三态进前置条件）；
 - **`[JIT-IMPL-2]`** 接线不变量 —— `A2JITReadinessVerdict` 与 Natives 的 `A2JITRegionVerdict`
   逐值相等、scheme 清单与 `Air2/Info.plist` 一致、★Player 不得 import Natives 判据头★、
   Bridge 确实调用了 `A2JITEnvironment`；★[JIT-AUTOPAIR-1] 另加：设置页接入自动配对行、
-  Bridge 骨架如实报未接入、Player 不得 import Bridge★。
+  Bridge 骨架如实报未接入、Player 不得 import Bridge★；★[JIT-DDI-1] 另加：设置页接入 DDI 行 /
+  导入 / **联网取开关（默认关）**、DDI 设备侧 Bridge 骨架如实回 `Unknown` / `NO`、
+  Player 不得 import DDI Bridge★。
 
 ## 运行（macOS：需 Xcode 命令行工具的 clang）
 
@@ -31,11 +38,14 @@ python3 tests/JIT/run_jit_tests.py
 输出每例一行 `PASS` / `FAIL`，末尾给计数：
 
 ```
-TOTAL pass=265 fail=0
+TOTAL pass=<N> fail=0
 [runner] 全部通过 ✓
 ```
 
 退出码：`0` = 全通过；`1` = 有 `FAIL`（或编译/工具链失败）。
+
+> 计数是**单调不回退**的门禁：新增逻辑只许加例（`[JIT-AUTOPAIR-1]` 达 396；
+> `[JIT-DDI-1]` 再增 ⑭⑮ 与不变量 ⑩），基线例数一项都不许掉。
 
 > 为什么是真编译：版本隔离那套用 Python 镜像，是因为当年 iSH 里没有 ObjC 编译器；
 > 本机有 clang + Foundation，直接编译**被测的真实源文件**严格强于镜像。

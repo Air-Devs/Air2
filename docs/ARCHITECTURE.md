@@ -263,6 +263,23 @@ ADR 见 `docs/DECISIONS.md` ADR-007 / ADR-008 / ADR-009。
 **来源**：`docs/JIT-PROVISIONING.md` §1.2 / §3.3；许可口径见 `docs/DEPENDENCIES.md`「JIT 自动配对」节
 （★自研；只参考 SideInstaller 思路、未用其代码★）。
 
+### DDI（Developer Disk Image）取得与三态判定 —— [JIT-DDI-1]
+
+依赖严格单向（App → UI → Player → Core → Bridge → Natives）。★机制在 Bridge → Natives，
+Player 只消费状态★：本地镜像的发现/校验/落盘与判定合成都在 Player（纯逻辑、可单测），
+真正碰设备与网络的（设备侧查询、个性化请求、`image_mounter` 挂载）经 Bridge 注入。
+
+| 文件 | 层 | 职责 |
+|---|---|---|
+| `Air2/Player/A2JITDDI.[hm]` | Player | DDI 类型（来源 / 形态 / 5 态判定 / 三态对齐）+ 值对象（要求 / 镜像 / 判定结果）+ 纯逻辑（版本对齐、新鲜度、判定 → 前置条件三态）+ 设备侧查询协议 `A2JITDDIDeviceQuery` |
+| `Air2/Player/A2JITDDIStore.[hm]` | Player | 本地镜像发现 / 校验（UDIF 尾标 `koly`）/ **手动导入**（与配对文件同机制）/ 落盘记录（来源 / 时间 / SHA-256 / 声明版本） |
+| `Air2/Player/A2JITDDIProbe.[hm]` | Player | 判定合成（本地镜像 + 设备侧查询 ⇒ 三态），★唯一实现★；「联网取 / 挂载」调用点（如实转发） |
+| `Air2/Player/A2JITDDIGuidance.[hm]` | Player | DDI 分流表（5 态 → 前置条件三态 / 本地化 key / 稳定诊断名 / 日志行） |
+| `Air2/Bridge/A2JITDDIDeviceBridge.[hm]` | **Bridge** | 设备侧查询接线点骨架（设备侧判定回 `Unknown`、能力查询回 `NO`、联网取与挂载回 `NO` + 确切缺什么）|
+
+**来源**：`docs/JIT-PROVISIONING.md` §1.2 / §3.4；许可口径见 `docs/DEPENDENCIES.md`「DDI 取得」节
+（★自研；只按公开资料的行为描述实现，未搬运任何第三方代码★）。
+
 ### 运行时 / 渲染器随包登记 —— [RT-BUNDLE]
 
 **分层**：`Libraries/` 是「预编译二进制」层（见 §顶层，**不放源码**）；启动链（`Natives/Context`）只**消费**它，

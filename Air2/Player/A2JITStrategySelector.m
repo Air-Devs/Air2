@@ -80,6 +80,8 @@
         case A2JITStrategyAutomatic:
             // [JIT-AUTOPAIR-1] iOS 27+：自动为主；未接入/失败时逐级降级到导入、外部。
             // 口径与 docs/JIT-PROVISIONING.md §1.2 / §2.2 两处同改（本行只作指向，不改策略语义）。
+            // [JIT-DDI-1] 自动配对的前置条件 ④（DDI）在 A2JITAutomaticPairingProvider 里是【真三态】
+            // （已就位 / 缺失 / 无法确认）；判定实现见 A2JITDDIProbe，口径见 §3.4 —— ★分级口径未变★。
             return @[ @(A2JITProviderKindAutomaticPairing),
                       @(A2JITProviderKindImportedPairing),
                       @(A2JITProviderKindExternalTool) ];

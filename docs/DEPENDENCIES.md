@@ -131,6 +131,39 @@
 
 ---
 
+## DDI（Developer Disk Image）取得 —— [JIT-DDI-1]
+
+> 把自动配对前置条件 ④（DDI）从「一律 Unknown」做成【真三态：已就位 / 缺失 / 无法确认】。
+> ★**本仓零新增第三方依赖、零 vendor**★：本单只落【本地镜像发现 / 校验 / 手动导入 +
+> 版本匹配与新鲜度 + 判定合成 + 如实阻断】；真正的【联网个性化请求】与【image_mounter 挂载】
+> 属下一阶段（`docs/JIT-PROVISIONING.md` §4.2）。
+
+| 名称 | 版本 | 来源 | 许可 | 用途 | 引入方式 |
+|---|---|---|---|---|---|
+| （无） | — | — | — | 本阶段无任何新依赖 | **未引入** |
+
+**材料来源（★只用公开资料★）**：
+- **公开文档 / 公开实现的行为描述**：`mobile_image_mounter`（挂载/查询开发者镜像的锁定服务）、
+  iOS 17+ 的 **个性化 DDI**（按设备标识个性化请求 + 配套 trustcache）、
+  Apple 官方 **personalization（TSS）端点**的行为描述，以及 UDIF（`.dmg`）**尾标块魔数 `koly`**
+  这一公开磁盘映像格式事实。以上均属**公开可查的协议/格式行为**。
+- ★**未拷贝、未搬运任何第三方代码**★：SideInstaller（自定义许可：非商业 + 禁再分发构建）、
+  PocketJ、StikDebug/StikJIT 的代码一律**未引用**；本单只按「行为描述」自研实现
+  （本地镜像校验用公开的 UDIF 尾标事实；判定逻辑全为仓内原创）。
+
+**合规口径（★必须写清★）**：
+- 仓内新增件 `A2JITDDI` / `A2JITDDIStore` / `A2JITDDIProbe` / `A2JITDDIGuidance` /
+  `A2JITDDIDeviceBridge` 全部**自研**，许可随本项目 **GPL-3.0-or-later**（见 `LICENSE`）。
+- **「联网取 DDI」的边界**：★默认关★（偏好键 `debug.jit_ddi_fetch`）。开启后是向
+  **Apple 官方 personalization（TSS）端点**请求 —— ★这属于「访问 Apple 官方服务」，**不是「上云」**★：
+  请求直达 Apple，不经任何第三方服务器。★本单未实现该请求★（Bridge 骨架如实报未接入）。
+- **完全离线可用**：本地发现 + 手动导入两条路都在，不依赖联网。
+- **挂载的边界**：经 `image_mounter` 挂载可能**需要特权**；★当前环境不具备时如实阻断并点名缺什么★，
+  绝不假成功（`A2JITDDIDeviceBridge`）。
+- **本阶段复核**：未引入任何第三方代码/二进制；未改 `Natives/Support/A2JITEnvironment` 判据语义。
+
+---
+
 ## Java 侧自研替换（★替掉 Pojav 传承的 Java 类★）—— [OWN-JAVA]
 
 **变更**：启动核心的 **Java 侧整块换成自研**。原 `runtime_native`（Amethyst/Pojav 线）的
