@@ -2160,9 +2160,24 @@ static void testRPPairingCore(void) {
     ok([bridgeEngine containsString:@"#import \"a2_rppairing_rsd.h\""], @"★Bridge 接进了 RSD 发现/连接层★");
     ok([bridgeEngine containsString:@"[A2RPPairingPreflight run]"], @"★Bridge 真跑握手完成度自检（有调用点）★");
     ok([bridgeEngine containsString:@"security.mac.amfi.developer_mode_status"], @"Developer Mode 探测键明确");
-    ok(![bridgeEngine containsString:@"SecTaskCreateFromSelf("]
-       && ![bridgeEngine containsString:@"SecTaskCopyValueForEntitlement("],
-       @"★不引入 iOS 私有 API 去读 entitlement（只在注释里点名它，代码里没有任何调用）★");
+    // ★不引入 iOS 私有 API 去读 entitlement★：允许「类型/原型声明」与注释，
+    //   禁止任何**调用点**（iPhoneOS SDK 不导出 SecTask.h，但符号可从 Security.tbd 链接，
+    //   所以 Bridge 里有一段 #if __has_include 保护的 extern 声明 —— 那是为了编过，不是调用）。
+    __block BOOL secTaskCalled = NO;
+    [bridgeEngine enumerateLinesUsingBlock:^(NSString *line, BOOL *stop) {
+        NSString *t = [line stringByTrimmingCharactersInSet:
+                       NSCharacterSet.whitespaceCharacterSet];
+        BOOL isComment = [t hasPrefix:@"//"] || [t hasPrefix:@"/*"] || [t hasPrefix:@"*"];
+        BOOL isDecl = [t hasPrefix:@"extern "];
+        if (!isComment && !isDecl &&
+            ([t containsString:@"SecTaskCreateFromSelf("] ||
+             [t containsString:@"SecTaskCopyValueForEntitlement("])) {
+            secTaskCalled = YES;
+            *stop = YES;
+        }
+    }];
+    ok(!secTaskCalled,
+       @"★不引入 iOS 私有 API 去读 entitlement（只允许声明/注释，代码里没有任何调用点）★");
     ok([bridgeEngine containsString:@"iOS 无公开 API"], @"取不到的前置条件如实点名「无公开 API」");
     ok([bridgeEngine containsString:@"unknownPreconditions"], @"★仍以「全 Unknown」为底（没探测到 ≠ 已满足）★");
 }
@@ -2518,7 +2533,11 @@ static void testIntegrationTLSPSK(void) {
     NSString *javaSrc = [NSString stringWithContentsOfFile:RepoPath(@"JavaApp/src/ownglfw/org/lwjgl/glfw/GLFW.java")
                                                   encoding:NSUTF8StringEncoding error:NULL];
     ok([javaSrc containsString:@"a2OwnGlfwDispatch"], @"★Java 最后一跳 a2OwnGlfwDispatch 已落★");
-    ok([javaSrc containsString:@"int i0, int i1, int i2, int i3"],
+    // 签名断言语义不变，只是不再依赖 Java 源码的换行位置（原来那条子串跨了两行 ⇒ 假红）
+    ok([javaSrc containsString:@"a2OwnGlfwDispatch(long window, int type"]
+       && [javaSrc containsString:@"int i0, int i1,"]
+       && [javaSrc containsString:@"int i2, int i3,"]
+       && [javaSrc containsString:@"double d0, double d1)"],
        @"签名与 native 侧契约一致（long,int,int,int,int,int,double,double）");
 
     // ⑨ 随仓第三方件自证（缺一即失败；★这是「真编进来了」的静态证据★）
