@@ -40,9 +40,12 @@ NS_ASSUME_NONNULL_BEGIN
 
 typedef NS_ENUM(NSInteger, A2SettingsRowAccessory) {
     A2SettingsRowAccessoryNone = 0,
-    A2SettingsRowAccessoryDisclosure,   ///< 右箭头
-    A2SettingsRowAccessorySwitch,       ///< 开关
+    A2SettingsRowAccessoryDisclosure,   ///< 右箭头（进入下级）
+    A2SettingsRowAccessorySwitch,       ///< MD3 开关
     A2SettingsRowAccessoryCheckmark,    ///< 选中勾
+    A2SettingsRowAccessoryDropdown,     ///< 下拉箭头（展开选项，对应 ZL2 的 ▾）
+    A2SettingsRowAccessoryDownloadable, ///< 下载图标 + 下拉（对应 ZL2 的 ⬇▾，表示可下载）
+    A2SettingsRowAccessoryWarning,      ///< 警告三角（对应截图里的红色 ⚠）
     A2SettingsRowAccessoryCustom,       ///< 自定义右侧视图
 };
 

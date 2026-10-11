@@ -24,6 +24,7 @@
 #import "A2SettingsRow.h"
 #import "A2ThemeManager.h"
 #import "A2Typography.h"
+#import "A2Switch.h"
 
 @interface A2SettingsRow ()
 @property (nonatomic, strong) UIView *fillView;
@@ -33,8 +34,11 @@
 @property (nonatomic, strong) UILabel *subtitleLabel;
 @property (nonatomic, strong) UILabel *valueLabel;
 @property (nonatomic, strong) UIImageView *chevron;
-@property (nonatomic, strong) UISwitch *toggle;
+@property (nonatomic, strong) A2Switch *toggle;
 @property (nonatomic, strong) UIImageView *checkmark;
+@property (nonatomic, strong) UIImageView *dropdownIcon;
+@property (nonatomic, strong) UIImageView *downloadIcon;
+@property (nonatomic, strong) UIImageView *warningIcon;
 @property (nonatomic, strong) UIView *separator;
 @property (nonatomic, strong) UIStackView *textStack;
 @property (nonatomic, strong) UIStackView *trailingStack;
@@ -109,17 +113,36 @@
     _chevron.translatesAutoresizingMaskIntoConstraints = NO;
     _chevron.hidden = YES;
 
-    _toggle = [[UISwitch alloc] initWithFrame:CGRectZero];
-    _toggle.translatesAutoresizingMaskIntoConstraints = NO;
+    // MD3 风格开关（自绘），不用系统 UISwitch —— 外观差异明显
+    _toggle = [[A2Switch alloc] initWithFrame:CGRectZero];
     _toggle.hidden = YES;
-    _toggle.transform = CGAffineTransformMakeScale(0.85, 0.85);   // MD3 的开关更小
-    [_toggle addTarget:self action:@selector(toggleChanged) forControlEvents:UIControlEventValueChanged];
+    __weak typeof(self) weakSelf = self;
+    _toggle.onChange = ^(BOOL isOn) {
+        __strong typeof(weakSelf) self = weakSelf;
+        self.on = isOn;
+        if (self.onToggle) self.onToggle(isOn);
+    };
+
+    // 下拉箭头（对应 ZL2 的 ▾）
+    _dropdownIcon = [self makeIcon:@"chevron.down"];
+    _dropdownIcon.hidden = YES;
+
+    // 下载图标（对应 ZL2 的 ⬇，表示可下载）
+    _downloadIcon = [self makeIcon:@"arrow.down.to.line"];
+    _downloadIcon.hidden = YES;
+
+    // 警告三角（红色，提示该设置可能有问题）
+    _warningIcon = [self makeIcon:@"exclamationmark.triangle.fill"];
+    _warningIcon.hidden = YES;
 
     _checkmark = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"checkmark"]];
     _checkmark.translatesAutoresizingMaskIntoConstraints = NO;
     _checkmark.hidden = YES;
 
-    _trailingStack = [[UIStackView alloc] initWithArrangedSubviews:@[_valueLabel, _checkmark, _chevron, _toggle]];
+    // 顺序即视觉顺序：警告 → 下载 → 当前值 → 选中勾 → 右箭头 → 下拉 → 开关
+    _trailingStack = [[UIStackView alloc] initWithArrangedSubviews:
+                      @[_warningIcon, _downloadIcon, _valueLabel,
+                        _checkmark, _chevron, _dropdownIcon, _toggle]];
     _trailingStack.translatesAutoresizingMaskIntoConstraints = NO;
     _trailingStack.axis = UILayoutConstraintAxisHorizontal;
     _trailingStack.spacing = A2SpaceS;
@@ -177,6 +200,18 @@
 
 #pragma mark - 属性
 
+- (UIImageView *)makeIcon:(NSString *)name {
+    UIImageSymbolConfiguration *cfg =
+        [UIImageSymbolConfiguration configurationWithPointSize:14 weight:UIImageSymbolWeightSemibold];
+    UIImageView *v = [[UIImageView alloc] initWithImage:
+                      [UIImage systemImageNamed:name withConfiguration:cfg]];
+    v.translatesAutoresizingMaskIntoConstraints = NO;
+    v.contentMode = UIViewContentModeScaleAspectFit;
+    [v.widthAnchor constraintEqualToConstant:18].active = YES;
+    [v.heightAnchor constraintEqualToConstant:18].active = YES;
+    return v;
+}
+
 - (void)setSymbolName:(NSString *)symbolName {
     _symbolName = [symbolName copy];
     UIImageSymbolConfiguration *cfg =
@@ -214,6 +249,10 @@
     _chevron.hidden = (accessory != A2SettingsRowAccessoryDisclosure);
     _toggle.hidden = (accessory != A2SettingsRowAccessorySwitch);
     _checkmark.hidden = (accessory != A2SettingsRowAccessoryCheckmark);
+    _dropdownIcon.hidden = (accessory != A2SettingsRowAccessoryDropdown &&
+                            accessory != A2SettingsRowAccessoryDownloadable);
+    _downloadIcon.hidden = (accessory != A2SettingsRowAccessoryDownloadable);
+    _warningIcon.hidden = (accessory != A2SettingsRowAccessoryWarning);
 }
 
 - (void)setCustomAccessoryView:(UIView *)customAccessoryView {
@@ -286,12 +325,6 @@
 
 #pragma mark - 交互
 
-- (void)toggleChanged {
-    _on = _toggle.isOn;
-    [_feedback selectionChanged];
-    if (self.onToggle) self.onToggle(_on);
-}
-
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     [super touchesBegan:touches withEvent:event];
     if (_accessory == A2SettingsRowAccessorySwitch) return;
@@ -309,8 +342,10 @@
         // 点整行也能切开关
         CGPoint p = [touches.anyObject locationInView:self];
         if (CGRectContainsPoint(self.bounds, p)) {
+            [_feedback selectionChanged];
             [_toggle setOn:!_toggle.isOn animated:YES];
-            [self toggleChanged];
+            self.on = _toggle.isOn;
+            if (self.onToggle) self.onToggle(self.on);
         }
         return;
     }
@@ -352,7 +387,9 @@
     _valueLabel.textColor = t.cOnSurfaceVariant;
     _chevron.tintColor = t.cOutline;
     _checkmark.tintColor = t.cPrimary;
-    _toggle.onTintColor = t.cPrimary;
+    _warningIcon.tintColor = t.cError;
+    _dropdownIcon.tintColor = t.cOnSurfaceVariant;
+    _downloadIcon.tintColor = t.cPrimary;
     _separator.backgroundColor = [t.cOutlineVariant colorWithAlphaComponent:0.6];
 }
 

@@ -42,6 +42,18 @@ NSString *const A2SettingsKeyCurrentAccountID = @"A2CurrentAccountID";
 NSString *const A2SettingsKeyCurrentVersionName = @"A2CurrentVersionName";
 NSString *const A2SettingsKeyAutoLogin = @"A2AutoLogin";
 
+// ---- 渲染设置 ----
+static NSString *const kKeyVulkanDriver    = @"A2VulkanDriver";
+static NSString *const kKeyGraphicsApi     = @"A2GraphicsApi";
+static NSString *const kKeyResolutionRule  = @"A2ResolutionRule";
+static NSString *const kKeyRenderScale     = @"A2RenderScale";
+static NSString *const kKeyFullscreenGame  = @"A2FullscreenGame";
+static NSString *const kKeySustainedPerf   = @"A2SustainedPerformance";
+static NSString *const kKeyUseSystemVulkan = @"A2UseSystemVulkan";
+static NSString *const kKeyZinkVSync       = @"A2ZinkVSync";
+static NSString *const kKeyUseSurfaceView  = @"A2UseSurfaceView";
+static NSString *const kKeyShaderLog       = @"A2ShaderLog";
+
 /// 托管 key 全集（读写与迁移共用，增减设置只改这一处）。
 static NSArray<NSString *> *A2SettingsAllKeys(void) {
     return @[
@@ -140,6 +152,18 @@ static NSArray<NSString *> *A2SettingsAllKeys(void) {
     _currentAccountID = [self stringForKey:A2SettingsKeyCurrentAccountID];
     _currentVersionName = [self stringForKey:A2SettingsKeyCurrentVersionName];
     _autoLogin = [self boolForKey:A2SettingsKeyAutoLogin defaultValue:YES];
+
+    // ---- 渲染设置 ----
+    _vulkanDriver = [self stringForKey:kKeyVulkanDriver] ?: @"mainline-turnip-sync-V32";
+    _graphicsApi = [self stringForKey:kKeyGraphicsApi] ?: @"仅首次启动时设置为 OpenGL";
+    _resolutionRule = [self stringForKey:kKeyResolutionRule] ?: @"百分比";
+    _renderScale = [self integerForKey:kKeyRenderScale defaultValue:100];
+    _fullscreenGame = [self boolForKey:kKeyFullscreenGame defaultValue:NO];
+    _sustainedPerformance = [self boolForKey:kKeySustainedPerf defaultValue:NO];
+    _useSystemVulkan = [self boolForKey:kKeyUseSystemVulkan defaultValue:NO];
+    _zinkVSync = [self boolForKey:kKeyZinkVSync defaultValue:NO];
+    _useSurfaceView = [self boolForKey:kKeyUseSurfaceView defaultValue:YES];
+    _shaderLog = [self boolForKey:kKeyShaderLog defaultValue:NO];
 }
 
 - (void)resetAllToDefaults {
@@ -280,6 +304,60 @@ static NSArray<NSString *> *A2SettingsAllKeys(void) {
 - (void)setAutoLogin:(BOOL)v {
     _autoLogin = v;
     [self setObject:@(v) forKey:A2SettingsKeyAutoLogin];
+}
+
+#pragma mark - 渲染设置
+
+- (void)setVulkanDriver:(NSString *)v {
+    _vulkanDriver = [v copy];
+    [self setObject:v forKey:kKeyVulkanDriver];
+}
+
+- (void)setGraphicsApi:(NSString *)v {
+    _graphicsApi = [v copy];
+    [self setObject:v forKey:kKeyGraphicsApi];
+}
+
+- (void)setResolutionRule:(NSString *)v {
+    _resolutionRule = [v copy];
+    [self setObject:v forKey:kKeyResolutionRule];
+}
+
+/// 渲染分辨率钳到 10~200 —— 超出这个范围游戏必然出问题
+- (void)setRenderScale:(NSInteger)v {
+    NSInteger clamped = MAX(10, MIN(200, v));
+    _renderScale = clamped;
+    [self setObject:@(clamped) forKey:kKeyRenderScale];
+}
+
+- (void)setFullscreenGame:(BOOL)v {
+    _fullscreenGame = v;
+    [self setObject:@(v) forKey:kKeyFullscreenGame];
+}
+
+- (void)setSustainedPerformance:(BOOL)v {
+    _sustainedPerformance = v;
+    [self setObject:@(v) forKey:kKeySustainedPerf];
+}
+
+- (void)setUseSystemVulkan:(BOOL)v {
+    _useSystemVulkan = v;
+    [self setObject:@(v) forKey:kKeyUseSystemVulkan];
+}
+
+- (void)setZinkVSync:(BOOL)v {
+    _zinkVSync = v;
+    [self setObject:@(v) forKey:kKeyZinkVSync];
+}
+
+- (void)setUseSurfaceView:(BOOL)v {
+    _useSurfaceView = v;
+    [self setObject:@(v) forKey:kKeyUseSurfaceView];
+}
+
+- (void)setShaderLog:(BOOL)v {
+    _shaderLog = v;
+    [self setObject:@(v) forKey:kKeyShaderLog];
 }
 
 @end
