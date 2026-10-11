@@ -84,6 +84,12 @@ typedef enum {
     A2_GLFW_EVENT_CONTENT_SCALE = 7,
     // 光标进入/离开：i0=1(进入)/0(离开)
     A2_GLFW_EVENT_CURSOR_ENTER = 8,
+    // 文本输入（字符）：i0=Unicode 码点, i1=mods
+    // 投递点：a2_glfw_input.m 的 -pressesBegan:withEvent:（外接键盘 UIKey.characters）
+    A2_GLFW_EVENT_CHAR = 9,
+    // 滚动：d0=xoffset, d1=yoffset（GLFW 语义：y 正 = 向上/远离用户）
+    // 投递点：a2_glfw_input.m 的 -a2_scroll:（间接输入：外接鼠标滚轮 / 触控板两指滚动）
+    A2_GLFW_EVENT_SCROLL = 10,
 } A2GlfwEventType;
 
 typedef struct A2GlfwEvent {

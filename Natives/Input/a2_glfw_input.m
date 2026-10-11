@@ -26,6 +26,11 @@
 // 鼠标左键（官方 glfw3.h：GLFW_MOUSE_BUTTON_LEFT = GLFW_MOUSE_BUTTON_1 = 0）
 #define A2_GLFW_MOUSE_BUTTON_LEFT 0
 
+// 滚动分辨率：间接输入每累计这么多「点」折算 1 个 GLFW 滚动刻度。
+// 依据：离散滚轮一格在 UIKit 间接输入里约 10 点（触控板为连续量）⇒ 一格 ≈ ±1.0，
+// 与桌面 GLFW「滚轮一格 = yoffset ±1」的手感对齐。属可调常数（阶段 B 可按真机微调）。
+#define A2_GLFW_SCROLL_POINTS_PER_NOTCH 10.0
+
 // ============================================================================
 //  HID usage → GLFW 键码（紧凑标准表）
 // ============================================================================
@@ -109,6 +114,9 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 @property (nonatomic, assign) long  window;
 @property (nonatomic, assign) NSInteger activeTouches;
 @property (nonatomic, assign) BOOL  touchLogged;
+@property (nonatomic, assign) BOOL  scrollLogged;
+// 滚动（间接输入）：声明在类内，避免 GCC_WARN_UNDECLARED_SELECTOR 警告。
+- (void)a2_scroll:(UIPanGestureRecognizer *)pan;
 @end
 
 @implementation A2GlfwView
@@ -120,6 +128,16 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
         self.multipleTouchEnabled = YES;
         self.backgroundColor = [UIColor blackColor];
         self.opaque = YES;
+
+        // ★滚动源：间接输入（外接鼠标滚轮 / 触控板两指滚动）★
+        //   allowedScrollTypesMask 让 pan 手势也认滚轮/触控板（Apple 文档）；
+        //   maximumNumberOfTouches = 0 ⇒ 只认间接输入，不吃直接触摸
+        //   （直接触摸仍走 touchesBegan/Moved/Ended，指针语义不变）。
+        UIPanGestureRecognizer *scroll = [[UIPanGestureRecognizer alloc]
+                                          initWithTarget:self action:@selector(a2_scroll:)];
+        scroll.allowedScrollTypesMask = UIScrollTypeMaskAll;
+        scroll.maximumNumberOfTouches = 0;
+        [self addGestureRecognizer:scroll];
     }
     return self;
 }
@@ -156,6 +174,54 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
     ev.window = self.window;
     ev.type = A2_GLFW_EVENT_CURSOR_ENTER;
     ev.i0 = entered;
+    a2_glfw_event_post(&ev);
+}
+
+// 文本输入：外接键盘按键产生的字符（UIKey.characters）→ CHAR 事件。
+// ★只在外接键盘的 -pressesBegan: 里调★（软键盘文本输入属阶段 B，本文件不做）。
+- (void)postChar:(UIKey *)key mods:(int)mods {
+    NSString *chars = key.characters;
+    if (chars.length == 0) {
+        return;
+    }
+    // 取首个 Unicode 码点（UTF-32 解码，代理对也正确）；控制字符不算文本输入，跳过。
+    NSData *utf32 = [chars dataUsingEncoding:NSUTF32LittleEndianStringEncoding];
+    if (utf32.length < 4) {
+        return;
+    }
+    uint32_t cp = 0;
+    memcpy(&cp, utf32.bytes, 4);
+    if (cp == 0 || cp < 0x20) {
+        return;
+    }
+    A2GlfwEvent ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.window = self.window;
+    ev.type = A2_GLFW_EVENT_CHAR;
+    ev.i0 = (int) cp;
+    ev.i1 = mods;
+    a2_glfw_event_post(&ev);
+}
+
+// 滚动：间接输入（外接鼠标滚轮 / 触控板两指滚动）→ SCROLL 事件。
+// GLFW 语义：yoffset 正 = 向上/远离用户。UIKit 的 pan translation.y 向下为正 ⇒ 取负。
+- (void)a2_scroll:(UIPanGestureRecognizer *)pan {
+    CGPoint t = [pan translationInView:self];
+    [pan setTranslation:CGPointZero inView:self];
+    if (t.x == 0.0 && t.y == 0.0) {
+        return;
+    }
+    if (!self.scrollLogged) {
+        self.scrollLogged = YES;
+        a2_log_f(@"[A2-GLFW] 首次滚动已到达输入层 window=%ld（间接输入→SCROLL 通道通则）",
+                 self.window);
+    }
+    A2GlfwEvent ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.window = self.window;
+    ev.type = A2_GLFW_EVENT_SCROLL;
+    ev.d0 = (double) (t.x / A2_GLFW_SCROLL_POINTS_PER_NOTCH);
+    ev.d1 = (double) (-t.y / A2_GLFW_SCROLL_POINTS_PER_NOTCH);
     a2_glfw_event_post(&ev);
 }
 
@@ -232,6 +298,10 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
         ev.i2 = A2_GLFW_PRESS;
         ev.i3 = a2_glfw_mods_from_flags(event.modifierFlags);
         a2_glfw_event_post(&ev);
+
+        // ★同一次按下也是文本输入源★：外接键盘的字符 → CHAR 事件
+        //   （MC 的文本/聊天输入读的是 glfwSetCharCallback，不是 key 回调）。
+        [self postChar:key mods:a2_glfw_mods_from_flags(event.modifierFlags)];
     }
 }
 
