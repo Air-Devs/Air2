@@ -212,13 +212,13 @@
         return;
     }
 
-    // 前置未满足 / 未确认 ⇒ ★缺哪项说哪项★（不谎报为「可用」）。
+    // 前置未满足 / 未确认 ⇒ ★缺哪项说哪项★（不谎报为「可用」；且未确认 ≠ 未满足）。
     NSNumber *blocking = [ap firstBlockingPrecondition];
     if (blocking) {
         A2JITAutoPairingPrecondition pc = (A2JITAutoPairingPrecondition)blocking.integerValue;
         NSString *name = [self text:[A2JITAutoPairingGuidance nameKeyForPrecondition:pc]];
-        self.autopairRow.subtitle = [NSString stringWithFormat:@"%@%@",
-                                     [self text:@"jit.row.autopair.precondMissing"], name];
+        NSString *reasonKey = [ap blockingPreconditionReasonKey] ?: @"jit.row.autopair.precondMissing";
+        self.autopairRow.subtitle = [NSString stringWithFormat:[self text:reasonKey], name];
         return;
     }
 

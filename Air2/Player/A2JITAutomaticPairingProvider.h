@@ -79,6 +79,12 @@ NS_ASSUME_NONNULL_BEGIN
 /// 需要用户先处理的前置条件（未满足优先，其次未确认；无则 nil）。
 - (nullable NSNumber *)firstBlockingPrecondition;
 
+/// 需要用户处理的前置条件的【本地化 reason key】：
+/// 有【明确未满足】项 → `jit.row.autopair.precondMissing`；
+/// 只有【未确认】项 → `jit.row.autopair.precondUnknown`（★不把 Unknown 说成「未满足」★）；
+/// 无阻塞 → nil。文案本体在 A2JITStrings（四语）。
+- (nullable NSString *)blockingPreconditionReasonKey;
+
 @end
 
 NS_ASSUME_NONNULL_END

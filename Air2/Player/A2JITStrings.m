@@ -286,6 +286,12 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
             @"en": @"Precondition unmet: %@",
             @"ja": @"前提条件が未達：%@",
         },
+        @"jit.row.autopair.precondUnknown": @{
+            @"zh-Hans": @"前置未确认：%@",
+            @"zh-Hant": @"前置未確認：%@",
+            @"en": @"Precondition unconfirmed: %@",
+            @"ja": @"前提条件が未確認：%@",
+        },
         // 前置条件名 / 判定态
         @"jit.autopair.precond.developerMode": @{
             @"zh-Hans": @"Developer Mode（开发者模式）",

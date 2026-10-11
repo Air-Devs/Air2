@@ -1144,6 +1144,13 @@ static void testAutomaticPairingProvider(void) {
     eqInt(err.code, 1, @"★「未接入」用 A2JITProviderNotImplementedError（code=1）★");
     ok(!pOff.canGeneratePairingFile, @"引擎未接入 → 不能生成");
 
+    // ---- ⑤b ★「未确认」不得说成「未满足」：前置 reason key 三态分得清★ ----
+    eqStr([pDev blockingPreconditionReasonKey], @"jit.row.autopair.precondMissing",
+          @"明确未满足 → precondMissing key");
+    eqStr([p27 blockingPreconditionReasonKey], @"jit.row.autopair.precondUnknown",
+          @"★仅未确认 → precondUnknown key（不谎报为未满足）★");
+    ok([pOff blockingPreconditionReasonKey] == nil, @"前置全满足 → 无前置 reason key");
+
     // ---- ⑥ 27 + 前置齐 + 引擎接入 +【真写文件】⇒ 成功且就绪 ----
     A2JITPairingFileStore *storeOK = [[A2JITPairingFileStore alloc] initWithDirectory:TempDir()];
     FakeAutoPairingEngine *engineOK = [[FakeAutoPairingEngine alloc] init];

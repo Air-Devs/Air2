@@ -164,6 +164,17 @@ static A2JITAutoPairingStep A2StepForBlocker(A2JITAutoPairingBlocker blocker) {
     return [self.preconditions firstUnconfirmedPrecondition];
 }
 
+- (nullable NSString *)blockingPreconditionReasonKey {
+    // ★三态要分清★：明确未满足 ⇒「未满足」；仅无法确认 ⇒「未确认」（不把 Unknown 说成未满足）。
+    if ([self.preconditions firstUnsatisfiedPrecondition]) {
+        return @"jit.row.autopair.precondMissing";
+    }
+    if ([self.preconditions firstUnconfirmedPrecondition]) {
+        return @"jit.row.autopair.precondUnknown";
+    }
+    return nil;
+}
+
 #pragma mark - 小工具
 
 - (void)logStep:(A2JITAutoPairingStep)step
