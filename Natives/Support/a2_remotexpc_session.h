@@ -92,7 +92,7 @@ NSString *A2RemoteXPCErrorKindName(A2RemoteXPCErrorKind kind);
 
 @interface A2RemoteXPCSession : NSObject
 
-- (instancetype)initWithStream:(id<A2RPByteStream>)stream
+- (instancetype)initWithStream:(nullable id<A2RPByteStream>)stream
            wireProtocolVersion:(NSUInteger)wireProtocolVersion
                   originatedBy:(NSString *)originatedBy;
 

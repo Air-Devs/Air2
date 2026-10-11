@@ -180,7 +180,7 @@ NSData *_Nullable A2RXPCEncodeXPCValue(id value, NSString *_Nullable *_Nullable 
 /// 解码一个 XPC 值。consumedOut 回填已消费字节数。语义同上（nil reason = 不够）。
 /// @return nil + reason==nil ⇒ 不够；nil + reason!=nil ⇒ 错。成功 ⇒ 返回解码值。
 id _Nullable A2RXPCDecodeXPCValue(NSData *blob,
-                                  NSUInteger *consumedOut,
+                                  NSUInteger *_Nullable consumedOut,
                                   NSString *_Nullable *_Nullable reason);
 
 /// 值类型诊断名（日志用；稳定字符串）。

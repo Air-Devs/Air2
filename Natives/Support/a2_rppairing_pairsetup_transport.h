@@ -64,8 +64,8 @@ BOOL A2RPPairSetupUSBPathAvailable(NSString *_Nullable *_Nullable reason);
 /// 是否观察到设备在等用户同意（规格 §9 Phase 1），透传自会话。
 @property (nonatomic, readonly) BOOL awaitingUserConsentObserved;
 
-/// 用一条字节通道构造（会先做 RemoteXPC 初始化握手）。
-+ (nullable instancetype)transportOverByteStream:(id<A2RPByteStream>)stream
+/// 用一条字节通道构造（会先做 RemoteXPC 初始化握手；流为 nil 时如实失败）。
++ (nullable instancetype)transportOverByteStream:(nullable id<A2RPByteStream>)stream
                                         hostName:(NSString *)hostName
                                      wireVersion:(NSUInteger)wireVersion
                                          timeout:(NSTimeInterval)timeout

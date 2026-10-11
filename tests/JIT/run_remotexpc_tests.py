@@ -34,6 +34,14 @@ SOURCES = [
     os.path.join(SUPPORT, "a2_remotexpc_session.m"),
     os.path.join(SUPPORT, "a2_rppairing_pairsetup_transport.m"),
     os.path.join(SUPPORT, "a2_rppairing_pairable_host.m"),
+    # pairable-host 复用既有 RSD 层的服务类型常量（★不另造常量★）⇒ 需要链接该层。
+    # 该层已在 tests/JIT/run_jit_tests.py 里被证明可在本编译配置下编过。
+    os.path.join(SUPPORT, "a2_rppairing_rsd.m"),
+    os.path.join(SUPPORT, "a2_rppairing_verify.m"),
+    os.path.join(SUPPORT, "a2_rppairing.m"),
+    os.path.join(SUPPORT, "a2_rppairing_crypto.m"),
+    os.path.join(SUPPORT, "a2_rppairing_chacha.m"),
+    os.path.join(SUPPORT, "a2_rppairing_ed25519.m"),
     # 判据行走到 a2_log_f ⇒ 一并链接项目统一的纯日志实现（只有 Foundation + stdio）。
     os.path.join(SUPPORT, "a2_log.m"),
     os.path.join(HERE, "remotexpc_tests.m"),

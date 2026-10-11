@@ -236,7 +236,7 @@ int main(void) {
     NSArray *lback = lblock != nil ? A2RXPCDecodeHeaderBlock(lblock, &lwhy2) : nil;
     T("hpack/long-value-roundtrip",
       lback != nil && [lback[0][1] length] == 300);
-    T("hpack/long-value-length-prefixed", lblock.length < 20);
+    T("hpack/long-value-length-prefixed", lblock.length == 311);   // 1+7 头 + 3 长度续字节 + 300 数据
 
     // =====================================================================
     // 3. XPC 消息
@@ -376,11 +376,15 @@ int main(void) {
       [sess3 connectAndHandshakeWithTimeout:1.0 reason:&s3Why error:&s3Err] == NO
       && s3Err == A2RemoteXPCErrorNotConnected);
 
+    A2RemoteXPCInMemoryStream *sPre = [[A2RemoteXPCInMemoryStream alloc] init];
+    A2RemoteXPCSession *sessPre = [[A2RemoteXPCSession alloc] initWithStream:sPre
+                                                         wireProtocolVersion:19
+                                                                originatedBy:@"host"];
     NSString *preWhy = nil;
     A2RemoteXPCErrorKind preErr = A2RemoteXPCErrorNone;
     T("session/exchange-before-handshake",
-      [sess1.exchangePairingData:[NSData dataWithBytes:"x" length:1] kind:@"k" startNew:YES
-                          reason:&preWhy error:&preErr] == nil
+      [sessPre exchangePairingData:[NSData dataWithBytes:"x" length:1] kind:@"k" startNew:YES
+                            reason:&preWhy error:&preErr] == nil
       && preErr == A2RemoteXPCErrorNotConnected);
 
     // 成功往返
