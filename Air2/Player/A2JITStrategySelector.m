@@ -78,7 +78,8 @@
             return @[ @(A2JITProviderKindKernel) ];
 
         case A2JITStrategyAutomatic:
-            // 自动为主；未接入/失败时逐级降级到导入、外部。
+            // [JIT-AUTOPAIR-1] iOS 27+：自动为主；未接入/失败时逐级降级到导入、外部。
+            // 口径与 docs/JIT-PROVISIONING.md §1.2 / §2.2 两处同改（本行只作指向，不改策略语义）。
             return @[ @(A2JITProviderKindAutomaticPairing),
                       @(A2JITProviderKindImportedPairing),
                       @(A2JITProviderKindExternalTool) ];

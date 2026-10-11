@@ -39,6 +39,8 @@
 // 注：协议声明一律走 import，不做前置声明 —— 仓内 lint_objc.py 按配对计数，前置声明会被误判。
 #import "A2JITReadinessProbe.h"
 #import "A2JITExternalToolLauncher.h"
+// [JIT-AUTOPAIR-1] 自动配对（iOS 27+）的注入缝与前置条件值对象。
+#import "A2JITAutoPairing.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -84,10 +86,22 @@ NS_ASSUME_NONNULL_BEGIN
 /// ★[JIT-IMPL-2] 装配用★：把判据内核（Bridge → Natives/A2JITEnvironment）、外部工具拉起器
 /// （UI → UIApplication）与配对文件存储（Player，容器约定位置）一并注入四路 Provider。
 /// ★本方法只依赖协议★：真机实现由 App / UI / Bridge 提供，单测传假实现。
+/// ★[JIT-AUTOPAIR-1]★ 等价于 providersWithFacts:preconditions:engine:probe:launcher:pairingFileStore:
+/// 的 preconditions/engine 传 nil（自动配对 Provider 会如实报「前置未确认 / 引擎未接入」）。
 + (NSArray<id<A2JITProvider>> *)providersWithFacts:(A2JITFacts *)facts
                                              probe:(nullable id<A2JITReadinessProbe>)probe
                                           launcher:(nullable id<A2JITExternalToolLauncher>)launcher
                                  pairingFileStore:(nullable A2JITPairingFileStore *)store;
+
+/// ★[JIT-AUTOPAIR-1] 装配用★：在上一版基础上，把自动配对（iOS 27+）的【前置条件】与
+/// 【RPPairing 引擎】也注入 ① 自动配对 Provider（真机引擎 = Bridge → Natives）。
+/// preconditions / engine 传 nil 时，① 会如实报「前置未确认 / 未接入」，绝不假成功。
++ (NSArray<id<A2JITProvider>> *)providersWithFacts:(A2JITFacts *)facts
+                                      preconditions:(nullable A2JITAutoPairingPreconditions *)preconditions
+                                             engine:(nullable id<A2JITAutoPairingEngine>)engine
+                                              probe:(nullable id<A2JITReadinessProbe>)probe
+                                           launcher:(nullable id<A2JITExternalToolLauncher>)launcher
+                                  pairingFileStore:(nullable A2JITPairingFileStore *)store;
 
 /// 重新评估环境并推进状态（★不触发 JIT 开启★）。用于设置页出现 / App 回前台。
 - (void)refreshState;

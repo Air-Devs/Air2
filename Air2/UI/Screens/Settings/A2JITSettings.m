@@ -34,14 +34,18 @@
 #import "A2JITStrategySelector.h"
 #import "A2JITProvider.h"
 #import "A2JITImportedPairingProvider.h"
+#import "A2JITAutomaticPairingProvider.h"
 #import "A2JITExternalToolProvider.h"
 #import "A2JITReadinessProbe.h"
 #import "A2JITExternalToolLauncher.h"
 #import "A2JITPairingFileStore.h"
 #import "A2JITVerdictGuidance.h"
+#import "A2JITAutoPairing.h"
+#import "A2JITAutoPairingGuidance.h"
 #import "A2JITStrings.h"
 #import "A2JITSystemToolLauncher.h"
 #import "A2JITEnvironmentProbe.h"
+#import "A2JITAutoPairingEngineBridge.h"
 #import "A2Toast.h"
 
 #import <UIKit/UIKit.h>
@@ -89,11 +93,14 @@
 @property (nonatomic, strong) A2JITCoordinator *coordinator;
 @property (nonatomic, strong) A2JITPairingFileStore *store;
 @property (nonatomic, strong, nullable) id<A2JITReadinessProbe> probe;
+/// [JIT-AUTOPAIR-1] ① 自动配对 Provider（用于显示前置 / 新鲜度 / 失败分类）。
+@property (nonatomic, strong, nullable) A2JITAutomaticPairingProvider *autoProvider;
 
 // 行（section 持有它们；这里只用弱引用，避免与行内 block 形成环）
 @property (nonatomic, weak, nullable) A2SettingsRow *statusRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *strategyRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *nextRow;
+@property (nonatomic, weak, nullable) A2SettingsRow *autopairRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *importRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *toolRow;
 @property (nonatomic, weak, nullable) A2SettingsRow *evidenceRow;
@@ -103,6 +110,8 @@
 - (void)apply;
 /// 起系统文档选择器挑选配对文件。
 - (void)presentImportPicker;
+/// [JIT-AUTOPAIR-1] 后台队列开展自动配对（有界），完成后回主线程刷新。
+- (void)runAutoPair;
 /// 后台队列开启 JIT（有界等待），完成后回主线程刷新。
 - (void)runEnable;
 
@@ -143,6 +152,9 @@
     self.strategyRow.subtitle = [NSString stringWithFormat:@"iOS %ld.%ld",
                                  (long)self.facts.osMajorVersion, (long)self.facts.osMinorVersion];
 
+    // ---- [JIT-AUTOPAIR-1] 自动配对（iOS 27+ 推荐）----
+    [self applyAutopairRowForDecision:decision];
+
     // ---- 判据取证（失败原因★按 verdict 分流★）----
     A2JITReadinessVerdict verdict = [self currentVerdict];
     self.evidenceRow.valueText = [self text:[A2JITVerdictGuidance reasonKeyForVerdict:verdict]];
@@ -177,6 +189,48 @@
     BOOL canEnable = self.coordinator.hasActiveProvider && decision.strategy != A2JITStrategyUnavailable;
     self.enableRow.enabled = canEnable;
     self.enableRow.subtitle = [self text:canEnable ? @"jit.row.enable.ready" : @"jit.row.enable.noPath"];
+}
+
+// ---- [JIT-AUTOPAIR-1] 自动配对行的文案与启用态（按策略 / 前置 / blocker 分流）----
+- (void)applyAutopairRowForDecision:(A2JITStrategyDecision *)decision {
+    BOOL applicable = (decision.strategy == A2JITStrategyAutomatic);
+    A2JITAutomaticPairingProvider *ap = self.autoProvider;
+
+    if (!applicable) {
+        // 仅 iOS 27+ 适用：其它档位置灰并写明原因（不做成点了没反应的按钮）。
+        self.autopairRow.enabled = NO;
+        self.autopairRow.valueText = @"";
+        self.autopairRow.subtitle = [self text:@"jit.row.autopair.notApplicable"];
+        return;
+    }
+
+    self.autopairRow.enabled = YES;
+    self.autopairRow.valueText = [self text:@"jit.row.autopair.recommended"];
+
+    if (ap.isPairingReady) {
+        self.autopairRow.subtitle = [self text:@"jit.row.autopair.ready"];
+        return;
+    }
+
+    // 前置未满足 / 未确认 ⇒ ★缺哪项说哪项★（不谎报为「可用」）。
+    NSNumber *blocking = [ap firstBlockingPrecondition];
+    if (blocking) {
+        A2JITAutoPairingPrecondition pc = (A2JITAutoPairingPrecondition)blocking.integerValue;
+        NSString *name = [self text:[A2JITAutoPairingGuidance nameKeyForPrecondition:pc]];
+        self.autopairRow.subtitle = [NSString stringWithFormat:@"%@%@",
+                                     [self text:@"jit.row.autopair.precondMissing"], name];
+        return;
+    }
+
+    // 上次开展失败的分类（按 blocker 分流，不写万能文案）。
+    if (ap.lastBlocker != A2JITAutoPairingBlockerNone) {
+        NSString *reason = [self text:[A2JITAutoPairingGuidance reasonKeyForBlocker:ap.lastBlocker]];
+        NSString *action = [self text:[A2JITAutoPairingGuidance actionKeyForBlocker:ap.lastBlocker]];
+        self.autopairRow.subtitle = [NSString stringWithFormat:@"%@；%@", reason, action];
+        return;
+    }
+
+    self.autopairRow.subtitle = [self text:@"jit.row.autopair.needRun"];
 }
 
 - (NSString *)nextActionTextForVerdict:(A2JITReadinessVerdict)verdict
@@ -280,6 +334,35 @@
     });
 }
 
+#pragma mark [JIT-AUTOPAIR-1] 自动配对（后台队列 + 有界）
+
+- (void)runAutoPair {
+    UIViewController *host = self.host;
+    NSString *running = [self text:@"jit.toast.autopairing"];
+    NSString *okText = [self text:@"jit.toast.autopairOK"];
+    NSString *failText = [self text:@"jit.toast.autopairFail"];
+    [A2Toast show:running inView:host.view];
+
+    A2JITCoordinator *coordinator = self.coordinator;
+    __weak typeof(self) weakSelf = self;
+    // ★必须在后台队列★：自动配对要「发现 → RSD → pair-verify → TLS-PSK → 写文件」（有界），
+    // 在主线程会直接卡住界面（Provider 侧也有主线程收紧预算的保护）。
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSError *err = nil;
+        BOOL ok = [coordinator acquirePairingWithError:&err];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            NSString *head = ok ? okText : failText;
+            NSString *detail = ok ? @"" : [NSString stringWithFormat:@"：%@",
+                                           err.localizedDescription ?: coordinator.statusDetail];
+            NSLog(@"[A2JIT] autopair 结果 ok=%d state=%@ detail=%@",
+                  (int)ok, [A2JITStateMachine displayNameForState:coordinator.state],
+                  err.localizedDescription ?: coordinator.statusDetail);
+            [A2Toast show:[NSString stringWithFormat:@"%@%@", head, detail] inView:host.view];
+            [weakSelf apply];
+        });
+    });
+}
+
 @end
 
 #pragma mark - 面板
@@ -299,19 +382,38 @@
     // ★判据内核★：Bridge → Natives/Support/A2JITEnvironment（真发 brk #0x69 + 区域取证）。
     A2JITEnvironmentProbe *probe = [[A2JITEnvironmentProbe alloc] init];
 
+    // ★[JIT-AUTOPAIR-1] 自动配对（iOS 27+）引擎 + 前置条件★：真机引擎 = Bridge → Natives；
+    // 本单为【骨架】：engineAvailable=NO 且前置全 Unknown ⇒ Provider 会【如实】报「未接入 / 未确认」，
+    // 绝不假成功（RPPairing 真实现见 docs/JIT-PROVISIONING.md §4.2）。
+    A2JITAutoPairingEngineBridge *autoEngine = [[A2JITAutoPairingEngineBridge alloc] init];
+    A2JITAutoPairingPreconditions *preconditions = [autoEngine readPreconditions];
+
     NSArray<id<A2JITProvider>> *providers = [A2JITCoordinator providersWithFacts:facts
+                                                                  preconditions:preconditions
+                                                                         engine:autoEngine
                                                                           probe:probe
                                                                        launcher:launcher
                                                               pairingFileStore:store];
     A2JITCoordinator *coordinator = [[A2JITCoordinator alloc] initWithFacts:facts providers:providers];
 
-    NSLog(@"[A2JIT] 装配完成：strategy=%@ state=%@ 外部工具=%@ 配对文件=%@",
+    // 取回 ① 自动配对 Provider（面板要显示它的前置 / 新鲜度 / 失败分类）。
+    A2JITAutomaticPairingProvider *autoProvider = nil;
+    for (id<A2JITProvider> p in providers) {
+        if (p.kind == A2JITProviderKindAutomaticPairing) {
+            autoProvider = (A2JITAutomaticPairingProvider *)p;
+            break;
+        }
+    }
+
+    NSLog(@"[A2JIT] 装配完成：strategy=%@ state=%@ 外部工具=%@ 配对文件=%@ 自动配对=%@",
           [A2JITStrategySelector displayNameForStrategy:[A2JITStrategySelector strategyForFacts:facts]],
           [A2JITStateMachine displayNameForState:coordinator.state],
           facts.hasExternalEnablerInstalled ? @"已安装" : @"未安装",
-          store.hasUsablePairingFile ? @"已导入" : @"未导入");
+          store.hasUsablePairingFile ? @"已导入" : @"未导入",
+          autoProvider ? (autoProvider.canGeneratePairingFile ? @"可生成" : @"未就绪") : @"无");
 
-    return [self buildWithHost:host facts:facts coordinator:coordinator store:store probe:probe launcher:launcher];
+    return [self buildWithHost:host facts:facts coordinator:coordinator store:store
+                         probe:probe launcher:launcher autoProvider:autoProvider];
 }
 
 /// 可注入重载（单测 / 装配处可传自制事实、编排器、存储、判据与拉起器）。
@@ -320,13 +422,15 @@
                          coordinator:(A2JITCoordinator *)coordinator
                                store:(A2JITPairingFileStore *)store
                                probe:(nullable id<A2JITReadinessProbe>)probe
-                            launcher:(nullable id<A2JITExternalToolLauncher>)launcher {
+                            launcher:(nullable id<A2JITExternalToolLauncher>)launcher
+                        autoProvider:(nullable A2JITAutomaticPairingProvider *)autoProvider {
     A2JITPanelPresenter *presenter = [[A2JITPanelPresenter alloc] init];
     presenter.host = host;
     presenter.facts = facts;
     presenter.coordinator = coordinator;
     presenter.store = store;
     presenter.probe = probe;
+    presenter.autoProvider = autoProvider;
     (void)launcher;   // 拉起器只被 Provider 使用；此处保留形参便于装配处换实现。
 
     A2JITStrategyDecision *decision = [A2JITStrategySelector decisionForFacts:facts];
@@ -356,6 +460,12 @@
     evidenceRow.title = [A2JITStrings stringForKey:@"jit.row.evidence"];
     [section addRow:evidenceRow];
 
+    A2SettingsRow *autopairRow = [[A2SettingsRow alloc] init];
+    autopairRow.symbolName = @"wand.and.stars";
+    autopairRow.title = [A2JITStrings stringForKey:@"jit.row.autopair"];
+    autopairRow.accessory = A2SettingsRowAccessoryDisclosure;
+    [section addRow:autopairRow];
+
     A2SettingsRow *importRow = [[A2SettingsRow alloc] init];
     importRow.symbolName = @"doc.badge.plus";
     importRow.title = [A2JITStrings stringForKey:@"jit.row.import"];
@@ -376,12 +486,16 @@
     presenter.strategyRow = strategyRow;
     presenter.nextRow = nextRow;
     presenter.evidenceRow = evidenceRow;
+    presenter.autopairRow = autopairRow;
     presenter.importRow = importRow;
     presenter.toolRow = toolRow;
     presenter.enableRow = enableRow;
 
     // ---- 交互 ----
     __weak typeof(presenter) weakPresenter = presenter;
+    autopairRow.onTap = ^{
+        [weakPresenter runAutoPair];
+    };
     importRow.onTap = ^{
         [weakPresenter presentImportPicker];
     };

@@ -97,11 +97,31 @@ static NSString *const A2JITCoordinatorErrorDomain = @"A2JITCoordinatorError";
                                              probe:(nullable id<A2JITReadinessProbe>)probe
                                           launcher:(nullable id<A2JITExternalToolLauncher>)launcher
                                  pairingFileStore:(nullable A2JITPairingFileStore *)store {
+    // [JIT-AUTOPAIR-1] 旧签名等价于「不注入自动配对前置/引擎」⇒ ① 会如实报未确认/未接入。
+    return [self providersWithFacts:facts
+                      preconditions:nil
+                             engine:nil
+                              probe:probe
+                           launcher:launcher
+                  pairingFileStore:store];
+}
+
++ (NSArray<id<A2JITProvider>> *)providersWithFacts:(A2JITFacts *)facts
+                                      preconditions:(nullable A2JITAutoPairingPreconditions *)preconditions
+                                             engine:(nullable id<A2JITAutoPairingEngine>)engine
+                                              probe:(nullable id<A2JITReadinessProbe>)probe
+                                           launcher:(nullable id<A2JITExternalToolLauncher>)launcher
+                                  pairingFileStore:(nullable A2JITPairingFileStore *)store {
     NSParameterAssert(facts);
     // ★[JIT-IMPL-2]★ 判据内核（probe）同时注入 ② 导入 / ③ 外部 / ④ 内核三条路径：
     // 它们都要靠 A2JITEnvironment 的真实判据说话，而不是靠「能力声明」。
+    // ★[JIT-AUTOPAIR-1]★ ① 自动配对另注入前置条件与 RPPairing 引擎（真机 = Bridge → Natives）。
     A2JITPairingFileStore *fileStore = store ?: [A2JITPairingFileStore defaultStore];
-    return @[ [[A2JITAutomaticPairingProvider alloc] initWithFacts:facts],
+    return @[ [[A2JITAutomaticPairingProvider alloc] initWithFacts:facts
+                                                     preconditions:preconditions
+                                                            engine:engine
+                                                             store:fileStore
+                                                             probe:probe],
               [[A2JITImportedPairingProvider alloc] initWithFacts:facts store:fileStore probe:probe],
               [[A2JITExternalToolProvider alloc] initWithFacts:facts
                                                       launcher:launcher

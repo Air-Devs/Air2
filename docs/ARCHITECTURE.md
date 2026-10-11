@@ -247,3 +247,18 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 
 **启动链开关（Debug）**：设置 → 诊断 → 「运行环境 · 启动链」（写 `NSUserDefaults` key `debug.rt_p1_runtime`）。
 ADR 见 `docs/DECISIONS.md` ADR-007 / ADR-008 / ADR-009。
+
+### iOS 27+ 自动配对（自研 RPPairing）—— [JIT-AUTOPAIR-1]
+
+依赖严格单向（App → UI → Player → Core → Bridge → Natives）；★Bridge 是唯一与 Natives 相邻的层★，
+真 RPPairing（Bonjour / RSD / pair-verify / TLS-PSK）的落点只能在这里 → Natives。
+
+| 文件 | 层 | 职责 |
+|---|---|---|
+| `Air2/Player/A2JITAutoPairing.[hm]` | Player | 自动配对类型（前置条件 4 项 / 步骤 / 阻塞分类）+ `A2JITAutoPairingPreconditions`（三态值对象）+ `A2JITAutoPairingEngine` 注入缝 |
+| `Air2/Player/A2JITAutoPairingGuidance.[hm]` | Player | 自动配对分流表：blocker → 现有 `A2JITFailureReason` / 本地化 key / 诊断名 / 日志行 |
+| `Air2/Player/A2JITAutomaticPairingProvider.[hm]` | Player | ① 自动配对 Provider 真实现（能力 / 前置 / 新鲜度 / ★有界★生成调用点 / 真调判据复验） |
+| `Air2/Bridge/A2JITAutoPairingEngineBridge.[hm]` | **Bridge** | RPPairing 引擎接线点骨架（本阶段如实报「未接入」；真实现见 `docs/JIT-PROVISIONING.md` §4.2） |
+
+**来源**：`docs/JIT-PROVISIONING.md` §1.2 / §3.3；许可口径见 `docs/DEPENDENCIES.md`「JIT 自动配对」节
+（★自研；只参考 SideInstaller 思路、未用其代码★）。

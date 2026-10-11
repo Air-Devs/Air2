@@ -247,6 +247,277 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
             @"en": @"Enable failed",
             @"ja": @"有効化に失敗しました",
         },
+
+        // ------------- [JIT-AUTOPAIR-1] 自动配对（iOS 27+，自研 RPPairing） -------------
+        // 行
+        @"jit.row.autopair": @{
+            @"zh-Hans": @"自动配对",
+            @"zh-Hant": @"自動配對",
+            @"en": @"Auto pairing",
+            @"ja": @"自動ペアリング",
+        },
+        @"jit.row.autopair.recommended": @{
+            @"zh-Hans": @"推荐",
+            @"zh-Hant": @"推薦",
+            @"en": @"Recommended",
+            @"ja": @"推奨",
+        },
+        @"jit.row.autopair.ready": @{
+            @"zh-Hans": @"配对文件已就绪（新鲜）",
+            @"zh-Hant": @"配對檔已就緒（新鮮）",
+            @"en": @"Pairing file ready (fresh)",
+            @"ja": @"ペアリングファイルは準備済み（新しい）",
+        },
+        @"jit.row.autopair.needRun": @{
+            @"zh-Hans": @"点此在本机自动生成配对文件（无需 PC）",
+            @"zh-Hant": @"點此在本機自動產生配對檔（無需 PC）",
+            @"en": @"Tap to generate the pairing file on-device (no PC)",
+            @"ja": @"タップして端末内でペアリングファイルを生成します（PC 不要）",
+        },
+        @"jit.row.autopair.notApplicable": @{
+            @"zh-Hans": @"仅 iOS 27+ 适用",
+            @"zh-Hant": @"僅 iOS 27+ 適用",
+            @"en": @"Applies to iOS 27+ only",
+            @"ja": @"iOS 27 以降のみ対象です",
+        },
+        @"jit.row.autopair.precondMissing": @{
+            @"zh-Hans": @"前置未满足：%@",
+            @"zh-Hant": @"前置未滿足：%@",
+            @"en": @"Precondition unmet: %@",
+            @"ja": @"前提条件が未達：%@",
+        },
+        // 前置条件名 / 判定态
+        @"jit.autopair.precond.developerMode": @{
+            @"zh-Hans": @"Developer Mode（开发者模式）",
+            @"zh-Hant": @"Developer Mode（開發者模式）",
+            @"en": @"Developer Mode",
+            @"ja": @"Developer Mode",
+        },
+        @"jit.autopair.precond.localNetwork": @{
+            @"zh-Hans": @"本地网络权限",
+            @"zh-Hant": @"本機網路權限",
+            @"en": @"Local Network permission",
+            @"ja": @"ローカルネットワーク権限",
+        },
+        @"jit.autopair.precond.getTaskAllow": @{
+            @"zh-Hans": @"get-task-allow 签名",
+            @"zh-Hant": @"get-task-allow 簽章",
+            @"en": @"get-task-allow entitlement",
+            @"ja": @"get-task-allow 署名",
+        },
+        @"jit.autopair.precond.ddi": @{
+            @"zh-Hans": @"DDI（Developer Disk Image）",
+            @"zh-Hant": @"DDI（Developer Disk Image）",
+            @"en": @"DDI (Developer Disk Image)",
+            @"ja": @"DDI（Developer Disk Image）",
+        },
+        @"jit.autopair.precond.satisfied": @{
+            @"zh-Hans": @"已满足",
+            @"zh-Hant": @"已滿足",
+            @"en": @"Met",
+            @"ja": @"満たしています",
+        },
+        @"jit.autopair.precond.unsatisfied": @{
+            @"zh-Hans": @"未满足",
+            @"zh-Hant": @"未滿足",
+            @"en": @"Unmet",
+            @"ja": @"満たしていません",
+        },
+        @"jit.autopair.precond.unknown": @{
+            @"zh-Hans": @"无法确认",
+            @"zh-Hant": @"無法確認",
+            @"en": @"Unconfirmed",
+            @"ja": @"確認できません",
+        },
+        // 阻塞 / 失败分类：原因
+        @"jit.autopair.blocker.none.reason": @{
+            @"zh-Hans": @"无阻塞",
+            @"zh-Hant": @"無阻塞",
+            @"en": @"No blocker",
+            @"ja": @"ブロックなし",
+        },
+        @"jit.autopair.blocker.systemTooOld.reason": @{
+            @"zh-Hans": @"本机系统低于 iOS 27：设备内自动配对不适用",
+            @"zh-Hant": @"本機系統低於 iOS 27：裝置內自動配對不適用",
+            @"en": @"System is below iOS 27: in-device auto pairing does not apply",
+            @"ja": @"本機は iOS 27 未満：端末内の自動ペアリングは対象外です",
+        },
+        @"jit.autopair.blocker.developerMode.reason": @{
+            @"zh-Hans": @"Developer Mode 未开启",
+            @"zh-Hant": @"Developer Mode 未開啟",
+            @"en": @"Developer Mode is off",
+            @"ja": @"Developer Mode がオフです",
+        },
+        @"jit.autopair.blocker.localNetwork.reason": @{
+            @"zh-Hans": @"未授予本地网络权限",
+            @"zh-Hant": @"未授予本機網路權限",
+            @"en": @"Local Network permission not granted",
+            @"ja": @"ローカルネットワークの権限がありません",
+        },
+        @"jit.autopair.blocker.getTaskAllow.reason": @{
+            @"zh-Hans": @"签名缺少 get-task-allow",
+            @"zh-Hant": @"簽章缺少 get-task-allow",
+            @"en": @"Signature lacks get-task-allow",
+            @"ja": @"署名に get-task-allow がありません",
+        },
+        @"jit.autopair.blocker.ddi.reason": @{
+            @"zh-Hans": @"缺少 DDI（首次需联网获取）",
+            @"zh-Hant": @"缺少 DDI（首次需連網取得）",
+            @"en": @"DDI missing (first run needs network)",
+            @"ja": @"DDI がありません（初回はネット接続が必要）",
+        },
+        @"jit.autopair.blocker.precondUnknown.reason": @{
+            @"zh-Hans": @"前置条件无法确认（探测未接入）",
+            @"zh-Hant": @"前置條件無法確認（探測未接入）",
+            @"en": @"Preconditions unconfirmed (probe not wired)",
+            @"ja": @"前提条件を確認できません（検出は未接続）",
+        },
+        @"jit.autopair.blocker.engineUnavailable.reason": @{
+            @"zh-Hans": @"RPPairing 引擎未接入",
+            @"zh-Hant": @"RPPairing 引擎未接入",
+            @"en": @"RPPairing engine not wired in",
+            @"ja": @"RPPairing エンジンは未接続です",
+        },
+        @"jit.autopair.blocker.discovery.reason": @{
+            @"zh-Hans": @"未发现 RSD 广播（Bonjour）",
+            @"zh-Hant": @"未發現 RSD 廣播（Bonjour）",
+            @"en": @"No RSD advertisement found (Bonjour)",
+            @"ja": @"RSD の広告（Bonjour）が見つかりません",
+        },
+        @"jit.autopair.blocker.rsd.reason": @{
+            @"zh-Hans": @"RSD 端口连接失败",
+            @"zh-Hant": @"RSD 連接埠連線失敗",
+            @"en": @"Failed to connect to the RSD port",
+            @"ja": @"RSD ポートへの接続に失敗しました",
+        },
+        @"jit.autopair.blocker.pairVerify.reason": @{
+            @"zh-Hans": @"pair-verify 失败",
+            @"zh-Hant": @"pair-verify 失敗",
+            @"en": @"pair-verify failed",
+            @"ja": @"pair-verify に失敗しました",
+        },
+        @"jit.autopair.blocker.tunnel.reason": @{
+            @"zh-Hans": @"TLS-PSK 隧道建立失败",
+            @"zh-Hant": @"TLS-PSK 通道建立失敗",
+            @"en": @"Failed to establish the TLS-PSK tunnel",
+            @"ja": @"TLS-PSK トンネルの確立に失敗しました",
+        },
+        @"jit.autopair.blocker.write.reason": @{
+            @"zh-Hans": @"配对文件写出失败",
+            @"zh-Hant": @"配對檔寫出失敗",
+            @"en": @"Failed to write the pairing file",
+            @"ja": @"ペアリングファイルの書き出しに失敗しました",
+        },
+        @"jit.autopair.blocker.stale.reason": @{
+            @"zh-Hans": @"配对文件已过期（超过 7 天窗口）",
+            @"zh-Hant": @"配對檔已過期（超過 7 天視窗）",
+            @"en": @"Pairing file is stale (beyond the 7-day window)",
+            @"ja": @"ペアリングファイルが期限切れです（7 日超）",
+        },
+        // 阻塞 / 失败分类：下一步动作
+        @"jit.autopair.blocker.none.action": @{
+            @"zh-Hans": @"可以继续",
+            @"zh-Hant": @"可以繼續",
+            @"en": @"You can proceed",
+            @"ja": @"そのまま進めます",
+        },
+        @"jit.autopair.blocker.systemTooOld.action": @{
+            @"zh-Hans": @"改用导入配对文件或外部工具",
+            @"zh-Hant": @"改用匯入配對檔或外部工具",
+            @"en": @"Use an imported pairing file or an external tool",
+            @"ja": @"ペアリングファイルの取り込みか外部ツールを使います",
+        },
+        @"jit.autopair.blocker.developerMode.action": @{
+            @"zh-Hans": @"在「设置 → 隐私与安全性 → 开发者模式」打开并重启设备",
+            @"zh-Hant": @"在「設定 → 隱私權與安全性 → 開發者模式」開啟並重新啟動裝置",
+            @"en": @"Enable it in Settings → Privacy & Security → Developer Mode, then reboot",
+            @"ja": @"「設定 → プライバシーとセキュリティ → デベロッパモード」で有効化し、再起動します",
+        },
+        @"jit.autopair.blocker.localNetwork.action": @{
+            @"zh-Hans": @"在「设置 → Air2 → 本地网络」允许访问",
+            @"zh-Hant": @"在「設定 → Air2 → 本機網路」允許存取",
+            @"en": @"Allow it in Settings → Air2 → Local Network",
+            @"ja": @"「設定 → Air2 → ローカルネットワーク」で許可します",
+        },
+        @"jit.autopair.blocker.getTaskAllow.action": @{
+            @"zh-Hans": @"改用带 get-task-allow 的签名（免费/开发签名默认具备）后重装",
+            @"zh-Hant": @"改用含 get-task-allow 的簽章（免費/開發簽章預設具備）後重新安裝",
+            @"en": @"Reinstall with a signature that has get-task-allow (free/dev signing has it by default)",
+            @"ja": @"get-task-allow を含む署名（無料/開発署名は既定で付与）で入れ直します",
+        },
+        @"jit.autopair.blocker.ddi.action": @{
+            @"zh-Hans": @"连接网络后重试，让系统获取 Developer Disk Image",
+            @"zh-Hant": @"連接網路後重試，讓系統取得 Developer Disk Image",
+            @"en": @"Go online and retry so the system can fetch the Developer Disk Image",
+            @"ja": @"ネット接続後に再試行し、Developer Disk Image を取得させます",
+        },
+        @"jit.autopair.blocker.precondUnknown.action": @{
+            @"zh-Hans": @"本版本尚未接入前置探测；可先用导入配对文件",
+            @"zh-Hant": @"本版本尚未接入前置探測；可先用匯入配對檔",
+            @"en": @"This build has no precondition probe yet; import a pairing file for now",
+            @"ja": @"この版には前提検出がまだありません。当面はペアリングファイルを取り込みます",
+        },
+        @"jit.autopair.blocker.engineUnavailable.action": @{
+            @"zh-Hans": @"自动配对属下一阶段；本机请先用「导入配对文件」或外部工具",
+            @"zh-Hant": @"自動配對屬下一階段；本機請先用「匯入配對檔」或外部工具",
+            @"en": @"Auto pairing lands next phase; for now use an imported pairing file or an external tool",
+            @"ja": @"自動ペアリングは次段階です。当面はペアリングファイルの取り込みか外部ツールを使います",
+        },
+        @"jit.autopair.blocker.discovery.action": @{
+            @"zh-Hans": @"确认本地网络权限已开，并让设备与自身处在同一网络后重试",
+            @"zh-Hant": @"確認本機網路權限已開，並讓裝置與自身處於同一網路後重試",
+            @"en": @"Make sure Local Network is allowed and the device is on the same network, then retry",
+            @"ja": @"ローカルネットワークの許可と同じネットワーク上にいることを確認して再試行します",
+        },
+        @"jit.autopair.blocker.rsd.action": @{
+            @"zh-Hans": @"确认 Developer Mode 已开并重试；仍失败请改用导入配对文件",
+            @"zh-Hant": @"確認 Developer Mode 已開並重試；仍失敗請改用匯入配對檔",
+            @"en": @"Verify Developer Mode is on and retry; if it still fails, import a pairing file",
+            @"ja": @"Developer Mode が有効か確認して再試行します。なお失敗する場合はペアリングファイルを取り込みます",
+        },
+        @"jit.autopair.blocker.pairVerify.action": @{
+            @"zh-Hans": @"删除旧的配对材料后重试；仍失败请改用导入配对文件",
+            @"zh-Hant": @"刪除舊的配對材料後重試；仍失敗請改用匯入配對檔",
+            @"en": @"Remove stale pairing material and retry; if it still fails, import a pairing file",
+            @"ja": @"古いペアリング材料を削除して再試行します。なお失敗する場合はペアリングファイルを取り込みます",
+        },
+        @"jit.autopair.blocker.tunnel.action": @{
+            @"zh-Hans": @"确认本地网络权限与 Developer Mode 后重试",
+            @"zh-Hant": @"確認本機網路權限與 Developer Mode 後重試",
+            @"en": @"Verify Local Network permission and Developer Mode, then retry",
+            @"ja": @"ローカルネットワーク権限と Developer Mode を確認して再試行します",
+        },
+        @"jit.autopair.blocker.write.action": @{
+            @"zh-Hans": @"确认设备存储空间充足后重试",
+            @"zh-Hant": @"確認裝置儲存空間充足後重試",
+            @"en": @"Make sure there is enough storage, then retry",
+            @"ja": @"ストレージの空きを確認して再試行します",
+        },
+        @"jit.autopair.blocker.stale.action": @{
+            @"zh-Hans": @"重新自动配对，或重新导入一份配对文件",
+            @"zh-Hant": @"重新自動配對，或重新匯入一份配對檔",
+            @"en": @"Auto pair again, or import a fresh pairing file",
+            @"ja": @"自動ペアリングをやり直すか、新しいファイルを取り込みます",
+        },
+        // 提示
+        @"jit.toast.autopairing": @{
+            @"zh-Hans": @"正在自动配对…",
+            @"zh-Hant": @"正在自動配對…",
+            @"en": @"Auto pairing…",
+            @"ja": @"自動ペアリング中…",
+        },
+        @"jit.toast.autopairOK": @{
+            @"zh-Hans": @"自动配对完成",
+            @"zh-Hant": @"自動配對完成",
+            @"en": @"Auto pairing completed",
+            @"ja": @"自動ペアリングが完了しました",
+        },
+        @"jit.toast.autopairFail": @{
+            @"zh-Hans": @"自动配对失败",
+            @"zh-Hant": @"自動配對失敗",
+            @"en": @"Auto pairing failed",
+            @"ja": @"自動ペアリングに失敗しました",
+        },
         };
     });
     return table;

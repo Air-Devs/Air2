@@ -146,7 +146,7 @@ Provider 自报不可用 ⇒ 最终 `Unavailable`。这是**如实口径**，不
 
 | Provider | `isAvailable` | `isPairingReady` | 适用策略 |
 |---|---|---|---|
-| `A2JITAutomaticPairingProvider` | `supportsAutomaticPairing`（≥27） | 占位 NO（自动生成未接） | `Automatic` |
+| `A2JITAutomaticPairingProvider` | `supportsAutomaticPairing`（≥27） | ★[JIT-AUTOPAIR-1] 真探测★：容器里有一份【新鲜】的可用配对文件 ⇒ YES；否则 NO（`preparePairing` 会先查前置条件、再（有界）尝试生成） | `Automatic` |
 | `A2JITImportedPairingProvider` | `supportsRemoteDebugJIT`（≥17.4） | ★真探测★ `A2JITPairingFileStore.hasUsablePairingFile`（容器约定位置找 + 解析） | `BuiltInManual` / `Automatic` / `ImportedExternal` |
 | `A2JITExternalToolProvider` | ★`supportsRemoteDebugJIT && hasExternalEnablerInstalled`★（未安装 ⇒ 不可用，编排层不选、设置页置灰写「未安装」） | `hasExternalEnablerInstalled` | `BuiltInManual` / `Automatic` / `ImportedExternal` |
 | `A2JITKernelJITProvider` | `hasKernelJITEnvironment` | = `isAvailable`（无需配对） | `Kernel` |
@@ -207,7 +207,8 @@ UI（启动按钮）
 （返回 NO + 可读原因），因此本单**不会真正开启 JIT**；带来的是：**分级策略可判定、状态机可跑、
 回退顺序可观测、UI 文案可按原因分流**。
 （★[JIT-IMPL-2] 已把 ②导入 / ③外部 / ④内核 三条路径改为真实现，见 §3.2；
-① 自动配对仍为占位★。）
+★[JIT-AUTOPAIR-1] 已把 ① 自动配对 从「占位」改为【真能力探测 + 前置条件检查 + 配对文件新鲜度】，
+见 §3.3 —— 但真正的 RPPairing 握手（RSD + pair-verify + TLS-PSK）仍是【骨架】，如实报未接入★。）
 
 ### 3.1【JIT-IMPL】纯逻辑件实现 + 单测（后续一轮）
 
@@ -255,6 +256,31 @@ UI（启动按钮）
 （ExtensionKit XPC，§4.1）、内核级 JIT 的真实启用、TrollStore 自开 JIT，
 以及 `A2JITEnvironment` 判据语义的任何改动。
 
+### 3.3【JIT-AUTOPAIR-1】iOS 27+ 自动配对（自研 RPPairing）—— 第一阶段
+
+把 ① 自动配对 从「占位」做成【真能力探测 + 前置条件检查 + 配对文件新鲜度 + 有界生成调用点】。
+★本阶段**不做**真正的 RPPairing 握手★（Bonjour 广告 / RSD / pair-verify / TLS-PSK 属 §4.2，下一阶段）；
+引擎在仓内以【Bridge 骨架】如实报「未接入」，★绝不假成功★。
+
+| 文件 | 层 | 变更 |
+|---|---|---|
+| `Air2/Player/A2JITAutoPairing.h/.m` | Player | **新增**：类型（前置条件 4 项 / 步骤 6 步 / 阻塞分类 14 档）+ `A2JITAutoPairingPreconditions`（三态值对象）+ `A2JITAutoPairingEngine` 协议（注入缝）|
+| `Air2/Player/A2JITAutoPairingGuidance.h/.m` | Player | **新增**：自动配对分流表（blocker → 现有 `A2JITFailureReason` / 本地化 key / 稳定诊断名 / 日志行）|
+| `Air2/Player/A2JITAutomaticPairingProvider.h/.m` | Player | **占位 → 真实现**：能力检测（≥27）/ 就绪真探测（新鲜文件）/ 前置条件精确报缺哪项 / ★有界★生成调用点 / 开启时真调判据复验 |
+| `Air2/Bridge/A2JITAutoPairingEngineBridge.h/.m` | **Bridge** | **新增**：RPPairing 引擎的【接线点骨架】——`isEngineAvailable=NO`、`readPreconditions` 全 Unknown、`generate` 返回 `EngineUnavailable`（如实报未接入）|
+| `Air2/Player/A2JITCoordinator.h/.m` | Player | 新增装配工厂 `providersWithFacts:preconditions:engine:probe:launcher:pairingFileStore:`（旧签名等价于 preconditions/engine 传 nil）|
+| `Air2/Player/A2JITStrings.m` | Player | 新增 **44 个 key × 4 语**（自动配对行 / 前置条件名与判定态 / 14 档 blocker 的原因与动作 / 提示）|
+| `Air2/UI/Screens/Settings/A2JITSettings.m` | UI | 新增「自动配对（推荐）」行 + **一键开展**（后台队列）+ 失败按 blocker 分流（四语）|
+| `tests/JIT/*` | tests | 新增 ⑫⑬ 两组（~70 例）：能力/前置/新鲜度/有界生成/★不谎报★/分流表四语/接线不变量 |
+
+★ **「不谎报」的三条硬判据（真机可核对）★**：
+1. 前置条件三态：**Unknown（无法确认）≠ Satisfied（已满足）** —— 探测未接入时报「无法确认」，绝不当作满足；
+2. 引擎未接入 ⇒ 用 `A2JITProviderNotImplementedError`（code=1），与「真实执行失败」（code=2）分开；
+3. 引擎报成功但容器里没有可解析的配对文件 ⇒ **不视为成功**（报 `WriteFailed`）。
+
+★ **仍未做（属 §4.2 下一阶段）★**：Bonjour 广告与设备发现、RSD 连接、pair-verify、
+TLS-PSK 隧道、DDI 真取用、`readPreconditions` 的真读实现（Developer Mode / 本地网络 / DDI）。
+
 ---
 
 ## 4. 第二阶段工作拆分与工作量估算（★本单不实现★）
@@ -287,6 +313,11 @@ UI（启动按钮）
 
 ★★ **必须避开 SideInstaller 代码**（自定义许可：非商业 + 禁止再分发官方构建）——
 只可参考「协议与思路」，**不得抄任何代码/常量**。
+
+★ **进度（[JIT-AUTOPAIR-1]，§3.3）**：本节的**前置条件 + 能力探测 + 配对文件新鲜度 +
+有界生成调用点**已落第一阶段（引擎以 Bridge 骨架如实报「未接入」）；
+**尚未做**的是 4.2-a（RSD/TLS-PSK 握手）、4.2-b 的真读（Developer Mode / 本地网络 / DDI）与 4.2-d/e。
+★本节不动分级口径：iOS 27+ 仍= `A2JITStrategyAutomatic`（与 `Air2/Player/A2JITStrategySelector.m` 同改）★。
 
 ### 4.3 ③ iOS 17 / 18 导入 UI + 外部工具拉起
 

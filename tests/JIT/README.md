@@ -13,9 +13,14 @@
 - **`[JIT-IMPL-2]`** `A2JITPairingFileStore` —— 导入落盘 + 元数据（来源/时间/SHA-256）+ 拒垃圾；
 - **`[JIT-IMPL-2]`** `A2JITExternalToolProvider` —— 拉起 + **有界等待** + 轮询判据（含超时即失败）；
 - **`[JIT-IMPL-2]`** `A2JITImportedPairingProvider` —— 就绪真探测 + **真调判据**（注入假 probe）；
+- **`[JIT-AUTOPAIR-1]`** `A2JITAutomaticPairingProvider` —— 能力检测（仅 27+）+ **前置条件精确报缺哪项** +
+  配对文件**新鲜度** + ★有界★生成调用点 + **不谎报**（引擎未接入 / 报成功但无文件一律失败）；
+- **`[JIT-AUTOPAIR-1]`** `A2JITAutoPairingGuidance` + `A2JITAutoPairingPreconditions` ——
+  14 档 blocker → 现有 `A2JITFailureReason` 的映射、四语分流文案、三态（Unknown≠满足）语义；
 - **`[JIT-IMPL-2]`** 接线不变量 —— `A2JITReadinessVerdict` 与 Natives 的 `A2JITRegionVerdict`
   逐值相等、scheme 清单与 `Air2/Info.plist` 一致、★Player 不得 import Natives 判据头★、
-  Bridge 确实调用了 `A2JITEnvironment`。
+  Bridge 确实调用了 `A2JITEnvironment`；★[JIT-AUTOPAIR-1] 另加：设置页接入自动配对行、
+  Bridge 骨架如实报未接入、Player 不得 import Bridge★。
 
 ## 运行（macOS：需 Xcode 命令行工具的 clang）
 

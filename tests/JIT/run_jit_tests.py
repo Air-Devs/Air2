@@ -44,6 +44,9 @@ SOURCES = [
     os.path.join(PLAYER, "A2JITVerdictGuidance.m"),
     os.path.join(PLAYER, "A2JITStrings.m"),
     os.path.join(PLAYER, "A2JITPairingFileStore.m"),
+    # --- [JIT-AUTOPAIR-1] 自动配对（iOS 27+，自研 RPPairing）的类型 / 前置条件 / 分流表 ---
+    os.path.join(PLAYER, "A2JITAutoPairing.m"),
+    os.path.join(PLAYER, "A2JITAutoPairingGuidance.m"),
     os.path.join(HERE, "jit_logic_tests.m"),
 ]
 

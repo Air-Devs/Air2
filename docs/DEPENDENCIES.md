@@ -106,6 +106,31 @@
 
 ---
 
+## JIT 自动配对（自研 RPPairing）—— [JIT-AUTOPAIR-1]
+
+> iOS 27+ 的「设备内自动配对」= **自研 RPPairing**（RSD + pair-verify + TLS-PSK），
+> ★**本仓零新增第三方依赖、零 vendor**★：本阶段只落【能力探测 + 前置条件 + 配对文件新鲜度 +
+> 有界生成调用点】，真正的握手在下一阶段（`docs/JIT-PROVISIONING.md` §4.2）。
+
+| 名称 | 版本 | 来源 | 许可 | 用途 | 引入方式 |
+|---|---|---|---|---|---|
+| （无） | — | — | — | 本阶段无任何新依赖 | **未引入** |
+
+**合规口径（★必须写清★）**：
+- **自研 RPPairing**：本仓不 vendor 任何第三方 JIT 隧道库；`A2JITAutoPairing` /
+  `A2JITAutoPairingGuidance` / `A2JITAutomaticPairingProvider` / `A2JITAutoPairingEngineBridge`
+  全部为仓内自研，许可随本项目 GPL-3.0-or-later（见 `LICENSE`）。
+- **SideInstaller 只参考思路、未用其代码**：仅参考其「设备内 RPPairing」的**协议思路**
+  （设备发现 → RSD → pair-verify → TLS-PSK → 落配对文件）。
+  ★**未拷贝、未搬运其任何代码/常量/文件**★——其许可为**自定义（非 OSI：非商业 + 禁止再分发官方构建）**，
+  与 GPL/AGPL 兼容性不明，故一律「只参考、不入仓」（见上一节 SideInstaller 行）。
+- 下一阶段若引入 `idevice`(**MIT**) 做 RSD/TLS-PSK，须**先登记本表**再落码，并走「源码 + CI 构建」
+  （★不要搬 PocketJ 的预编译 `libidevice_ffi.a`，约 90 MB★）。
+- **本阶段复核**：未引入 StikJIT(MPL-2.0) / StikDebug(AGPL-3.0) / SideInstaller(禁抄) 的任何代码；
+  未改 `Natives/Support/A2JITEnvironment` 的判据语义。
+
+---
+
 ## Java 侧自研替换（★替掉 Pojav 传承的 Java 类★）—— [OWN-JAVA]
 
 **变更**：启动核心的 **Java 侧整块换成自研**。原 `runtime_native`（Amethyst/Pojav 线）的
