@@ -18,6 +18,68 @@
 #import "a2_launch.h"          // Natives/Context —— facade 与开关（Bridge → Natives 是允许方向）
 #import "a2_resourcepaths.h"   // Natives/Context —— R4 classpath 唯一拼装点
 #import "a2_renderer.h"        // Natives/Renderer —— 渲染后端「选 + 加载」入口（见 docs/ARCHITECTURE.md [RENDER-WIRE]）
+#import "a2_gl_bridge.h"       // Natives/Renderer —— ★GL 桥★：让选中后端真的拿到 surface 并建出 GL 上下文（[GL-BRIDGE]）
+
+// ============================================================================
+//  ★[GL-BRIDGE] 宿主表面采集 + 帧回调★（本文件的私有件；调用点见 +launchWithPlanPath:）
+// ----------------------------------------------------------------------------
+//  为什么在 Bridge：宿主表面来自 UIKit（承载游戏的宿主窗口），而 Core 明文不得 import
+//  UIKit、Player 也不感知 UIKit；Bridge 是启动链唯一与 Natives 相邻的层（同 [LAUNCH-PLAN] 决策 2）。
+//  ★唯一取面点★：将来专用游戏 surface 落地后，只把这里换成
+//   Input 层的中立表面查询面（见 Natives/Input/a2_glfw_window.h）即可（同 [LAUNCH-PLAN-FACTS] 的口径）。
+// ============================================================================
+
+/// 采集宿主表面（★主线程★：UIKit 查询契约要求）。口径与 +currentRuntimeFacts 一致
+/// （宿主窗口 bounds × screen.scale = 像素），字段类型复用 Natives 的中立描述 `A2GlfwSurface`。
+static A2GlfwSurface A2RunnerHostSurface(void) {
+    A2GlfwSurface out = {0};
+    A2GlfwSurface *s = &out;                       // 用指针进块：块捕获的是 const 副本
+    void (^grab)(void) = ^{
+        UIWindowScene *activeScene = nil;
+        for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+            if ([scene isKindOfClass:UIWindowScene.class] &&
+                scene.activationState == UISceneActivationStateForegroundActive) {
+                activeScene = (UIWindowScene *)scene;
+                break;
+            }
+        }
+        UIWindow *host = nil;
+        for (UIWindow *w in activeScene.windows) {
+            if (w.isKeyWindow) { host = w; break; }
+        }
+        if (host == nil) host = activeScene.windows.firstObject;   // 无 key window 时的兜底
+        if (host == nil) return;
+
+        UIScreen *screen = (activeScene.screen != nil) ? activeScene.screen : UIScreen.mainScreen;
+        CGFloat scale = screen.scale;                              // ★与 +currentRuntimeFacts 同口径★
+        CGRect b = host.bounds;
+        UIView *view = host.rootViewController.view ?: (UIView *)host;
+
+        s->nativeView    = (__bridge void *)view;                  // 承载视图（GL 桥会取其 layer）
+        s->nativeWindow  = (__bridge void *)host;
+        s->widthPoints   = (int)lround(b.size.width);
+        s->heightPoints  = (int)lround(b.size.height);
+        s->widthPixels   = (int)lround(b.size.width  * scale);
+        s->heightPixels  = (int)lround(b.size.height * scale);
+        s->contentScaleX = (float)scale;
+        s->contentScaleY = (float)scale;
+        s->pixelFormat   = A2_GLFW_PIXEL_FORMAT_HOST_DEFAULT;
+    };
+    if (NSThread.isMainThread) {
+        grab();
+    } else {
+        dispatch_sync(dispatch_get_main_queue(), grab);
+    }
+    return out;
+}
+
+/// ★帧回调★：GL 桥每帧先做完自己的帧动作（glClear/eglSwapBuffers）再回调本函数。
+/// 这里只做「宿主侧记录」——不碰任何 GL 类型（帧回调是交给桥的中立接口，不是 GL 接口）。
+static void A2RunnerFrameCallback(void *user) {
+    int *counter = (int *)user;
+    if (counter != NULL) (*counter)++;
+    [A2Log log:@"[A2-GLBRIDGE] 宿主帧回调触发（第 %d 帧；钩子已在启动链上）", counter ? *counter : 0];
+}
 
 @implementation A2LaunchRunner
 
@@ -112,6 +174,28 @@
         [A2Log log:@"[A2-RENDERER] ★阻断启动★：所选渲染器不可用（rc=%d）—— 缺什么/为何失败见上一行，改选已内置的渲染器后重试",
          renderRC];
         return -10;
+    }
+
+    // ---- ★[GL-BRIDGE] 让选中的后端真的拿到 surface 并建出可用的 GL 上下文★ ----
+    // 缺口（接线前）：只做到「选 + dlopen」⇒ 后端拿不到表面、也建不出上下文（出不了画面）。
+    // 本步补上：宿主表面（Bridge 采集）+ 据已选后端名加载 EGL/GLES 兼容底 + 建 EGL 上下文
+    //   + 帧回调里 glClear（可判据的可用性证据）。
+    // ★阻断口径（不静默回退）★：非 EGL/GL 系后端（如主推 Metal）本桥不负责 ⇒ rc=1，**不阻断**；
+    //   是 EGL/GL 系但缺库/无表面/建面失败 ⇒ 负值，**如实阻断**（-12），绝不换成别的渲染器。
+    int glFrameCounter = 0;
+    A2GlHostSurface glHost = {0};
+    glHost.surface       = A2RunnerHostSurface();     // 原生窗口句柄 + 像素格式 + 尺寸（主线程采集）
+    glHost.rendererName  = rendererDylib.UTF8String;  // 与上面同一份已解析的 dylib 名（Bridge 不读偏好）
+    glHost.frameCallback = A2RunnerFrameCallback;     // 帧回调（宿主侧记录；桥每帧末尾回调）
+    glHost.frameUser     = &glFrameCounter;
+
+    int glRC = a2_gl_bridge_attach(&glHost, frameworksPath);
+    [A2Log log:@"[A2-GLBRIDGE] GL 桥附着完成 rc=%d（0=已建出上下文；1=非 EGL/GL 系不归本桥；-1=缺库；-2=加载失败；-3=无表面；-4=EGL 建面失败）",
+     glRC];
+    if (glRC < 0) {
+        [A2Log log:@"[A2-GLBRIDGE] ★阻断启动★：所选渲染器是 EGL/GL 系，但未能建出 GL 上下文（rc=%d）—— 缺什么/为何失败见上一行，改选已内置的渲染器后重试",
+         glRC];
+        return -12;
     }
 
     // ---- front 项：启动核心 jar + LWJGL 补丁 jar（补丁必须最先，才能盖住 libs/lwjgl-<ver>）----

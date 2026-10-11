@@ -73,6 +73,9 @@
         //   由各自调用点在更早一步阻断（这里只负责把码翻译成人话）。
         case -10: why = @"所选渲染器未内置/加载失败 ⇒ 阻断启动（改选已内置的渲染器）"; break;
         case -11: why = @"所选 Java 运行时未内置/不完整 ⇒ 阻断启动（改选已内置的档位）"; break;
+        // ★[GL-BRIDGE]：所选后端是 EGL/GL 系但没建出 GL 上下文（缺库/无表面/EGL 失败）。
+        //   具体缺什么由 Natives/Renderer/a2_gl_bridge 的 `[A2-GLBRIDGE]` 判据行点名。
+        case -12: why = @"所选渲染器是 EGL/GL 系，但未能建出 GL 上下文（缺库/无表面/EGL 失败）⇒ 阻断启动（详见 [A2-GLBRIDGE] 日志）"; break;
         default:  why = [NSString stringWithFormat:@"未知返回码 %ld", (long)rc]; break;
     }
     return [NSString stringWithFormat:@"③ 建 VM 失败 rc=%ld：%@（见 a2_launch.h 契约）",

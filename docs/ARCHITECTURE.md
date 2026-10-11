@@ -369,7 +369,8 @@ JRE 缺失时该阶段**只告警不失败**（同树多任务并行时不让别
 
 **开关**：无独立开关 —— 只走 `debug.rt_p1_runtime` 那条自研链。
 
-**未做/前提**：Air2 的游戏 surface 尚未落地（渲染器只到「选 + `dlopen`」，见 [RENDER-WIRE]），
+**未做/前提**：Air2 的游戏 surface 尚未落地（渲染器到「选 + 加载」为止，见 [RENDER-WIRE]；
+「拿表面 + 建上下文」这一段见 [GL-BRIDGE]），
 故现取「承载游戏的宿主窗口」的像素尺寸；专用 surface 落地后只需改
 `+currentRuntimeFacts` 一处。详见 `D:\CTF\_AIR2_PLANPROPS.md` §⑦。
 
@@ -449,6 +450,7 @@ JIT 是否可用只由 `A2JITEnvironment.lastRegionVerdict`（经 probe）一处
 
 **边界（本单未做）**：只做「选择 + 加载」这一步，**不含** Metal 后端与 JVM 侧的对接
 （出画面不在本单范围）；`libmetallum.dylib` 本体仍是既存随包物，未改动字节。
+★后续★：「拿表面 + 建出可用 GL 上下文」这一段见 [GL-BRIDGE]（本单在此之上）。
 
 ### 设置里的「渲染器 / Java 运行时」两张列表 + 接线到启动 —— [RENDER-SEL] / [JRE-SEL]
 
@@ -508,4 +510,54 @@ action sheet 列全部候选，**未内置的项照列但标「未内置」**（
 **来源**：老线 `runtime_native`（GPL-3.0，只读参考）：`Natives/utils.h`（`RENDERER_NAME_*`）、
 `Natives/LauncherPreferences.m`（渲染器候选表 + `rendererLibraryExists` 过滤）、
 `LauncherPreferences.m:351 getSelectedJavaHome`（JRE 分档选择）。★只拄口径，未搬运代码★。
+
+### 渲染器 surface / GL 桥（缺口③）—— [GL-BRIDGE]
+
+**缺口（接线前）**：`[RENDER-WIRE]`/`[RENDER-SEL]` 只做到「选 + `dlopen`」——
+用户看得见列表、选得中，但选中的后端**拿不到 surface、也建不出 GL 上下文** ⇒ 出不了画面。
+
+**本单补的**：把「宿主表面 → 已选后端」真的接上，并**建出一条可用的 GL 上下文**。
+
+**接口（★与渲染器解耦★）**：`Natives/Renderer/a2_gl_bridge.h` 的 `A2GlHostSurface` ——
+★只含五样★：原生窗口句柄 + 像素格式 + 尺寸（这三样**复用** `Natives/Input/a2_glfw_window.h`
+的中立表面描述 `A2GlfwSurface`，★不另造平行结构★）+ 帧回调 + 已选渲染器名。
+`a2_gl_bridge.m` 里 **不出现任何 Metal 专有 API**（`CAMetalLayer`/`MTLDevice`… 命中 = 0），
+也不 import 任何图形后端头 —— 只按 Khronos 公开 ABI 自声明最小 EGL 类型。
+机器判据：`tests/Natives/gl_bridge_tests.m` §⑤ 的解耦断言（带阴性对照组）。
+
+| 文件 | 层 | 职责 |
+|---|---|---|
+| `Natives/Renderer/a2_gl_bridge.[hm]` | Natives | ★GL 桥★：按已选后端名从 `<App>/Frameworks/` 加载 EGL/GLES 兼容底 + 后端本体，建 EGL display/config/context/surface，取函数指针表，在**帧回调**里做一次 `glClear`（可判据动作） |
+| `Air2/Bridge/A2LaunchRunner.m` | Bridge | ★唯一调用点★：`a2_renderer_load_named` 之后调 `a2_gl_bridge_attach`；宿主表面在主线程采集（同 `+currentRuntimeFacts` 的口径），帧回调交给桥 |
+| `Air2/Player/A2LaunchFailure.m` | Player | `-12` 的用户文案翻译 |
+
+**阻断口径（★不静默回退★）**：
+
+| 情形 | 返回 | 行为 |
+|---|---|---|
+| 选中的后端**不是** EGL/GL 系（如主推 Metal） | `A2GlBridgeSkipped`(1) | **不阻断** —— 它的建面归它自己；本桥不假装能替它建面，也不换成别的后端 |
+| 是 EGL/GL 系，但缺库 / 无表面 / EGL 建面失败 | 负值（-1/-2/-3/-4） | Bridge 返回 **-12 ⇒ 如实阻断启动**（缺什么由 `[A2-GLBRIDGE]` 判据行点名） |
+
+**判据行（真机 grep 锚点）**：
+
+```
+[A2-GLBRIDGE] 后端判定：selected=libgl4es_114.dylib ⇒ EGL/GL 系，本桥负责建面
+[A2-GLBRIDGE] 后端判定：selected=libmetallum.dylib ⇒ 非 EGL/GL 系，本桥不负责其建面（跳过…）
+[A2-GLBRIDGE] 已加载兼容底：EGL=…/libEGL.framework/libEGL handle=…；GLESv2=… handle=…；后端=… handle=…
+[A2-GLBRIDGE] EGL 就绪：display=… config=… context=… surface=…（1170x2532 像素；像素格式=0）
+[A2-GLBRIDGE] 帧回调 #1 已执行 glClear（color=0,0,0,0；1170x2532 像素）glGetError=0x0 ⇒ GL 上下文可用
+[A2-GLBRIDGE] ★阻断★：包内缺该后端所需的库 …（未内置）⇒ 不静默回退到默认渲染器
+```
+
+**开关**：**无独立开关** —— 该调用只在自研启动链内发生，链整体由 `debug.rt_p1_runtime`
+（默认关）决定 ⇒ 开箱行为不变（同 [RENDER-WIRE]）。
+
+**测试**：`tests/Natives/run_gl_bridge_tests.py`（★真编译 + 真运行★）—— 判据/常量、后端判定、
+返回码契约、`attach` 四个分支（不归本桥 / 无表面 / 缺库 / 加载失败）、接线自证 + 解耦自证 + 阴性对照。
+★真建面（EGL 成功）需 iOS 设备，属真机判定表项★。
+
+**来源**：老线 `runtime_native/Natives/ctxbridges/gl_bridge.m`（GPL-3.0，★只读行为约定★：
+`EGLNativeWindowType` 取 `layer` 的行为事实、`eglCreateWindowSurface` 带/不带尺寸属性的两种尝试）。
+★未搬运任何代码★。
+
 

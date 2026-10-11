@@ -68,7 +68,9 @@ NS_ASSUME_NONNULL_BEGIN
 ///        可空 ⇒ 主推 `libmetallum.dylib`）。★由 Player 解析好传入，Bridge 不读偏好★ ——
 ///        本层只负责「把它交给 Natives/Renderer/a2_renderer 加载」。
 /// @return `a2_launch_jvm_with_argv` 的返回码（0 成功；负值见 a2_launch.h 契约）；
-///         ★-10 = 所选渲染后端未内置/加载失败 ⇒ 未进 VM，如实阻断（不静默回退）★。
+///         ★-10 = 所选渲染后端未内置/加载失败 ⇒ 未进 VM，如实阻断（不静默回退）★；
+///         ★-12 = 所选渲染后端是 EGL/GL 系但未能建出 GL 上下文（缺库/无表面/EGL 失败）
+///                ⇒ 未进 VM，如实阻断（理由见 `[A2-GLBRIDGE]` 判据行；非 EGL/GL 系后端不产生 -12）★。
 + (int)launchWithPlanPath:(NSString *)planPath
              entryJarPath:(NSString *)entryJarPath
            patchJarPath:(nullable NSString *)patchJarPath
