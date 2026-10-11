@@ -124,9 +124,23 @@
     <key>NSPhotoLibraryUsageDescription</key>
     <string>Air2 需要访问相册，以便你选择一张图片作为启动器背景。</string>
 
-    <!-- 本地网络：之后的联机功能会用到 -->
+    <!-- 本地网络：联机 + [JIT-AUTOPAIR-2] 自动配对的 Bonjour 发现 -->
     <key>NSLocalNetworkUsageDescription</key>
-    <string>Air2 需要访问本地网络，用于发现局域网内的 Minecraft 服务器。</string>
+    <string>Air2 需要访问本地网络，用于发现局域网内的 Minecraft 服务器，以及（iOS 27+）发现本机的开发者服务以完成自动配对。</string>
+
+    <!-- ============================================================
+         [JIT-AUTOPAIR-2] Bonjour 服务白名单
+         ★NWBrowser 只能浏览登记在此的服务类型★；未登记时系统【不返回任何结果】，
+         表现为「发现阶段一无所获」——这正是 DiscoveryFailed 的常见成因。
+         服务类型事实来源：公开协议描述 §2（三条连接路径），见 Natives/Support/a2_rppairing_rsd.h。
+         ★清单唯一真相源★ = A2RPRSDDefaultServiceTypes()（tests/JIT 会读本文件逐项比对，防漂移）。
+         ============================================================ -->
+    <key>NSBonjourServices</key>
+    <array>
+        <string>_remotepairing._tcp</string>
+        <string>_remoted._tcp</string>
+        <string>_remotepairing-pairable-host._tcp</string>
+    </array>
 
     <!-- 后台模式：游戏运行时的音频播放 -->
     <key>UIBackgroundModes</key>

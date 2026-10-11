@@ -28,7 +28,8 @@
   Bridge 骨架如实报未接入、Player 不得 import Bridge★；★[JIT-DDI-1] 另加：设置页接入 DDI 行 /
   导入 / **联网取开关（默认关）**、DDI 设备侧 Bridge 骨架如实回 `Unknown` / `NO`、
   Player 不得 import DDI Bridge★；
-- **`[JIT-AUTOPAIR-2]`** `a2_rppairing_crypto` + `a2_rppairing`（Natives/Support，★真实现直接链接★）——
+- **`[JIT-AUTOPAIR-2]`** `a2_rppairing_crypto` + `a2_rppairing` + `a2_rppairing_chacha` + `a2_rppairing_ed25519`
+  + `a2_rppairing_verify` + `a2_rppairing_rsd`（Natives/Support，★真实现直接链接★）——
   RPPairing 握手内核：**X25519**（RFC 7748 §5.2/§6.1 向量逐位核对）、**HKDF-SHA512**（独立参考逐位核对）、
   SHA-512 / MD5 / CSPRNG / **UUIDv3**（RFC 4122）、**线上帧与信封编解码**（往返 + 边界如实报错）、
   **配对文件组装 → `A2PairingFile` 校验 → `A2JITPairingFileStore` 落盘**（与 ④ 的交接）、

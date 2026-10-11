@@ -197,25 +197,66 @@ BOOL A2RPUUIDv3FromName(NSString *name, uint8_t out[16]) {
     return YES;
 }
 
-#pragma mark - 未落地原语的如实回报
+#pragma mark - 握手原语（Ed25519 / ChaCha20-Poly1305）：真自检
 
 BOOL A2RPEd25519Available(void) {
-    // ★如实回 NO★：cced25519_* 符号在 libSystem 中存在，但 cced25519_ctx 无公开初始化路径
-    // （实测：ctx 传 NULL 或自备缓冲均失败/崩溃，cced25519_ctx_size/ctx_new 符号不存在）⇒
-    // 签名/验签的驱动方式未确认完成，本阶段不落地、不猜、不假成功。
-    return NO;
+    // ★真自检★：随机种子 → 派生公钥 → 签一条消息 → 验签必须通过；坏签名必须被拒。
+    // 不是查缓存、不是假设（与 A2RPX25519AgreementSelfTest 同一标准）。
+    uint8_t seed[A2RP_ED25519_KEY_BYTES], pub[A2RP_ED25519_KEY_BYTES], sig[A2RP_ED25519_SIG_BYTES];
+    if (!A2RPRandomBytes(seed, sizeof(seed))) {
+        return NO;
+    }
+    if (A2RPEd25519PublicKey(pub, seed) != 1) {
+        return NO;
+    }
+    static const uint8_t probe[5] = { 'A', '2', 'R', 'P', 0x01 };
+    if (A2RPEd25519Sign(sig, seed, probe, sizeof(probe)) != 1) {
+        return NO;
+    }
+    if (A2RPEd25519Verify(pub, probe, sizeof(probe), sig) != 1) {
+        return NO;
+    }
+    uint8_t bad[A2RP_ED25519_SIG_BYTES];
+    memcpy(bad, sig, sizeof(bad));
+    bad[9] ^= 0x01;
+    if (A2RPEd25519Verify(pub, probe, sizeof(probe), bad) != 0) {
+        return NO;                       // ★坏签名居然通过 ⇒ 视为不可用（不假成功）★
+    }
+    return YES;
 }
 
 BOOL A2RPChaCha20Poly1305Available(void) {
-    // ★如实回 NO★：ccchacha20poly1305_{encrypt,decrypt}_oneshot 需要一个 corecrypto
-    // 的 info 结构，其获取方式未确认（实测调用崩溃）⇒ 本阶段不落地。
-    return NO;
+    // ★真自检★：seal → open 往返一致；改一个 tag 字节必须被拒。
+    uint8_t key[A2RP_CHACHA_KEY_BYTES], nonce[A2RP_CHACHA_NONCE_BYTES];
+    uint8_t msg[37], ct[37], tag[A2RP_AEAD_TAG_BYTES], back[37];
+    static const uint8_t aad[3] = { 0xAA, 0xBB, 0xCC };
+    if (!A2RPRandomBytes(key, sizeof(key)) || !A2RPRandomBytes(nonce, sizeof(nonce))
+        || !A2RPRandomBytes(msg, sizeof(msg))) {
+        return NO;
+    }
+    if (A2RPChaCha20Poly1305Seal(ct, tag, key, nonce, aad, sizeof(aad), msg, sizeof(msg)) != 1) {
+        return NO;
+    }
+    if (A2RPChaCha20Poly1305Open(back, key, nonce, aad, sizeof(aad), ct, sizeof(ct), tag) != 1) {
+        return NO;
+    }
+    if (memcmp(back, msg, sizeof(msg)) != 0) {
+        return NO;
+    }
+    uint8_t bad[A2RP_AEAD_TAG_BYTES];
+    memcpy(bad, tag, sizeof(bad));
+    bad[0] ^= 0x01;
+    if (A2RPChaCha20Poly1305Open(back, key, nonce, aad, sizeof(aad), ct, sizeof(ct), bad) != 0) {
+        return NO;                       // ★坏 tag 居然通过 ⇒ 视为不可用★
+    }
+    return YES;
 }
 
 NSString *A2RPHandshakeCryptoUnavailableReason(void) {
-    return @"RPPairing 握手的 Ed25519(签名) 与 ChaCha20-Poly1305(AEAD) 原语尚未落地："
-           @"Objective-C 侧无 Curve25519/Ed25519 公开 API（CryptoKit 为 Swift-only），"
-           @"libSystem 虽导出 cced25519_*/ccchacha20poly1305_* 符号，但其 ctx/info 结构无公开"
-           @"初始化路径（实测不可驱动）⇒ 需先决定「引入 Swift/CryptoKit」或「落地可自证的私有符号桥」"
-           @"（见 docs/JIT-PROVISIONING.md §4.2-a）。X25519/HKDF-SHA512 已落地并自证。";
+    if (A2RPEd25519Available() && A2RPChaCha20Poly1305Available()) {
+        return @"RPPairing 握手原语全部可用（Ed25519 / ChaCha20-Poly1305 均为本仓自研实现，"
+               @"由 RFC 8032 / RFC 8439 向量与独立库随机向量逐位自证）。";
+    }
+    return @"RPPairing 握手原语自检未通过：Ed25519 / ChaCha20-Poly1305 里至少一个未能通过运行期自证"
+           @"（严禁在此情况下继续握手）。";
 }

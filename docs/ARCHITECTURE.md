@@ -259,7 +259,11 @@ ADR 见 `docs/DECISIONS.md` ADR-007 / ADR-008 / ADR-009。
 | `Air2/Player/A2JITAutoPairingGuidance.[hm]` | Player | 自动配对分流表：blocker → 现有 `A2JITFailureReason` / 本地化 key / 诊断名 / 日志行 |
 | `Air2/Player/A2JITAutomaticPairingProvider.[hm]` | Player | ① 自动配对 Provider 真实现（能力 / 前置 / 新鲜度 / ★有界★生成调用点 / 真调判据复验） |
 | `Air2/Bridge/A2JITAutoPairingEngineBridge.[hm]` | **Bridge** | RPPairing 引擎接线点：★[JIT-AUTOPAIR-2] 起为真接线★（前置条件真读 + 真跑 `A2RPPairingPreflight` 并点名受阻步骤；仍如实报「未接入」） |
-| `Natives/Support/a2_rppairing_crypto.[hm]` | **Natives** | 系统密码学原语薄封装：X25519（corecrypto `cccurve25519`）/ HKDF-SHA512 / SHA-512 / MD5 / CSPRNG / UUIDv3；★Ed25519 / ChaCha20-Poly1305 如实报未落地★ |
+| `Natives/Support/a2_rppairing_crypto.[hm]` | **Natives** | 系统密码学原语薄封装：X25519（corecrypto `cccurve25519`）/ HKDF-SHA512 / SHA-512 / MD5 / CSPRNG / UUIDv3；Ed25519 / ChaCha20-Poly1305 的**可用性真自检**（★真跑签/验/加解 + 坏输入必须被拒★）
+| `Natives/Support/a2_rppairing_chacha.[hm]` | **Natives** | **[JIT-AUTOPAIR-2] 自研** ChaCha20-Poly1305（RFC 8439）：ChaCha20 流 + Poly1305 + AEAD seal/open（常数时间认证）
+| `Natives/Support/a2_rppairing_ed25519.[hm]` | **Natives** | **[JIT-AUTOPAIR-2] 自研** Ed25519（RFC 8032）：5×51 位肢体域运算 + 扩展坐标点运算 + mod L 标量运算（★非常数时间，一次性握手用★）
+| `Natives/Support/a2_rppairing_verify.[hm]` | **Natives** | **[JIT-AUTOPAIR-2] pair-verify 握手本体**：Host/Device 双角色会话 + M1→M4 状态机 + `shared_secret`(=PSK) + HKDF 派生 + §10 主密钥；**进程内自握手自证** `A2RPPairVerifySelfTest`
+| `Natives/Support/a2_rppairing_rsd.[hm]` | **Natives** | **[JIT-AUTOPAIR-2] 发现/连接层**：Bonjour 服务类型与传输路径映射、流式帧读取器、hostOptions/pairingData/createListener 信封、NWBrowser 发现 + NWConnection 连接 + 真跑 pair-verify、TLS-PSK 配置与**能力如实点名** |
 | `Natives/Support/a2_rppairing.[hm]` | **Natives** | RPPairing 线上编解码（帧 / 信封）+ 配对文件（RpPairingFile）组装 + 握手完成度自检 `A2RPPairingPreflight` |
 
 **来源**：`docs/JIT-PROVISIONING.md` §1.2 / §3.3 / §3.6；许可口径见 `docs/DEPENDENCIES.md`「JIT 自动配对」节

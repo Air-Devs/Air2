@@ -44,6 +44,10 @@
 //
 
 #import <Foundation/Foundation.h>
+// ★自研握手原语的两个实现文件（在 NS_ASSUME_NONNULL 之外引入：clang 不允许在
+//   assume_nonnull 区间里 #include/#import）★
+#import "a2_rppairing_ed25519.h"
+#import "a2_rppairing_chacha.h"
 #include <stddef.h>
 #include <stdint.h>
 
@@ -94,14 +98,18 @@ BOOL A2RPMD5(const uint8_t *data, size_t length, uint8_t *out);
 BOOL A2RPUUIDv3FromName(NSString *name, uint8_t *out);
 
 // ---------------------------------------------------------------------------
-// ★未落地的原语：如实回报（调用方据此走「NotImplemented / 降级」，绝不假成功）★
+// ★握手原语：全部【真实现 + RFC 向量自证】
+//   实现落在两个自研文件里（不重复声明、不造二套 API）：
+//     · a2_rppairing_ed25519.[hm] —— Ed25519（RFC 8032）
+//     · a2_rppairing_chacha.[hm]  —— ChaCha20-Poly1305（RFC 8439）
+//   这两个文件返回 int（1 = 成功，0 = 失败），以便纯 C 环境下也能单独编译自测。
 // ---------------------------------------------------------------------------
 
-/// Ed25519 是否可用（本阶段 = NO；原因见 A2RPHandshakeCryptoUnavailableReason()）。
+/// Ed25519 是否可用（★真自检：随机种子派生公钥 + 签一条消息 + 验签，再验一条坏签名必须被拒★）。
 BOOL A2RPEd25519Available(void);
-/// ChaCha20-Poly1305 是否可用（本阶段 = NO）。
+/// ChaCha20-Poly1305 是否可用（★真自检：seal → open 往返 + 改一个 tag 必须被拒★）。
 BOOL A2RPChaCha20Poly1305Available(void);
-/// 未落地原语的可读原因（给日志 / UI 直接用；点名缺什么，不写万能文案）。
+/// 未落地原语的可读原因（给日志 / UI 直接用；全部落地时写「全部可用」）。
 NSString *A2RPHandshakeCryptoUnavailableReason(void);
 
 NS_ASSUME_NONNULL_END

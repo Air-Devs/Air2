@@ -556,6 +556,9 @@
     // 本单为【骨架】：engineAvailable=NO 且前置全 Unknown ⇒ Provider 会【如实】报「未接入 / 未确认」，
     // 绝不假成功（RPPairing 真实现见 docs/JIT-PROVISIONING.md §4.2）。
     A2JITAutoPairingEngineBridge *autoEngine = [[A2JITAutoPairingEngineBridge alloc] init];
+    // ★[JIT-AUTOPAIR-2] 把落盘目标注入引擎★：pair-verify 成功后由 Bridge 直接写进容器约定位置
+    // （Provider 侧仍会独立复验 store.hasUsablePairingFile —— 不凭引擎一面之词）。
+    autoEngine.pairingFileStore = store;
     A2JITAutoPairingPreconditions *preconditions = [autoEngine readPreconditions];
 
     // ★[JIT-DDI-1] DDI 真探测★：本地镜像存储（容器约定目录）+ 设备侧查询（Bridge 骨架）+ 系统要求。

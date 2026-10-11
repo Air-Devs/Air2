@@ -26,8 +26,10 @@
 
 #import "A2JITAutoPairingEngineBridge.h"
 #import "a2_rppairing.h"          // [JIT-AUTOPAIR-2] Natives/Support：RPPairing 握手内核 / 完成度自检
+#import "a2_rppairing_verify.h"   // [JIT-AUTOPAIR-2] pair-verify 握手本体（消息流 + 密钥交换）
+#import "a2_rppairing_rsd.h"      // [JIT-AUTOPAIR-2] Bonjour 发现 / 连接 / JSON 帧 / TLS-PSK 口径
+#import "A2JITPairingFileStore.h" // ★配对材料的落盘目标★（同层已有的类，见 docs/ARCHITECTURE.md）
 
-#import <Security/Security.h>
 #import <sys/sysctl.h>
 
 #pragma mark - 前置条件真读（取不到一律 Unknown，绝不猜）
@@ -44,36 +46,11 @@ static A2JITAutoPairingPreconditionState A2RPReadDeveloperModeState(void) {
                         : A2JITAutoPairingPreconditionStateUnsatisfied;
 }
 
-/// get-task-allow：读【本进程自己的】entitlement（SecTask）。
-/// ★只有确实读到了值才给 Satisfied/Unsatisfied；读取本身报错 ⇒ Unknown★。
+/// get-task-allow：★iOS 无公开 API★ —— `SecTask.h`（`SecTaskCreateFromSelf` /
+/// `SecTaskCopyValueForEntitlement`）**只在 macOS SDK 提供**，iOS 侧属私有符号。
+/// 为「读一项前置条件」而再引入一个私有 API 不划算 ⇒ ★如实回 Unknown★（不猜、不谎报满足）。
 static A2JITAutoPairingPreconditionState A2RPReadGetTaskAllowState(void) {
-    SecTaskRef task = SecTaskCreateFromSelf(kCFAllocatorDefault);
-    if (task == NULL) {
-        return A2JITAutoPairingPreconditionStateUnknown;
-    }
-    CFErrorRef err = NULL;
-    CFTypeRef value = SecTaskCopyValueForEntitlement(task, CFSTR("get-task-allow"), &err);
-    CFRelease(task);
-
-    A2JITAutoPairingPreconditionState state;
-    if (value != NULL && CFGetTypeID(value) == CFBooleanGetTypeID()) {
-        state = CFBooleanGetValue((CFBooleanRef)value)
-                    ? A2JITAutoPairingPreconditionStateSatisfied
-                    : A2JITAutoPairingPreconditionStateUnsatisfied;
-    } else if (value == NULL && err == NULL) {
-        // 读取没报错、但没有该 entitlement ⇒ 明确未满足。
-        state = A2JITAutoPairingPreconditionStateUnsatisfied;
-    } else {
-        // 读取失败 ⇒ ★Unknown★（不猜）。
-        state = A2JITAutoPairingPreconditionStateUnknown;
-    }
-    if (value != NULL) {
-        CFRelease(value);
-    }
-    if (err != NULL) {
-        CFRelease(err);
-    }
-    return state;
+    return A2JITAutoPairingPreconditionStateUnknown;
 }
 
 static NSString *A2RPStateName(A2JITAutoPairingPreconditionState state) {
@@ -89,6 +66,7 @@ static NSString *A2RPStateName(A2JITAutoPairingPreconditionState state) {
 /// 惰性缓存（自检只跑一次；读取无副作用）。
 @property (nonatomic, strong, nullable) A2RPPairingPreflight *preflight;
 @property (nonatomic, strong, nullable) A2JITAutoPairingPreconditions *cachedPreconditions;
+@property (nonatomic, readwrite, copy, nullable) NSData *lastGeneratedPairingFile;
 @end
 
 @implementation A2JITAutoPairingEngineBridge
@@ -99,14 +77,17 @@ static NSString *A2RPStateName(A2JITAutoPairingPreconditionState state) {
     if (self.preflight == nil) {
         self.preflight = [A2RPPairingPreflight run];
         NSLog(@"[A2JIT] autopair engine: %@", self.preflight.summary);
+        NSLog(@"[A2JIT] autopair engine: pair-verify 自握手自证 ⇒ %@", self.preflight.pairVerifySummary);
     }
     return self.preflight;
 }
 
 - (BOOL)isEngineAvailable {
-    // ★只有握手链路全部就绪（含 Ed25519 / ChaCha20-Poly1305 / 消息机）才算「已接入」★。
-    // 本阶段首个受阻步骤 = Ed25519 ⇒ 如实回 NO（让 Provider 如实报「未接入」并降级到 ②导入）。
-    return self.preflightResult.firstBlockedStep == A2RPPairingBlockedStepNone;
+    // ★本地握手链路（原语 + pair-verify 本体）全绿 ⇒ 引擎【已接入】★；
+    // 剩下的卡点是「真 RSD 端点」（Bonjour 发现/连接），那属于运行时环境，不是「未接入」——
+    // 所以本方法如实回 YES，由 generate 按步骤点名 DiscoveryFailed / PairVerifyFailed 等。
+    return self.preflightResult.firstBlockedStep == A2RPPairingBlockedStepRsdEndpoint
+        || self.preflightResult.firstBlockedStep == A2RPPairingBlockedStepNone;
 }
 
 - (A2JITAutoPairingPreconditions *)readPreconditions {
@@ -129,36 +110,150 @@ static NSString *A2RPStateName(A2JITAutoPairingPreconditionState state) {
                                                          localNetwork:localNet
                                                          getTaskAllow:taskAllow
                                                                   ddi:ddi];
-    NSLog(@"[A2JIT] autopair engine: 前置条件真读 ⇒ DeveloperMode=%@ get-task-allow=%@ "
-          @"LocalNetwork=未知（iOS 无公开 API） DDI=未知（由 ddiProbe 覆盖）",
-          A2RPStateName(devMode), A2RPStateName(taskAllow));
+    NSLog(@"[A2JIT] autopair engine: 前置条件真读 ⇒ DeveloperMode=%@ "
+          @"get-task-allow=未知（iOS 无公开 API） LocalNetwork=未知（iOS 无公开 API） "
+          @"DDI=未知（由 ddiProbe 覆盖）",
+          A2RPStateName(devMode));
     return self.cachedPreconditions;
 }
 
-#pragma mark - 生成（★如实点名受阻步骤，绝不假成功★）
+#pragma mark - 生成（★真跑；每一步失败都按语义分类，绝不假成功★）
 
 - (BOOL)generatePairingFileWithinBudget:(NSTimeInterval)budget
                                  reason:(NSString *_Nullable *_Nullable)whyOut
                                 blocker:(A2JITAutoPairingBlocker *_Nullable)blockerOut {
     A2RPPairingPreflight *pf = [self preflightResult];
     NSLog(@"[A2JIT] autopair engine: 尝试生成 ⇒ 自检 %@（budget=%.1fs）", pf.summary, budget);
+    NSLog(@"[A2JIT] autopair engine: pair-verify 自握手自证 ⇒ %@", pf.pairVerifySummary);
 
-    // 本阶段必然走到这里（Ed25519 未落地）。即便将来原语齐了，pair-setup/pair-verify 消息机
-    // 仍是未落地的一环 ⇒ 本方法【永不】返回 YES：没有真握手就没有真配对文件（不假成功）。
-    NSString *blockedName = [A2RPPairingPreflight displayNameForBlockedStep:pf.firstBlockedStep];
-    NSString *detail = (pf.firstBlockedStep == A2RPPairingBlockedStepNone)
-        ? @"RPPairing 原语已齐，但 pair-setup(SRP-3072)/pair-verify 消息机与 TLS-PSK 隧道尚未落地"
-        : A2RPHandshakeCryptoUnavailableReason();
-
-    if (whyOut) {
-        *whyOut = [NSString stringWithFormat:@"RPPairing 握手在第【%@】步受阻；%@（自检：%@）",
-                   blockedName, detail, pf.summary];
+    // ---- ① 本地握手链路是否就绪（原语 + pair-verify 本体）----
+    if (pf.firstBlockedStep != A2RPPairingBlockedStepNone
+        && pf.firstBlockedStep != A2RPPairingBlockedStepRsdEndpoint) {
+        NSString *blockedName = [A2RPPairingPreflight displayNameForBlockedStep:pf.firstBlockedStep];
+        if (whyOut) {
+            *whyOut = [NSString stringWithFormat:
+                       @"RPPairing 本地握手链路在第【%@】步受阻；%@（自检：%@）",
+                       blockedName, A2RPHandshakeCryptoUnavailableReason(), pf.summary];
+        }
+        if (blockerOut) {
+            *blockerOut = A2JITAutoPairingBlockerEngineUnavailable;
+        }
+        return NO;
     }
+
+    // ---- ② TLS-PSK 隧道的【如实口径】（只记录；产配对文件不需要隧道，隧道另有去向）----
+    NSString *pskWhy = nil;
+    BOOL pskOK = A2RPRSDPublicTLSPSKPathSufficient(&pskWhy);
+    NSLog(@"[A2JIT] autopair engine: TLS-PSK(§12) 公开路径可用=%@ ⇒ %@",
+          pskOK ? @"是" : @"否", pskWhy);
+
+    // ---- ③ 发现（Bonjour）----
+    NSArray<NSString *> *types = A2RPRSDDefaultServiceTypes();
+    NSTimeInterval discoverBudget = MAX(1.0, budget * 0.6);
+    A2RPRSDDiscovery *discovery = [[A2RPRSDDiscovery alloc] initWithServiceTypes:types];
+    NSString *discWhy = nil;
+    id endpoint = [discovery waitForEndpointWithTimeout:discoverBudget reason:&discWhy];
+    NSLog(@"[A2JIT] autopair engine: Bonjour 发现（%@，≤%.1fs）⇒ %@",
+          [types componentsJoinedByString:@","], discoverBudget,
+          endpoint ? [A2RPRSDDiscovery describeEndpoint:endpoint] : discWhy);
+    if (endpoint == nil) {
+        if (whyOut) {
+            *whyOut = [NSString stringWithFormat:@"RPPairing 本地握手已就绪（%@），但%@",
+                       pf.pairVerifySummary, discWhy ?: @"未发现设备端点"];
+        }
+        if (blockerOut) {
+            *blockerOut = A2JITAutoPairingBlockerDiscoveryFailed;
+        }
+        return NO;
+    }
+
+    // ---- ④ 连上 + hostOptions + pair-verify（真跑消息流 M1..M4）----
+    NSError *idErr = nil;
+    NSString *hostName = NSProcessInfo.processInfo.hostName ?: @"air2-rppairing";
+    // ★规格 §7：identifier = uuid_v3(NAMESPACE_DNS, hostname)★
+    A2RPPairingIdentity *localIdentity =
+        [A2RPPairingIdentity identityWithHostName:hostName error:&idErr];
+    if (localIdentity == nil) {
+        if (whyOut) {
+            *whyOut = [NSString stringWithFormat:@"本地身份生成失败：%@",
+                       idErr.localizedDescription ?: @"未知"];
+        }
+        if (blockerOut) {
+            *blockerOut = A2JITAutoPairingBlockerPairVerifyFailed;
+        }
+        return NO;
+    }
+    if (self.devicePublicKey == nil) {
+        NSLog(@"[A2JIT] autopair engine: ★未持有设备 Ed25519 公钥 ⇒ 按规格 §8 Step 6「设备证明可不解」"
+              @"跳过身份签名校验★（AEAD 认证与密钥交换仍照做）");
+    }
+
+    NSString *pvWhy = nil;
+    NSTimeInterval pvBudget = MAX(1.0, budget - discoverBudget);
+    A2RPPairingIdentity *freshIdentity =
+        [A2RPRSDPairVerifyClient pairVerifyWithEndpoint:endpoint
+                                          localIdentity:localIdentity
+                                        devicePublicKey:self.devicePublicKey
+                                                timeout:pvBudget
+                                                 reason:&pvWhy];
+    if (freshIdentity == nil) {
+        if (whyOut) {
+            *whyOut = [NSString stringWithFormat:@"已发现 %@，但 pair-verify 未完成：%@",
+                       [A2RPRSDDiscovery describeEndpoint:endpoint], pvWhy ?: @"原因未记录"];
+        }
+        if (blockerOut) {
+            *blockerOut = A2JITAutoPairingBlockerPairVerifyFailed;
+        }
+        return NO;
+    }
+
+    // ---- ⑤ 落盘（写不进注入的存储 ⇒ 不算成功）----
+    NSData *fileData = [freshIdentity pairingFileData];
+    if (fileData.length == 0) {
+        if (whyOut) {
+            *whyOut = @"握手成功但产不出配对文件字节";
+        }
+        if (blockerOut) {
+            *blockerOut = A2JITAutoPairingBlockerWriteFailed;
+        }
+        return NO;
+    }
+    if (self.pairingFileStore == nil) {
+        // ★没注入存储就不落盘 ⇒ 不返回成功★（不假成功：没落盘 = 没有配对文件）
+        if (whyOut) {
+            *whyOut = @"握手成功，但未注入配对文件存储（pairingFileStore=nil）⇒ 不落盘、不报成功";
+        }
+        if (blockerOut) {
+            *blockerOut = A2JITAutoPairingBlockerWriteFailed;
+        }
+        return NO;
+    }
+    NSError *impErr = nil;
+    NSString *written = [self.pairingFileStore importData:fileData
+                                               sourceName:@"RPPairing(设备内自配对)"
+                                                    error:&impErr];
+    if (written.length == 0) {
+        if (whyOut) {
+            *whyOut = [NSString stringWithFormat:@"配对文件落盘失败：%@",
+                       impErr.localizedDescription ?: @"未知"];
+        }
+        if (blockerOut) {
+            *blockerOut = A2JITAutoPairingBlockerWriteFailed;
+        }
+        return NO;
+    }
+
+    self.lastGeneratedPairingFile = fileData;
+    NSLog(@"[A2JIT] autopair engine: ★pair-verify 成功★ ⇒ 配对文件已落盘 path=%@ (%lu 字节) "
+          @"identifier=%@", written, (unsigned long)fileData.length, freshIdentity.identifier);
     if (blockerOut) {
-        // 「机制尚未接入」语义（映射 AutoPairingNotBuilt），与「真实执行失败」分开。
-        *blockerOut = A2JITAutoPairingBlockerEngineUnavailable;
+        *blockerOut = A2JITAutoPairingBlockerNone;
     }
-    return NO;
+    if (whyOut) {
+        *whyOut = [NSString stringWithFormat:@"pair-verify 成功（%@）；配对文件已写入 %@",
+                   pf.pairVerifySummary, written];
+    }
+    return YES;
 }
 
 @end

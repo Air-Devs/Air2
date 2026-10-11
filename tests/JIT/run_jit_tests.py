@@ -55,6 +55,11 @@ SOURCES = [
     # --- [JIT-AUTOPAIR-2] RPPairing 握手内核（Natives/Support：★真实现，含系统 corecrypto 的 X25519★）---
     os.path.join(ROOT, "Natives", "Support", "a2_rppairing_crypto.m"),
     os.path.join(ROOT, "Natives", "Support", "a2_rppairing.m"),
+    # --- [JIT-AUTOPAIR-2] 真握手本体：自研密码学原语 + pair-verify 消息机 + RSD 发现/连接 ---
+    os.path.join(ROOT, "Natives", "Support", "a2_rppairing_chacha.m"),
+    os.path.join(ROOT, "Natives", "Support", "a2_rppairing_ed25519.m"),
+    os.path.join(ROOT, "Natives", "Support", "a2_rppairing_verify.m"),
+    os.path.join(ROOT, "Natives", "Support", "a2_rppairing_rsd.m"),
     os.path.join(HERE, "jit_logic_tests.m"),
 ]
 
@@ -98,6 +103,8 @@ def main():
         includes += ["-I", inc]
     cmd = [clang, "-fobjc-arc", "-fblocks", "-Wall", "-Wno-unused-parameter"] + \
           includes + ["-framework", "Foundation", "-framework", "Security",
+                      # RSD 层用 Bonjour 发现/连接（NWBrowser/NWConnection）⇒ 需要 Network
+                      "-framework", "Network",
                       "-o", binary] + SOURCES
     print("compile: clang -fobjc-arc -I Air2/Player ... -o jit_logic_tests")
     ci = subprocess.run(cmd, capture_output=True, text=True)

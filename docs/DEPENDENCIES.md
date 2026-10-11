@@ -167,7 +167,12 @@
   未改 `Natives/Support/A2JITEnvironment` 的判据语义。
 
 **★[JIT-AUTOPAIR-2] 补充（阶段 2a）★**：
-- **仍然零新增第三方依赖、零 vendor**。新增的 `Natives/Support/a2_rppairing*` 只用**系统库**：
+- **仍然零新增第三方依赖、零 vendor**。新增的 `Natives/Support/a2_rppairing*` 分两类：
+  · **系统库**：X25519（corecrypto `cccurve25519`）、HKDF-SHA512 / SHA-512 / MD5（CommonCrypto）、
+    CSPRNG（Security `SecRandomCopyBytes`）、Bonjour/连接（Network.framework）、TLS 选项（Security `SecProtocolOptions`）；
+  · **本仓自研（GPL-3.0-or-later）**：`a2_rppairing_ed25519.[hm]`（RFC 8032）与 `a2_rppairing_chacha.[hm]`（RFC 8439）——
+    两者**按公开标准自写**（未采用任何项目源码），并由 RFC 官方向量 + PyNaCl/cryptography 随机向量逐位自证；
+    自研理由（该两个原语在 iOS 侧**无公开 API**，私有符号不可驱动）见 `docs/JIT-PROVISIONING.md` §3.6。
   CommonCrypto（`CCHmac` / `CC_SHA512` / `CC_MD5`）、`SecRandomCopyBytes`、以及
   ★系统 corecrypto 的 **私有导出符号** `cccurve25519`（libSystem 导出，无公开头文件）★。
 - **★必须登记的合规点★**：`cccurve25519` 是 **Apple 私有 API**（CryptoKit 底层同一实现），

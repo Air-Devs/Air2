@@ -45,6 +45,9 @@
 #import "A2JITEnvironment.h"
 // [JIT-AUTOPAIR-2] RPPairing 握手内核（★这些是【真实现】源文件，直接编译并链接运行★）
 #import "a2_rppairing.h"
+// [JIT-AUTOPAIR-2] 真握手本体：pair-verify 消息机 + RSD 发现/连接
+#import "a2_rppairing_verify.h"
+#import "a2_rppairing_rsd.h"
 
 static int gPass = 0;
 static int gFail = 0;
@@ -1133,11 +1136,19 @@ static void testWiringInvariants(void) {
     NSString *engineSrc = [NSString stringWithContentsOfFile:RepoPath(@"Air2/Bridge/A2JITAutoPairingEngineBridge.m")
                                                     encoding:NSUTF8StringEncoding
                                                        error:NULL];
-    ok(engineSrc.length > 0, @"读得到自动配对引擎骨架");
-    ok([engineSrc containsString:@"return NO;"], @"骨架 isEngineAvailable 返回 NO");
-    ok([engineSrc containsString:@"unknownPreconditions"], @"骨架读前置 ⇒ 全 Unknown（不谎报满足）");
-    ok([engineSrc containsString:@"A2JITAutoPairingBlockerEngineUnavailable"], @"骨架生成失败分类 = EngineUnavailable");
-    ok(![engineSrc containsString:@"#import \"A2JITEnvironment.h\""], @"骨架不 import Natives 判据头");
+    ok(engineSrc.length > 0, @"读得到自动配对引擎 Bridge");
+    ok([engineSrc containsString:@"A2RPRSDPairVerifyClient"], @"★Bridge 真调 pair-verify 客户端（真握手本体）★");
+    ok([engineSrc containsString:@"A2RPRSDDiscovery"], @"★Bridge 真做 Bonjour 发现★");
+    ok([engineSrc containsString:@"A2JITAutoPairingBlockerDiscoveryFailed"], @"没发现端点 ⇒ DiscoveryFailed（按步骤分类）");
+    ok([engineSrc containsString:@"A2JITAutoPairingBlockerPairVerifyFailed"], @"握手失败 ⇒ PairVerifyFailed");
+    ok([engineSrc containsString:@"A2JITAutoPairingBlockerWriteFailed"], @"落盘失败 ⇒ WriteFailed");
+    ok([engineSrc containsString:@"pairingFileStore == nil"], @"★没注入存储 ⇒ 报 WriteFailed、不返回成功★");
+    ok([engineSrc containsString:@"importData:fileData"], @"★真把配对文件写进注入的存储★");
+    ok([engineSrc containsString:@"NSProcessInfo.processInfo.hostName"], @"identifier 由 hostname 派生（规格 §7）");
+    ok([engineSrc containsString:@"A2RPRSDPublicTLSPSKPathSufficient"], @"★「TLS-PSK 公开路径不通」在 Bridge 里如实记录★");
+    ok([engineSrc containsString:@"unknownPreconditions"], @"前置条件以「全 Unknown」为底（不谎报满足）");
+    ok(![engineSrc containsString:@"#import \"A2JITEnvironment.h\""], @"Bridge 不 import Natives 判据头");
+    ok([settingsSrc containsString:@"autoEngine.pairingFileStore = store"], @"★设置页把落盘目标注进引擎（有生产调用点）★");
 
     // ⑧ ★Provider 侧不得 import Bridge（单向分层：Bridge 在下）★
     NSInteger bridgeLeaks = 0;
@@ -2125,38 +2136,290 @@ static void testRPPairingCore(void) {
     ok(store.hasUsablePairingFile, @"落盘后可被真探测到（hasUsablePairingFile）");
     [[NSFileManager defaultManager] removeItemAtPath:tmpDir error:NULL];
 
-    // ---- 完成度自检（★真跑原语，如实点名受阻步骤★）----
+    // ---- 完成度自检（★真跑原语 + 真跑 pair-verify 自握手，如实点名受阻步骤★）----
     A2RPPairingPreflight *pf = [A2RPPairingPreflight run];
     ok(pf.randomOK, @"自检：CSPRNG 可用");
     ok(pf.keyAgreementOK, @"自检：X25519 双向协商一致（运行期真跑，非查缓存）");
-    ok(!pf.signingOK, @"★自检：Ed25519 如实报【未落地】★");
-    ok(!pf.streamCipherOK, @"★自检：ChaCha20-Poly1305 如实报【未落地】★");
-    eqInt(pf.firstBlockedStep, A2RPPairingBlockedStepSigningKey, @"★首个受阻步骤 = SigningKey(Ed25519)★");
+    ok(pf.signingOK, @"★自检：Ed25519 可用（运行期真跑：派生公钥+签名+验签，且坏签名被拒）★");
+    ok(pf.streamCipherOK, @"★自检：ChaCha20-Poly1305 可用（运行期真跑：往返 + 坏 tag 被拒）★");
+    ok(pf.pairVerifyOK, @"★自检：pair-verify 自手写【真跑通过】（M1→M4 消息流 + 双方密钥一致）★");
+    ok([pf.pairVerifySummary containsString:@"M1..M4"], @"自握手结论带消息流尺寸（可核对真发生了）");
+    eqInt(pf.firstBlockedStep, A2RPPairingBlockedStepRsdEndpoint,
+          @"★首个受阻步骤 = 真 RSD 端点（本地链路已全绿）★");
     ok([pf.summary containsString:@"Ed25519"], @"自检摘要点名校验");
-    ok([pf.summary containsString:@"未落地"], @"★自检摘要不谎报（写「未落地」）★");
+    ok([pf.summary containsString:@"pair-verify 自握手=通过"], @"★自检摘要如实写「自握手=通过」★");
     eqStr([A2RPPairingPreflight displayNameForBlockedStep:A2RPPairingBlockedStepPairSetup],
-          @"PairSetup(SRP-3072)", @"受阻步骤诊断名稳定");
-    ok(!A2RPEd25519Available(), @"Ed25519 可用性如实回 NO");
-    ok(!A2RPChaCha20Poly1305Available(), @"ChaCha20-Poly1305 可用性如实回 NO");
-    ok(A2RPHandshakeCryptoUnavailableReason().length > 0, @"未落地原因可读（不空）");
+          @"PairSetup(SRP-3072)", @"受阻步骤诊断名稳定（pair-setup 仍未落地）");
+    ok([A2RPPairingPreflight displayNameForBlockedStep:A2RPPairingBlockedStepRsdEndpoint].length > 0,
+       @"受阻步骤诊断名稳定（RSD 端点）");
+    ok(A2RPEd25519Available(), @"Ed25519 可用性 = YES（真自检通过）");
+    ok(A2RPChaCha20Poly1305Available(), @"ChaCha20-Poly1305 可用性 = YES（真自检通过）");
+    ok(A2RPHandshakeCryptoUnavailableReason().length > 0, @"原语状态说明可读（不空）");
 
-    // ---- [JIT-AUTOPAIR-2] Bridge 真接线（源码级不变量）----
+    // ---- [JIT-AUTOPAIR-2] Bridge 真接线（源码级不变量；细则集中在 ⑪ 接线不变量）----
     NSString *bridgeEngine = [NSString stringWithContentsOfFile:RepoPath(@"Air2/Bridge/A2JITAutoPairingEngineBridge.m")
                                                        encoding:NSUTF8StringEncoding
                                                           error:NULL];
     ok(bridgeEngine.length > 0, @"读得到自动配对引擎 Bridge");
     ok([bridgeEngine containsString:@"#import \"a2_rppairing.h\""], @"★Bridge 真接进了 Natives 的握手内核★");
+    ok([bridgeEngine containsString:@"#import \"a2_rppairing_verify.h\""], @"★Bridge 接进了 pair-verify 握手本体★");
+    ok([bridgeEngine containsString:@"#import \"a2_rppairing_rsd.h\""], @"★Bridge 接进了 RSD 发现/连接层★");
     ok([bridgeEngine containsString:@"[A2RPPairingPreflight run]"], @"★Bridge 真跑握手完成度自检（有调用点）★");
-    ok([bridgeEngine containsString:@"A2RPHandshakeCryptoUnavailableReason"], @"Bridge 把「未落地原因」透出给上层");
-    ok([bridgeEngine containsString:@"sysctlbyname"], @"★Developer Mode 真读（sysctl）★");
     ok([bridgeEngine containsString:@"security.mac.amfi.developer_mode_status"], @"Developer Mode 探测键明确");
-    ok([bridgeEngine containsString:@"SecTaskCreateFromSelf"], @"★get-task-allow 真读（SecTask）★");
-    ok([bridgeEngine containsString:@"SecTaskCopyValueForEntitlement"], @"entitlement 读取点明确");
+    ok(![bridgeEngine containsString:@"SecTaskCreateFromSelf("]
+       && ![bridgeEngine containsString:@"SecTaskCopyValueForEntitlement("],
+       @"★不引入 iOS 私有 API 去读 entitlement（只在注释里点名它，代码里没有任何调用）★");
+    ok([bridgeEngine containsString:@"iOS 无公开 API"], @"取不到的前置条件如实点名「无公开 API」");
     ok([bridgeEngine containsString:@"unknownPreconditions"], @"★仍以「全 Unknown」为底（没探测到 ≠ 已满足）★");
-    ok([bridgeEngine containsString:@"return NO;"], @"★isEngineAvailable/generate 仍如实回 NO（不假成功）★");
-    ok(![bridgeEngine containsString:@"return YES;"], @"★Bridge 里没有任何「生成成功」的假出口★");
-    ok([bridgeEngine containsString:@"A2JITAutoPairingBlockerEngineUnavailable"], @"失败分类 = EngineUnavailable（未接入语义）");
-    ok(![bridgeEngine containsString:@"#import \"A2JITEnvironment.h\""], @"Bridge 不 import 判据头（分层：判据另有 probe）");
+}
+
+
+#pragma mark - ⑰ [JIT-AUTOPAIR-2] 真握手本体：TLV8 / 身份 / pair-verify / RSD / 向量自证
+
+/// [JIT-AUTOPAIR-2]：本单的核心 —— pair-verify 握手本体的运行期自证 + 各层的真实现断言。
+/// ★这里的每一条都跑【真实现】（Natives/Support/a2_rppairing* 直接编译链接），不是镜像★。
+static void testRPPairingHandshakeBody(void) {
+    printf("\n-- [JIT-AUTOPAIR-2] 真握手本体（TLV8 / 身份 / pair-verify / RSD）--\n");
+
+    // ================= ① RFC 向量自证：Ed25519（RFC 8032 §7.1 TEST 1）=================
+    uint8_t seed[32], pub[32], sig[64], msgEmpty[1] = { 0 };
+    [A2RPHexData(@"9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60") getBytes:seed length:32];
+    ok(A2RPEd25519PublicKey(pub, seed) == 1, @"Ed25519 公钥派生调用成功");
+    eqStr(A2RPHexString(pub, 32),
+          @"d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+          @"★Ed25519 公钥与 RFC 8032 TEST 1 逐位相同★");
+    ok(A2RPEd25519Sign(sig, seed, msgEmpty, 0) == 1, @"Ed25519 签名调用成功");
+    eqStr(A2RPHexString(sig, 64),
+          @"e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc"
+          @"61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b",
+          @"★Ed25519 签名与 RFC 8032 TEST 1 逐位相同★");
+    ok(A2RPEd25519Verify(pub, msgEmpty, 0, sig) == 1, @"Ed25519 自验签通过");
+    uint8_t badSig[64];
+    memcpy(badSig, sig, 64);
+    badSig[7] ^= 1;
+    ok(A2RPEd25519Verify(pub, msgEmpty, 0, badSig) == 0, @"★坏签名被拒（不假通过）★");
+    uint8_t bigS[64];
+    memcpy(bigS, sig, 64);
+    memset(bigS + 32, 0xFF, 32);
+    ok(A2RPEd25519Verify(pub, msgEmpty, 0, bigS) == 0, @"★S≥L 被拒（RFC 8032 §5.1.7）★");
+
+    // ================= ② RFC 向量自证：ChaCha20-Poly1305（RFC 8439 §2.8.2）=================
+    uint8_t key[32], nonce[12], aad[12], pt[114], ct[114], tag[16], back[114];
+    NSData *dKey = A2RPHexData(@"808182838485868788898a8b8c8d8e8f909192939495969798999a9b9c9d9e9f");
+    NSData *dNonce = A2RPHexData(@"070000004041424344454647");
+    NSData *dAad = A2RPHexData(@"50515253c0c1c2c3c4c5c6c7");
+    NSData *dPt = A2RPHexData(
+        @"4c616469657320616e642047656e746c656d656e206f662074686520636c617373206f66202739393a"
+        @"204966204920636f756c64206f6666657220796f75206f6e6c79206f6e652074697020666f72207468"
+        @"65206675747572652c2073756e73637265656e20776f756c642062652069742e");
+    [dKey getBytes:key length:32];
+    [dNonce getBytes:nonce length:12];
+    [dAad getBytes:aad length:12];
+    [dPt getBytes:pt length:114];
+    ok(A2RPChaCha20Poly1305Seal(ct, tag, key, nonce, aad, 12, pt, 114) == 1, @"ChaCha20-Poly1305 加密调用成功");
+    eqStr(A2RPHexString(tag, 16), @"1ae10b594f09e26a7e902ecbd0600691",
+          @"★认证标签与 RFC 8439 §2.8.2 逐位相同★");
+    eqStr([A2RPHexString(ct, 114) substringToIndex:32], @"d31a8d34648e60db7b86afbc53ef7ec2",
+          @"★密文头 16 字节与 RFC 8439 §2.8.2 一致★");
+    ok(A2RPChaCha20Poly1305Open(back, key, nonce, aad, 12, ct, 114, tag) == 1
+       && memcmp(back, pt, 114) == 0, @"解密往返一致");
+    uint8_t badTag[16];
+    memcpy(badTag, tag, 16);
+    badTag[0] ^= 1;
+    ok(A2RPChaCha20Poly1305Open(back, key, nonce, aad, 12, ct, 114, badTag) == 0,
+       @"★坏认证标签被拒（AEAD 不假通过）★");
+
+    // ================= ③ TLV8 编解码（公开规格 §5）=================
+    NSData *v1 = [@"air2-rppairing" dataUsingEncoding:NSUTF8StringEncoding];
+    NSData *tlv = A2RPTLVEncode(@[ @(A2RPTLVTypeState), @(A2RPTLVTypeIdentifier) ],
+                                @[ [NSData dataWithBytes:"\x01" length:1], v1 ]);
+    eqInt((NSInteger)tlv.length, 2 + 1 + 2 + (NSInteger)v1.length, @"TLV8 长度 = Σ(头 2 + 值)");
+    NSString *tlvErr = nil;
+    NSDictionary *decoded = A2RPTLVDecode(tlv, &tlvErr);
+    eqInt(A2RPTLVStateValue(decoded), 1, @"TLV8 往返：State 值正确");
+    ok([[decoded objectForKey:@(A2RPTLVTypeIdentifier)] isEqualToData:v1], @"TLV8 往返：Identifier 字节一致");
+    ok(A2RPTLVValue(decoded, A2RPTLVTypeSignature) == nil, @"不存在的类型 ⇒ nil（不猜）");
+    // ★>255 字节必须切成连续同型条目、解码时并回来★
+    NSData *big = [NSMutableData dataWithLength:300];
+    NSData *bigTlv = A2RPTLVEncode(@[ @(A2RPTLVTypeProof) ], @[ big ]);
+    eqInt((NSInteger)bigTlv.length, 2 + 255 + 2 + 45, @"300 字节的值被切成 255+45 两个同型条目");
+    NSDictionary *bigBack = A2RPTLVDecode(bigTlv, NULL);
+    ok([[bigBack objectForKey:@(A2RPTLVTypeProof)] isEqualToData:big], @"★分片解码按规格并回原值★");
+    // 截断必须报错而不是静默
+    NSData *truncated = [tlv subdataWithRange:NSMakeRange(0, tlv.length - 1)];
+    tlvErr = nil;
+    ok(A2RPTLVDecode(truncated, &tlvErr) == nil && tlvErr.length > 0, @"★TLV 截断 ⇒ 报错（不静默）★");
+    ok(A2RPTLVDecode([NSData data], NULL).count == 0, @"空数据 ⇒ 空字典");
+
+    // ================= ④ 身份与配对文件（规格 §7）=================
+    NSError *idErr = nil;
+    A2RPPairingIdentity *ident = [A2RPPairingIdentity identityWithHostName:@"air2-test-host" error:&idErr];
+    ok(ident != nil, @"随机 Ed25519 身份可生成");
+    eqInt((NSInteger)ident.publicKey.length, 32, @"公钥 32 字节");
+    eqInt((NSInteger)ident.privateKey.length, 32, @"私钥 32 字节");
+    eqStr(ident.identifier, A2RPPairingIdentifierForName(@"air2-test-host"),
+          @"identifier = uuid_v3(NAMESPACE_DNS, hostname)（规格 §7）");
+    NSData *pfData2 = [ident pairingFileData];
+    ok(pfData2.length > 0, @"配对文件可产出");
+    A2PairingFile *parsed2 = [A2PairingFile pairingFileWithData:pfData2 error:NULL];
+    ok(parsed2.isValid, @"★产出的配对文件通过 A2PairingFile 校验★");
+    NSError *rtErr = nil;
+    A2RPPairingIdentity *backIdent = [A2RPPairingIdentity identityWithPairingFileData:pfData2 error:&rtErr];
+    ok(backIdent != nil && [backIdent.publicKey isEqualToData:ident.publicKey], @"配对文件往返：公钥一致");
+    // ★一致性自证：私钥必须派生出公钥，否则拒绝★
+    NSMutableDictionary *tamper = [[NSPropertyListSerialization propertyListWithData:pfData2
+                                                                            options:NSPropertyListMutableContainers
+                                                                             format:NULL error:NULL] mutableCopy];
+    uint8_t bogus[32] = { 0 };
+    tamper[@"private_key"] = [NSData dataWithBytes:bogus length:32];
+    NSData *tamperedFile = [NSPropertyListSerialization dataWithPropertyList:tamper
+                                                                     format:NSPropertyListXMLFormat_v1_0
+                                                                    options:0 error:NULL];
+    rtErr = nil;
+    ok([A2RPPairingIdentity identityWithPairingFileData:tamperedFile error:&rtErr] == nil && rtErr != nil,
+       @"★私钥与公钥不匹配的配对文件被拒（不静默接受）★");
+    // 签名/验签（身份自己的 API）
+    NSData *m = [@"payload" dataUsingEncoding:NSUTF8StringEncoding];
+    NSData *sg = [ident signMessage:m];
+    ok(sg.length == 64, @"身份可签名（64 字节）");
+    ok([A2RPPairingIdentity verifySignature:sg forMessage:m publicKey:ident.publicKey], @"身份签名可验");
+    ok(![A2RPPairingIdentity verifySignature:sg
+                                  forMessage:[@"payloaD" dataUsingEncoding:NSUTF8StringEncoding]
+                                   publicKey:ident.publicKey], @"★消息改了 ⇒ 验签失败★");
+
+    // ================= ⑤ pair-verify 自握手（★真密码学 + 真消息流★）=================
+    A2RPPairVerifySelfTest *st = [A2RPPairVerifySelfTest runSelfTest];
+    ok(st.ok, @"★pair-verify 自握手整体通过（M1→M4 + 双方密钥一致 + 篡改被拒）★");
+    eqInt((NSInteger)st.messageSizes.count, 4, @"自握手真的走了 4 条消息");
+    ok(st.secretsEqual, @"★双方 X25519 共享密钥一致（= TLS-PSK 的 PSK）★");
+    ok(st.mainKeysCrossEqual, @"★双方 client/server 主密钥一致且两名互不相同★");
+    ok(st.tamperRejected, @"★篡改 M2 的认证标签 ⇒ 被 AEAD 拒绝★");
+    ok([st.summary containsString:@"M1..M4"], @"自握手结论可读（带消息流尺寸）");
+
+    // ================= ⑥ pair-verify 消息机：非法输入必须拒（不半信）=================
+    A2RPPairingIdentity *hID = [A2RPPairingIdentity identityWithHostName:@"neg-host" error:NULL];
+    A2RPPairingIdentity *dID = [A2RPPairingIdentity identityWithHostName:@"neg-dev" error:NULL];
+    A2RPPairingIdentity *otherID = [A2RPPairingIdentity identityWithHostName:@"neg-other" error:NULL];
+    NSString *why = nil;
+    A2RPPairVerifySession *h1 = [A2RPPairVerifySession sessionWithRole:A2RPPairVerifyRoleHost
+                                                             identity:hID
+                                                        peerPublicKey:dID.publicKey
+                                                               reason:&why];
+    A2RPPairVerifySession *d1 = [A2RPPairVerifySession sessionWithRole:A2RPPairVerifyRoleDevice
+                                                             identity:dID
+                                                        peerPublicKey:hID.publicKey
+                                                               reason:&why];
+    NSData *n1 = [h1 nextMessageWithReason:&why];
+    ok(n1 != nil && [d1 acceptMessage:n1 reason:&why], @"负例准备：M1 正常");
+    NSData *n2 = [d1 nextMessageWithReason:&why];
+    // 用【另一个身份的对端公钥】的 Host 去处理 M2 ⇒ 设备签名校验必须失败
+    A2RPPairVerifySession *hWrongPeer = [A2RPPairVerifySession sessionWithRole:A2RPPairVerifyRoleHost
+                                                                     identity:hID
+                                                                peerPublicKey:otherID.publicKey
+                                                                       reason:&why];
+    NSData *p1 = [hWrongPeer nextMessageWithReason:&why];
+    ok(p1 != nil, @"负例：换了公钥的 Host 仍能发 M1（消息本身合法）");
+    why = nil;
+    ok(![hWrongPeer acceptMessage:n2 reason:&why] && why.length > 0,
+       @"★对端身份不对 ⇒ 设备证明验签失败被拒（点名原因）★");
+    // 顺序错：把 M2 直接喂给一个还没发过 M1 的 Host
+    A2RPPairVerifySession *h2 = [A2RPPairVerifySession sessionWithRole:A2RPPairVerifyRoleHost
+                                                              identity:hID
+                                                         peerPublicKey:dID.publicKey
+                                                                reason:&why];
+    why = nil;
+    ok(![h2 acceptMessage:n2 reason:&why] && [why containsString:@"顺序"],
+       @"★消息流顺序错 ⇒ 被拒（点名「顺序」）★");
+    // 非 TLV 垃圾
+    why = nil;
+    ok(![h2 acceptMessage:[@"not-a-tlv" dataUsingEncoding:NSUTF8StringEncoding] reason:&why] && why.length > 0,
+       @"非 TLV8 字节 ⇒ 被拒");
+    // 带 Error 的 TLV ⇒ 如实失败
+    NSData *errTlv = A2RPTLVEncode(@[ @(A2RPTLVTypeState), @(A2RPTLVTypeError) ],
+                                   @[ [NSData dataWithBytes:"\x02" length:1],
+                                      [NSData dataWithBytes:"\x01" length:1] ]);
+    why = nil;
+    ok(![h2 acceptMessage:errTlv reason:&why] && [why containsString:@"ErrorResponse"],
+       @"★对端 ErrorResponse ⇒ 如实失败（不当作成功）★");
+    // 未建立时不得产出共享密钥
+    ok(h2.sharedSecret == nil && !h2.established, @"未完成的会话不产出密钥、不报已建立");
+    // 对端公钥长度不对 ⇒ 拒绝建会话
+    A2RPPairVerifySession *nope = [A2RPPairVerifySession sessionWithRole:A2RPPairVerifyRoleHost
+                                                               identity:hID
+                                                          peerPublicKey:[NSMutableData dataWithLength:8]
+                                                                 reason:&why];
+    ok(nope == nil, @"★对端公钥长度不对 ⇒ 拒绝建会话（不猜）★");
+
+    // ================= ⑦ RSD 层：服务类型 / 帧 / 信封 / PSK 口径 =================
+    eqStr(A2RPRSDServiceRemotePairing, @"_remotepairing._tcp", @"服务类型常量（公开规格 §2c）");
+    eqStr(A2RPRSDServiceRemoted, @"_remoted._tcp", @"服务类型常量（公开规格 §2b）");
+    eqInt(A2RPRSDTransportForServiceType(A2RPRSDServiceRemotePairing), A2RPRSDTransportRawSocket,
+          @"_remotepairing._tcp ⇒ 裸 socket 路径");
+    eqInt(A2RPRSDTransportForServiceType(A2RPRSDServiceRemoted), A2RPRSDTransportRemoteXPC,
+          @"_remoted._tcp ⇒ RemoteXPC 路径");
+    eqInt(A2RPRSDTransportForServiceType(@"_unknown._tcp"), A2RPRSDTransportUnknown,
+          @"★未知服务类型 ⇒ Unknown（不猜）★");
+    eqInt((NSInteger)A2RPRSDDefaultServiceTypes().count, 2, @"默认发现顺序 = 先 2c 再 2b");
+
+    // 帧读取器：分片到达不报错；magic 错才报错
+    A2RPRSDFrameReader *reader = [[A2RPRSDFrameReader alloc] init];
+    NSData *frameHello = A2RPFrameEncode([@"{\"a\":1}" dataUsingEncoding:NSUTF8StringEncoding]);
+    [reader appendData:[frameHello subdataWithRange:NSMakeRange(0, 5)]];
+    NSString *fErr = nil;
+    ok([reader popFramePayloadWithError:&fErr] == nil && fErr == nil,
+       @"★帧没收全 ⇒ 返回 nil 且【不】报错（等更多数据）★");
+    [reader appendData:[frameHello subdataWithRange:NSMakeRange(5, frameHello.length - 5)]];
+    NSData *payloadOut = [reader popFramePayloadWithError:&fErr];
+    ok(payloadOut != nil
+       && [[[NSString alloc] initWithData:payloadOut encoding:NSUTF8StringEncoding] isEqualToString:@"{\"a\":1}"],
+       @"分片补齐后切出正确载荷");
+    eqInt((NSInteger)reader.bufferedBytes, 0, @"切走后缓冲清空");
+    [reader appendData:[NSData dataWithBytes:"XXXXXxxxx\x00\x01" length:11]];
+    fErr = nil;
+    ok([reader popFramePayloadWithError:&fErr] == nil && fErr.length > 0, @"★magic 不对 ⇒ 报错（不静默）★");
+
+    // JSON 信封（§8 / §3）
+    NSDictionary *hostOpts = A2RPRSDHostOptionsRequest(YES);
+    eqInt([hostOpts[@"request"][@"_0"][@"handshake"][@"_0"][@"wireProtocolVersion"] integerValue], 19,
+          @"★hostOptions 里 wireProtocolVersion = 19（规格 §1/§8）★");
+    ok([hostOpts[@"request"][@"_0"][@"handshake"][@"_0"][@"hostOptions"][@"attemptPairVerify"] boolValue],
+       @"hostOptions 带 attemptPairVerify（规格 §8 Step 1）");
+    NSData *evTlv = [NSData dataWithBytes:"\x06\x01\x01" length:3];
+    NSDictionary *ev = A2RPRSDPairingDataEvent(evTlv, @"verifyManualPairing", YES);
+    NSString *whyEv = nil;
+    NSData *evBack = A2RPRSDTLVFromPairingDataEvent(ev, &whyEv);
+    ok([evBack isEqualToData:evTlv], @"★pairingData 事件往返（base64，规格 §3）★");
+    ok([ev[@"event"][@"_0"][@"pairingData"][@"_0"][@"kind"] isEqualToString:@"verifyManualPairing"],
+       @"事件 kind = verifyManualPairing");
+    whyEv = nil;
+    ok(A2RPRSDTLVFromPairingDataEvent(@{ @"event": @{ @"_0": @{ @"pairVerifyFailed": @{} } } }, &whyEv) == nil
+       && [whyEv containsString:@"pairVerifyFailed"], @"★对端 pairVerifyFailed ⇒ 点名（回落 pair-setup）★");
+    NSNumber *port = A2RPRSDListenerPortFromResponse(@{ @"createListener": @{ @"port": @"59100" } }, NULL);
+    eqInt(port.integerValue, 59100, @"★createListener 端口按字符串解析（规格 §15）★");
+    whyEv = nil;
+    ok(A2RPRSDListenerPortFromResponse(@{ }, &whyEv) == nil && whyEv.length > 0,
+       @"没端口 ⇒ 返回 nil + 原因（不猜 0）");
+    ok([A2RPRSDCreateListenerRequest([NSData dataWithBytes:key length:32])[@"request"][@"_0"]
+        [@"createListener"][@"transportProtocolType"] isEqualToString:@"tcp"], @"createListener 走 tcp（规格 §11）");
+
+    // ★TLS-PSK 的如实口径★：公开 API 给不出设备要的套件（套件码仍是规格值）
+    whyEv = nil;
+    ok(A2RPRSDPublicTLSPSKPathSufficient(&whyEv) == NO, @"★TLS-PSK 公开路径如实回 NO（未打通）★");
+    ok([whyEv containsString:@"0x00AF"], @"★理由点名设备要的套件 0x00AF★");
+    eqInt(A2RPRSDCipherSuitePSKAES256CBCSHA384, 0x00AF, @"套件码常量（规格 §12）");
+    eqInt(A2RPRSDCipherSuitePSKAES128CBCSHA, 0x008C, @"套件码常量（规格 §12）");
+
+    // ================= ⑧ Info.plist：NSBonjourServices 与本仓服务清单一致（防漂移）=================
+    NSString *plistSrc = [NSString stringWithContentsOfFile:RepoPath(@"Air2/Info.plist")
+                                                   encoding:NSUTF8StringEncoding
+                                                      error:NULL];
+    ok(plistSrc.length > 0, @"读得到 Air2/Info.plist");
+    ok([plistSrc containsString:@"NSBonjourServices"],
+       @"★Info.plist 登记了 NSBonjourServices（否则发现阶段一无所获）★");
+    for (NSString *svc in A2RPRSDDefaultServiceTypes()) {
+        ok([plistSrc containsString:svc], ([NSString stringWithFormat:@"plist 登记了 %@", svc]));
+    }
+    ok([plistSrc containsString:A2RPRSDServicePairableHost], @"plist 登记了可配对宿主服务类型");
 }
 
 #pragma mark - main
@@ -2181,6 +2444,7 @@ int main(int argc, const char *argv[]) {
         testDDILogicAndStore();
         testDDIProbeAndGuidance();
         testRPPairingCore();
+        testRPPairingHandshakeBody();
         testWiringInvariants();
 
         printf("\n----------------------------------------\n");
