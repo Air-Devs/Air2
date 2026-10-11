@@ -67,45 +67,7 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     A2ResourceSearchStateUnsupported,
 };
 
-#pragma mark - 结果行
-//
-//  搜索结果与收藏页共用 A2ResourceCard ——
-//  对应 ZL2 里两处都用同一个 ResultProjectLayout。
-//  之前这里自绘了一套 158 行的卡片，视觉与收藏页不一致。
-
-@interface A2ResourceResultCell : UITableViewCell
-@property (nonatomic, strong) A2ResourceCard *card;
-- (void)configureWithItem:(A2ContentItem *)item;
-@end
-
-@implementation A2ResourceResultCell
-
-- (instancetype)initWithStyle:(UITableViewCellStyle)style reuseIdentifier:(NSString *)reuseIdentifier {
-    self = [super initWithStyle:style reuseIdentifier:reuseIdentifier];
-    if (!self) return nil;
-    self.backgroundColor = UIColor.clearColor;
-    self.selectionStyle = UITableViewCellSelectionStyleNone;
-
-    _card = [[A2ResourceCard alloc] initWithFrame:CGRectZero];
-    [self.contentView addSubview:_card];
-
-    [NSLayoutConstraint activateConstraints:@[
-        [_card.topAnchor constraintEqualToAnchor:self.contentView.topAnchor constant:3],
-        [_card.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor constant:-3],
-        [_card.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
-        [_card.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
-    ]];
-    return self;
-}
-
-- (void)configureWithItem:(A2ContentItem *)item {
-    [_card configureWithItem:item];
-    _card.installed = [A2DownloadManifest.shared isProjectInstalled:item.projectID];
-    _card.favorite = [A2DownloadFavorites.shared isFavorite:item.projectID];
-}
-
-@end
-
+#import "A2ResourceResultCell.h"
 
 #pragma mark - 搜索页
 

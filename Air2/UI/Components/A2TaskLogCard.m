@@ -4,6 +4,7 @@
 //
 
 #import "A2TaskLogCard.h"
+#import "A2TaskLogOutput.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"

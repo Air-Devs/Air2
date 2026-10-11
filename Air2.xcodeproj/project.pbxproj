@@ -99,6 +99,7 @@
 		7344000874E6AFAA9489A939 /* A2InstallingViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */; };
 		36BD9E3D29A1204C4DE1649E /* A2ModPackImportViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = EAF5FDB108BCF648BF323F13 /* A2ModPackImportViewController.m */; };
 		0C5E9A5111CB1B65E9B79ED9 /* A2ResourceDetailViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 39176526660F1CAEC3199C8F /* A2ResourceDetailViewController.m */; };
+		07F456A55641318A92B41F45 /* A2ResourceResultCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 05C7E85764E09AEA04C8DE32 /* A2ResourceResultCell.m */; };
 		D49F4495BA8F3A147387277B /* A2ResourceSearchViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 98024C5565241D478B54F4D6 /* A2ResourceSearchViewController.m */; };
 		4037C5EBDB3F5A02EBD25E87 /* A2SearchByIdViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = C769776AF3D8703861D81699 /* A2SearchByIdViewController.m */; };
 		7300D5E59DE772A9BD66181A /* A2FilesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E10CEEF11893D9C3037031FF /* A2FilesViewController.m */; };
@@ -225,6 +226,7 @@
 		6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2InstallingViewController.m"; sourceTree = "<group>"; };
 		EAF5FDB108BCF648BF323F13 /* A2ModPackImportViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPackImportViewController.m"; sourceTree = "<group>"; };
 		39176526660F1CAEC3199C8F /* A2ResourceDetailViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceDetailViewController.m"; sourceTree = "<group>"; };
+		05C7E85764E09AEA04C8DE32 /* A2ResourceResultCell.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceResultCell.m"; sourceTree = "<group>"; };
 		98024C5565241D478B54F4D6 /* A2ResourceSearchViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceSearchViewController.m"; sourceTree = "<group>"; };
 		C769776AF3D8703861D81699 /* A2SearchByIdViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SearchByIdViewController.m"; sourceTree = "<group>"; };
 		E10CEEF11893D9C3037031FF /* A2FilesViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2FilesViewController.m"; sourceTree = "<group>"; };
@@ -344,6 +346,7 @@
 		C7770877217FAF37A3CE2F32 /* A2InstallingViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InstallingViewController.h"; sourceTree = "<group>"; };
 		13CFDC12BA665812C543D1A4 /* A2ModPackImportViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPackImportViewController.h"; sourceTree = "<group>"; };
 		3EA82DE1C4D37327845A0CE6 /* A2ResourceDetailViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceDetailViewController.h"; sourceTree = "<group>"; };
+		C88B6C791D172A2F08F35BF2 /* A2ResourceResultCell.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceResultCell.h"; sourceTree = "<group>"; };
 		C862BDE71D4C2C8EA8C47AB5 /* A2ResourceSearchViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceSearchViewController.h"; sourceTree = "<group>"; };
 		018CB525E29025D7B9C0B237 /* A2SearchByIdViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SearchByIdViewController.h"; sourceTree = "<group>"; };
 		593DBA138961EDD00008892E /* A2FilesViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2FilesViewController.h"; sourceTree = "<group>"; };
@@ -778,6 +781,7 @@
 				6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */,
 				EAF5FDB108BCF648BF323F13 /* A2ModPackImportViewController.m */,
 				39176526660F1CAEC3199C8F /* A2ResourceDetailViewController.m */,
+				05C7E85764E09AEA04C8DE32 /* A2ResourceResultCell.m */,
 				98024C5565241D478B54F4D6 /* A2ResourceSearchViewController.m */,
 				C769776AF3D8703861D81699 /* A2SearchByIdViewController.m */,
 				27A67636607C66ADDEAFFE18 /* A2DownloadTargetPicker.h */,
@@ -789,6 +793,7 @@
 				C7770877217FAF37A3CE2F32 /* A2InstallingViewController.h */,
 				13CFDC12BA665812C543D1A4 /* A2ModPackImportViewController.h */,
 				3EA82DE1C4D37327845A0CE6 /* A2ResourceDetailViewController.h */,
+				C88B6C791D172A2F08F35BF2 /* A2ResourceResultCell.h */,
 				C862BDE71D4C2C8EA8C47AB5 /* A2ResourceSearchViewController.h */,
 				018CB525E29025D7B9C0B237 /* A2SearchByIdViewController.h */,
 			);
@@ -1025,6 +1030,7 @@
 				7344000874E6AFAA9489A939 /* A2InstallingViewController.m in Sources */,
 				36BD9E3D29A1204C4DE1649E /* A2ModPackImportViewController.m in Sources */,
 				0C5E9A5111CB1B65E9B79ED9 /* A2ResourceDetailViewController.m in Sources */,
+				07F456A55641318A92B41F45 /* A2ResourceResultCell.m in Sources */,
 				D49F4495BA8F3A147387277B /* A2ResourceSearchViewController.m in Sources */,
 				4037C5EBDB3F5A02EBD25E87 /* A2SearchByIdViewController.m in Sources */,
 				7300D5E59DE772A9BD66181A /* A2FilesViewController.m in Sources */,
