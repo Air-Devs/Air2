@@ -51,6 +51,7 @@
 #import "A2SettingsRow.h"
 #import "A2AccountManager.h"
 #import "A2Wardrobe.h"
+#import "A2SkinHeadView.h"
 #import "A2Account.h"
 #import "A2MicrosoftAuth.h"
 #import "A2LoginViewController.h"
@@ -234,8 +235,26 @@ didFinishPickingMediaWithInfo:(NSDictionary<UIImagePickerControllerInfoKey, id> 
     if (!image || !acc) return;
 
     [A2Toast show:@"正在应用皮肤…" inView:self.view];
+
+    // 规整到标准皮肤尺寸（64x64）后再交给 Core ——
+    // Core 层不引 UIKit，图片处理必须在 UI 层做完。
+    // 直接存原图会让头像裁剪坐标算错（A2SkinHeadView 按标准布局
+    // 的固定像素位置取头部区域）。
+    UIImage *normalized = image;
+    if (image.size.width != 64 || image.size.height != 64) {
+        UIGraphicsBeginImageContextWithOptions(CGSizeMake(64, 64), NO, 1.0);
+        [image drawInRect:CGRectMake(0, 0, 64, 64)];
+        normalized = UIGraphicsGetImageFromCurrentImageContext() ?: image;
+        UIGraphicsEndImageContext();
+    }
+    NSData *pngData = UIImagePNGRepresentation(normalized);
+    if (!pngData) {
+        [A2Toast show:@"图片格式无法处理" inView:self.view];
+        return;
+    }
+
     __weak typeof(self) weakSelf = self;
-    [[A2Wardrobe new] setLocalSkin:image forAccount:acc completion:^(BOOL success) {
+    [[A2Wardrobe new] setLocalSkinData:pngData forAccount:acc completion:^(BOOL success) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
         if (success) {

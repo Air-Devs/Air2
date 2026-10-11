@@ -233,28 +233,21 @@ static NSString *const kWardrobeCacheDir = @"A2Wardrobe";
 ///   64x64（1.8+ 带第二层）或 64x32（旧版）
 /// 直接存原图会让 A2SkinHeadView 的裁剪坐标算错 —— 它按
 /// 标准布局的固定像素位置取头部区域。
-- (void)setLocalSkin:(UIImage *)image
-          forAccount:(A2Account *)account
-          completion:(void (^)(BOOL))completion {
-    if (!image || !account) {
+- (void)setLocalSkinData:(NSData *)pngData
+              forAccount:(A2Account *)account
+              completion:(void (^)(BOOL))completion {
+    if (pngData.length == 0 || !account) {
         if (completion) completion(NO);
         return;
     }
 
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-        UIImage *normalized = [self normalizeSkinImage:image];
-        NSData *png = UIImagePNGRepresentation(normalized);
-        if (!png) {
-            dispatch_async(dispatch_get_main_queue(), ^{ if (completion) completion(NO); });
-            return;
-        }
-
         NSString *dir = [self directoryForUUID:account.profileID ?: account.uniqueID];
         [NSFileManager.defaultManager createDirectoryAtPath:dir
                                 withIntermediateDirectories:YES attributes:nil error:nil];
 
         NSString *dest = [dir stringByAppendingPathComponent:@"skin.png"];
-        BOOL ok = [png writeToFile:dest atomically:YES];
+        BOOL ok = [pngData writeToFile:dest atomically:YES];
         if (ok) account.skinPath = dest;
 
         dispatch_async(dispatch_get_main_queue(), ^{
@@ -263,44 +256,21 @@ static NSString *const kWardrobeCacheDir = @"A2Wardrobe";
     });
 }
 
-/// 把任意尺寸的图规整成标准皮肤尺寸。
-///
-/// Minecraft 皮肤的标准是 64x64（或旧版 64x32）。
-/// 用户可能给任意尺寸的图，直接存会让头部裁剪取到错位区域。
-/// 这里按「拉伸到 64x64」处理 —— 皮肤图本身就该是正方形比例，
-/// 非标准图拉伸总比裁错位置好。
-- (UIImage *)normalizeSkinImage:(UIImage *)image {
-    CGFloat w = image.size.width;
-    CGFloat h = image.size.height;
-    if (w <= 0 || h <= 0) return image;
-
-    // 已经是标准尺寸就不动
-    if ((w == 64 && h == 64) || (w == 64 && h == 32)) return image;
-
-    // 目标：64x64（现代皮肤格式）
-    CGSize target = CGSizeMake(64, 64);
-    UIGraphicsBeginImageContextWithOptions(target, NO, 1.0);
-    [image drawInRect:CGRectMake(0, 0, target.width, target.height)];
-    UIImage *out = UIGraphicsGetImageFromCurrentImageContext();
-    UIGraphicsEndImageContext();
-    return out ?: image;
-}
-
 - (BOOL)applyLocalSkinFromPath:(NSString *)path forAccount:(A2Account *)account {
     if (path.length == 0 || !account) return NO;
-    UIImage *img = [UIImage imageWithContentsOfFile:path];
-    if (!img) return NO;
 
-    UIImage *normalized = [self normalizeSkinImage:img];
-    NSData *png = UIImagePNGRepresentation(normalized);
-    if (!png) return NO;
+    // 直接复制文件 —— 不做图片解码/重编码。
+    // 理由：Core 层不引 UIKit（分层约束），而且皮肤图本来就该是
+    // 64x64 的标准 PNG；非标准的由 UI 层在传入前处理。
+    NSData *data = [NSData dataWithContentsOfFile:path];
+    if (data.length == 0) return NO;
 
     NSString *dir = [self directoryForUUID:account.profileID ?: account.uniqueID];
     [NSFileManager.defaultManager createDirectoryAtPath:dir
                             withIntermediateDirectories:YES attributes:nil error:nil];
 
     NSString *dest = [dir stringByAppendingPathComponent:@"skin.png"];
-    if (![png writeToFile:dest atomically:YES]) return NO;
+    if (![data writeToFile:dest atomically:YES]) return NO;
 
     account.skinPath = dest;
     return YES;
