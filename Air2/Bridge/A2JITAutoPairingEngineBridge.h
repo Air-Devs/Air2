@@ -51,6 +51,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+@class A2JITPairingFileStore;   // ★只前向声明★：头文件不引入 Player 的实现头（.m 里才 import）
+
 /// 自动配对引擎的 Bridge（RPPairing 真实现经 Bridge → Natives 落地）。
 @interface A2JITAutoPairingEngineBridge : NSObject <A2JITAutoPairingEngine>
 
