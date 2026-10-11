@@ -71,7 +71,7 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
 
 #pragma mark - 搜索页
 
-@interface A2ResourceSearchViewController () <UITableViewDataSource, UITableViewDelegate, UISearchBarDelegate>
+@interface A2ResourceSearchViewController () <UITableViewDataSource, UITableViewDelegate>
 
 @property (nonatomic, assign) A2ContentClass contentClass;
 
@@ -308,7 +308,7 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     };
     [stack addArrangedSubview:[self labeledBlock:@"名称" content:_searchField]];
     // 回车即搜
-    [_searchField setReturnKeyType:UIReturnKeySearch];
+    _searchField.textField.returnKeyType = UIReturnKeySearch;
 
     // ---- 游戏版本 ----
     _gameVersionField = [[A2TextField alloc] initWithLabel:@"游戏版本"];
@@ -319,7 +319,7 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
         __strong typeof(weakSelf) self = weakSelf;
         self.selectedGameVersion = text.length ? text : nil;
     };
-    _gameVersionField.returnKeyType = UIReturnKeySearch;
+    _gameVersionField.textField.returnKeyType = UIReturnKeySearch;
     [stack addArrangedSubview:[self labeledBlock:@"游戏版本" content:_gameVersionField]];
 
     // ---- 平台切换 ----
@@ -739,8 +739,8 @@ static NSString *A2PlatformDisplayName(A2ContentPlatform platform) {
 
 
 
-                                                  constant:A2PageMargin],
-                                                   constant:-A2PageMargin],
+                                                 constant:A2PageMargin],
+                                                  constant:-A2PageMargin],
 
 
         [_countLabel.leadingAnchor constraintEqualToAnchor:self.resultContainer.leadingAnchor
@@ -789,7 +789,7 @@ static NSString *A2PlatformDisplayName(A2ContentPlatform platform) {
     [self updateStateView];
 
     A2ContentFilter *filter = [A2ContentFilter defaultFilter];
-    filter.query = self.searchBar.text.length ? self.searchBar.text : nil;
+    filter.query = self.searchField.text.length ? self.searchField.text : nil;
     filter.gameVersion = self.selectedGameVersion;
     filter.loader = self.selectedLoader;
     filter.categories = self.selectedCategories.allObjects;
@@ -843,7 +843,7 @@ static NSString *A2PlatformDisplayName(A2ContentPlatform platform) {
     [self updateStateView];
 
     A2ContentFilter *filter = [A2ContentFilter defaultFilter];
-    filter.query = self.searchBar.text.length ? self.searchBar.text : nil;
+    filter.query = self.searchField.text.length ? self.searchField.text : nil;
     filter.gameVersion = self.selectedGameVersion;
     filter.loader = self.selectedLoader;
     filter.categories = self.selectedCategories.allObjects;
@@ -949,17 +949,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
 #pragma mark - UISearchBarDelegate
 
-- (void)searchBarSearchButtonClicked:(UISearchBar *)searchBar {
-    [searchBar resignFirstResponder];
-    [self reload];
-}
 
-- (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText {
-    // 清空时立刻恢复完整列表
-    if (searchText.length == 0) [self reload];
-}
-
-#pragma mark - 通知
 
 - (void)handleThemeChanged:(NSNotification *)note {
     [self applyTheme];
