@@ -129,10 +129,16 @@ static void testReturnCodes(void) {
 static void testAttachBranches(void) {
     printf("\n=== ④ attach 分支（真跑）===\n");
 
+    // ★持住这个替身句柄★：__bridge 不转移所有权 ⇒ 若写成 `(__bridge void *)[NSObject new]`，
+    //   ARC 会在整条表达式结束时释放它，桥随后拿它发消息就是野指针（实测直接崩）。
+    static NSObject *handleObj = nil;
+    if (handleObj == nil) handleObj = [NSObject new];
+
     A2GlfwSurface surf = {0};
-    surf.nativeView   = (__bridge void *)[NSObject new];   // 有效句柄（非 NULL）
+    surf.nativeView   = (__bridge void *)handleObj;         // 有效句柄（非 NULL；respondsToSelector 安全）
     surf.widthPixels  = 1170; surf.heightPixels = 2532;
     surf.pixelFormat  = A2_GLFW_PIXEL_FORMAT_HOST_DEFAULT;
+    ok(surf.nativeView != NULL, @"替身窗口句柄已就位（非 NULL）");
 
     // (a) 非 EGL/GL 系后端 ⇒ 不归本桥（不阻断）
     A2GlHostSurface metal = {0};
