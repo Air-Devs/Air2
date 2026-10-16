@@ -35,6 +35,8 @@
 
 #import <Foundation/Foundation.h>
 
+#import "A2LaunchMemory.h"   // Utils 叶子层 —— 内存档位的枚举（A2LaunchMemoryMode）唯一来源
+
 NS_ASSUME_NONNULL_BEGIN
 
 /// 设置变更通知。userInfo 带 A2SettingsChangedKeyKey = 变更的 key。
@@ -47,6 +49,7 @@ FOUNDATION_EXPORT NSString *const A2SettingsKeyVersionIsolation;
 FOUNDATION_EXPORT NSString *const A2SettingsKeyVersionIsolationMode;
 FOUNDATION_EXPORT NSString *const A2SettingsKeySkipIntegrityCheck;
 FOUNDATION_EXPORT NSString *const A2SettingsKeyRAMAllocationMB;
+FOUNDATION_EXPORT NSString *const A2SettingsKeyMemoryMode;
 FOUNDATION_EXPORT NSString *const A2SettingsKeyRenderer;
 FOUNDATION_EXPORT NSString *const A2SettingsKeyPreferredContentPlatform;
 FOUNDATION_EXPORT NSString *const A2SettingsKeyMirrorPriority;
@@ -97,7 +100,12 @@ static const NSInteger A2SettingsMinRAMMB = 256;
 @property (nonatomic, assign) BOOL skipIntegrityCheck;
 
 /// 全局内存分配（MB）。默认 2048，写入时钳到 >= 256。
+/// ★它是「手动档」的堆上限★；自动档下不参与取值（见 memoryMode）。
 @property (nonatomic, assign) NSInteger ramAllocationMB;
+
+/// 内存档位（自动/手动）。默认「自动」—— 按设备可用内存动态定 `-Xmx`（见 A2LaunchMemory）。
+/// 手动档用 `ramAllocationMB`，但仍受设备安全顶钳制。
+@property (nonatomic, assign) A2LaunchMemoryMode memoryMode;
 
 /// 全局渲染器标识。默认 nil（未选择）。
 @property (nonatomic, copy, nullable) NSString *renderer;

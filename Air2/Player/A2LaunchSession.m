@@ -15,6 +15,7 @@
 #import "A2JITEnvironmentProbe.h"    // ② 真调判据（Bridge → Natives/A2JITEnvironment）
 #import "A2JITScriptDelivery.h"      // ① 下发脚本（Bridge → Natives 的下发原语）
 #import "A2LaunchContract.h"
+#import "A2LaunchMemory.h"          // Utils 叶子层 —— ★内存预算★（安全堆顶 / 档位 / GC 档判据）
 #import "A2VersionManager.h"
 #import "A2AccountManager.h"
 #import "A2Account.h"
@@ -306,9 +307,31 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
         return;
     }
 
-    NSInteger memoryMB = A2Settings.shared.ramAllocationMB;
-    if (memoryMB < A2SettingsMinRAMMB) memoryMB = A2SettingsMinRAMMB;
-    NSArray<NSString *> *jvmOptions = [plan jvmOptionsWithMemoryMB:memoryMB];
+    // ========================================================================
+    // ★[MEM] 启动内存预算：设备可用内存 → 安全堆顶 → `-Xmx`★
+    // ------------------------------------------------------------------------
+    // ① 探测：Bridge 的 `currentMemoryProbe`（启动链唯一与系统接口相邻的层；
+    //    与上面 runtimeFacts 同一落点）→ 进程可安全申请内存 + 物理内存。
+    // ② 安全顶：`A2LaunchMemory.safeHeapCeilingMBForProbe:`（纯函数，见该头文件的取值口径）。
+    // ③ 档位：设置里的「自动/手动」（A2Settings.memoryMode）。★手动值仍受安全顶钳制★ ——
+    //    堆超顶的后果是被 iOS jetsam 直接杀（无 Java 异常、日志凭空断），不是慢。
+    // ④ 参数集：Java 档位（jreMajor）决定 GC 那一组（Java 17+ 才启用 G1 调优）。
+    // ★不写猜的值★：探不到就按 A2LaunchMemory 的 default 回退，并在判据行如实标 source。
+    // ========================================================================
+    A2MemoryProbe *memProbe = [A2LaunchRunner currentMemoryProbe];
+    NSInteger ceilingMB = [A2LaunchMemory safeHeapCeilingMBForProbe:memProbe];
+    NSInteger jreMajor = [A2JavaRuntimeCatalog majorVersionForDirectoryName:jreDir];
+    A2LaunchMemoryMode memMode = A2Settings.shared.memoryMode;
+    NSInteger xmxMB = [A2LaunchMemory xmxMBWithCeilingMB:ceilingMB
+                                                    mode:memMode
+                                             requestedMB:A2Settings.shared.ramAllocationMB];
+    // ★[MEM] 判据行（默认可见）★：真机一眼判「堆上限从哪来、走了哪个档、GC 是谁」。
+    [A2Log log:@"[MEM] ceiling=%ldMB -> -Xmx%ldMB (source=%@) mode=%@ jre=%ld gc=%@",
+     (long)ceilingMB, (long)xmxMB, memProbe.source,
+     (memMode == A2LaunchMemoryModeManual ? @"manual" : @"auto"),
+     (long)jreMajor, [A2LaunchMemory gcNameForJavaMajorVersion:jreMajor]];
+    NSArray<NSString *> *jvmOptions = [plan jvmOptionsWithMemoryMB:xmxMB
+                                                  javaMajorVersion:jreMajor];
 
     // 建 VM 会阻塞 ⇒ 放后台队列；结果回主线程。
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{

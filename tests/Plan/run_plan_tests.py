@@ -32,6 +32,7 @@ ROOT = os.path.dirname(os.path.dirname(HERE))          # 仓根
 # 全部只依赖 Foundation（★不含 UIKit★），所以能在 macOS 上直接编、直接跑。
 SOURCES = [
     os.path.join(ROOT, "Air2", "Core", "Version", "A2LaunchPlan.m"),
+    os.path.join(ROOT, "Air2", "Utils", "A2LaunchMemory.m"),   # 本单：计划现在依赖它做 Java 档位判据
     os.path.join(ROOT, "Air2", "Utils", "A2LaunchRuntimeFacts.m"),
     os.path.join(ROOT, "Air2", "Utils", "A2LaunchContract.m"),
     os.path.join(ROOT, "Air2", "Utils", "A2Log.m"),      # 计划里记日志的门面（随包真实实现）

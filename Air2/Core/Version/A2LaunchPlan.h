@@ -100,7 +100,13 @@ NS_ASSUME_NONNULL_BEGIN
 - (BOOL)writeToFile:(NSString *)path error:(NSError *_Nullable *_Nullable)error;
 
 /// VM 级 JVM 选项（`-Xmx…` / `-D…`）—— ★不含 classpath★。
-- (NSArray<NSString *> *)jvmOptionsWithMemoryMB:(NSInteger)memoryMB;
+/// @param memoryMB         堆上限（MB；<=0 ⇒ 连 `-Xms`/`-Xmx` 都不下发）。取值由调用方按设备预算给出
+///                         （见 `A2LaunchMemory`；Player 打 `[MEM]` 判据行）。
+/// @param javaMajorVersion 所选 JRE 大版本（`A2JavaRuntimeCatalog.majorVersionForDirectoryName:`）。
+///                         ★它决定参数集档位★：>=17 启用 G1 调优；Java 8（及未知档）保持 JVM 默认 GC
+///                         （判据实现 = `A2LaunchMemory.usesG1TuningForJavaMajorVersion:`）。
+- (NSArray<NSString *> *)jvmOptionsWithMemoryMB:(NSInteger)memoryMB
+                                javaMajorVersion:(NSInteger)javaMajorVersion;
 /// 程序参数（`--plan <path>`）。
 - (NSArray<NSString *> *)programArgumentsWithPlanPath:(NSString *)planPath;
 

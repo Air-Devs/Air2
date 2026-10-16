@@ -101,7 +101,7 @@ int main(int argc, const char *argv[]) {
         // ---- ② 计划真的产出两条 -D（字面量与契约常量逐字相同）----
         printf("[②] A2LaunchPlan.jvmOptionsWithMemoryMB: 产出这两条 -D\n");
         A2LaunchPlan *plan = PlanWithFacts(facts);
-        NSArray<NSString *> *opts = [plan jvmOptionsWithMemoryMB:2048];
+        NSArray<NSString *> *opts = [plan jvmOptionsWithMemoryMB:2048 javaMajorVersion:25];
 
         NSString *wantSize = [NSString stringWithFormat:@"-D%@=%@", A2LaunchSysPropGLFWWindowSize, @"2436x1125"];
         NSString *wantFps  = [NSString stringWithFormat:@"-D%@=120", A2LaunchSysPropMaximumFramesPerSecond];
@@ -133,7 +133,7 @@ int main(int argc, const char *argv[]) {
         ok(!nothing.hasMaximumFramesPerSecond, @"fps=0 ⇒ hasMaximumFramesPerSecond = NO");
         ok(nothing.glfwWindowSizeValue == nil, @"没取到表面尺寸 ⇒ glfwWindowSizeValue = nil（不是 \"0x0\"）");
 
-        NSArray<NSString *> *noneOpts = [PlanWithFacts(nothing) jvmOptionsWithMemoryMB:1024];
+        NSArray<NSString *> *noneOpts = [PlanWithFacts(nothing) jvmOptionsWithMemoryMB:1024 javaMajorVersion:25];
         ok(!ArrayHasPrefix(noneOpts, [NSString stringWithFormat:@"-D%@=", A2LaunchSysPropGLFWWindowSize]),
            @"★缺真值时【不下发】-Dglfw.windowSize★");
         ok(!ArrayHasPrefix(noneOpts, [NSString stringWithFormat:@"-D%@=", A2LaunchSysPropMaximumFramesPerSecond]),
@@ -145,7 +145,7 @@ int main(int argc, const char *argv[]) {
         A2LaunchRuntimeFacts *onlySize = [A2LaunchRuntimeFacts factsWithSurfaceWidthPixels:1179
                                                                              heightPixels:2556
                                                                     maximumFramesPerSecond:0];
-        NSArray<NSString *> *onlySizeOpts = [PlanWithFacts(onlySize) jvmOptionsWithMemoryMB:0];
+        NSArray<NSString *> *onlySizeOpts = [PlanWithFacts(onlySize) jvmOptionsWithMemoryMB:0 javaMajorVersion:25];
         ok(ArrayContains(onlySizeOpts, [NSString stringWithFormat:@"-D%@=1179x2556", A2LaunchSysPropGLFWWindowSize]),
            @"有尺寸 ⇒ 下发 windowSize");
         ok(!ArrayHasPrefix(onlySizeOpts, [NSString stringWithFormat:@"-D%@=", A2LaunchSysPropMaximumFramesPerSecond]),
@@ -155,7 +155,7 @@ int main(int argc, const char *argv[]) {
         // ---- ⑤ runtimeFacts = nil 也不崩、也不猜 ----
         printf("[⑤] runtimeFacts = nil 的安全行为\n");
         A2LaunchPlan *nilPlan = PlanWithFacts(nil);
-        NSArray<NSString *> *nilOpts = [nilPlan jvmOptionsWithMemoryMB:512];
+        NSArray<NSString *> *nilOpts = [nilPlan jvmOptionsWithMemoryMB:512 javaMajorVersion:25];
         ok(nilOpts.count > 0, @"计划仍可用（只少运行时事实那两条）");
         ok(!ArrayHasPrefix(nilOpts, [NSString stringWithFormat:@"-D%@=", A2LaunchSysPropGLFWWindowSize]) &&
            !ArrayHasPrefix(nilOpts, [NSString stringWithFormat:@"-D%@=", A2LaunchSysPropMaximumFramesPerSecond]),

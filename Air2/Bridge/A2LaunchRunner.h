@@ -25,6 +25,7 @@
 #import <Foundation/Foundation.h>
 
 #import "A2LaunchRuntimeFacts.h"   // Utils —— ★运行时事实值对象★（屏幕像素尺寸 / 系统最大帧率）
+#import "A2LaunchMemory.h"         // Utils —— ★内存探测值对象★（进程可安全申请内存 / 物理内存）
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -49,6 +50,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// ★不猜★：任一项取不到 ⇒ 对应字段为 0，底层据此**不下发**该 `-D`
 /// （宁可让 Java 侧如实抛错，也不填一个默认值把问题盖住）。
 + (A2LaunchRuntimeFacts *)currentRuntimeFacts;
+
+/// ★采集「设备内存探测」★：进程可安全申请内存（`os_proc_available_memory()`）+ 物理内存。
+///
+/// 为什么在 Bridge：与 `+currentRuntimeFacts` 同一落点 —— 启动链只有这里与系统接口相邻；
+/// `Core` 明文不得 import UIKit、`Player` 也不感知这类系统探测，由本层采集后如实递进。
+///
+/// ★调用点只有一处★：`Air2/Player/A2LaunchSession.m` 的 `+startCurrentVersionWithCompletion:`
+/// （在产出 jvmOptions **之前**）。取值经 `A2LaunchMemory` 算成安全堆顶 ⇒ `-Xmx`，
+/// 并在那里打成默认可见的 `[MEM] ceiling=…MB -> -Xmx…MB (source=<api|default>)` 判据行。
+///
+/// ★不猜★：`os_proc_available_memory()` 取不到时 `availableMB = 0`，底层据此走 default 回退
+/// 并把 `source=default` 如实写进判据行（不把它伪装成权威读数）。
++ (A2MemoryProbe *)currentMemoryProbe;
 
 /// 以已解析好的取值组成 java 命令行并调用自研链（**同步阻塞**：会建 VM 并派发主类 main，
 /// 调用方须放到后台队列）。
