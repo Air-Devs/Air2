@@ -448,6 +448,9 @@
     _mainCard.cornerRadius = A2RadiusXL;
     _mainCard.elevation = A2CardElevationLow;
     _mainCard.contentInsets = UIEdgeInsetsMake(A2SpaceXL, A2SpaceL, A2SpaceL, A2SpaceL);
+    // ★一级页面是玻璃的唯一用武之地★：跟随壁纸做半透明 + 可模糊。
+    // 默认（不写这行）是 MD3 实心表面 —— 二级界面一律走默认，见 docs/DECISIONS.md。
+    _mainCard.glassEnabled = YES;
 
     [self buildAccountSection];
     [self buildVersionSection];
@@ -620,6 +623,7 @@
     _recentCard.cornerRadius = A2RadiusXL;
     _recentCard.elevation = A2CardElevationLow;
     _recentCard.contentInsets = UIEdgeInsetsMake(A2CardPadding, 0, A2CardPadding, 0);
+    _recentCard.glassEnabled = YES;   // 一级页面：与主卡同样保留玻璃观感
 
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectZero];
     title.translatesAutoresizingMaskIntoConstraints = NO;

@@ -55,6 +55,7 @@
 #import "A2LoginViewController.h"
 #import "A2Settings.h"
 #import "A2Log.h"
+#import "A2OptionSheet.h"
 
 @interface A2AccountViewController ()
 @property (nonatomic, strong) A2GlassCard *listCard;
@@ -203,35 +204,32 @@
 
 /// 账号的更多操作
 - (void)showMoreMenuForAccount:(A2Account *)acc fromView:(UIView *)source {
-    UIAlertController *sheet =
-        [UIAlertController alertControllerWithTitle:acc.username
-                                            message:acc.typeDisplayName
-                                     preferredStyle:UIAlertControllerStyleActionSheet];
+    (void)source;   // MD3 选项弹窗居中自绘，不再需要 popover 锚点
+    A2OptionSheet *sheet =
+        [A2OptionSheet sheetWithTitle:acc.username
+                              message:acc.typeDisplayName];
 
     if (acc.type != A2AccountTypeOffline) {
-        [sheet addAction:[UIAlertAction actionWithTitle:@"复制 UUID"
-                                                 style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *a) {
+        [sheet addOptionWithTitle:@"复制 UUID"
+                         selected:NO
+                      destructive:NO
+                          handler:^{
             UIPasteboard.generalPasteboard.string = acc.profileID ?: @"";
             [A2Toast show:@"UUID 已复制" inView:self.view];
-        }]];
+        }];
     }
 
-    [sheet addAction:[UIAlertAction actionWithTitle:@"移除账号"
-                                             style:UIAlertActionStyleDestructive
-                                           handler:^(UIAlertAction *a) {
+    [sheet addOptionWithTitle:@"移除账号"
+                     selected:NO
+                  destructive:YES
+                      handler:^{
         [A2Log log:@"AccountVC: 移除账号 %@", acc.username];
         [A2AccountManager.shared removeAccount:acc];
         [self buildAccounts];
         [A2Toast show:@"已移除" inView:self.view];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
-                                             style:UIAlertActionStyleCancel
-                                           handler:nil]];
+    }];
 
-    sheet.popoverPresentationController.sourceView = source;
-    sheet.popoverPresentationController.sourceRect = source.bounds;
-    [self presentViewController:sheet animated:YES completion:nil];
+    [sheet presentFrom:self];
 }
 
 #pragma mark - 添加账号

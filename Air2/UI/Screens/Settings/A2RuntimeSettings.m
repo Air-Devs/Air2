@@ -48,6 +48,7 @@
 #import "A2LaunchContract.h"      // 两个偏好键（跨层契约常量）
 #import "A2Log.h"
 #import "A2Toast.h"
+#import "A2OptionSheet.h"
 
 // 四语文案取词（本文件的唯一入口；缺 key 时 A2RuntimeStrings 会回吐 key，便于一眼看出漏配）。
 static NSString *A2RS(NSString *key) {
@@ -115,10 +116,9 @@ static NSString *A2CurrentJavaRuntimeDirectory(void) {
         UIViewController *hostVC = weakHost;
         if (hostVC == nil) return;
 
-        UIAlertController *sheet =
-            [UIAlertController alertControllerWithTitle:A2RS(@"runtime.pick.renderer.title")
-                                                message:A2RS(@"runtime.pick.renderer.message")
-                                         preferredStyle:UIAlertControllerStyleActionSheet];
+        A2OptionSheet *sheet =
+            [A2OptionSheet sheetWithTitle:A2RS(@"runtime.pick.renderer.title")
+                                  message:A2RS(@"runtime.pick.renderer.message")];
 
         A2Renderer *cur = A2CurrentRenderer();
         NSString *frameworks = A2BundleFrameworksPath();
@@ -131,13 +131,12 @@ static NSString *A2CurrentJavaRuntimeDirectory(void) {
             NSString *title = [NSString stringWithFormat:@"%@ · %@ · %@",
                                name, A2RS([A2RendererCatalog tierLocalizationKeyForTier:tier]),
                                A2RS(bundled ? @"runtime.bundled" : @"runtime.notBundled")];
-            if ([cand.identifier isEqualToString:cur.identifier]) {
-                title = [@"✓ " stringByAppendingString:title];
-            }
             __weak A2SettingsRow *wRow = weakRow;
-            [sheet addAction:[UIAlertAction actionWithTitle:title
-                                                     style:UIAlertActionStyleDefault
-                                                   handler:^(UIAlertAction *a) {
+            // 当前项的标记由行上的 MD3 选中勾承担（不再往标题里塞「✓ 」前缀）
+            [sheet addOptionWithTitle:title
+                             selected:[cand.identifier isEqualToString:cur.identifier]
+                          destructive:NO
+                              handler:^{
                 [NSUserDefaults.standardUserDefaults setObject:cand.identifier
                                                         forKey:A2SelectedRendererPrefKey];
                 // 设置侧只记「用户改成了什么」；启动侧的判据行 chosen= 由 Player 的启动会话打
@@ -152,14 +151,9 @@ static NSString *A2CurrentJavaRuntimeDirectory(void) {
                               cand.identifier];
                 [A2Toast show:[NSString stringWithFormat:A2RS(@"runtime.toast.selected"), cand.displayName]
                        inView:hostVC.view];
-            }]];
+            }];
         }
-        [sheet addAction:[UIAlertAction actionWithTitle:A2RS(@"runtime.cancel")
-                                                 style:UIAlertActionStyleCancel handler:nil]];
-        A2SettingsRow *r = weakRow;
-        sheet.popoverPresentationController.sourceView = r ?: hostVC.view;
-        sheet.popoverPresentationController.sourceRect = r ? r.bounds : hostVC.view.bounds;
-        [hostVC presentViewController:sheet animated:YES completion:nil];
+        [sheet presentFrom:hostVC];
     };
     return row;
 }
@@ -191,10 +185,9 @@ static NSString *A2CurrentJavaRuntimeDirectory(void) {
         UIViewController *hostVC = weakHost;
         if (hostVC == nil) return;
 
-        UIAlertController *sheet =
-            [UIAlertController alertControllerWithTitle:A2RS(@"runtime.pick.jre.title")
-                                                message:A2RS(@"runtime.pick.jre.message")
-                                         preferredStyle:UIAlertControllerStyleActionSheet];
+        A2OptionSheet *sheet =
+            [A2OptionSheet sheetWithTitle:A2RS(@"runtime.pick.jre.title")
+                                  message:A2RS(@"runtime.pick.jre.message")];
 
         NSString *cur = A2CurrentJavaRuntimeDirectory();
         NSString *runtimesDir = A2BundleJavaRuntimesPath();
@@ -208,13 +201,11 @@ static NSString *A2CurrentJavaRuntimeDirectory(void) {
             NSString *title = [NSString stringWithFormat:@"%@ · %@ · %@",
                                name, A2RS([A2JavaRuntimeCatalog mcRangeLocalizationKeyForMajorVersion:major]),
                                A2RS(usable ? @"runtime.bundled" : @"runtime.notBundled")];
-            if ([dir isEqualToString:cur]) {
-                title = [@"✓ " stringByAppendingString:title];
-            }
             __weak A2SettingsRow *wRow = weakRow;
-            [sheet addAction:[UIAlertAction actionWithTitle:title
-                                                     style:UIAlertActionStyleDefault
-                                                   handler:^(UIAlertAction *a) {
+            [sheet addOptionWithTitle:title
+                             selected:[dir isEqualToString:cur]
+                          destructive:NO
+                              handler:^{
                 [NSUserDefaults.standardUserDefaults setObject:dir
                                                         forKey:A2SelectedJavaRuntimePrefKey];
                 [A2Log log:@"settings: Java 运行时 → %@（%@）", dir,
@@ -228,14 +219,9 @@ static NSString *A2CurrentJavaRuntimeDirectory(void) {
                 [A2Toast show:[NSString stringWithFormat:A2RS(@"runtime.toast.selected"),
                                [NSString stringWithFormat:@"Java %ld", (long)major]]
                        inView:hostVC.view];
-            }]];
+            }];
         }
-        [sheet addAction:[UIAlertAction actionWithTitle:A2RS(@"runtime.cancel")
-                                                 style:UIAlertActionStyleCancel handler:nil]];
-        A2SettingsRow *r = weakRow;
-        sheet.popoverPresentationController.sourceView = r ?: hostVC.view;
-        sheet.popoverPresentationController.sourceRect = r ? r.bounds : hostVC.view.bounds;
-        [hostVC presentViewController:sheet animated:YES completion:nil];
+        [sheet presentFrom:hostVC];
     };
     return row;
 }

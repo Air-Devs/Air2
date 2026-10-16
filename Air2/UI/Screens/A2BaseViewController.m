@@ -25,14 +25,12 @@
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
-#import "A2BackgroundView.h"
 
 @interface A2BaseViewController ()
 @property (nonatomic, strong) UIView *topBar;
 @property (nonatomic, strong) UIButton *backButton;
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UIStackView *trailingStack;
-@property (nonatomic, strong) A2BackgroundView *backgroundView;
 @property (nonatomic, strong) UIScrollView *scrollViewInternal;
 @property (nonatomic, strong) UIStackView *contentStackInternal;
 @property (nonatomic, strong) UIView *plainContentViewInternal;
@@ -55,12 +53,11 @@
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.view.backgroundColor = UIColor.blackColor;
-
-    _backgroundView = [[A2BackgroundView alloc] initWithFrame:CGRectZero];
-    _backgroundView.translatesAutoresizingMaskIntoConstraints = NO;
-    _backgroundView.fadeRatio = 0;   // 二级页面是全屏内容，不需要右侧渐隐
-    [self.view addSubview:_backgroundView];
+    // ★二级页面底板 = MD3 不透明 surface★
+    // 这里刻意不挂「壁纸 + 模糊」那层组件：它本身就是玻璃的载体，
+    // 二级选择界面一律 MD3（实心表面 + 卡片 tonal 层级），一级页面才用玻璃。
+    // 见 docs/DECISIONS.md「二级界面改 MD3、去玻璃」。
+    self.view.backgroundColor = A2ThemeManager.shared.scheme.cSurface;
 
     [self setupTopBar];
 
@@ -225,11 +222,6 @@
     NSMutableArray *constraints = [NSMutableArray array];
 
     [constraints addObjectsFromArray:@[
-        [_backgroundView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
-        [_backgroundView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
-        [_backgroundView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-        [_backgroundView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-
         [_topBar.topAnchor constraintEqualToAnchor:safe.topAnchor],
         [_topBar.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
         [_topBar.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
@@ -317,6 +309,8 @@
 
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
+    // 页面底板跟随主题的 surface —— 二级页面没有壁纸层，主题切换只换这一个色
+    self.view.backgroundColor = t.cSurface;
     _titleLabel.textColor = t.cOnSurface;
     // 顶栏控件跟随背景深浅：亮底用深色、暗底用浅色（onSurface 已按模式解析），
     // 写死白色在亮色纯色背景下会看不见。

@@ -43,6 +43,7 @@
 #import "A2GlassCard.h"
 #import "A2PrimaryButton.h"
 #import "A2Toast.h"
+#import "A2OptionSheet.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
@@ -485,35 +486,22 @@
 }
 
 - (void)showMoreMenuForVersion:(A2Version *)version meta:(NSString *)meta fromView:(UIView *)source {
-    UIAlertController *sheet =
-        [UIAlertController alertControllerWithTitle:version.name
-                                            message:meta
-                                     preferredStyle:UIAlertControllerStyleActionSheet];
+    (void)source;   // MD3 选项弹窗居中自绘，不再需要 popover 锚点
+    A2OptionSheet *sheet = [A2OptionSheet sheetWithTitle:version.name message:meta];
     __weak typeof(self) weakSelf = self;
-    [sheet addAction:[UIAlertAction actionWithTitle:@"重命名"
-                                              style:UIAlertActionStyleDefault
-                                            handler:^(UIAlertAction *action) {
+    [sheet addOptionWithTitle:@"重命名" selected:NO destructive:NO handler:^{
         __strong typeof(weakSelf) self = weakSelf;
         [self showRenameDialogForVersion:version];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"复制"
-                                              style:UIAlertActionStyleDefault
-                                            handler:^(UIAlertAction *action) {
+    }];
+    [sheet addOptionWithTitle:@"复制" selected:NO destructive:NO handler:^{
         __strong typeof(weakSelf) self = weakSelf;
-        [self showCopyDialogForVersion:version fromView:source];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"删除"
-                                              style:UIAlertActionStyleDestructive
-                                            handler:^(UIAlertAction *action) {
+        [self showCopyDialogForVersion:version fromView:nil];
+    }];
+    [sheet addOptionWithTitle:@"删除" selected:NO destructive:YES handler:^{
         __strong typeof(weakSelf) self = weakSelf;
         [self showDeleteConfirmForVersion:version];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
-                                              style:UIAlertActionStyleCancel
-                                            handler:nil]];
-    sheet.popoverPresentationController.sourceView = source;
-    sheet.popoverPresentationController.sourceRect = source.bounds;
-    [self presentViewController:sheet animated:YES completion:nil];
+    }];
+    [sheet presentFrom:self];
 }
 
 /// 重命名弹窗：非法名由管理器校验，这里只透出错误文案。
@@ -538,25 +526,20 @@
 
 /// 复制：先选粒度（无输入框的 sheet，锚在行上防 iPad 崩），再输新名，两步都合规。
 - (void)showCopyDialogForVersion:(A2Version *)version fromView:(UIView *)source {
+    (void)source;   // MD3 选项弹窗居中自绘，不再需要 popover 锚点
     __weak typeof(self) weakSelf = self;
-    UIAlertController *sheet =
-        [UIAlertController alertControllerWithTitle:@"复制版本"
-                                            message:@"仅版本文件只拷 json 与 jar；全部文件连存档模组一起拷"
-                                     preferredStyle:UIAlertControllerStyleActionSheet];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"仅版本文件" style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *a) {
+    A2OptionSheet *sheet =
+        [A2OptionSheet sheetWithTitle:@"复制版本"
+                              message:@"仅版本文件只拷 json 与 jar；全部文件连存档模组一起拷"];
+    [sheet addOptionWithTitle:@"仅版本文件" selected:NO destructive:NO handler:^{
         __strong typeof(weakSelf) self = weakSelf;
         [self requestCopyNameForVersion:version mode:A2VersionCopyModeMinimal];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"全部文件" style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *a) {
+    }];
+    [sheet addOptionWithTitle:@"全部文件" selected:NO destructive:NO handler:^{
         __strong typeof(weakSelf) self = weakSelf;
         [self requestCopyNameForVersion:version mode:A2VersionCopyModeFull];
-    }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    sheet.popoverPresentationController.sourceView = source ?: self.view;
-    sheet.popoverPresentationController.sourceRect = source ? source.bounds : self.view.bounds;
-    [self presentViewController:sheet animated:YES completion:nil];
+    }];
+    [sheet presentFrom:self];
 }
 
 /// 复制第二步：输新名并执行（粒度由上一步定，不用开关传）。

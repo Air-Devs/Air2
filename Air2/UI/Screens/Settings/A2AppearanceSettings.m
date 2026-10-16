@@ -34,6 +34,7 @@
 #import "A2Metrics.h"
 #import "A2Typography.h"
 #import "A2Toast.h"
+#import "A2OptionSheet.h"
 #import "A2BackgroundSettingsViewController.h"
 #import "A2ColorThemeDialog.h"
 #import "A2CurseForgeAPI.h"
@@ -99,26 +100,20 @@
     // row 持有 block，block 里若强引用 row 会循环 —— 用 weak
     __weak A2SettingsRow *weakAppearanceRow = appearanceRow;
     appearanceRow.onTap = ^{
-        UIAlertController *sheet =
-            [UIAlertController alertControllerWithTitle:@"深色模式"
-                                                message:nil
-                                         preferredStyle:UIAlertControllerStyleActionSheet];
+        A2OptionSheet *sheet = [A2OptionSheet sheetWithTitle:@"深色模式" message:nil];
         NSArray<NSString *> *names = @[@"跟随系统", @"浅色", @"深色"];
+        A2AppearanceMode current = A2ThemeManager.shared.appearanceMode;
         for (NSInteger i = 0; i < (NSInteger)names.count; i++) {
             NSInteger mode = i;
-            [sheet addAction:[UIAlertAction actionWithTitle:names[i]
-                                                     style:UIAlertActionStyleDefault
-                                                   handler:^(UIAlertAction *a) {
+            [sheet addOptionWithTitle:names[i]
+                             selected:(mode == (NSInteger)current)
+                          destructive:NO
+                              handler:^{
                 A2ThemeManager.shared.appearanceMode = (A2AppearanceMode)mode;
                 weakAppearanceRow.valueText = names[mode];
-            }]];
+            }];
         }
-        [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
-                                                style:UIAlertActionStyleCancel
-                                              handler:nil]];
-        sheet.popoverPresentationController.sourceView = weakAppearanceRow;
-        sheet.popoverPresentationController.sourceRect = weakAppearanceRow.bounds;
-        [host presentViewController:sheet animated:YES completion:nil];
+        [sheet presentFrom:host];
     };
     [section addRow:appearanceRow];
 
@@ -182,27 +177,25 @@
     priorityRow.accessory = A2SettingsRowAccessoryDisclosure;
     __weak A2SettingsRow *weakPriorityRow = priorityRow;
     priorityRow.onTap = ^{
-        UIAlertController *sheet =
-            [UIAlertController alertControllerWithTitle:@"镜像优先级"
-                                                message:@"下载引擎会依次尝试候选地址，失败自动切换"
-                                         preferredStyle:UIAlertControllerStyleActionSheet];
-        [sheet addAction:[UIAlertAction actionWithTitle:@"官方优先"
-                                                 style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *a) {
+        A2OptionSheet *sheet =
+            [A2OptionSheet sheetWithTitle:@"镜像优先级"
+                                  message:@"下载引擎会依次尝试候选地址，失败自动切换"];
+        A2MirrorPriority cur = [A2MirrorResolver shared].priority;
+        [sheet addOptionWithTitle:@"官方优先"
+                         selected:(cur == A2MirrorPriorityOfficialFirst)
+                      destructive:NO
+                          handler:^{
             [A2MirrorResolver shared].priority = A2MirrorPriorityOfficialFirst;
             weakPriorityRow.valueText = @"官方优先";
-        }]];
-        [sheet addAction:[UIAlertAction actionWithTitle:@"镜像优先"
-                                                 style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *a) {
+        }];
+        [sheet addOptionWithTitle:@"镜像优先"
+                         selected:(cur == A2MirrorPriorityMirrorFirst)
+                      destructive:NO
+                          handler:^{
             [A2MirrorResolver shared].priority = A2MirrorPriorityMirrorFirst;
             weakPriorityRow.valueText = @"镜像优先";
-        }]];
-        [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
-                                                 style:UIAlertActionStyleCancel handler:nil]];
-        sheet.popoverPresentationController.sourceView = weakPriorityRow;
-        sheet.popoverPresentationController.sourceRect = weakPriorityRow.bounds;
-        [host presentViewController:sheet animated:YES completion:nil];
+        }];
+        [sheet presentFrom:host];
     };
     [section addRow:priorityRow];
 

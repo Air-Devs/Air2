@@ -576,4 +576,39 @@ action sheet 列全部候选，**未内置的项照列但标「未内置」**（
 `EGLNativeWindowType` 取 `layer` 的行为事实、`eglCreateWindowSurface` 带/不带尺寸属性的两种尝试）。
 ★未搬运任何代码★。
 
+### 二级界面 MD3 去玻璃（一级保留玻璃）—— [MD3-SECONDARY]
+
+**口径**（用户 2026-10-16）：一级页面（启动器主页）保留 iOS 26 液态玻璃观感；
+**从一级点进去的二级选择界面一律 Material Design 3、不用玻璃**。
+
+**「二级」的判定是结构性的**：`Air2/UI/Screens/A2BaseViewController` 的类注释即自述
+「所有二级页面继承它」⇒ 二级界面 = `@interface X : A2BaseViewController` 的 22 个页面
+（清单由 `scripts/check_no_glass.py` 现场推导，不手抄，新增页面自动纳入）。
+一级 = `Air2/UI/Screens/Home/A2LauncherViewController`（根导航栈的 root，**不**继承基类）。
+
+| 文件 | 层 | 职责 |
+|---|---|---|
+| `Air2/UI/Screens/A2BaseViewController.m` | UI/Screens | ★二级基类★：底板从 `A2BackgroundView`（壁纸 + 模糊层）改为**不透明的 MD3 `surface`**（含 `applyTheme` 里跟随主题重取色） |
+| `Air2/UI/Components/A2GlassCard.[hm]` | UI/Components | 新增**玻璃总开关** `glassEnabled`（★默认 NO★）：NO ⇒ `surfaceContainer` 不透明填充、不加模糊；YES ⇒ 原有「跟随壁纸半透明 + `blurAmount` 模糊」路径 |
+| `Air2/UI/Screens/Home/A2LauncherViewController.m` | UI/Screens/Home | ★一级页面★、唯一调用点：主卡与最近游玩卡 `glassEnabled = YES`（观感与改前逐像素一致） |
+| `Air2/UI/Components/A2OptionSheet.[hm]` | UI/Components | ★MD3 选项弹窗★：二级界面的选择器统一形态（居中自绘 + surfaceContainerHigh 卡片 + 0.45 遮罩 + 选项行复用 A2SettingsSection/A2SettingsRow + `error` 语义色标注破坏性项）。替换 9 处系统 ActionSheet；★不依赖 popover，iPad 上同样成立★ |
+| `scripts/check_no_glass.py` | 构建 | ★机器判据★：玻璃 API 白名单 + 阴性对照①（一级命中 > 0）+ 二级清单命中 = 0 + 玻璃默认值断言 + 系统 ActionSheet 命中 = 0 + 阴性对照②（A2OptionSheet 有定义有调用）；接入 `scripts/lint_structure.sh` 第 8 节与 CI lint job |
+
+**玻璃 API 清单（命中即算玻璃使用点）**：`UIVisualEffectView` / `UIBlurEffect` / `UIVibrancyEffect` /
+`effectWithStyle:` / `blurAmount` / `A2BackgroundView` / `glassEnabled` / `UIGlassEffect` / `glassEffect`。
+**系统玻璃弹层清单**：`UIAlertControllerStyleActionSheet`（命中 = 0，白名单为空）。
+
+**白名单（唯一允许出现玻璃 API 的文件，逐条给理由）**：`A2GlassCard.[hm]`（玻璃能力的定义与实现）、
+`A2BackgroundView.[hm]`（一级壁纸层）、`A2TaskDrawer.m`（一级外壳的下载浮层）、
+`A2LauncherViewController.m`（一级页面，唯一显式开玻璃处）。★二级界面一个都不许进白名单★。
+
+**开关**：无运行时开关 —— 是**静态判据**，改错即 `make lint` 失败。
+
+**测试**：`python3 scripts/check_no_glass.py`（本仓可直接跑，Windows 亦可）。
+阴性对照 ①：把改动 stash 掉（改前代码）⇒ 脚本在二级基类上命中 3 处并判失败
+（`A2BackgroundView` 的 import / 属性 / 实例化，另 4 条约束行不计），改后为 0。
+阴性对照 ②：一级文件命中恒 > 0（若为 0 则脚本判为「假通过」并失败）。
+
+**决策记录**：`docs/DECISIONS.md` ADR-010；设计规范：`docs/UI-DESIGN.md` §4.1。
+
 
