@@ -137,6 +137,7 @@
 		1E7FB60017717A3BE32B9A3C /* A2DiagnosticsSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */; };
 		C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB44E450592838BA6F7B061 /* A2GameSettings.m */; };
 		9BE8F5D901DBF1D45147781D /* A2JITSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 0F44B4D1AF1E26050C08BDB7 /* A2JITSettings.m */; };
+		A507CF0C4C57920AE991430B /* A2MemorySettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 2A080D1149ADB6AC6557E2D1 /* A2MemorySettings.m */; };
 		DC9A725659424ECF0E571881 /* A2PairingNotifier.m in Sources */ = {isa = PBXBuildFile; fileRef = D8BC5772897E023DFBFB4D08 /* A2PairingNotifier.m */; };
 		D8FA542F7EBB121B40454E86 /* A2RuntimeSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = A05E5FC7A4D468C3B145E7EF /* A2RuntimeSettings.m */; };
 		1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */; };
@@ -153,6 +154,7 @@
 		7B7A47F5F8AA510170F1A159 /* A2ThemeManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */; };
 		0771576A647FFB4348CEC538 /* A2Typography.m in Sources */ = {isa = PBXBuildFile; fileRef = 42B68771E09EA8BB40AC83D7 /* A2Typography.m */; };
 		9DBF1C18D3CF37C75F4CD2C1 /* A2LaunchContract.m in Sources */ = {isa = PBXBuildFile; fileRef = 66180FFBC0643CB5454B7D9F /* A2LaunchContract.m */; };
+		D5A31B16172968FB7F50E8EB /* A2LaunchMemory.m in Sources */ = {isa = PBXBuildFile; fileRef = FABB5CB317D92C2E1FD06240 /* A2LaunchMemory.m */; };
 		3146645C6E4FEF74DF4E4317 /* A2LaunchRuntimeFacts.m in Sources */ = {isa = PBXBuildFile; fileRef = BECB5FBB14A09216F6F71BB2 /* A2LaunchRuntimeFacts.m */; };
 		C754280DF19913731620CE6A /* A2Log.m in Sources */ = {isa = PBXBuildFile; fileRef = CE8E02818B37C0AFFABF71D5 /* A2Log.m */; };
 		6B1CD1AC96CD93B7EE0847A4 /* A2MurmurHash2.m in Sources */ = {isa = PBXBuildFile; fileRef = 70E537F57063CE783BE3A38B /* A2MurmurHash2.m */; };
@@ -327,6 +329,7 @@
 		D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DiagnosticsSettings.m"; sourceTree = "<group>"; };
 		0FB44E450592838BA6F7B061 /* A2GameSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameSettings.m"; sourceTree = "<group>"; };
 		0F44B4D1AF1E26050C08BDB7 /* A2JITSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITSettings.m"; sourceTree = "<group>"; };
+		2A080D1149ADB6AC6557E2D1 /* A2MemorySettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MemorySettings.m"; sourceTree = "<group>"; };
 		D8BC5772897E023DFBFB4D08 /* A2PairingNotifier.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PairingNotifier.m"; sourceTree = "<group>"; };
 		A05E5FC7A4D468C3B145E7EF /* A2RuntimeSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RuntimeSettings.m"; sourceTree = "<group>"; };
 		9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsViewController.m"; sourceTree = "<group>"; };
@@ -343,6 +346,7 @@
 		5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ThemeManager.m"; sourceTree = "<group>"; };
 		42B68771E09EA8BB40AC83D7 /* A2Typography.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Typography.m"; sourceTree = "<group>"; };
 		66180FFBC0643CB5454B7D9F /* A2LaunchContract.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchContract.m"; sourceTree = "<group>"; };
+		FABB5CB317D92C2E1FD06240 /* A2LaunchMemory.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchMemory.m"; sourceTree = "<group>"; };
 		BECB5FBB14A09216F6F71BB2 /* A2LaunchRuntimeFacts.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchRuntimeFacts.m"; sourceTree = "<group>"; };
 		CE8E02818B37C0AFFABF71D5 /* A2Log.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Log.m"; sourceTree = "<group>"; };
 		70E537F57063CE783BE3A38B /* A2MurmurHash2.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MurmurHash2.m"; sourceTree = "<group>"; };
@@ -524,6 +528,7 @@
 		789AF4E406F5B8122812523E /* A2ThemeManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ThemeManager.h"; sourceTree = "<group>"; };
 		2146F61DDD3A2234BEDF108A /* A2Typography.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Typography.h"; sourceTree = "<group>"; };
 		39F6293D97FE03FDFC5D3DE4 /* A2LaunchContract.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchContract.h"; sourceTree = "<group>"; };
+		9CDA54A9359EF4776173E445 /* A2LaunchMemory.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchMemory.h"; sourceTree = "<group>"; };
 		85C93CC11854E1E0B8FD1810 /* A2LaunchRuntimeFacts.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchRuntimeFacts.h"; sourceTree = "<group>"; };
 		A0A4BD66A8E2E70961D106B2 /* A2Log.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Log.h"; sourceTree = "<group>"; };
 		089E9C0B1F10F5FF4BE351B0 /* A2MurmurHash2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MurmurHash2.h"; sourceTree = "<group>"; };
@@ -757,11 +762,13 @@
 			isa = PBXGroup;
 			children = (
 				66180FFBC0643CB5454B7D9F /* A2LaunchContract.m */,
+				FABB5CB317D92C2E1FD06240 /* A2LaunchMemory.m */,
 				BECB5FBB14A09216F6F71BB2 /* A2LaunchRuntimeFacts.m */,
 				CE8E02818B37C0AFFABF71D5 /* A2Log.m */,
 				70E537F57063CE783BE3A38B /* A2MurmurHash2.m */,
 				7EC0262DD08DEE92A0AD385D /* A2Strings.m */,
 				39F6293D97FE03FDFC5D3DE4 /* A2LaunchContract.h */,
+				9CDA54A9359EF4776173E445 /* A2LaunchMemory.h */,
 				85C93CC11854E1E0B8FD1810 /* A2LaunchRuntimeFacts.h */,
 				A0A4BD66A8E2E70961D106B2 /* A2Log.h */,
 				089E9C0B1F10F5FF4BE351B0 /* A2MurmurHash2.h */,
@@ -1225,6 +1232,7 @@
 				D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */,
 				0FB44E450592838BA6F7B061 /* A2GameSettings.m */,
 				0F44B4D1AF1E26050C08BDB7 /* A2JITSettings.m */,
+				2A080D1149ADB6AC6557E2D1 /* A2MemorySettings.m */,
 				D8BC5772897E023DFBFB4D08 /* A2PairingNotifier.m */,
 				A05E5FC7A4D468C3B145E7EF /* A2RuntimeSettings.m */,
 				9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */,
@@ -1491,6 +1499,7 @@
 				1E7FB60017717A3BE32B9A3C /* A2DiagnosticsSettings.m in Sources */,
 				C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */,
 				9BE8F5D901DBF1D45147781D /* A2JITSettings.m in Sources */,
+				A507CF0C4C57920AE991430B /* A2MemorySettings.m in Sources */,
 				DC9A725659424ECF0E571881 /* A2PairingNotifier.m in Sources */,
 				D8FA542F7EBB121B40454E86 /* A2RuntimeSettings.m in Sources */,
 				1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */,
@@ -1507,6 +1516,7 @@
 				7B7A47F5F8AA510170F1A159 /* A2ThemeManager.m in Sources */,
 				0771576A647FFB4348CEC538 /* A2Typography.m in Sources */,
 				9DBF1C18D3CF37C75F4CD2C1 /* A2LaunchContract.m in Sources */,
+				D5A31B16172968FB7F50E8EB /* A2LaunchMemory.m in Sources */,
 				3146645C6E4FEF74DF4E4317 /* A2LaunchRuntimeFacts.m in Sources */,
 				C754280DF19913731620CE6A /* A2Log.m in Sources */,
 				6B1CD1AC96CD93B7EE0847A4 /* A2MurmurHash2.m in Sources */,
