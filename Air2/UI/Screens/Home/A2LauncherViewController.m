@@ -447,6 +447,9 @@
     _mainCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
     _mainCard.cornerRadius = A2RadiusXL;
     _mainCard.elevation = A2CardElevationLow;
+    // 用户批注：这两个组件（版本卡 + 最近游玩卡）不要带边框和阴影。
+    _mainCard.drawsBorder = NO;
+    _mainCard.drawsShadow = NO;
     _mainCard.contentInsets = UIEdgeInsetsMake(A2SpaceXL, A2SpaceL, A2SpaceL, A2SpaceL);
 
     [self buildAccountSection];
@@ -619,6 +622,9 @@
     _recentCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
     _recentCard.cornerRadius = A2RadiusXL;
     _recentCard.elevation = A2CardElevationLow;
+    // 用户批注：这两个组件（版本卡 + 最近游玩卡）不要带边框和阴影。
+    _recentCard.drawsBorder = NO;
+    _recentCard.drawsShadow = NO;
     _recentCard.contentInsets = UIEdgeInsetsMake(A2CardPadding, 0, A2CardPadding, 0);
 
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectZero];

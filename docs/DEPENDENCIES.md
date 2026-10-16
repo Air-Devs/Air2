@@ -349,3 +349,47 @@
 **机器判据（可逐条核）**：`lipo -info Libraries/ThirdParty/mbedtls/lib/libmbedtls.a` = arm64；
 `nm -gU …libmbedtls.a | grep _mbedtls_ssl_conf_psk` 命中；包内 `nm` 有 `_mbedtls_ssl_conf_psk`（链接真的进去了）；
 `natives` 自证见 `tests/JIT/jit_logic_tests.m` 的 [A2-INTEGRATION] 例。
+
+---
+
+## 加载器品牌图标（IMG_0094 批注）—— ★本轮未引入，许可未决★
+
+**背景**：版本详情页（`A2LoaderCard`）的加载器列表原用 iOS 自带 SF Symbols 占位
+（`A2LoaderSymbol()`：puzzlepiece.extension.fill / square.grid.3x3.fill / …）。用户批注
+「这些不要用 iOS 自带的图标，上网找对应的真图标」，要求换成 Fabric / Quilt / Forge /
+NeoForge / Legacy Fabric / OptiFine / 原版的**官方或可再分发**品牌图标。
+
+**本轮结论：没有找到可合法随包分发的素材，故一个都没引入，等用户拍板。**
+（铁律③：图标只接受官方品牌资源或可商用/可再分发素材；拿不到就如实标注并停下问，
+★不得用无关图标充数★。）
+
+**逐项取证（截至本轮，来源为各项目官网/仓库）：**
+
+| 加载器 | 官方站点 | 许可取证 | 可否随 GPL-3.0 包分发 |
+|---|---|---|---|
+| Fabric | fabricmc.net | 站点声明「本站内容除非另有注明，按 **CC BY-NC-SA 4.0** 授权」（`fabricmc.net/use` 页脚）。NC 禁止商业使用、SA 附加相同方式共享 —— 与 GPL-3.0 分发条款不兼容 | ★否★（需上游书面许可） |
+| Quilt | quiltmc.org | 未检索到对 logo 的授权声明；商标权归 QuiltMC | ★未获授权★ |
+| Forge | minecraftforge.net | 仓库许可（LGPL-2.1）覆盖**代码**，未覆盖品牌 logo | ★未获授权★ |
+| NeoForge | neoforged.net | logo 位于 `neoforged/NeoForge` 仓库 `docs/assets`，随项目 LGPL-2.1；是否覆盖 logo 无明确说明 | ★待澄清★ |
+| Legacy Fabric | legacyfabric.net | 未检索到对 logo 的授权声明 | ★未获授权★ |
+| OptiFine | optifine.net | `optifine.net/copyright` 明确「**It may not be placed on any web site or otherwise (re)distributed**」 | ★否，明令禁止再分发★ |
+| 原版（草方块） | — | 草方块贴图是 Mojang 的美术资源，受 Minecraft 品牌/版权约束 | ★未获授权★ |
+
+**已排查但未采用的来源**：simple-icons（CC0）—— 已核 `fabric` / `quilt` / `forge` /
+`minecraftforge` / `neoforge` / `optifine` / `legacyfabric` 均 **404 / 无该品牌**，取自其 CDN 核实。
+
+**仓库内既有同名资源的处置说明（★未采用、也未删除★）**：
+`Assets/Images.xcassets/` 下另有 `ModLoaderFabric/Forge/NeoForge/OptiFine/Quilt.imageset`
+及 `VanillaIcon.imageset`，由 `A2Icon +loaderIconForIdentifier:` 使用（首页「最近游玩」小卡）。
+经逐张查图核对：`ModLoaderFabric` 实为一张**像素风火石（flint）贴图、并非 Fabric logo**，
+`ModLoaderForge` 为深色铁砧像素材质图，`ModLoaderOptiFine` 为黄字 OF 圆标，
+`VanillaIcon` 为草方块；四者在本文档**均无登记**（不在依赖清单内）。
+本轮**未改动**它们的用法（不在本单范围内），仅记录该事实供用户决定是否清理。
+⇒ 因为既无来源/许可登记、`ModLoaderFabric` 又与 Fabric 品牌无关，
+**不能**把它们搬去充当版本详情页的「真图标」。
+
+**待用户拍板的三条路**：
+1. 由用户提供/授权 6 家的官方图标（含 OptiFine 需 sp614x 书面许可）；
+2. 维持 SF Symbols，但改用**中性自绘徽标**（如首字母色块），不冒充品牌；
+3. 只对已获授权的项目换真图标，其余保持现状（会不一致，需接受）。
+

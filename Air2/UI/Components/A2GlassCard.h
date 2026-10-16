@@ -49,6 +49,15 @@ typedef NS_ENUM(NSInteger, A2CardElevation) {
 /// 卡片自身是否跟随背景模糊，0~1。需要用户在设置里开启背景模糊才生效。
 @property (nonatomic, assign) CGFloat blurAmount;
 
+/// 是否绘制描边（MD3 用 outlineVariant 的低对比细线）。默认 YES。
+/// 关掉后卡片只剩填充色，和周围的表面同族、边界靠色阶区分。
+@property (nonatomic, assign) BOOL drawsBorder;
+
+/// 是否绘制投影（MD3 的 elevation 阴影）。默认 YES。
+/// 调用方：A2LauncherViewController 的 `_mainCard` / `_recentCard`
+/// （用户批注：这两个组件不要带边框和阴影）。
+@property (nonatomic, assign) BOOL drawsShadow;
+
 /// 可点击（会带按压缩放反馈）
 @property (nonatomic, assign) BOOL tappable;
 @property (nonatomic, copy, nullable) void (^onTap)(void);

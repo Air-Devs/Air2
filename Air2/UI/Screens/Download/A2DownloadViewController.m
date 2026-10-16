@@ -95,10 +95,14 @@
 
 - (void)setupCategoryNav {
     NSArray<A2NavCategory *> *cats = @[
-        [A2NavCategory title:@"游戏"   symbol:@"sports.esports"],
+        // 图标名必须在最低支持系统（iOS 14）上存在，否则 systemImageNamed: 返回 nil、
+        // 侧栏该项只剩文字（用户批注：这两项缺图标）。原来「游戏」用 sports.esports、
+        // 「资源包」用 photo.stack.fill，两者都是 SF Symbols 4（iOS 16 起）才有的符号，
+        // 在 iPad7,11 / iOS 15.4.1 上取不到图。换成 iOS 13 就存在的等价符号。
+        [A2NavCategory title:@"游戏"   symbol:@"gamecontroller.fill"],
         [A2NavCategory title:@"整合包" symbol:@"shippingbox.fill"],
         [A2NavCategory title:@"模组"   symbol:@"puzzlepiece.extension.fill" division:YES],
-        [A2NavCategory title:@"资源包" symbol:@"photo.stack.fill"],
+        [A2NavCategory title:@"资源包" symbol:@"rectangle.stack.fill"],
         [A2NavCategory title:@"数据包" symbol:@"doc.text.fill"],
         [A2NavCategory title:@"存档"   symbol:@"map.fill"],
         [A2NavCategory title:@"光影"   symbol:@"sun.max.fill"],

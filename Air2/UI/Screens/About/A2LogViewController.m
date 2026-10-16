@@ -19,8 +19,20 @@
 @implementation A2LogViewController
 
 - (void)viewDidLoad {
-    [super viewDidLoad];
+    // ★必须在 super 之前设★：基类在 viewDidLoad 里
+    // 按 _usesScrollContent 决定建哪种内容容器（该 ivar 在 -init 里默认 YES）。
+    // 设晚了基类已经建好滚动容器、_plainContentViewInternal 一直是 nil，
+    // 于是 self.plainContentView 返回 nil，下面
+    //   [self.plainContentView addSubview:…]      → 空操作，卡没进视图树
+    //   [x.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor …]
+    //   → 目标 anchor 是 nil，CoreAutoLayout 把它当成「把 NSLayoutYAxisAnchor
+    //     约束到常量」并抛 NSInvalidArgumentException（真机日志：
+    //     "A constraint cannot be made from <NSLayoutYAxisAnchor …A2GlassCard….top>
+    //      to a constant. Location anchors require being paired."），
+    //     随后进程 abort（信号 6）。
+    // 其它 plain 页面（下载 / 设置 / 版本列表 / 选版页）都是这个顺序，别改回去。
     self.usesScrollContent = NO;
+    [super viewDidLoad];
     self.pageTitle = @"运行日志";
 
     [self addTrailingButtonWithSymbol:@"square.and.arrow.up" action:^{

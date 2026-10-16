@@ -352,6 +352,15 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     [_filterCard.contentView addSubview:root];
 
     [NSLayoutConstraint activateConstraints:@[
+        // 卡头高度必须由内容决定。原来只给摘要标签做了 centerY 对齐 +
+        // header >= 24，header 的纵向完全欠约束；Auto Layout 于是把卡头
+        // （连同整张筛选卡）解成填满可用高度，摘要文字被挤到屏幕正中，
+        // 下面的结果列表整块被盖住 —— 模组/资源包/数据包/存档/光影五个
+        // 搜索页都走这个控制器，全都白屏
+        //（用户批注：都被这东西挡上了，或者没做完，显示不出来）。
+        // 把标签上下贴住 header，header 高度就只剩「内容高度 / >= 24」两种解。
+        [_filterSummaryLabel.topAnchor constraintEqualToAnchor:header.topAnchor],
+        [_filterSummaryLabel.bottomAnchor constraintEqualToAnchor:header.bottomAnchor],
         [header.heightAnchor constraintGreaterThanOrEqualToConstant:24],
         [_filterSummaryLabel.leadingAnchor constraintEqualToAnchor:header.leadingAnchor],
         [_filterSummaryLabel.centerYAnchor constraintEqualToAnchor:header.centerYAnchor],

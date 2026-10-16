@@ -53,6 +53,11 @@ static const CGFloat kA2VersionIconBoxSize = 32;
 /// 图标方块内符号的点数。
 static const CGFloat kA2VersionIconPointSize = 18;
 
+/// 顶部筛选行（类型胶囊 / 搜索版本号 / 刷新）的统一高度。
+/// 搜索框和胶囊都用它：用户批注「搜索框太高，高度改为和旁边的一致」，
+/// 所以这行的高度由胶囊决定，搜索框跟着等高（A2TextField compactHeight）。
+static const CGFloat kA2VersionHeaderRowHeight = 36;
+
 #pragma mark - 类型筛选胶囊
 
 /// 可多选的筛选胶囊。选中态用主色填充 + 白字，未选中用容器底 + 次要文字色。
@@ -421,6 +426,12 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
         NSString *title = [A2GameVersionCell displayNameForType:type];
         A2VersionTypeChip *chip = [[A2VersionTypeChip alloc] initWithTitle:title typeKey:type];
         chip.selected = [_selectedTypes containsObject:type];
+        // 胶囊必须贴合自身文字宽度：横向抗拉伸优先级拉满。
+        // 默认 250 时，stack 宽度一旦富余（下面 chipsMaxWidth 那条会把滚动区
+        // 撑到 header 的六成宽）就只会拉长其中一个胶囊 —— 排在最前的
+        //「正式版」被拉成长条（用户批注：这个太宽了，改成和旁边两个一样的宽度）。
+        [chip setContentHuggingPriority:UILayoutPriorityRequired - 1
+                                forAxis:UILayoutConstraintAxisHorizontal];
         [chip addTarget:self action:@selector(chipTapped:)
        forControlEvents:UIControlEventTouchUpInside];
         _chipByType[type] = chip;
@@ -430,6 +441,8 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
     _searchField = [[A2TextField alloc] initWithLabel:@"搜索版本号"];
     _searchField.translatesAutoresizingMaskIntoConstraints = NO;
     _searchField.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    // 与旁边胶囊等高（用户批注：这个太高，高度改为和旁边的一致）。
+    _searchField.compactHeight = kA2VersionHeaderRowHeight;
     __weak typeof(self) weakSelf = self;
     _searchField.onTextChange = ^(NSString *text) {
         [weakSelf searchTextChanged];
@@ -469,10 +482,13 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
         [_headerRow.topAnchor constraintEqualToAnchor:host.topAnchor constant:A2SpaceM],
         [_headerRow.leadingAnchor constraintEqualToAnchor:host.leadingAnchor constant:A2PageMargin],
         [_headerRow.trailingAnchor constraintEqualToAnchor:host.trailingAnchor constant:-A2PageMargin],
+        // 整行高度 = 胶囊高度（36）。没有这条时，行高只能由搜索框的内部约束
+        // 反推（A2TextField 默认 56），整行会比胶囊高一截。
+        [_headerRow.heightAnchor constraintEqualToAnchor:_chipScroll.heightAnchor],
 
         [_chipScroll.leadingAnchor constraintEqualToAnchor:_headerRow.leadingAnchor],
         [_chipScroll.centerYAnchor constraintEqualToAnchor:_headerRow.centerYAnchor],
-        [_chipScroll.heightAnchor constraintEqualToConstant:36],
+        [_chipScroll.heightAnchor constraintEqualToConstant:kA2VersionHeaderRowHeight],
         [_chipScroll.widthAnchor constraintLessThanOrEqualToAnchor:_headerRow.widthAnchor
                                                         multiplier:0.6],
         chipsFitWidth,
@@ -484,9 +500,10 @@ static NSArray<NSString *> *A2VersionTypeOrder(void) {
         [_chipStack.trailingAnchor constraintEqualToAnchor:chipContent.trailingAnchor],
         [_chipStack.heightAnchor constraintEqualToAnchor:_chipScroll.heightAnchor],
 
-        // 搜索框撑满「胶囊区之后到刷新按钮之前」，同时它的高度决定整行高度。
-        [_searchField.topAnchor constraintEqualToAnchor:_headerRow.topAnchor],
-        [_searchField.bottomAnchor constraintEqualToAnchor:_headerRow.bottomAnchor],
+        // 搜索框与胶囊等高、同行居中（原来上下贴着 headerRow，
+        // 于是被自己的 56pt 内部高度撑高，比旁边胶囊高出一头）。
+        [_searchField.centerYAnchor constraintEqualToAnchor:_headerRow.centerYAnchor],
+        [_searchField.heightAnchor constraintEqualToAnchor:_chipScroll.heightAnchor],
         [_searchField.leadingAnchor constraintEqualToAnchor:_chipScroll.trailingAnchor
                                                    constant:A2SpaceM],
         [_searchField.trailingAnchor constraintEqualToAnchor:_refreshButton.leadingAnchor

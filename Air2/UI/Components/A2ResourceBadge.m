@@ -128,7 +128,10 @@
     switch (_contentClass) {
         case A2ContentClassMod:          symbol = @"puzzlepiece.extension.fill"; break;
         case A2ContentClassModPack:      symbol = @"shippingbox.fill"; break;
-        case A2ContentClassResourcePack: symbol = @"photo.stack.fill"; break;
+        // 资源包：用 iOS 13 就有的 rectangle.stack.fill。
+        // photo.stack.fill 是 SF Symbols 4（iOS 16 起）才有的，在最低支持系统
+        // （iOS 14/15）上 systemImageNamed: 返回 nil ⇒ 徽标没有图标（与侧栏缺图标同因）。
+        case A2ContentClassResourcePack: symbol = @"rectangle.stack.fill"; break;
         case A2ContentClassShader:       symbol = @"sun.max.fill"; break;
         case A2ContentClassWorld:        symbol = @"map.fill"; break;
         case A2ContentClassDataPack:     symbol = @"doc.fill"; break;

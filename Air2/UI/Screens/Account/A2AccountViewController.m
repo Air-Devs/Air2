@@ -85,7 +85,10 @@
 
 - (void)setupListCard {
     _listCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
-    _listCard.cornerRadius = A2RadiusXL;
+    // 整屏大卡的外圆角收一档：A2RadiusXL(28) 在整屏尺寸下弧度过大，
+    // 看起来像被「啃」掉一块（用户批注：把大筐的圆角效果削弱一些）。
+    // 用 MD3 卡片的标准 extraLarge→large 档，即 A2RadiusL(16)。
+    _listCard.cornerRadius = A2RadiusL;
     _listCard.elevation = A2CardElevationLow;
     _listCard.contentInsets = UIEdgeInsetsMake(6, 12, 6, 12);   // ZL2: 上下 6、左右 12
 
@@ -148,9 +151,16 @@
 
         row.onSelect = ^{
             __strong typeof(weakSelf) self = weakSelf;
+            if (!self) return;
             if ([A2AccountManager.shared selectCurrentAccount:acc]) {
                 [A2Log log:@"AccountVC: 切换到账号 %@", acc.username];
-                for (A2AccountRowView *r in self.rows) r.current = (r == weakRow);
+                // 这里不要再自己刷选中态：selectCurrentAccount: 会【同步】发
+                // A2AccountsDidChangeNotification，本控制器在 viewDidLoad 里
+                // 监听它并调 -buildAccounts 重建整个列表（含选中态）。
+                // 原来这里还有一句 `for (r in self.rows) r.current = (r == weakRow);`
+                // —— 那时 self.rows 已经换成新行、weakRow 指向的旧行也已释放，
+                // 于是把所有行都刷成「未选中」（用户批注：切换账号后账号这里没有
+                // 变成选中状态，重进时正常）。选中态由重建后的 buildAccounts 负责。
                 [A2Toast show:[NSString stringWithFormat:@"已切换到 %@", acc.username]
                        inView:self.view];
             }

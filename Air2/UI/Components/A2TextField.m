@@ -41,6 +41,14 @@ static const CGFloat kA2FieldHeight = 56;
 @property (nonatomic, strong) NSLayoutConstraint *labelRestingCenterY;
 @property (nonatomic, strong) NSLayoutConstraint *underlineHeight;
 
+/// 填充框高度。标准形态 = kA2FieldHeight；compactHeight > 0 时改为该值。
+@property (nonatomic, strong) NSLayoutConstraint *boxHeight;
+/// 标准形态下输入行的上下内边距（上 22 / 下 6）。
+@property (nonatomic, strong) NSLayoutConstraint *fieldTop;
+@property (nonatomic, strong) NSLayoutConstraint *fieldBottom;
+/// 紧凑形态下输入行垂直居中。
+@property (nonatomic, strong) NSLayoutConstraint *fieldCenterY;
+
 /// 标签当前是否处于上浮态
 @property (nonatomic, assign) BOOL labelFloating;
 
@@ -112,13 +120,19 @@ static const CGFloat kA2FieldHeight = 56;
 
     _underlineHeight = [_underline.heightAnchor constraintEqualToConstant:1];
 
+    // 这三条按形态二选一激活（见 -setCompactHeight:），所以先建出来不激活。
+    _boxHeight = [_box.heightAnchor constraintEqualToConstant:kA2FieldHeight];
+    _fieldTop = [_field.topAnchor constraintEqualToAnchor:_box.topAnchor constant:22];
+    _fieldBottom = [_field.bottomAnchor constraintEqualToAnchor:_box.bottomAnchor constant:-6];
+    _fieldCenterY = [_field.centerYAnchor constraintEqualToAnchor:_box.centerYAnchor];
+
     [NSLayoutConstraint activateConstraints:@[
         [_rootStack.topAnchor constraintEqualToAnchor:self.topAnchor],
         [_rootStack.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
         [_rootStack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
         [_rootStack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
 
-        [_box.heightAnchor constraintEqualToConstant:kA2FieldHeight],
+        _boxHeight,
 
         [_label.leadingAnchor constraintEqualToAnchor:_box.leadingAnchor constant:A2SpaceM],
         [_label.trailingAnchor constraintLessThanOrEqualToAnchor:_box.trailingAnchor
@@ -126,8 +140,8 @@ static const CGFloat kA2FieldHeight = 56;
 
         [_field.leadingAnchor constraintEqualToAnchor:_box.leadingAnchor constant:A2SpaceM],
         [_field.trailingAnchor constraintEqualToAnchor:_box.trailingAnchor constant:-A2SpaceM],
-        [_field.topAnchor constraintEqualToAnchor:_box.topAnchor constant:22],
-        [_field.bottomAnchor constraintEqualToAnchor:_box.bottomAnchor constant:-6],
+        _fieldTop,
+        _fieldBottom,
 
         [_underline.leadingAnchor constraintEqualToAnchor:_box.leadingAnchor],
         [_underline.trailingAnchor constraintEqualToAnchor:_box.trailingAnchor],
@@ -168,6 +182,26 @@ static const CGFloat kA2FieldHeight = 56;
 - (void)setLabelText:(NSString *)labelText {
     _labelText = [labelText copy];
     _label.text = labelText;
+}
+
+/// 切换紧凑单行形态：框高 = compactHeight，标签只当占位（不上浮），
+/// 输入行在框内垂直居中。传 0 回到标准 MD3 填充式形态。
+- (void)setCompactHeight:(CGFloat)compactHeight {
+    _compactHeight = compactHeight;
+    BOOL compact = (compactHeight > 0);
+
+    _boxHeight.constant = compact ? compactHeight : kA2FieldHeight;
+
+    _fieldTop.active = !compact;
+    _fieldBottom.active = !compact;
+    _fieldCenterY.active = compact;
+
+    if (compact) {
+        _labelFloating = NO;
+        _labelFloatingTop.active = NO;
+        _labelRestingCenterY.active = YES;
+    }
+    [self updateFloatingStateAnimated:NO];
 }
 
 - (NSString *)text {
@@ -248,7 +282,9 @@ static const CGFloat kA2FieldHeight = 56;
 #pragma mark - 状态
 
 /// 空且未聚焦时标签停在输入行内；聚焦或有内容时上浮到顶部。
+/// 紧凑形态没有上浮态 —— 标签就是占位符，输入行居中。
 - (void)updateFloatingStateAnimated:(BOOL)animated {
+    if (_compactHeight > 0) return;
     BOOL floating = (_field.isFirstResponder || _field.text.length > 0);
     if (floating == _labelFloating) return;
     _labelFloating = floating;
