@@ -45,6 +45,7 @@
 		186C2F9B8B2FA203E76FC125 /* A2GameDirMigration.m in Sources */ = {isa = PBXBuildFile; fileRef = F03B93794DA818FF2F14D7D0 /* A2GameDirMigration.m */; };
 		B084543A044A1B44B18F5627 /* A2GameFiles.m in Sources */ = {isa = PBXBuildFile; fileRef = D0693B31AD2EAB6A0328732E /* A2GameFiles.m */; };
 		6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */ = {isa = PBXBuildFile; fileRef = 074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */; };
+		6A6F891D61316F9322AA89DB /* A2RenderScaleCatalog.m in Sources */ = {isa = PBXBuildFile; fileRef = 40A79BB8E06A88A0FEE25433 /* A2RenderScaleCatalog.m */; };
 		8B0D65271C85EAABC46B0226 /* A2Renderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 47106E1A43667C70F671BED2 /* A2Renderer.m */; };
 		FF385466CB276B950E721B7C /* A2RendererCatalog.m in Sources */ = {isa = PBXBuildFile; fileRef = 72515A7BFB0670C8C454D5D5 /* A2RendererCatalog.m */; };
 		E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */ = {isa = PBXBuildFile; fileRef = 035FB3CC4FE4018F44632AD5 /* A2Settings.m */; };
@@ -165,6 +166,7 @@
 		34AA6CBDDC0541DFCC1C1BBA /* a2_glfw_overlay_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = DCA5F028E64087F787F6C202 /* a2_glfw_overlay_bridge.m */; };
 		1E2CAC326914A1EF62970368 /* a2_glfw_window.m in Sources */ = {isa = PBXBuildFile; fileRef = 64F303C8C293FF2E9265B15F /* a2_glfw_window.m */; };
 		CC74379E78799DC547F9DD00 /* a2_own_glfw_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = FA722481A91882EF6F53A567 /* a2_own_glfw_bridge.m */; };
+		F1DC313E49C6664F7C5536CD /* a2_frame_perf.m in Sources */ = {isa = PBXBuildFile; fileRef = 502EDC10EBE1532B70995126 /* a2_frame_perf.m */; };
 		9C3F95924BF96FCEFE9A2D98 /* a2_gl_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 7122630510302DEFFCBDA6B8 /* a2_gl_bridge.m */; };
 		E60B81CEF174962114DA466F /* a2_renderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 76FB869ECFD07C22D9C0F43B /* a2_renderer.m */; };
 		E04C097645AD3CC6F4684CE5 /* A2JITEnvironment.m in Sources */ = {isa = PBXBuildFile; fileRef = A651CCF3099E12483ECACD39 /* A2JITEnvironment.m */; };
@@ -233,6 +235,7 @@
 		F03B93794DA818FF2F14D7D0 /* A2GameDirMigration.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameDirMigration.m"; sourceTree = "<group>"; };
 		D0693B31AD2EAB6A0328732E /* A2GameFiles.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameFiles.m"; sourceTree = "<group>"; };
 		074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionIsolation.m"; sourceTree = "<group>"; };
+		40A79BB8E06A88A0FEE25433 /* A2RenderScaleCatalog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RenderScaleCatalog.m"; sourceTree = "<group>"; };
 		47106E1A43667C70F671BED2 /* A2Renderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Renderer.m"; sourceTree = "<group>"; };
 		72515A7BFB0670C8C454D5D5 /* A2RendererCatalog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererCatalog.m"; sourceTree = "<group>"; };
 		035FB3CC4FE4018F44632AD5 /* A2Settings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Settings.m"; sourceTree = "<group>"; };
@@ -353,6 +356,7 @@
 		DCA5F028E64087F787F6C202 /* a2_glfw_overlay_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_glfw_overlay_bridge.m"; sourceTree = "<group>"; };
 		64F303C8C293FF2E9265B15F /* a2_glfw_window.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_glfw_window.m"; sourceTree = "<group>"; };
 		FA722481A91882EF6F53A567 /* a2_own_glfw_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_own_glfw_bridge.m"; sourceTree = "<group>"; };
+		502EDC10EBE1532B70995126 /* a2_frame_perf.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_frame_perf.m"; sourceTree = "<group>"; };
 		7122630510302DEFFCBDA6B8 /* a2_gl_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_gl_bridge.m"; sourceTree = "<group>"; };
 		76FB869ECFD07C22D9C0F43B /* a2_renderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_renderer.m"; sourceTree = "<group>"; };
 		A651CCF3099E12483ECACD39 /* A2JITEnvironment.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITEnvironment.m"; sourceTree = "<group>"; };
@@ -413,6 +417,7 @@
 		801FBE3D9BBD2833977FF7A9 /* A2GameDirMigration.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameDirMigration.h"; sourceTree = "<group>"; };
 		0B3D6D1B16A31DBED39334EE /* A2GameFiles.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameFiles.h"; sourceTree = "<group>"; };
 		CDB8C000E2777EB953C462DD /* A2VersionIsolation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionIsolation.h"; sourceTree = "<group>"; };
+		C744196F4F440B96FB2AEF8F /* A2RenderScaleCatalog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RenderScaleCatalog.h"; sourceTree = "<group>"; };
 		12B70B0E6FB31B7E75D61633 /* A2Renderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Renderer.h"; sourceTree = "<group>"; };
 		AFE13A591BDAAC52AA2CB55D /* A2RendererCatalog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererCatalog.h"; sourceTree = "<group>"; };
 		8D9149596220C9F4F49C460D /* A2Settings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Settings.h"; sourceTree = "<group>"; };
@@ -530,6 +535,7 @@
 		7665B1CD998B74E654718928 /* a2_vmloader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_vmloader.h"; sourceTree = "<group>"; };
 		BC1BFCD3931CF2B23F207B8F /* a2_glfw_input.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_glfw_input.h"; sourceTree = "<group>"; };
 		7098596D5BC01E0C70FA57C8 /* a2_glfw_window.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_glfw_window.h"; sourceTree = "<group>"; };
+		2D5EE38B9E92A558A8A68E9A /* a2_frame_perf.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_frame_perf.h"; sourceTree = "<group>"; };
 		81BAC4932618C2728A52D6F9 /* a2_gl_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_gl_bridge.h"; sourceTree = "<group>"; };
 		17A733F4890B4DE82120E806 /* a2_renderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_renderer.h"; sourceTree = "<group>"; };
 		99A22A8A368208284945EF9E /* A2JITEnvironment.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITEnvironment.h"; sourceTree = "<group>"; };
@@ -808,8 +814,10 @@
 		E6E7BE7A1D3073742B26D202 /* Renderer */ = {
 			isa = PBXGroup;
 			children = (
+				502EDC10EBE1532B70995126 /* a2_frame_perf.m */,
 				7122630510302DEFFCBDA6B8 /* a2_gl_bridge.m */,
 				76FB869ECFD07C22D9C0F43B /* a2_renderer.m */,
+				2D5EE38B9E92A558A8A68E9A /* a2_frame_perf.h */,
 				81BAC4932618C2728A52D6F9 /* a2_gl_bridge.h */,
 				17A733F4890B4DE82120E806 /* a2_renderer.h */,
 			);
@@ -971,8 +979,10 @@
 		7BE232A3F169182CC82ED438 /* Renderer */ = {
 			isa = PBXGroup;
 			children = (
+				40A79BB8E06A88A0FEE25433 /* A2RenderScaleCatalog.m */,
 				47106E1A43667C70F671BED2 /* A2Renderer.m */,
 				72515A7BFB0670C8C454D5D5 /* A2RendererCatalog.m */,
+				C744196F4F440B96FB2AEF8F /* A2RenderScaleCatalog.h */,
 				12B70B0E6FB31B7E75D61633 /* A2Renderer.h */,
 				AFE13A591BDAAC52AA2CB55D /* A2RendererCatalog.h */,
 			);
@@ -1389,6 +1399,7 @@
 				186C2F9B8B2FA203E76FC125 /* A2GameDirMigration.m in Sources */,
 				B084543A044A1B44B18F5627 /* A2GameFiles.m in Sources */,
 				6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */,
+				6A6F891D61316F9322AA89DB /* A2RenderScaleCatalog.m in Sources */,
 				8B0D65271C85EAABC46B0226 /* A2Renderer.m in Sources */,
 				FF385466CB276B950E721B7C /* A2RendererCatalog.m in Sources */,
 				E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */,
@@ -1509,6 +1520,7 @@
 				34AA6CBDDC0541DFCC1C1BBA /* a2_glfw_overlay_bridge.m in Sources */,
 				1E2CAC326914A1EF62970368 /* a2_glfw_window.m in Sources */,
 				CC74379E78799DC547F9DD00 /* a2_own_glfw_bridge.m in Sources */,
+				F1DC313E49C6664F7C5536CD /* a2_frame_perf.m in Sources */,
 				9C3F95924BF96FCEFE9A2D98 /* a2_gl_bridge.m in Sources */,
 				E60B81CEF174962114DA466F /* a2_renderer.m in Sources */,
 				E04C097645AD3CC6F4684CE5 /* A2JITEnvironment.m in Sources */,

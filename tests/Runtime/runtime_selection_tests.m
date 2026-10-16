@@ -21,6 +21,7 @@
 
 #import "A2Renderer.h"
 #import "A2RendererCatalog.h"
+#import "A2RenderScaleCatalog.h"   // ★[FRAME-PERF] 渲染分辨率倍率候选表★
 #import "A2JavaRuntimeCatalog.h"
 #import "A2RuntimeStrings.h"
 
@@ -267,6 +268,58 @@ static void testRuntimeStrings(void) {
 }
 
 // ============================================================================
+#pragma mark - ③b 渲染分辨率倍率候选表（[FRAME-PERF]）
+// ============================================================================
+
+static void testRenderScaleCatalog(void) {
+    printf("\n=== ③b 渲染分辨率倍率（A2RenderScaleCatalog）===\n");
+
+    NSArray<NSNumber *> *scales = [A2RenderScaleCatalog allScales];
+    eqInt((NSInteger)scales.count, 3, @"起始三档");
+    eqInt((NSInteger)(scales[0].doubleValue * 100), 50,  @"第一档 = 0.5");
+    eqInt((NSInteger)(scales[1].doubleValue * 100), 75,  @"第二档 = 0.75");
+    eqInt((NSInteger)(scales[2].doubleValue * 100), 100, @"第三档 = 1.0");
+    ok(scales[0].doubleValue < scales[1].doubleValue &&
+       scales[1].doubleValue < scales[2].doubleValue, @"★候选按升序（UI 顺序稳定）★");
+
+    eqInt((NSInteger)([A2RenderScaleCatalog defaultScale] * 100), 100, @"默认档 = 1.0（原生像素）");
+    ok([A2RenderScaleCatalog isSupportedScale:1.0], @"1.0 受支持");
+    ok([A2RenderScaleCatalog isSupportedScale:0.75], @"0.75 受支持");
+    ok([A2RenderScaleCatalog isSupportedScale:0.5], @"0.5 受支持");
+    ok(![A2RenderScaleCatalog isSupportedScale:0.33], @"0.33 不受支持（不在表里）");
+    ok(![A2RenderScaleCatalog isSupportedScale:1.5], @"1.5 不受支持（放大不在本单范围）");
+    ok(![A2RenderScaleCatalog isSupportedScale:0.0], @"0.0 不受支持");
+
+    // ★归一化「不猜」★：缺值 / 非数值 / 超范围 ⇒ 默认档（1.0）；受支持值原样通过。
+    eqInt((NSInteger)([A2RenderScaleCatalog normalizedScaleForStoredString:nil] * 100), 100,
+          @"★缺值 ⇒ 默认档（未选择）★");
+    eqInt((NSInteger)([A2RenderScaleCatalog normalizedScaleForStoredString:@""] * 100), 100,
+          @"★空串 ⇒ 默认档★");
+    eqInt((NSInteger)([A2RenderScaleCatalog normalizedScaleForStoredString:@"abc"] * 100), 100,
+          @"★非数值 ⇒ 默认档（不解析成 0）★");
+    eqInt((NSInteger)([A2RenderScaleCatalog normalizedScaleForStoredString:@"3.0"] * 100), 100,
+          @"★超范围 ⇒ 默认档（不夹成 1.0 之外的档）★");
+    eqInt((NSInteger)([A2RenderScaleCatalog normalizedScaleForStoredString:@"0.75"] * 100), 75,
+          @"受支持值原样通过（0.75）");
+    eqInt((NSInteger)([A2RenderScaleCatalog normalizedScaleForStoredString:@"0.50"] * 100), 50,
+          @"受支持值原样通过（0.50）");
+
+    eqStr([A2RenderScaleCatalog displayPercentForScale:0.5], @"50%",  @"百分比文案 0.5");
+    eqStr([A2RenderScaleCatalog displayPercentForScale:0.75], @"75%", @"百分比文案 0.75");
+    eqStr([A2RenderScaleCatalog displayPercentForScale:1.0], @"100%", @"百分比文案 1.0");
+
+    // ★设置页要用的 key 真的在四语表里（不是漏配的裸 key）★
+    NSArray<NSString *> *keys = @[ @"runtime.row.scale", @"runtime.row.scale.detail",
+                                   @"runtime.scale.native",
+                                   @"runtime.pick.scale.title", @"runtime.pick.scale.message" ];
+    for (NSString *k in keys) {
+        NSString *v = [A2RuntimeStrings stringForKey:k language:A2RuntimeLanguageZhHans];
+        ok(v.length > 0 && ![v isEqualToString:k],
+           [NSString stringWithFormat:@"★倍率行文案 key 已配置：%@★", k]);
+    }
+}
+
+// ============================================================================
 #pragma mark - ④ 接线自证（源码级 + 随包件存在性）
 // ============================================================================
 
@@ -300,6 +353,18 @@ static void testWiring(void) {
        [ui containsString:@"A2SelectedJavaRuntimePrefKey"],
        @"★设置页是这两个键的唯一写入点（Air2 自己的 NSUserDefaults）★");
     ok([ui containsString:@"setObject:cand.identifier"], @"渲染器写入的是 dylib 文件名");
+
+    // ★[FRAME-PERF] 渲染分辨率倍率的「写点/读点各一处」★
+    ok([session containsString:@"A2SelectedRenderScalePrefKey"],
+       @"★Player 读渲染分辨率倍率偏好键（读取点）★");
+    ok([session containsString:@"[A2-RENDER] chosen="],
+       @"★倍率选择有判据行 [A2-RENDER] chosen=★");
+    ok([session containsString:@"renderScale:renderScale"],
+       @"★归一化后的倍率被传给 Bridge（不是只在 UI 里存着）★");
+    ok([ui containsString:@"A2SelectedRenderScalePrefKey"],
+       @"★设置页是倍率键的唯一写入点★");
+    ok([ui containsString:@"[NSUserDefaults.standardUserDefaults setObject:stored"],
+       @"倍率写入的是受支持档的十进制字符串（0.50/0.75/1.00）★");
 
     NSString *vc = [NSString stringWithContentsOfFile:
                     RepoPath(@"Air2/UI/Screens/Settings/A2SettingsViewController.m")
@@ -342,6 +407,7 @@ int main(void) {
         testRendererCatalog();
         testJavaRuntimeCatalog();
         testRuntimeStrings();
+        testRenderScaleCatalog();
         testWiring();
         printf("\n================ 汇总 ================\n");
         printf("PASS=%d  FAIL=%d\n", gPass, gFail);

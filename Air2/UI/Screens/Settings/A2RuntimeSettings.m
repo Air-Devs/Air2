@@ -43,11 +43,14 @@
 #import "A2SettingsRow.h"
 #import "A2Renderer.h"            // 候选值对象的类型（A2RendererCatalog 的属性/返回值用）
 #import "A2RendererCatalog.h"
+#import "A2RenderScaleCatalog.h"  // 渲染分辨率倍率候选表（[FRAME-PERF]）
 #import "A2JavaRuntimeCatalog.h"
 #import "A2RuntimeStrings.h"
 #import "A2LaunchContract.h"      // 两个偏好键（跨层契约常量）
 #import "A2Log.h"
 #import "A2Toast.h"
+
+#import <math.h>   // fabs（倍率比较）
 
 // 四语文案取词（本文件的唯一入口；缺 key 时 A2RuntimeStrings 会回吐 key，便于一眼看出漏配）。
 static NSString *A2RS(NSString *key) {
@@ -78,6 +81,22 @@ static NSString *A2CurrentJavaRuntimeDirectory(void) {
     return [A2JavaRuntimeCatalog defaultDirectoryName];
 }
 
+/// 当前选择的渲染分辨率倍率（未设置 / 非受支持值 ⇒ 默认档；归一化唯一实现在 Core 的候选表）。
+static double A2CurrentRenderScale(void) {
+    NSString *sel = [NSUserDefaults.standardUserDefaults stringForKey:A2SelectedRenderScalePrefKey];
+    return [A2RenderScaleCatalog normalizedScaleForStoredString:sel];
+}
+
+/// 倍率行的显示值：百分比 +（原生档额外标「原生」）。
+static NSString *A2RenderScaleDisplayText(double scale) {
+    NSString *percent = [A2RenderScaleCatalog displayPercentForScale:scale];
+    if (![A2RenderScaleCatalog isSupportedScale:scale]) return percent;   // 不该发生（已归一化）
+    if (scale >= [A2RenderScaleCatalog defaultScale] - 0.001) {
+        return [NSString stringWithFormat:@"%@ · %@", percent, A2RS(@"runtime.scale.native")];
+    }
+    return percent;
+}
+
 @implementation A2RuntimeSettings
 
 + (A2SettingsSection *)buildWithHost:(UIViewController *)host {
@@ -86,6 +105,7 @@ static NSString *A2CurrentJavaRuntimeDirectory(void) {
 
     [section addRow:[self rendererRowWithHost:host]];
     [section addRow:[self javaRuntimeRowWithHost:host]];
+    [section addRow:[self renderScaleRowWithHost:host]];
     return section;
 }
 
@@ -238,6 +258,70 @@ static NSString *A2CurrentJavaRuntimeDirectory(void) {
         [hostVC presentViewController:sheet animated:YES completion:nil];
     };
     return row;
+}
+
+#pragma mark - 渲染分辨率（[FRAME-PERF]）
+
++ (A2SettingsRow *)renderScaleRowWithHost:(UIViewController *)host {
+    // ★局部名用 scaleRow（而非 row）★：本行文案 key 形如 `runtime.row.scale.*`，
+    // 若局部名叫 row，scripts/lint_objc.py 的「block 循环引用」启发式会把字面量里的
+    // `row.` 误判成对 row 自身的强引用（假阳性）。换个名字即可，语义不变。
+    A2SettingsRow *scaleRow = [[A2SettingsRow alloc] init];
+    scaleRow.symbolName = @"rectangle.compress.vertical";
+    scaleRow.title = A2RS(@"runtime.row.scale");
+    scaleRow.accessory = A2SettingsRowAccessoryDisclosure;
+
+    __weak A2SettingsRow *weakRow = scaleRow;
+    void (^refresh)(void) = ^{
+        double cur = A2CurrentRenderScale();
+        weakRow.valueText = A2RenderScaleDisplayText(cur);
+        weakRow.subtitle = A2RS(@"runtime.row.scale.detail");
+    };
+    refresh();
+
+    __weak UIViewController *weakHost = host;
+    scaleRow.onTap = ^{
+        UIViewController *hostVC = weakHost;
+        if (hostVC == nil) return;
+
+        UIAlertController *sheet =
+            [UIAlertController alertControllerWithTitle:A2RS(@"runtime.pick.scale.title")
+                                                message:A2RS(@"runtime.pick.scale.message")
+                                         preferredStyle:UIAlertControllerStyleActionSheet];
+
+        double cur = A2CurrentRenderScale();
+        for (NSNumber *cand in [A2RenderScaleCatalog allScales]) {
+            double scale = cand.doubleValue;
+            NSString *title = A2RenderScaleDisplayText(scale);
+            if (fabs(scale - cur) < 0.001) {
+                title = [@"✓ " stringByAppendingString:title];
+            }
+            __weak A2SettingsRow *wRow = weakRow;
+            [sheet addAction:[UIAlertAction actionWithTitle:title
+                                                     style:UIAlertActionStyleDefault
+                                                   handler:^(UIAlertAction *a) {
+                // ★写入点唯一★（读取点 = Player 的启动会话；键见 A2LaunchContract.h）。
+                NSString *stored = [NSString stringWithFormat:@"%.2f", scale];
+                [NSUserDefaults.standardUserDefaults setObject:stored
+                                                        forKey:A2SelectedRenderScalePrefKey];
+                [A2Log log:@"settings: 渲染分辨率 → %@（%@；下一帧起按缩放后的 drawable 尺寸清屏/呈现）",
+                 stored, [A2RenderScaleCatalog displayPercentForScale:scale]];
+                A2SettingsRow *r = wRow;
+                r.valueText = A2RenderScaleDisplayText(scale);
+                r.subtitle = A2RS(@"runtime.row.scale.detail");
+                [A2Toast show:[NSString stringWithFormat:A2RS(@"runtime.toast.selected"),
+                               [A2RenderScaleCatalog displayPercentForScale:scale]]
+                       inView:hostVC.view];
+            }]];
+        }
+        [sheet addAction:[UIAlertAction actionWithTitle:A2RS(@"runtime.cancel")
+                                                 style:UIAlertActionStyleCancel handler:nil]];
+        A2SettingsRow *r = weakRow;
+        sheet.popoverPresentationController.sourceView = r ?: hostVC.view;
+        sheet.popoverPresentationController.sourceRect = r ? r.bounds : hostVC.view.bounds;
+        [hostVC presentViewController:sheet animated:YES completion:nil];
+    };
+    return scaleRow;
 }
 
 @end

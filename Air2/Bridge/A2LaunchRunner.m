@@ -19,6 +19,7 @@
 #import "a2_resourcepaths.h"   // Natives/Context —— R4 classpath 唯一拼装点
 #import "a2_renderer.h"        // Natives/Renderer —— 渲染后端「选 + 加载」入口（见 docs/ARCHITECTURE.md [RENDER-WIRE]）
 #import "a2_gl_bridge.h"       // Natives/Renderer —— ★GL 桥★：让选中后端真的拿到 surface 并建出 GL 上下文（[GL-BRIDGE]）
+#import "a2_frame_perf.h"      // Natives/Renderer —— ★[FRAME-PERF] 与渲染器无关的帧性能判据★
 
 // ============================================================================
 //  ★[GL-BRIDGE] 宿主表面采集 + 帧回调★（本文件的私有件；调用点见 +launchWithPlanPath:）
@@ -73,12 +74,26 @@ static A2GlfwSurface A2RunnerHostSurface(void) {
     return out;
 }
 
-/// ★帧回调★：GL 桥每帧先做完自己的帧动作（glClear/eglSwapBuffers）再回调本函数。
-/// 这里只做「宿主侧记录」——不碰任何 GL 类型（帧回调是交给桥的中立接口，不是 GL 接口）。
+// ---------------------------------------------------------------------------
+//  ★[FRAME-PERF] 判据节拍★（与渲染器无关：这里只数帧、打行；数值由桥记进 a2_frame_perf）
+// ---------------------------------------------------------------------------
+// 基线帧数：附着后由启动链驱动这么多帧（**预览态**）。★为什么必须有★：
+//   本包内游戏帧源尚未接入（渲染器只到「选 + dlopen」）⇒ 若不主动驱动，就一帧样本都没有，
+//   「每 N 帧一行」也就无从谈起。基线帧只验「上下文在按当前渲染倍率清屏/呈现」，不代表游戏负载。
+static const int A2RunnerPreviewFrameCount = 10;
+/// 每 N 帧打一行 [FRAME]（避免每帧刷日志）；★首帧必打★（保证至少一行样本，或一行「无样本」说明）。
+static const int A2RunnerFrameLogEveryNFrames = 5;
+
+/// ★帧回调★：GL 桥每帧先做完自己的帧动作（按缩放尺寸清屏/呈现）再回调本函数。
+/// 本函数只负责**判据节拍**（每 N 帧一行）——不碰任何 GL 类型（帧回调是交给桥的中立接口，
+/// 不是 GL 接口）；本帧的数值由桥在回调之前记进 `a2_frame_perf`。
 static void A2RunnerFrameCallback(void *user) {
     int *counter = (int *)user;
-    if (counter != NULL) (*counter)++;
-    [A2Log log:@"[A2-GLBRIDGE] 宿主帧回调触发（第 %d 帧；钩子已在启动链上）", counter ? *counter : 0];
+    if (counter == NULL) return;
+    (*counter)++;
+    if (*counter == 1 || (*counter % A2RunnerFrameLogEveryNFrames) == 0) {
+        a2_frame_perf_log_line();
+    }
 }
 
 @implementation A2LaunchRunner
@@ -155,7 +170,8 @@ static void A2RunnerFrameCallback(void *user) {
             librariesPath:(NSString *)librariesPath
                  lwjglDir:(NSString *)lwjglDir
            frameworksPath:(nullable NSString *)frameworksPath
-            rendererDylib:(nullable NSString *)rendererDylib {
+            rendererDylib:(nullable NSString *)rendererDylib
+              renderScale:(double)renderScale {
     if (planPath.length == 0 || javaHome.length == 0) {
         [A2Log log:@"[A2-LAUNCH] 组命令行失败：planPath/javaHome 为空"];
         return -8;
@@ -184,9 +200,29 @@ static void A2RunnerFrameCallback(void *user) {
     //   是 EGL/GL 系但缺库/无表面/建面失败 ⇒ 负值，**如实阻断**（-12），绝不换成别的渲染器。
     int glFrameCounter = 0;
     A2GlHostSurface glHost = {0};
-    glHost.surface       = A2RunnerHostSurface();     // 原生窗口句柄 + 像素格式 + 尺寸（主线程采集）
+
+    // ---- ★[FRAME-PERF] 分辨率缩放：只改**表面像素**（drawable），逻辑尺寸（点）不动★ ----
+    // 缩放口径：drawable 像素 = 表面像素 × 渲染倍率。倍率由 Player 归一化后传入；
+    // 这里只做「合法区间」兜底（<=0 或 >1 ⇒ 按 1.0，不猜中间值），不在 Bridge 里读偏好。
+    A2GlfwSurface hostSurface = A2RunnerHostSurface();   // 原生窗口句柄 + 像素格式 + 尺寸（主线程采集）
+    double appliedScale = (renderScale > 0.0 && renderScale <= 1.0) ? renderScale : 1.0;
+    if (appliedScale < 1.0) {
+        hostSurface.widthPixels  = (int)lround(hostSurface.widthPixels  * appliedScale);
+        hostSurface.heightPixels = (int)lround(hostSurface.heightPixels * appliedScale);
+        // ★widthPoints/heightPoints/contentScale 原样不动★ —— 逻辑尺寸不变。
+    }
+    [A2Log log:@"[A2-RENDER] 表面缩放：points=%dx%d（不变） px=%dx%d（= 表面像素 × %.2f）scale=%.2f source=%@",
+     hostSurface.widthPoints, hostSurface.heightPoints,
+     hostSurface.widthPixels, hostSurface.heightPixels, appliedScale, appliedScale,
+     (renderScale > 0.0 && renderScale <= 1.0) ? @"player" : @"clamped-to-1.0"];
+
+    // 帧判据的环境（drawable 尺寸 + 渲染倍率）；相位从「预览态」起。
+    a2_frame_perf_set_environment(hostSurface.widthPixels, hostSurface.heightPixels, appliedScale);
+    a2_frame_perf_set_phase(A2FramePhasePreview);
+
+    glHost.surface       = hostSurface;               // 原生窗口句柄 + 像素格式 + 尺寸（已按倍率缩放）
     glHost.rendererName  = rendererDylib.UTF8String;  // 与上面同一份已解析的 dylib 名（Bridge 不读偏好）
-    glHost.frameCallback = A2RunnerFrameCallback;     // 帧回调（宿主侧记录；桥每帧末尾回调）
+    glHost.frameCallback = A2RunnerFrameCallback;     // 帧回调（每 N 帧一行 [FRAME]；桥每帧末尾回调）
     glHost.frameUser     = &glFrameCounter;
 
     int glRC = a2_gl_bridge_attach(&glHost, frameworksPath);
@@ -196,6 +232,19 @@ static void A2RunnerFrameCallback(void *user) {
         [A2Log log:@"[A2-GLBRIDGE] ★阻断启动★：所选渲染器是 EGL/GL 系，但未能建出 GL 上下文（rc=%d）—— 缺什么/为何失败见上一行，改选已内置的渲染器后重试",
          glRC];
         return -12;
+    }
+
+    // ---- ★[FRAME-PERF] 预览态基线帧★ ----
+    // 附着之后由启动链驱动一小段帧（≤ A2RunnerPreviewFrameCount）：① 给「每 N 帧一行」凑出样本；
+    // ② 让「本帧确实按缩放尺寸清屏/呈现」有据可查（每帧的 drawable/scissor 读回进 [FRAME]）。
+    // 非 EGL/GL 系后端（rc=1，桥未附着）时本循环不产帧 ⇒ 下面如实补一行「无帧样本」。
+    // 相位说明：这些帧是**预览态**；游戏/渲染器接管帧生产后才是真实态（见 [FRAME] 的 phase 字段）。
+    for (int i = 0; i < A2RunnerPreviewFrameCount; i++) {
+        a2_gl_bridge_present_frame();
+    }
+    if (glFrameCounter == 0) {
+        // 桥没附着（后端不归本桥）⇒ 如实说「没有帧样本」，不编造。
+        a2_frame_perf_log_line();
     }
 
     // ---- front 项：启动核心 jar + LWJGL 补丁 jar + 自研 GLFW jar ----
@@ -255,6 +304,10 @@ static void A2RunnerFrameCallback(void *user) {
     [A2Log log:@"[A2-LAUNCH] 自研链启动：entry=%@ plan=%@ argv=%lu 条（classpath %lu 字符）",
      A2LaunchEntryMainClass, planPath.lastPathComponent,
      (unsigned long)count, (unsigned long)classpath.length];
+
+    // ★[FRAME-PERF] 相位切到「真实态」★：从这里起帧生产归游戏/渲染器（本包内未接入帧源
+    //   ⇒ 不会有真实态样本；若将来渲染器经桥产帧，其 [FRAME] 行即 phase=real）。
+    a2_frame_perf_set_phase(A2FramePhaseReal);
 
     int rc = a2_launch_jvm_with_argv((int)count, cargv, input);
 

@@ -146,6 +146,18 @@ if [ -f "$ROOT/scripts/lint_objc.py" ]; then
     fi
 fi
 
+# ------------------------------------------------------------
+# 8. 帧性能判据层：与渲染器解耦 + 禁石山（[FRAME-PERF]）
+# ------------------------------------------------------------
+# 为什么并进这里：本层「不得出现后端专有名」「每个对外函数必须有调用点」两条都是
+# 可机器判定的硬约束（同 verify_ownglfw_native.py 的做法）；挂进 lint 才能被 CI 挡住。
+echo "==> 8. 帧性能判据层（解耦 / 禁石山）"
+if [ -f "$ROOT/scripts/verify_frame_perf_native.py" ]; then
+    if ! python3 "$ROOT/scripts/verify_frame_perf_native.py"; then
+        err "帧性能判据层静态自证未通过（见上方输出）"
+    fi
+fi
+
 echo ""
 if [ "$FAIL" -eq 0 ]; then
     printf '\033[32m检查通过\033[0m\n'

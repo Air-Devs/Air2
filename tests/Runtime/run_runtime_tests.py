@@ -31,6 +31,7 @@ ROOT = os.path.dirname(os.path.dirname(HERE))          # 仓根
 SOURCES = [
     os.path.join(ROOT, "Air2", "Core", "Renderer", "A2Renderer.m"),         # 既有：值对象 + 注册表
     os.path.join(ROOT, "Air2", "Core", "Renderer", "A2RendererCatalog.m"),  # 候选表 + 包内存在性
+    os.path.join(ROOT, "Air2", "Core", "Renderer", "A2RenderScaleCatalog.m"),# ★[FRAME-PERF] 渲染分辨率倍率候选表★
     os.path.join(ROOT, "Air2", "Core", "Version", "A2JavaRuntimeCatalog.m"),# JRE 候选表 + 可用性
     os.path.join(ROOT, "Air2", "Player", "A2RuntimeStrings.m"),             # 四语文案表
     os.path.join(HERE, "runtime_selection_tests.m"),

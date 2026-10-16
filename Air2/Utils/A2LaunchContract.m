@@ -28,3 +28,4 @@ NSString *const A2SelectedRendererPrefKey    = @"A2SelectedRenderer";
 NSString *const A2SelectedJavaRuntimePrefKey = @"A2SelectedJavaRuntime";
 // [JIT-AUTOPAIR-3] 配对码来源（写入点=设置页；读取点=Player 的 A2JITPairingPinResolver）。
 NSString *const A2SelectedPairingPinSourcePrefKey = @"A2SelectedPairingPinSource";
+NSString *const A2SelectedRenderScalePrefKey = @"A2SelectedRenderScale";

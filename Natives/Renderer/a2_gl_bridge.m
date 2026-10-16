@@ -21,6 +21,7 @@
 // ============================================================================
 #import "a2_gl_bridge.h"
 #import "a2_log.h"
+#import "a2_frame_perf.h"   // ★[FRAME-PERF] 与渲染器无关的帧性能判据（本文件的帧动作每帧记一次）
 
 #import <objc/message.h>   // objc_msgSend（动态取 layer 用；不 import UIKit）
 #import <dlfcn.h>
@@ -59,10 +60,16 @@ typedef void         *(*A2PFN_eglGetProcAddress)(const char *);
 typedef A2EGLBoolean  (*A2PFN_eglDestroySurface)(A2EGLDisplay, A2EGLSurface);
 typedef A2EGLBoolean  (*A2PFN_eglDestroyContext)(A2EGLDisplay, A2EGLContext);
 typedef A2EGLBoolean  (*A2PFN_eglTerminate)(A2EGLDisplay);
+typedef A2EGLBoolean  (*A2PFN_eglQuerySurface)(A2EGLDisplay, A2EGLSurface, A2EGLint, A2EGLint *);
 
 typedef void      (*A2PFN_glClear)(uint32_t);
 typedef void      (*A2PFN_glClearColor)(float, float, float, float);
 typedef uint32_t  (*A2PFN_glGetError)(void);
+typedef void      (*A2PFN_glViewport)(int, int, int, int);
+typedef void      (*A2PFN_glScissor)(int, int, int, int);
+typedef void      (*A2PFN_glEnable)(uint32_t);
+typedef void      (*A2PFN_glDisable)(uint32_t);
+typedef void      (*A2PFN_glGetIntegerv)(uint32_t, int *);
 
 #define A2_EGL_DEFAULT_DISPLAY       ((void *)0)
 #define A2_EGL_NO_DISPLAY            ((A2EGLDisplay)0)
@@ -85,6 +92,8 @@ typedef uint32_t  (*A2PFN_glGetError)(void);
 #define A2_EGL_WIDTH                 0x3057
 #define A2_EGL_HEIGHT                0x3056
 #define A2_GL_COLOR_BUFFER_BIT       0x00004000
+#define A2_GL_SCISSOR_BOX            0x0C10
+#define A2_GL_SCISSOR_TEST           0x0C11
 
 // ---------------------------------------------------------------------------
 // 桥状态（一次性：attach 成功后驻留到进程结束/再次 attach）
@@ -111,15 +120,23 @@ static A2PFN_eglGetProcAddress    gEglGetProcAddress = NULL;
 static A2PFN_eglDestroySurface    gEglDestroySurface = NULL;
 static A2PFN_eglDestroyContext    gEglDestroyContext = NULL;
 static A2PFN_eglTerminate         gEglTerminate = NULL;
+static A2PFN_eglQuerySurface      gEglQuerySurface = NULL;
 
 static A2PFN_glClear      gGLClear = NULL;
 static A2PFN_glClearColor gGLClearColor = NULL;
 static A2PFN_glGetError   gGLGetError = NULL;
+static A2PFN_glViewport    gGLViewport = NULL;
+static A2PFN_glScissor     gGLScissor = NULL;
+static A2PFN_glEnable      gGLEnable = NULL;
+static A2PFN_glDisable     gGLDisable = NULL;
+static A2PFN_glGetIntegerv gGLGetIntegerv = NULL;
 
 static int   gAttached = 0;
 static int   gFrameCount = 0;
 static int   gWidthPixels = 0;
 static int   gHeightPixels = 0;
+static int   gSurfaceWidthPixels  = 0;   // eglQuerySurface 回报的实际 drawable 宽（0 = 实现未回报）
+static int   gSurfaceHeightPixels = 0;   // 同上（高）
 static A2GlFrameCallback gFrameCb = NULL;
 static void *gFrameUser = NULL;
 
@@ -152,11 +169,13 @@ static void a2_gl_bridge_teardown(void) {
     gEglChooseConfig = NULL; gEglCreateContext = NULL; gEglCreateWindowSurface = NULL;
     gEglMakeCurrent = NULL; gEglSwapBuffers = NULL; gEglGetError = NULL;
     gEglGetProcAddress = NULL; gEglDestroySurface = NULL; gEglDestroyContext = NULL;
-    gEglTerminate = NULL;
+    gEglTerminate = NULL; gEglQuerySurface = NULL;
     gGLClear = NULL; gGLClearColor = NULL; gGLGetError = NULL;
+    gGLViewport = NULL; gGLScissor = NULL; gGLEnable = NULL; gGLDisable = NULL; gGLGetIntegerv = NULL;
     gAttached = 0; gFrameCount = 0;
     gFrameCb = NULL; gFrameUser = NULL;
     gWidthPixels = 0; gHeightPixels = 0;
+    gSurfaceWidthPixels = 0; gSurfaceHeightPixels = 0;
 }
 
 /// 把宿主的「承载视图」归一化成 EGL 期望的可渲染句柄（layer）。
@@ -185,26 +204,60 @@ static void *a2_gl_bridge_egl_symbol(void *handle, const char *name, int *missin
     return sym;
 }
 
-/// ★帧回调体★：本层每帧做一次可判据的可用性动作 —— `glClear`（+ `eglSwapBuffers`），
-/// 再回调宿主提供的 frameCallback（若给了）。调用点：a2_gl_bridge_attach（附着后立即渲染一帧）。
+/// ★帧回调体★：本层每帧做一次可判据的可用性动作，并按**当前渲染倍率的 drawable 像素尺寸**
+/// 清屏/呈现（[FRAME-PERF]）。调用点：`a2_gl_bridge_attach`（附着后立即渲染一帧）与
+/// `a2_gl_bridge_present_frame`（启动链的基线帧循环）。
 ///
-/// 为什么清成透明 (0,0,0,0) 而不是实色：宿主表面当前是承载游戏的宿主窗口，
+/// ★缩小的是这里的像素数，不是逻辑尺寸★：宿主表面里点尺寸（widthPoints/heightPoints）没动，
+/// drawable 像素（gWidthPixels/gHeightPixels）已是「表面像素 × 渲染倍率」——
+/// 本函数把这些像素设进 viewport/scissor、再清屏，就是「分辨率缩放真的落到帧上」的那一处。
+///
+/// ★为什么清成透明 (0,0,0,0) 而不是实色★：宿主表面当前是承载游戏的宿主窗口，
 /// 实色清屏会让 UI 整块变黑（可见破坏）；透明清屏同样能证明「上下文可用」，
-/// 且视觉上通常无变化 —— 证据由本函数的判据行 + glGetError 承担。
+/// 且视觉上通常无变化 —— 证据由 scissor 读回 + 判据行 + glGetError 承担。
 static void a2_gl_bridge_frame_work(void) {
     if (!gAttached) return;
 
     gFrameCount++;
     uint32_t glErr = 0;
 
+    const int w = gWidthPixels;    // = 缩放后的 drawable 宽（像素）
+    const int h = gHeightPixels;   // = 缩放后的 drawable 高（像素）
+
+    // ---- ① 按缩放后的像素尺寸设 viewport / scissor（清屏与后续绘制都落在这个区域里）----
+    if (gGLViewport != NULL) gGLViewport(0, 0, w, h);
+    if (gGLEnable != NULL)   gGLEnable(A2_GL_SCISSOR_TEST);
+    if (gGLScissor != NULL)  gGLScissor(0, 0, w, h);
+
     if (gGLClearColor != NULL) gGLClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     if (gGLClear != NULL)      gGLClear(A2_GL_COLOR_BUFFER_BIT);
-    if (gEglSwapBuffers != NULL) gEglSwapBuffers(gDpy, gSurf);
-    if (gGLGetError != NULL)   glErr = gGLGetError();
 
-    a2_log_f(@"%s 帧回调 #%d 已执行 glClear（color=0,0,0,0；%dx%d 像素）glGetError=0x%x ⇒ %s（surface=%p）",
-             A2GlBridgeJudgementTag, gFrameCount, gWidthPixels, gHeightPixels, (unsigned)glErr,
-             (glErr == 0) ? @"GL 上下文可用" : @"★GL 上下文报错★",
+    // ---- ② ★可核对证据★：读回 scissor box（= 本帧真正被清屏/绘制的像素区域）----
+    //   与 gWidthPixels/gHeightPixels 一致 ⇒ 「本帧确实按缩放尺寸清屏」有据可查；
+    //   实现不提供 glGetIntegerv/glScissor 时退回报请求值，并在判据行点明「无读回」。
+    int clearW = w, clearH = h;
+    BOOL boxReadBack = NO;
+    if (gGLGetIntegerv != NULL && gGLScissor != NULL) {
+        int scissorBox[4] = { 0, 0, 0, 0 };
+        gGLGetIntegerv(A2_GL_SCISSOR_BOX, scissorBox);
+        clearW = scissorBox[2];
+        clearH = scissorBox[3];
+        boxReadBack = YES;
+    }
+    if (gGLDisable != NULL) gGLDisable(A2_GL_SCISSOR_TEST);   // ★还原状态★：不把 scissor 留给后续使用者
+
+    if (gEglSwapBuffers != NULL) gEglSwapBuffers(gDpy, gSurf);
+    if (gGLGetError != NULL)     glErr = gGLGetError();
+
+    // ---- ③ 记进帧性能判据（中立数值；draw=1 = 本帧一次清屏；shaderNew=0 = 本层不建着色器/管线）----
+    a2_frame_perf_record_frame(1, 0, (gEglSwapBuffers != NULL) ? 1 : 0, clearW, clearH);
+
+    a2_log_f(@"%s 帧回调 #%d 已按缩放尺寸清屏/呈现（drawable=%dx%d 像素；scissor 读回=%dx%d %s）"
+             "glGetError=0x%x ⇒ %s（surface=%p）",
+             A2GlBridgeJudgementTag, gFrameCount, w, h, clearW, clearH,
+             boxReadBack ? "[已读回]" : "[实现无读回，报请求值]",
+             (unsigned)glErr,
+             (glErr == 0) ? "GL 上下文可用" : "★GL 上下文报错★",
              (void *)gSurf);
 
     if (gFrameCb != NULL) gFrameCb(gFrameUser);
@@ -213,6 +266,12 @@ static void a2_gl_bridge_frame_work(void) {
 // ============================================================================
 //  公开 API
 // ============================================================================
+
+void a2_gl_bridge_present_frame(void) {
+    // 未附着（例如所选后端不是 EGL/GL 系 ⇒ attach 返回 Skipped）⇒ 无操作：
+    // 不产帧、不记数（帧性能判据会如实报 frames=0）。
+    a2_gl_bridge_frame_work();
+}
 
 int a2_gl_bridge_backend_is_egl(const char *rendererName) {
     if (rendererName == NULL || rendererName[0] == '\0') return 0;
@@ -328,6 +387,7 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     gEglDestroySurface    = (A2PFN_eglDestroySurface)dlsym(gEglHandle, "eglDestroySurface");
     gEglDestroyContext    = (A2PFN_eglDestroyContext)dlsym(gEglHandle, "eglDestroyContext");
     gEglTerminate         = (A2PFN_eglTerminate)dlsym(gEglHandle, "eglTerminate");
+    gEglQuerySurface      = (A2PFN_eglQuerySurface)dlsym(gEglHandle, "eglQuerySurface");
 
     // ---- ⑥ 建 EGL display / config / context / surface ----
     gDpy = gEglGetDisplay(A2_EGL_DEFAULT_DISPLAY);
@@ -416,6 +476,23 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
              A2GlBridgeJudgementTag, (void *)gDpy, (void *)gCfg, (void *)gCtx, (void *)gSurf,
              host->surface.widthPixels, host->surface.heightPixels, host->surface.pixelFormat);
 
+    // ---- ⑥b [FRAME-PERF] 回报实际 drawable 尺寸（可核对：与「请求的缩放后尺寸」是否一致）----
+    // 为什么单独查一次：部分实现在 iOS 上按图层的点尺寸 × 缩放决定 drawable，会**忽略**请求尺寸。
+    // ★量不到就不声称量到了★：回报为 0 就说明「实现没回报」，不假装等于请求值。
+    // （帧判据行里的 `clear=` 是本层按请求的缩放尺寸显式设进 scissor 的区域 ⇒ 缩放仍生效。）
+    gSurfaceWidthPixels = 0;
+    gSurfaceHeightPixels = 0;
+    if (gEglQuerySurface != NULL) {
+        A2EGLint qw = 0, qh = 0;
+        if (gEglQuerySurface(gDpy, gSurf, A2_EGL_WIDTH, &qw))  gSurfaceWidthPixels  = (int)qw;
+        if (gEglQuerySurface(gDpy, gSurf, A2_EGL_HEIGHT, &qh)) gSurfaceHeightPixels = (int)qh;
+    }
+    a2_log_f(@"%s drawable 尺寸核对：请求=%dx%d 像素（已含渲染倍率）；实现回报=%dx%d 像素%s",
+             A2GlBridgeJudgementTag,
+             host->surface.widthPixels, host->surface.heightPixels,
+             gSurfaceWidthPixels, gSurfaceHeightPixels,
+             (gEglQuerySurface == NULL) ? "（实现未提供查询入口）" : "");
+
     // ---- ⑦ 取 GL 函数指针（glClear 必需；优先 eglGetProcAddress，回落 dlsym(GLESv2)）----
     void *pClear = gEglGetProcAddress ? gEglGetProcAddress("glClear") : NULL;
     void *pClearColor = gEglGetProcAddress ? gEglGetProcAddress("glClearColor") : NULL;
@@ -433,6 +510,25 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     gGLClear      = (A2PFN_glClear)pClear;
     gGLClearColor = (A2PFN_glClearColor)pClearColor;   // 可空（缺则只清默认色）
     gGLGetError   = (A2PFN_glGetError)pGetError;       // 可空（缺则判据行只报 0 未知）
+
+    // ---- ⑦b [FRAME-PERF] 取「按缩放尺寸清屏」所需的可选入口 ----
+    // 缺了不影响建面/清屏主路径：viewport/scissor 退化为「清整个 drawable」，
+    // scissor 读回缺失时判据行如实点明「实现无读回，报请求值」。
+    void *pViewport  = gEglGetProcAddress ? gEglGetProcAddress("glViewport") : NULL;
+    void *pScissor   = gEglGetProcAddress ? gEglGetProcAddress("glScissor") : NULL;
+    void *pEnable    = gEglGetProcAddress ? gEglGetProcAddress("glEnable") : NULL;
+    void *pDisable   = gEglGetProcAddress ? gEglGetProcAddress("glDisable") : NULL;
+    void *pGetInt    = gEglGetProcAddress ? gEglGetProcAddress("glGetIntegerv") : NULL;
+    if (pViewport == NULL) pViewport = dlsym(gGlesHandle, "glViewport");
+    if (pScissor  == NULL) pScissor  = dlsym(gGlesHandle, "glScissor");
+    if (pEnable   == NULL) pEnable   = dlsym(gGlesHandle, "glEnable");
+    if (pDisable  == NULL) pDisable  = dlsym(gGlesHandle, "glDisable");
+    if (pGetInt   == NULL) pGetInt   = dlsym(gGlesHandle, "glGetIntegerv");
+    gGLViewport    = (A2PFN_glViewport)pViewport;
+    gGLScissor     = (A2PFN_glScissor)pScissor;
+    gGLEnable      = (A2PFN_glEnable)pEnable;
+    gGLDisable     = (A2PFN_glDisable)pDisable;
+    gGLGetIntegerv = (A2PFN_glGetIntegerv)pGetInt;
 
     // ---- ⑧ 附着并渲染一帧（帧内 glClear 作可用性判据）----
     gAttached = 1;

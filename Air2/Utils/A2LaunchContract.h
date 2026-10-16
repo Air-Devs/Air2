@@ -85,4 +85,12 @@ FOUNDATION_EXPORT NSString *const A2SelectedJavaRuntimePrefKey;
 /// 读取点唯一：`Air2/Player/A2JITPairingPinSource.m` 的 `A2JITPairingPinResolver`。
 FOUNDATION_EXPORT NSString *const A2SelectedPairingPinSourcePrefKey;
 
+/// ★用户选择的渲染分辨率倍率偏好键★（同上：NSUserDefaults，UI 写、Player 读）。
+/// 取值：受支持倍率的十进制字符串（`0.5` / `0.75` / `1.0`，候选与校验见
+///      `Air2/Core/Renderer/A2RenderScaleCatalog.h`）；键缺失 / 非受支持值 = 未选择 ⇒ 用默认档（1.0）。
+/// 语义：drawable 像素 = 表面像素 × 倍率（★逻辑尺寸/点不变★）；判据行 `[FRAME] scale=… px=…x…`。
+/// 写入点唯一：`Air2/UI/Screens/Settings/A2RuntimeSettings.m` 的渲染分辨率行 onTap；
+/// 读取点唯一：`Air2/Player/A2LaunchSession.m` 的 `+startCurrentVersionWithCompletion:`。
+FOUNDATION_EXPORT NSString *const A2SelectedRenderScalePrefKey;
+
 NS_ASSUME_NONNULL_END
