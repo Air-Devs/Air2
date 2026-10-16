@@ -106,7 +106,7 @@ static void A2PairingBGSubmit(void) {
             [[BGContinuedProcessingTaskRequest alloc] initWithIdentifier:kA2PairingBGTaskIdentifier
                                                                    title:@"Air2 配对"
                                                                 subtitle:gSubtitle];
-        req.strategy = BGContinuedProcessingTaskRequestStrategyQueue;
+        req.strategy = BGContinuedProcessingTaskRequestSubmissionStrategyQueue;
         NSError *err = nil;
         if ([BGTaskScheduler.sharedScheduler submitTaskRequest:req error:&err]) {
             gBGSubmitted = YES;
