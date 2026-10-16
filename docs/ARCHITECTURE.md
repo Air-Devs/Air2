@@ -302,6 +302,31 @@ Player 只消费状态★：本地镜像的发现/校验/落盘与判定合成�
 **来源**：`docs/JIT-PROVISIONING.md` §1.2 / §3.4；许可口径见 `docs/DEPENDENCIES.md`「DDI 取得」节
 （★自研；只按公开资料的行为描述实现，未搬运任何第三方代码★）。
 
+### 真机反馈修复：配对误报 / DDI 摆设 / 多数行点不动 —— [PAIRFIX]
+
+来源：真机（iPhone 17 Pro / iOS 27.2；包 `Air2-chain-pairwire.ipa` = commit `ded14f1`）三条反馈。
+★根因是同一条★：设置页 `A2JITSettings.m` 的面板呈现器 `A2JITPanelPresenter` 只活在
+`+buildWithHost:` 的**栈上**（`A2JITSettings.m:660`），而行内 block 捕的是 `__weak`
+（改前 `:755`）⇒ 该方法一返回（`:1070`）呈现器即释放，行内 block 全成了「发给 nil」。
+
+| 真机现象 | 根因（改前行号） | 修法 |
+|---|---|---|
+| 多数行点了没反应 | `autopairRow` / `ddiImportRow` / `ddiRow` / `ddiFetchRow` / `importRow` / `enableRow` 的 `onTap`/`onToggle` 只经 `weakPresenter` ⇒ nil（`:756-781`） | 行内 block **强持有**呈现器（`A2JITPanelPresenter *panelPresenter = presenter;`）★presenter 对行只持 weak ⇒ 不成环★ |
+| 「开始配对」误报「还没显示 6 位码」 | `weakPWEngine`（`:929`）随呈现器一起释放 ⇒ `engine == nil` 分支（`:985`）报 `jit.pairwire.toast.nocode` —— ★那一刻码根本没生成★ | ① 引擎改强捕获；② **先生成并显示 6 位码**、再判引擎；③ 引擎不可用改报真实原因 `jit.pairwire.toast.noengine`；④ 生成失败报真实错误 |
+| 「联网取 DDI」是摆设 | 开关只写偏好 `debug.jit_ddi_fetch`（`:723/:768`），真机制 `A2JITLocalDDIProbe.fetchPersonalizedImageWithReason:` 在 `deviceQuery == nil` 时如实回「未接线」（`A2JITDDIProbe.m:140-148`） | 去掉开关，改为**如实态行**：`valueText = 未实现` + 副标题写「为什么 + 替代路径」，点它走真调用点、如实报缺什么；随之不可达的 `fetchDisabled*` 文案与 `jit.row.ddiFetch.detail` 一并删除 |
+
+**判据行（真机 grep 锚点）**：`[A2-PAIRPIN] step=tap|source|gen|engine …`
++ 既有会话判据行（`A2JITPairingCodeSession.m:105/116/128`）。
+
+**测试**：`tests/JIT/run_jit_tests.py` ⑨-b（源码硬合同：不得 `__weak typeof(presenter)`、
+引擎不得只被 weak 捕获、误报文案已从设置页移除）与 ⑳ `testPairfixPresenterLifetime`
+（★真运行★：证明「栈上对象 + `__weak` 捕获 ⇒ block 拿到 nil」与「强持有 ⇒ 仍拿得到」两种写法）。
+
+**DDI 联网下载的阻塞点（★如实报，不装★）**：取件与挂载都必须经 `RPPairing` 隧道（本仓尚未落地）
+再调设备的 `image_mounter`（本进程为沙盒 App，无该能力）；且**取件来源尚未拍板**
+（第三方镜像仓 vs Apple 分发，合规口径见 `docs/DEPENDENCIES.md` 的 DDI 节）。
+⇒ ★本单不做真下载，只在 UI 如实标「未实现」★；离线两条路（本地发现 / 手动导入）是真的。
+
 ### 运行时 / 渲染器随包登记 —— [RT-BUNDLE]
 
 **分层**：`Libraries/` 是「预编译二进制」层（见 §顶层，**不放源码**）；启动链（`Natives/Context`）只**消费**它，

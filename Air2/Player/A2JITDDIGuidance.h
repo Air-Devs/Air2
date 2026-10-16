@@ -44,8 +44,8 @@ NS_ASSUME_NONNULL_BEGIN
 // ---------------------------------------------------------------------------
 // 机制阻塞（联网取 / 挂载）的文案 key —— 未接线或缺特权时【如实报】
 // ---------------------------------------------------------------------------
-+ (NSString *)fetchDisabledReasonKey;      ///< 「联网取 DDI」默认关
-+ (NSString *)fetchDisabledActionKey;
+// ★[PAIRFIX-DDI]★ 原 fetchDisabledReasonKey / fetchDisabledActionKey 已删：
+//   「联网取 DDI」的开关去掉后它们再无调用点（见 A2JITSettings 的「未实现」如实态行）。
 + (NSString *)fetchUnsupportedReasonKey;   ///< 机制未接入 / 缺能力
 + (NSString *)fetchUnsupportedActionKey;
 + (NSString *)mountUnavailableReasonKey;   ///< 挂载缺特权 / 未接线

@@ -175,11 +175,15 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
             @"en": @"Started: advertisement is up. In Settings › General › VPN & Device Management tap \"Pair with Air2…\" and enter the 6-digit code above.",
             @"ja": @"開始しました。設定 › 一般 › VPN とデバイス管理 で「Air2… とペアリング」をタップし、上記の 6 桁コードを入力してください。",
         },
-        @"jit.pairwire.toast.nocode": @{
-            @"zh-Hans": @"还没显示 6 位码 ⇒ 先选「设备发起档」让码显示出来",
-            @"zh-Hant": @"還沒顯示 6 位碼 ⇒ 先選「裝置發起檔」讓碼顯示出來",
-            @"en": @"No 6-digit code is displayed yet: pick the device-initiated mode first",
-            @"ja": @"6 桁コードが未表示です。先にデバイス主導モードを選択してください",
+        // ★[PAIRFIX-ORDER]★ 原 key `jit.pairwire.toast.nocode`
+        //   （「还没显示 6 位码 ⇒ 先选设备发起档」）已删除：它是【误报】的载体 ——
+        //   点「开始配对」时码是【由这一击自己生成】的，报那句只会让用户以为「码没生成 / 选错档」。
+        //   现在「引擎不可用」报本 key；「生成失败」报真实错误（见 A2JITSettings 的 pairwireStartRow.onTap）。
+        @"jit.pairwire.toast.noengine": @{
+            @"zh-Hans": @"配对引擎不可用（内部状态，与你的选择无关）：6 位码已显示可复制，可先去设备上输码；请把日志里的 [A2-PAIRPIN] 行发给开发者",
+            @"zh-Hant": @"配對引擎不可用（內部狀態，與你的選擇無關）：6 位碼已顯示可複製，可先去裝置上輸入；請把日誌裡的 [A2-PAIRPIN] 行發給開發者",
+            @"en": @"Pairing engine unavailable (internal state, unrelated to your selection): the 6-digit code is shown and can be copied - you can still enter it on the device; please send the [A2-PAIRPIN] log lines to the developer",
+            @"ja": @"ペアリングエンジンが利用できません（内部状態であり、選択内容とは無関係です）。6 桁コードは表示済みでコピーできます。先に端末側で入力できます。ログの [A2-PAIRPIN] 行を開発者までお送りください",
         },
         @"jit.pairwire.toast.cancelRequested": @{
             @"zh-Hans": @"已请求取消（协作式：当前等待会在其预算内返回后停下）",
@@ -716,11 +720,15 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
             @"en": @"Fetch DDI online",
             @"ja": @"DDI をオンライン取得",
         },
-        @"jit.row.ddiFetch.detail": @{
-            @"zh-Hans": @"默认关。开启后向 Apple 官方服务请求个性化 DDI——这是访问 Apple 官方服务，不是「上云」",
-            @"zh-Hant": @"預設關。開啟後向 Apple 官方服務請求個人化 DDI——這是存取 Apple 官方服務，不是「上雲」",
-            @"en": @"Off by default. When on, requests a personalized DDI from Apple's official service — that is accessing Apple's service, not \"going to the cloud\"",
-            @"ja": @"既定はオフ。オンにすると Apple 公式サービスへ個別化 DDI を要求します（Apple 公式サービスへのアクセスであり「クラウド化」ではありません）",
+        // ★[PAIRFIX-DDI]★ 原 key `jit.row.ddiFetch.detail`
+        //   （「默认关。开启后向 Apple 官方服务请求个性化 DDI…」）已删除：开关本身已去掉（它只写偏好、
+        //   什么也不做 = 摆设）。改为下面这个【如实态】：行右侧值写「未实现」，副标题由
+        //   A2JITDDIGuidance 的 fetchUnsupported* 文案给出「为什么 + 替代路径」。
+        @"jit.ddi.fetch.value.unimplemented": @{
+            @"zh-Hans": @"未实现",
+            @"zh-Hant": @"未實現",
+            @"en": @"Not implemented",
+            @"ja": @"未実装",
         },
         // 判定短文案
         @"jit.ddi.status.present": @{
@@ -792,10 +800,10 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
             @"ja": @"DDI は準備済みです。続行できます",
         },
         @"jit.ddi.next.enableFetch": @{
-            @"zh-Hans": @"本地没有 DDI：导入一份，或打开「联网取 DDI」开关",
-            @"zh-Hant": @"本機沒有 DDI：匯入一份，或開啟「連網取 DDI」開關",
-            @"en": @"No local DDI: import one, or turn on \"Fetch DDI online\"",
-            @"ja": @"本機に DDI がありません。取り込むか「DDI をオンライン取得」をオンにします",
+            @"zh-Hans": @"本地没有 DDI：用「导入 DDI 镜像」导入一份（本机校验，不联网）——★联网取件未实现，不要等它★",
+            @"zh-Hant": @"本機沒有 DDI：用「匯入 DDI 映像」匯入一份（本機校驗，不連網）——★連網取件未實作，不要等它★",
+            @"en": @"No local DDI: import one with \"Import DDI image\" (validated on device, no network) - online fetching is NOT implemented, do not wait for it",
+            @"ja": @"本機に DDI がありません。「DDI イメージを取り込む」で取り込んでください（端末内検証・通信なし）——★オンライン取得は未実装です。待たないでください★",
         },
         @"jit.ddi.next.fetch": @{
             @"zh-Hans": @"本地没有 DDI：可向 Apple 官方服务请求（需联网）",
@@ -816,18 +824,9 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
             @"ja": @"確認できません。まずログの証跡を確認します",
         },
         // 机制阻塞（联网取 / 挂载）
-        @"jit.ddi.fetch.disabled.reason": @{
-            @"zh-Hans": @"「联网取 DDI」当前是关闭的",
-            @"zh-Hant": @"「連網取 DDI」目前是關閉的",
-            @"en": @"\"Fetch DDI online\" is currently off",
-            @"ja": @"「DDI をオンライン取得」は現在オフです",
-        },
-        @"jit.ddi.fetch.disabled.action": @{
-            @"zh-Hans": @"打开开关后重试（这是访问 Apple 官方服务，不是「上云」）",
-            @"zh-Hant": @"開啟開關後重試（這是存取 Apple 官方服務，不是「上雲」）",
-            @"en": @"Turn it on and retry (this accesses Apple's official service, not \"the cloud\")",
-            @"ja": @"オンにして再試行します（Apple 公式サービスへのアクセスであり「クラウド化」ではありません）",
-        },
+        // ★[PAIRFIX-DDI]★ 原 key `jit.ddi.fetch.disabled.reason` / `jit.ddi.fetch.disabled.action`
+        //   （「开关是关的 ⇒ 去开开关」）随「联网取 DDI」开关一并删除 —— 开关已去掉，
+        //   这两句永远不可达（留着就是死文案）；机制未接线的如实阻断文案见下面两条 unsupported。
         @"jit.ddi.fetch.unsupported.reason": @{
             @"zh-Hans": @"联网取 DDI 尚不可用（个性化机制未接入 / 缺设备标识）",
             @"zh-Hant": @"連網取 DDI 尚不可用（個人化機制未接線 / 缺裝置識別）",

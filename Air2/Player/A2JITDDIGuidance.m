@@ -83,14 +83,8 @@ static NSString *A2DDIToken(A2JITDDIVerdict verdict) {
 
 #pragma mark - 机制阻塞文案 key
 
-+ (NSString *)fetchDisabledReasonKey {
-    return @"jit.ddi.fetch.disabled.reason";
-}
-
-+ (NSString *)fetchDisabledActionKey {
-    return @"jit.ddi.fetch.disabled.action";
-}
-
+// ★[PAIRFIX-DDI]★ 原 fetchDisabledReasonKey / fetchDisabledActionKey 已删：
+//   「联网取 DDI」的开关去掉后这两句永远不可达（无调用点 ⇒ 死文案）。
 + (NSString *)fetchUnsupportedReasonKey {
     return @"jit.ddi.fetch.unsupported.reason";
 }
