@@ -140,9 +140,17 @@
         <string>_remotepairing._tcp</string>
         <string>_remoted._tcp</string>
         <string>_remotepairing-pairable-host._tcp</string>
+        <!-- [PAIRWIRE-NETPROBE] 本地网络权限自检探针（自建服务，检完即撤） -->
+        <string>_a2lnprobe._tcp</string>
     </array>
 
     <!-- 后台模式：游戏运行时的音频播放 -->
+    <!-- [PAIRWIRE-KEEPALIVE] 后台继续任务：配对期间用户要离开 App 去系统设置输码 -->
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>dev.airdevs.air2.pairing</string>
+    </array>
+
     <key>UIBackgroundModes</key>
     <array>
         <string>audio</string>

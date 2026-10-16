@@ -10,6 +10,7 @@
 		5B69779F761A566D166C2342 /* A2AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 8DA45F9AA021EBFBF929A56A /* A2AppDelegate.m */; };
 		59F01512A836702FD0D9F5D9 /* A2CrashGuard.m in Sources */ = {isa = PBXBuildFile; fileRef = EDF360D6C38161620D973AA3 /* A2CrashGuard.m */; };
 		84B4ED65340FEC57222535E6 /* A2NavigationController.m in Sources */ = {isa = PBXBuildFile; fileRef = F6EE6864D5C02736374620A3 /* A2NavigationController.m */; };
+		A7C8781E9CDF2880617A7DC9 /* A2PairingKeepAlive.m in Sources */ = {isa = PBXBuildFile; fileRef = 2583FEFEB51289329D85BD33 /* A2PairingKeepAlive.m */; };
 		1D4ED46FBFBF946134C72573 /* A2RootViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E0A962942F56F74CF7617780 /* A2RootViewController.m */; };
 		84C22A76F0D470DBB7E9248C /* A2SceneDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */; };
 		B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 36F3AADE4F4508F86A2F0505 /* main.m */; };
@@ -135,6 +136,7 @@
 		1E7FB60017717A3BE32B9A3C /* A2DiagnosticsSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */; };
 		C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB44E450592838BA6F7B061 /* A2GameSettings.m */; };
 		9BE8F5D901DBF1D45147781D /* A2JITSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 0F44B4D1AF1E26050C08BDB7 /* A2JITSettings.m */; };
+		DC9A725659424ECF0E571881 /* A2PairingNotifier.m in Sources */ = {isa = PBXBuildFile; fileRef = D8BC5772897E023DFBFB4D08 /* A2PairingNotifier.m */; };
 		D8FA542F7EBB121B40454E86 /* A2RuntimeSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = A05E5FC7A4D468C3B145E7EF /* A2RuntimeSettings.m */; };
 		1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */; };
 		F3A3A971AE05998E6D648440 /* A2ModListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 86984D61C69EA55C028368AC /* A2ModListViewController.m */; };
@@ -169,6 +171,7 @@
 		2E34D2754F22272BEF457FAD /* NMToast.m in Sources */ = {isa = PBXBuildFile; fileRef = BC813E12DC68A4D2CBCC0ECC /* NMToast.m */; };
 		64A34223B7AA99D70C1B8233 /* UIKit+hook.m in Sources */ = {isa = PBXBuildFile; fileRef = 1E8D565EEE899288910F94F0 /* UIKit+hook.m */; };
 		0EE14820F3619D81DD29FB1A /* a2_failbanner.m in Sources */ = {isa = PBXBuildFile; fileRef = 41F40768EE993D4FDD8EF834 /* a2_failbanner.m */; };
+		1D913BEEB8A68298A90F9D9A /* a2_local_network_probe.m in Sources */ = {isa = PBXBuildFile; fileRef = 71C614E0C47355171FDA6CD1 /* a2_local_network_probe.m */; };
 		6CF98CDCF8BDE70CD592CD7E /* a2_log.m in Sources */ = {isa = PBXBuildFile; fileRef = C8C11BDFE3957C1F2DD76E10 /* a2_log.m */; };
 		3815B18505F9F4B8D0D791A7 /* a2_remotexpc_framing.m in Sources */ = {isa = PBXBuildFile; fileRef = BF51D5FB2AFC9D3F65FF85CA /* a2_remotexpc_framing.m */; };
 		DCD6B1D79209867F0C77EC2D /* a2_remotexpc_session.m in Sources */ = {isa = PBXBuildFile; fileRef = FD379B598D86FE65BF565BA7 /* a2_remotexpc_session.m */; };
@@ -178,6 +181,7 @@
 		E07E486F2F322557DE9BB97C /* a2_rppairing_ed25519.m in Sources */ = {isa = PBXBuildFile; fileRef = BB39CD8A99C42623B61DDF56 /* a2_rppairing_ed25519.m */; };
 		2938FADF387CF104B5DDC809 /* a2_rppairing_pairable_host.m in Sources */ = {isa = PBXBuildFile; fileRef = 07E08CF29323DC1338BC640A /* a2_rppairing_pairable_host.m */; };
 		29C3641F12813D9EF7C9C0F1 /* a2_rppairing_pairsetup.m in Sources */ = {isa = PBXBuildFile; fileRef = B6CB3E3E25542FA51ACAF960 /* a2_rppairing_pairsetup.m */; };
+		E82A620287CE02C2887253CD /* a2_rppairing_pairsetup_accessory.m in Sources */ = {isa = PBXBuildFile; fileRef = B8F28247AC5FB880379DA60A /* a2_rppairing_pairsetup_accessory.m */; };
 		76DE2B4705BD41CD96AE2C46 /* a2_rppairing_pairsetup_transport.m in Sources */ = {isa = PBXBuildFile; fileRef = 63F6ABC34B3800F1BDA1A521 /* a2_rppairing_pairsetup_transport.m */; };
 		6DF36811EF63088DA46ACD61 /* a2_rppairing_rsd.m in Sources */ = {isa = PBXBuildFile; fileRef = 8DD4A4A3EE7CD77E6B14110F /* a2_rppairing_rsd.m */; };
 		BCFA6A08AE7E19583E7842EA /* a2_rppairing_srp.m in Sources */ = {isa = PBXBuildFile; fileRef = CB8B91449CF1FC489DA86CBC /* a2_rppairing_srp.m */; };
@@ -194,6 +198,7 @@
 		8DA45F9AA021EBFBF929A56A /* A2AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AppDelegate.m"; sourceTree = "<group>"; };
 		EDF360D6C38161620D973AA3 /* A2CrashGuard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CrashGuard.m"; sourceTree = "<group>"; };
 		F6EE6864D5C02736374620A3 /* A2NavigationController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2NavigationController.m"; sourceTree = "<group>"; };
+		2583FEFEB51289329D85BD33 /* A2PairingKeepAlive.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PairingKeepAlive.m"; sourceTree = "<group>"; };
 		E0A962942F56F74CF7617780 /* A2RootViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RootViewController.m"; sourceTree = "<group>"; };
 		B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SceneDelegate.m"; sourceTree = "<group>"; };
 		36F3AADE4F4508F86A2F0505 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "main.m"; sourceTree = "<group>"; };
@@ -319,6 +324,7 @@
 		D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DiagnosticsSettings.m"; sourceTree = "<group>"; };
 		0FB44E450592838BA6F7B061 /* A2GameSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameSettings.m"; sourceTree = "<group>"; };
 		0F44B4D1AF1E26050C08BDB7 /* A2JITSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITSettings.m"; sourceTree = "<group>"; };
+		D8BC5772897E023DFBFB4D08 /* A2PairingNotifier.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PairingNotifier.m"; sourceTree = "<group>"; };
 		A05E5FC7A4D468C3B145E7EF /* A2RuntimeSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RuntimeSettings.m"; sourceTree = "<group>"; };
 		9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsViewController.m"; sourceTree = "<group>"; };
 		86984D61C69EA55C028368AC /* A2ModListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModListViewController.m"; sourceTree = "<group>"; };
@@ -353,6 +359,7 @@
 		BC813E12DC68A4D2CBCC0ECC /* NMToast.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "NMToast.m"; sourceTree = "<group>"; };
 		1E8D565EEE899288910F94F0 /* UIKit+hook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "UIKit+hook.m"; sourceTree = "<group>"; };
 		41F40768EE993D4FDD8EF834 /* a2_failbanner.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_failbanner.m"; sourceTree = "<group>"; };
+		71C614E0C47355171FDA6CD1 /* a2_local_network_probe.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_local_network_probe.m"; sourceTree = "<group>"; };
 		C8C11BDFE3957C1F2DD76E10 /* a2_log.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_log.m"; sourceTree = "<group>"; };
 		BF51D5FB2AFC9D3F65FF85CA /* a2_remotexpc_framing.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_remotexpc_framing.m"; sourceTree = "<group>"; };
 		FD379B598D86FE65BF565BA7 /* a2_remotexpc_session.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_remotexpc_session.m"; sourceTree = "<group>"; };
@@ -362,6 +369,7 @@
 		BB39CD8A99C42623B61DDF56 /* a2_rppairing_ed25519.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_ed25519.m"; sourceTree = "<group>"; };
 		07E08CF29323DC1338BC640A /* a2_rppairing_pairable_host.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_pairable_host.m"; sourceTree = "<group>"; };
 		B6CB3E3E25542FA51ACAF960 /* a2_rppairing_pairsetup.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_pairsetup.m"; sourceTree = "<group>"; };
+		B8F28247AC5FB880379DA60A /* a2_rppairing_pairsetup_accessory.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_pairsetup_accessory.m"; sourceTree = "<group>"; };
 		63F6ABC34B3800F1BDA1A521 /* a2_rppairing_pairsetup_transport.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_pairsetup_transport.m"; sourceTree = "<group>"; };
 		8DD4A4A3EE7CD77E6B14110F /* a2_rppairing_rsd.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_rsd.m"; sourceTree = "<group>"; };
 		CB8B91449CF1FC489DA86CBC /* a2_rppairing_srp.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_srp.m"; sourceTree = "<group>"; };
@@ -371,6 +379,7 @@
 		52E0A8862124FBDB57E8C690 /* A2AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AppDelegate.h"; sourceTree = "<group>"; };
 		6A39662C0840C98AB5D33038 /* A2CrashGuard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CrashGuard.h"; sourceTree = "<group>"; };
 		FFF83F1A982D07C7CBBF5C78 /* A2NavigationController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2NavigationController.h"; sourceTree = "<group>"; };
+		DD225B3BA07340E88D2B3551 /* A2PairingKeepAlive.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PairingKeepAlive.h"; sourceTree = "<group>"; };
 		2C58D391DAC32B55049E9809 /* A2RootViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RootViewController.h"; sourceTree = "<group>"; };
 		1185FA48A6FE1AB2F1E312DE /* A2SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SceneDelegate.h"; sourceTree = "<group>"; };
 		02A33E6F66321118391D8A93 /* A2JITAutoPairingEngineBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITAutoPairingEngineBridge.h"; sourceTree = "<group>"; };
@@ -494,6 +503,7 @@
 		8A8A69E0C0117AD2228117A1 /* A2BackgroundSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundSettingsViewController.h"; sourceTree = "<group>"; };
 		137E26C858B461DBC6F3AB93 /* A2ColorThemeDialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorThemeDialog.h"; sourceTree = "<group>"; };
 		9CE1BE0BB775D12731066330 /* A2DiagnosticsSettings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DiagnosticsSettings.h"; sourceTree = "<group>"; };
+		ADE021D57C8E46EE0E06F194 /* A2PairingNotifier.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PairingNotifier.h"; sourceTree = "<group>"; };
 		A309D45ADA810213043EDE96 /* A2SettingsSections.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsSections.h"; sourceTree = "<group>"; };
 		F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsViewController.h"; sourceTree = "<group>"; };
 		C595542224E314960D0F3C02 /* A2ModListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModListViewController.h"; sourceTree = "<group>"; };
@@ -526,6 +536,7 @@
 		B7EC742575BE40277C5918F0 /* NMToast.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "NMToast.h"; sourceTree = "<group>"; };
 		79E2BBD2EFDC35F97EB8D2C4 /* UIKit+hook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UIKit+hook.h"; sourceTree = "<group>"; };
 		C18D94535AB7474923C21B8E /* a2_failbanner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_failbanner.h"; sourceTree = "<group>"; };
+		CC91372A62D2A0C0A56B17C2 /* a2_local_network_probe.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_local_network_probe.h"; sourceTree = "<group>"; };
 		385B60A0F03909DA9353A26C /* a2_log.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_log.h"; sourceTree = "<group>"; };
 		AE33275B1332C1E9705E3BCD /* a2_remotexpc_framing.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_remotexpc_framing.h"; sourceTree = "<group>"; };
 		86F4679CCBD5F653F726894F /* a2_remotexpc_session.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_remotexpc_session.h"; sourceTree = "<group>"; };
@@ -535,6 +546,7 @@
 		A09AED31B25AF3A3729E20AE /* a2_rppairing_ed25519.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_ed25519.h"; sourceTree = "<group>"; };
 		7020DE052BE01500DD8B6917 /* a2_rppairing_pairable_host.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_pairable_host.h"; sourceTree = "<group>"; };
 		A36999C5D2FE22C4776CDA3F /* a2_rppairing_pairsetup.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_pairsetup.h"; sourceTree = "<group>"; };
+		34D2A74916257EFD767731EB /* a2_rppairing_pairsetup_accessory.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_pairsetup_accessory.h"; sourceTree = "<group>"; };
 		380BF3751376F74E7DBB6D46 /* a2_rppairing_pairsetup_transport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_pairsetup_transport.h"; sourceTree = "<group>"; };
 		8F192F1BB49B9590F2CC25C4 /* a2_rppairing_rsd.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_rsd.h"; sourceTree = "<group>"; };
 		67DB864B3937EC9666BF3926 /* a2_rppairing_srp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_srp.h"; sourceTree = "<group>"; };
@@ -612,12 +624,14 @@
 				8DA45F9AA021EBFBF929A56A /* A2AppDelegate.m */,
 				EDF360D6C38161620D973AA3 /* A2CrashGuard.m */,
 				F6EE6864D5C02736374620A3 /* A2NavigationController.m */,
+				2583FEFEB51289329D85BD33 /* A2PairingKeepAlive.m */,
 				E0A962942F56F74CF7617780 /* A2RootViewController.m */,
 				B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */,
 				36F3AADE4F4508F86A2F0505 /* main.m */,
 				52E0A8862124FBDB57E8C690 /* A2AppDelegate.h */,
 				6A39662C0840C98AB5D33038 /* A2CrashGuard.h */,
 				FFF83F1A982D07C7CBBF5C78 /* A2NavigationController.h */,
+				DD225B3BA07340E88D2B3551 /* A2PairingKeepAlive.h */,
 				2C58D391DAC32B55049E9809 /* A2RootViewController.h */,
 				1185FA48A6FE1AB2F1E312DE /* A2SceneDelegate.h */,
 			);
@@ -810,6 +824,7 @@
 				BC813E12DC68A4D2CBCC0ECC /* NMToast.m */,
 				1E8D565EEE899288910F94F0 /* UIKit+hook.m */,
 				41F40768EE993D4FDD8EF834 /* a2_failbanner.m */,
+				71C614E0C47355171FDA6CD1 /* a2_local_network_probe.m */,
 				C8C11BDFE3957C1F2DD76E10 /* a2_log.m */,
 				BF51D5FB2AFC9D3F65FF85CA /* a2_remotexpc_framing.m */,
 				FD379B598D86FE65BF565BA7 /* a2_remotexpc_session.m */,
@@ -819,6 +834,7 @@
 				BB39CD8A99C42623B61DDF56 /* a2_rppairing_ed25519.m */,
 				07E08CF29323DC1338BC640A /* a2_rppairing_pairable_host.m */,
 				B6CB3E3E25542FA51ACAF960 /* a2_rppairing_pairsetup.m */,
+				B8F28247AC5FB880379DA60A /* a2_rppairing_pairsetup_accessory.m */,
 				63F6ABC34B3800F1BDA1A521 /* a2_rppairing_pairsetup_transport.m */,
 				8DD4A4A3EE7CD77E6B14110F /* a2_rppairing_rsd.m */,
 				CB8B91449CF1FC489DA86CBC /* a2_rppairing_srp.m */,
@@ -829,6 +845,7 @@
 				B7EC742575BE40277C5918F0 /* NMToast.h */,
 				79E2BBD2EFDC35F97EB8D2C4 /* UIKit+hook.h */,
 				C18D94535AB7474923C21B8E /* a2_failbanner.h */,
+				CC91372A62D2A0C0A56B17C2 /* a2_local_network_probe.h */,
 				385B60A0F03909DA9353A26C /* a2_log.h */,
 				AE33275B1332C1E9705E3BCD /* a2_remotexpc_framing.h */,
 				86F4679CCBD5F653F726894F /* a2_remotexpc_session.h */,
@@ -838,6 +855,7 @@
 				A09AED31B25AF3A3729E20AE /* a2_rppairing_ed25519.h */,
 				7020DE052BE01500DD8B6917 /* a2_rppairing_pairable_host.h */,
 				A36999C5D2FE22C4776CDA3F /* a2_rppairing_pairsetup.h */,
+				34D2A74916257EFD767731EB /* a2_rppairing_pairsetup_accessory.h */,
 				380BF3751376F74E7DBB6D46 /* a2_rppairing_pairsetup_transport.h */,
 				8F192F1BB49B9590F2CC25C4 /* a2_rppairing_rsd.h */,
 				67DB864B3937EC9666BF3926 /* a2_rppairing_srp.h */,
@@ -1197,11 +1215,13 @@
 				D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */,
 				0FB44E450592838BA6F7B061 /* A2GameSettings.m */,
 				0F44B4D1AF1E26050C08BDB7 /* A2JITSettings.m */,
+				D8BC5772897E023DFBFB4D08 /* A2PairingNotifier.m */,
 				A05E5FC7A4D468C3B145E7EF /* A2RuntimeSettings.m */,
 				9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */,
 				8A8A69E0C0117AD2228117A1 /* A2BackgroundSettingsViewController.h */,
 				137E26C858B461DBC6F3AB93 /* A2ColorThemeDialog.h */,
 				9CE1BE0BB775D12731066330 /* A2DiagnosticsSettings.h */,
+				ADE021D57C8E46EE0E06F194 /* A2PairingNotifier.h */,
 				A309D45ADA810213043EDE96 /* A2SettingsSections.h */,
 				F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */,
 			);
@@ -1334,6 +1354,7 @@
 				5B69779F761A566D166C2342 /* A2AppDelegate.m in Sources */,
 				59F01512A836702FD0D9F5D9 /* A2CrashGuard.m in Sources */,
 				84B4ED65340FEC57222535E6 /* A2NavigationController.m in Sources */,
+				A7C8781E9CDF2880617A7DC9 /* A2PairingKeepAlive.m in Sources */,
 				1D4ED46FBFBF946134C72573 /* A2RootViewController.m in Sources */,
 				84C22A76F0D470DBB7E9248C /* A2SceneDelegate.m in Sources */,
 				B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */,
@@ -1459,6 +1480,7 @@
 				1E7FB60017717A3BE32B9A3C /* A2DiagnosticsSettings.m in Sources */,
 				C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */,
 				9BE8F5D901DBF1D45147781D /* A2JITSettings.m in Sources */,
+				DC9A725659424ECF0E571881 /* A2PairingNotifier.m in Sources */,
 				D8FA542F7EBB121B40454E86 /* A2RuntimeSettings.m in Sources */,
 				1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */,
 				F3A3A971AE05998E6D648440 /* A2ModListViewController.m in Sources */,
@@ -1493,6 +1515,7 @@
 				2E34D2754F22272BEF457FAD /* NMToast.m in Sources */,
 				64A34223B7AA99D70C1B8233 /* UIKit+hook.m in Sources */,
 				0EE14820F3619D81DD29FB1A /* a2_failbanner.m in Sources */,
+				1D913BEEB8A68298A90F9D9A /* a2_local_network_probe.m in Sources */,
 				6CF98CDCF8BDE70CD592CD7E /* a2_log.m in Sources */,
 				3815B18505F9F4B8D0D791A7 /* a2_remotexpc_framing.m in Sources */,
 				DCD6B1D79209867F0C77EC2D /* a2_remotexpc_session.m in Sources */,
@@ -1502,6 +1525,7 @@
 				E07E486F2F322557DE9BB97C /* a2_rppairing_ed25519.m in Sources */,
 				2938FADF387CF104B5DDC809 /* a2_rppairing_pairable_host.m in Sources */,
 				29C3641F12813D9EF7C9C0F1 /* a2_rppairing_pairsetup.m in Sources */,
+				E82A620287CE02C2887253CD /* a2_rppairing_pairsetup_accessory.m in Sources */,
 				76DE2B4705BD41CD96AE2C46 /* a2_rppairing_pairsetup_transport.m in Sources */,
 				6DF36811EF63088DA46ACD61 /* a2_rppairing_rsd.m in Sources */,
 				BCFA6A08AE7E19583E7842EA /* a2_rppairing_srp.m in Sources */,

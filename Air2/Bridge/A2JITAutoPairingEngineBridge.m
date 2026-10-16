@@ -32,6 +32,7 @@
 #import "a2_tlspsk_mbedtls.h"     // [A2-INTEGRATION] mbedTLS 后端注册入口（第三方，Apache-2.0）
 // ★[A2-RXPC] 本单新增：传输层判据行（只加一行调用点，见下；不改既有逻辑）★
 #import "a2_rppairing_pairable_host.h"
+#import "a2_local_network_probe.h"   // [PAIRWIRE-NETPROBE] 本地网络权限自检
 // ★[JIT-AUTOPAIR-4] 设备发起档（iOS 27）的★唯一驱动函数★：广告 → 连入 → 建传输 → accessory 侧 PS-Msg01..06
 #import "a2_rppairing_pairsetup_accessory.h"
 #import "A2JITPairingFileStore.h" // ★配对材料的落盘目标★（同层已有的类，见 docs/ARCHITECTURE.md）
@@ -408,6 +409,24 @@ NSString *A2JITDeviceInitiatedPairingStageName(A2JITDeviceInitiatedPairingStage 
         if (whyOut) { *whyOut = @"已有一轮设备发起配对在跑 ⇒ 先取消或等它结束"; }
         if (failureNameOut) { *failureNameOut = @"AlreadyRunning"; }
         return NO;
+    }
+
+    // ---- ★[PAIRWIRE-NETPROBE] 先确认「本地网络」权限已给✗★ ----
+    //   iOS 没有公开 API 查这个权限；不给的话广告只会以 PublishFailed 失败、用户看到笼统报错。
+    //   这里先跑一次自检（自建 Bonjour 探针），给可判据的结论与可读的失败原因。
+    {
+        NSString *probeWhy = nil;
+        BOOL probeOK = A2LocalNetworkProbeRun(5.0, &probeWhy);
+        NSLog(@"%@", A2LocalNetworkProbeCriterionLine(probeOK ? @"ok" : @"denied", probeWhy));
+        if (!probeOK) {
+            if (whyOut) {
+                *whyOut = [NSString stringWithFormat:
+                           @"本地网络权限未授予（或环境异常）⇒ 配对无法开始：%@",
+                           probeWhy ?: @"-"];
+            }
+            if (failureNameOut) { *failureNameOut = @"NoLocalNetworkPermission"; }
+            return NO;
+        }
     }
 
     self.deviceInitiatedCancelled = NO;

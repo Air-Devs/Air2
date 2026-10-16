@@ -49,6 +49,8 @@
 // [JIT-AUTOPAIR-3] 配对码来源（可选项表）与设备发起档的 6 位码会话
 #import "A2JITPairingPinSource.h"
 #import "A2JITPairingCodeSession.h"
+#import "A2PairingNotifier.h"
+#import "A2PairingKeepAlive.h"      // [PAIRWIRE-KEEPALIVE] 配对期间保活      // [PAIRWIRE-NOTIFY] 码/结果发本地通知
 #import "A2LaunchContract.h"   // A2SelectedPairingPinSourcePrefKey（写入点=本文件）
 // [JIT-DDI-1] DDI：本地镜像存储 / 判定缝 / 分流表 / 设备侧 Bridge 骨架
 #import "A2JITDDI.h"
@@ -953,11 +955,16 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
                 case A2JITDeviceInitiatedPairingStageVerifying:
                     [cs advanceToState:A2JITPairingCodeStateVerifying detail:detail]; break;
                 case A2JITDeviceInitiatedPairingStageSucceeded:
+                A2PairingNotifyPostDone(YES, nil);
+                A2PairingKeepAliveStop();
                     [cs advanceToState:A2JITPairingCodeStateSucceeded detail:detail]; break;
                 case A2JITDeviceInitiatedPairingStageFailed:
+                A2PairingNotifyPostDone(NO, detail);
+                A2PairingKeepAliveStop();
                     [cs advanceToState:A2JITPairingCodeStateFailed detail:detail]; break;
                 case A2JITDeviceInitiatedPairingStageCancelled:
                     // 码会话没有「取消」态 ⇒ 回到 Idle（★码仍显示，可重试★），并如实记一条。
+                    A2PairingKeepAliveStop();
                     [cs advanceToState:A2JITPairingCodeStateIdle
                                 detail:detail.length ? detail : @"已取消（码仍在显示，可重试）"]; break;
                 case A2JITDeviceInitiatedPairingStageIdle:
@@ -1010,6 +1017,10 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
             [A2Toast show:[A2JITStrings stringForKey:@"jit.pairwire.toast.nocode"] inView:hvc.view];
             return;
         }
+        // ★[PAIRWIRE-NOTIFY] 把码同时发一条本地通知✗★ —— 用户切到系统设置里输码时仍能看到它。
+        A2PairingNotifyPostCode(shown, pairableHostName);
+        // ★[PAIRWIRE-KEEPALIVE] 保活✗★:用户马上要切到系统设置输码;不保活会被挂起 ⇒ listener 等不到连入。
+        A2PairingKeepAliveStart(@"等待设备连入…");
         applyPairwireStage(A2JITDeviceInitiatedPairingStagePreparing, nil);
         [A2Toast show:[A2JITStrings stringForKey:@"jit.pairwire.toast.started"] inView:hvc.view];
 

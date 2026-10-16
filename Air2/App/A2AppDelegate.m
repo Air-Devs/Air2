@@ -29,12 +29,17 @@
 #import "A2AccountManager.h"
 #import "A2GameDirMigration.h"
 #import "A2Log.h"
+#import "A2PairingKeepAlive.h"   // [PAIRWIRE-KEEPALIVE] 配对期间保活
 
 @implementation A2AppDelegate
 
 - (BOOL)application:(UIApplication *)application
 didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *)launchOptions {
     [A2Log log:@"AppDelegate: didFinishLaunching 开始"];
+
+    // ★[PAIRWIRE-KEEPALIVE] BGTaskScheduler 必须在启动早期注册 handler（之后不能再注册）★
+    //   设备发起配对时用户要离开 App 去系统设置输码 ⇒ 靠「后台继续任务 + 静音音频」保住进程。
+    A2PairingKeepAliveRegisterBGTask();
     // 最早的目录改名迁移：把旧的 Documents/.minecraft 迁成 Documents/minecraft。
     // 必须早于任何读取游戏目录的逻辑（版本扫描、主题背景等），否则会读到旧路径。
     [A2GameDirMigration migrateIfNeeded];
