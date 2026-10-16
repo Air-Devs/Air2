@@ -91,6 +91,7 @@
 		C5F3C56FAA94C667A202A766 /* A2InputDialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 1AAD1DB8B8E6685A93FA2940 /* A2InputDialog.m */; };
 		D18551C0C1DF2CC32C176485 /* A2JITSystemToolLauncher.m in Sources */ = {isa = PBXBuildFile; fileRef = D120228AEA96AE56EB705DA2 /* A2JITSystemToolLauncher.m */; };
 		2C9CD0FA185D54ECBE085D43 /* A2LoaderCard.m in Sources */ = {isa = PBXBuildFile; fileRef = 139430B14A933139D8C20D5C /* A2LoaderCard.m */; };
+		8635EDA79A9D11F002707FCC /* A2OptionSheet.m in Sources */ = {isa = PBXBuildFile; fileRef = F75AADCFE52958844D70A977 /* A2OptionSheet.m */; };
 		552EA36099808FC6CF1AF68C /* A2PrimaryButton.m in Sources */ = {isa = PBXBuildFile; fileRef = EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */; };
 		8ABD4DA07F7A241239D71053 /* A2ProgressBar.m in Sources */ = {isa = PBXBuildFile; fileRef = EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */; };
 		ED8B276093698A47A8E600CB /* A2QuickActionCard.m in Sources */ = {isa = PBXBuildFile; fileRef = BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */; };
@@ -279,6 +280,7 @@
 		1AAD1DB8B8E6685A93FA2940 /* A2InputDialog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2InputDialog.m"; sourceTree = "<group>"; };
 		D120228AEA96AE56EB705DA2 /* A2JITSystemToolLauncher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITSystemToolLauncher.m"; sourceTree = "<group>"; };
 		139430B14A933139D8C20D5C /* A2LoaderCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoaderCard.m"; sourceTree = "<group>"; };
+		F75AADCFE52958844D70A977 /* A2OptionSheet.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2OptionSheet.m"; sourceTree = "<group>"; };
 		EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PrimaryButton.m"; sourceTree = "<group>"; };
 		EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ProgressBar.m"; sourceTree = "<group>"; };
 		BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2QuickActionCard.m"; sourceTree = "<group>"; };
@@ -461,6 +463,7 @@
 		51D0A8ACF4410E0B1AC0B915 /* A2InputDialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InputDialog.h"; sourceTree = "<group>"; };
 		375532D78DFD99BC21499E6D /* A2JITSystemToolLauncher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITSystemToolLauncher.h"; sourceTree = "<group>"; };
 		0AE3E9A2D83CB6D50AE64979 /* A2LoaderCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoaderCard.h"; sourceTree = "<group>"; };
+		97EA334E1CBDAA956A9F3DE5 /* A2OptionSheet.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2OptionSheet.h"; sourceTree = "<group>"; };
 		F483F847F6597D3BD17BBBA5 /* A2PrimaryButton.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PrimaryButton.h"; sourceTree = "<group>"; };
 		A2C65A10681693BAA019E065 /* A2ProgressBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ProgressBar.h"; sourceTree = "<group>"; };
 		D771FB41CA40081650206A01 /* A2ProgressView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ProgressView.h"; sourceTree = "<group>"; };
@@ -1024,6 +1027,7 @@
 				1AAD1DB8B8E6685A93FA2940 /* A2InputDialog.m */,
 				D120228AEA96AE56EB705DA2 /* A2JITSystemToolLauncher.m */,
 				139430B14A933139D8C20D5C /* A2LoaderCard.m */,
+				F75AADCFE52958844D70A977 /* A2OptionSheet.m */,
 				EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */,
 				EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */,
 				BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */,
@@ -1053,6 +1057,7 @@
 				51D0A8ACF4410E0B1AC0B915 /* A2InputDialog.h */,
 				375532D78DFD99BC21499E6D /* A2JITSystemToolLauncher.h */,
 				0AE3E9A2D83CB6D50AE64979 /* A2LoaderCard.h */,
+				97EA334E1CBDAA956A9F3DE5 /* A2OptionSheet.h */,
 				F483F847F6597D3BD17BBBA5 /* A2PrimaryButton.h */,
 				A2C65A10681693BAA019E065 /* A2ProgressBar.h */,
 				D771FB41CA40081650206A01 /* A2ProgressView.h */,
@@ -1435,6 +1440,7 @@
 				C5F3C56FAA94C667A202A766 /* A2InputDialog.m in Sources */,
 				D18551C0C1DF2CC32C176485 /* A2JITSystemToolLauncher.m in Sources */,
 				2C9CD0FA185D54ECBE085D43 /* A2LoaderCard.m in Sources */,
+				8635EDA79A9D11F002707FCC /* A2OptionSheet.m in Sources */,
 				552EA36099808FC6CF1AF68C /* A2PrimaryButton.m in Sources */,
 				8ABD4DA07F7A241239D71053 /* A2ProgressBar.m in Sources */,
 				ED8B276093698A47A8E600CB /* A2QuickActionCard.m in Sources */,
