@@ -212,8 +212,9 @@
 **合规口径（★必须写清★）**：
 - 仓内新增件 `A2JITDDI` / `A2JITDDIStore` / `A2JITDDIProbe` / `A2JITDDIGuidance` /
   `A2JITDDIDeviceBridge` 全部**自研**，许可随本项目 **GPL-3.0-or-later**（见 `LICENSE`）。
-- **「联网取 DDI」的边界**：★默认关★（偏好键 `debug.jit_ddi_fetch`）。
-  ★本单未实现该请求★（Bridge 骨架如实报未接入）；且**取件来源尚未拍板** ——
+- **「联网取 DDI」的边界**：★未实现★ —— UI（[PAIRFIX] 起）如实标「未实现」，并且去掉了那个
+  只写偏好（`debug.jit_ddi_fetch`）的开关（它是摆设，会给用户「能下」的期待）。
+  Bridge 骨架如实报未接入；且**取件来源尚未拍板** ——
   公开实现指向的是**第三方镜像仓**（重分发 Apple 的 DDI 文件），
   与「直接从 Apple 分发获取」在**来源合规**上不是一回事，★须先定来源再落码★。
 - **完全离线可用**：本地发现 + 手动导入两条路都在，不依赖联网。

@@ -1169,11 +1169,31 @@ static void testWiringInvariants(void) {
     ok([autoSrc containsString:@"A2JITProviderNotImplementedError"], @"引擎未接入 ⇒ NotImplemented（与真失败分开）");
     ok([autoSrc containsString:@"不视为成功"], @"★引擎报成功但无文件 ⇒ 不视为成功（不谎报）★");
 
+    // ⑨-b ★[PAIRFIX-LIFE]★ 面板呈现器的生命周期（真机「很多按钮点不进去」+「还没生成」的同一个根因）
+    //   原来 presenter 只活在 buildWithHost: 的栈上，而行内 block 捕的是 __weak ⇒ 方法一返回
+    //   行内 block 全是「发给 nil」；配对引擎（presenter.autoEngine）随之释放 ⇒「开始配对」
+    //   落进 engine==nil 分支，误报「还没显示 6 位码」。★这两条是防回归的硬合同★。
+    ok(![settingsSrc containsString:@"__weak typeof(presenter)"],
+       @"★设置页不得把面板呈现器只交给 __weak 捕获（函数返回即释放 ⇒ 行点了没反应）★");
+    ok([settingsSrc containsString:@"A2JITPanelPresenter *panelPresenter = presenter;"],
+       @"★面板呈现器由行内 block 强持有（生命周期 = section）★");
+    ok(![settingsSrc containsString:@"__weak A2JITAutoPairingEngineBridge"],
+       @"★配对引擎不得只被 __weak 捕获（否则「开始配对」误报「还没生成」）★");
+    ok(![settingsSrc containsString:@"jit.pairwire.toast.nocode"],
+       @"★误报文案载体 jit.pairwire.toast.nocode 已从设置页移除★");
+    ok([settingsSrc containsString:@"jit.pairwire.toast.noengine"],
+       @"★引擎不可用改报真实原因（jit.pairwire.toast.noengine）★");
+
     // ⑩ ★[JIT-DDI-1] 设置页接入 DDI + Bridge 骨架如实报 + 分层纪律★
     ok([settingsSrc containsString:@"A2JITDDIStore"], @"设置页接入 DDI 本地镜像存储");
     ok([settingsSrc containsString:@"A2JITLocalDDIProbe"], @"设置页接入 DDI 判定缝（真三态）");
-    ok([settingsSrc containsString:@"jit.row.ddiFetch"], @"设置页有「联网取 DDI」开关行");
-    ok([settingsSrc containsString:@"debug.jit_ddi_fetch"], @"开关走偏好键（★默认关★）");
+    ok([settingsSrc containsString:@"jit.row.ddiFetch"], @"设置页有「联网取 DDI」行");
+    // ★[PAIRFIX-DDI]★ 这一行【不得】再是「只写偏好的假开关」：开关本身已去掉，
+    //   改为「未实现」如实态行（valueText = 未实现 + 副标题写清为什么/替代路径）。
+    ok(![settingsSrc containsString:@"debug.jit_ddi_fetch"],
+       @"★「联网取 DDI」不得再靠只写偏好、什么也不做的开关（装样子）★");
+    ok([settingsSrc containsString:@"jit.ddi.fetch.value.unimplemented"],
+       @"★「联网取 DDI」如实写「未实现」（不给「能下」的期待）★");
     ok([settingsSrc containsString:@"runDDIFetch"], @"设置页有「联网取 DDI」的调用点");
     ok([settingsSrc containsString:@"presentDDIImportPicker"], @"设置页有 DDI 导入入口");
     ok([settingsSrc containsString:@"A2JITDDIDeviceBridge"], @"设置页注入 DDI 设备侧 Bridge（骨架）");
@@ -1753,8 +1773,8 @@ static void testDDIProbeAndGuidance(void) {
     eqInt((NSInteger)missing.count, 0, @"★DDI 状态/原因 key 四语齐全且非空★");
 
     // ★机制阻塞文案（联网取 / 挂载）四语齐全★
+    //   ★[PAIRFIX-DDI]★ fetchDisabled* 两条已随「联网取 DDI」开关删除（开关没了 ⇒ 永远不可达）。
     NSArray<NSString *> *blockerKeys = @[
-        [A2JITDDIGuidance fetchDisabledReasonKey], [A2JITDDIGuidance fetchDisabledActionKey],
         [A2JITDDIGuidance fetchUnsupportedReasonKey], [A2JITDDIGuidance fetchUnsupportedActionKey],
         [A2JITDDIGuidance mountUnavailableReasonKey], [A2JITDDIGuidance mountUnavailableActionKey],
     ];
@@ -3508,6 +3528,37 @@ static void testJitVmTierVerdictMatrix(void) {
        && [gateLine containsString:@"开关=关"], @"gate 步判据行自述覆盖生效（未就绪路径点名开关）");
 }
 
+#pragma mark - ⑳ [PAIRFIX-LIFE] 呈现器生命周期（栈上对象 + __weak 捕获 ⇒ 点了没反应）
+
+/// 用真运行证明「行内 block 只 __weak 捕【栈上对象】」的后果：
+///   构建函数一返回，那个对象就没了 ⇒ block 里拿到 nil（点了没反应）；
+///   而 block **强持有**时，对象跟着 block 活（生命周期 = 持有 block 的视图树）。
+/// 这正是设置页的两个真机现象：多数行点了没反应、以及「开始配对」误报「还没显示 6 位码」
+/// （引擎随 presenter 一起释放 ⇒ engine==nil 分支）。
+static void testPairfixPresenterLifetime(void) {
+    printf("\n=== ⑳ [PAIRFIX-LIFE] 栈上呈现器 + 行内 block 捕获（__weak vs 强持有）===\n");
+
+    __block BOOL weakAlive = NO;
+    __block BOOL strongAlive = NO;
+    void (^weakBlock)(void) = nil;
+    void (^strongBlock)(void) = nil;
+
+    {   // ← 「构建面板」这一帧：两个对象都只活在栈上（与 buildWithHost: 里一样）
+        NSObject *presenterWeakOnly = [NSObject new];   // 行内 block 只 __weak 捕它（事故写法）
+        NSObject *presenterStrongHeld = [NSObject new]; // 行内 block 强持有它（修法）
+        __weak NSObject *weakRef = presenterWeakOnly;
+        __weak NSObject *strongRef = presenterStrongHeld;
+        weakBlock = ^{ weakAlive = (weakRef != nil); };
+        strongBlock = ^{ strongAlive = (strongRef != nil); (void)presenterStrongHeld; };
+        ok(weakRef != nil && strongRef != nil, @"构建时两个对象都活着");
+    }
+    // 「构建面板」已经返回，行（= 两个 block）还挂在视图树上，用户现在来点了：
+    weakBlock();
+    strongBlock();
+    ok(!weakAlive, @"★只 __weak 捕栈上对象 ⇒ 构建函数返回后行内 block 拿到 nil（点了没反应）★");
+    ok(strongAlive, @"★block 强持有 ⇒ 构建函数返回后行内 block 仍拿得到（生命周期 = section）★");
+}
+
 #pragma mark - main
 
 int main(int argc, const char *argv[]) {
@@ -3539,6 +3590,7 @@ int main(int argc, const char *argv[]) {
         testIntegrationTLSPSK();
         testLaunchChainJitVmWiring();
         testWiringInvariants();
+        testPairfixPresenterLifetime();
 
         printf("\n----------------------------------------\n");
         printf("TOTAL pass=%d fail=%d\n", gPass, gFail);

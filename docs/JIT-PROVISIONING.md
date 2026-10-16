@@ -299,7 +299,7 @@ TLS-PSK 隧道、DDI 的真取用（联网个性化请求与 image_mounter 挂�
 | `Air2/Player/A2JITAutomaticPairingProvider.h/.m` | Player | 新增 `ddiProbe:` 注入；**生效前置条件** = 注入值 +（有探测时）以探测结果覆盖 DDI 那一项 |
 | `Air2/Player/A2JITCoordinator.h/.m` | Player | 新增装配工厂 `providersWithFacts:preconditions:engine:ddiProbe:probe:launcher:pairingFileStore:`（旧签名等价于 ddiProbe 传 nil） |
 | `Air2/Player/A2JITStrings.m` | Player | 新增 **约 37 个 key × 4 语**（DDI 行 / 开关行 / 5 态状态·原因·动作 / 下一步动作 / 机制阻塞 / 提示） |
-| `Air2/UI/Screens/Settings/A2JITSettings.m` | UI | 新增「DDI」状态行、「导入 DDI 镜像」行、「**联网取 DDI**」开关行（★默认关★）+ 失败分流文案 |
+| `Air2/UI/Screens/Settings/A2JITSettings.m` | UI | 新增「DDI」状态行、「导入 DDI 镜像」行、「**联网取 DDI**」行（★[PAIRFIX] 起改为「未实现」如实态行 —— 原来那个只写偏好的开关是摆设★）+ 失败分流文案 |
 | `tests/JIT/*` | tests | 新增 ⑭⑮ 两组 + 接线不变量 ⑩（DDI 纯逻辑 / 本地存储 / 判定合成 / 四语 / Provider 接线 / 分层纪律）|
 
 ★ **「不谎报」的三条硬判据（真机可核对）★**：
@@ -309,8 +309,10 @@ TLS-PSK 隧道、DDI 的真取用（联网个性化请求与 image_mounter 挂�
    探测未接线 / 目录不可读 / 元数据不足时一律 **Unknown**，★不许升成「已满足」，也不许降成「缺失」★；
 3. **机制未接入就如实阻断**：联网获取与镜像挂载都返回 `NO` 并**点名缺什么**，★不假成功★。
 
-★ **「联网取 DDI」的边界（★默认关★，偏好键 `debug.jit_ddi_fetch`）★**：
-开启后才会呼叫机制。★完全离线也能用★：本地发现 + 手动导入两条路都在，不依赖联网。
+★ **「联网取 DDI」的边界（★[PAIRFIX] 起：无开关，UI 如实标「未实现」★）★**：
+★机制未接线★（Bridge 骨架如实回 `NO` + 点名缺什么）⇒ 不给用户「能下」的期待。
+行仍可点，点了走真机制调用点并如实报缺什么；原先那个「开关只写偏好」的写法已删 —— ★那是摆设★。
+★完全离线也能用★：本地发现 + 手动导入两条路都在，不依赖联网。
 
 ★ **流程口径（以公开实现的行为为准，见 §3.4 末「与 StikDebug 对照」）★**：
 公开实现（StikDebug）的 DDI 获取**不是**向 Apple 的个性化（TSS）端点申请，而是

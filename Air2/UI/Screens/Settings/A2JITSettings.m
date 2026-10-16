@@ -300,26 +300,33 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
         self.ddiFetchRow.enabled = NO;
         return;
     }
-    BOOL fetchOn = [NSUserDefaults.standardUserDefaults boolForKey:@"debug.jit_ddi_fetch"];
+    // ★[PAIRFIX-DDI]★ 联网取件【不可用】是唯一事实（机制未接线，见 A2JITDDIDeviceBridge）——
+    //   原来这里读那个「DDI 联网取的调试开关」偏好，让「下一步动作」按开关值分流；
+    //   开关已被如实态行取代 ⇒ 恒按「取件不可用」分流（不再指引用户去开一个不存在的开关）。
+    BOOL fetchAvailable = NO;
     A2JITDDIStatus *st = [probe ddiStatus];
 
     // 状态（短文案）+ 原因 + 下一步动作 + 取证（一行定成败，便于照单核对）。
     self.ddiRow.enabled = YES;
     self.ddiRow.valueText = [self text:[A2JITDDIGuidance statusKeyForVerdict:st.verdict]];
     NSString *reason = [self text:[A2JITDDIGuidance reasonKeyForVerdict:st.verdict]];
-    NSString *next = [self text:[A2JITDDIGuidance nextActionKeyForVerdict:st.verdict fetchEnabled:fetchOn]];
+    NSString *next = [self text:[A2JITDDIGuidance nextActionKeyForVerdict:st.verdict
+                                                            fetchEnabled:fetchAvailable]];
     self.ddiRow.subtitle = [NSString stringWithFormat:@"%@；%@｜%@", reason, next, st.evidence ?: @""];
 
-    // 导入 DDI 行（与配对文件同机制：系统文档选择器 → 本机校验）。
+    // 导入 DDI 行（与配对文件同机制：系统文档选择器 → 本机校验）。★这条路是真的，且不联网★。
     self.ddiImportRow.enabled = YES;
     self.ddiImportRow.subtitle = (st.verdict == A2JITDDIVerdictPresent)
         ? [self text:@"jit.ddi.status.present"]
         : [self text:@"jit.row.ddiImport.needFile"];
 
-    // 「联网取 DDI」开关行（★默认关★；文案写明这是访问 Apple 官方服务，不是「上云」）。
+    // ★[PAIRFIX-DDI]★ 「联网取 DDI」行：不再是开关（开关 = 装样子）。
+    //   如实写「未实现」+ 为什么 + 替代路径；行可点 ⇒ 点了走真机制调用点、如实报缺什么。
     self.ddiFetchRow.enabled = YES;
-    self.ddiFetchRow.on = fetchOn;
-    self.ddiFetchRow.subtitle = [self text:@"jit.row.ddiFetch.detail"];
+    self.ddiFetchRow.valueText = [self text:@"jit.ddi.fetch.value.unimplemented"];
+    self.ddiFetchRow.subtitle = [NSString stringWithFormat:@"%@；%@",
+                                 [self text:[A2JITDDIGuidance fetchUnsupportedReasonKey]],
+                                 [self text:[A2JITDDIGuidance fetchUnsupportedActionKey]]];
 }
 
 - (NSString *)nextActionTextForVerdict:(A2JITReadinessVerdict)verdict
@@ -410,19 +417,11 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
     [self apply];
 }
 
-// [JIT-DDI-1] 「联网取 DDI」：★默认关★；关着就【不发起任何网络动作】，只提示去开开关。
-// 开着才真呼叫机制 —— 机制未接入时如实失败并点名缺什么（绝不假成功）。
+// ★[PAIRFIX-DDI]★ 「联网取 DDI」：机制【未接线】⇒ 这里没有「开关」可开（开关是摆设，已去掉）。
+// 本方法直接走真机制调用点，如实失败并点名缺什么（绝不假成功，也不给「能下」的期待）。
 - (void)runDDIFetch {
     UIViewController *host = self.host;
-    BOOL fetchOn = [NSUserDefaults.standardUserDefaults boolForKey:@"debug.jit_ddi_fetch"];
-    if (!fetchOn) {
-        NSString *reason = [self text:[A2JITDDIGuidance fetchDisabledReasonKey]];
-        NSString *action = [self text:[A2JITDDIGuidance fetchDisabledActionKey]];
-        NSLog(@"[A2JIT] DDI 联网取：开关关闭 ⇒ 不发起任何网络动作（这是访问 Apple 官方服务，非「上云」）");
-        [A2Toast show:[NSString stringWithFormat:@"%@；%@", reason, action] inView:host.view];
-        [self apply];
-        return;
-    }
+    NSLog(@"[A2JIT] DDI 联网取：走真机制调用点（未接线则如实报缺什么；这是访问 Apple 官方服务，非「上云」）");
 
     A2JITLocalDDIProbe *probe = self.ddiProbe;
     if (probe == nil) {
@@ -715,12 +714,16 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
     ddiImportRow.accessory = A2SettingsRowAccessoryDisclosure;
     [section addRow:ddiImportRow];
 
+    // ---- 「联网取 DDI」：★未接线 ⇒ 不做成可开关的假开关★ ----
+    //   机制（个性化取件 + image_mounter 挂载）未接线、且取件来源尚未拍板（见
+    //   A2JITDDIDeviceBridge 与 docs/JIT-PROVISIONING.md §3.4）⇒ 原来那个「只写偏好、
+    //   什么也不做」的开关就是摆设（真机反馈「开关打开了也不会下」）。
+    //   现在它是【如实态行】：valueText 写「未实现」，副标题写清为什么 + 替代路径；
+    //   点它 = 走真实机制调用点，如实报缺什么（绝不假成功）。
     A2SettingsRow *ddiFetchRow = [[A2SettingsRow alloc] init];
     ddiFetchRow.symbolName = @"antenna.radiowaves.left.and.right";
     ddiFetchRow.title = [A2JITStrings stringForKey:@"jit.row.ddiFetch"];
-    ddiFetchRow.accessory = A2SettingsRowAccessorySwitch;
-    // ★默认关★（偏好键 debug.jit_ddi_fetch 默认 NO）。
-    ddiFetchRow.on = [NSUserDefaults.standardUserDefaults boolForKey:@"debug.jit_ddi_fetch"];
+    ddiFetchRow.accessory = A2SettingsRowAccessoryDisclosure;   // 可点：点了如实报未接线
     [section addRow:ddiFetchRow];
 
     A2SettingsRow *importRow = [[A2SettingsRow alloc] init];
@@ -752,32 +755,36 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
     presenter.enableRow = enableRow;
 
     // ---- 交互 ----
-    __weak typeof(presenter) weakPresenter = presenter;
+    // ★[PAIRFIX-LIFE]★ 面板呈现器必须【活到用户点完为止】。
+    //   原来这里捕的是 __weak，而 presenter 在本方法里只是栈上局部变量 ⇒ 本方法一返回它就被释放，
+    //   行内 block 里的 [weakPresenter …] 全成了「发给 nil」：
+    //     ·「一键开展自动配对」「开启 JIT」「导入配对文件」「导入 DDI 镜像」「挂载 DDI」
+    //       这些行点了【没有任何反应】（真机反馈「很多按钮点不进去」）；
+    //     · 配对引擎（presenter.autoEngine）也随之释放 ⇒「开始配对」直接落进 engine==nil 分支，
+    //       报一句「还没显示 6 位码 ⇒ 先选设备发起档」（真机反馈「我生成了配对码…说我还没生成」）——
+    //       那一刻【码根本没生成/没显示】，用户「想输都输不了」。
+    //   行内 block【强持有】它就修好了：presenter 对行只持 weak（见上面的行声明）⇒ 依旧不成环，
+    //   生命周期 = section（section 挂在设置页 VC 的视图树上）。
+    A2JITPanelPresenter *panelPresenter = presenter;
     autopairRow.onTap = ^{
-        [weakPresenter runAutoPair];
+        [panelPresenter runAutoPair];
     };
     ddiImportRow.onTap = ^{
-        [weakPresenter presentDDIImportPicker];
+        [panelPresenter presentDDIImportPicker];
     };
     ddiRow.onTap = ^{
-        [weakPresenter runDDIMount];
+        [panelPresenter runDDIMount];
     };
-    // ★「联网取 DDI」默认关★：开关只写偏好；打开的那一刻才真呼叫机制
-    // （机制未接入时如实失败并点名缺什么——绝不假成功）。
-    ddiFetchRow.onToggle = ^(BOOL isOn) {
-        [NSUserDefaults.standardUserDefaults setBool:isOn forKey:@"debug.jit_ddi_fetch"];
-        NSLog(@"[A2JIT] DDI 联网取开关 = %@（★这是访问 Apple 官方服务，不是「上云」★）", isOn ? @"开" : @"关");
-        if (isOn) {
-            [weakPresenter runDDIFetch];
-        } else {
-            [weakPresenter apply];
-        }
+    // ★[PAIRFIX-DDI]★ 「联网取 DDI」不再是「开关」（机制未接线 ⇒ 开关是摆设）：
+    //   这一行改成【如实态行】，点它 = 如实报缺什么（绝不假成功，也不给「能下」的期待）。
+    ddiFetchRow.onTap = ^{
+        [panelPresenter runDDIFetch];
     };
     importRow.onTap = ^{
-        [weakPresenter presentImportPicker];
+        [panelPresenter presentImportPicker];
     };
     enableRow.onTap = ^{
-        [weakPresenter runEnable];
+        [panelPresenter runEnable];
     };
 
     // ---- 启动链开关（runtime chain）[RT-P1-SWITCH]（本单不改其语义）----
@@ -926,7 +933,9 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
 
     __weak A2SettingsRow *weakPWStart = pairwireStartRow;
     __weak A2SettingsRow *weakPWCancel = pairwireCancelRow;
-    __weak A2JITAutoPairingEngineBridge *weakPWEngine = presenter.autoEngine;
+    // ★[PAIRFIX-LIFE]★ 引擎也【强捕获】：它原来只被 presenter 强持有（presenter.autoEngine），
+    //   presenter 一没它就跟着没 ⇒「开始配对」会误报成「还没显示 6 位码」（真机反馈）。
+    A2JITAutoPairingEngineBridge *panelEngine = presenter.autoEngine;
 
     // 阶段 → UI（★块可在任意线程被调用 ⇒ 内部自己回主线程★）。
     void (^applyPairwireStage)(A2JITDeviceInitiatedPairingStage, NSString *_Nullable) =
@@ -980,45 +989,54 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
     pairwireStartRow.onTap = ^{
         UIViewController *hvc = weakHostVC;
         A2JITPairingPinMode modeForThisRow = [A2JITPairingPinResolver selectedMode];
-        A2JITAutoPairingEngineBridge *engine = weakPWEngine;
+        A2JITAutoPairingEngineBridge *engine = panelEngine;
         if (hvc == nil) { return; }
-        if (engine == nil) {
-            [A2Toast show:[A2JITStrings stringForKey:@"jit.pairwire.toast.nocode"] inView:hvc.view];
-            return;
-        }
+        NSLog(@"[A2-PAIRPIN] step=tap row=start source=%@ engine=%@",
+              [A2JITPairingPinSourceCatalog displayNameForMode:modeForThisRow],
+              engine ? @"有" : @"★无（面板呈现器/引擎生命周期）★");
         // ★[PAIRWIRE-FIX]「开始配对」这个按钮本身就是【设备发起档】的流程 ⇒
         //   先把来源档写成该档:否则 refreshPairpin() 里「码行只在设备发起档显示」的条件不成立,
         //   码虽然生成了但用户看不到(真机反馈:点了开始配对看不到 6 位码)。
         if (modeForThisRow != A2JITPairingPinModeDeviceInitiated) {
             [NSUserDefaults.standardUserDefaults setObject:[A2JITPairingPinSourceCatalog defaultIdentifier]
                                                     forKey:A2SelectedPairingPinSourcePrefKey];
-            NSLog(@"[A2JIT] settings: 开始配对 ⇒ 自动把来源档写成设备发起档（否则码行不显示）");
+            NSLog(@"[A2-PAIRPIN] step=source 写成 deviceInitiated（否则码行不显示）");
         }
-        // ① 生成并显示 6 位码（★沿用既有件★：用户要切到系统设置去输这个码）
+        // ★[PAIRFIX-ORDER]★ ① 先生成并显示 6 位码 —— 【与引擎可用与否无关】：
+        //   码是给用户在设备上输的，先把它生成出来并显示，才不会出现「我想输都输不了」。
+        //   原来的顺序是「先查引擎、后生成码」⇒ 引擎一旦不可用就提前 return，既不生成也不显示码，
+        //   只报一句「还没显示 6 位码 ⇒ 先选设备发起档」——★那是误报（档早就选好了）★。
         A2JITPairingCodeSession *cs = A2JITPairingCodeSession.sharedSession;
         A2JITPairingCodeSession *persisted = [A2JITPairingCodeSession restoredFromDefaults];
         NSString *shown = cs.code.length > 0 ? cs.code : (persisted.code ?: @"");
+        NSError *genErr = nil;
         if (shown.length != 6) {
-            NSError *e = nil;
-            [cs beginDeviceInitiatedWithHostName:pairableHostName error:&e];
-            shown = cs.code;
-            if (shown.length != 6 && e != nil) {
-                // ★把真实错误报出来(而不是笼统的 nocode)★ —— 真机定位用。
-                NSLog(@"[A2JIT] 生成配对码失败: %@", e.localizedDescription ?: @"(无详情)");
-                [A2Toast show:[NSString stringWithFormat:@"生成配对码失败：%@",
-                               e.localizedDescription ?: @"(无详情)"]
-                        inView:hvc.view];
-                refreshPairpin();
-                return;
-            }
+            [cs beginDeviceInitiatedWithHostName:pairableHostName error:&genErr];
+            A2JITPairingCodeSession *again = [A2JITPairingCodeSession restoredFromDefaults];
+            shown = cs.code.length > 0 ? cs.code : (again.code ?: @"");
         }
-        refreshPairpin();
         if (shown.length != 6) {
-            [A2Toast show:[A2JITStrings stringForKey:@"jit.pairwire.toast.nocode"] inView:hvc.view];
+            // 走到这里说明【已经生成过】了 ⇒ 只剩「生成失败」一种可能：报真实原因（不再报误报）。
+            NSString *why = genErr.localizedDescription ?: @"生成器没有给出 6 位码（内部不一致）";
+            NSLog(@"[A2-PAIRPIN] step=gen ★失败★ reason=%@", why);
+            [A2Toast show:[NSString stringWithFormat:@"生成配对码失败：%@", why] inView:hvc.view];
+            refreshPairpin();
             return;
         }
+        NSLog(@"[A2-PAIRPIN] step=gen 就绪 code=已生成(%lu 位) host=%@",
+              (unsigned long)shown.length, pairableHostName);
+        refreshPairpin();
         // ★[PAIRWIRE-NOTIFY] 把码同时发一条本地通知✗★ —— 用户切到系统设置里输码时仍能看到它。
         A2PairingNotifyPostCode(shown, pairableHostName);
+
+        // ★[PAIRFIX-ORDER]★ 引擎不可用 = 【程序内部状态】，不是「你没选设备发起档」⇒ 报真实原因；
+        //   而且【不】因为这一条就把刚显示出来的码藏起来（码已可复制，用户能先去设备上输）。
+        if (engine == nil) {
+            NSLog(@"[A2-PAIRPIN] step=engine ★不可用★（呈现器/引擎生命周期）⇒ 只显示码，不开始配对");
+            [A2Toast show:[A2JITStrings stringForKey:@"jit.pairwire.toast.noengine"] inView:hvc.view];
+            return;
+        }
+
         // ★[PAIRWIRE-KEEPALIVE] 保活✗★:用户马上要切到系统设置输码;不保活会被挂起 ⇒ listener 等不到连入。
         A2PairingKeepAliveStart(@"等待设备连入…");
         applyPairwireStage(A2JITDeviceInitiatedPairingStagePreparing, nil);
@@ -1056,7 +1074,7 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
 
     pairwireCancelRow.onTap = ^{
         UIViewController *hvc = weakHostVC;
-        A2JITAutoPairingEngineBridge *engine = weakPWEngine;
+        A2JITAutoPairingEngineBridge *engine = panelEngine;
         if (hvc == nil || engine == nil) { return; }
         [engine cancelDeviceInitiatedPairing];
         [A2Toast show:[A2JITStrings stringForKey:@"jit.pairwire.toast.cancelRequested"] inView:hvc.view];
