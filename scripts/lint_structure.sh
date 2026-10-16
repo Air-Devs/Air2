@@ -158,6 +158,22 @@ if [ -f "$ROOT/scripts/verify_frame_perf_native.py" ]; then
     fi
 fi
 
+# ------------------------------------------------------------
+# 9. 二级界面去玻璃（MD3 口径）
+# ------------------------------------------------------------
+# 口径：一级页面（启动器）保留玻璃，二级界面一律 MD3、不许有玻璃 API。
+# 判据是「白名单 + 阴性对照 + 二级清单命中 = 0」三条断言，
+# 详见 scripts/check_no_glass.py 与 docs/DECISIONS.md。
+echo "==> 9. 二级界面去玻璃检查"
+if [ -f "$ROOT/scripts/check_no_glass.py" ]; then
+    if python3 "$ROOT/scripts/check_no_glass.py" 2>&1 | tail -25; then
+        :
+    else
+        err "二级界面去玻璃检查未通过"
+    fi
+fi
+
+
 echo ""
 if [ "$FAIL" -eq 0 ]; then
     printf '\033[32m检查通过\033[0m\n'

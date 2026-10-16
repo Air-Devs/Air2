@@ -21,14 +21,18 @@
 //
 //
 //  MD3 卡片实现。
-//  设计取舍：不用 UIVisualEffectView 做玻璃。
+//  设计取舍：不用 UIVisualEffectView 做玻璃（玻璃默认关闭）。
 //
 //  原因：MD3 的 surfaceContainer 体系本身就是「分层表面」，
 //  用半透明色 + 精确的层级色值就能表达深度，比强制加模糊更可控：
 //    · 卡片数量多时模糊会显著掉帧（尤其中低端设备）
 //    · 用户自定义背景图上叠模糊，色彩完全不可预测
 //  所以这里用「MD3 语义色 + 可选的轻微模糊」，
-//  模糊只在用户显式开启时才启用（走 A2ThemeManager.backgroundBlur 的联动）。
+//  模糊只在 glassEnabled 显式打开、且用户也开了背景模糊时才启用。
+//
+//  ★glassEnabled 默认 NO★ ⇒ 默认输出不透明的 MD3 表面，
+//  二级选择界面全部走这条路径（玻璃 API 的命中数由
+//  scripts/check_no_glass.py 守住，只允许一级页面打开）。
 //
 
 #import "A2GlassCard.h"
@@ -63,6 +67,7 @@
     _cornerRadius = A2RadiusL;
     _contentInsets = UIEdgeInsetsMake(A2SpaceL, A2SpaceL, A2SpaceL, A2SpaceL);
     _elevation = A2CardElevationLow;
+    _glassEnabled = NO;   // ★默认 MD3 不透明★：二级界面不开玻璃
     _blurAmount = 0;
     _drawsBorder = YES;
     _drawsShadow = YES;
@@ -175,6 +180,11 @@
     ]];
 }
 
+- (void)setGlassEnabled:(BOOL)glassEnabled {
+    _glassEnabled = glassEnabled;
+    [self applyTheme];
+}
+
 - (void)setBlurAmount:(CGFloat)blurAmount {
     _blurAmount = MAX(0, MIN(1, blurAmount));
     [self applyTheme];
@@ -242,8 +252,11 @@
         default:                           fill = s.cSurfaceContainer;      break;
     }
 
-    // 有自定义背景时让卡片半透明，让背景色透出来 —— 这是个性化的关键
-    if (hasCustomBg) {
+    // 有自定义背景时让卡片半透明，让背景色透出来 —— 这是个性化的关键。
+    // ★只在玻璃开启时生效★：二级界面 glassEnabled == NO ⇒ 填充保持不透明，
+    // 卡片就是实心 MD3 表面，壁纸不会透过卡片。
+    BOOL translucent = _glassEnabled && hasCustomBg;
+    if (translucent) {
         CGFloat alpha = tm.isDark ? 0.68 : 0.76;
         // 用户设了模糊，卡片内部也跟一点，整体更统一
         if (tm.backgroundBlur > 60) alpha -= 0.08;
@@ -252,8 +265,8 @@
 
     _fillView.backgroundColor = fill;
 
-    // —— 模糊（仅在用户开启背景模糊且存在背景图时启用）——
-    BOOL wantBlur = hasCustomBg && tm.backgroundBlur > 0 && _blurAmount > 0;
+    // —— 模糊（玻璃开启 + 用户开启背景模糊 + 卡片自身要模糊，三者同时满足）——
+    BOOL wantBlur = translucent && tm.backgroundBlur > 0 && _blurAmount > 0;
     if (wantBlur) {
         UIBlurEffectStyle style = tm.backgroundBlur < 40 ? UIBlurEffectStyleSystemUltraThinMaterial
                                : tm.backgroundBlur < 75 ? UIBlurEffectStyleSystemThinMaterial
@@ -288,7 +301,7 @@
             case A2CardElevationLow:
             default:                     opacity = 0.06f; radius = 10; offsetY = 3; break;
         }
-        self.layer.shadowOpacity = hasCustomBg ? opacity * 1.4f : opacity;
+        self.layer.shadowOpacity = (_glassEnabled && hasCustomBg) ? opacity * 1.4f : opacity;
         self.layer.shadowRadius = radius;
         self.layer.shadowOffset = CGSizeMake(0, offsetY);
     }

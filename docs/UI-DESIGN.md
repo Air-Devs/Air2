@@ -136,6 +136,24 @@ Air2 是 **iOS 横屏**的 Minecraft Java 版启动器。
 最后一条很关键：用户可能选一张花哨的图，直接放会让右侧卡片糊在一起。
 加一层渐隐（图片色 → 半透明黑）能让操作区始终有稳定的对比度。
 
+### 4.1 一级 / 二级分层（2026-10-16 口径）
+
+| 页面 | 底板 | 卡片 | 玻璃 |
+|---|---|---|---|
+| **一级**（启动器主页 `A2LauncherViewController`） | 用户壁纸（`A2BackgroundView`，含可选模糊） | `A2GlassCard` 且 `glassEnabled = YES` | ✅ 保留 |
+| **二级**（一切从一级点进去的页面，均继承 `A2BaseViewController`） | MD3 `surface` 纯色（**不放壁纸**） | `A2GlassCard` 默认（`glassEnabled = NO`，不透明 `surfaceContainer` + 描边 + 阴影） | ❌ 禁止 |
+
+- 二级页面的玻璃相关 API 命中数由 `scripts/check_no_glass.py` 断言为 **0**（接入 `make lint` / CI），
+  白名单之外出现 `UIVisualEffectView` / `UIBlurEffect` / `A2BackgroundView` / `blurAmount` / `glassEnabled`
+  一律判失败。
+- 二级页面沿用既有 MD3 组件（`A2SettingsSection` / `A2SettingsRow` / `A2SegmentedControl` / `A2TextField`…），
+  不自创风格；`A2GlassCard` 只作为「不透明表面容器」使用。
+- **选择器**（渲染器 / Java 运行时 / 版本隔离档位 / 深色模式 / 镜像优先级 / 配对码来源 / 版本更多操作 / 复制粒度 / 账号更多操作）
+  一律用自研 **`A2OptionSheet`**（MD3 实心卡片 + 选中勾 + 语义色 `error` 标注破坏性项）；
+  ❌ 禁止 `UIAlertControllerStyleActionSheet`（系统半透明材质、不跟主题、iPad 需锚 popover）。
+  危险操作**确认**仍用 `UIAlertControllerStyleAlert`（见组件规范「Alert 仅用于危险操作确认」）。
+- 决策记录见 `docs/DECISIONS.md` ADR-010。
+
 ---
 
 ## 五、动效系统

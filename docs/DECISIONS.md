@@ -168,3 +168,54 @@
     ★StikDebug **AGPL-3.0** 只可当外部 App★、★SideInstaller 自定义许可，禁抄禁再分发★）。
 - **来源**：`docs/JIT-PROVISIONING.md`（本项目）、`D:\CTF\_AIR2_JIT_BUILTIN.md`（PocketJ / SideInstaller 源码核实）、
   `D:\CTF\_AIR2_JIT_PLAN.md`（本单交付计划）。
+
+
+---
+
+## ADR-010：二级界面改 Material Design 3、去玻璃；一级页面保留玻璃
+
+- **状态**：已接受（实现已落；真机观感验收见 `D:\CTF\_AIR2_MD3_SECONDARY.md` 的逐页判定表）
+- **日期**：2026-10-16
+- **背景**：
+  - 用户最新口径（原话）：「你这个 ui，就是点进去二级选择界面用 metrial design 3，不用玻璃」。
+    即：一级页面（启动器主页）现有观感不动；**从一级点进去的二级选择界面改用 MD3、不要玻璃**。
+  - 此前 `A2BaseViewController`（二级页面基类，类注释自述「所有二级页面继承它」）在**每个二级页面**
+    都挂了一张 `A2BackgroundView`：壁纸 + 用户设定的模糊材质（`UIVisualEffectView`）。
+    同时 `A2GlassCard` 在**有自定义壁纸时**把填充做成半透明（亮 0.76 / 暗 0.68）。
+    两者叠加 = 二级页面上「毛玻璃卡片浮在糊掉的壁纸上」，正是用户点名的玻璃观感。
+- **决策**：
+  1. **二级页面底板 = MD3 不透明 `surface`**：`A2BaseViewController` 不再挂 `A2BackgroundView`，
+     直接 `self.view.backgroundColor = scheme.cSurface`。二级页面不放壁纸、也没有模糊层。
+  2. **玻璃改成显式 opt-in**：`A2GlassCard` 新增**玻璃总开关** `glassEnabled`，
+     ★默认 NO★ ⇒ 默认输出不透明的 MD3 表面（elevation 对应的 `surfaceContainer` 不透明填充
+     + `outlineVariant` 描边 + 阴影）。原半透明填充与模糊只在 `glassEnabled == YES` 时生效。
+  3. **一级页面是玻璃的唯一用武之地**：`A2LauncherViewController`（启动器主页）保留自己的
+     `A2BackgroundView`，并在主卡/最近游玩卡上显式 `glassEnabled = YES` ⇒ 一级观感**逐像素不变**。
+  4. **机器判据**：新增 `scripts/check_no_glass.py`，接入 `scripts/lint_structure.sh` 第 8 节与 CI 的 lint job：
+     ① 白名单之外任何文件命中玻璃 API = 失败；② 阴性对照（一级文件命中必须 > 0，防假通过）；
+     ③ ★二级清单（由 `@interface X : A2BaseViewController` 推导）命中必须 = 0★；
+     ④ `A2GlassCard` 的默认值必须是 `_glassEnabled = NO`。
+  5. **组件复用优先**：不新建「MD3 卡片」组件 —— `A2GlassCard` 本身就是 MD3 卡片容器
+     （其头注释即写「用 surfaceContainer 的五档层级表达深度，而不是玻璃模糊」），
+     玻璃只是它的一项可选能力。类名里的 “Glass” 属历史命名，本单**不改名**（改名会波及全部调用点）。
+  6. **选择器也去系统玻璃**：二级界面里 9 处单选/菜单选择器原先是
+     `UIAlertController` 的 **ActionSheet**（外观是系统半透明材质、不跟主题，
+     且 iPad 上必须锚 popover 否则抛异常）⇒ 统一换成自研 `A2OptionSheet`
+     （MD3 实心 surfaceContainerHigh 卡片 + 0.45 遮罩 + 选项行复用 A2SettingsSection/A2SettingsRow
+     + 语义色 error 标注破坏性项 + 弹簧入场，居中自绘 ⇒ 不再需要 popover 锚点）。
+     危险操作**确认**仍用 `UIAlertControllerStyleAlert`（air2-ui 组件规范允许），本单不动那 5 处。
+     当前项标记由行上的 MD3 选中勾承担，不再往标题里塞「✓ 」前缀。
+- **理由**：
+  - MD3 的页面底板语义就是 `surface`；壁纸穿透 + 模糊本身就是「玻璃层」的载体，留着它就等于二级页面仍有玻璃。
+  - 把玻璃收成**一个默认关闭的开关**，才能让「二级不许有玻璃」成为可被机器断言的强不变量：
+    将来任何人给新二级页面加玻璃，`make lint` 直接红。
+  - 一级/二级分层与「用户个性化只出现在一级」一致：个性化在主页，功能页求清晰与一致。
+  - 不新建组件、不改名 ⇒ 不产生并行实现（石山），也不顺手重构。
+- **影响 / 边界**：
+  - 二级页面**不再显示用户壁纸**（这是本决策的可见后果，且是「不用玻璃」的必然推论：
+    壁纸层就是玻璃的载体）。若后续要求「二级留壁纸但卡片不透明」，那是一条**新 ADR**，
+    改动集中在 `A2BaseViewController` 一处（3 行）。
+  - `A2InputDialog` / `A2ColorThemeDialog` 本来就是 MD3（`surfaceContainerHigh` + 0.45 遮罩），
+    本单未改；它们由同一条断言覆盖（玻璃命中 = 0）。
+- **来源**：本仓 `Air2/UI/Screens/A2BaseViewController.m`、`Air2/UI/Components/A2GlassCard.[hm]`、
+  `Air2/UI/Screens/Home/A2LauncherViewController.m`、`scripts/check_no_glass.py`。

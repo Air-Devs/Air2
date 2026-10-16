@@ -59,6 +59,7 @@
 #import "A2JITDDIGuidance.h"
 #import "A2JITDDIDeviceBridge.h"
 #import "A2Toast.h"
+#import "A2OptionSheet.h"
 
 #import <UIKit/UIKit.h>
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
@@ -857,10 +858,9 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
     pairpinRow.onTap = ^{
         UIViewController *hvc = weakHostVC;
         if (hvc == nil) return;
-        UIAlertController *sheet =
-            [UIAlertController alertControllerWithTitle:[A2JITStrings stringForKey:@"jit.row.pairpin"]
-                                                message:[A2JITPairingPinResolver criterionLine]
-                                         preferredStyle:UIAlertControllerStyleActionSheet];
+        A2OptionSheet *sheet =
+            [A2OptionSheet sheetWithTitle:[A2JITStrings stringForKey:@"jit.row.pairpin"]
+                                  message:[A2JITPairingPinResolver criterionLine]];
         NSString *cur = [NSUserDefaults.standardUserDefaults stringForKey:A2SelectedPairingPinSourcePrefKey] ?: @"";
         for (A2JITPairingPinSourceItem *it in [A2JITPairingPinSourceCatalog allItems]) {
             NSString *title = [A2JITStrings stringForKey:it.nameKey];
@@ -868,9 +868,10 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
                 title = [NSString stringWithFormat:@"%@（%@）", title,
                          [A2JITStrings stringForKey:@"jit.pairpin.unsupported"]];
             }
-            if ([it.identifier isEqualToString:cur]) { title = [@"✓ " stringByAppendingString:title]; }
-            [sheet addAction:[UIAlertAction actionWithTitle:title style:UIAlertActionStyleDefault
-                                                   handler:^(UIAlertAction *a) {
+            [sheet addOptionWithTitle:title
+                             selected:[it.identifier isEqualToString:cur]
+                          destructive:NO
+                              handler:^{
                 // ★写入点唯一点★：偏好键 = A2SelectedPairingPinSourcePrefKey。
                 [NSUserDefaults.standardUserDefaults setObject:it.identifier
                                                         forKey:A2SelectedPairingPinSourcePrefKey];
@@ -889,14 +890,9 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
                 [A2Toast show:[NSString stringWithFormat:[A2JITStrings stringForKey:@"jit.pairpin.toast.selected"],
                                [A2JITPairingPinSourceCatalog displayNameForMode:it.mode]]
                        inView:hvc.view];
-            }]];
+            }];
         }
-        [sheet addAction:[UIAlertAction actionWithTitle:[A2JITStrings stringForKey:@"jit.pairpin.cancel"]
-                                                 style:UIAlertActionStyleCancel handler:nil]];
-        A2SettingsRow *r = weakPairpin;
-        sheet.popoverPresentationController.sourceView = r ?: hvc.view;
-        sheet.popoverPresentationController.sourceRect = r ? r.bounds : hvc.view.bounds;
-        [hvc presentViewController:sheet animated:YES completion:nil];
+        [sheet presentFrom:hvc];
     };
 
     paircodeRow.onTap = ^{

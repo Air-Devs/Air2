@@ -25,7 +25,10 @@
 //  用 surfaceContainer 的五档层级表达深度，而不是玻璃模糊。
 //  理由：MD3 的表面体系本身就是分层的，用色值表达更可控；
 //  模糊在卡片数量多时掉帧，且叠在用户自定义背景上色彩不可预测。
-//  用户显式开启背景模糊时，卡片才会跟随。
+//
+//  ★默认不透明（MD3）★：glassEnabled 默认 NO，卡片是纯 MD3 表面。
+//  玻璃（跟随自定义壁纸的半透明填充 + 可选模糊）是★一级页面专属★的显式开关，
+//  二级页面一律不开 —— 见 docs/DECISIONS.md「二级界面 MD3 去玻璃」。
 //
 
 #import <UIKit/UIKit.h>
@@ -46,7 +49,16 @@ typedef NS_ENUM(NSInteger, A2CardElevation) {
 @property (nonatomic, assign) UIEdgeInsets contentInsets;
 @property (nonatomic, assign) A2CardElevation elevation;
 
+/// ★玻璃总开关★，默认 NO。
+///
+/// NO（默认，二级界面）：卡片是不透明的 MD3 表面 —— 用 elevation 对应的
+/// surfaceContainer 色 × 不透明填充 + outlineVariant 描边 + 阴影表达层级，
+/// 既不跟随壁纸半透明、也不加任何模糊。
+/// YES：跟随自定义壁纸做半透明填充，并按 blurAmount 叠加模糊（一级页面用）。
+@property (nonatomic, assign) BOOL glassEnabled;
+
 /// 卡片自身是否跟随背景模糊，0~1。需要用户在设置里开启背景模糊才生效。
+/// 仅在 glassEnabled == YES 时有意义（二级界面不开玻璃，此值被忽略）。
 @property (nonatomic, assign) CGFloat blurAmount;
 
 /// 是否绘制描边（MD3 用 outlineVariant 的低对比细线）。默认 YES。

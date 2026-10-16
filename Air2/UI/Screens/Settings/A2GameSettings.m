@@ -34,6 +34,7 @@
 #import "A2VersionIsolation.h"
 #import "A2VersionManager.h"
 #import "A2Toast.h"
+#import "A2OptionSheet.h"
 #import "A2Log.h"
 
 @implementation A2GameSettings
@@ -64,20 +65,21 @@
 
     modeRow.accessory = A2SettingsRowAccessoryDisclosure;
     modeRow.onTap = ^{
-        UIAlertController *sheet =
-            [UIAlertController alertControllerWithTitle:@"版本隔离"
-                                                message:@"选择后对所有版本统一生效"
-                                         preferredStyle:UIAlertControllerStyleActionSheet];
+        A2OptionSheet *sheet =
+            [A2OptionSheet sheetWithTitle:@"版本隔离"
+                                  message:@"选择后对所有版本统一生效"];
 
         NSArray<NSNumber *> *modes = @[@(A2IsolationModeNone),
                                        @(A2IsolationModeMod),
                                        @(A2IsolationModeFull)];
+        A2IsolationMode current = A2Settings.shared.versionIsolationMode;
         for (NSNumber *value in modes) {
             A2IsolationMode mode = (A2IsolationMode)value.integerValue;
             NSString *title = A2IsolationModeDisplayName(mode);
-            [sheet addAction:[UIAlertAction actionWithTitle:title
-                                                     style:UIAlertActionStyleDefault
-                                                   handler:^(UIAlertAction *a) {
+            [sheet addOptionWithTitle:title
+                             selected:(mode == current)
+                          destructive:NO
+                              handler:^{
                 A2Settings.shared.versionIsolationMode = mode;
                 // 档位变了必须立刻重算目录与共享 mods 链接，否则要等下次扫描。
                 [A2VersionManager.shared applyIsolation];
@@ -85,14 +87,9 @@
                 refresh();
                 [A2Toast show:[NSString stringWithFormat:@"已切换到「%@」", title]
                        inView:host.view];
-            }]];
+            }];
         }
-        [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
-                                                style:UIAlertActionStyleCancel handler:nil]];
-
-        sheet.popoverPresentationController.sourceView = weakRow;
-        sheet.popoverPresentationController.sourceRect = weakRow.bounds;
-        [host presentViewController:sheet animated:YES completion:nil];
+        [sheet presentFrom:host];
     };
     [section addRow:modeRow];
 
