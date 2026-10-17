@@ -36,6 +36,7 @@
 #import "A2ModPackInstaller.h"
 #import "A2TaskLogOutput.h"
 #import "A2TaskLogCard.h"
+#import "A2InstallProgressDialog.h"
 #import "A2VersionManager.h"
 #import "A2ModLoaderAPI.h"
 #import "A2Log.h"
@@ -575,13 +576,28 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
         _progressBar.detailText = message;
     }
 
-    double total = ((double)stage + progress) / (double)A2InstallStageCount;
+    // ---- 总进度 ----
+    //
+    // 之前用 (stage + progress) / A2InstallStageCount 有两个问题：
+    //   1. 未选加载器时「安装模组加载器」被跳过，但分母仍算它 → 永远到不了 100%
+    //   2. 步骤列表显示「下载依赖库 100%」时环形还停在 42%
+    //      （stage 索引与实际进度脱节）
+    //
+    // 改成按【实际会执行的步骤数】算分母，并且以步骤列表的真实状态为准，
+    // 不是直接信任 stage 索引。
+    BOOL hasLoader = (_loaderType != nil);
+    NSInteger effectiveStages = A2InstallStageCount - (hasLoader ? 0 : 1);
+    if (effectiveStages <= 0) effectiveStages = 1;
+
+    // stage 可能超过 effectiveStages（跳过加载器时），钳一下
+    NSInteger effectiveStage = MIN((NSInteger)stage, effectiveStages - 1);
+    double total = ((double)effectiveStage + progress) / (double)effectiveStages;
+    total = MAX(0, MIN(1.0, total));
+
     [_ring setProgress:total animated:YES];
     _ring.centerText = [NSString stringWithFormat:@"%.0f%%", total * 100];
-    [_progressBar setProgress:progress animated:YES];
-    _progressBar.detailText = [NSString stringWithFormat:@"本阶段 %.0f%%", progress * 100];
-
-    BOOL hasLoader = (_loaderType != nil);
+    [_progressBar setProgress:total animated:YES];
+    _progressBar.detailText = [NSString stringWithFormat:@"总进度 %.0f%%", total * 100];
     for (NSUInteger i = 0; i < _stepRows.count; i++) {
         A2InstallStepRow *row = _stepRows[i];
         if (!hasLoader && i == (NSUInteger)A2InstallStageInstallLoader) {
@@ -589,8 +605,14 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
         } else if (i < (NSUInteger)stage) {
             [row applyState:A2InstallStepStateDone percentText:@"完成"];
         } else if (i == (NSUInteger)stage) {
-            [row applyState:A2InstallStepStateActive
-                percentText:[NSString stringWithFormat:@"%.0f%%", progress * 100]];
+            // 已经 100% 就该显示完成，不是继续转圈
+            // （截图里出现过「下载依赖库 100%」还挂着半填充圆的情况）
+            if (progress >= 0.999) {
+                [row applyState:A2InstallStepStateDone percentText:@"完成"];
+            } else {
+                [row applyState:A2InstallStepStateActive
+                    percentText:[NSString stringWithFormat:@"%.0f%%", progress * 100]];
+            }
         } else {
             [row applyState:A2InstallStepStateWaiting percentText:@"等待"];
         }
@@ -724,6 +746,132 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     _stageLabel.textColor = t.cOnSurface;
     for (A2InstallStepRow *row in _stepRows) {
         [row applyTheme];
+    }
+}
+
+#pragma mark - 弹窗呈现
+
+/// 以弹窗形式呈现安装进度 —— 对照 ZL2 的 TitleTaskFlowDialog。
+///
+/// ZL2 的规则：
+///   · 简单安装（原版/加载器）：单列弹窗
+///   · 需要看日志（整合包等）：双列弹窗，宽度 80%
+///
+/// 我们的做法：始终带日志（用户遇到问题能截图），因此始终双列。
++ (void)presentAsDialogFrom:(UIViewController *)host
+                mcVersion:(NSString *)mcVersion
+              versionName:(NSString *)versionName
+               loaderType:(NSNumber *)loaderType
+            loaderVersion:(NSString *)loaderVersion
+                  apiType:(NSNumber *)apiType
+               apiVersion:(NSString *)apiVersion {
+
+    // 这里不直接复用 VC，而是弹出一个独立的进度弹窗 ——
+    // 安装逻辑在 A2GameInstaller 里，弹窗只负责展示。
+    A2TaskLogOutput *log = [[A2TaskLogOutput alloc]
+                            initWithTitle:[NSString stringWithFormat:@"安装 %@", versionName]];
+
+    A2InstallProgressDialog *dialog = [[A2InstallProgressDialog alloc] initWithLogOutput:log];
+    dialog.dialogTitle = @"安装游戏中";
+
+    NSArray<NSString *> *steps = @[
+        @"获取版本清单",
+        @"下载版本信息",
+        @"下载客户端",
+        @"下载依赖库",
+        @"下载资源文件",
+        @"安装模组加载器",
+        @"完成安装",
+    ];
+    [dialog setSteps:steps];
+
+    [host presentViewController:dialog animated:YES completion:^{
+        [log start];
+
+        A2InstallRequest *req = [A2InstallRequest new];
+        req.mcVersion = mcVersion;
+        req.versionName = versionName;
+        req.loaderType = loaderType;
+        req.loaderVersion = loaderVersion;
+        req.apiModType = apiType;
+        req.apiModVersion = apiVersion;
+        req.gameHome = A2VersionManager.shared.gameHome;
+
+        A2GameInstaller *installer = [[A2GameInstaller alloc] init];
+
+        [installer install:req
+            progress:^(A2InstallStage stage, double progress, NSString *message) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                // 未选加载器时跳过那一项 —— 标成「跳过」，不是「完成」
+                BOOL hasLoader = (loaderType != nil);
+
+                // 先把所有已完成阶段标为完成
+                for (NSInteger i = 0; i < (NSInteger)steps.count; i++) {
+                    if (i < (NSInteger)stage) {
+                        if (!hasLoader && i == (NSInteger)A2InstallStageInstallLoader) {
+                            [dialog updateStepAtIndex:i
+                                                stage:A2ProgressStepStageCompleted
+                                              message:@"跳过（未选加载器）"
+                                             progress:1.0
+                                                 rate:nil];
+                        } else {
+                            [dialog updateStepAtIndex:i
+                                                stage:A2ProgressStepStageCompleted
+                                              message:nil
+                                             progress:1.0
+                                                 rate:nil];
+                        }
+                    }
+                }
+
+                // 当前阶段
+                [dialog updateStepAtIndex:(NSInteger)stage
+                                    stage:A2ProgressStepStageRunning
+                                  message:message
+                                 progress:progress
+                                     rate:nil];
+
+                [log appendProgress:[NSString stringWithFormat:@"%@ %@",
+                                     [self stageTagFor:stage], message ?: @""]];
+            });
+        }
+            completion:^(BOOL success, NSError *error) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                for (NSInteger i = 0; i < (NSInteger)steps.count; i++) {
+                    [dialog updateStepAtIndex:i
+                                        stage:success ? A2ProgressStepStageCompleted
+                                                      : A2ProgressStepStagePreparing
+                                      message:success ? nil : error.localizedDescription
+                                     progress:1.0
+                                         rate:nil];
+                }
+                [log append:success ? @"安装完成" : [NSString stringWithFormat:
+                                                    @"安装失败：%@",
+                                                    error.localizedDescription ?: @""]];
+                [log stop];
+
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
+                               dispatch_get_main_queue(), ^{
+                    [dialog dismissWithCompletion:^{
+                        if (success) [A2VersionManager.shared reload];
+                    }];
+                });
+            });
+        }];
+    }];
+}
+
+/// 阶段标签，用于日志前缀（与安装页的 stageDisplayName: 一致）
++ (NSString *)stageTagFor:(A2InstallStage)stage {
+    switch (stage) {
+        case A2InstallStageFetchManifest:     return @"[清单]";
+        case A2InstallStageDownloadJSON:      return @"[版本信息]";
+        case A2InstallStageDownloadJar:       return @"[客户端]";
+        case A2InstallStageDownloadLibraries: return @"[依赖库]";
+        case A2InstallStageDownloadAssets:    return @"[资源]";
+        case A2InstallStageInstallLoader:     return @"[加载器]";
+        case A2InstallStageFinalize:          return @"[收尾]";
+        default:                              return @"[安装]";
     }
 }
 

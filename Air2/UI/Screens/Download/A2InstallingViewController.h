@@ -33,6 +33,7 @@
 //
 
 #import "A2BaseViewController.h"
+#import "A2GameInstaller.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -52,6 +53,18 @@ NS_ASSUME_NONNULL_BEGIN
 /// 步骤清单在整合包模式下会换成整合包专属的阶段名。
 - (instancetype)initWithModPackPath:(NSString *)zipPath
                         versionName:(NSString *)versionName;
+
+/// 以弹窗形式呈现安装进度（对照 ZL2 的 TitleTaskFlowDialog）。
+///
+/// 这是推荐的入口 —— 弹窗能盖住底层列表、装完自动关闭，
+/// 不需要用户返回。整页模式保留给需要长日志的整合包安装。
++ (void)presentAsDialogFrom:(UIViewController *)host
+                  mcVersion:(NSString *)mcVersion
+                versionName:(NSString *)versionName
+                 loaderType:(nullable NSNumber *)loaderType
+              loaderVersion:(nullable NSString *)loaderVersion
+                    apiType:(nullable NSNumber *)apiType
+                 apiVersion:(nullable NSString *)apiVersion;
 
 @end
 

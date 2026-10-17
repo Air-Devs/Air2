@@ -69,7 +69,11 @@
         [_logBackground.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
         [_logBackground.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
         // 日志区至少留 3 行高度，否则内容少时卡片会塌成一条
+        // 至少 3 行高；最多 8 行 —— 再高就把下面的按钮挤出屏幕。
+        // 之前是「固定 88pt 最小」，但没上限时日志少了会显得空，
+        // 日志多了又会把整页撑长、需要滚动才能看到「取消」按钮。
         [_logBackground.heightAnchor constraintGreaterThanOrEqualToConstant:88],
+        [_logBackground.heightAnchor constraintLessThanOrEqualToConstant:180],
 
         [_logView.topAnchor constraintEqualToAnchor:_logBackground.topAnchor],
         [_logView.bottomAnchor constraintEqualToAnchor:_logBackground.bottomAnchor],
