@@ -122,9 +122,15 @@ typedef NS_ENUM(NSInteger, A2RendererEnvType) {
 /// 校验文件并探测能否 dlopen。会更新 availability 与 unavailableReason。
 - (void)validate;
 
-/// 探测是否可以 dlopen（只探测，不保留句柄）
-+ (A2RendererAvailability)probeLoadabilityOfPath:(NSString *)path
-                                          reason:(NSString * _Nullable * _Nullable)reason;
+/// 检查 Mach-O 是否导出指定符号 —— **纯静态，不执行任何库代码**。
+///
+/// ⚠️ 不要用 dlopen 做"能否加载"的探测：
+///   dlopen 会执行库的 constructor，而 GL 库的 constructor
+///   通常假设 EGL 上下文已就绪 —— 探测阶段没有那个环境，
+///   会直接 SIGSEGV。（实测：导入 MobileGlues 崩在 init_target_egl）
++ (BOOL)machO:(NSString *)path
+    exportsSymbol:(const char *)symbolName
+          missing:(NSString * _Nullable * _Nullable)missing;
 
 @end
 

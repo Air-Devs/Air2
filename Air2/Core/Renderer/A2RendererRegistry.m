@@ -97,27 +97,54 @@ static NSString *const kSelectedRendererKey = @"A2SelectedRendererID";
                     (unsigned long)plugins.count]];
 }
 
-/// 内置渲染器。
+/// 内置渲染器 —— **按 bundle 里实际存在的 dylib 列出**。
 ///
-/// 与 FCL 的 RendererManager.init() 对应 —— 也是硬编码的列表。
-/// 差别在于：iOS 上库是 .dylib 且在 bundle 的 Frameworks/ 下，
-/// 而不是 .so 在 APK 的 lib/ 下。
+/// ⚠️ 之前这里硬编码了 4 个（NG-GL4ES / Zink / MobileGlues / VirGL），
+/// 但工程里一个 dylib 都没有 —— 用户在列表里看到 4 个选项，
+/// 点了全部失败。这是自欺欺人的做法。
+///
+/// 现在改成扫描：只有真的存在对应 .dylib 才登记。
+/// 库没编进来时列表是空的，用户看到的是「还没有可用的渲染器」，
+/// 而不是 4 个假的选项。
+///
+/// 已知渲染器与库文件名的映射（CMake 产物名）：
+///   NG-GL4ES   → libnggl4es.dylib
+///   Zink       → libzink.dylib
+///   MobileGlues→ libMobileGlues.dylib
+///   VirGL      → libvirgl.dylib
 - (NSArray<A2RendererEntry *> *)builtinRenderers {
     NSMutableArray<A2RendererEntry *> *list = [NSMutableArray array];
 
     struct {
         const char *ident;
         const char *name;
+        const char *libName;
         const char *summary;
         const char *minMC;
     } builtins[] = {
-        { "builtin.nggl4es",  "NG-GL4ES",  "GL4ES 增强版，兼容性最好，适合大多数设备", "1.16.5" },
-        { "builtin.zink",     "Zink",      "Vulkan 后端，通过 MoltenVK 转 Metal",     "1.17" },
-        { "builtin.mobilegl", "MobileGlues","Metal 原生 GL 转译，性能最优",            "1.17" },
-        { "builtin.virgl",    "VirGL",     "虚拟化 GL，兼容老版本",                    "1.7" },
+        { "builtin.nggl4es",  "NG-GL4ES",   "libnggl4es.dylib",
+          "GL4ES 增强版，兼容性最好，适合大多数设备", "1.16.5" },
+        { "builtin.zink",     "Zink",       "libzink.dylib",
+          "Vulkan 后端，通过 MoltenVK 转 Metal", "1.17" },
+        { "builtin.mobilegl", "MobileGlues", "libMobileGlues.dylib",
+          "Metal 原生 GL 转译，性能最优", "1.17" },
+        { "builtin.virgl",    "VirGL",      "libvirgl.dylib",
+          "虚拟化 GL，兼容老版本", "1.7" },
     };
 
     for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); i++) {
+        NSString *libName = [NSString stringWithUTF8String:builtins[i].libName];
+
+        // 只在库真的存在时登记
+        NSString *path = [NSBundle.mainBundle pathForAuxiliaryExecutable:libName];
+        if (!path) {
+            [A2Logger debug:@"A2RendererRegistry"
+                    message:[NSString stringWithFormat:
+                             @"跳过 %@：bundle 里没有 %@",
+                             [NSString stringWithUTF8String:builtins[i].name], libName]];
+            continue;
+        }
+
         A2RendererEntry *e = [A2RendererEntry new];
         e.identifier = [NSString stringWithUTF8String:builtins[i].ident];
         e.displayName = [NSString stringWithUTF8String:builtins[i].name];
@@ -126,8 +153,10 @@ static NSString *const kSelectedRendererKey = @"A2SelectedRendererID";
         e.minMCVer = [NSString stringWithUTF8String:builtins[i].minMC];
         [list addObject:e];
     }
+
     return list;
 }
+
 
 #pragma mark - 查询
 

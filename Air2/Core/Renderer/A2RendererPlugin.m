@@ -9,6 +9,7 @@
 #import <mach-o/loader.h>
 #import <mach-o/fat.h>
 #import "A2Logger.h"
+#include <string.h>
 
 #pragma mark - 环境变量规格
 
@@ -244,11 +245,35 @@
         return;
     }
 
-    // 4. 实际 dlopen 探测
-    NSString *reason = nil;
-    A2RendererAvailability result = [A2RendererPlugin probeLoadabilityOfPath:gl reason:&reason];
-    self.availability = result;
-    self.unavailableReason = reason;
+    // 4. ⚠️ 不做 dlopen 探测
+    //
+    // 这里曾经调 dlopen 来"验证能否加载"，结果导入时直接闪退：
+    //
+    //   libMobileGlues.dylib  init_target_egl + 336
+    //   libMobileGlues.dylib  proc_init + 124       ← 构造函数
+    //   dyld                  findAndRunAllInitializers
+    //
+    // 【根因】dlopen 会真的执行库的 __attribute__((constructor))。
+    // MobileGlues 的 proc_init 在初始化时调 init_target_egl，
+    // 它假设 EGL 上下文已就绪 —— 但我们只是"探测"，没有 EGL 环境，
+    // 于是 SIGSEGV。
+    //
+    // 【结论】导入阶段的校验只能是【静态的】：
+    //   文件存在 + 架构正确 + 声明的符号存在（读 Mach-O 符号表）。
+    // 真正的加载放到启动游戏时，那时才有完整的 EGL 环境。
+    //
+    // 这是 iOS 上容易踩的坑：dlopen 不是"检查文件"的轻量操作。
+
+    // 检查必需符号是否在导出表里（不执行代码）
+    NSString *missing = nil;
+    if (![A2RendererPlugin machO:gl exportsSymbol:"glGetString" missing:&missing]) {
+        self.availability = A2RendererAvailabilityMissingDependency;
+        self.unavailableReason = missing ?: @"库中没有 glGetString 导出符号";
+        return;
+    }
+
+    self.availability = A2RendererAvailabilityAvailable;
+    self.unavailableReason = nil;
 }
 
 /// 检查是不是 arm64 的 Mach-O。
@@ -301,48 +326,114 @@
     return YES;
 }
 
-/// 尝试 dlopen 探测。
+/// 检查 Mach-O 是否导出指定符号 —— **纯静态，不执行任何库代码**。
 ///
-/// 不保留句柄 —— 只判断「能不能加载」。
-/// 真正的加载在启动游戏时进行（那时才知道要设置哪些环境变量）。
-+ (A2RendererAvailability)probeLoadabilityOfPath:(NSString *)path
-                                          reason:(NSString * _Nullable * _Nullable)reason {
+/// 为什么不用 dlopen：
+///   dlopen 会执行库的 constructor（__attribute__((constructor))）。
+///   很多 GL 库的 constructor 假设 EGL 上下文已就绪 ——
+///   检查阶段没有那个环境，直接 SIGSEGV。
+///   （实测：导入 MobileGlues 时崩在 init_target_egl）
+///
+/// 实现：解析 Mach-O 的 LC_SYMTAB 与 LC_DYSYMTAB，
+/// 在前两者的导出符号里找名字。
+///
+/// @param missing 失败时填具体原因
++ (BOOL)machO:(NSString *)path
+    exportsSymbol:(const char *)symbolName
+          missing:(NSString **)missing {
 
-    // 注意：这里必须真的 dlopen 一次 —— 签名校验只有在实际加载时才做。
-    // RTLD_LAZY 让符号解析推迟，避免因缺符号而误判为加载失败。
-    void *handle = dlopen(path.UTF8String, RTLD_LAZY | RTLD_LOCAL);
-
-    if (handle) {
-        dlclose(handle);
-        if (reason) *reason = nil;
-        return A2RendererAvailabilityAvailable;
+    NSData *data = [NSData dataWithContentsOfFile:path
+                                          options:NSDataReadingMappedIfSafe
+                                            error:nil];
+    if (!data || data.length < 32) {
+        if (missing) *missing = @"文件无法读取或太小";
+        return NO;
     }
 
-    const char *err = dlerror();
-    NSString *errStr = err ? [NSString stringWithUTF8String:err] : @"未知错误";
+    const uint8_t *bytes = data.bytes;
+    NSUInteger len = data.length;
 
-    if (reason) {
-        // 把系统的错误翻译成用户能理解的话
-        if ([errStr containsString:@"code signature"] ||
-            [errStr containsString:@"Code Signature"] ||
-            [errStr containsString:@"invalid"] ) {
-            *reason = @"代码签名无效。iOS 要求动态库与 App 使用相同签名 —— "
-                       "TrollStore/越狱环境可直接使用，其他环境需重新签名。";
-        } else if ([errStr containsString:@"not found"] ||
-                   [errStr containsString:@"image not found"]) {
-            *reason = [NSString stringWithFormat:@"缺少依赖库：%@", errStr];
-        } else {
-            *reason = errStr;
+    // ---- 解析 mach_header_64 ----
+    // magic 0xFEEDFACF（小端读作 0xCFFAEDFE）
+    uint32_t magic = 0;
+    memcpy(&magic, bytes, 4);
+    if (magic != 0xFEEDFACF) {
+        if (missing) *missing = @"不是 64 位 Mach-O";
+        return NO;
+    }
+
+    uint32_t ncmds = 0;
+    memcpy(&ncmds, bytes + 16, 4);
+
+    NSUInteger offset = 32;   // mach_header_64 大小
+    uint32_t symtabOff = 0, nsyms = 0, strtabOff = 0, strtabSize = 0;
+    BOOL foundSymtab = NO;
+
+    for (uint32_t i = 0; i < ncmds && offset + 8 <= len; i++) {
+        uint32_t cmd = 0, cmdsize = 0;
+        memcpy(&cmd, bytes + offset, 4);
+        memcpy(&cmdsize, bytes + offset + 4, 4);
+        if (cmdsize < 8 || offset + cmdsize > len) break;
+
+        if (cmd == LC_SYMTAB && offset + 24 <= len) {
+            memcpy(&symtabOff, bytes + offset + 8, 4);
+            memcpy(&nsyms, bytes + offset + 12, 4);
+            memcpy(&strtabOff, bytes + offset + 16, 4);
+            memcpy(&strtabSize, bytes + offset + 20, 4);
+            foundSymtab = YES;
+        }
+        offset += cmdsize;
+    }
+
+    if (!foundSymtab) {
+        if (missing) *missing = @"Mach-O 里没有符号表";
+        return NO;
+    }
+
+    if (symtabOff + (NSUInteger)nsyms * 16 > len || strtabOff + strtabSize > len) {
+        if (missing) *missing = @"符号表越界（文件可能损坏）";
+        return NO;
+    }
+
+    // ---- 遍历 nlist_64，找匹配的导出符号 ----
+    size_t wantLen = strlen(symbolName);
+    for (uint32_t i = 0; i < nsyms; i++) {
+        NSUInteger entry = symtabOff + (NSUInteger)i * 16;
+
+        uint32_t strx = 0;
+        uint8_t type = 0;
+        memcpy(&strx, bytes + entry, 4);
+        memcpy(&type, bytes + entry + 4, 1);
+
+        // N_EXT（0x01）= 外部符号，N_TYPE 为 N_SECT 表示定义在本文件
+        if (!(type & 0x01)) continue;           // 只要外部可见的
+
+        NSUInteger nameOff = strtabOff + strx;
+        if (nameOff >= len) continue;
+
+        // 读到   为止
+        const char *name = (const char *)(bytes + nameOff);
+        NSUInteger maxRead = MIN(strtabSize - strx, (uint32_t)(len - nameOff));
+        size_t actual = strnlen(name, maxRead);
+
+        // Mach-O 的 C 符号带下划线前缀
+        if (actual == wantLen + 1 && name[0] == '_' &&
+            memcmp(name + 1, symbolName, wantLen) == 0) {
+            return YES;
+        }
+        // 也接受不带前缀的（某些编译配置）
+        if (actual == wantLen && memcmp(name, symbolName, wantLen) == 0) {
+            return YES;
         }
     }
 
-    if ([errStr containsString:@"code signature"] || [errStr containsString:@"invalid"]) {
-        return A2RendererAvailabilitySignatureInvalid;
+    if (missing) {
+        *missing = [NSString stringWithFormat:
+            @"库中没有导出 %s 符号 —— 可能不是 GL 实现库，或符号被 strip 掉了",
+            symbolName];
     }
-    if ([errStr containsString:@"not found"] || [errStr containsString:@"image not found"]) {
-        return A2RendererAvailabilityMissingDependency;
-    }
-    return A2RendererAvailabilityUnknown;
+    return NO;
 }
+
 
 @end

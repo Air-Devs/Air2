@@ -141,6 +141,11 @@
 
     // ---- 3. 验证关键符号 ----
     //
+    // 注意：这里是【加载后】的校验 —— 此时 constructor 已经跑过了，
+    // 说明库里对 EGL 的假设已经成立（或者它不依赖）。
+    // 导入阶段的检查是静态的（A2RendererPlugin machO:exportsSymbol:），
+    // 不执行代码。
+    //
     // 加载成功不代表符号齐全。至少要有 glGetString 与 eglGetDisplay，
     // 否则后面会以更难懂的方式失败。
     if (![handle symbolGL:"glGetString"]) {
