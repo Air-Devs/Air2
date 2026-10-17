@@ -41,6 +41,19 @@
 python3 tests/JIT/run_jit_tests.py
 ```
 
+### JIT 脚本（`Assets/AmethystJIT69.js`）—— GDB-RSP 协议行为单测
+
+脚本本体是 JS，用 **node + 假 debugserver**（`node:vm` 沙箱）直接跑**仓里那份真脚本**，
+断言它**发出去的包**与**打出来的日志**：
+
+```sh
+node tests/JIT/jit_script_tests.js      # 基线 98 例，TOTAL pass=98 fail=0
+```
+
+覆盖：停止回复分类（T/W/X/E/空/缺寄存器）、`brk` 指令判定与立即数、续跑包形状
+（★`C<sig>`，不许 `vCont;S`★）、`brk #0x69` 真交付（`_M<size>,rx` + `prepare_memory_region` +
+`P0=` 回填）、未认领 brk 必须越过、读内存失败不抛异常、连续无效回复有界收尾。
+
 输出每例一行 `PASS` / `FAIL`，末尾给计数：
 
 ```
