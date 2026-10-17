@@ -189,7 +189,8 @@ NSString *A2RXPCObjectTypeName(A2RXPCObjectType type);
 #pragma mark - 判据行（[RXPC]，默认可见，可 grep）
 
 /// 判据行统一出口：一行一条，前缀恒为 `[RXPC] `。message 里不要带换行。
-/// 走 a2_log_f（前缀 `[RT] `），因此真机日志里表现为 `[RT] [RXPC] …`，grep `[RXPC]` 即得。
+/// 走 `a2_log_criterion` ⇒ ①控制台（stderr）②App 会话日志文件（Documents/lastlog.txt，
+/// 「运行日志」页读的那一份）。真机 `grep '\[RXPC\]'` 两份都能命中。
 void A2RXPCLog(NSString *message);
 
 NS_ASSUME_NONNULL_END

@@ -36,6 +36,7 @@
 // ★[JIT-AUTOPAIR-4] 设备发起档（iOS 27）的★唯一驱动函数★：广告 → 连入 → 建传输 → accessory 侧 PS-Msg01..06
 #import "a2_rppairing_pairsetup_accessory.h"
 #import "A2JITPairingFileStore.h" // ★配对材料的落盘目标★（同层已有的类，见 docs/ARCHITECTURE.md）
+#import "A2Log.h"                 // [A2Log criterion:]：判据行的统一出口（控制台 + 会话日志文件）
 
 #import <sys/sysctl.h>
 
@@ -417,7 +418,7 @@ NSString *A2JITDeviceInitiatedPairingStageName(A2JITDeviceInitiatedPairingStage 
     {
         NSString *probeWhy = nil;
         BOOL probeOK = A2LocalNetworkProbeRun(5.0, &probeWhy);
-        NSLog(@"%@", A2LocalNetworkProbeCriterionLine(probeOK ? @"ok" : @"denied", probeWhy));
+        [A2Log criterion:@"%@", A2LocalNetworkProbeCriterionLine(probeOK ? @"ok" : @"denied", probeWhy)];
         if (!probeOK) {
             if (whyOut) {
                 *whyOut = [NSString stringWithFormat:

@@ -57,10 +57,11 @@ void a2_frame_perf_set_environment(int drawableWidthPixels, int drawableHeightPi
 
     // ★口径行（一次性）★：把「这行数字是什么、不是什么」说在明处 ——
     // 拿不到真实 GPU 时间，只用 CPU 帧时间 + draw 做代理；tex 是 drawable 字节估值。
-    a2_log_f(@"%s 指标口径：★无真实 GPU 时间★ ⇒ cpu_fps/cpu_ms 为 CPU 帧时间（相邻帧墙钟差及其倒数）；"
-             "draw 为提交的绘制/清屏命令数；tex 为 drawable 字节估值（非真实纹理内存）。"
-             "drawable=%dx%d 像素 scale=%.2f",
-             A2FramePerfTag, drawableWidthPixels, drawableHeightPixels, renderScale);
+    // 走统一出口（控制台 + 会话日志文件）⇒ 与每 N 帧那行同一个去处，日志页里能一起看到。
+    a2_log_criterion(@"%s 指标口径：★无真实 GPU 时间★ ⇒ cpu_fps/cpu_ms 为 CPU 帧时间（相邻帧墙钟差及其倒数）；"
+                     "draw 为提交的绘制/清屏命令数；tex 为 drawable 字节估值（非真实纹理内存）。"
+                     "drawable=%dx%d 像素 scale=%.2f",
+                     A2FramePerfTag, drawableWidthPixels, drawableHeightPixels, renderScale);
 }
 
 void a2_frame_perf_set_phase(A2FramePhase phase) {
@@ -110,7 +111,8 @@ NSString *a2_frame_perf_format_line(void) {
 }
 
 void a2_frame_perf_log_line(void) {
-    // 注意：a2_log_f 走 vsnprintf ⇒ 只认 C 格式符（不认 %@），字符串一律用 %s + UTF8String。
+    // 本行走统一出口 a2_log_criterion（★认 ObjC 格式 %@★：与 a2_log_f 的 vsnprintf 口径不同），
+    // 于是「控制台」与「会话日志文件（运行日志页）」都能拿到同一行。
     NSString *line = a2_frame_perf_format_line();
-    a2_log_f(@"%s", line.UTF8String);
+    a2_log_criterion(@"%@", line);
 }

@@ -4,6 +4,7 @@
 //
 
 #import "A2PairingNotifier.h"
+#import "A2Log.h"     // [A2Log criterion:]：判据行的统一出口（控制台 + 会话日志文件）
 
 #import <UserNotifications/UserNotifications.h>
 
@@ -51,19 +52,19 @@ void A2PairingNotifyPostCode(NSString *code, NSString *hostName) {
                   [NSString stringWithFormat:
                    @"在 设置 › 通用 › VPN 与设备管理（或 隐私与安全性 › 开发者模式）里点「与 %@ 配对」，输入：%@",
                    name, code]);
-    NSLog(@"%@", A2PairingNotifierCriterionLine(@"code"));
+    [A2Log criterion:@"%@", A2PairingNotifierCriterionLine(@"code")];
 }
 
 void A2PairingNotifyPostDone(BOOL success, NSString *_Nullable detail) {
     if (success) {
         A2PairingPost(kA2PairingNotificationDoneID, @"配对完成",
                       @"回到 Air2 即可使用（配对文件已落到 App 容器）。");
-        NSLog(@"%@", A2PairingNotifierCriterionLine(@"done"));
+        [A2Log criterion:@"%@", A2PairingNotifierCriterionLine(@"done")];
         return;
     }
     A2PairingPost(kA2PairingNotificationDoneID, @"配对失败",
                   detail.length > 0 ? detail : @"回到 Air2 看具体原因。");
-    NSLog(@"%@", A2PairingNotifierCriterionLine(@"failed"));
+    [A2Log criterion:@"%@", A2PairingNotifierCriterionLine(@"failed")];
 }
 
 NSString *A2PairingNotifierCriterionLine(NSString *kind) {

@@ -48,7 +48,8 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// 判据行前缀。★同一标记在 Player 侧（A2JITPairingCodeSession）也出现★ ——
 /// 两处各自书写字面量，是为了不引入 Natives → Player 的反向依赖（ADR-002）。
-/// 真机判据：`grep '\[A2-PAIRPIN\]' latestlog.txt`。
+/// 真机判据：`grep '\[A2-PAIRPIN\]' latestlog.txt`（控制台归档）或 `lastlog.txt`（会话日志，
+/// 「运行日志」页读的那一份）—— 两者都命中，因为本行的出口是统一的判据行出口。
 FOUNDATION_EXPORT NSString *const A2RPPairWireCriterionMarker;
 
 /// 打一行判据行（前缀 + 内容；★默认可见★，独立于任何 verbose 开关）。

@@ -10,6 +10,13 @@
 //
 // 输出：stderr（main.m 已把 stderr 重定向到 latestlog.txt，无缓冲、逐行 flush），
 //   前缀 `[RT]`（结构化事件）/ `[LAUNCH-PROGRESS]`（阶段流）。供真机判据 grep。
+//
+// ★判据行的统一出口：a2_log_criterion★（与上面的 [RT] 事件区分）
+//   · 一条判据行同时送两处：① 控制台（stderr）② App 会话日志文件。
+//   · ② 的落点由宿主注入（`a2_log_set_sink`）—— App 层把 A2Log 的
+//     `a2_log_session_sink` 接上，落进 Documents/lastlog.txt（也就是「运行日志」页读的那份）。
+//     本模块【不】认识 A2Log（分层：Natives 只依赖 Libraries），故用注入而不是反向 include。
+//   · 没注入 sink 时（单测 / 无宿主）只进控制台 —— 行为与从前一致，不会丢判据行。
 // ============================================================================
 #ifndef A2_LOG_H
 #define A2_LOG_H
@@ -34,6 +41,22 @@ void a2_log_f(NSString *fmt, ...);
 /// 逐项细节事件（verbose 桶，前缀 `[RT-V] `）：仅当 verbose 为真时输出。
 /// verbose 由调用方【显式传入】（边界读一次 → 显式下传）—— 本模块仍无状态、不读环境、不读偏好。
 void a2_log_detail(BOOL verbose, NSString *fmt, ...);
+
+#pragma mark - 判据行统一出口（[A2-PAIRPIN] / [RXPC] / [FRAME] / [MEM]）
+
+/// ★native 侧判据行统一出口★。一条判据行同时送：
+///   ① 控制台：stderr（逐行 flush；App 的 main() 已把它归档进 Documents/latestlog.txt）
+///   ② App 会话日志文件：由 `a2_log_set_sink` 注入的落点（Documents/lastlog.txt，
+///      「运行日志」页读的那一份）——★与 Air2 侧的 `[A2Log criterion:]` 同一个落点★。
+///
+/// ⚠️与 a2_log_f 的区别：本函数用 ObjC 格式（认 `%@`），a2_log_f 走 vsnprintf（只认 `%s`）。
+/// 不叠 `[RT] ` 前缀 —— 判据行自带行首标记（如 `[RXPC] `），前缀只会让 grep 多绕一层。
+void a2_log_criterion(NSString *fmt, ...);
+
+/// 注入「会话日志文件」落点（签名：收一行 UTF-8 文本）。
+/// 由 App 装配点（Air2/App/main.m）在启动早期调用一次：`a2_log_set_sink(a2_log_session_sink);`
+/// 传 NULL 取消注入（此后判据行只进控制台）。未注入时行为与注入前一致。
+void a2_log_set_sink(void (* _Nullable sink)(const char *utf8Line));
 
 /// `[LAUNCH-PROGRESS] 阶段 <stage>/8：<名>`。阶段由调用方显式给出（幂等、无内部游标）。
 void a2_progress_enter(A2Stage stage);

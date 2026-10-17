@@ -270,42 +270,33 @@ static NSString *A2RenderScaleDisplayText(double scale) {
         UIViewController *hostVC = weakHost;
         if (hostVC == nil) return;
 
-        UIAlertController *sheet =
-            [UIAlertController alertControllerWithTitle:A2RS(@"runtime.pick.scale.title")
-                                                message:A2RS(@"runtime.pick.scale.message")
-                                         preferredStyle:UIAlertControllerStyleActionSheet];
+        A2OptionSheet *sheet =
+            [A2OptionSheet sheetWithTitle:A2RS(@"runtime.pick.scale.title")
+                                  message:A2RS(@"runtime.pick.scale.message")];
 
         double cur = A2CurrentRenderScale();
         for (NSNumber *cand in [A2RenderScaleCatalog allScales]) {
             double scale = cand.doubleValue;
-            NSString *title = A2RenderScaleDisplayText(scale);
-            if (fabs(scale - cur) < 0.001) {
-                title = [@"✓ " stringByAppendingString:title];
-            }
             __weak A2SettingsRow *wRow = weakRow;
-            [sheet addAction:[UIAlertAction actionWithTitle:title
-                                                     style:UIAlertActionStyleDefault
-                                                   handler:^(UIAlertAction *a) {
+            [sheet addOptionWithTitle:A2RenderScaleDisplayText(scale)
+                             selected:(fabs(scale - cur) < 0.001)
+                          destructive:NO
+                              handler:^{
                 // ★写入点唯一★（读取点 = Player 的启动会话；键见 A2LaunchContract.h）。
                 NSString *stored = [NSString stringWithFormat:@"%.2f", scale];
                 [NSUserDefaults.standardUserDefaults setObject:stored
                                                         forKey:A2SelectedRenderScalePrefKey];
                 [A2Log log:@"settings: 渲染分辨率 → %@（%@；下一帧起按缩放后的 drawable 尺寸清屏/呈现）",
-                 stored, [A2RenderScaleCatalog displayPercentForScale:scale]];
+                      stored, [A2RenderScaleCatalog displayPercentForScale:scale]];
                 A2SettingsRow *r = wRow;
                 r.valueText = A2RenderScaleDisplayText(scale);
                 r.subtitle = A2RS(@"runtime.row.scale.detail");
                 [A2Toast show:[NSString stringWithFormat:A2RS(@"runtime.toast.selected"),
                                [A2RenderScaleCatalog displayPercentForScale:scale]]
                        inView:hostVC.view];
-            }]];
+            }];
         }
-        [sheet addAction:[UIAlertAction actionWithTitle:A2RS(@"runtime.cancel")
-                                                 style:UIAlertActionStyleCancel handler:nil]];
-        A2SettingsRow *r = weakRow;
-        sheet.popoverPresentationController.sourceView = r ?: hostVC.view;
-        sheet.popoverPresentationController.sourceRect = r ? r.bounds : hostVC.view.bounds;
-        [hostVC presentViewController:sheet animated:YES completion:nil];
+        [sheet presentFrom:hostVC];
     };
     return scaleRow;
 }

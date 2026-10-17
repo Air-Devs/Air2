@@ -4,6 +4,7 @@
 //
 
 #import "A2PairingKeepAlive.h"
+#import "A2Log.h"     // [A2Log criterion:]：判据行的统一出口（控制台 + 会话日志文件）
 
 #import <AVFAudio/AVFAudio.h>
 #import <BackgroundTasks/BackgroundTasks.h>
@@ -34,7 +35,7 @@ static void A2PairingAudioStart(void) {
                  options:AVAudioSessionCategoryOptionMixWithOthers
                    error:&err];
     if (err != nil) {
-        NSLog(@"[A2-PAIRPIN] keepalive 音频类别设置失败: %@", err.localizedDescription ?: @"");
+        [A2Log criterion:@"[A2-PAIRPIN] keepalive 音频类别设置失败: %@", err.localizedDescription ?: @""];
     }
     [session setActive:YES error:&err];
 
@@ -53,9 +54,9 @@ static void A2PairingAudioStart(void) {
         [player play];
         gEngine = engine;
         gPlayer = player;
-        NSLog(@"[A2-PAIRPIN] keepalive 静音音频已启动（后台保活）");
+        [A2Log criterion:@"[A2-PAIRPIN] keepalive 静音音频已启动（后台保活）"];
     } else {
-        NSLog(@"[A2-PAIRPIN] keepalive 静音音频启动失败: %@", err.localizedDescription ?: @"");
+        [A2Log criterion:@"[A2-PAIRPIN] keepalive 静音音频启动失败: %@", err.localizedDescription ?: @""];
     }
 }
 
@@ -81,9 +82,9 @@ void A2PairingKeepAliveRegisterBGTask(void) {
                                                            usingQueue:dispatch_get_main_queue()
                                                         launchHandler:^(BGTask *task) {
             // 配对本身跑在别的队列上；这里只需要在过期时收尾，避免系统判定任务已死。
-            NSLog(@"[A2-PAIRPIN] keepalive 后台任务回调（%@）", task.identifier ?: @"-");
+            [A2Log criterion:@"[A2-PAIRPIN] keepalive 后台任务回调（%@）", task.identifier ?: @"-"];
             task.expirationHandler = ^{
-                NSLog(@"[A2-PAIRPIN] keepalive 后台任务过期 ⇒ 停止保活（配对可能被挂起）");
+                [A2Log criterion:@"[A2-PAIRPIN] keepalive 后台任务过期 ⇒ 停止保活（配对可能被挂起）"];
                 A2PairingKeepAliveStop();
             };
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(300 * NSEC_PER_SEC)),
@@ -96,7 +97,7 @@ void A2PairingKeepAliveRegisterBGTask(void) {
         gBGRegistered = YES;
     } else {
         gLastBGNote = @"unavailable";
-        NSLog(@"[A2-PAIRPIN] keepalive 后台继续任务不可用（需要 iOS 26+）⇒ 只剩音频保活");
+        [A2Log criterion:@"[A2-PAIRPIN] keepalive 后台继续任务不可用（需要 iOS 26+）⇒ 只剩音频保活"];
     }
 }
 
@@ -136,14 +137,14 @@ void A2PairingKeepAliveStart(NSString *subtitle) {
     gActive = YES;
     A2PairingAudioStart();
     A2PairingBGSubmit();
-    NSLog(@"%@", A2PairingKeepAliveCriterionLine());
+    [A2Log criterion:@"%@", A2PairingKeepAliveCriterionLine()];
 }
 
 void A2PairingKeepAliveStop(void) {
     gActive = NO;
     A2PairingAudioStop();
     A2PairingBGCancel();
-    NSLog(@"%@", A2PairingKeepAliveCriterionLine());
+    [A2Log criterion:@"%@", A2PairingKeepAliveCriterionLine()];
 }
 
 BOOL A2PairingKeepAliveIsActive(void) {

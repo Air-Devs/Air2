@@ -43,6 +43,7 @@
 #import "A2JITAutoPairing.h"
 #import "A2JITAutoPairingGuidance.h"
 #import "A2JITStrings.h"
+#import "A2Log.h"     // [A2Log criterion:]：判据行的统一出口（控制台 + 会话日志文件）
 #import "A2JITSystemToolLauncher.h"
 #import "A2JITEnvironmentProbe.h"
 #import "A2JITAutoPairingEngineBridge.h"
@@ -594,9 +595,9 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
         NSString *pin = [A2JITPairingPinResolver resolvedPinForDisplayedCode:
                          [A2JITPairingCodeSession sharedSession].code reason:&why];
         // ★不把码本身写进日志★（只记长度 / 是否取到）。
-        NSLog(@"[A2JIT] pair-setup 取配对码：%@ ⇒ %@", [A2JITPairingPinResolver criterionLine],
+        [A2Log criterion:@"[A2JIT] pair-setup 取配对码：%@ ⇒ %@", [A2JITPairingPinResolver criterionLine],
               pin.length > 0 ? [NSString stringWithFormat:@"用码（%lu 位）", (unsigned long)pin.length]
-                             : [NSString stringWithFormat:@"拒绝（%@）", why ?: @"-"]);
+                             : [NSString stringWithFormat:@"拒绝（%@）", why ?: @"-"]];
         return pin;
     };
     A2JITAutoPairingPreconditions *preconditions = [autoEngine readPreconditions];
@@ -875,7 +876,7 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
                 // ★写入点唯一点★：偏好键 = A2SelectedPairingPinSourcePrefKey。
                 [NSUserDefaults.standardUserDefaults setObject:it.identifier
                                                         forKey:A2SelectedPairingPinSourcePrefKey];
-                NSLog(@"[A2JIT] settings: 配对码来源 → %@", [A2JITPairingPinResolver criterionLine]);
+                [A2Log criterion:@"[A2JIT] settings: 配对码来源 → %@", [A2JITPairingPinResolver criterionLine]];
                 if (it.mode == A2JITPairingPinModeDeviceInitiated) {
                     // 设备发起档：立刻生成并显示 6 位码（用户要切到系统设置去输）。
                     NSError *e = nil;
@@ -987,16 +988,16 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
         A2JITPairingPinMode modeForThisRow = [A2JITPairingPinResolver selectedMode];
         A2JITAutoPairingEngineBridge *engine = panelEngine;
         if (hvc == nil) { return; }
-        NSLog(@"[A2-PAIRPIN] step=tap row=start source=%@ engine=%@",
+        [A2Log criterion:@"[A2-PAIRPIN] step=tap row=start source=%@ engine=%@",
               [A2JITPairingPinSourceCatalog displayNameForMode:modeForThisRow],
-              engine ? @"有" : @"★无（面板呈现器/引擎生命周期）★");
+              engine ? @"有" : @"★无（面板呈现器/引擎生命周期）★"];
         // ★[PAIRWIRE-FIX]「开始配对」这个按钮本身就是【设备发起档】的流程 ⇒
         //   先把来源档写成该档:否则 refreshPairpin() 里「码行只在设备发起档显示」的条件不成立,
         //   码虽然生成了但用户看不到(真机反馈:点了开始配对看不到 6 位码)。
         if (modeForThisRow != A2JITPairingPinModeDeviceInitiated) {
             [NSUserDefaults.standardUserDefaults setObject:[A2JITPairingPinSourceCatalog defaultIdentifier]
                                                     forKey:A2SelectedPairingPinSourcePrefKey];
-            NSLog(@"[A2-PAIRPIN] step=source 写成 deviceInitiated（否则码行不显示）");
+            [A2Log criterion:@"[A2-PAIRPIN] step=source 写成 deviceInitiated（否则码行不显示）"];
         }
         // ★[PAIRFIX-ORDER]★ ① 先生成并显示 6 位码 —— 【与引擎可用与否无关】：
         //   码是给用户在设备上输的，先把它生成出来并显示，才不会出现「我想输都输不了」。
@@ -1014,13 +1015,13 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
         if (shown.length != 6) {
             // 走到这里说明【已经生成过】了 ⇒ 只剩「生成失败」一种可能：报真实原因（不再报误报）。
             NSString *why = genErr.localizedDescription ?: @"生成器没有给出 6 位码（内部不一致）";
-            NSLog(@"[A2-PAIRPIN] step=gen ★失败★ reason=%@", why);
+            [A2Log criterion:@"[A2-PAIRPIN] step=gen ★失败★ reason=%@", why];
             [A2Toast show:[NSString stringWithFormat:@"生成配对码失败：%@", why] inView:hvc.view];
             refreshPairpin();
             return;
         }
-        NSLog(@"[A2-PAIRPIN] step=gen 就绪 code=已生成(%lu 位) host=%@",
-              (unsigned long)shown.length, pairableHostName);
+        [A2Log criterion:@"[A2-PAIRPIN] step=gen 就绪 code=已生成(%lu 位) host=%@",
+              (unsigned long)shown.length, pairableHostName];
         refreshPairpin();
         // ★[PAIRWIRE-NOTIFY] 把码同时发一条本地通知✗★ —— 用户切到系统设置里输码时仍能看到它。
         A2PairingNotifyPostCode(shown, pairableHostName);
@@ -1028,7 +1029,7 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
         // ★[PAIRFIX-ORDER]★ 引擎不可用 = 【程序内部状态】，不是「你没选设备发起档」⇒ 报真实原因；
         //   而且【不】因为这一条就把刚显示出来的码藏起来（码已可复制，用户能先去设备上输）。
         if (engine == nil) {
-            NSLog(@"[A2-PAIRPIN] step=engine ★不可用★（呈现器/引擎生命周期）⇒ 只显示码，不开始配对");
+            [A2Log criterion:@"[A2-PAIRPIN] step=engine ★不可用★（呈现器/引擎生命周期）⇒ 只显示码，不开始配对"];
             [A2Toast show:[A2JITStrings stringForKey:@"jit.pairwire.toast.noengine"] inView:hvc.view];
             return;
         }

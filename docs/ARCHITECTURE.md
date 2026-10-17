@@ -673,3 +673,46 @@ action sheet 列全部候选，**未内置的项照列但标「未内置」**（
 
 **已知推论**：二级页面**不再显示壁纸**（壁纸层就是玻璃的载体）。若要「留壁纸、只让卡片不透明」，
 回退点集中在 `A2BaseViewController.m`（3 行）+ 判据白名单放开一行。
+
+### 日志输出：判据行统一出口 + 控制台归档 —— [A2-LOG]
+
+**要解决的是什么**：真机上「看不到新加的判据行」。原因是两条：判据行由**两个层**产生
+（Air2 侧与 native 侧），各自写各自的去处；而 stderr 没有归档 ⇒ native 的 `NSLog`
+只进 Xcode/Console.app，进不了 App 内的日志页，也没法在机器上导出。
+
+**① 判据行统一出口（一条判据行同时送「控制台」与「会话日志文件」）**
+
+| 调用面 | 符号 | 落点 |
+|---|---|---|
+| Air2 侧（App/UI/Player/Bridge） | `+[A2Log criterion:]`（`Air2/Utils/A2Log.h`） | ① stderr ② `Documents/lastlog.txt` |
+| native 侧（Natives/**） | `a2_log_criterion(...)`（`Natives/Support/a2_log.h`） | ① stderr ② 由 sink 注入的同一个 `Documents/lastlog.txt` |
+
+两侧**共用同一个落盘函数** `a2_log_session_sink`（`A2Log.m` 的纯 C 导出）⇒ 落点只有一处，
+不存在「两套日志各写各的」。native 侧不认识 A2Log（`Natives/` 只依赖 `Libraries`），
+故由 **`Air2/App/main.m` 这一处装配点**注入：`a2_log_set_sink(a2_log_session_sink);`。
+未注入时（macOS 单测 / 无宿主）判据行只进控制台 —— 单测无需任何桩件。
+
+已接的判据行：`[A2-PAIRPIN]`（`A2PairingKeepAlive` / `A2PairingNotifier` / `A2JITSettings` /
+`A2JITPairingCodeSession` / `A2JITAutoPairingEngineBridge` / native 的 `A2RPPairWireCriterionLog`）、
+`[RXPC]`（`A2RXPCLog`，被 pairable-host 与 RemoteXPC 会话共用）、
+`[FRAME]`（`a2_frame_perf`）、`[MEM]`（`A2LaunchRunner` 的 probe / `A2LaunchSession` 的 ceiling→-Xmx）。
+
+**② 控制台归档（stderr → `Documents/latestlog.txt`）**
+
+`+[A2Log archiveStderr]` 在 `main()` 最早期调用（幂等），用 **dup2 直接接文件**：
+· 启动时轮转一次（`latestlog.txt` → `latestlog.old.txt`，只留两代）；
+· 运行中超过 2 MiB 就**就地轮转**（先抄一份到 `.old`，再 `ftruncate` 归档续写，
+  `O_APPEND` 保证截断后从 0 处继续）⇒ 不会无限涨。触发点＝写判据行时 + 一条 30 秒定时守护。
+· **不用「管道 + 读线程」**：管道里未读走的那一截在崩溃时会丢，而那正是最需要的尾部。
+
+**③ 「运行日志」页（`Air2/UI/Screens/About/A2LogViewController.m`）**
+
+默认显示**当前会话日志**（`Documents/lastlog.txt`）；顶部标明两份文件的路径与大小；
+右上角一次导出（`+[A2Log exportCombinedLogToPath:error:]` 把 ①会话日志 ②控制台归档
+折成一个文本）→ 系统分享（AirDrop / 存到「文件」）。切回页面会重载（日志边跑边长）。
+
+**边界**：只统一「判据行」这一类（一行一个结论的行）。普通结构化日志（`[RT]` / `[A2-CHAIN]` 等）
+仍各走原路：native 的进 `latestlog.txt`（stderr），Air2 侧 `+[A2Log log:]` 的进 `lastlog.txt`。
+两者都在导出物里，不会丢，只是不共用同一个入口。
+
+**开关**：无 —— 归档与判据行出口默认生效（这正是「真机最少步骤看到判据行」的前提）。
