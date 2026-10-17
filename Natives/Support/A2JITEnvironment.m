@@ -558,6 +558,20 @@ static int gA2JITEnsureKickInflight = 0;
 }
 
 + (BOOL)ensureVerifiedWithinBudget:(NSTimeInterval)budget reason:(NSString **)whyOut {
+    // ★排查开关(2026-10-17)★ A2SkipJITMachinery=YES(默认) ⇒ 整条自研 JIT 取证链全部跳过：
+    //   不发 brk #0x69、不做 exec-probe、不做区域自证。目的：把「我们的 JIT 代码」
+    //   从“StikDebug 9000+ 请求 + 建 VM 卡死”里摘出去，判断到底是谁在刷。
+    //   定位完必须默认关掉（那意味着放弃 JIT 校验）。
+    id a2skipVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2SkipJITMachinery"];
+    BOOL a2skip = (a2skipVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2SkipJITMachinery"];
+    if (a2skip) {
+        if (whyOut) *whyOut = @"排查模式:已跳过整条 JIT 取证链(A2SkipJITMachinery=YES)";
+        gA2JITRegionVerdict = A2JITRegionVerdictUsable;
+        gA2JITRegionEvidence = @"排查模式:未做任何 brk/自证";
+        a2_jit_log("[A2JIT] ★排查模式★ A2SkipJITMachinery=YES ⇒ 跳过 brk #0x69 / exec-probe / 区域自证，直接放行建 VM");
+        return YES;
+    }
+
     if (gA2JITVerified) {
         if (whyOut) *whyOut = gA2JITRegionEvidence ?: @"already verified (verifiedRegion non-null)";
         return YES;
