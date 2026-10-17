@@ -499,7 +499,7 @@ static BOOL a2_jit_verify_region_bounded(NSTimeInterval deadline, const char *wh
     }
 
     // ③ 判定依据：region 属性即判据；write+exec 自证降为【只作日志】。
-    //    真机实证（2026-10-07，见 _RT_P0_2.md）：用 AmethystJIT69.js 后调试器已交付【真 JIT 区】
+    //    真机实证（2026-10-07，见 _RT_P0_2.md）：用 Air2JIT69.js 后调试器已交付【真 JIT 区】
     //    （mapped=1 cur=0x5 max=0x7 size=16384），可直接作 JVM 的 code cache。而自证常报
     //    proof=5(inconclusive)：先 mprotect(RW) 再 mprotect(RX) 会撤销 iOS26+ 对调试器交付页的
     //    「可执行祝福」⇒ 第二步失败。这是**自证手法自身的局限**，不是「区域不可用」。

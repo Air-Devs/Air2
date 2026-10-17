@@ -11,7 +11,7 @@
 //  a2_jit_send_script_safe（brk #0xf00d cmd=2）」只能发生在这里。
 //  Player 的 A2LaunchChain 只表达「①→②→③ 的顺序」，具体做法由本类提供。
 //
-//  ★一步只做一件事★：定位随包脚本（AmethystJIT69.js）→ 交给 Natives 的
+//  ★一步只做一件事★：定位随包脚本（Air2JIT69.js）→ 交给 Natives 的
 //  「带 SIGTRAP 安全网的下发原语」。★不判据、不建 VM、不改任何既有语义★。
 //
 //  与 [JIT-ORDER] 的关系：脚本必须在任何 brk #0x69 探测【之前】下发，

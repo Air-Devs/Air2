@@ -227,7 +227,7 @@ def collect_resources():
             continue
         full = os.path.join(assets_dir, entry)
         # 资源目录（.xcassets 资产目录 / .lproj 本地化）或散落的资源文件。
-        # 后者用于 AmethystJIT69.js（自包含 JIT 脚本，必须随包下发）。
+        # 后者用于 Air2JIT69.js（自包含 JIT 脚本，必须随包下发）。
         if entry.endswith(".xcassets") or entry.endswith(".lproj") or os.path.isfile(full):
             # 归一化为 POSIX 分隔符：Windows 下 os.path.join 会产出反斜杠，
             # 后续 group_tree() 按 "/" 切分，反斜杠会让所有路径落进空路径孤儿组

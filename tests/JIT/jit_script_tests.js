@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 // ============================================================================
-// tests/JIT/jit_script_tests.js —— AmethystJIT69.js 的纯逻辑 + 协议行为单测
+// tests/JIT/jit_script_tests.js —— Air2JIT69.js 的纯逻辑 + 协议行为单测
 // ----------------------------------------------------------------------------
-// 被测对象是【仓里真实的】Assets/AmethystJIT69.js（不是镜像实现）：
+// 被测对象是【仓里真实的】Assets/Air2JIT69.js（不是镜像实现）：
 //   * 用 node:vm 把它跑在一个沙箱里，宿主侧的 send_command / get_pid / log /
 //     prepare_memory_region 全部由本文件假装成一台 debugserver；
 //   * 单测直接断言【脚本发出去的 GDB-RSP 包】与【它自己打出来的日志】。
@@ -25,7 +25,7 @@ const fs = require('fs');
 const path = require('path');
 const vm = require('vm');
 
-const SCRIPT_PATH = path.join(__dirname, '..', '..', 'Assets', 'AmethystJIT69.js');
+const SCRIPT_PATH = path.join(__dirname, '..', '..', 'Assets', 'Air2JIT69.js');
 const SRC = fs.readFileSync(SCRIPT_PATH, 'utf8');
 
 let pass = 0;
@@ -104,7 +104,7 @@ function run(respond, options) {
     vm.createContext(sandbox);
     let error = null;
     try {
-        vm.runInContext(SRC, sandbox, { filename: 'AmethystJIT69.js' });
+        vm.runInContext(SRC, sandbox, { filename: 'Air2JIT69.js' });
     } catch (e) {
         error = e;
     }
@@ -271,7 +271,7 @@ console.log('== E. 端到端：brk #0x69 真交付');
     eq(String(r.preps[0][1]), String(0x1000n), 'E7 落实长度 = 请求尺寸');
     ok(r.sent.some(function (p) { return p === 'P0=' + leHex(0x100004000n) + ';thread:1e03;'; }),
         'E8 回填 x0 = 分配到的区域地址');
-    ok(r.logs.some(function (l) { return l.indexOf('[AMETHYST-JIT69] hit #1') >= 0; }),
+    ok(r.logs.some(function (l) { return l.indexOf('[AIR2-JIT69] hit #1') >= 0; }),
         'E9 打出 0x69 命中判据行');
 }
 

@@ -99,11 +99,11 @@ void a2_failbanner_show_jit_unavailable(AMEJITRegionVerdict verdict,
             a2_log_f(@"判据分流=legacy-sentinel（brk #0x69 回 0xE0000069）⇒ 提示用户【指派 JIT 脚本】");
             a2_log_f(@"需要的 JIT 开启方式：用 JIT 使能器（StikDebug 等）给本 App 启用 JIT，并"
                      @"【指派 Universal JIT 脚本】（StikDebug 里长按 Amethyst → Assign Script → 选 "
-                     @"Amethyst 目录下的 AmethystJIT69.js）。否则 brk #0x69 只会回 legacy 哨兵 "
+                     @"Amethyst 目录下的 Air2JIT69.js）。否则 brk #0x69 只会回 legacy 哨兵 "
                      @"0xE0000069，JVM 的 code cache 就拿不到内存，必然 SIGBUS。");
             toastReason = @"未检测到 JIT 脚本交付（brk #0x69 回 legacy 哨兵 0xE0000069）。\n"
                           @"请在 JIT 使能器里给 Amethyst 指派 JIT 脚本：StikDebug 长按 Amethyst → "
-                          @"Assign Script → 选 Amethyst 目录下的 AmethystJIT69.js";
+                          @"Assign Script → 选 Amethyst 目录下的 Air2JIT69.js";
         } else if (verdict == AMEJITRegionVerdictNotServiced) {
             a2_log_f(@"判据分流=not-serviced（brk #0x69 无人应答）⇒ 提示用户【先启用 JIT】");
             toastReason = @"未检测到应答的 JIT 调试器（brk #0x69 无人服务）。\n"

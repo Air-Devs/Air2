@@ -427,7 +427,7 @@ JRE 缺失时该阶段**只告警不失败**（同树多任务并行时不让别
 | 文件 | 层 | 职责 |
 |---|---|---|
 | `Air2/Player/A2LaunchChain.[hm]` | Player | ★顺序与状态的唯一真相源★：`stage` / `failureReason`；① 失败不拦路、② 失败拦路（绝不进 ③）。本单**零改动** |
-| `Air2/Bridge/A2JITScriptDelivery.[hm]` | **Bridge** | ① ★唯一调用 `a2_jit_send_script_safe` 的地方★：定位随包 `AmethystJIT69.js` 并下发（失败不拦路）|
+| `Air2/Bridge/A2JITScriptDelivery.[hm]` | **Bridge** | ① ★唯一调用 `a2_jit_send_script_safe` 的地方★：定位随包 `Air2JIT69.js` 并下发（失败不拦路）|
 | `Air2/Bridge/A2JITEnvironmentProbe.[hm]` | **Bridge** | ② 真调判据（**已有**；本单不改其语义）|
 | `Air2/Bridge/A2LaunchRunner.[hm]` | **Bridge** | ③ ★唯一调用 `a2_launch_jvm_with_argv` 的地方★（**已有**）|
 | `Air2/Player/A2LaunchFailure.[hm]` | Player | ★失败分类唯一实现★：`chain.stage` ⇒ 4 类；② 的判据行 / 用户文案按 7 档 verdict 分流（复用 `A2JITVerdictGuidance` + `A2JITStrings`，不另造表）|

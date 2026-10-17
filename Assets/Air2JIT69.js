@@ -22,7 +22,7 @@
 //            【有界、有原文】的失败：base 在 tid/pc/x16 全 null 时 `continue` 空转，最后被宿主
 //            以 `Script failed:` 收尾（真机日志：Handling signal 5 → Failed to extract registers）。 
 //
-// 命中传统 0x69 时打印 `[AMETHYST-JIT69] ...` 行，便于真机判据（见 D:\CTF\_JIT_SCRIPT.md）。
+// 命中传统 0x69 时打印 `[AIR2-JIT69] ...` 行，便于真机判据（见 D:\CTF\_JIT_SCRIPT.md）。
 // ============================================================================
 
 
@@ -116,7 +116,7 @@ function ameJITAllocMapping(bytes) {
     for (let i = 0; i < perms.length; i++) {
         const p = perms[i];
         const resp = send_command(`_M${bytes.toString(16)},${p}`);
-        log(`[AMETHYST-JIT69] _M${bytes.toString(16)},${p} -> '${resp}'`);
+        log(`[AIR2-JIT69] _M${bytes.toString(16)},${p} -> '${resp}'`);
         const addr = ameJITParseAllocAddr(resp);
         if (addr !== 0n) return addr;
     }
@@ -172,7 +172,7 @@ while (!detached) {
             || ameJITBadReplies >= AME_JIT_BAD_REPLY_LIMIT) {
             // 进程已被杀 / 调试会话报错 / 连续拿不到停止回复 ⇒ 如实收尾（base 在这里无限空转，
             // 最终被宿主按 `Script failed:` 结束，看不到任何原因）。
-            log(`[AMETHYST-JIT69] 停止服务：进程已退出或调试会话失效`
+            log(`[AIR2-JIT69] 停止服务：进程已退出或调试会话失效`
                 + `（kind=${stop.kind}, 连续无效回复=${ameJITBadReplies}）`);
             break;
         }
@@ -196,7 +196,7 @@ while (!detached) {
             // 若同一个 pc 连续第二次报 SIGTRAP，说明这条指令自身必停（例如读不出指令字的 brk），
             // 越过它再继续，避免在同一地址无休止重停。
             if (ameJITTrapPc !== null && ameJITTrapPc === pc) {
-                log(`[AMETHYST-JIT69] 同一 pc 连续 SIGTRAP ⇒ 跳过该指令 (pc=0x${pc.toString(16)})`);
+                log(`[AIR2-JIT69] 同一 pc 连续 SIGTRAP ⇒ 跳过该指令 (pc=0x${pc.toString(16)})`);
                 ameJITSkipInstruction();
             }
             ameJITTrapPc = pc;
@@ -280,14 +280,14 @@ function JIT26NewBreakpoints(brkResponse) {
 //   并打出成千条调试命令（64MiB ⇒ 4096 条）⇒ 地址每次都变 + 命令洪水 ⇒ App 反复重试 ⇒ 假死/黑屏。
 function JIT26HandleBrk0x69(brkResponse) {
     if (ameJITInBrk69) {                                       // ★防重入★：同一时刻只允许一层
-        log(`[AMETHYST-JIT69] re-entrant brk #0x69 -> skipped`);
+        log(`[AIR2-JIT69] re-entrant brk #0x69 -> skipped`);
         return;
     }
     ameJITInBrk69 = true;
     try {
         ameJITBrk69Hits++;
         if (ameJITBrk69Hits <= 3) {                            // 只记前几次，避免刷屏
-            log(`[AMETHYST-JIT69] hit #${ameJITBrk69Hits}: brk #0x69 BreakGetJITMapping(size=0x${x0.toString(16)}) @pc=0x${pc.toString(16)}`);
+            log(`[AIR2-JIT69] hit #${ameJITBrk69Hits}: brk #0x69 BreakGetJITMapping(size=0x${x0.toString(16)}) @pc=0x${pc.toString(16)}`);
         }
         x1 = x0;                                               // 官方语义：size 挪到 x1
         x0 = 0;                                                // 官方语义：x0=0 ⇒ 由 host 分配

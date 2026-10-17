@@ -41,7 +41,7 @@
 python3 tests/JIT/run_jit_tests.py
 ```
 
-### JIT 脚本（`Assets/AmethystJIT69.js`）—— GDB-RSP 协议行为单测
+### JIT 脚本（`Assets/Air2JIT69.js`）—— GDB-RSP 协议行为单测
 
 脚本本体是 JS，用 **node + 假 debugserver**（`node:vm` 沙箱）直接跑**仓里那份真脚本**，
 断言它**发出去的包**与**打出来的日志**：

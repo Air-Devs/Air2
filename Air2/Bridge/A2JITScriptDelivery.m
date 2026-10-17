@@ -15,7 +15,7 @@
 // NATIVES_INCLUDE_DIRS 提供（含 $(SRCROOT)/Natives/Support）。
 #import "A2JITEnvironment.h"    // a2_jit_send_script_safe（带 SIGTRAP 安全网的叶子原语）
 
-NSString *const A2JITScriptFileName = @"AmethystJIT69.js";
+NSString *const A2JITScriptFileName = @"Air2JIT69.js";
 
 static NSString *const A2JITScriptDeliveryErrorDomain = @"A2JITScriptDeliveryError";
 
@@ -26,7 +26,7 @@ static NSString *const A2JITScriptDeliveryErrorDomain = @"A2JITScriptDeliveryErr
     NSBundle *b = NSBundle.mainBundle;
     NSMutableArray<NSString *> *candidates = [NSMutableArray array];
     // ① 标准资源查找（collect_resources() 把 Assets/ 下的散落资源平铺进包根）
-    NSString *res = [b pathForResource:@"AmethystJIT69" ofType:@"js"];
+    NSString *res = [b pathForResource:@"Air2JIT69" ofType:@"js"];
     if (res.length) [candidates addObject:res];
     // ② 包根（不依赖资源注册）
     [candidates addObject:[b.bundlePath stringByAppendingPathComponent:A2JITScriptFileName]];

@@ -2665,7 +2665,7 @@ static void testLaunchChainJitVmWiring(void) {
                                                      encoding:NSUTF8StringEncoding error:NULL];
     ok(deliverSrc.length > 0, @"读得到 A2JITScriptDelivery.m");
     ok([deliverSrc containsString:@"a2_jit_send_script_safe"], @"★① 真调 Natives 下发原语★");
-    ok([deliverSrc containsString:@"AmethystJIT69"], @"① 下发的是随包自包含脚本");
+    ok([deliverSrc containsString:@"Air2JIT69"], @"① 下发的是随包自包含脚本");
 
 }
 

@@ -87,7 +87,7 @@
 
 | 名称 | 版本 | 来源 | 许可 | 用途 |
 |---|---|---|---|---|
-| AmethystJIT69.js | —（md5 `0201f14d3a59354a1c636a3d1e8c6b24`，16228 B） | 自研；逐字派生自 Amethyst 包内 `UniversalJIT26.js`（`Natives/resources/`，last updated 2025-10-10），三处改动见脚本头部 `★[改-*]★` | 随上游 Amethyst / PojavLauncher 系（见上「启动核心后端」） | 接管传统 `brk #0x69`（BreakGetJITMapping），在目标进程内真分配一块 W+X 内存并回填地址（不再回 legacy 哨兵 `0xE0000069`）。落地于 `Assets/AmethystJIT69.js` |
+| Air2JIT69.js | —（md5 `76bb9121d9c90f1eb8d3e43354ef1e02`，22776 B） | 自研；★Air2 专用★（协议逻辑派生自上游 `UniversalJIT26.js`，日志前缀 `[AIR2-JIT69]`）（`Natives/resources/`，last updated 2025-10-10），三处改动见脚本头部 `★[改-*]★` | 随上游 Amethyst / PojavLauncher 系（见上「启动核心后端」） | 接管传统 `brk #0x69`（BreakGetJITMapping），在目标进程内真分配一块 W+X 内存并回填地址（不再回 legacy 哨兵 `0xE0000069`）。落地于 `Assets/Air2JIT69.js` |
 
 ---
 
@@ -139,7 +139,7 @@
 | 名称 | 版本 | 来源 | 许可 | 用途 | 引入方式 |
 |---|---|---|---|---|---|
 | libjvm.dylib | JDK 8/17/21/25 | 包内 `java_runtimes/*-openjdk`(OpenJDK 官方构建) | GPL-2.0+CE | JVM 本体 | app_bundle 内随包 |
-| AmethystJIT69.js | 1.0 | 自研(基于上游 UniversalJIT26 的 base+Extension 合并) | 跟随上游 | 服务传统 brk #0x69 交付可执行区 | `Assets/` 静态资源 |
+| Air2JIT69.js | 1.0 | 自研(基于上游 UniversalJIT26 的 base+Extension 合并) | 跟随上游 | 服务传统 brk #0x69 交付可执行区 | `Assets/` 静态资源 |
 
 ---
 
@@ -307,7 +307,7 @@
 | `Air2/Core/Version/A2LaunchPlan.[hm]` | — | 本单新写（净室） | 同上 | 启动计划产出（版本 JSON 合并/rules/占位符/库表 + 账号取值） | 随仓（源码） |
 | `Air2/Bridge/A2LaunchRunner.[hm]` | — | 本单新写（净室） | 同上 | 组 margv 并调 `a2_launch_jvm_with_argv`；转发开关 | 随仓（源码） |
 | `Air2/Player/A2LaunchSession.[hm]` | — | 本单新写（净室） | 同上 | 一次启动的编排（默认关 ⇒ 零副作用） | 随仓（源码） |
-| `Air2/Bridge/A2JITScriptDelivery.[hm]` | — | [JIT-VM-WIRE] 本单新写（净室） | 随本仓 GPL-3.0-or-later | ① 唯一调用 `a2_jit_send_script_safe` 的地方（下发随包 `AmethystJIT69.js`，失败不拦路） | 随仓（源码） |
+| `Air2/Bridge/A2JITScriptDelivery.[hm]` | — | [JIT-VM-WIRE] 本单新写（净室） | 随本仓 GPL-3.0-or-later | ① 唯一调用 `a2_jit_send_script_safe` 的地方（下发随包 `Air2JIT69.js`，失败不拦路） | 随仓（源码） |
 | `Air2/Player/A2LaunchFailure.[hm]` | — | [JIT-VM-WIRE] 本单新写（净室） | 同上 | 启动链失败分类 + 判据行 + 用户文案（复用 `A2JITVerdictGuidance` / `A2JITStrings`） | 随仓（源码） |
 | `air2-lwjgl-patch.jar`（源 `JavaApp/src/lwjgl/**`） | 随本仓 | 本单新写（净室）；`org.lwjgl.glfw.CallbackBridge` / `GLFWWindowProperties` 为**非官方同名**类 | 随本仓 GPL-3.0-or-later（LWJGL 本体仍是 BSD-3，见上表） | `org.lwjgl.*` 补丁类容器（层 2，逐片落位） | 随仓（源码）→ 构建产物 `<App>/Java/` |
 

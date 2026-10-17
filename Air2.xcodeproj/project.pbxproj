@@ -205,7 +205,7 @@
 		072BE91496C49D3121A7E288 /* a2_rppairing_verify.m in Sources */ = {isa = PBXBuildFile; fileRef = 6DB059C24F4995B6CD32CFC3 /* a2_rppairing_verify.m */; };
 		5E6D2E22D7E3C8631CBE7CFF /* a2_tlspsk_mbedtls.m in Sources */ = {isa = PBXBuildFile; fileRef = 497444A01DBBFD2FAACE0D50 /* a2_tlspsk_mbedtls.m */; };
 		E3CF259BD6AAF19109CDA83D /* a2_tlspsk_tunnel.m in Sources */ = {isa = PBXBuildFile; fileRef = 407ECB99D6941017E615F9DA /* a2_tlspsk_tunnel.m */; };
-		47B5FB1970DB484540DD3605 /* AmethystJIT69.js in Resources */ = {isa = PBXBuildFile; fileRef = F4E3CA4116E260F771AC42E2 /* AmethystJIT69.js */; };
+		A3C3C2B92C1CA71DC14A22CA /* Air2JIT69.js in Resources */ = {isa = PBXBuildFile; fileRef = 01747E5D28ABCC003A3BB764 /* Air2JIT69.js */; };
 		FC6E8A547C179CC55A247D57 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F6B4BAFE39547DFF98D20300 /* Images.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -605,7 +605,7 @@
 		6979441440A7FA3BCE8069E0 /* a2_tlspsk_tunnel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_tlspsk_tunnel.h"; sourceTree = "<group>"; };
 		5FA56D644FC3CBFFA281A454 /* utils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "utils.h"; sourceTree = "<group>"; };
 		FE8E7FD5EC13EBBEDE03587C /* jni.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "jni.h"; sourceTree = "<group>"; };
-		F4E3CA4116E260F771AC42E2 /* AmethystJIT69.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "Assets/AmethystJIT69.js"; sourceTree = "<group>"; };
+		01747E5D28ABCC003A3BB764 /* Air2JIT69.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "Assets/Air2JIT69.js"; sourceTree = "<group>"; };
 		F6B4BAFE39547DFF98D20300 /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets/Images.xcassets"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -1388,7 +1388,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				47B5FB1970DB484540DD3605 /* AmethystJIT69.js in Resources */,
+				A3C3C2B92C1CA71DC14A22CA /* Air2JIT69.js in Resources */,
 				FC6E8A547C179CC55A247D57 /* Images.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

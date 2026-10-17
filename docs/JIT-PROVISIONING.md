@@ -536,7 +536,7 @@ USB 前提根本不存在 ⇒ `A2RPPairSetupUSBPathAvailable()` 如实回 `NO` �
 | 6 | `libidevice_ffi.a` 约 **90 MB** | 包体暴涨 | 走**源码 + CI 构建**，不搬预编译 |
 | 7 | **许可红线** | 合规 | StikJIT=MPL-2.0（保留声明）、idevice/isideload=MIT、★StikDebug=AGPL-3.0 只可当外部 App★、★SideInstaller 禁抄禁再分发★ |
 | 8 | **分支基线旧** | 无法直接 PR | 基线 `091db7a` 系；远程 `main` 已前进 ⇒ 先 rebase |
-| 9 | `AmethystJIT69.js` 与 StikJIT 脚本兼容性未验证 | 内置路可能需换脚本 | 第二阶段做脚本并存测试 |
+| 9 | `Air2JIT69.js` 与 StikJIT 脚本兼容性未验证 | 内置路可能需换脚本 | 第二阶段做脚本并存测试 |
 | 10 | 越狱 JIT 需用户自己打开（`Allow JIT`） | 误判 | 就绪判据只用真实能力（ADR-007） |
 
 ---
@@ -553,7 +553,7 @@ USB 前提根本不存在 ⇒ `A2RPPairSetupUSBPathAvailable()` 如实回 `NO` �
 
 ## 7. 脚本侧真机回归：`Skipping: instruction was not a brk` 与 `Failed to extract registers: tid=null…`
 
-真机（StikDebug 跑 `AmethystJIT69.js`）稳定复现过这一段：
+真机（StikDebug 跑 `Air2JIT69.js`）稳定复现过这一段：
 
 ```
 Skipping: instruction was not a brk (was 0xa9bf7bfd)
