@@ -89,13 +89,23 @@
     _subtitleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _subtitleLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightRegular];
     _subtitleLabel.numberOfLines = 2;
+    _subtitleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
     _subtitleLabel.hidden = YES;
+    // 副标题常常是整句说明（诊断页尤其长）。必须允许被压缩，
+    // 否则它会按「单行完整宽度」索取空间，把整行撑到屏幕外。
+    [_subtitleLabel setContentCompressionResistancePriority:UILayoutPriorityDefaultLow
+                                                    forAxis:UILayoutConstraintAxisHorizontal];
+    [_titleLabel setContentCompressionResistancePriority:UILayoutPriorityDefaultLow
+                                                 forAxis:UILayoutConstraintAxisHorizontal];
 
     _textStack = [[UIStackView alloc] initWithArrangedSubviews:@[_titleLabel, _subtitleLabel]];
     _textStack.translatesAutoresizingMaskIntoConstraints = NO;
     _textStack.axis = UILayoutConstraintAxisVertical;
     _textStack.spacing = 1;
-    _textStack.alignment = UIStackViewAlignmentLeading;
+    // ★Fill 而不是 Leading★：垂直栈的 Leading 对齐只定「贴哪边」，不约束子视图宽度，
+    // 长副标题会按自身完整宽度超出文字区、画到屏幕外（用户批注：简介过长超出屏幕、
+    // 页面能横向拖动）。Fill 让每个子标签宽度恒等于文字区宽度，越界在结构上不可能。
+    _textStack.alignment = UIStackViewAlignmentFill;
     [self addSubview:_textStack];
 
     // ---- 右侧 ----
@@ -176,6 +186,12 @@
         [_textStack.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:A2SpaceL],
         [_textStack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
         [_textStack.topAnchor constraintGreaterThanOrEqualToAnchor:self.topAnchor constant:A2SpaceM],
+        // 文字区右边界不需要单独约束：下面已经有
+        // 「_trailingStack.leading >= _textStack.trailing + 12」限定它。
+        // 真正会让整页横向滚动的不是缺这条，而是标签的压缩阻力（见上面的
+        // setContentCompressionResistancePriority ⇒ 250）：默认 750 与
+        // 基类滚动容器里 750 的「内容撑满可视宽」同优先级，
+        // 长副标题于是把内容堆栈撑宽、contentLayoutGuide 变宽 ⇒ 整页可横向拖动。
 
         [_trailingStack.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-A2SpaceL],
         [_trailingStack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],

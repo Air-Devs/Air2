@@ -57,6 +57,12 @@ static const CGFloat kIconSize = 72;
     _impact = [[UIImpactFeedbackGenerator alloc] initWithStyle:UIImpactFeedbackStyleLight];
 
     _card = [[A2GlassCard alloc] initWithFrame:CGRectZero];
+    // ★必须关掉自动转换约束★：卡片是用约束贴住宿主 cell 的，
+    // 留着 translatesAutoresizingMaskIntoConstraints = YES 会让 UIKit 另加一组
+    // 「frame = 0×0」的自动约束，与四条贴边约束打架 ⇒ 卡片被解成 0×0，
+    // 里面的图标/文字全被挤到 0 宽（真机表现：列表行只剩一个图标 + 每行一个字，
+    // 卡片底色完全不可见）。其它卡片组件都显式关掉，这里漏了。
+    _card.translatesAutoresizingMaskIntoConstraints = NO;
     // ZL2 用 shapes.large；我们的 A2RadiusL = 16，接近
     _card.cornerRadius = A2RadiusL;
     _card.elevation = A2CardElevationLow;

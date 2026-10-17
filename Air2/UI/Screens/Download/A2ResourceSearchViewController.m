@@ -45,17 +45,11 @@
 #import "A2RemoteImageView.h"
 #import "A2RemoteVersions.h"
 #import "A2ResourceDetailViewController.h"
+#import "A2TextField.h"
 #import "A2ThemeManager.h"
 #import "A2Typography.h"
 
 static NSString *const kResultCellID = @"A2ResourceResultCell";
-
-/// 下载量易读格式
-static NSString *A2RSFormatCount(long long count) {
-    if (count >= 1000000) return [NSString stringWithFormat:@"%.1fM", count / 1000000.0];
-    if (count >= 1000) return [NSString stringWithFormat:@"%.1fK", count / 1000.0];
-    return [NSString stringWithFormat:@"%lld", count];
-}
 
 /// 结果区状态 —— 各自独立文案
 typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
@@ -109,12 +103,12 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
 
 #pragma mark - 搜索页
 
-@interface A2ResourceSearchViewController () <UITableViewDataSource, UITableViewDelegate, UISearchBarDelegate>
+@interface A2ResourceSearchViewController () <UITableViewDataSource, UITableViewDelegate>
 
 @property (nonatomic, assign) A2ContentClass contentClass;
 
-// 搜索栏
-@property (nonatomic, strong) UISearchBar *searchBar;
+// 搜索框：MD3 填充式输入框（与「安装新版本」页同一套组件）
+@property (nonatomic, strong) A2TextField *searchField;
 
 // 可展开筛选卡
 @property (nonatomic, strong) A2GlassCard *filterCard;
@@ -180,7 +174,7 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     _platform = [self initialPlatform];
     _source = [A2ContentSource sourceForPlatform:_platform];
 
-    [self setupSearchBar];
+    [self setupSearchField];
     [self setupFilterCard];
     [self buildLoaderChips];
     [self buildSortChips];
@@ -277,34 +271,27 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     [self reload];
 }
 
-#pragma mark - UI：搜索栏
+#pragma mark - UI：搜索框
 
-- (void)setupSearchBar {
-    _searchBar = [[UISearchBar alloc] initWithFrame:CGRectZero];
-    _searchBar.translatesAutoresizingMaskIntoConstraints = NO;
-    _searchBar.placeholder = @"搜索资源…";
-    _searchBar.delegate = self;
-    _searchBar.searchBarStyle = UISearchBarStyleMinimal;
-    _searchBar.tintColor = A2ThemeManager.shared.scheme.cPrimary;
-    _searchBar.backgroundImage = [UIImage new];
-    _searchBar.autocapitalizationType = UITextAutocapitalizationTypeNone;
-    _searchBar.autocorrectionType = UITextAutocorrectionTypeNo;
+- (void)setupSearchField {
+    // MD3 填充式输入框，替换原先的 UISearchBar（iOS 原生形态、圆角灰底，
+    // 与本站其它页的 MD3 输入框不是一套）。用户批注：搜索框要换成 MD3 风格。
+    // 用的是「安装新版本」页同一套组件与调用方式（A2TextField initWithLabel:）。
+    _searchField = [[A2TextField alloc] initWithLabel:@"搜索资源…"];
+    _searchField.autocapitalizationType = UITextAutocapitalizationTypeNone;
 
-    // 搜索框文字配色（UISearchBar 不跟随我们的色板，需手动设）
-    A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    for (UIView *v in _searchBar.subviews) {
-        for (UIView *sv in v.subviews) {
-            if ([sv isKindOfClass:UITextField.class]) {
-                UITextField *tf = (UITextField *)sv;
-                tf.textColor = t.cOnSurface;
-                tf.attributedPlaceholder =
-                    [[NSAttributedString alloc] initWithString:@"搜索资源…"
-                                                    attributes:@{NSForegroundColorAttributeName:
-                                                                     t.cOnSurfaceVariant}];
-            }
-        }
-    }
-    [self.plainContentView addSubview:_searchBar];
+    __weak typeof(self) weakSelf = self;
+    _searchField.onTextChange = ^(NSString *text) {
+        // 清空时立刻恢复完整列表（原 UISearchBarDelegate 的 textDidChange 逻辑）
+        if (text.length == 0) [weakSelf reload];
+    };
+    _searchField.onReturn = ^{
+        __weak typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        [self.searchField.textField resignFirstResponder];
+        [self reload];
+    };
+    [self.plainContentView addSubview:_searchField];
 }
 
 #pragma mark - UI：可展开筛选卡
@@ -732,12 +719,11 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     [self.plainContentView addSubview:_stateLabel];
 
     [NSLayoutConstraint activateConstraints:@[
-        [_searchBar.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
-        [_searchBar.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor constant:A2SpaceS],
-        [_searchBar.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor constant:-A2SpaceS],
-        [_searchBar.heightAnchor constraintEqualToConstant:44],
+        [_searchField.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_searchField.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor constant:A2PageMargin],
+        [_searchField.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor constant:-A2PageMargin],
 
-        [_filterCard.topAnchor constraintEqualToAnchor:_searchBar.bottomAnchor constant:A2SpaceS],
+        [_filterCard.topAnchor constraintEqualToAnchor:_searchField.bottomAnchor constant:A2SpaceM],
         [_filterCard.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
                                                   constant:A2PageMargin],
         [_filterCard.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
@@ -793,7 +779,7 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     [self updateStateView];
 
     A2ContentFilter *filter = [A2ContentFilter defaultFilter];
-    filter.query = self.searchBar.text.length ? self.searchBar.text : nil;
+    filter.query = self.searchField.text.length ? self.searchField.text : nil;
     filter.gameVersion = self.selectedGameVersion;
     filter.loader = self.selectedLoader;
     filter.categories = self.selectedCategories.allObjects;
@@ -897,18 +883,6 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     [self.navigationController pushViewController:vc animated:YES];
 }
 
-#pragma mark - UISearchBarDelegate
-
-- (void)searchBarSearchButtonClicked:(UISearchBar *)searchBar {
-    [searchBar resignFirstResponder];
-    [self reload];
-}
-
-- (void)searchBar:(UISearchBar *)searchBar textDidChange:(NSString *)searchText {
-    // 清空时立刻恢复完整列表
-    if (searchText.length == 0) [self reload];
-}
-
 #pragma mark - 通知
 
 - (void)handleThemeChanged:(NSNotification *)note {
@@ -927,19 +901,7 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
 
-    _searchBar.tintColor = t.cPrimary;
-    for (UIView *v in _searchBar.subviews) {
-        for (UIView *sv in v.subviews) {
-            if ([sv isKindOfClass:UITextField.class]) {
-                UITextField *tf = (UITextField *)sv;
-                tf.textColor = t.cOnSurface;
-                tf.attributedPlaceholder =
-                    [[NSAttributedString alloc] initWithString:@"搜索资源…"
-                                                    attributes:@{NSForegroundColorAttributeName:
-                                                                     t.cOnSurfaceVariant}];
-            }
-        }
-    }
+    [_searchField applyTheme];
 
     _filterSummaryLabel.textColor = t.cOnSurfaceVariant;
     _filterChevron.tintColor = t.cOnSurfaceVariant;

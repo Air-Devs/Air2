@@ -28,7 +28,10 @@
 #import "A2Typography.h"
 
 @interface A2TaskDrawer ()
-@property (nonatomic, strong) UIVisualEffectView *blurView;
+// ★原来是 UIVisualEffectView + SystemThickMaterialDark（系统深色材质）★
+// 用户批注：下载进度界面太黑。二级界面一律 MD3、不用系统材质，
+// 这里换成不透明的 MD3 surfaceContainerHigh 填充（与其它卡片同一层语义色）。
+@property (nonatomic, strong) UIView *fillView;
 @property (nonatomic, strong) UIView *grabber;
 @property (nonatomic, strong) UILabel *summaryLabel;
 @property (nonatomic, strong) UILabel *percentLabel;
@@ -57,7 +60,7 @@
     self.layer.cornerCurve = kCACornerCurveContinuous;
     self.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
 
-    [self setupBlur];
+    [self setupFill];
     [self setupSummary];
     [self setupList];
 
@@ -82,10 +85,10 @@
         [_grabber.widthAnchor constraintEqualToConstant:36],
         [_grabber.heightAnchor constraintEqualToConstant:4],
 
-        [_blurView.topAnchor constraintEqualToAnchor:self.topAnchor],
-        [_blurView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
-        [_blurView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-        [_blurView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+        [_fillView.topAnchor constraintEqualToAnchor:self.topAnchor],
+        [_fillView.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+        [_fillView.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+        [_fillView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
     ]];
 
     [self applyTheme];
@@ -103,11 +106,11 @@
 
 #pragma mark - 构建
 
-- (void)setupBlur {
-    _blurView = [[UIVisualEffectView alloc] initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemThickMaterialDark]];
-    _blurView.translatesAutoresizingMaskIntoConstraints = NO;
-    _blurView.userInteractionEnabled = NO;
-    [self addSubview:_blurView];
+- (void)setupFill {
+    _fillView = [[UIView alloc] initWithFrame:CGRectZero];
+    _fillView.translatesAutoresizingMaskIntoConstraints = NO;
+    _fillView.userInteractionEnabled = NO;
+    [self addSubview:_fillView];
 }
 
 - (void)setupSummary {
@@ -218,7 +221,16 @@
 
 - (void)updateVisibility {
     BOOL hasTasks = _listStack.arrangedSubviews.count > 0;
-    if (!hasTasks && !self.isExpanded) {
+    if (!hasTasks) {
+        // ★没有任务就必须收起并隐藏，不管之前是否展开过★
+        // 原来条件是「没任务 && 未展开」，用户展开过之后任务全部完成，
+        // 抽屉会一直停在展开态、空列表、还没有关闭入口（批注：完成后不会消失，
+        // 也不能关闭）。这里先强制回到收起态，再走隐藏动画。
+        if (_expanded) {
+            _expanded = NO;
+            self.heightConstraint.constant = _collapsedHeight;
+            [self.superview layoutIfNeeded];
+        }
         [UIView animateWithDuration:A2AnimDuration animations:^{
             self.transform = CGAffineTransformMakeTranslation(0, self.collapsedHeight + 30);
             self.alpha = 0;
@@ -307,13 +319,15 @@
 
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    _grabber.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.28];
+    // MD3 表面（不透明），替代原来的 SystemThickMaterialDark 深色材质
+    _fillView.backgroundColor = t.cSurfaceContainerHigh;
+    _grabber.backgroundColor = [t.cOnSurfaceVariant colorWithAlphaComponent:0.5];
     _summaryLabel.textColor = t.cOnSurface;
     _percentLabel.textColor = t.cPrimary;
-    _summaryTrack.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.14];
+    _summaryTrack.backgroundColor = [t.cOnSurface colorWithAlphaComponent:0.12];
     _summaryFill.backgroundColor = t.cPrimary;
     self.layer.borderWidth = 0.5;
-    self.layer.borderColor = [UIColor colorWithWhite:1.0 alpha:0.12].CGColor;
+    self.layer.borderColor = [t.cOutlineVariant colorWithAlphaComponent:0.9].CGColor;
 }
 
 @end

@@ -19,9 +19,9 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
-//
 
 #import "A2Toast.h"
+#import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
 
@@ -33,38 +33,58 @@ static const NSTimeInterval kToastFadeDuration = 0.22;
 + (void)show:(NSString *)message inView:(UIView *)view {
     if (message.length == 0 || !view) return;
 
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+
+    // 胶囊容器 + 内嵌标签，两者分开：
+    // 原来是「一个 UILabel 兼当气泡」，没有内边距也没有宽度上限 ⇒ 文字贴着圆角
+    // 切边，长文案（版本路径那种）直接顶出屏幕（用户批注：框短字多，字顶到头了）。
+    UIView *bubble = [[UIView alloc] initWithFrame:CGRectZero];
+    bubble.translatesAutoresizingMaskIntoConstraints = NO;
+    bubble.userInteractionEnabled = NO;
+    bubble.backgroundColor = t.cInverseSurface;
+    bubble.layer.cornerRadius = 18;
+    bubble.layer.cornerCurve = kCACornerCurveContinuous;
+    bubble.clipsToBounds = YES;
+    bubble.alpha = 0;
+
     UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
+    label.translatesAutoresizingMaskIntoConstraints = NO;
     label.text = message;
     label.font = [A2Typography caption];
-    label.textColor = UIColor.whiteColor;
-    label.backgroundColor = [UIColor colorWithWhite:0.0 alpha:0.78];
+    label.textColor = t.cInverseOnSurface;
     label.textAlignment = NSTextAlignmentCenter;
-    label.layer.cornerRadius = 18;
-    label.layer.cornerCurve = kCACornerCurveContinuous;
-    label.clipsToBounds = YES;
-    label.translatesAutoresizingMaskIntoConstraints = NO;
-    label.alpha = 0;
-    label.userInteractionEnabled = NO;
+    label.numberOfLines = 2;
+    // 路径类文案中间截断，头尾都能看见（尾部的文件名才是关键）
+    label.lineBreakMode = NSLineBreakByTruncatingMiddle;
 
-    [view addSubview:label];
+    [bubble addSubview:label];
+    [view addSubview:bubble];
 
     [NSLayoutConstraint activateConstraints:@[
-        [label.centerXAnchor constraintEqualToAnchor:view.centerXAnchor],
-        [label.bottomAnchor constraintEqualToAnchor:view.safeAreaLayoutGuide.bottomAnchor constant:-40],
-        [label.heightAnchor constraintEqualToConstant:36],
-        [label.widthAnchor constraintGreaterThanOrEqualToConstant:120],
+        [bubble.centerXAnchor constraintEqualToAnchor:view.centerXAnchor],
+        [bubble.bottomAnchor constraintEqualToAnchor:view.safeAreaLayoutGuide.bottomAnchor constant:-40],
+        // 宽度上限：再长的文案也不会超出屏幕
+        [bubble.widthAnchor constraintLessThanOrEqualToAnchor:view.widthAnchor
+                                                     constant:-A2PageMargin * 2],
+        [bubble.widthAnchor constraintGreaterThanOrEqualToConstant:120],
+        [bubble.heightAnchor constraintGreaterThanOrEqualToConstant:36],
+
+        [label.topAnchor constraintEqualToAnchor:bubble.topAnchor constant:A2SpaceS],
+        [label.bottomAnchor constraintEqualToAnchor:bubble.bottomAnchor constant:-A2SpaceS],
+        [label.leadingAnchor constraintEqualToAnchor:bubble.leadingAnchor constant:A2SpaceL],
+        [label.trailingAnchor constraintEqualToAnchor:bubble.trailingAnchor constant:-A2SpaceL],
     ]];
 
     [UIView animateWithDuration:kToastFadeDuration animations:^{
-        label.alpha = 1;
+        bubble.alpha = 1;
     }];
 
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kToastVisibleDuration * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         [UIView animateWithDuration:kToastFadeDuration animations:^{
-            label.alpha = 0;
+            bubble.alpha = 0;
         } completion:^(BOOL finished) {
-            [label removeFromSuperview];
+            [bubble removeFromSuperview];
         }];
     });
 }

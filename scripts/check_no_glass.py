@@ -79,8 +79,10 @@ GLASS_ALLOWED = {
         "一级页面壁纸层（含模糊）",
     "Air2/UI/Components/A2BackgroundView.m":
         "一级页面壁纸层（含模糊）实现",
-    "Air2/UI/Components/A2TaskDrawer.m":
-        "一级外壳的下载任务浮层（全局浮层，非二级页面）",
+    # A2TaskDrawer 原先登记在此（SystemThickMaterialDark 浮层）。
+    # 第二批 UI 修复：用户批注「下载进度界面咋这么黑」，二级界面一律 MD3，
+    # 该浮层已改为不透明 MD3 surfaceContainerHigh 填充 ⇒ 不再是玻璃使用点，
+    # 本条与 NEGATIVE_CONTROL 里的同名项一并删除（★收紧门禁，不是放宽★）。
     "Air2/UI/Screens/Home/A2LauncherViewController.m":
         "★一级页面★：唯一显式打开玻璃（glassEnabled = YES）的调用点",
 }
@@ -89,7 +91,6 @@ GLASS_ALLOWED = {
 NEGATIVE_CONTROL = [
     "Air2/UI/Screens/Home/A2LauncherViewController.m",
     "Air2/UI/Components/A2BackgroundView.m",
-    "Air2/UI/Components/A2TaskDrawer.m",
 ]
 
 # D 断言：玻璃总开关默认值必须在这一行

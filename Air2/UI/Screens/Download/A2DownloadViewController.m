@@ -43,7 +43,6 @@
 #import "A2CategoryNavView.h"
 #import "A2NavigationController.h"
 #import "A2GameVersionListViewController.h"
-#import "A2DownloadListViewController.h"
 #import "A2ResourceSearchViewController.h"
 #import "A2SearchByIdViewController.h"
 #import "A2FavoritesViewController.h"
@@ -162,17 +161,17 @@
 }
 
 /// 分类索引 → 内容页。索引与 setupCategoryNav 的顺序一一对应。
-/// 资源类（模组/资源包/数据包/存档/光影）全部走共用的 A2ResourceSearchViewController，
-/// 只有整合包仍用旧的 A2DownloadListViewController（重写范围排除它）。
+/// 资源类（整合包/模组/资源包/数据包/存档/光影）全部走共用的 A2ResourceSearchViewController ——
+/// 整合包原先还留在旧的 A2DownloadListViewController 上，筛选条/平台切换的样式与其它资源页
+/// 不一致，且首屏不发起请求（用户批注：整合包筛选样式要改成和 Mod 等资源页一样；
+/// 首次进入没加载出任何整合包）。统一到同一个控制器后两条一起解决。
 - (UIViewController *)makeContentViewControllerForIndex:(NSInteger)index {
     switch (index) {
         case 0:
             return [[A2GameVersionListViewController alloc] init];
-        case 1: {
-            A2DownloadListViewController *vc = [[A2DownloadListViewController alloc] init];
-            vc.category = A2DownloadCategoryModpack;
-            return vc;
-        }
+        case 1:
+            return [[A2ResourceSearchViewController alloc]
+                    initWithContentClass:A2ContentClassModPack];
         case 2:
             return [[A2ResourceSearchViewController alloc]
                     initWithContentClass:A2ContentClassMod];
