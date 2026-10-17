@@ -39,6 +39,27 @@ jobs:
         run: python3 scripts/verify_pbxproj.py
 
   # ============================================================
+  # 单元测试（与编译并行；失败会挡 PR）
+  # ============================================================
+  tests:
+    name: 单元测试
+    runs-on: macos-15
+    needs: lint
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 脚本协议单测（node，98 例）
+        run: node tests/JIT/jit_script_tests.js
+
+      - name: Plan / Runtime / Instance 套件
+        run: |
+          set -o pipefail
+          python3 tests/Plan/run_plan_tests.py
+          python3 tests/Plan/run_plan_memory_tests.py
+          python3 tests/Runtime/run_runtime_tests.py
+          python3 tests/Instance/run_instance_tests.py
+
+  # ============================================================
   # 编译并打包 IPA
   # ============================================================
   build:
@@ -52,6 +73,24 @@ jobs:
         run: |
           xcodebuild -version
           xcrun --sdk iphoneos --show-sdk-version
+
+      # ★JRE 就位★：java-25-openjdk 有 120MB，不入 git；它作为本仓 release 资产
+      #   （tag: jre-assets）随 CI 拉取。只由 workflow 的 GITHUB_TOKEN 读取。
+      - name: 下载 JRE 运行时（release 资产，命中则跳过）
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          mkdir -p Libraries/java_runtimes
+          if [ -d Libraries/java_runtimes/java-25-openjdk ]; then
+            echo "JRE 已存在，跳过下载"
+          else
+            mkdir -p /tmp/jre
+            gh release download jre-assets --pattern 'java25.tgz' --dir /tmp/jre --clobber
+            tar xzf /tmp/jre/java25.tgz -C Libraries/java_runtimes
+          fi
+          du -sh Libraries/java_runtimes/java-25-openjdk
+          test -f Libraries/java_runtimes/java-25-openjdk/lib/server/libjvm.dylib
 
       - name: 重新生成工程文件
         run: python3 scripts/gen_xcodeproj.py
