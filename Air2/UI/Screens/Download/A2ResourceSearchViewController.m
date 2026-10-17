@@ -891,7 +891,14 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
     A2ContentItem *item = _items[indexPath.row];
     A2ResourceDetailViewController *vc =
         [[A2ResourceDetailViewController alloc] initWithProject:item contentClass:self.contentClass];
-    [self.navigationController pushViewController:vc animated:YES];
+    // ★兼容两种宿主★：本页既可能被 push 进 A2NavigationController，也可能是 tab 容器里的
+    //   子控制器（navigationController 为 nil）。后者以前直接 push 到 nil ⇒ 点击无反应。
+    if (self.navigationController != nil) {
+        [self.navigationController pushViewController:vc animated:YES];
+    } else {
+        vc.modalPresentationStyle = UIModalPresentationFullScreen;
+        [self presentViewController:vc animated:YES completion:nil];
+    }
 }
 
 #pragma mark - UISearchBarDelegate
