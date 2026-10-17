@@ -47,11 +47,13 @@ int main(int argc, char *argv[]) {
         // ★控制台归档★：把 stderr 接进 Documents/latestlog.txt（启动时轮转、运行中超上限就地轮转）。
         // 接上之后，native 层（NSLog / a2_log_* / printf）与控制台的每一行都落文件，
         // 不再只存在于 Xcode / Console.app。放在 startSession 之前 —— 越早接上漏得越少。
-        [A2Log archiveStderr];
+        // ★顺序★：先 startSession（轮转 lastlog.txt 并打开句柄），再把 stderr dup2 到
+        //   同一个文件 —— 反过来会把 stderr 接到刚被改名成 .old 的那份上。
+        [A2Log startSession];
 
         // 再轮转日志（上一次会话留档为 lastlog.old.txt）。
         // 必须早于任何业务日志，否则上一轮的日志会被本轮内容污染。
-        [A2Log startSession];
+        [A2Log archiveStderr];   // stderr → 同一个 lastlog.txt（单文件模式）
 
         // ★接线★：native 侧的判据行（[RXPC]/[FRAME]/native 的 [A2-PAIRPIN]）
         // 经 a2_log_criterion → a2_log_session_sink 落进会话日志文件 lastlog.txt，

@@ -45,9 +45,10 @@
 
 static NSString *const kCurrentLogName  = @"lastlog.txt";
 static NSString *const kPreviousLogName = @"lastlog.old.txt";
-/// 控制台归档（stderr 的去处）与它的上一代。
-static NSString *const kConsoleLogName    = @"latestlog.txt";
-static NSString *const kConsoleLogOldName = @"latestlog.old.txt";
+/// ★单文件模式★：控制台归档（stderr 的去处）就是会话日志本身 ——
+/// 用户只要看一份，A2Log 行与 native/NSLog 行都写在 Documents/lastlog.txt。
+static NSString *const kConsoleLogName    = @"lastlog.txt";
+static NSString *const kConsoleLogOldName = @"lastlog.old.txt";
 
 /// 控制台归档的大小上限：到了就就地轮转。2 MiB 够放下一次会话的 native 判据行与控制台噪声。
 static const unsigned long long kConsoleLogCapBytes = 2ULL * 1024ULL * 1024ULL;
@@ -191,6 +192,10 @@ static void a2_log_console_write(NSString *text) {
 /// 超上限就地轮转：当前内容留档成 latestlog.old.txt（有界：≤ 上限），归档截断后继续写。
 /// ★调用前必须已持有队列★。
 static void a2_log_console_guard(void) {
+    // ★单文件模式★：会话日志与控制台归档是同一个文件，按大小就地截断会把另一路
+    //   刚写的行一起抹掉 ⇒ 这里不再做运行时轮转；只在启动时把 lastlog.txt 轮转成
+    //   lastlog.old.txt（见 a2_log_rotate / a2_log_console_open）。
+    return;
     if (gConsoleFd < 0) { return; }
     struct stat info;
     if (fstat(gConsoleFd, &info) != 0) { return; }
@@ -236,12 +241,11 @@ static void a2_log_console_open(void) {
     NSString *previous = a2_log_path_named(kConsoleLogOldName);
     if (!current || !previous) { return; }
 
-    if ([fm fileExistsAtPath:previous]) {
-        [fm removeItemAtPath:previous error:nil];
-    }
-    if ([fm fileExistsAtPath:current]) {
-        [fm moveItemAtPath:current toPath:previous error:nil];
-    }
+    // ★单文件模式★：轮转只在 a2_log_rotate（startSession）里做一次。
+    //   这里若再 move 一次，会把本轮刚建好的 lastlog.txt 挪成 .old，
+    //   而会话句柄仍指向被挪走的那份 ⇒ 两份又分叉。故此处只打开、不轮转。
+    (void)fm;
+    (void)previous;
     int fd = open(current.fileSystemRepresentation, O_WRONLY | O_CREAT | O_APPEND, 0644);
     if (fd < 0) { return; }
     if (dup2(fd, STDERR_FILENO) != STDERR_FILENO) {
@@ -324,9 +328,9 @@ void a2_log_session_sink(const char *utf8Line) {
 + (BOOL)exportCombinedLogToPath:(NSString *)destination error:(NSError **)error {
     // 折两份：① 会话日志（判据行的落点，页面显示的那一份）
     //           ② 控制台归档（stderr；native 层的 NSLog / a2_log_* 也在这里）
+    // ★单文件模式★：会话日志与控制台归档是同一个文件 ⇒ 只导一次，不再重复两段。
     NSArray<NSArray<NSString *> *> *sections = @[
-        @[ @"① 会话日志", [self currentLogPath] ],
-        @[ @"② 控制台归档", [self consoleLogPath] ],
+        @[ @"Air2 日志", [self currentLogPath] ],
     ];
 
     NSMutableString *body = [NSMutableString string];
@@ -363,7 +367,7 @@ void a2_log_session_sink(const char *utf8Line) {
         @"============================================================================\n"
         @"Air2 日志导出\n"
         @"导出时间：%@\n"
-        @"内容：① 本次会话日志（判据行的落点）② 控制台归档（stderr，native 层也在这里）\n"
+            @"内容：本次会话全部日志（A2Log 判据行 + native/NSLog 控制台输出，同一个文件）\n"
         @"判据行形如 [A2-PAIRPIN] / [RXPC] / [FRAME] / [MEM]，可直接 grep。\n"
         @"============================================================================\n\n",
         a2_log_timestamp()];

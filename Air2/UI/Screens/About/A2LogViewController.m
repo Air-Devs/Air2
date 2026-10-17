@@ -137,8 +137,8 @@
                 [self displayPath:console], consoleBody];
     }
     return @"暂无日志。\n\n本次会话还没有写过任何一行。启动器跑起来之后：\n"
-            "· Documents/lastlog.txt —— 会话日志（判据行 [A2-PAIRPIN]/[RXPC]/[FRAME]/[MEM] 都在这里）\n"
-            "· Documents/latestlog.txt —— 控制台归档（native 层裸写的 NSLog 只在这里）";
+            "· Documents/lastlog.txt —— 全部日志（判据行 + native/NSLog 输出都在这一份）\n"
+            "· Documents/lastlog.txt —— 全部日志（判据行 + native/NSLog 输出都在这一份）";
 }
 
 /// 两个文件的路径 + 大小 + 一句话说明。
@@ -146,11 +146,12 @@
 - (NSString *)metaText {
     NSString *session = [A2Log currentLogPath];
     NSString *console = [A2Log consoleLogPath];
+    // ★单文件模式★：控制台输出也进同一个 lastlog.txt（不再有 latestlog.txt）。
+    (void)console;
     return [NSString stringWithFormat:
-            @"会话日志：%@（%@）\n控制台归档：%@（%@）\n"
-            @"判据行形如 [A2-PAIRPIN] / [RXPC] / [FRAME] / [MEM]；右上角一次导出上面两份。",
-            [self displayPath:session], [self sizeTextForPath:session],
-            [self displayPath:console], [self sizeTextForPath:console]];
+            @"日志文件：%@（%@）\n"
+            @"A2Log 判据行与 native/NSLog 控制台输出都在这一份里；右上角可导出。",
+            [self displayPath:session], [self sizeTextForPath:session]];
 }
 
 - (NSString *)displayPath:(NSString *)path {
