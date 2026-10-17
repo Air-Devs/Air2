@@ -260,8 +260,7 @@ A2JITRegionProof a2_jit_prove_region_rwx(void *addr, size_t len,
     //   ⇒ 这里只读已有的映射/保护位，★不改写页保护、不写试探字节、不执行★。
     (void)mprotectRcOut;
     (void)errnoOut;
-    a2_jit_log("[A2JIT] self-proof 跳过（纯观测）：不 mprotect、不写、不执行 —— 
-               避免撤销调试器的可执行祝福（那会变成 SIGBUS 风暴并卡死建 VM）");
+    a2_jit_log("[A2JIT] self-proof 跳过（纯观测）：不 mprotect、不写、不执行 —— 避免撤销调试器的可执行祝福（否则会变成 SIGBUS 风暴并卡死建 VM）");
     return A2JITRegionProofInconclusive;
 }
 
