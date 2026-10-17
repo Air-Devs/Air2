@@ -184,6 +184,7 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
     BOOL jreFromUser = (selJRE.length > 0 &&
                         [[A2JavaRuntimeCatalog allDirectoryNames] containsObject:selJRE]);
     NSString *jreDir = jreFromUser ? selJRE : [A2JavaRuntimeCatalog defaultDirectoryName];
+    NSString *javaHome = [runtimesDir stringByAppendingPathComponent:jreDir];
     NSString *jreSource = jreFromInstance ? @"instance" : (jreFromUser ? @"user" : @"default");
     NSString *jreSourceWord = jreFromInstance
         ? @"实例设置"
