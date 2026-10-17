@@ -22,6 +22,7 @@
 #import "a2_jli_launch.h"     // ★[JLI-LAUNCH] dlopen(libjli) + JLI_Launch（默认入口）
 
 #include <stdlib.h>
+#include <limits.h>
 
 // ★ [RT-P1-SWITCH] 设置项读取统一收口：Air2 用 NSUserDefaults（本仓无旧线的
 //   $POJAV_HOME/launcher_preferences_v2.plist 机制；设置页「运行环境 · 启动链」写的也是它）。
@@ -424,17 +425,20 @@ int a2_launch_jvm_with_argv(int argc, const char *const argv[], A2LaunchInput in
     jint usedVer = 0;
     // ★全量探针(2026-10-17)★：把最终 argv 与环境一次性打出来，避免再来回猜。
     {
-        NSArray<NSString *> *opts = [bundle optionStrings];
-        a2_log_f(@"[A2JVM-DIAG] argv 共 %lu 条：", (unsigned long)opts.count);
-        for (NSUInteger i = 0; i < opts.count; i++) {
-            a2_log_f(@"[A2JVM-DIAG]   [%02lu] %s", (unsigned long)i, opts[i].UTF8String);
+        // optionStrings 是 C 数组（const char *const *），不是 NSArray —— 逐条打出来。
+        const char *const *opts = [bundle optionStrings];
+        int optCount = [bundle optionCount];
+        a2_log_f(@"[A2JVM-DIAG] argv 共 %d 条：", optCount);
+        for (int i = 0; i < optCount; i++) {
+            a2_log_f(@"[A2JVM-DIAG]   [%02d] %s", i, opts[i] ? opts[i] : "(null)");
         }
         a2_log_f(@"[A2JVM-DIAG] classpath=%s", builder.classpath.UTF8String ?: "");
         a2_log_f(@"[A2JVM-DIAG] mainClass=%s", builder.mainClass.UTF8String ?: "");
+        char cwdBuf[PATH_MAX] = {0};
+        (void)getcwd(cwdBuf, sizeof(cwdBuf));
         a2_log_f(@"[A2JVM-DIAG] env HOME=%s TMPDIR=%s JAVA_HOME=%s POJAV_HOME=%s cwd=%s",
                  getenv("HOME") ?: "", getenv("TMPDIR") ?: "",
-                 getenv("JAVA_HOME") ?: "", getenv("POJAV_HOME") ?: "",
-                 getcwd(NULL, 0) ?: "");
+                 getenv("JAVA_HOME") ?: "", getenv("POJAV_HOME") ?: "", cwdBuf);
     }
 
     int rc = a2_vm_create(libjvm, [bundle optionStrings], [bundle optionCount],
