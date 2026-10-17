@@ -475,6 +475,24 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     // ★实验开关(2026-10-17)★ 真机探针:卡在 JavaCalls::call_helper(VM 初始化期就在执行 Java 代码),
     //  头号嫌疑 = VM 在 initPhase 里构造自定义系统类加载器 ⇒ 默认★不下发★;
     //  需要时把偏好键 A2UseSystemClassLoader 置 YES 恢复(A2Entry 会退回反射 addURL,功能等价)。
+    // ★全量探针(2026-10-17)★ A2VMDiagAll(默认 YES) ⇒ 让 JVM 自己把初始化过程打出来：
+    //   · class+load/class+init：卡住时最后加载/初始化的类一目了然
+    //   · safepoint/gc：区分“卡在等锁”与“卡在 JIT/GC”
+    //   · PrintFlagsFinal：核对哪些参数真的生效了（例如 MirrorMappedCodeCache 是否存在）
+    //   定位完默认关。
+    {
+        id diagVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2VMDiagAll"];
+        BOOL diagAll = (diagVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2VMDiagAll"];
+        if (diagAll) {
+            [options addObject:@"-Xlog:class+load=info:stderr"];
+            [options addObject:@"-Xlog:class+init=debug:stderr"];
+            [options addObject:@"-Xlog:safepoint=info:stderr"];
+            [options addObject:@"-Xlog:gc=info:stderr"];
+            [options addObject:@"-XX:+UnlockDiagnosticVMOptions"];
+            [options addObject:@"-XX:+PrintFlagsFinal"];
+        }
+    }
+
     if ([NSUserDefaults.standardUserDefaults boolForKey:@"A2UseSystemClassLoader"]) {
         [options addObject:[NSString stringWithFormat:@"-Djava.system.class.loader=%@", A2LaunchGameClassLoaderName]];
     }

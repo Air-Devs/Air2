@@ -422,6 +422,21 @@ int a2_launch_jvm_with_argv(int argc, const char *const argv[], A2LaunchInput in
     JavaVM *vm = NULL;
     JNIEnv *env = NULL;
     jint usedVer = 0;
+    // ★全量探针(2026-10-17)★：把最终 argv 与环境一次性打出来，避免再来回猜。
+    {
+        NSArray<NSString *> *opts = [bundle optionStrings];
+        a2_log_f(@"[A2JVM-DIAG] argv 共 %lu 条：", (unsigned long)opts.count);
+        for (NSUInteger i = 0; i < opts.count; i++) {
+            a2_log_f(@"[A2JVM-DIAG]   [%02lu] %s", (unsigned long)i, opts[i].UTF8String);
+        }
+        a2_log_f(@"[A2JVM-DIAG] classpath=%s", builder.classpath.UTF8String ?: "");
+        a2_log_f(@"[A2JVM-DIAG] mainClass=%s", builder.mainClass.UTF8String ?: "");
+        a2_log_f(@"[A2JVM-DIAG] env HOME=%s TMPDIR=%s JAVA_HOME=%s POJAV_HOME=%s cwd=%s",
+                 getenv("HOME") ?: "", getenv("TMPDIR") ?: "",
+                 getenv("JAVA_HOME") ?: "", getenv("POJAV_HOME") ?: "",
+                 getcwd(NULL, 0) ?: "");
+    }
+
     int rc = a2_vm_create(libjvm, [bundle optionStrings], [bundle optionCount],
                           ignoreUnrecognized, &vm, &env, &usedVer);
     if (rc != 0) {
