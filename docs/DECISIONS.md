@@ -224,7 +224,11 @@
 
 ## ADR-011：原版下载走「国内镜像候选链 + 失败自动切源」，并发默认提到 6
 
-- **状态**：已接受（实现已落；★真机网速实测未做★，判定表见 `D:\CTF\_AIR2_MIRROR.md`）
+- **状态**：★已退役（2026-10-17 上游同步）★ —— 用户口径「下载要留上游的」：
+  上游 `origin/main` 的下载链（`A2GameInstaller` / `A2ContentSource` / `A2APIModDownloader` /
+  `A2ModPackInstaller` / `A2RemoteVersions`）一律照上游实现，本 ADR 的「Mojang 域名 → bmclapi2
+  候选展开」「安装并发默认 6」不再接线到任何下载器；`A2MirrorResolver` 改为上游自带的
+  MCIM（Modrinth / CurseForge CDN）版本。详见 `D:\CTF\_AIR2_SYNC.md`。以下为实现当时的原始记录。
 - **日期**：2026-10-17
 - **背景**：
   - 用户真机反馈：原版游戏资源（版本清单 / 依赖库 / 资源）下载**慢**。
