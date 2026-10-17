@@ -9,7 +9,6 @@
 #import "A2ZipReader.h"
 #import "A2DownloadEngine.h"
 #import "A2CurseForgeAPI.h"
-#import "A2MirrorResolver.h"
 #import "A2ModLoaderAPI.h"
 #import "A2ModLoaderInstaller.h"
 #import "A2GameInstaller.h"
@@ -488,20 +487,14 @@ static void A2Main(dispatch_block_t b) {
     }];
 }
 
-/// 单文件下载。整合包里的文件地址都是官方 CDN（Modrinth / ForgeCDN），
-/// 国内直连很慢甚至不通 —— 与 A2GameInstaller 同一套口径：
-/// ★候选展开只在这一个入口做一次★，调用方传进来的都是原始官方地址，
-/// 展开成「镜像优先 → 官方兜底」的候选链后交给下载引擎按序尝试。
 - (void)downloadFile:(A2ModPackFile *)file
                   to:(NSString *)dest
           completion:(void (^)(BOOL))completion {
 
     NSMutableArray<NSURL *> *urls = [NSMutableArray array];
     for (NSString *u in file.urls) {
-        for (NSString *candidate in [[A2MirrorResolver shared] candidateURLsForURL:u]) {
-            NSURL *url = [NSURL URLWithString:candidate];
-            if (url) [urls addObject:url];
-        }
+        NSURL *url = [NSURL URLWithString:u];
+        if (url) [urls addObject:url];
     }
     if (urls.count == 0) {
         completion(NO);

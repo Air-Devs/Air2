@@ -203,7 +203,17 @@ int main(int argc, const char *argv[]) {
         NSMutableArray<NSString *> *want8b = [want8 mutableCopy];
         [want8b replaceObjectAtIndex:1 withObject:@"-Xmx2048M"];   // 只改堆上限，与 j25 对齐
         NSMutableArray<NSString *> *j25NoGC = [j25 mutableCopy];
-        [j25NoGC removeObjectsInRange:NSMakeRange(8, 4)];         // 去掉 G1 那 4 条
+        // G1 组 = 以 -XX:+UnlockExperimentalVMOptions 起头的连续 4 条。
+        // ★按标记定位，不写死下标★：参数集一改（如撤掉四项封顶）写死的范围就越界崩溃，
+        // 而「去掉 G1 后与 Java 8 档一致」这条断言本身依然有效。
+        NSUInteger g1Start = [j25NoGC indexOfObject:@"-XX:+UnlockExperimentalVMOptions"];
+        ok(g1Start != NSNotFound, @"Java 17+ 档里能找到 G1 组起点（-XX:+UnlockExperimentalVMOptions）");
+        if (g1Start != NSNotFound && g1Start + 4 <= j25NoGC.count) {
+            [j25NoGC removeObjectsInRange:NSMakeRange(g1Start, 4)];
+        } else {
+            printf("FAIL  G1 组不足 4 条或找不到起点，无法比对（实际 %lu 条）\n",
+                   (unsigned long)j25NoGC.count);
+        }
         ok(ArrayEquals(j25NoGC, want8b),
            [NSString stringWithFormat:@"去掉 G1 4 条后与 Java 8 档逐项相同（实际：%@）", Join(j25NoGC)]);
 

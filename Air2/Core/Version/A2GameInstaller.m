@@ -24,44 +24,17 @@
 #import "A2Logger.h"
 #import "A2VersionIsolation.h"
 #import "A2ModLoaderInstaller.h"
-#import "A2MirrorResolver.h"
 #import "A2APIModDownloader.h"
 #import "A2Log.h"
 
-/// 官方版本清单地址（Mojang piston-meta）—— 镜像链的「原始地址」，
-/// 候选顺序由 A2MirrorResolver 决定（镜像优先 → 官方兜底）。
+/// 官方版本清单地址（Mojang piston-meta）
 static NSString *const kVersionManifestURL = @"https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
-/// 资源对象的官方根：资源索引里只给 hash，不给完整 URL，故这里必须自己拼。
-/// （★依赖库不在这里拼★ —— 库的完整 URL 由 manifest 的 downloads.artifact.url 给出。）
+/// 依赖库与资源的下载根
 static NSString *const kResourcesBaseURL = @"https://resources.download.minecraft.net";
+/// 依赖库根
+static NSString *const kLibrariesBaseURL = @"https://libraries.minecraft.net";
 
 static NSString *const kUserAgent = @"Air-Devs/Air2/0.1.0 (github.com/Air-Devs/Air2)";
-
-// ============================================================
-// [DL-CONC] 安装期批量下载（libraries / assets）的并发度
-// ------------------------------------------------------------
-// ★唯一调参点★：改这里的默认值即可，无需改动任何调用方。
-//   · 默认 6 —— 真机实测下 3 路仍把总耗时压在单条连接上
-//     （数千个 asset 的网络往返），6 路能把吞吐顶起来；
-//   · 建议范围 1..8（上限见 kA2InstallMaxConcurrency）；
-//   · 运行期亦可用 NSUserDefaults 键 "air2.install.concurrency" 覆盖，便于真机试参。
-// 背景：原实现把每个文件串成一条长龙（下完一个才发下一个），
-//   数千个 asset 的网络往返直接线性叠加成总耗时 —— 即用户说的
-//   「一个个下、一个要等一秒多」。改为 completion 驱动的有界并发流水线。
-// ============================================================
-static const NSInteger kA2InstallDefaultConcurrency = 6;
-static const NSInteger kA2InstallMaxConcurrency = 8;
-static NSString *const kA2InstallConcurrencyPrefKey = @"air2.install.concurrency";
-
-/// 解析本次安装实际使用的并发度：默认值 ← 偏好覆盖，并夹到 [1, 上限]
-static NSInteger A2InstallEffectiveConcurrency(void) {
-    NSInteger n = kA2InstallDefaultConcurrency;
-    NSNumber *pref = [[NSUserDefaults standardUserDefaults] objectForKey:kA2InstallConcurrencyPrefKey];
-    if ([pref isKindOfClass:NSNumber.class]) n = pref.integerValue;
-    if (n < 1) n = 1;
-    if (n > kA2InstallMaxConcurrency) n = kA2InstallMaxConcurrency;
-    return n;
-}
 
 static void A2Main(dispatch_block_t block) {
     if ([NSThread isMainThread]) block();
@@ -81,18 +54,6 @@ static void A2Main(dispatch_block_t block) {
 @property (nonatomic, strong) NSURLSession *session;
 @property (nonatomic, copy, nullable) void (^progressBlock)(A2InstallStage, double, NSString *);
 @property (nonatomic, copy, nullable) void (^completionBlock)(BOOL, NSError *);
-
-// [DL-CONC] 下载辅助（实现见 #pragma mark - 下载辅助）
-- (void)download:(NSArray<NSString *> *)urls
-              to:(NSString *)dest
-      stageLabel:(A2InstallStage)stage
-         message:(NSString *)message
-  reportIntraFile:(BOOL)reportIntraFile
-         thenRun:(void (^)(NSError * _Nullable))then;
-- (void)downloadBatch:(NSArray<NSArray<NSString *> *> *)items
-                stage:(A2InstallStage)stage
-          messageBase:(NSString *)base
-             thenRun:(void (^)(NSError * _Nullable))then;
 @end
 
 @implementation A2InstallRequest
@@ -147,9 +108,6 @@ static void A2Main(dispatch_block_t block) {
     [A2Log log:@"installer: 开始安装 mc=%@ 版本名=%@ 加载器=%@ 基底=%@ 目录=%@",
           request.mcVersion, request.versionName,
           request.loaderType ?: @"原版", self.baseVersionName, request.gameHome];
-    // ★[A2-MIRROR] 判据行★：镜像开关 + 判定依据（时区）+ 生效结论 + 镜像出处，
-    //   每次安装打一条，默认可见、可 grep（`grep '\[A2-MIRROR\]' lastlog.txt`）。
-    [A2Log log:@"[A2-MIRROR] %@", [[A2MirrorResolver shared] auditSummary]];
 
     if (self.reuseVanilla) {
         [A2Log log:@"installer: 原版 %@ 已存在，跳过原版下载直接叠加加载器", request.mcVersion];
@@ -186,103 +144,43 @@ static void A2Main(dispatch_block_t block) {
     [self installLoaderIfNeeded];
 }
 
-/// 版本清单的候选源：镜像优先 → 官方兜底。
-/// 顺序由 A2MirrorResolver 按「开关 / 优先级 / 是否大陆」决定；
-/// 关掉镜像或不在大陆时这里只剩官方一条 —— 即「默认国内才启用」。
-- (NSArray<NSString *> *)manifestCandidateURLs {
-    NSArray<NSString *> *cands =
-        [[A2MirrorResolver shared] candidateURLsForURL:kVersionManifestURL];
-    return cands.count > 0 ? cands : @[kVersionManifestURL];
-}
-
 - (void)fetchManifest {
-    [self fetchManifestFromCandidate:0 lastError:nil];
-}
-
-/// 依次尝试候选清单源。
-///
-/// 任一源失败（网络错 / 非 2xx / 不是 JSON / 清单里没有这个版本）就换下一个，
-/// 全部耗尽才报错 —— 即「镜像优先，失败自动切源（官方兜底）」。
-- (void)fetchManifestFromCandidate:(NSUInteger)index lastError:(NSError *)lastError {
-    NSArray<NSString *> *cands = [self manifestCandidateURLs];
-    if (index >= cands.count) {
-        [self failWithError:lastError ?: [NSError errorWithDomain:@"A2Installer" code:1
-            userInfo:@{NSLocalizedDescriptionKey: @"版本清单不可用：镜像与官方源均失败"}]];
-        return;
-    }
-
-    NSString *urlString = cands[index];
-    NSString *source = [A2MirrorResolver sourceLabelForURL:urlString];
-    [A2Log log:@"[A2-MIRROR] stage=manifest 候选=%lu/%lu source=%@ url=%@",
-          (unsigned long)(index + 1), (unsigned long)cands.count, source, urlString];
-
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
-                               [NSURL URLWithString:urlString]];
+                               [NSURL URLWithString:kVersionManifestURL]];
     req.timeoutInterval = 30;
     [req setValue:kUserAgent forHTTPHeaderField:@"User-Agent"];
 
-    __weak typeof(self) weakSelf = self;
     NSURLSessionDataTask *t = [_session dataTaskWithRequest:req
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
-        __strong typeof(weakSelf) self = weakSelf;
-        if (!self || self.cancelled) return;
+        if (self.cancelled) return;
+        if (error) { [self failWithError:error]; return; }
 
-        NSString *entryURL = nil;
-        NSError *attemptError = error;
-
-        if (!attemptError) {
-            // 先看状态码：镜像 404/5xx 时常回 HTML，先看码比让 JSON 解析报错更直接。
-            NSInteger code = [resp isKindOfClass:NSHTTPURLResponse.class]
-                ? ((NSHTTPURLResponse *)resp).statusCode : 200;
-            NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data ?: [NSData data]
-                                                                 options:0 error:nil];
-            if (code < 200 || code >= 300) {
-                attemptError = [self errorWithMessage:
-                    [NSString stringWithFormat:@"HTTP %ld（清单源 %@）", (long)code, source]];
-            } else if (![json isKindOfClass:NSDictionary.class]) {
-                attemptError = [self errorWithMessage:
-                    [NSString stringWithFormat:@"清单不是 JSON 字典（清单源 %@）", source]];
-            } else {
-                entryURL = [self versionJSONURLInManifest:json];
-                if (entryURL.length == 0) {
-                    attemptError = [self errorWithMessage:
-                        [NSString stringWithFormat:@"清单里没有版本 %@（清单源 %@）",
-                         self.request.mcVersion, source]];
-                }
-            }
-        }
-
-        if (entryURL.length > 0) {
-            [A2Log log:@"[A2-MIRROR] stage=manifest 采用 source=%@ url=%@", source, urlString];
-            [self report:A2InstallStageFetchManifest progress:1 message:@"版本清单已获取"];
-            [self report:A2InstallStageDownloadJSON progress:0 message:@"正在下载版本信息…"];
-            [self downloadVersionJSON:entryURL];
+        NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+        if (![json isKindOfClass:NSDictionary.class]) {
+            [self failWithMessage:@"版本清单格式异常"];
             return;
         }
 
-        [A2Log log:@"[A2-MIRROR] stage=manifest 失败切源 source=%@ 原因=%@ url=%@",
-              source, attemptError.localizedDescription ?: @"(未知)", urlString];
-        [self fetchManifestFromCandidate:index + 1 lastError:attemptError];
+        // 找到目标版本的清单 URL
+        NSArray *versions = json[@"versions"];
+        NSString *url = nil;
+        for (NSDictionary *v in versions) {
+            if ([v[@"id"] isEqualToString:self.request.mcVersion]) {
+                url = v[@"url"];
+                break;
+            }
+        }
+        if (!url.length) {
+            [self failWithMessage:[NSString stringWithFormat:
+                                   @"未找到版本 %@", self.request.mcVersion]];
+            return;
+        }
+
+        [self report:A2InstallStageFetchManifest progress:1 message:@"版本清单已获取"];
+        [self report:A2InstallStageDownloadJSON progress:0 message:@"正在下载版本信息…"];
+        [self downloadVersionJSON:url];
     }];
     [t resume];
-}
-
-/// 从清单里取出目标版本的「版本 JSON」地址；没有则返回 nil。
-- (nullable NSString *)versionJSONURLInManifest:(NSDictionary *)json {
-    NSArray *versions = json[@"versions"];
-    if (![versions isKindOfClass:NSArray.class]) return nil;
-    for (NSDictionary *v in versions) {
-        if (![v isKindOfClass:NSDictionary.class]) continue;
-        if (![v[@"id"] isEqualToString:self.request.mcVersion]) continue;
-        id u = v[@"url"];
-        return [u isKindOfClass:NSString.class] ? u : nil;
-    }
-    return nil;
-}
-
-- (NSError *)errorWithMessage:(NSString *)message {
-    return [NSError errorWithDomain:@"A2Installer" code:1
-                           userInfo:@{NSLocalizedDescriptionKey: message}];
 }
 
 - (void)downloadVersionJSON:(NSString *)url {
@@ -291,8 +189,7 @@ static void A2Main(dispatch_block_t block) {
     // 加载器后面会读它、并把它的 jar 硬链到自己的版本目录。
     NSString *dest = [path versionJSONPath:self.baseVersionName];
 
-    [self logStage:@"stage=version-json" sample:url];
-    [self download:@[url]
+    [self download:[NSArray arrayWithObject:url]
                 to:dest
         stageLabel:A2InstallStageDownloadJSON
            message:@"正在下载版本信息"
@@ -325,7 +222,6 @@ static void A2Main(dispatch_block_t block) {
     }
 
     [self report:A2InstallStageDownloadJar progress:0 message:@"正在下载客户端…"];
-    [self logStage:@"stage=client-jar" sample:jarURL];
     [self download:@[jarURL] to:jarDest stageLabel:A2InstallStageDownloadJar
            message:@"正在下载客户端"
            thenRun:^(NSError *error) {
@@ -372,7 +268,6 @@ static void A2Main(dispatch_block_t block) {
         return;
     }
 
-    [self logStage:@"stage=libraries" sample:pending.firstObject.firstObject];
     [self downloadBatch:pending
                   stage:A2InstallStageDownloadLibraries
             messageBase:@"正在下载依赖库"
@@ -439,7 +334,6 @@ static void A2Main(dispatch_block_t block) {
                            [indexID stringByAppendingPathExtension:@"json"]];
 
     [self report:A2InstallStageDownloadAssets progress:0 message:@"正在下载资源索引…"];
-    [self logStage:@"stage=assets-index" sample:indexURL];
     [self download:@[indexURL] to:indexPath stageLabel:A2InstallStageDownloadAssets
            message:@"正在下载资源索引"
            thenRun:^(NSError *error) {
@@ -488,7 +382,6 @@ static void A2Main(dispatch_block_t block) {
         return;
     }
 
-    [self logStage:@"stage=assets" sample:pending.firstObject.firstObject];
     [self downloadBatch:pending
                   stage:A2InstallStageDownloadAssets
             messageBase:[NSString stringWithFormat:@"正在下载资源（%lu 个文件）",
@@ -679,48 +572,6 @@ static void A2Main(dispatch_block_t block) {
         [d writeToFile:configPath atomically:YES];
     }
 
-    // ========================================================================
-    // ★[A2-INSTANCE] 实例落位判据行（安装侧）★
-    // ------------------------------------------------------------------------
-    // 判据 = 启动链真的要打开的那两个文件：
-    //          <gameHome>/versions/<版本名>/<版本名>.json
-    //          <gameHome>/versions/<版本名>/<版本名>.jar
-    //   两者都走 A2GamePath 的同一处计算（与下载落点、与启动读取同一处，
-    //   不在这里另拼一份路径）。
-    // 带加载器时另查基底版本：加载器 json 以 inheritsFrom 指向它、
-    //   它的 jar 被硬链到加载器版本目录 —— 缺了照样起不来。
-    // ★判据为假 ⇒ 如实报失败★：报「安装完成」却不在 versions/ 里留下可用
-    //   实例，正是本单要消灭的半成品形态（包内 versions/ = 0 的成因）。
-    // ========================================================================
-    NSFileManager *fm = NSFileManager.defaultManager;
-    NSString *instanceJSON = [path versionJSONPath:self.request.versionName];
-    NSString *instanceJar = [path versionJarPath:self.request.versionName];
-    BOOL jsonExists = [fm fileExistsAtPath:instanceJSON];
-    BOOL jarExists = [fm fileExistsAtPath:instanceJar];
-    BOOL instanceOK = jsonExists && jarExists;
-
-    BOOL baseOK = YES;
-    NSString *baseField = @"";
-    if (![self.baseVersionName isEqualToString:self.request.versionName]) {
-        baseOK = [fm fileExistsAtPath:[path versionJSONPath:self.baseVersionName]]
-              && [fm fileExistsAtPath:[path versionJarPath:self.baseVersionName]];
-        baseField = [NSString stringWithFormat:@" base=%@ baseExists=%d",
-                     self.baseVersionName, baseOK ? 1 : 0];
-    }
-
-    // ★可 grep 的判据行（默认可见）★
-    [A2Log log:@"[A2-INSTANCE] id=%@ jar=%@ json=%@ exists=%d stage=install assets=%@ libraries=%@%@",
-     self.request.versionName, instanceJar, instanceJSON, instanceOK ? 1 : 0,
-     [path assetsHome], [path librariesHome], baseField];
-
-    if (!instanceOK || !baseOK) {
-        [self failWithMessage:[NSString stringWithFormat:
-            @"安装收尾校验未通过：versions/%@ 缺 json 或 jar（json=%d jar=%d）%@",
-            self.request.versionName, jsonExists ? 1 : 0, jarExists ? 1 : 0,
-            baseOK ? @"" : [NSString stringWithFormat:@"，且基底 %@ 不完整", self.baseVersionName]]];
-        return;
-    }
-
     [self report:A2InstallStageFinalize progress:1 message:@"安装完成"];
     [A2Log log:@"installer: 安装完成 %@", self.request.versionName];
     if (self.completionBlock) self.completionBlock(YES, nil);
@@ -728,83 +579,32 @@ static void A2Main(dispatch_block_t block) {
 
 #pragma mark - 下载辅助
 
-#pragma mark 镜像链
-
-/// 单个地址 → 候选链（镜像优先 → 官方兜底；关掉镜像时只有官方一条）。
-///
-/// ★只给判据行用★：真正的候选展开发生在 `download:…` 里（唯一入口）。
-/// 调用方一律把 manifest 里的**原始官方地址**交给 `download:`，
-/// 若这里再展开一次，下载请求的候选链就会变成 [镜像, 官方, 镜像, 官方]。
-- (NSArray<NSString *> *)candidatesForURL:(NSString *)url {
-    NSArray<NSString *> *cands = [[A2MirrorResolver shared] candidateURLsForURL:url];
-    return cands.count > 0 ? cands : @[url];
-}
-
-/// 阶段级判据行：本阶段实际会用的源（镜像 / 官方）+ 候选条数 + 样本地址。
-///
-/// `stage` 传进来的就是完整判据 token（如 `stage=libraries`）—— 这样
-/// 「哪些阶段会打源判据」在源码里可 grep（`grep 'stage='` 一眼看全），
-/// 编译进包后也是一条完整字面量（包内自证可直接扫到）。
-///
-/// 每阶段一条而不是每文件一条 —— 库 / 资源阶段的文件数以千计，
-/// 逐条打会把日志刷爆，反而看不出「用的哪个源」。
-- (void)logStage:(NSString *)stage sample:(NSString *)url {
-    NSArray<NSString *> *cands = [self candidatesForURL:url];
-    NSString *first = cands.firstObject ?: @"";
-    [A2Log log:@"[A2-MIRROR] %@ 首选=%@ source=%@ 候选=%lu 样本=%@",
-          stage, first, [A2MirrorResolver sourceLabelForURL:first],
-          (unsigned long)cands.count, url];
-}
-
-#pragma mark 单文件 / 批量
-
-/// 单文件下载（带校验、断点、镜像）。阶段内进度按该文件字节推进。
+/// 单文件下载（带校验、断点、镜像）
 - (void)download:(NSArray<NSString *> *)urls
               to:(NSString *)dest
       stageLabel:(A2InstallStage)stage
          message:(NSString *)message
-         thenRun:(void (^)(NSError * _Nullable))then {
-    [self download:urls to:dest stageLabel:stage message:message
-   reportIntraFile:YES thenRun:then];
-}
-
-/// 单文件下载核心。
-/// @param reportIntraFile YES=用本文件字节数推进阶段进度（单文件阶段：json / jar / 索引）；
-///                        NO =不推进（批量阶段：进度由 downloadBatch: 按文件数推进，
-///                             否则并行多文件各自的 0..1 会让进度条来回乱跳）。
-- (void)download:(NSArray<NSString *> *)urls
-              to:(NSString *)dest
-      stageLabel:(A2InstallStage)stage
-         message:(NSString *)message
-  reportIntraFile:(BOOL)reportIntraFile
          thenRun:(void (^)(NSError * _Nullable))then {
 
     if (self.cancelled) return;
 
     A2DownloadRequest *req = [A2DownloadRequest new];
     NSMutableArray<NSURL *> *list = [NSMutableArray array];
-    // ★[A2-MIRROR] 镜像链的唯一入口★：调用方（版本 json / jar / 索引 / 库 / 资源）
-    //   传进来的都是 manifest 里的官方地址，在这里统一展开成「镜像优先 → 官方兜底」
-    //   的候选链；引擎按序尝试，前一个候选失败（退避重试耗尽）自动换下一个。
     for (NSString *u in urls) {
-        for (NSString *c in [self candidatesForURL:u]) {
-            NSURL *url = [NSURL URLWithString:c];
-            if (url) [list addObject:url];
-        }
+        NSURL *url = [NSURL URLWithString:u];
+        if (url) [list addObject:url];
     }
     req.candidateURLs = list;
     req.destinationPath = dest;
     req.allowZipFallbackCheck = YES;
 
     __weak typeof(self) weakSelf = self;
-    // [DL-CONC] 累计值改为【每次调用独立】。旧实现用函数内 static：
-    //   批量下载时该 static 被所有文件共用 ⇒ 累计值跨文件串味、进度瞬间顶到 1。
-    __block int64_t acc = 0;
     [[A2DownloadEngine sharedClient] startRequest:req
         progress:^(int64_t delta, int64_t total) {
-        if (!reportIntraFile) return;
         __strong typeof(weakSelf) self = weakSelf;
         if (!self || self.cancelled || total <= 0) return;
+        // 用累计值算阶段进度
+        static int64_t acc = 0;
         acc += delta;
         if (acc < 0) acc = 0;
         double p = MIN(1.0, (double)acc / (double)total);
@@ -818,97 +618,53 @@ static void A2Main(dispatch_block_t block) {
     }];
 }
 
-/// 批量下载 —— [DL-CONC] completion 驱动的有界并发流水线。
-///
-/// 原实现「逐个串行」：一个文件下完才发下一个 ⇒ N 个文件的网络往返线性叠加，
-/// 数千 asset 时即用户说的「一个个下、一个要等一秒多」。
-///
-/// 现实现：始终维持最多 A2InstallEffectiveConcurrency() 个在途下载，任一完成即从
-/// 队列补位，全程由 completion 回调驱动 —— 无 sleep、无轮询。
-/// · 调度状态（游标/计数）只在串行队列 sched 上访问，故无需额外加锁；
-/// · 进度按「已完成文件数 / 总数」单调推进，不随各文件快慢乱跳；
-/// · 单文件失败不中断整体（依赖库含可选组件），与原行为一致；
-/// · 取消沿用 self.cancelled：不再发起新任务，在途任务自然收尾。
+/// 批量下载（逐个串行，避免并发过高被限流）
 - (void)downloadBatch:(NSArray<NSArray<NSString *> *> *)items
                 stage:(A2InstallStage)stage
           messageBase:(NSString *)base
              thenRun:(void (^)(NSError * _Nullable))then {
 
-    NSUInteger total = items.count;
-    if (total == 0) {
-        [self report:stage progress:1 message:base];
-        if (then) then(nil);
-        return;
-    }
-
-    NSInteger maxConcurrent = A2InstallEffectiveConcurrency();
-    [A2Log log:@"[DL-CONC] 批量下载开始: %lu 个文件, 并发度=%ld, 阶段=%ld",
-          (unsigned long)total, (long)maxConcurrent, (long)stage];
-
-    dispatch_queue_t sched = dispatch_queue_create("dev.airdevs.air2.installer.batch",
-                                                   DISPATCH_QUEUE_SERIAL);
-    __block NSUInteger nextIndex = 0;   // 下一个待发起的下标
-    __block NSUInteger completed = 0;   // 已收尾（成功+失败）文件数
+    __block NSUInteger index = 0;
+    __block NSUInteger total = items.count;
     __block NSUInteger failed = 0;
-    __block NSUInteger inFlight = 0;    // 在途下载数
-    __block BOOL finished = NO;
 
+    __block void (^next)(void) = nil;
     __weak typeof(self) weakSelf = self;
-    __block void (^pump)(void) = nil;   // 补位调度器（仅在 sched 上执行）
 
-    pump = ^{
+    next = ^{
         __strong typeof(weakSelf) self = weakSelf;
-        if (!self || finished) return;
-        if (self.cancelled) return;     // 取消：停止发起新任务（在途任务自会回调收尾）
-
-        // 把在途窗口补满
-        while (inFlight < (NSUInteger)maxConcurrent && nextIndex < total) {
-            NSArray<NSString *> *pair = items[nextIndex];
-            nextIndex++;
-
-            NSString *url = pair.count > 0 ? pair[0] : nil;
-            NSString *dest = pair.count > 1 ? pair[1] : nil;
-            if (!url.length || !dest.length) {
-                completed++;
-                failed++;
-                [self report:stage progress:(double)completed / (double)total
-                     message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
-                              base, (unsigned long)completed, (unsigned long)total]];
-                continue;
-            }
-
-            inFlight++;
-            NSUInteger ordinal = MIN(completed + inFlight, total);
-            [self download:@[url] to:dest stageLabel:stage
-                   message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
-                            base, (unsigned long)ordinal, (unsigned long)total]
-            reportIntraFile:NO
-                   thenRun:^(NSError *error) {
-                dispatch_async(sched, ^{
-                    __strong typeof(weakSelf) s2 = weakSelf;
-                    if (!s2) return;
-                    if (error) failed++;
-                    completed++;
-                    if (inFlight > 0) inFlight--;
-                    [s2 report:stage progress:(double)completed / (double)total
-                         message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
-                                  base, (unsigned long)completed, (unsigned long)total]];
-                    if (pump) pump();
-                });
-            }];
-        }
-
-        // 全部收尾 → 回调（单文件失败不视为整体失败，与旧行为一致）
-        if (completed >= total && !finished) {
-            finished = YES;
-            [A2Log log:@"[DL-CONC] 批量下载结束: %lu 个文件, 失败=%lu",
-                  (unsigned long)total, (unsigned long)failed];
+        if (!self || self.cancelled) return;
+        if (index >= total) {
             if (then) then(nil);
-            pump = nil;   // 打断 pump 的自持有，避免泄漏
+            next = nil;
+            return;
         }
+
+        NSArray<NSString *> *pair = items[index];
+        NSString *url = pair[0];
+        NSString *dest = pair[1];
+        NSUInteger currentIndex = index;
+
+        [self download:@[url] to:dest stageLabel:stage
+               message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
+                        base, (unsigned long)(currentIndex + 1), (unsigned long)total]
+               thenRun:^(NSError *error) {
+            __strong typeof(weakSelf) self = weakSelf;
+            if (!self || self.cancelled) return;
+
+            // 单个文件失败不中断整体 —— 依赖库里有可选组件，
+            // 下载不到不影响启动
+            if (error) failed++;
+
+            index++;
+            [self report:stage progress:(double)index / (double)total
+                 message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
+                          base, (unsigned long)index, (unsigned long)total]];
+            if (next) next();
+        }];
     };
 
-    dispatch_async(sched, ^{ if (pump) pump(); });
+    next();
 }
 
 #pragma mark - 回调
@@ -922,7 +678,8 @@ static void A2Main(dispatch_block_t block) {
 }
 
 - (void)failWithMessage:(NSString *)msg {
-    [self failWithError:[self errorWithMessage:msg]];
+    [self failWithError:[NSError errorWithDomain:@"A2Installer" code:1
+                                        userInfo:@{NSLocalizedDescriptionKey: msg}]];
 }
 
 - (void)failWithError:(NSError *)error {

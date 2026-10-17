@@ -41,7 +41,6 @@
 #import "A2ResourceCard.h"
 #import "A2TextField.h"
 #import "A2PaginationBar.h"
-#import "A2SegmentedControl.h"
 #import "A2Log.h"
 #import "A2Metrics.h"
 #import "A2ModLoaderAPI.h"
@@ -88,8 +87,7 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
 @property (nonatomic, assign) BOOL filterExpanded;
 @property (nonatomic, strong) NSMutableArray<UILabel *> *sectionLabels;
 
-/// MD3 分段按钮（原为 UISegmentedControl，用户批注：搜索源要 MD3 风格）
-@property (nonatomic, strong) A2SegmentedControl *platformControl;
+@property (nonatomic, strong) UISegmentedControl *platformControl;
 @property (nonatomic, copy) NSArray<NSNumber *> *platformOptions;
 
 @property (nonatomic, strong) UIStackView *categoryChipsStack;
@@ -148,8 +146,6 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     // 平台默认取记住的那个；若它不支持本资源大类（如存档 + Modrinth）则退回首个支持的平台。
     _platform = [self initialPlatform];
     _source = [A2ContentSource sourceForPlatform:_platform];
-    // 分段按钮的项由此列表生成，构建侧栏前必须就绪（否则控件零项 = 死行）
-    _platformOptions = [self supportedPlatforms];
 
     // 布局对照 ZL2 的 SearchAssetsScreen：
     //   Row { ResultListLayout(weight=7)  SearchFilter(weight=3) }
@@ -216,9 +212,22 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
 
 - (void)selectPlatformControlForPlatform:(A2ContentPlatform)platform {
     NSInteger idx = [self indexForPlatform:platform];
-    if (idx >= 0 && idx < (NSInteger)_platformOptions.count) {
-        _platformControl.selectedIndex = idx;
+    if (idx >= 0 && idx < (NSInteger)_platformControl.numberOfSegments) {
+        _platformControl.selectedSegmentIndex = idx;
     }
+}
+
+- (void)platformControlChanged {
+    NSInteger idx = _platformControl.selectedSegmentIndex;
+    if (idx < 0 || idx >= (NSInteger)_platformOptions.count) return;
+    NSNumber *pickedNumber = _platformOptions[idx];
+    A2ContentPlatform picked = (A2ContentPlatform)pickedNumber.integerValue;
+    A2ContentPlatform previous = self.platform;
+    if (picked == previous) return;
+
+    // Key 是内置的，两个平台都开箱可用，不需要任何拦截。
+    (void)previous;
+    [self applyPlatform:picked remember:YES];
 }
 
 /// 平台切换的实际生效：记忆选择 + 重建分类 + 重载结果。
@@ -310,7 +319,9 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
 
     // ---- 平台切换 ----
     _platformControl = [self makePlatformControl];
+    _platformControl.selectedSegmentIndex = (_platform == A2ContentPlatformCurseForge) ? 1 : 0;
     [stack addArrangedSubview:[self labeledBlock:@"平台" content:_platformControl]];
+    _platformControl.translatesAutoresizingMaskIntoConstraints = NO;
 
     // ---- 排序 ----
     _sortChipsStack = [self horizontalChipStack];
@@ -433,20 +444,17 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     return scroll;
 }
 
-/// 平台切换控件。MD3 分段按钮 —— 全站同一套控件，
-/// 不再用 iOS 原生 UISegmentedControl（用户批注：搜索源要 MD3 风格）。
-- (A2SegmentedControl *)makePlatformControl {
+/// 平台切换控件
+- (UISegmentedControl *)makePlatformControl {
     NSMutableArray<NSString *> *titles = [NSMutableArray array];
     for (NSNumber *n in _platformOptions) {
         [titles addObject:A2PlatformDisplayName((A2ContentPlatform)n.integerValue)];
     }
-    A2SegmentedControl *c = [[A2SegmentedControl alloc] initWithTitles:titles];
-    // 初始选中项必须按「本页支持的平台列表」折算，不能假定 Modrinth 一定在项 0
-    c.selectedIndex = [self indexForPlatform:_platform];
-    __weak typeof(self) weakSelf = self;
-    c.onSegmentChange = ^(NSInteger index) {
-        [weakSelf platformChanged:index];
-    };
+    UISegmentedControl *c = [[UISegmentedControl alloc] initWithItems:titles];
+    c.selectedSegmentIndex = 0;
+    [c addTarget:self action:@selector(platformChanged)
+        forControlEvents:UIControlEventValueChanged];
+    [c.heightAnchor constraintEqualToConstant:32].active = YES;
     return c;
 }
 
@@ -471,20 +479,25 @@ static NSString *A2PlatformDisplayName(A2ContentPlatform platform) {
 
 #pragma mark - 筛选交互
 
-/// 侧栏的平台切换。index 来自 MD3 分段按钮的 onSegmentChange。
-/// 切换平台后分类体系不同，需要清空已选分类并重新拉取
-///（记忆选择 + 重建分类 + 重载统一走 applyPlatform:remember:）。
-- (void)platformChanged:(NSInteger)idx {
+/// 侧栏的平台切换。
+/// 切换平台后分类体系不同，需要清空已选分类并重新拉取。
+- (void)platformChanged {
+    NSInteger idx = _platformControl.selectedSegmentIndex;
     if (idx < 0 || idx >= (NSInteger)_platformOptions.count) return;
 
     A2ContentPlatform picked = (A2ContentPlatform)_platformOptions[idx].integerValue;
     if (picked == _platform) return;
 
+    _platform = picked;
+    _source = [A2ContentSource sourceForPlatform:picked];
+    [A2ContentSource setPreferredPlatform:picked];
+
     // 分类标识两家不通用，切换后清空
     [_selectedCategories removeAllObjects];
     [self clearCategoryChipSelection];
 
-    [self applyPlatform:picked remember:YES];
+    [self loadCategories];
+    [self reload];
 }
 
 - (void)resetAllFilters {
@@ -945,7 +958,12 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
         label.textColor = t.cOnSurfaceVariant;
     }
 
-    // 平台分段按钮（A2SegmentedControl）自行监听主题变化并重绘，这里无需再设。
+    _platformControl.selectedSegmentTintColor = t.cPrimary;
+    _platformControl.tintColor = t.cOnSurfaceVariant;
+    [_platformControl setTitleTextAttributes:@{NSForegroundColorAttributeName: t.cOnSurfaceVariant}
+                                    forState:UIControlStateNormal];
+    [_platformControl setTitleTextAttributes:@{NSForegroundColorAttributeName: t.cOnPrimary}
+                                    forState:UIControlStateSelected];
 
     [_resetButton setTitleColor:t.cPrimary forState:UIControlStateNormal];
     _resetButton.layer.borderColor = t.cOutlineVariant.CGColor;

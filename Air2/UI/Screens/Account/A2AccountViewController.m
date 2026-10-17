@@ -290,11 +290,12 @@ didFinishPickingMediaWithInfo:(NSDictionary<UIImagePickerControllerInfoKey, id> 
                               message:acc.typeDisplayName];
 
     // 设置皮肤 —— 离线账号也能用（拉不到远端材质，改用本地图）
-    [sheet addAction:[UIAlertAction actionWithTitle:@"设置皮肤"
-                                             style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *a) {
+    [sheet addOptionWithTitle:@"设置皮肤"
+                     selected:NO
+                  destructive:NO
+                      handler:^{
         [self presentSkinPickerForAccount:acc];
-    }]];
+    }];
 
     if (acc.type != A2AccountTypeOffline) {
         [sheet addOptionWithTitle:@"复制 UUID"
