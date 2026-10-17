@@ -29,18 +29,73 @@ static NSString *const kMCIMMirrorRoot = @"https://mod.mcimirror.top";
 /// 可被镜像替换的 CDN 域名
 ///   https://edge.forgecdn.net   → CurseForge 的文件 CDN
 ///   https://cdn.modrinth.com    → Modrinth 的文件 CDN
-static NSArray<NSString *> *MirrorableHolders(void) {
-    static NSArray<NSString *> *holders = nil;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        holders = @[
-            @"https://edge.forgecdn.net",
-            @"https://cdn.modrinth.com",
-            // CurseForge 有时用 media 域名分发
-            @"https://media.forgecdn.net",
-        ];
-    });
-    return holders;
+/// 镜像规则。
+///
+/// 两种替换方式，必须区分 —— 这是之前漏掉的：
+///
+///  **前缀替换**（MCIM）
+///    https://cdn.modrinth.com/xxx → https://mod.mcimirror.top/xxx
+///    域名换了，路径不变。
+///
+///  **路径重映射**（BMCLAPI）
+///    BMCLAPI 的路径结构完全不同，不能只换域名：
+///      https://piston-meta.mojang.com/mc/game/version_manifest_v2.json
+///        → https://bmclapi2.bangbang93.com/mc/game/version_manifest_v2.json
+///      https://launchermeta.mojang.com/mc/game/version_manifest.json
+///        → https://bmclapi2.bangbang93.com/mc/game/version_manifest.json
+///      https://piston-data.mojang.com/v1/objects/xx/yy
+///        → https://bmclapi2.bangbang93.com/v1/objects/xx/yy
+///      https://libraries.minecraft.net/org/xx/yy.jar
+///        → https://bmclapi2.bangbang93.com/maven/org/xx/yy.jar   ← 注意加了 /maven
+///      https://resources.download.minecraft.net/ab/abcdef
+///        → https://bmclapi2.bangbang93.com/assets/ab/abcdef       ← 注意加了 /assets
+///
+/// 这几条规则来自 BMCLAPI 的官方文档与实际抓包验证。
+/// 写错任何一条都会导致文件 404 或下到错的内容。
+typedef struct {
+    const char *prefix;       ///< 原始 URL 前缀
+    const char *replacement;  ///< 替换后的前缀
+} A2MirrorRule;
+
+static const A2MirrorRule kMirrorRules[] = {
+    // ---- MCIM：mod 平台 CDN（只换域名）----
+    { "https://cdn.modrinth.com",     "https://mod.mcimirror.top" },
+    { "https://edge.forgecdn.net",    "https://mod.mcimirror.top" },
+    { "https://media.forgecdn.net",   "https://mod.mcimirror.top" },
+
+    // ---- BMCLAPI：游戏本体与 Mojang 资源 ----
+    { "https://launchermeta.mojang.com", "https://bmclapi2.bangbang93.com" },
+    { "https://piston-meta.mojang.com",  "https://bmclapi2.bangbang93.com" },
+    { "https://piston-data.mojang.com",  "https://bmclapi2.bangbang93.com" },
+    // 注意这两条路径要加段，不能只换域名
+    { "https://libraries.minecraft.net",              "https://bmclapi2.bangbang93.com/maven" },
+    { "https://resources.download.minecraft.net",     "https://bmclapi2.bangbang93.com/assets" },
+
+    // ---- BMCLAPI：加载器 ----
+    { "https://meta.fabricmc.net",    "https://bmclapi2.bangbang93.com/fabric-meta" },
+    { "https://meta.quiltmc.org",     "https://bmclapi2.bangbang93.com/quilt-meta" },
+    { "https://maven.minecraftforge.net", "https://bmclapi2.bangbang93.com/maven" },
+    { "https://maven.neoforged.net/releases", "https://bmclapi2.bangbang93.com/maven" },
+};
+
+static size_t kMirrorRuleCount = sizeof(kMirrorRules) / sizeof(kMirrorRules[0]);
+
+/// 把 URL 按规则表映射成镜像地址。不匹配返回 nil。
+static NSString *A2MirrorURLFor(NSString *url) {
+    for (size_t i = 0; i < kMirrorRuleCount; i++) {
+        NSString *prefix = [NSString stringWithUTF8String:kMirrorRules[i].prefix];
+        if (![url hasPrefix:prefix]) continue;
+
+        NSString *rest = [url substringFromIndex:prefix.length];
+        NSString *replacement = [NSString stringWithUTF8String:kMirrorRules[i].replacement];
+        return [replacement stringByAppendingString:rest];
+    }
+    return nil;
+}
+
+/// 该地址是否可镜像
+static BOOL A2IsMirrorable(NSString *url) {
+    return A2MirrorURLFor(url) != nil;
 }
 
 @implementation A2MirrorResolver
@@ -97,21 +152,12 @@ static NSArray<NSString *> *MirrorableHolders(void) {
 
 + (BOOL)isMirrorableURL:(NSString *)url {
     if (url.length == 0) return NO;
-    for (NSString *holder in MirrorableHolders()) {
-        if ([url hasPrefix:holder]) return YES;
-    }
-    return NO;
+    return A2IsMirrorable(url);
 }
 
 /// 把 https://edge.forgecdn.net/xxx 替换成 https://mod.mcimirror.top/xxx
 + (nullable NSString *)mirroredURLFor:(NSString *)url {
-    for (NSString *holder in MirrorableHolders()) {
-        if ([url hasPrefix:holder]) {
-            return [url stringByReplacingCharactersInRange:
-                    NSMakeRange(0, holder.length) withString:kMCIMMirrorRoot];
-        }
-    }
-    return nil;
+    return A2MirrorURLFor(url);
 }
 
 - (NSArray<NSString *> *)candidateURLsForURL:(NSString *)url {

@@ -570,6 +570,11 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
         [_logOutput appendProgress:[NSString stringWithFormat:@"%@ %@", stageName, message]];
     }
 
+    // 进度条上显示速度 —— 用户最关心"现在下得快不快"
+    if (message.length > 0) {
+        _progressBar.detailText = message;
+    }
+
     double total = ((double)stage + progress) / (double)A2InstallStageCount;
     [_ring setProgress:total animated:YES];
     _ring.centerText = [NSString stringWithFormat:@"%.0f%%", total * 100];

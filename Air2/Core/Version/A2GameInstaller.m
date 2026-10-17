@@ -145,8 +145,13 @@ static void A2Main(dispatch_block_t block) {
 }
 
 - (void)fetchManifest {
+    // 版本清单也走镜像 —— 国内直连 piston-meta 很慢，
+    // 这一步是安装的第一个请求，卡在这里最影响观感
+    NSString *manifestURL = [[A2MirrorResolver shared]
+                             candidateURLsForURL:kVersionManifestURL].firstObject
+                         ?: kVersionManifestURL;
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
-                               [NSURL URLWithString:kVersionManifestURL]];
+                               [NSURL URLWithString:manifestURL]];
     req.timeoutInterval = 30;
     [req setValue:kUserAgent forHTTPHeaderField:@"User-Agent"];
 
@@ -586,6 +591,10 @@ static void A2Main(dispatch_block_t block) {
          message:(NSString *)message
          thenRun:(void (^)(NSError * _Nullable))then {
 
+    // 同样展开镜像候选
+    A2MirrorResolver *mirror = [A2MirrorResolver shared];
+    urls = [mirror candidateURLsForURLs:urls];
+
     if (self.cancelled) return;
 
     A2DownloadRequest *req = [A2DownloadRequest new];
@@ -619,53 +628,111 @@ static void A2Main(dispatch_block_t block) {
 }
 
 /// 批量下载（逐个串行，避免并发过高被限流）
+/// 批量下载 —— **并发**，不是逐个串行。
+///
+/// 之前的实现是「下完一个再下一个」，几百个依赖库要几分钟。
+/// ZL2 用 64 个并发（BatchDownloader.DEFAULT_MAX_CONNECTIONS），
+/// 现在改用 A2BatchDownloader。
+///
+/// 为什么之前会慢：一个文件 100KB，串行下载意味着每次都要
+/// 完整走一遍 TCP 握手 + TLS 协商 + 首字节等待。并发能把这些
+/// 延迟重叠起来。
 - (void)downloadBatch:(NSArray<NSArray<NSString *> *> *)items
                 stage:(A2InstallStage)stage
           messageBase:(NSString *)base
              thenRun:(void (^)(NSError * _Nullable))then {
 
-    __block NSUInteger index = 0;
-    __block NSUInteger total = items.count;
-    __block NSUInteger failed = 0;
+    if (items.count == 0) {
+        if (then) then(nil);
+        return;
+    }
 
-    __block void (^next)(void) = nil;
+    // 组请求 —— 每个 URL 都展开镜像候选
+    //
+    // 这一步很关键：之前直接拿官方 URL 下载，国内用户
+    // 每个文件都要等 piston-data / libraries.minecraft.net 的响应，
+    // 几百个库就慢得离谱。BMCLAPI 镜像能把延迟从几百毫秒降到几十毫秒。
+    NSMutableArray<A2DownloadRequest *> *requests = [NSMutableArray array];
+    A2MirrorResolver *mirror = [A2MirrorResolver shared];
+
+    for (NSArray<NSString *> *pair in items) {
+        if (pair.count < 2) continue;
+
+        NSArray<NSString *> *candidates = [mirror candidateURLsForURL:pair[0]];
+        NSMutableArray<NSURL *> *urls = [NSMutableArray array];
+        for (NSString *u in candidates) {
+            NSURL *url = [NSURL URLWithString:u];
+            if (url) [urls addObject:url];
+        }
+        if (urls.count == 0) continue;
+
+        A2DownloadRequest *req = [A2DownloadRequest new];
+        req.candidateURLs = urls;
+        req.destinationPath = pair[1];
+        req.allowZipFallbackCheck = YES;
+        [requests addObject:req];
+    }
+
+    if (requests.count == 0) {
+        if (then) then(nil);
+        return;
+    }
+
+    // 并发数可配置 —— 默认 64（与 ZL2 的 DEFAULT_MAX_CONNECTIONS 一致）。
+    //
+    // 上限不是越高越好：每个连接都要占内存与文件句柄，
+    // iOS 上超过 128 容易触发系统限制或服务端限流。
+    NSInteger configured = [NSUserDefaults.standardUserDefaults
+                            integerForKey:@"A2MaxConnections"];
+    NSInteger kMaxConnections = (configured > 0) ? MIN(configured, 128) : 64;
+
+    A2BatchDownloader *downloader =
+        [[A2BatchDownloader alloc] initWithRequests:requests
+                                     maxConnections:kMaxConnections
+                                        retryRounds:1];
+
     __weak typeof(self) weakSelf = self;
 
-    next = ^{
+    downloader.onProgress = ^(A2BatchProgress *progress) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self || self.cancelled) return;
-        if (index >= total) {
-            if (then) then(nil);
-            next = nil;
-            return;
+
+        NSString *msg = [NSString stringWithFormat:@"%@ (%ld/%ld)",
+                         base,
+                         (long)progress.downloadedFiles,
+                         (long)progress.totalFiles];
+        if (progress.speedBytesPerSec > 0) {
+            msg = [msg stringByAppendingFormat:@" · %@",
+                   [self formatSpeed:progress.speedBytesPerSec]];
         }
-
-        NSArray<NSString *> *pair = items[index];
-        NSString *url = pair[0];
-        NSString *dest = pair[1];
-        NSUInteger currentIndex = index;
-
-        [self download:@[url] to:dest stageLabel:stage
-               message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
-                        base, (unsigned long)(currentIndex + 1), (unsigned long)total]
-               thenRun:^(NSError *error) {
-            __strong typeof(weakSelf) self = weakSelf;
-            if (!self || self.cancelled) return;
-
-            // 单个文件失败不中断整体 —— 依赖库里有可选组件，
-            // 下载不到不影响启动
-            if (error) failed++;
-
-            index++;
-            [self report:stage progress:(double)index / (double)total
-                 message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
-                          base, (unsigned long)index, (unsigned long)total]];
-            if (next) next();
-        }];
+        [self report:stage progress:progress.fraction message:msg];
     };
 
-    next();
+    downloader.onCompletion = ^(BOOL success, NSDictionary<NSString *, NSError *> *failures) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self || self.cancelled) return;
+
+        if (failures.count > 0) {
+            [A2Log log:@"installer: %@ 完成，%lu 个文件失败",
+                  base, (unsigned long)failures.count];
+        }
+        // 单文件失败不阻断 —— 依赖库里有可选组件，缺几个不影响启动
+        if (then) then(nil);
+    };
+
+    [downloader start];
 }
+
+- (NSString *)formatSpeed:(double)bytesPerSec {
+    if (bytesPerSec >= 1024 * 1024) {
+        return [NSString stringWithFormat:@"%.1f MB/s", bytesPerSec / (1024 * 1024)];
+    }
+    if (bytesPerSec >= 1024) {
+        return [NSString stringWithFormat:@"%.0f KB/s", bytesPerSec / 1024];
+    }
+    return [NSString stringWithFormat:@"%.0f B/s", bytesPerSec];
+}
+
 
 #pragma mark - 回调
 

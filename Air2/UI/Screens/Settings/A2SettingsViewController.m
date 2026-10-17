@@ -52,15 +52,25 @@
     [super viewDidLoad];
     self.pageTitle = @"设置";
 
-    // 其余等对应功能实现后再加。见 A2SettingsSections.h 的说明。
-    // 只放有真实实现的分类。
-    // 渲染设置暂不加 —— 渲染层还没实现，加了就是空壳。
-    // 分类顺序参考 ZL2：渲染在前（最常用）
+    // 分类结构对照 ZL2 的 SettingsScreen.kt：
+    //
+    //   渲染 / 游戏 / 控制 / 手柄 / 启动器
+    //   ────────────
+    //   Java 管理 / 控制布局管理
+    //   ────────────
+    //   关于
+    //
+    // 我们只列【有真实实现】的分类 —— 加没有实现的分类就是造假。
+    // 与 ZL2 的差异：
+    //   · 「控制」「手柄」需要游戏内输入层，尚未实现，先不加
+    //   · 「Java 管理」「控制布局管理」同上
+    //   · 用「外观」代替「启动器」—— 我们这部分主要是外观相关
     NSArray<A2NavCategory *> *cats = @[
-        [A2NavCategory title:@"渲染" symbol:@"video.fill"],
-        [A2NavCategory title:@"游戏" symbol:@"gamecontroller.fill"],
-        [A2NavCategory title:@"外观" symbol:@"paintpalette.fill"],
-        [A2NavCategory title:@"诊断" symbol:@"stethoscope"],
+        [A2NavCategory title:@"渲染"   symbol:@"video.fill"],
+        [A2NavCategory title:@"游戏"   symbol:@"gamecontroller.fill"],
+        [A2NavCategory title:@"外观"   symbol:@"paintpalette.fill"],
+        [A2NavCategory title:@"下载"   symbol:@"arrow.down.circle" division:YES],
+        [A2NavCategory title:@"诊断"   symbol:@"stethoscope" division:YES],
     ];
 
     __weak typeof(self) weakSelf = self;
@@ -107,6 +117,50 @@
     [_nav selectIndex:0 animated:NO];
 }
 
+/// 下载性能设置 —— 并发数、镜像开关。
+///
+/// 这几项直接影响下载速度，值得单独成组。
+- (A2SettingsSection *)buildDownloadPerformanceSection {
+    A2SettingsSection *sec = [[A2SettingsSection alloc] initWithTitle:@"下载性能"];
+    sec.footerText = @"并发数越高下载越快，但过高可能被服务端限流。"
+                      "默认 64，与 ZL2 一致。";
+
+    A2SettingsRow *concurrencyRow = [[A2SettingsRow alloc] init];
+    concurrencyRow.symbolName = @"bolt.horizontal";
+    concurrencyRow.title = @"并发连接数";
+    concurrencyRow.subtitle = @"同时下载的文件数";
+    NSInteger cur = [NSUserDefaults.standardUserDefaults integerForKey:@"A2MaxConnections"];
+    if (cur <= 0) cur = 64;
+    concurrencyRow.valueText = [NSString stringWithFormat:@"%ld", (long)cur];
+    concurrencyRow.accessory = A2SettingsRowAccessoryDropdown;
+    concurrencyRow.showsSeparator = NO;
+
+    __weak A2SettingsRow *weakRow = concurrencyRow;
+    concurrencyRow.onTap = ^{
+        UIAlertController *sheet =
+            [UIAlertController alertControllerWithTitle:@"并发连接数"
+                                                message:@"越高越快，但可能被限流"
+                                         preferredStyle:UIAlertControllerStyleActionSheet];
+        for (NSNumber *n in @[@16, @32, @64, @128]) {
+            [sheet addAction:[UIAlertAction actionWithTitle:[n stringValue]
+                                                     style:UIAlertActionStyleDefault
+                                                   handler:^(UIAlertAction *a) {
+                [NSUserDefaults.standardUserDefaults setInteger:n.integerValue
+                                                        forKey:@"A2MaxConnections"];
+                weakRow.valueText = [n stringValue];
+            }]];
+        }
+        [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
+                                                 style:UIAlertActionStyleCancel handler:nil]];
+        sheet.popoverPresentationController.sourceView = weakRow;
+        sheet.popoverPresentationController.sourceRect = weakRow.bounds;
+        [self presentViewController:sheet animated:YES completion:nil];
+    };
+
+    [sec addRow:concurrencyRow];
+    return sec;
+}
+
 - (void)rebuildContentForIndex:(NSInteger)index {
     for (UIView *v in _detailStack.arrangedSubviews) {
         [_detailStack removeArrangedSubview:v];
@@ -141,6 +195,10 @@
         [_detailStack addArrangedSubview:[A2AppearanceSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2AppearanceSettings buildSourceSectionWithHost:self]];
     } else if (index == 3) {
+        // 下载：镜像、并发、缓存
+        [_detailStack addArrangedSubview:[A2AppearanceSettings buildSourceSectionWithHost:self]];
+        [_detailStack addArrangedSubview:[self buildDownloadPerformanceSection]];
+    } else if (index == 4) {
         [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2AboutSettings buildWithHost:self]];
     }

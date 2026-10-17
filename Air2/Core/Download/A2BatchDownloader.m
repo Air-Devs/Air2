@@ -31,6 +31,8 @@ static const NSInteger kSystemicFailureLimit = 12;
 @property (nonatomic, assign) long long counterTotalBytes;
 @property (nonatomic, assign) NSInteger counterDownloadedFiles;
 @property (nonatomic, assign) NSInteger consecutiveFailures;
+/// 上一秒的字节数 —— 用于算瞬时速度
+@property (nonatomic, assign) long long bytesAtLastTick;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSError *> *failures;
 
 @property (nonatomic, strong) dispatch_queue_t scheduleQueue;
@@ -239,6 +241,15 @@ static const NSInteger kSystemicFailureLimit = 12;
     p.totalBytes = _counterTotalBytes;
     p.downloadedFiles = _counterDownloadedFiles;
     p.totalFiles = (NSInteger)_requests.count;
+
+    // 瞬时速度：本次采样与上次采样的字节差 / 时间差
+    //
+    // 不做平滑 —— 与 ZL2 的 DownloadStats 一致：
+    // 「每个报表值就是刚刚完整过去的那一秒里真实落盘的字节数」。
+    // 平滑会让数字好看但不真实。
+    long long delta = _counterDownloadedBytes - _bytesAtLastTick;
+    _bytesAtLastTick = _counterDownloadedBytes;
+    p.speedBytesPerSec = (double)MAX(0LL, delta) / kProgressInterval;
     [_lock unlock];
 
     if (self.onProgress) self.onProgress(p);
