@@ -199,7 +199,6 @@ int main(int argc, const char *argv[]) {
             @"-XX:ReservedCodeCacheSize=64m",
             @"-XX:InitialCodeCacheSize=16m",
             @"-XX:CodeCacheExpansionSize=4m",
-            @"-XX:+MirrorMappedCodeCache",
             @"-Xlog:init=debug:stderr",
         ];
         ok(ArrayEquals(j25, want17),

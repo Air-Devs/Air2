@@ -435,7 +435,14 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     [options addObject:@"-XX:ReservedCodeCacheSize=64m"];
     [options addObject:@"-XX:InitialCodeCacheSize=16m"];
     [options addObject:@"-XX:CodeCacheExpansionSize=4m"];
-    if (javaMajorVersion >= 17) {
+    // ★开关(真机证据 2026-10-17)★:我们请求 64MB 的 JIT 区,但调试器只交付了
+    //   ★16384 字节✗★(见 [A2JIT] region … size=16384) ⇒ MirrorMappedCodeCache 要把 64MB
+    //   code cache 映射进 16KB 区里,VM 在初始化期跑 JIT 代码时卡住。
+    //   ⇒ 默认★不开镜像映射★(让 JVM 走自己的 code cache 分配),需要时置偏好键
+    //     A2UseMirrorCodeCache=YES 开回。
+    id a2mirrorVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2UseMirrorCodeCache"];
+    BOOL a2useMirror = (a2mirrorVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2UseMirrorCodeCache"];
+    if (javaMajorVersion >= 17 && a2useMirror) {
         [options addObject:@"-XX:+MirrorMappedCodeCache"];
     }
 
