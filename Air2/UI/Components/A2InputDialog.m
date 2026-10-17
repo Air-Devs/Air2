@@ -114,19 +114,27 @@ static const CGFloat kA2InputDialogMaxWidth = 460;
                                               name:A2ThemeDidChangeNotification
                                             object:nil];
 
-    // 入场前状态：卡片缩小淡出，viewDidAppear 里弹回
-    _card.alpha = 0;
+    // ★入场动画改在 viewWillAppear 里跑★（原来放 viewDidAppear）：
+    // 呈现是用 CrossDissolve，暗底随转场立刻出现，而 viewDidAppear 要等转场
+    // 结束才回调，卡片再淡入 ⇒ 先暗屏、约 0.5s 后才看到输入框
+    //（用户批注：屏幕变暗后 1s 左右才弹出，建议同时进行）。
+    // 现在卡片与暗底同属一个 view，一起转场，只在转场期间做一个轻微放大。
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    // 与暗底同帧出现：只在转场期间从 0.96 弹到 1，不再先透明后淡入
     _card.transform = CGAffineTransformMakeScale(0.96, 0.96);
+    UIViewPropertyAnimator *anim = A2ExpressiveSpring(A2AnimDurationFast);
+    [anim addAnimations:^{
+        self.card.transform = CGAffineTransformIdentity;
+    }];
+    [anim startAnimation];
 }
 
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
-    UIViewPropertyAnimator *anim = A2ExpressiveSpring(A2AnimDurationFast);
-    [anim addAnimations:^{
-        self.card.alpha = 1;
-        self.card.transform = CGAffineTransformIdentity;
-    }];
-    [anim startAnimation];
+    // 键盘等视图真正上屏后再唤起，避免转场里抢焦点
     [self.field.textField becomeFirstResponder];
 }
 

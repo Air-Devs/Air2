@@ -313,7 +313,6 @@ Air2/
 | `Version/A2VersionSettingsViewController` | ✅ | 版本设置（含隔离） |
 | `Version/A2VersionRowView` | ✅ | 版本行 |
 | `Download/A2DownloadViewController` | ✅ | 下载中心（左导航） |
-| `Download/A2DownloadListViewController` | ✅ | 资源列表（搜索/筛选/排序） |
 | `Download/A2InstallingViewController` | ✅ | 安装进度（7 阶段） |
 
 ---
@@ -1044,7 +1043,7 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
 - [x] **`A2InstallingViewController.backToDownloadCenter`** 不再依赖已删的 Home 页，
       改为回退到内层栈底（`nav.viewControllers.firstObject`）。
 
-**2) 资源列表筛选改真实数据（`A2DownloadListViewController`）**
+**2) 资源列表筛选改真实数据（`A2ResourceSearchViewController`；旧 `A2DownloadListViewController` 已删除）**
 
 - [x] **删除硬编码**：`filtersForCategory`（假加载器表 / 假版本号表）与 `makeChip:` 一并删除。
 - [x] **新增私有 `A2FilterChip`（`filterValue`）**：筛选值不再靠展示文案反推
@@ -1197,7 +1196,8 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
 **7) 容器接线与路由**
 
 - [x] `A2DownloadViewController`：侧栏新增「数据包」「任务」；索引 2–6 走新搜索页，
-      **整合包（索引 1）保持旧 `A2DownloadListViewController`**，游戏（索引 0）仍走选版页。
+      **整合包（索引 1）也已并入新搜索页**（2026-10 第二批 UI 修复：整合包与其它资源页筛选样式不一致、
+      首屏不加载），游戏（索引 0）仍走选版页。
 - [x] `A2SearchByIdViewController` / `A2FavoritesViewController` 改跳新详情页（按分类猜 `A2ContentClass`，
       补 datapack 判定）。
 - [x] `A2RootViewController` 把 `A2DownloadTaskCenter` 接入 `A2TaskDrawer`：仅「进行中」任务显示在
