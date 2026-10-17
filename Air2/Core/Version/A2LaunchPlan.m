@@ -459,8 +459,15 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     // ★对齐原版★：Air 原版在 iOS26+ 上默认就带 -XX:+MirrorMappedCodeCache（老线
     //   JavaLauncher.m:2377-2384）。之前我把它默认关了是为了排查，现在恢复默认开；
     //   要关就显式把偏好键 A2UseMirrorCodeCache 置 NO。
+    // ★单变量实验(2026-10-17 夜)★ 真机证据：MirrorMappedCodeCache=true 时 JVM 把 16MB
+    //   code cache 镜射进我们那 16KB 的 JIT 区，随后★卡在第一条 Java 代码 java.lang.String.<clinit>✗★
+    //   （call_class_initializer ← initialize_java_lang_classes ← create_vm）。
+    //   ⇒ 默认改成★关✗★，让 JVM 用自己的 code cache 分配（进程在调试器下可执行内存本就可申请）。
+    //   要恢复镜射：偏好键 A2UseMirrorCodeCache = YES。
     id a2mirrorVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2UseMirrorCodeCache"];
-    BOOL a2useMirror = (a2mirrorVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2UseMirrorCodeCache"];
+    BOOL a2useMirror = (a2mirrorVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2UseMirrorCodeCache"];
+    A2Log(@"[A2JIT] MirrorMappedCodeCache=%d（键 A2UseMirrorCodeCache 未设 ⇒ 默认关：真机证据是镜射进 16KB 区导致卡死）",
+          (int)a2useMirror);
     if (javaMajorVersion >= 17 && a2useMirror) {
         [options addObject:@"-XX:+MirrorMappedCodeCache"];
     }
