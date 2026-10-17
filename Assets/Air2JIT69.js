@@ -332,16 +332,27 @@ function JIT26PrepareRegion(brkResponse) {
     //   它对 64MB 会发约 4096 条命令（StikDebug 里几千条请求），但★真的把请求尺寸交出来★；
     //   而我们前一轮的“单条 _M<size>,rwx 捷径”只换回 16384 字节 ⇒ JVM 拿不到要的尺寸 ⇒ 卡死。
     //   ⇒ 先求“能启动”，噪声交给 L2'（自写宿主）解决。
+    // ★`_M` 的回复必须判别★（L2' 核验报告 §2）
+    //   debugserver 的 HandlePacket_AllocateMemory 在 mach_vm_protect 失败时回 `E53`；
+    //   老实现直接 BigInt("0x"+resp) ⇒ 把 "E53" 当成地址 0xE53=3667 写回 P0，
+    //   之后 JVM 在 3667 取指 ⇒ SIGBUS 风暴。
+    const ameIsHexAddress = (s) => typeof s === 'string' && /^[0-9a-fA-F]+$/.test(s) && s.length >= 6;
     let jitPageAddress = x0;
+    let usedFallbackPerms = '';
     if (x0 == 0n) {
         let allocResp = send_command(`_M${x1.toString(16)},rx`);
-        log_verbose(`allocResponse(rx) = ${allocResp}`);
-        if (!allocResp || allocResp.length === 0) {
-            log(`[AIR2-JIT69] 分配失败(size=0x${x1.toString(16)})`);
-            return;
+        if (!ameIsHexAddress(allocResp)) {
+            // 回退：先 `rw`（不带 X）再逐页祝福，这是最接近官方 UniversalJIT26 的路径
+            log(`[AIR2-JIT69] _M(rx) 失败回复='${allocResp}' ⇒ 回退 _M(rw) + 逐页 prepare`);
+            allocResp = send_command(`_M${x1.toString(16)},rw`);
+            usedFallbackPerms = 'rw';
+            if (!ameIsHexAddress(allocResp)) {
+                log(`[AIR2-JIT69] 分配彻底失败(size=0x${x1.toString(16)}) 回复='${allocResp}'`);
+                return;
+            }
         }
         jitPageAddress = BigInt(`0x${allocResp}`);
-        log(`[AIR2-JIT69] 分配 ok: addr=0x${jitPageAddress.toString(16)} size=0x${x1.toString(16)}（随后逐页 prepare，请求数≈size/16KB）`);
+        log(`[AIR2-JIT69] 分配 ok: addr=0x${jitPageAddress.toString(16)} size=0x${x1.toString(16)} perms=${usedFallbackPerms || 'rx'}（随后逐页 prepare，请求数≈size/16KB）`);
     }
     let prepareJITPageResponse = prepare_memory_region(jitPageAddress, x1);
     log(`prepareJITPageResponse = ${prepareJITPageResponse}`);
