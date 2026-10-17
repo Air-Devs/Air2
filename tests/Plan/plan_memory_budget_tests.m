@@ -175,7 +175,6 @@ int main(int argc, const char *argv[]) {
             @"-XX:InitialCodeCacheSize=16m",
             @"-XX:CodeCacheExpansionSize=4m",
             @"-Xlog:init=debug:stderr",
-            [NSString stringWithFormat:@"-Djava.system.class.loader=%@", A2LaunchGameClassLoaderName],
         ];
         ok(ArrayEquals(j8, want8),
            [NSString stringWithFormat:@"Java 8 档选项表逐项/逐位置一致（实际 %lu 条：%@）",
@@ -202,7 +201,6 @@ int main(int argc, const char *argv[]) {
             @"-XX:CodeCacheExpansionSize=4m",
             @"-XX:+MirrorMappedCodeCache",
             @"-Xlog:init=debug:stderr",
-            [NSString stringWithFormat:@"-Djava.system.class.loader=%@", A2LaunchGameClassLoaderName],
         ];
         ok(ArrayEquals(j25, want17),
            [NSString stringWithFormat:@"Java 25 档选项表逐项/逐位置一致（实际 %lu 条：%@）",
@@ -256,14 +254,19 @@ int main(int argc, const char *argv[]) {
 
         // ================================================================= ⑩
         printf("[⑩] 各档共有项与次序（类加载器 -D 永远在最后、且只此一条）\n");
-        NSString *loader = [NSString stringWithFormat:@"-Djava.system.class.loader=%@", A2LaunchGameClassLoaderName];
-        ok(ArrayContains(j8, loader) && ArrayContains(j25, loader) && ArrayContains(none, loader),
-           @"三份选项表都含类加载器 -D");
-        ok([j25.lastObject isEqualToString:loader] && [j8.lastObject isEqualToString:loader],
-           @"类加载器 -D 是最后一条（不掺入上面几组）");
+        // 默认不下发；只有 A2UseSystemClassLoader=YES 才下发（见 A2LaunchPlan 的实验开关）。
+    [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"A2UseSystemClassLoader"];
+    NSArray<NSString *> *j25WithLoader = [PlanNoFacts() jvmOptionsWithMemoryMB:2048 javaMajorVersion:25];
+    [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"A2UseSystemClassLoader"];
+    NSString *loader = [NSString stringWithFormat:@"-Djava.system.class.loader=%@", A2LaunchGameClassLoaderName];
+        ok(ArrayContains(j25WithLoader, loader),
+           @"开关打开时才下发类加载器 -D");
+        ok([j25WithLoader.lastObject isEqualToString:loader],
+           @"类加载器 -D 打开时是最后一条");
         int loaderCount = 0;
-        for (NSString *s in j25) if ([s hasPrefix:@"-Djava.system.class.loader="]) loaderCount++;
+        for (NSString *s in j25WithLoader) if ([s hasPrefix:@"-Djava.system.class.loader="]) loaderCount++;
         ok(loaderCount == 1, @"类加载器 -D 只出现一次");
+        ok(!ArrayContains(j25, loader) && !ArrayContains(j8, loader), @"★默认不下发类加载器 -D★");
         ok(A2LaunchMemoryMinXmxMB == 256,
            @"下限常量 = 256（与 A2SettingsMinRAMMB 同值：再低 JVM 起不来）");
         ok(A2LaunchMemoryMaxXmxMB == 4096, @"上限常量 = 4096（本单的保守天花板）");

@@ -446,7 +446,12 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     [options addObject:@"-Xlog:init=debug:stderr"];   // ★必须指定 stderr★：App 里 stdout 无处可去
 
     // ★追加类路径的唯一可行方式（Java 9+）：必须带，否则 A2Entry 追加 MC 库时被模块系统挡下。
-    [options addObject:[NSString stringWithFormat:@"-Djava.system.class.loader=%@", A2LaunchGameClassLoaderName]];
+    // ★实验开关(2026-10-17)★ 真机探针:卡在 JavaCalls::call_helper(VM 初始化期就在执行 Java 代码),
+    //  头号嫌疑 = VM 在 initPhase 里构造自定义系统类加载器 ⇒ 默认★不下发★;
+    //  需要时把偏好键 A2UseSystemClassLoader 置 YES 恢复(A2Entry 会退回反射 addURL,功能等价)。
+    if ([NSUserDefaults.standardUserDefaults boolForKey:@"A2UseSystemClassLoader"]) {
+        [options addObject:[NSString stringWithFormat:@"-Djava.system.class.loader=%@", A2LaunchGameClassLoaderName]];
+    }
 
     // ---- ★运行时事实 ⇒ VM 级 -D★（Bridge 的 A2LaunchRunner 会把本数组原样注入 argv）----
     // 为什么是 `-D` 而不是 plan.properties：

@@ -360,6 +360,15 @@ int a2_launch_jvm_with_argv(int argc, const char *const argv[], A2LaunchInput in
     //   JNI_CreateJavaVM 路径 —— 该路径保留但不再默认。
     // ============================================================================
     {
+        // ★诊断开关★ A2ForceJNIPath=YES ⇒ 跳过 JLI，强制走下面的 JNI_CreateJavaVM 路径。
+        // ★默认走 JNI★（JLI 版真机一启动就闪退，先以 JNI 为准做诊断）；
+        //   要试 JLI 就把偏好键 A2ForceJNIPath 显式置 NO。
+        id a2ForceJNIVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2ForceJNIPath"];
+        BOOL a2ForceJNI = (a2ForceJNIVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2ForceJNIPath"];
+        if (a2ForceJNI) {
+            a2_log_f(@"[RT-P1] ★A2ForceJNIPath=YES ⇒ 跳过 JLI，强制走 JNI_CreateJavaVM★");
+        }
+        if (!a2ForceJNI) {
         NSArray<NSString *> *jliArgv = a2_jli_build_argv(input.javaHome, [builder rawOptions],
                                                          builder.classpath, builder.mainClass,
                                                          builder.programArgs);
@@ -390,6 +399,7 @@ int a2_launch_jvm_with_argv(int argc, const char *const argv[], A2LaunchInput in
         // JLI 不可用 ⇒ 保留的 JNI_CreateJavaVM 路径（异常安全网；默认已不是主路）
         a2_log_f(@"[RT-P1] JLI 入口不可用 rc=%d（libjli 打不开或缺 JLI_Launch）⇒ 回退 JNI_CreateJavaVM 路径", lrc);
     }
+        }   // if (!a2ForceJNI)
 
     // ---- R2：定位 libjvm + 建 VM ----
     NSString *libjvm = a2_vm_resolve_libjvm(input.javaHome);
