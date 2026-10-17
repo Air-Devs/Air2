@@ -143,7 +143,7 @@
     //
     // 加载成功不代表符号齐全。至少要有 glGetString 与 eglGetDisplay，
     // 否则后面会以更难懂的方式失败。
-    if (!handle.symbolGL("glGetString")) {
+    if (![handle symbolGL:"glGetString"]) {
         [self unload:handle];
         if (error) {
             *error = [self err:@"库加载成功但没有 glGetString 符号 —— "
@@ -152,7 +152,8 @@
         return nil;
     }
 
-    if (layout != A2RendererLibraryLayoutGLOny && !handle.symbolEGL("eglGetDisplay")) {
+    if (layout != A2RendererLibraryLayoutGLOny &&
+        ![handle symbolEGL:"eglGetDisplay"]) {
         [self unload:handle];
         if (error) {
             *error = [self err:@"库加载成功但没有 eglGetDisplay 符号 —— "
