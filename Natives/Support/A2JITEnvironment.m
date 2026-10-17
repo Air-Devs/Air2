@@ -251,67 +251,18 @@ A2JITRegionProof a2_jit_prove_region_rwx(void *addr, size_t len,
         return A2JITRegionProofUnmapped;
     }
 
-    // ② 弄成可写；被拒 ⇒ 就是「拿不到可写 code cache」的 JVM 崩溃形态。
-    errno = 0;
-    int mr = mprotect(addr, len, PROT_READ | PROT_WRITE);
-    int me = errno;
-    if (mprotectRcOut) *mprotectRcOut = mr;
-    if (errnoOut) *errnoOut = me;
-    if (mr != 0) {
-        a2_jit_log("[A2JIT] region @%p mprotect(RW) DENIED errno=%d(%s) (cur=0x%x max=0x%x) => NOT writable",
-                   addr, me, strerror(me), c0, m0);
-        return A2JITRegionProofNotWritable;
-    }
-
-    // ③ 真写入探针指令 + 真回读（排除「写入被优化 / 没落地」）。
-    memcpy(addr, kA2JITProbeCode, sizeof(kA2JITProbeCode));
-    sys_icache_invalidate(addr, len);
-#if defined(__arm64__) || defined(__aarch64__)
-    uint32_t rb0 = 0;
-    memcpy(&rb0, addr, sizeof(uint32_t));
-    if (rb0 != kA2JITProbeCode[0]) {
-        a2_jit_log("[A2JIT] self-proof: region @%p memcpy WRITE DID NOT LAND (wrote 0x%08x readback 0x%08x) -- 写入被优化/未落地",
-                   addr, kA2JITProbeCode[0], rb0);
-    }
-#endif
-
-    // ④ 标 RX。失败 ⇒ Inconclusive（多为 iOS26+ RW→RX 撤销了调试器对该页的可执行祝福）。
-    errno = 0;
-    if (mprotect(addr, len, PROT_READ | PROT_EXEC) != 0) {
-        int rxErrno = errno;
-        a2_jit_log("[A2JIT] self-proof: region @%p mprotect(RX) FAILED errno=%d(%s) after RW toggle "
-                   "(cur0=0x%x max0=0x%x) => proof=5(inconclusive) 的直接原因（自证局限，非区域不可用）",
-                   addr, rxErrno, strerror(rxErrno), c0, m0);
-        return A2JITRegionProofInconclusive;
-    }
-
-    // ⑤ 真执行（同一套安全网；保存/恢复原处置）。
-    struct sigaction sa, oldBus, oldSegv;
-    memset(&sa, 0, sizeof(sa));
-    memset(&oldBus, 0, sizeof(oldBus));
-    memset(&oldSegv, 0, sizeof(oldSegv));
-    sa.sa_handler = a2_jit_exec_probe_handler;
-    sa.sa_flags = SA_NODEFER;
-    sigemptyset(&sa.sa_mask);
-    sigaction(SIGBUS, &sa, &oldBus);
-    sigaction(SIGSEGV, &sa, &oldSegv);
-
-    gA2JITExecProbeArmed = 1;
-    volatile int got = -1;
-    volatile A2JITRegionProof res = A2JITRegionProofExecFaulted;
-    if (sigsetjmp(gA2JITExecProbeEnv, 1) == 0) {
-        int (*volatile fn)(void) = (int (*)(void))addr;
-        got = fn();
-        res = (got == A2JIT_PROBE_RETVAL) ? A2JITRegionProofRWXOK : A2JITRegionProofExecFaulted;
-    }
-    gA2JITExecProbeArmed = 0;
-    sigaction(SIGBUS, &oldBus, NULL);
-    sigaction(SIGSEGV, &oldSegv, NULL);
-    if (res != A2JITRegionProofRWXOK) {
-        a2_jit_log("[A2JIT] region @%p mprotect(RX) ok BUT executing our written instruction faulted "
-                   "(ret=%d) -- page is NOT a real executable JIT mapping (would SIGBUS for JVM)", addr, got);
-    }
-    return (A2JITRegionProof)res;
+    // ② ★自证改为纯观测★（2026-10-17 真机证据）
+    //   原实现：mprotect(RW) → 写试探指令 → mprotect(RX) → 真的 call。
+    //   真机后果：mprotect(RX) 在 iOS26+ 上会撤销调试器对这块页的可执行祝福（errno=13），
+    //   之后任何取指都 SIGBUS；StikDebug 把 SIGBUS 原样放行 ⇒ 5000+ 条
+    //   `signal … not a brk … continue with signal 0xa` 的循环，
+    //   而 JNI_CreateJavaVM 卡在 InstanceKlass::call_class_initializer 永不返回。
+    //   ⇒ 这里只读已有的映射/保护位，★不改写页保护、不写试探字节、不执行★。
+    (void)mprotectRcOut;
+    (void)errnoOut;
+    a2_jit_log("[A2JIT] self-proof 跳过（纯观测）：不 mprotect、不写、不执行 —— 
+               避免撤销调试器的可执行祝福（那会变成 SIGBUS 风暴并卡死建 VM）");
+    return A2JITRegionProofInconclusive;
 }
 
 // ============================================================================
