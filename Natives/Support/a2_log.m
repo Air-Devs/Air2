@@ -8,9 +8,10 @@
 #include <stdio.h>
 #include <stdarg.h>
 
-// 统一写 stderr：main.m 的 init_redirectStdio 已把 stdout/stderr dup2 到管道
-// （→ latestlog.txt）。stderr 无缓冲，每行显式 '\n' + fflush ⇒ 进程若在下一行前崩掉，
-// 最后一条事件也已落盘。flockfile/funlockfile 提供每行原子性（多线程上报不交错）。
+// 统一写 stderr：App 的 main() 早期调 [A2Log archiveStderr]（Air2/Utils/A2Log.m），
+// 那里用 dup2 把 stderr 直接接到 Documents/latestlog.txt（无缓冲、带大小上限）。
+// stderr 每行显式 '\n' + fflush ⇒ 进程若在下一行前崩掉，最后一条事件也已落盘。
+// flockfile/funlockfile 提供每行原子性（多线程上报不交错）。
 static void a2_emit(const char *prefix, const char *body) {
     flockfile(stderr);
     fputs(prefix, stderr);
@@ -47,6 +48,32 @@ void a2_log_detail(BOOL verbose, NSString *fmt, ...) {
     va_start(ap, fmt);
     a2_emit_v("[RT-V] ", fmt, ap);
     va_end(ap);
+}
+
+// ----------------------------------------------------------------------------
+// 判据行统一出口
+// ----------------------------------------------------------------------------
+// 会话日志文件的落点（由宿主注入）。★只有一个函数指针、只在启动早期被写一次★
+// （main() 里，早于任何线程起来跑判据行），所以读侧不需要加锁：
+// 写 happens-before 后续线程的创建。
+// 未注入（NULL）⇒ 判据行只进控制台；单测/无宿主环境因此不需要任何桩件。
+static void (*gCriterionSink)(const char *) = NULL;
+
+void a2_log_set_sink(void (*sink)(const char *utf8Line)) {
+    gCriterionSink = sink;
+}
+
+void a2_log_criterion(NSString *fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    // 与 a2_log_f 不同：这里用 ObjC 格式（%@ 可用），因为判据行里常有对象字段。
+    NSString *line = [[NSString alloc] initWithFormat:fmt arguments:ap];
+    va_end(ap);
+
+    const char *utf8 = line.UTF8String ?: "";
+    a2_emit("", utf8);                      // ① 控制台（复用本模块的单行 + 立即 flush 口径）
+    void (*sink)(const char *) = gCriterionSink;
+    if (sink != NULL) { sink(utf8); }        // ② App 会话日志文件（宿主注入；未注入则跳过）
 }
 
 NSString *a2_stage_name(A2Stage stage) {

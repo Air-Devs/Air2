@@ -54,6 +54,10 @@ SOURCES = [
     os.path.join(PLAYER, "A2JITPairingCodeSession.m"),
     # 跨层契约常量（A2SelectedPairingPinSourcePrefKey 的唯一定义点）
     os.path.join(ROOT, "Air2", "Utils", "A2LaunchContract.m"),
+    # 判据行的统一出口（Utils 叶子层，只有 Foundation + stdio）：
+    # A2JITPairingCodeSession.m 的 [A2Log criterion:] 要它，否则 x86_64 链接报
+    # Undefined symbols: _OBJC_CLASS_$_A2Log。
+    os.path.join(ROOT, "Air2", "Utils", "A2Log.m"),
     # --- [JIT-DDI-1] DDI（Developer Disk Image）：类型 / 纯逻辑 / 本地镜像存储 / 判定合成 / 分流表 ---
     os.path.join(PLAYER, "A2JITDDI.m"),
     os.path.join(PLAYER, "A2JITDDIStore.m"),

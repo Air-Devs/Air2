@@ -326,7 +326,7 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
                                                     mode:memMode
                                              requestedMB:A2Settings.shared.ramAllocationMB];
     // ★[MEM] 判据行（默认可见）★：真机一眼判「堆上限从哪来、走了哪个档、GC 是谁」。
-    [A2Log log:@"[MEM] ceiling=%ldMB -> -Xmx%ldMB (source=%@) mode=%@ jre=%ld gc=%@",
+    [A2Log criterion:@"[MEM] ceiling=%ldMB -> -Xmx%ldMB (source=%@) mode=%@ jre=%ld gc=%@",
      (long)ceilingMB, (long)xmxMB, memProbe.source,
      (memMode == A2LaunchMemoryModeManual ? @"manual" : @"auto"),
      (long)jreMajor, [A2LaunchMemory gcNameForJavaMajorVersion:jreMajor]];

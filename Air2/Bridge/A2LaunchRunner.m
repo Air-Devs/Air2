@@ -179,7 +179,7 @@ static void A2RunnerFrameCallback(void *user) {
 
     // ★判据行（第 1 行）★：这一次探测到手的量级 —— 真机 grep `[MEM] probe` 即可对上。
     //   第 2 行（ceiling → -Xmx 的决策行）在 Player 的 A2LaunchSession（那里才知道档位）。
-    [A2Log log:@"[MEM] probe available=%ldMB physical=%ldMB source=%@",
+    [A2Log criterion:@"[MEM] probe available=%ldMB physical=%ldMB source=%@",
      (long)availMB, (long)physMB, probe.source];
 
     return probe;

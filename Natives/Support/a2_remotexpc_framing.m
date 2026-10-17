@@ -76,7 +76,7 @@ static void A2RXPCPadTo4(NSMutableData *out) {
 #pragma mark - 判据行
 
 void A2RXPCLog(NSString *message) {
-    a2_log_f(@"[RXPC] %s", message.UTF8String ?: "");
+    a2_log_criterion(@"[RXPC] %@", message ?: @"");
 }
 
 #pragma mark - HTTP/2

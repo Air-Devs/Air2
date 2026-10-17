@@ -8,6 +8,7 @@
 //
 
 #import "A2JITPairingCodeSession.h"
+#import "A2Log.h"     // [A2Log criterion:]：判据行的统一出口（控制台 + 会话日志文件）
 
 // ★持久化键（Player 内部；带 A2 前缀避免与老线键撞）★——用户切到系统设置期间，码要能读回来。
 static NSString *const kA2CodeKey    = @"A2PairingCodeCode";
@@ -102,8 +103,8 @@ static NSString *const kA2DetailKey  = @"A2PairingCodeDetail";
     [d setInteger:_state forKey:kA2StateKey];
     [d setObject:_lastDetail forKey:kA2DetailKey];
 
-    NSLog(@"%@", [A2JITPairingCodeSession criterionLineForState:_state host:_hostName code:_code
-                                                        detail:@"listener=★未实现★（唯一改点：本方法内起 NWListener(_remotepairing-pairable-host._tcp) 并把 pairingData 转交 pair-setup responder）"]);
+    [A2Log criterion:@"%@", [A2JITPairingCodeSession criterionLineForState:_state host:_hostName code:_code
+                                                        detail:@"listener=★未实现★（唯一改点：本方法内起 NWListener(_remotepairing-pairable-host._tcp) 并把 pairingData 转交 pair-setup responder）"]];
     return YES;
 }
 
@@ -113,7 +114,7 @@ static NSString *const kA2DetailKey  = @"A2PairingCodeDetail";
     NSUserDefaults *d = NSUserDefaults.standardUserDefaults;
     [d setInteger:state forKey:kA2StateKey];
     [d setObject:(detail ?: @"") forKey:kA2DetailKey];
-    NSLog(@"%@", [A2JITPairingCodeSession criterionLineForState:state host:_hostName code:_code detail:detail]);
+    [A2Log criterion:@"%@", [A2JITPairingCodeSession criterionLineForState:state host:_hostName code:_code detail:detail]];
 }
 
 - (void)endPairing {
@@ -125,8 +126,8 @@ static NSString *const kA2DetailKey  = @"A2PairingCodeDetail";
     [d removeObjectForKey:kA2CodeKey];
     [d removeObjectForKey:kA2DetailKey];
     [d setInteger:A2JITPairingCodeStateIdle forKey:kA2StateKey];
-    NSLog(@"%@", [A2JITPairingCodeSession criterionLineForState:_state host:_hostName code:_code
-                                                        detail:@"配对结束，已作废并清除显示的码"]);
+    [A2Log criterion:@"%@", [A2JITPairingCodeSession criterionLineForState:_state host:_hostName code:_code
+                                                        detail:@"配对结束，已作废并清除显示的码"]];
 }
 
 @end

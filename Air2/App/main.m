@@ -31,6 +31,11 @@
 #import "A2AppDelegate.h"
 #import "A2CrashGuard.h"
 #import "A2Log.h"
+// Natives/Support：native 层判据行的统一出口（a2_log_criterion / a2_log_set_sink）。
+// ★App → Natives 是允许方向★（见 docs/ARCHITECTURE.md 顶层表：`Air2/` 允许依赖 `Natives`）。
+// 装配点放在这里，是因为只有 main() 同时看得到两侧：Natives 侧不认识 A2Log（它只依赖 Libraries），
+// 所以「判据行落进会话日志文件」这件事必须由这里把 A2Log 的落点注进去。
+#import "a2_log.h"
 
 int main(int argc, char *argv[]) {
     NSString *delegateName = NSStringFromClass([A2AppDelegate class]);
@@ -39,9 +44,20 @@ int main(int argc, char *argv[]) {
         // 这个环境没有调试器，日志是唯一的定位手段。
         [A2CrashGuard install];
 
+        // ★控制台归档★：把 stderr 接进 Documents/latestlog.txt（启动时轮转、运行中超上限就地轮转）。
+        // 接上之后，native 层（NSLog / a2_log_* / printf）与控制台的每一行都落文件，
+        // 不再只存在于 Xcode / Console.app。放在 startSession 之前 —— 越早接上漏得越少。
+        [A2Log archiveStderr];
+
         // 再轮转日志（上一次会话留档为 lastlog.old.txt）。
         // 必须早于任何业务日志，否则上一轮的日志会被本轮内容污染。
         [A2Log startSession];
+
+        // ★接线★：native 侧的判据行（[RXPC]/[FRAME]/native 的 [A2-PAIRPIN]）
+        // 经 a2_log_criterion → a2_log_session_sink 落进会话日志文件 lastlog.txt，
+        // 与 Air2 侧的 [A2Log criterion:] 同一个落点 ⇒ 「运行日志」页一处看全。
+        a2_log_set_sink(a2_log_session_sink);
+
         [A2Log log:@"main: 进入 UIApplicationMain"];
 
         return UIApplicationMain(argc, argv, nil, delegateName);

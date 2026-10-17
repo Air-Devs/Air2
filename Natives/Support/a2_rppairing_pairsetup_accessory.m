@@ -12,15 +12,17 @@
 #import "a2_rppairing.h"          // A2RPPairingIdentity
 #import "a2_rppairing_rsd.h"      // ★复用★服务类型常量 A2RPRSDServicePairableHost（不另造）
 #import "a2_remotexpc_session.h"  // A2RemoteXPCErrorKind
+#import "a2_log.h"                // a2_log_criterion：判据行的统一出口（控制台 + 会话日志文件）
 
 #pragma mark - 判据行
 
 NSString *const A2RPPairWireCriterionMarker = @"[A2-PAIRPIN]";
 
 void A2RPPairWireCriterionLog(NSString *line) {
-    // ★单行、默认可见★：设备日志（NSLog）与 macOS 测试的 stderr 都能 `grep '\[A2-PAIRPIN\]'`。
+    // ★单行、默认可见★：走统一出口 ⇒ ①控制台（设备日志 / macOS 测试的 stderr 都能
+    //   `grep '\[A2-PAIRPIN\]'`）②App 会话日志文件（lastlog.txt，「运行日志」页可看）。
     //   ★用 %@ 包一层★：line 里可能带 % 字符（端口/尺寸），避免格式串注入。
-    NSLog(@"%@", [NSString stringWithFormat:@"%@ %@", A2RPPairWireCriterionMarker, line ?: @""]);
+    a2_log_criterion(@"%@ %@", A2RPPairWireCriterionMarker, line ?: @"");
 }
 
 #pragma mark - 阶段名 / 失败分类名
