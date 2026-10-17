@@ -113,10 +113,16 @@ static const NSInteger A2SettingsMinRAMMB = 256;
 /// 首选资源平台（见上方取值常量）。默认 Modrinth。
 @property (nonatomic, assign) NSInteger preferredContentPlatform;
 
-/// 镜像优先级（见上方取值常量）。默认官方优先。
+/// 镜像优先级（见上方取值常量）。默认镜像优先 ——
+/// 「默认国内才启用」由 A2MirrorResolver 的大陆判定兜底，
+/// 海外时镜像链整体不生效，故默认镜像优先对海外无副作用。
 @property (nonatomic, assign) NSInteger mirrorPriority;
 
-/// 是否允许镜像。默认 YES（是否真正生效还看网络检测）。
+/// 是否允许镜像（★一键关闭的开关★）。默认 YES。
+/// 真正生效还要同时满足「大陆时区」（见 A2MirrorResolver），二者取与。
+/// 关掉的入口有两个（写的是同一个 key）：
+///   · 设置页 → 「使用国内镜像加速」开关；
+///   · 偏好键 `A2MirrorEnabled`（存 Documents/config.json）。
 @property (nonatomic, assign) BOOL mirrorEnabled;
 
 /// 当前账号 uniqueID。默认 nil。

@@ -160,8 +160,10 @@
     A2SettingsRow *mirrorRow = [[A2SettingsRow alloc] init];
     mirrorRow.symbolName = @"arrow.triangle.2.circlepath";
     mirrorRow.title = @"使用国内镜像加速";
-    mirrorRow.subtitle = @"通过 MCIM 镜像下载 CurseForge / Modrinth 的文件，"
-                          "仅在中国大陆网络下生效";
+    mirrorRow.subtitle = @"原版（版本清单 / 依赖库 / 资源）与 CurseForge、Modrinth "
+                          "的文件改从国内镜像下载，仅在中国大陆网络下生效。"
+                          "镜像为第三方公益服务（BMCLAPI / MCIM，非 Mojang 官方），"
+                          "可用性不保证；下载异常时关掉本开关即改走官方源。";
     mirrorRow.accessory = A2SettingsRowAccessorySwitch;
     mirrorRow.on = [A2MirrorResolver shared].enabled;
     mirrorRow.onToggle = ^(BOOL isOn) {

@@ -137,8 +137,11 @@ static NSArray<NSString *> *A2SettingsAllKeys(void) {
     _renderer = [self stringForKey:A2SettingsKeyRenderer];
     _preferredContentPlatform = [self integerForKey:A2SettingsKeyPreferredContentPlatform
                                       defaultValue:A2SettingsPlatformModrinth];
+    // 默认「镜像优先」：国内镜像的收益来自「默认就走镜像」，
+    // 配成官方优先等于镜像只在官方失败后才用上 —— 那对提速没有意义。
+    // 不在大陆时镜像链整体不生效（见 A2MirrorResolver），故默认值对海外无副作用。
     _mirrorPriority = [self integerForKey:A2SettingsKeyMirrorPriority
-                             defaultValue:A2SettingsMirrorOfficialFirst];
+                             defaultValue:A2SettingsMirrorFirst];
     _mirrorEnabled = [self boolForKey:A2SettingsKeyMirrorEnabled defaultValue:YES];
     _currentAccountID = [self stringForKey:A2SettingsKeyCurrentAccountID];
     _currentVersionName = [self stringForKey:A2SettingsKeyCurrentVersionName];

@@ -403,19 +403,34 @@ A2ContentSortFieldUpdated   → CurseForge "3" / Modrinth "updated"
 
 ## 5.4 镜像加速
 
-CurseForge 与 Modrinth 的 CDN 在国内访问很慢，MCIM 做了反向代理：
+国内直连 Mojang 与 CurseForge / Modrinth 的 CDN 都很慢，故把域名替换成国内镜像：
 
 ```
-https://edge.forgecdn.net  →  https://mod.mcimirror.top
-https://cdn.modrinth.com   →  同上
-https://media.forgecdn.net →  同上
+https://piston-meta.mojang.com        →  https://bmclapi2.bangbang93.com
+https://libraries.minecraft.net       →  https://bmclapi2.bangbang93.com/maven
+https://resources.download.minecraft.net →  https://bmclapi2.bangbang93.com/assets
+https://edge.forgecdn.net             →  https://mod.mcimirror.top
+https://cdn.modrinth.com              →  同上
+https://media.forgecdn.net            →  同上
 ```
 
-策略（与 ZL2 一致）：
+策略（与 ZL2 / 老线 Air 1 一致）：
 - **只在检测到中国大陆网络时启用**（看时区，不发请求探测 IP ——
   判断错了只影响快慢，不影响功能）
-- 用户可选「官方优先」/「镜像优先」
+- 用户可选「官方优先」/「镜像优先」（★默认镜像优先★），并可在设置页**一键关闭**
 - 返回**候选列表**交给下载引擎依次尝试 —— 天然支持失败回退
+  （引擎退避重试耗尽 ⇒ 自动切下一个候选源，并打 `[A2-MIRROR] failover` 判据行）
+- 版本清单额外做了**逐候选源依次尝试**：镜像源拿不到（网络 / 非 2xx / 不是 JSON /
+  清单里没这个版本）就换官方源，全耗尽才报错
+- ★镜像为第三方公益服务（BMCLAPI / MCIM），非 Mojang 官方，不提供 SLA★：
+  因此镜像永远只是候选链的第一顺位，关掉即回官方单源（详见 `docs/DECISIONS.md` ADR-011）
+
+判据行（默认可见、可 grep）：
+```
+[A2-MIRROR] enabled=1 priority=mirror-first mainland=1 tz=Asia/Shanghai verdict=mirror-first(镜像优先⇒官方兜底) …
+[A2-MIRROR] stage=libraries 首选=https://bmclapi2.bangbang93.com/maven/… source=mirror(bmclapi) 候选=2 …
+[A2-MIRROR] failover 候选=2/2 from=https://bmclapi2.bangbang93.com/… to=https://libraries.minecraft.net/… 原因=…
+```
 
 ## 5.5 凭据存储
 
