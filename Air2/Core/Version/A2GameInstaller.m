@@ -222,7 +222,7 @@ static void A2Main(dispatch_block_t block) {
     __weak typeof(self) weakSelf = self;
     NSURLSessionDataTask *t = [_session dataTaskWithRequest:req
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
-        __strong typeof(weakSelf) self = self;
+        __strong typeof(weakSelf) self = weakSelf;
         if (!self || self.cancelled) return;
 
         NSString *entryURL = nil;
