@@ -29,6 +29,8 @@
 
 @interface A2BaseViewController ()
 @property (nonatomic, strong) UIView *topBar;
+/// 顶栏高度约束 —— hidesTopBar 时要把它清零，否则会留白
+@property (nonatomic, strong) NSLayoutConstraint *topBarHeightConstraint;
 @property (nonatomic, strong) UIButton *backButton;
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UIStackView *trailingStack;
@@ -123,6 +125,14 @@
 - (void)setHidesTopBar:(BOOL)hidesTopBar {
     _hidesTopBar = hidesTopBar;
     _topBar.hidden = hidesTopBar;
+
+    // 关键：hidden 只是不显示，【高度约束还在】——
+    // 结果就是页面顶部留出一块空白（用户截图里圈出的那片）。
+    // 必须把高度约束清零，内容才能真正顶到安全区。
+    if (_topBarHeightConstraint) {
+        _topBarHeightConstraint.constant = hidesTopBar ? 0 : A2TopBarHeight;
+    }
+    [self.view setNeedsLayout];
 }
 
 - (void)setLeadingCustomView:(UIView *)leadingCustomView {
@@ -239,7 +249,7 @@
         [_topBar.topAnchor constraintEqualToAnchor:safe.topAnchor],
         [_topBar.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
         [_topBar.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        [_topBar.heightAnchor constraintEqualToConstant:A2TopBarHeight],
+        (_topBarHeightConstraint = [_topBar.heightAnchor constraintEqualToConstant:A2TopBarHeight]),
 
         [_backButton.leadingAnchor constraintEqualToAnchor:_topBar.leadingAnchor constant:A2SpaceS],
         [_backButton.centerYAnchor constraintEqualToAnchor:_topBar.centerYAnchor],
@@ -311,6 +321,13 @@
     }
 
     [NSLayoutConstraint activateConstraints:constraints];
+
+    // 顶栏隐藏是在 viewDidLoad 里设置的，那时高度约束还没建 ——
+    // 这里补一次同步，确保隐藏态的高度真的是 0
+    if (_hidesTopBar && _topBarHeightConstraint) {
+        _topBarHeightConstraint.constant = 0;
+    }
+
     [super updateViewConstraints];
 }
 

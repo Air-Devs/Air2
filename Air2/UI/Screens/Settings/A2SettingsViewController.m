@@ -84,14 +84,33 @@
     _detailScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
     _detailScroll.translatesAutoresizingMaskIntoConstraints = NO;
     _detailScroll.showsVerticalScrollIndicator = NO;
+
+    // ---- 彻底禁用横向滚动 ----
+    //
+    // 这是用户反复反馈的「设置页能左右滑」问题的根因。
+    // 之前我只改了宽度约束，但那不够 —— contentSize.width 仍可能
+    // 被内容撑大（某个子视图宽度超出可视区时），UIScrollView 就会允许横拖。
+    //
+    // 四道保险：
+    //   1. showsHorizontalScrollIndicator = NO   （不显示横条）
+    //   2. alwaysBounceHorizontal = NO           （不需要横滑时不允许回弹）
+    //   3. directionalLockEnabled = YES          （锁定方向，不能斜着拖）
+    //   4. contentSize.width 钉死 = frame.width  （见下方约束）
+    _detailScroll.showsHorizontalScrollIndicator = NO;
+    _detailScroll.alwaysBounceHorizontal = NO;
+    _detailScroll.directionalLockEnabled = YES;
     _detailScroll.alwaysBounceVertical = YES;
+    _detailScroll.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+
+    // 关键：内容栈宽度锁死等于可视区宽度 ——
+    // 这样 contentSize.width 恒等于 frame.width，横向无处可滚
+    [_detailScroll addSubview:_detailStack];
     [self.plainContentView addSubview:_detailScroll];
 
     _detailStack = [[UIStackView alloc] initWithFrame:CGRectZero];
     _detailStack.translatesAutoresizingMaskIntoConstraints = NO;
     _detailStack.axis = UILayoutConstraintAxisVertical;
     _detailStack.spacing = A2SpaceXL;
-    [_detailScroll addSubview:_detailStack];
 
     [NSLayoutConstraint activateConstraints:@[
         [_nav.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
@@ -105,13 +124,29 @@
                                                     constant:A2SpaceM],
         [_detailScroll.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
 
-        [_detailStack.topAnchor constraintEqualToAnchor:_detailScroll.topAnchor constant:A2SpaceS],
-        [_detailStack.bottomAnchor constraintEqualToAnchor:_detailScroll.bottomAnchor
-                                                   constant:-A2SpaceXXL],
-        [_detailStack.leadingAnchor constraintEqualToAnchor:_detailScroll.leadingAnchor
-                                                    constant:A2SpaceM],
-        [_detailStack.trailingAnchor constraintEqualToAnchor:_detailScroll.trailingAnchor
-                                                     constant:-A2SpaceXL],
+        // ---- 垂直：贴合 contentLayoutGuide，决定可滚动范围 ----
+        [_detailStack.topAnchor constraintEqualToAnchor:_detailScroll.contentLayoutGuide.topAnchor
+                                               constant:A2SpaceS],
+        [_detailStack.bottomAnchor constraintEqualToAnchor:_detailScroll.contentLayoutGuide.bottomAnchor
+                                                  constant:-A2SpaceXXL],
+
+        // ---- 水平：宽度【精确等于】可视区 - margin ----
+        //
+        // 用 widthAnchor 而不是 leading/trailing 约束到 frameLayoutGuide ——
+        // 后者是「两端对齐」，理论上等价，但某个子视图 intrinsic width
+        // 超出时仍会把 contentSize 撑宽。widthAnchor 是硬约束，撑不开。
+        //
+        // 再用 centerX 定位。这样 contentSize.width 恒等于：
+        //     frame.width - 2*margin + 2*margin = frame.width
+        // 横向无处可滚。
+        [_detailStack.centerXAnchor constraintEqualToAnchor:_detailScroll.frameLayoutGuide.centerXAnchor],
+        [_detailStack.widthAnchor constraintEqualToAnchor:_detailScroll.frameLayoutGuide.widthAnchor
+                                                constant:-(A2SpaceM + A2SpaceXL)],
+
+        // ---- 第四道保险：contentSize 宽度钉死 ----
+        // ScrollView 的可滚内容宽度 = 内容栈 + 两侧 margin，恒等于 frame 宽度
+        [_detailScroll.contentLayoutGuide.widthAnchor
+            constraintEqualToAnchor:_detailScroll.frameLayoutGuide.widthAnchor],
     ]];
 
     [_nav selectIndex:0 animated:NO];

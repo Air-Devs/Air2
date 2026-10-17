@@ -271,12 +271,14 @@
         [scroll.leadingAnchor constraintEqualToAnchor:_card.leadingAnchor constant:A2SpaceL],
         [scroll.trailingAnchor constraintEqualToAnchor:_card.trailingAnchor constant:-A2SpaceL],
 
-        [stack.topAnchor constraintEqualToAnchor:scroll.topAnchor],
-        [stack.bottomAnchor constraintEqualToAnchor:scroll.bottomAnchor],
-        [stack.leadingAnchor constraintEqualToAnchor:scroll.leadingAnchor],
-        [stack.trailingAnchor constraintEqualToAnchor:scroll.trailingAnchor],
-        [stack.widthAnchor constraintEqualToAnchor:scroll.widthAnchor],
-        [stack.heightAnchor constraintGreaterThanOrEqualToConstant:0],
+        // 内容栈约束到 layout guide，不是 scroll 自身 ——
+        // 直接约束到 scroll 会让内容宽度按 scroll 的 frame 算，
+        // 而 frame 此时还没定，导致列表挤成一条窄列。
+        [stack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor],
+        [stack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor],
+        [stack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor],
+        [stack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor],
+        [stack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor],
         [scroll.heightAnchor constraintLessThanOrEqualToConstant:240],
     ]];
 
