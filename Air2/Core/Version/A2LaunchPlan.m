@@ -415,8 +415,9 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     //   · UseStringDeduplication 是实验特性 ⇒ 需先 UnlockExperimentalVMOptions（老线同款）。
     // ★诊断开关(2026-10-17)★ A2XintMode=YES(默认) ⇒ 加 -Xint：纯解释器、不生成任何 JIT 代码。
     //   目的：区分「卡在 JIT/code cache」与「卡在 VM 其它初始化」。定位完必须关掉。
+    //   结论(真机 2026-10-17):-Xint 下★依然卡在同一处✗★ ⇒ 卡点与 JIT 无关 ⇒ 默认关。
     id a2xintVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2XintMode"];
-    BOOL a2xint = (a2xintVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2XintMode"];
+    BOOL a2xint = (a2xintVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2XintMode"];
     if (a2xint) {
         [options addObject:@"-Xint"];
     }

@@ -104,11 +104,29 @@ static void *a2_vm_stuck_probe(void *ctx) {
         long offPC = 0, offLR = 0;
         const char *imgPC = a2_vm_short_image(pc, &ipc, &offPC);
         const char *imgLR = a2_vm_short_image(lr, &ilr, &offLR);
-        a2_log_f(@"[A2JVM] ★卡在 VM 创建(20s)：pc=0x%lx (%s+%ld sym=%s) lr=0x%lx (%s+%ld sym=%s) sp=0x%lx fp=0x%lx x0=0x%llx x1=0x%llx",
+        a2_log_f(@"[A2JVM] ★卡在 VM 创建(20s)：pc=0x%lx (%s+%ld sym=%s) lr=0x%lx (%s+%ld sym=%s) sp=0x%lx fp=0x%lx",
                  (unsigned long)pc, imgPC, offPC, ipc.dli_sname ?: "?",
                  (unsigned long)lr, imgLR, offLR, ilr.dli_sname ?: "?",
-                 (unsigned long)(uintptr_t)st.__sp, (unsigned long)(uintptr_t)st.__fp,
-                 (unsigned long long)st.__x[0], (unsigned long long)st.__x[1]);
+                 (unsigned long)(uintptr_t)st.__sp, (unsigned long)(uintptr_t)st.__fp);
+
+        // ★栈回溯★：arm64 帧记录 = {fp_prev, lr}；逐帧 dladdr 出符号，
+        //   这样能看清 JavaCalls::call_helper 是被 VM 初始化哪一步调起来的。
+        {
+            uintptr_t frameFP = (uintptr_t)st.__fp;
+            for (int depth = 0; depth < 12 && frameFP != 0; depth++) {
+                uintptr_t *rec = (uintptr_t *)frameFP;
+                uintptr_t nextFP = rec[0];
+                uintptr_t retAddr = rec[1];
+                if (retAddr == 0) break;
+                Dl_info fi = {0};
+                long foff = 0;
+                const char *fimg = a2_vm_short_image(retAddr, &fi, &foff);
+                a2_log_f(@"[A2JVM]   frame#%d ret=0x%lx (%s+%ld sym=%s)",
+                         depth, (unsigned long)retAddr, fimg, foff, fi.dli_sname ?: "?");
+                if (nextFP <= frameFP) break;      // 递增才继续（防坏链死循环）
+                frameFP = nextFP;
+            }
+        }
     } else {
         a2_log_f(@"[A2JVM] ★卡在 VM 创建(20s)：thread_get_state 失败 kr=%d", (int)kr);
     }

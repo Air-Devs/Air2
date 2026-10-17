@@ -167,7 +167,6 @@ int main(int argc, const char *argv[]) {
             // 改为显式关闭压缩类指针（依据 iPhone 17 Pro 崩溃报告 + 老线 JavaLauncher.m:2563/3469 的已验证行为）。
             @"-XX:-UseCompressedClassPointers",
             @"-Xss1m", @"-XX:SoftRefLRUPolicyMSPerMB=250",
-            @"-Xint",
             // ★JIT/代码缓存组（老线 JavaLauncher.m:2327-2384 已验证）：Java 8 只有 Unlock，
             //   且没有 MirrorMappedCodeCache（Java 8 的 libjvm 不认，老线 ISSUE-FIX #70）。
             @"-XX:+UnlockExperimentalVMOptions",
@@ -193,7 +192,6 @@ int main(int argc, const char *argv[]) {
             @"-Xms128M", @"-Xmx2048M",
             @"-XX:-UseCompressedClassPointers",
             @"-Xss1m", @"-XX:SoftRefLRUPolicyMSPerMB=250",
-            @"-Xint",
             @"-XX:+UnlockExperimentalVMOptions", @"-XX:+UseG1GC",
             @"-XX:MaxGCPauseMillis=50", @"-XX:+UseStringDeduplication",
             // ★JIT/代码缓存组★（Unlock 已在 G1 组里 ⇒ 这里不重复）+ Java≥17 的镜像映射
