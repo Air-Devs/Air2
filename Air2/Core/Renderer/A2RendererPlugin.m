@@ -4,6 +4,7 @@
 //
 
 #import "A2RendererPlugin.h"
+#import "A2RendererLibraryLayout.h"
 #import <dlfcn.h>
 #import <mach-o/loader.h>
 #import <mach-o/fat.h>
@@ -110,6 +111,34 @@
 
     p.rendererGLPath = json[@"rendererGLPath"] ?: @"";
     p.rendererEGLPath = json[@"rendererEGLPath"] ?: @"";
+
+    // 库布局：优先读显式声明，否则按路径推断
+    //
+    // 推断规则：
+    //   eglPath 为空                         → combined（不需要单独 EGL）
+    //   eglPath == glPath                    → combined（同一个文件）
+    //   两个路径都非空且不同                  → separate
+    //
+    // 注意「eglPath 为空」推断成 combined 而不是 glOnly ——
+    // 因为实际遇到的（MobileGlues / NG-GL4ES）都是合并库，
+    // glOnly 是少见情况，应该显式声明。
+    NSString *layout = json[@"libraryLayout"];
+    if ([layout isEqualToString:@"separate"]) {
+        p.libraryLayout = A2RendererLibraryLayoutSeparate;
+    } else if ([layout isEqualToString:@"glOnly"] ||
+               [layout isEqualToString:@"gl-only"]) {
+        p.libraryLayout = A2RendererLibraryLayoutGLOny;
+    } else if ([layout isEqualToString:@"combined"]) {
+        p.libraryLayout = A2RendererLibraryLayoutCombined;
+    } else {
+        // 未声明 → 推断
+        if (p.rendererEGLPath.length == 0 ||
+            [p.rendererEGLPath isEqualToString:p.rendererGLPath]) {
+            p.libraryLayout = A2RendererLibraryLayoutCombined;
+        } else {
+            p.libraryLayout = A2RendererLibraryLayoutSeparate;
+        }
+    }
     p.dlopenLibPaths = [json[@"dlopenLibPaths"] isKindOfClass:NSArray.class]
         ? json[@"dlopenLibPaths"] : @[];
     p.minMCVer = [json[@"minMCVer"] isKindOfClass:NSString.class] ? json[@"minMCVer"] : nil;
@@ -158,9 +187,19 @@
 }
 
 - (NSString *)absoluteEGLPath {
-    if (self.rendererEGLPath.length == 0) return @"";
-    if ([self.rendererEGLPath hasPrefix:@"/"]) return self.rendererEGLPath;
-    return [self.installPath stringByAppendingPathComponent:self.rendererEGLPath];
+    // 合并库：EGL 就在 GL 那个文件里
+    if (self.libraryLayout == A2RendererLibraryLayoutCombined ||
+        self.libraryLayout == A2RendererLibraryLayoutGLOny) {
+        return self.rendererEGLPath.length ? [self resolvePath:self.rendererEGLPath] : nil;
+    }
+
+    if (self.rendererEGLPath.length == 0) return nil;
+    return [self resolvePath:self.rendererEGLPath];
+}
+
+- (NSString *)resolvePath:(NSString *)rel {
+    if ([rel hasPrefix:@"/"]) return rel;
+    return [self.installPath stringByAppendingPathComponent:rel];
 }
 
 #pragma mark - 校验
@@ -181,12 +220,20 @@
         return;
     }
 
-    NSString *egl = self.absoluteEGLPath;
-    if (egl.length > 0 && ![NSFileManager.defaultManager fileExistsAtPath:egl]) {
-        self.availability = A2RendererAvailabilityMissingLib;
-        self.unavailableReason = [NSString stringWithFormat:
-            @"找不到 EGL 库：%@", self.rendererEGLPath];
-        return;
+    // 只有分离库才需要单独检查 EGL 文件
+    if (A2RendererLayoutHasSeparateEGL(self.libraryLayout)) {
+        NSString *egl = self.absoluteEGLPath;
+        if (egl.length == 0) {
+            self.availability = A2RendererAvailabilityMissingLib;
+            self.unavailableReason = @"声明为分离库（separate），但没有指定 rendererEGLPath";
+            return;
+        }
+        if (![NSFileManager.defaultManager fileExistsAtPath:egl]) {
+            self.availability = A2RendererAvailabilityMissingLib;
+            self.unavailableReason = [NSString stringWithFormat:
+                @"找不到 EGL 库：%@", self.rendererEGLPath];
+            return;
+        }
     }
 
     // 3. 架构检查（避免 dlopen 时报难懂的错误）

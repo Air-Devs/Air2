@@ -21,6 +21,7 @@
 //
 
 #import <Foundation/Foundation.h>
+#import "A2RendererLibraryLayout.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -78,7 +79,15 @@ typedef NS_ENUM(NSInteger, A2RendererEnvType) {
 @property (nonatomic, copy, nullable) NSString *author;
 @property (nonatomic, copy, nullable) NSString *homepage;
 
+/// 库的布局形态。manifest 里用 "libraryLayout" 字段声明：
+///   "combined"  —— GL 与 EGL 在同一个 dylib（MobileGlues / NG-GL4ES）
+///   "separate"  —— 两个独立 dylib（Zink / VirGL）
+///   "glOnly"    —— 只有 GL
+/// 缺省时自动推断：eglPath 为空或等于 glPath → combined，否则 separate。
+@property (nonatomic, assign) A2RendererLibraryLayout libraryLayout;
+
 @property (nonatomic, copy) NSString *rendererGLPath;   ///< 相对包根
+/// EGL 库。libraryLayout 为 combined 时可留空（表示与 GL 同一个文件）。
 @property (nonatomic, copy) NSString *rendererEGLPath;
 @property (nonatomic, copy) NSArray<NSString *> *dlopenLibPaths;
 @property (nonatomic, copy, nullable) NSString *minMCVer;

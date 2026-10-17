@@ -182,9 +182,19 @@ myrenderer.air2plugin          ← 就是个 zip
 ├── manifest.json              ← 必需
 ├── icon.png                   ← 可选，列表图标
 └── libs/
-    ├── libmygl.dylib          ← GL 库
-    └── libmyegl.dylib         ← EGL 库
+    └── ...                    ← 库文件，数量取决于布局
 ```
+
+**`libs/` 里放几个库，取决于你的库是怎么编的**（manifest 的 `libraryLayout` 字段）：
+
+| layout | 含义 | 例子 | 文件数 |
+|---|---|---|---|
+| **`combined`** | **GL 与 EGL 在同一个 dylib** | **MobileGlues、NG-GL4ES** | 1 |
+| `separate` | GL 与 EGL 各一个 | Zink、VirGL | 2 |
+| `glOnly` | 只有 GL | OSMesa 直连 | 1 |
+
+这是 iOS 特有的：Android 的 `glName`/`eglName` 总是两个独立 `.so`，
+而 iOS 上很多实现（含 MobileGlues）把两者编在一起。
 
 ### 5.4 manifest.json
 
@@ -199,6 +209,7 @@ myrenderer.air2plugin          ← 就是个 zip
 
   "rendererGLPath": "libs/libmygl.dylib",
   "rendererEGLPath": "libs/libmyegl.dylib",
+  "libraryLayout": "separate",
   "dlopenLibPaths": ["libs/libdeps.dylib"],
 
   "minMCVer": "1.16.5",

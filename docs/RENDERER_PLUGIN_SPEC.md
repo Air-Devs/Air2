@@ -11,9 +11,12 @@ myrenderer.air2plugin          ← 就是个 zip，扩展名改一下
 ├── manifest.json              ← 必需，渲染器描述
 ├── icon.png                   ← 可选，列表图标（建议 128x128）
 └── libs/
-    ├── libmygl.dylib          ← GL 库
-    └── libmyegl.dylib         ← EGL 库
+    └── ...                    ← 动态库，数量取决于库布局（见 2.3）
 ```
+
+**注意 `libs/` 里放几个文件，取决于你的库是怎么编的** —— 有三种情况，
+manifest 里用 `libraryLayout` 字段声明。这是 iOS 上特有的问题：
+Android 的 glName / eglName 总是两个独立的 `.so`，而 iOS 上很多是合并的。
 
 **注意**：`libs/` 下的文件必须是 **iOS 可加载的 `.dylib`**（不是 Android 的 `.so`）。
 如果是为 FCL 做的 `.so` 插件，**不能直接用**，需要用 iOS 工具链重新编译。
@@ -107,6 +110,63 @@ myrenderer.air2plugin          ← 就是个 zip，扩展名改一下
 | `env` | | 环境变量列表（见 3.2） |
 | `ios` | | iOS 特有信息（见 3.3） |
 
+### 3.1.1 库布局（libraryLayout）★ 重要
+
+iOS 上 GL 与 EGL 可能编在同一个 dylib 里，也可能分开。**必须显式声明**，
+否则加载顺序会错。
+
+| 值 | 含义 | 典型例子 | libs/ 里放几个 |
+|---|---|---|---|
+| `combined` | **GL 与 EGL 在同一个 dylib** | **MobileGlues、NG-GL4ES** | 1 个 |
+| `separate` | GL 与 EGL 各一个 dylib | Zink（libglxshim + libEGL_mesa）、VirGL | 2 个 |
+| `glOnly` | 只有 GL，不需要 EGL | 部分 OSMesa 直连 | 1 个 |
+
+**缺省时的自动推断**：
+
+```
+rendererEGLPath 为空            → combined
+rendererEGLPath == rendererGLPath → combined
+两个路径都非空且不同             → separate
+```
+
+**推荐显式写出来**，别依赖推断 —— 读 manifest 的人一眼就明白。
+
+#### combined 示例（MobileGlues）
+
+```json
+{
+  "rendererGLPath": "libs/libMobileGlues.dylib",
+  "rendererEGLPath": "",
+  "libraryLayout": "combined"
+}
+```
+
+**只需一个 dylib** —— 它同时导出 `gl*` 与 `egl*` 符号。
+加载时一次 `dlopen`，两个函数表都从同一个句柄取。
+
+#### separate 示例（Zink）
+
+```json
+{
+  "rendererGLPath": "libs/libglxshim.dylib",
+  "rendererEGLPath": "libs/libEGL_mesa.dylib",
+  "libraryLayout": "separate"
+}
+```
+
+**加载顺序很重要**：必须先 `dlopen` EGL 且加 `RTLD_GLOBAL`，
+再 `dlopen` GL。否则 GL 库找不到 `eglGetDisplay` 这些符号，
+报 `symbol not found`。
+
+#### glOnly 示例
+
+```json
+{
+  "rendererGLPath": "libs/libOSMesa.dylib",
+  "libraryLayout": "glOnly"
+}
+```
+
 ### 3.2 env 的四种类型
 
 对应 FCL 的 v2 规格，**格式完全兼容**：
@@ -142,7 +202,7 @@ myrenderer.air2plugin          ← 就是个 zip，扩展名改一下
 ① 解压到 Documents/Air2/Renderers/{rendererId}/
 ② 校验 manifest 字段完整性
 ③ 校验 libs/ 下的文件存在
-④ 尝试 dlopen 探测能否加载
+④ 尝试 dlopen 探测能否加载（按 libraryLayout 决定加载哪个文件）
    ├─ 成功 → 标记 available，加入列表
    └─ 失败 → 标记 unavailable，附上原因（签名无效 / 架构不匹配 / 缺依赖）
    ↓
