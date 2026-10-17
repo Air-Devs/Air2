@@ -126,6 +126,16 @@
     if (content.length > 0) {
         return content;
     }
+    // ★退一步★：会话文件为空/读不到时，直接显示控制台归档（latestlog.txt），
+    //   并如实标出来源 —— 不让用户看到“暂无日志”却其实有日志在另一个文件里。
+    NSString *console = [A2Log consoleLogPath];
+    NSString *consoleBody = console.length
+        ? [NSString stringWithContentsOfFile:console encoding:NSUTF8StringEncoding error:NULL]
+        : nil;
+    if (consoleBody.length > 0) {
+        return [NSString stringWithFormat:@"（会话日志为空 ⇒ 下面是控制台归档 %@）\n\n%@",
+                [self displayPath:console], consoleBody];
+    }
     return @"暂无日志。\n\n本次会话还没有写过任何一行。启动器跑起来之后：\n"
             "· Documents/lastlog.txt —— 会话日志（判据行 [A2-PAIRPIN]/[RXPC]/[FRAME]/[MEM] 都在这里）\n"
             "· Documents/latestlog.txt —— 控制台归档（native 层裸写的 NSLog 只在这里）";

@@ -308,6 +308,9 @@ void a2_log_session_sink(const char *utf8Line) {
         a2_log_append(message);
         a2_log_console_guard();
     });
+    // ★同一行也进控制台归档★（latestlog.txt）：会话文件读不到时（例如用户只拿得到
+    //   Documents 里的 latestlog.txt），启动链的判据行仍然可查 —— 不让日志只存在一处。
+    a2_log_console_write(message);
 }
 
 + (NSString *)currentLogPath {

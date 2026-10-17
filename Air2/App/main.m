@@ -59,6 +59,15 @@ int main(int argc, char *argv[]) {
         a2_log_set_sink(a2_log_session_sink);
 
         [A2Log log:@"main: 进入 UIApplicationMain"];
+    // ★构建戳★：日志第一屏就能看到装的是哪一次构建（打包时 CFBundleVersion = 提交短 sha）
+    {
+        NSDictionary *info = NSBundle.mainBundle.infoDictionary;
+        [A2Log log:@"[A2-BUILD] Air2 %@ (%@)",
+                     info[@"CFBundleShortVersionString"] ?: @"?",
+                     info[@"CFBundleVersion"] ?: @"?"];
+        [A2Log log:@"[A2-BUILD] 日志文件：%@ | 控制台归档：%@",
+                     [A2Log currentLogPath], [A2Log consoleLogPath]];
+    }
 
         return UIApplicationMain(argc, argv, nil, delegateName);
     }
