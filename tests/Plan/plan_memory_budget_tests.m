@@ -167,6 +167,14 @@ int main(int argc, const char *argv[]) {
             // 改为显式关闭压缩类指针（依据 iPhone 17 Pro 崩溃报告 + 老线 JavaLauncher.m:2563/3469 的已验证行为）。
             @"-XX:-UseCompressedClassPointers",
             @"-Xss1m", @"-XX:SoftRefLRUPolicyMSPerMB=250",
+            // ★JIT/代码缓存组（老线 JavaLauncher.m:2327-2384 已验证）：Java 8 只有 Unlock，
+            //   且没有 MirrorMappedCodeCache（Java 8 的 libjvm 不认，老线 ISSUE-FIX #70）。
+            @"-XX:+UnlockExperimentalVMOptions",
+            @"-XX:+DisablePrimordialThreadGuardPages",
+            @"-XX:ReservedCodeCacheSize=64m",
+            @"-XX:InitialCodeCacheSize=16m",
+            @"-XX:CodeCacheExpansionSize=4m",
+            @"-Xlog:init=debug:stderr",
             [NSString stringWithFormat:@"-Djava.system.class.loader=%@", A2LaunchGameClassLoaderName],
         ];
         ok(ArrayEquals(j8, want8),
@@ -187,6 +195,13 @@ int main(int argc, const char *argv[]) {
             @"-Xss1m", @"-XX:SoftRefLRUPolicyMSPerMB=250",
             @"-XX:+UnlockExperimentalVMOptions", @"-XX:+UseG1GC",
             @"-XX:MaxGCPauseMillis=50", @"-XX:+UseStringDeduplication",
+            // ★JIT/代码缓存组★（Unlock 已在 G1 组里 ⇒ 这里不重复）+ Java≥17 的镜像映射
+            @"-XX:+DisablePrimordialThreadGuardPages",
+            @"-XX:ReservedCodeCacheSize=64m",
+            @"-XX:InitialCodeCacheSize=16m",
+            @"-XX:CodeCacheExpansionSize=4m",
+            @"-XX:+MirrorMappedCodeCache",
+            @"-Xlog:init=debug:stderr",
             [NSString stringWithFormat:@"-Djava.system.class.loader=%@", A2LaunchGameClassLoaderName],
         ];
         ok(ArrayEquals(j25, want17),
@@ -207,6 +222,9 @@ int main(int argc, const char *argv[]) {
         // 而「去掉 G1 后与 Java 8 档一致」这条断言本身依然有效。
         NSUInteger g1Start = [j25NoGC indexOfObject:@"-XX:+UnlockExperimentalVMOptions"];
         ok(g1Start != NSNotFound, @"Java 17+ 档里能找到 G1 组起点（-XX:+UnlockExperimentalVMOptions）");
+        // ★两档差异 = G1 组（4 条）+ MirrorMappedCodeCache（仅 Java≥17）★ ⇒ 两处都摘掉再比
+        [j25NoGC removeObject:@"-XX:+MirrorMappedCodeCache"];
+        g1Start = [j25NoGC indexOfObject:@"-XX:+UnlockExperimentalVMOptions"];
         if (g1Start != NSNotFound && g1Start + 4 <= j25NoGC.count) {
             [j25NoGC removeObjectsInRange:NSMakeRange(g1Start, 4)];
         } else {
