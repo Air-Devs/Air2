@@ -25,6 +25,7 @@
 
 #import <Foundation/Foundation.h>
 #import "a2_remotexpc_session.h"
+#import "a2_rppairing_pairsetup.h"   // A2RPPairSetupTransportFailure（下方 JSON 传输的失败分类）
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -129,6 +130,8 @@ BOOL A2RPPairSetupUSBPathAvailable(NSString *_Nullable *_Nullable reason);
 @property (nonatomic, readonly) BOOL handshakeCompleted;
 /// 对端最先发来的原始字节（判据行的 `firstBytes=`）。
 @property (nonatomic, readonly, copy, nullable) NSData *firstBytes;
+/// 最近一次失败的分类（握手失败时调用方据此选「协议错」还是「传输错」）。
+@property (nonatomic, readonly) A2RPPairSetupTransportFailure lastFailureKind;
 - (void)close;
 
 @end
