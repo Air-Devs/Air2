@@ -23,6 +23,7 @@
 
 #import "A2CurseForgeAPI.h"
 #import "A2MurmurHash2.h"
+#import "A2Log.h"
 #import <Security/Security.h>
 
 /// 私有 Keychain 接口提前声明：文件顶部静态函数区会调它，
@@ -293,9 +294,18 @@ static NSNumber *A2CFModLoaderTypeForIdentifier(NSString *identifier) {
         return;
     }
 
+    // 判据行：把「实际请求的完整 URL + HTTP 状态」落到会话日志。
+    // 端点写错只会表现为「服务返回 HTTP 404」，没有 URL 就无从判断是哪一段参数错了
+    // （存档曾整类 404：classId 与其它资源不同，靠这一行才能一眼看出来）。
+    NSString *requestURL = req.URL.absoluteString ?: @"(nil)";
+
     NSURLSessionDataTask *t = [NSURLSession.sharedSession dataTaskWithRequest:req
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
         NSHTTPURLResponse *http = (NSHTTPURLResponse *)resp;
+
+        [A2Log criterion:@"[A2-CF] GET %@ -> %ld%@", requestURL,
+                        (long)http.statusCode,
+                        error ? [NSString stringWithFormat:@" err=%@", error.localizedDescription] : @""];
 
         if (error) { A2Main(^{ if (completion) completion(nil, error); }); return; }
 

@@ -30,6 +30,8 @@ ROOT = os.path.dirname(os.path.dirname(HERE))          # 仓根
 # 被测的【真实】源文件（全部只依赖 Foundation ⇒ 能在 macOS 上直接编、直接跑）。
 SOURCES = [
     os.path.join(ROOT, "Air2", "Core", "Path", "A2VersionIsolation.m"),  # 实例路径唯一计算处
+    # 用户选定的游戏根目录存在 A2Settings（A2GamePath.defaultGameHome 的唯一数据来源）
+    os.path.join(ROOT, "Air2", "Core", "Settings", "A2Settings.m"),
     os.path.join(ROOT, "Air2", "Utils", "A2Log.m"),                      # 判据行的日志门面
     os.path.join(HERE, "instance_path_tests.m"),
 ]
@@ -37,6 +39,7 @@ SOURCES = [
 # 头搜索路径：被测文件按「裸文件名」互相 import（仓内既有写法）。
 INCLUDE_DIRS = [
     os.path.join(ROOT, "Air2", "Core", "Path"),
+    os.path.join(ROOT, "Air2", "Core", "Settings"),
     os.path.join(ROOT, "Air2", "Utils"),
 ]
 

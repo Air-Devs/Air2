@@ -49,7 +49,51 @@
 #import "A2FavoritesViewController.h"
 #import "A2DownloadTasksViewController.h"
 #import "A2Metrics.h"
+#import "A2ThemeManager.h"
+#import "A2Typography.h"
 #import "A2Log.h"
+
+#pragma mark - 加载占位页
+
+/// 首次进入某分类时的占位页。
+///
+/// 为什么需要它：内容页的 viewDidLoad 要建整套筛选卡 / 表格并发网络请求，
+/// 这一帧在主线程上做完之前，用户点完左栏只看到「没反应」（批注：切换有点卡顿）。
+/// 先把这页塞进右侧栈、让本次 runloop 结束去渲染（左栏转圈同时亮起），
+/// 内容页的构建留到下一轮主循环 —— 反馈与重活不再抢同一帧。
+@interface A2CategoryLoadingViewController : UIViewController
+@end
+
+@implementation A2CategoryLoadingViewController
+
+- (void)viewDidLoad {
+    [super viewDidLoad];
+    self.view.backgroundColor = A2ThemeManager.shared.scheme.cSurface;
+
+    UIActivityIndicatorView *spinner =
+        [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
+    spinner.translatesAutoresizingMaskIntoConstraints = NO;
+    spinner.color = A2ThemeManager.shared.scheme.cPrimary;
+    [spinner startAnimating];
+
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    label.font = [A2Typography caption];
+    label.textColor = A2ThemeManager.shared.scheme.cOnSurfaceVariant;
+    label.text = @"正在加载…";
+
+    [self.view addSubview:spinner];
+    [self.view addSubview:label];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [spinner.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+        [spinner.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor constant:-16],
+        [label.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
+        [label.topAnchor constraintEqualToAnchor:spinner.bottomAnchor constant:A2SpaceS],
+    ]];
+}
+
+@end
 
 @interface A2DownloadViewController ()
 @property (nonatomic, strong) A2CategoryNavView *nav;
@@ -137,10 +181,30 @@
 
 - (void)selectCategoryAtIndex:(NSInteger)index {
     [A2Log log:@"download: 切换分类 index=%ld", (long)index];
-    UIViewController *vc = [self contentViewControllerForIndex:index];
-    // 直接把该分类的内容页设为栈底：上一个分类的二级页面随栈一并换掉，
-    // 免得看到的内容和点亮的分类对不上。
-    [_contentNav setViewControllers:@[vc] animated:NO];
+
+    // 已建过的页直接换：切回来是瞬时的，不需要加载态。
+    UIViewController *cached = _contentCache[@(index)];
+    if (cached) {
+        [_nav setLoadingIndex:-1];
+        [_contentNav setViewControllers:@[cached] animated:NO];
+        return;
+    }
+
+    // ★首建分类★：先亮左栏转圈 + 右侧「正在加载…」占位，
+    // 把内容页构建推到下一轮主循环（见 A2CategoryLoadingViewController 的说明）。
+    [_nav setLoadingIndex:index];
+    [_contentNav setViewControllers:@[[A2CategoryLoadingViewController new]] animated:NO];
+
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        // 这一轮里用户可能又点了别的分类：只认当前选中的那个。
+        if (self.nav.selectedIndex != index) return;
+        UIViewController *vc = [self contentViewControllerForIndex:index];
+        [self.contentNav setViewControllers:@[vc] animated:NO];
+        [self.nav setLoadingIndex:-1];
+    });
 }
 
 /// 取（或首次创建）某分类的内容页。

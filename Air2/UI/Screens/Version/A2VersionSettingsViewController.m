@@ -45,6 +45,7 @@
 #import "A2OptionSheet.h"          // 实例级「Java 运行时 / 渲染器」单选（MD3 弹窗）
 #import "A2JavaRuntimeCatalog.h"    // JRE 档位清单
 #import "A2RendererCatalog.h"       // 渲染器清单
+#import "A2Renderer.h"             // 渲染器取值的唯一来源（A2Renderer 类型）
 #import "A2RuntimeStrings.h"        // 渲染器显示名（缺 key 回退技术名）
 
 @interface A2VersionSettingsViewController ()

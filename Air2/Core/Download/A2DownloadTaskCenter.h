@@ -50,6 +50,8 @@ extern NSNotificationName const A2DownloadTasksDidChangeNotification;
 
 /// 入队并立即开始下载。
 /// projectID/versionID/subdir 非空时，成功后写入 A2DownloadManifest。
+/// iconURL/resourceClass/resourceVersion 是「资源是什么」的元信息，
+/// 只用于任务页展示（图标 / 类型 / 版本），不参与下载与回写。
 /// @return 任务 ID（永不为 nil）
 - (NSString *)enqueueWithTitle:(NSString *)title
                       subtitle:(nullable NSString *)subtitle
@@ -57,6 +59,9 @@ extern NSNotificationName const A2DownloadTasksDidChangeNotification;
                      projectID:(nullable NSString *)projectID
                      versionID:(nullable NSString *)versionID
                         subdir:(nullable NSString *)subdir
+                       iconURL:(nullable NSString *)iconURL
+                 resourceClass:(NSInteger)resourceClass
+               resourceVersion:(nullable NSString *)resourceVersion
                     completion:(nullable void (^)(BOOL success, NSError * _Nullable error))completion;
 
 /// 运行中 → 暂停；暂停 → 继续

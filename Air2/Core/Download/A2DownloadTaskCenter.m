@@ -111,6 +111,9 @@ static const NSTimeInterval kTaskNotifyThrottle = 0.1;
                      projectID:(NSString *)projectID
                      versionID:(NSString *)versionID
                         subdir:(NSString *)subdir
+                       iconURL:(NSString *)iconURL
+                 resourceClass:(NSInteger)resourceClass
+               resourceVersion:(NSString *)resourceVersion
                     completion:(void (^)(BOOL, NSError *))completion {
     A2DownloadTask *task = [A2DownloadTask taskWithTitle:title subtitle:subtitle createdAt:[NSDate date]];
     task.request = request;
@@ -119,6 +122,10 @@ static const NSTimeInterval kTaskNotifyThrottle = 0.1;
     task.subdir = subdir;
     task.completion = completion;
     task.state = A2DownloadStateRunning;
+    // 资源元信息（图标 / 类型 / 版本）只在入队时定一次，之后界面直接读。
+    [task applyResourceMetadataIconURL:iconURL
+                         resourceClass:resourceClass
+                       resourceVersion:resourceVersion];
 
     dispatch_sync(self.queue, ^{
         self.sequence += 1;

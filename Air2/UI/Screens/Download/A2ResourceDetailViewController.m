@@ -47,21 +47,47 @@
 static NSString *const kResourceVersionCellID = @"A2ResourceVersionCell";
 static const CGFloat kHeaderIconSize = 72;
 
+/// 弹性占位：把两侧内容顶到两端（标题左、计数右）。
+static UIView *A2RDSpacer(void) {
+    UIView *spacer = [[UIView alloc] initWithFrame:CGRectZero];
+    spacer.translatesAutoresizingMaskIntoConstraints = NO;
+    [spacer setContentHuggingPriority:1 forAxis:UILayoutConstraintAxisHorizontal];
+    [spacer setContentCompressionResistancePriority:1 forAxis:UILayoutConstraintAxisHorizontal];
+    return spacer;
+}
+
 #pragma mark - 版本行
 
 /// 版本行：版本号 + 加载器/体积/游戏版本，最新标记与已装打勾。
+///
+/// 版式（用户批注「版本选择没被框起来」）：整段版本列表共用一张卡片外观 ——
+/// 首行圆上角、末行圆下角、中间行直角，行间一条 1pt 分隔线。
+/// 仍然留在 UITableView 里而不是拆成一堆真实视图：Fabric API 这种项目有上千个版本，
+/// 全量建视图会让详情页卡住（虚拟化是这里唯一可行的做法）。
 @interface A2ResourceVersionCell : UITableViewCell
 
 @property (nonatomic, strong) UILabel *versionLabel;
 @property (nonatomic, strong) UILabel *metaLabel;
+@property (nonatomic, strong) UIView *badgeView;
 @property (nonatomic, strong) UILabel *badgeLabel;
 
 - (void)configureWithVersion:(A2ContentVersion *)version
                     sizeText:(NSString *)sizeText
                       latest:(BOOL)latest
-                   installed:(BOOL)installed;
+                   installed:(BOOL)installed
+                       first:(BOOL)first
+                        last:(BOOL)last;
 - (void)applyTheme;
 
+@end
+
+@interface A2ResourceVersionCell ()
+/// 卡片面板：整段版本区看起来是「一个框」，靠它画。
+@property (nonatomic, strong) UIView *panel;
+/// 行间分隔线（末行隐藏）。
+@property (nonatomic, strong) UIView *separator;
+@property (nonatomic, assign) BOOL isFirst;
+@property (nonatomic, assign) BOOL isLast;
 @end
 
 @implementation A2ResourceVersionCell
@@ -72,44 +98,81 @@ static const CGFloat kHeaderIconSize = 72;
 
     self.backgroundColor = UIColor.clearColor;
     self.contentView.backgroundColor = UIColor.clearColor;
+    self.selectionStyle = UITableViewCellSelectionStyleNone;
+
+    _panel = [[UIView alloc] initWithFrame:CGRectZero];
+    _panel.translatesAutoresizingMaskIntoConstraints = NO;
+    _panel.layer.cornerCurve = kCACornerCurveContinuous;
+    _panel.layer.masksToBounds = YES;
+    [self.contentView addSubview:_panel];
 
     _versionLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _versionLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _versionLabel.font = [A2Typography subtitleCard];
     _versionLabel.numberOfLines = 1;
-    [self.contentView addSubview:_versionLabel];
+    [_panel addSubview:_versionLabel];
+
+    // 「最新」标记：与资源卡片上的类别徽标同一套尺寸（18pt 高、14% 底色、A2RadiusS），
+    // 字号取 A2Typography 最小档 caption —— 之前它和版本号（subtitleCard）一样大，
+    // 用户批注「字太大」。
+    _badgeView = [[UIView alloc] initWithFrame:CGRectZero];
+    _badgeView.translatesAutoresizingMaskIntoConstraints = NO;
+    _badgeView.layer.cornerRadius = A2RadiusS;
+    _badgeView.layer.cornerCurve = kCACornerCurveContinuous;
+    _badgeView.hidden = YES;
+    [_panel addSubview:_badgeView];
 
     _badgeLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _badgeLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _badgeLabel.font = [A2Typography caption];
     _badgeLabel.text = @"最新";
     _badgeLabel.textAlignment = NSTextAlignmentCenter;
-    _badgeLabel.layer.cornerRadius = A2RadiusS;
-    _badgeLabel.layer.masksToBounds = YES;
-    [self.contentView addSubview:_badgeLabel];
+    [_badgeView addSubview:_badgeLabel];
 
     _metaLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _metaLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _metaLabel.font = [A2Typography caption];
     _metaLabel.numberOfLines = 1;
     _metaLabel.lineBreakMode = NSLineBreakByTruncatingTail;
-    [self.contentView addSubview:_metaLabel];
+    [_panel addSubview:_metaLabel];
+
+    _separator = [[UIView alloc] initWithFrame:CGRectZero];
+    _separator.translatesAutoresizingMaskIntoConstraints = NO;
+    [_panel addSubview:_separator];
 
     [NSLayoutConstraint activateConstraints:@[
-        [_versionLabel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor
+        [_panel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor],
+        [_panel.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor],
+        [_panel.leadingAnchor constraintEqualToAnchor:self.contentView.leadingAnchor],
+        [_panel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor],
+
+        [_versionLabel.leadingAnchor constraintEqualToAnchor:_panel.leadingAnchor
                                                     constant:A2SpaceL],
-        [_versionLabel.topAnchor constraintEqualToAnchor:self.contentView.topAnchor
-                                                constant:A2SpaceS],
-        [_badgeLabel.leadingAnchor constraintEqualToAnchor:_versionLabel.trailingAnchor
-                                                  constant:A2SpaceS],
-        [_badgeLabel.centerYAnchor constraintEqualToAnchor:_versionLabel.centerYAnchor],
-        [_badgeLabel.trailingAnchor constraintLessThanOrEqualToAnchor:self.contentView.trailingAnchor
-                                                             constant:-A2SpaceL],
+        [_versionLabel.topAnchor constraintEqualToAnchor:_panel.topAnchor
+                                                constant:A2SpaceM],
+        [_badgeView.leadingAnchor constraintEqualToAnchor:_versionLabel.trailingAnchor
+                                                 constant:A2SpaceS],
+        [_badgeView.centerYAnchor constraintEqualToAnchor:_versionLabel.centerYAnchor],
+        [_badgeView.heightAnchor constraintEqualToConstant:18],
+        [_badgeView.trailingAnchor constraintLessThanOrEqualToAnchor:_panel.trailingAnchor
+                                                            constant:-A2SpaceL],
+        [_badgeLabel.leadingAnchor constraintEqualToAnchor:_badgeView.leadingAnchor constant:6],
+        [_badgeLabel.trailingAnchor constraintEqualToAnchor:_badgeView.trailingAnchor constant:-6],
+        [_badgeLabel.centerYAnchor constraintEqualToAnchor:_badgeView.centerYAnchor],
+
         [_metaLabel.leadingAnchor constraintEqualToAnchor:_versionLabel.leadingAnchor],
-        [_metaLabel.trailingAnchor constraintEqualToAnchor:self.contentView.trailingAnchor
+        [_metaLabel.trailingAnchor constraintEqualToAnchor:_panel.trailingAnchor
                                                   constant:-A2SpaceL],
         [_metaLabel.topAnchor constraintEqualToAnchor:_versionLabel.bottomAnchor
                                              constant:A2SpaceXS],
+        [_metaLabel.bottomAnchor constraintEqualToAnchor:_panel.bottomAnchor
+                                                constant:-A2SpaceM],
+
+        [_separator.leadingAnchor constraintEqualToAnchor:_panel.leadingAnchor
+                                                 constant:A2SpaceL],
+        [_separator.trailingAnchor constraintEqualToAnchor:_panel.trailingAnchor],
+        [_separator.bottomAnchor constraintEqualToAnchor:_panel.bottomAnchor],
+        [_separator.heightAnchor constraintEqualToConstant:1.0 / UIScreen.mainScreen.scale],
     ]];
     [self applyTheme];
     return self;
@@ -118,7 +181,9 @@ static const CGFloat kHeaderIconSize = 72;
 - (void)configureWithVersion:(A2ContentVersion *)version
                     sizeText:(NSString *)sizeText
                       latest:(BOOL)latest
-                   installed:(BOOL)installed {
+                   installed:(BOOL)installed
+                       first:(BOOL)first
+                        last:(BOOL)last {
     self.versionLabel.text = version.versionNumber;
     NSMutableArray<NSString *> *bits = [NSMutableArray array];
     if (version.loaders.count) [bits addObject:version.loaders.firstObject];
@@ -127,17 +192,34 @@ static const CGFloat kHeaderIconSize = 72;
         [bits addObject:[version.gameVersions componentsJoinedByString:@", "]];
     }
     self.metaLabel.text = [bits componentsJoinedByString:@" · "];
-    self.badgeLabel.hidden = !latest;
+    self.badgeView.hidden = !latest;
+    self.isFirst = first;
+    self.isLast = last;
     self.accessoryType = installed ? UITableViewCellAccessoryCheckmark
                                    : UITableViewCellAccessoryDisclosureIndicator;
+    [self setNeedsLayout];
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    // 整段版本区一张卡：首行圆上角、末行圆下角，中间行直角。
+    // 圆角只能在拿到真实行位置后按首/末行决定，故放在 layout 而不是 configure。
+    CACornerMask corners = 0;
+    if (self.isFirst) corners |= kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
+    if (self.isLast)  corners |= kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner;
+    self.panel.layer.maskedCorners = corners;
+    self.panel.layer.cornerRadius = (corners == 0) ? 0 : A2RadiusM;
+    self.separator.hidden = self.isLast;
 }
 
 - (void)applyTheme {
     A2ColorScheme *scheme = A2ThemeManager.shared.scheme;
+    self.panel.backgroundColor = scheme.cSurfaceContainerLow;
+    self.separator.backgroundColor = [scheme.cOnSurface colorWithAlphaComponent:0.10];
     self.versionLabel.textColor = scheme.cOnSurface;
     self.metaLabel.textColor = scheme.cOnSurfaceVariant;
-    self.badgeLabel.textColor = scheme.cPrimary;
-    self.badgeLabel.backgroundColor = scheme.cSurfaceContainerHigh;
+    self.badgeLabel.textColor = scheme.cTertiary;
+    self.badgeView.backgroundColor = [scheme.cTertiary colorWithAlphaComponent:0.14];
 }
 
 @end
@@ -155,6 +237,14 @@ static const CGFloat kHeaderIconSize = 72;
 @property (nonatomic, strong) UIActivityIndicatorView *spinner;
 @property (nonatomic, strong) A2PrimaryButton *downloadButton;
 @property (nonatomic, strong) UIButton *favoriteButton;
+
+/// 整页滚动容器（用户批注：不要只有版本栏能滑，iPhone 上屏幕不够用）。
+/// 详情页的全部内容 —— 头卡 / 简介 / 筛选 / 版本标题 —— 都挂在它上面，
+/// 作为 tableView 的 tableHeaderView 随列表一起滚动；版本行仍是 cell（保留虚拟化）。
+@property (nonatomic, strong) UIView *headerContainer;
+@property (nonatomic, strong) UIStackView *headerStack;
+@property (nonatomic, strong) UILabel *versionsTitleLabel;
+@property (nonatomic, strong) UILabel *versionsCountLabel;
 
 @property (nonatomic, strong) A2GlassCard *headerCard;
 @property (nonatomic, strong) A2RemoteImageView *iconView;
@@ -206,6 +296,7 @@ static const CGFloat kHeaderIconSize = 72;
     self.pageTitle = _project.title;
 
     [self setupFavoriteButton];
+    [self setupHeaderContainer];
     [self setupHeader];
     [self setupSummaryCard];
     [self setupFilter];
@@ -221,6 +312,55 @@ static const CGFloat kHeaderIconSize = 72;
 
 - (void)dealloc {
     [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    [self updateTableHeaderSize];
+}
+
+#pragma mark - 整页滚动容器
+
+/// 头卡 / 简介 / 筛选 / 版本标题共用的竖向栈，整体作为 tableView 的表头。
+- (void)setupHeaderContainer {
+    _headerContainer = [[UIView alloc] initWithFrame:CGRectZero];
+    _headerContainer.backgroundColor = UIColor.clearColor;
+
+    _headerStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _headerStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _headerStack.axis = UILayoutConstraintAxisVertical;
+    _headerStack.spacing = A2SpaceM;
+    _headerStack.alignment = UIStackViewAlignmentFill;
+    [_headerContainer addSubview:_headerStack];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [_headerStack.topAnchor constraintEqualToAnchor:_headerContainer.topAnchor
+                                                constant:A2SpaceS],
+        [_headerStack.leadingAnchor constraintEqualToAnchor:_headerContainer.leadingAnchor],
+        [_headerStack.trailingAnchor constraintEqualToAnchor:_headerContainer.trailingAnchor],
+        [_headerStack.bottomAnchor constraintEqualToAnchor:_headerContainer.bottomAnchor
+                                                  constant:-A2SpaceS],
+    ]];
+}
+
+/// tableHeaderView 不会自己跟着自动布局长高，必须在布局完成后按宽度重算一次高度。
+- (void)updateTableHeaderSize {
+    UIView *header = _headerContainer;
+    if (!header || !_tableView) return;
+    CGFloat width = _tableView.bounds.size.width;
+    if (width <= 0) return;
+
+    CGSize fitted = [header systemLayoutSizeFittingSize:CGSizeMake(width, 0)
+                              withHorizontalFittingPriority:UILayoutPriorityRequired
+                                    verticalFittingPriority:UILayoutPriorityFittingSizeLevel];
+    CGFloat height = ceil(fitted.height);
+    if (fabs(header.frame.size.height - height) < 0.5 &&
+        fabs(header.frame.size.width - width) < 0.5) {
+        return;
+    }
+    header.frame = CGRectMake(0, 0, width, height);
+    // 重设一次才会让 tableView 重新读取表头高度（UIKit 的既有行为）。
+    _tableView.tableHeaderView = header;
 }
 
 #pragma mark - 收藏
@@ -275,7 +415,7 @@ static const CGFloat kHeaderIconSize = 72;
     card.translatesAutoresizingMaskIntoConstraints = NO;
     card.cornerRadius = A2RadiusL;
     card.elevation = A2CardElevationLow;
-    [self.plainContentView addSubview:card];
+    [self.headerStack addArrangedSubview:card];
     _headerCard = card;
 
     // 真实图标：远端拉取，无图时由 A2RemoteImageView 直接显示占位底。
@@ -351,12 +491,6 @@ static const CGFloat kHeaderIconSize = 72;
     [card.contentView addSubview:_downloadButton];
 
     [NSLayoutConstraint activateConstraints:@[
-        [card.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor
-                                       constant:A2SpaceS],
-        [card.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
-                                           constant:A2PageMargin],
-        [card.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
-                                            constant:-A2PageMargin],
         [topRow.topAnchor constraintEqualToAnchor:card.contentView.topAnchor],
         [topRow.leadingAnchor constraintEqualToAnchor:card.contentView.leadingAnchor],
         [topRow.trailingAnchor constraintEqualToAnchor:card.contentView.trailingAnchor],
@@ -400,7 +534,7 @@ static const CGFloat kHeaderIconSize = 72;
     card.cornerRadius = A2RadiusL;
     card.elevation = A2CardElevationSurface;
     card.contentInsets = UIEdgeInsetsMake(A2CardPadding, A2CardPadding, A2CardPadding, A2CardPadding);
-    [self.plainContentView addSubview:card];
+    [self.headerStack addArrangedSubview:card];
     _summaryCard = card;
 
     UILabel *title = [[UILabel alloc] initWithFrame:CGRectZero];
@@ -417,11 +551,6 @@ static const CGFloat kHeaderIconSize = 72;
     [card.contentView addSubview:_summaryBodyLabel];
 
     [NSLayoutConstraint activateConstraints:@[
-        [card.topAnchor constraintEqualToAnchor:_headerCard.bottomAnchor constant:A2SpaceM],
-        [card.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
-                                           constant:A2PageMargin],
-        [card.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
-                                            constant:-A2PageMargin],
         [title.topAnchor constraintEqualToAnchor:card.contentView.topAnchor],
         [title.leadingAnchor constraintEqualToAnchor:card.contentView.leadingAnchor],
         [title.trailingAnchor constraintEqualToAnchor:card.contentView.trailingAnchor],
@@ -440,7 +569,7 @@ static const CGFloat kHeaderIconSize = 72;
     _filterStack.translatesAutoresizingMaskIntoConstraints = NO;
     _filterStack.axis = UILayoutConstraintAxisVertical;
     _filterStack.spacing = A2SpaceS;
-    [self.plainContentView addSubview:_filterStack];
+    [self.headerStack addArrangedSubview:_filterStack];
 
     _gameVersionChipStack = [self makeChipStack];
     _gameVersionRow = [self makeFilterRowWithLabel:@"游戏版本" chipsStack:_gameVersionChipStack];
@@ -452,14 +581,25 @@ static const CGFloat kHeaderIconSize = 72;
     _loaderRow.hidden = YES;
     [_filterStack addArrangedSubview:_loaderRow];
 
-    [NSLayoutConstraint activateConstraints:@[
-        [_filterStack.topAnchor constraintEqualToAnchor:_summaryCard.bottomAnchor
-                                               constant:A2SpaceM],
-        [_filterStack.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
-                                                   constant:A2PageMargin],
-        [_filterStack.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
-                                                    constant:-A2PageMargin],
-    ]];
+    // 版本区标题：让「框」有名字（版本 · 共 N 个），也让用户知道下面这坨是什么。
+    _versionsTitleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    _versionsTitleLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _versionsTitleLabel.font = [A2Typography titleCard];
+    _versionsTitleLabel.text = @"版本";
+
+    _versionsCountLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    _versionsCountLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _versionsCountLabel.font = [A2Typography caption];
+    _versionsCountLabel.textAlignment = NSTextAlignmentRight;
+
+    UIStackView *versionsHeaderRow = [[UIStackView alloc] initWithArrangedSubviews:
+                                      @[_versionsTitleLabel, A2RDSpacer(), _versionsCountLabel]];
+    versionsHeaderRow.translatesAutoresizingMaskIntoConstraints = NO;
+    versionsHeaderRow.axis = UILayoutConstraintAxisHorizontal;
+    versionsHeaderRow.alignment = UIStackViewAlignmentFirstBaseline;
+    versionsHeaderRow.spacing = A2SpaceS;
+    [self.headerStack addArrangedSubview:versionsHeaderRow];
+    [self.headerStack setCustomSpacing:A2SpaceS afterView:versionsHeaderRow];
 }
 
 - (UIStackView *)makeChipStack {
@@ -596,7 +736,10 @@ static const CGFloat kHeaderIconSize = 72;
         [out addObject:v];
     }
     _versions = out;
+    _versionsCountLabel.text = [NSString stringWithFormat:@"共 %lu 个", (unsigned long)out.count];
     [_tableView reloadData];
+    // 筛选行的显隐会改变表头高度，重算一次表头尺寸。
+    [self.view setNeedsLayout];
     [A2Log log:@"resource-detail: 筛选 gameVersion=%@ loader=%@ -> %lu 个版本",
         _selectedGameVersion ?: @"全部", _selectedLoader ?: @"全部", (unsigned long)out.count];
 
@@ -618,7 +761,9 @@ static const CGFloat kHeaderIconSize = 72;
     _emptyLabel.textAlignment = NSTextAlignmentCenter;
     _emptyLabel.numberOfLines = 0;
     _emptyLabel.hidden = YES;
-    [self.plainContentView addSubview:_emptyLabel];
+    // 空态与转圈放在表头的版本标题下面 —— 它们代表「版本区」的占位，
+    // 不该浮在头卡上（头卡现在也在同一个滚动容器里）。
+    [self.headerStack addArrangedSubview:_emptyLabel];
 
     _tableView = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
     _tableView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -631,23 +776,23 @@ static const CGFloat kHeaderIconSize = 72;
     [_tableView registerClass:A2ResourceVersionCell.class forCellReuseIdentifier:kResourceVersionCellID];
     [self.plainContentView addSubview:_tableView];
 
+    // ★整页一起滚★：头卡 / 简介 / 筛选 / 版本标题挪进表头，
+    // 与版本行同处一个滚动容器（用户批注：不要只有版本栏能滑）。
+    _tableView.tableHeaderView = _headerContainer;
+
     _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
     _spinner.translatesAutoresizingMaskIntoConstraints = NO;
     _spinner.hidesWhenStopped = YES;
     _spinner.color = A2ThemeManager.shared.scheme.cPrimary;
-    [self.plainContentView addSubview:_spinner];
+    [self.headerStack addArrangedSubview:_spinner];
 
     [NSLayoutConstraint activateConstraints:@[
-        [_tableView.topAnchor constraintEqualToAnchor:_filterStack.bottomAnchor constant:A2SpaceS],
-        [_tableView.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor],
-        [_tableView.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
+        [_tableView.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_tableView.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
+                                                 constant:A2PageMargin],
+        [_tableView.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
+                                                  constant:-A2PageMargin],
         [_tableView.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
-        [_emptyLabel.centerXAnchor constraintEqualToAnchor:_tableView.centerXAnchor],
-        [_emptyLabel.centerYAnchor constraintEqualToAnchor:_tableView.centerYAnchor constant:-40],
-        [_emptyLabel.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.plainContentView.leadingAnchor
-                                                                constant:A2PageMargin],
-        [_spinner.centerXAnchor constraintEqualToAnchor:_tableView.centerXAnchor],
-        [_spinner.centerYAnchor constraintEqualToAnchor:_tableView.centerYAnchor constant:-40],
     ]];
 }
 
@@ -779,6 +924,9 @@ static const CGFloat kHeaderIconSize = 72;
                projectID:_project.projectID
                versionID:version.versionID
                   subdir:_targetSubdir
+                 iconURL:_project.iconURL
+           resourceClass:(NSInteger)_contentClass
+         resourceVersion:(version.versionNumber.length ? version.versionNumber : fileName)
               completion:^(BOOL success, NSError *error) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
@@ -888,7 +1036,9 @@ static const CGFloat kHeaderIconSize = 72;
     [cell configureWithVersion:v
                       sizeText:(v.fileSize > 0 ? [self displaySize:v.fileSize] : @"")
                         latest:latest
-                     installed:installed];
+                     installed:installed
+                         first:(indexPath.row == 0)
+                          last:(indexPath.row == (NSInteger)self.versions.count - 1)];
     return cell;
 }
 
@@ -915,6 +1065,8 @@ static const CGFloat kHeaderIconSize = 72;
     _headerMetaLabel.textColor = scheme.cOnSurfaceVariant;
     _headerSummaryLabel.textColor = scheme.cOnSurfaceVariant;
     _summaryBodyLabel.textColor = scheme.cOnSurface;
+    _versionsTitleLabel.textColor = scheme.cOnSurface;
+    _versionsCountLabel.textColor = scheme.cOnSurfaceVariant;
     _emptyLabel.textColor = scheme.cOnSurfaceVariant;
     _spinner.color = scheme.cPrimary;
     _tableView.backgroundColor = UIColor.clearColor;

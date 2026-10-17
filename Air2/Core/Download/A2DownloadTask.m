@@ -27,6 +27,10 @@
 #import "A2DownloadTask.h"
 #import "A2TaskLogOutput.h"
 
+/// 「未标注」取值。定义在实现文件顶层（不放实现块里），
+/// 与头文件的 extern 声明一一对应。
+const NSInteger A2DownloadResourceClassUnknown = -1;
+
 @implementation A2DownloadTask
 
 + (instancetype)taskWithTitle:(NSString *)title
@@ -37,7 +41,16 @@
     task.subtitle = subtitle;
     task.createdAt = createdAt;
     task.state = A2DownloadStateRunning;
+    task.resourceClass = A2DownloadResourceClassUnknown;
     return task;
+}
+
+- (void)applyResourceMetadataIconURL:(NSString *)iconURL
+                       resourceClass:(NSInteger)resourceClass
+                     resourceVersion:(NSString *)resourceVersion {
+    self.iconURL = iconURL.length ? iconURL : nil;
+    self.resourceClass = resourceClass;
+    self.resourceVersion = resourceVersion.length ? resourceVersion : nil;
 }
 
 - (void)applyProgressDelta:(int64_t)deltaBytes totalBytes:(int64_t)totalBytes {

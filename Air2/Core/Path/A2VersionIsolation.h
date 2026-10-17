@@ -128,7 +128,22 @@ FOUNDATION_EXPORT NSString *A2VersionFolderDisplayName(A2VersionFolder folder);
 + (instancetype)pathWithGameHome:(NSString *)gameHome;
 
 /// 默认游戏根目录（Documents/minecraft），与 A2VersionManager 一致。
+/// 用户在「版本管理」里换过目录时返回那个目录 —— 下载落点 / 清单 / 收藏 / 版本扫描
+/// 全部读这一处，换目录才会整体生效，而不是只有版本列表换了。
 + (NSString *)defaultGameHome;
+
+/// 当前游戏目录的显示名（最后一级目录名，如 minecraft、我的整合包）。
+/// 界面上展示目录名而不是整条长路径。
++ (NSString *)gameHomeDisplayName;
+
+/// 切换游戏根目录。
+/// @param path     目标目录，必须已存在且可写；不满足时返回 NO 并给出原因。
+/// @param bookmark 目录的安全作用域书签（沙盒内目录可传 nil）。
+/// 写入 A2Settings（当前目录 / 已知目录列表 / 书签）。
++ (BOOL)setGameHome:(NSString *)path bookmark:(nullable NSData *)bookmark error:(NSError **)error;
+
+/// 恢复上次选定目录的安全作用域访问权。启动最早期调用一次，进程内一直持有。
++ (void)restoreGameHomeAccess;
 
 - (NSString *)versionsHome;
 - (NSString *)librariesHome;

@@ -42,6 +42,9 @@ NSString *const A2SettingsKeyMirrorEnabled = @"A2MirrorEnabled";
 NSString *const A2SettingsKeyCurrentAccountID = @"A2CurrentAccountID";
 NSString *const A2SettingsKeyCurrentVersionName = @"A2CurrentVersionName";
 NSString *const A2SettingsKeyAutoLogin = @"A2AutoLogin";
+NSString *const A2SettingsKeyGameHome = @"A2GameHome";
+NSString *const A2SettingsKeyGameHomes = @"A2GameHomes";
+NSString *const A2SettingsKeyGameHomeBookmarks = @"A2GameHomeBookmarks";
 
 /// 托管 key 全集（读写与迁移共用，增减设置只改这一处）。
 static NSArray<NSString *> *A2SettingsAllKeys(void) {
@@ -58,6 +61,9 @@ static NSArray<NSString *> *A2SettingsAllKeys(void) {
         A2SettingsKeyCurrentAccountID,
         A2SettingsKeyCurrentVersionName,
         A2SettingsKeyAutoLogin,
+        A2SettingsKeyGameHome,
+        A2SettingsKeyGameHomes,
+        A2SettingsKeyGameHomeBookmarks,
     ];
 }
 
@@ -146,6 +152,7 @@ static NSArray<NSString *> *A2SettingsAllKeys(void) {
     _currentAccountID = [self stringForKey:A2SettingsKeyCurrentAccountID];
     _currentVersionName = [self stringForKey:A2SettingsKeyCurrentVersionName];
     _autoLogin = [self boolForKey:A2SettingsKeyAutoLogin defaultValue:YES];
+    _gameHome = [self stringForKey:A2SettingsKeyGameHome];
 
 }
 
@@ -298,6 +305,64 @@ static NSArray<NSString *> *A2SettingsAllKeys(void) {
 - (void)setMirrorEnabled:(BOOL)v {
     _mirrorEnabled = v;
     [self setObject:@(v) forKey:A2SettingsKeyMirrorEnabled];
+}
+
+#pragma mark 游戏目录
+
+- (void)setGameHome:(NSString *)gameHome {
+    _gameHome = [gameHome copy];
+    [self setObject:gameHome forKey:A2SettingsKeyGameHome];
+}
+
+/// 只认字符串项：config.json 是外部可改的，混进数字/字典时直接跳过，不让界面拿到脏值。
+- (NSArray<NSString *> *)gameHomes {
+    id v = [self objectForKey:A2SettingsKeyGameHomes];
+    if (![v isKindOfClass:NSArray.class]) return @[];
+    NSMutableArray<NSString *> *out = [NSMutableArray array];
+    for (id item in (NSArray *)v) {
+        if ([item isKindOfClass:NSString.class] && [item length] > 0) {
+            [out addObject:item];
+        }
+    }
+    return out;
+}
+
+- (void)setGameHomes:(NSArray<NSString *> *)gameHomes {
+    // 本属性没有 ivar 镜像（getter 直接从 store 解析），写入即落盘。
+    [self setObject:(gameHomes ?: @[]) forKey:A2SettingsKeyGameHomes];
+}
+
+/// 书签是二进制，config.json 只能存字符串 ⇒ 统一走 base64。
+/// 存成 path → base64 的字典：外部目录可能不止一个，切走再切回要靠各自的条目。
+- (NSDictionary<NSString *, NSString *> *)bookmarkStore {
+    id v = [self objectForKey:A2SettingsKeyGameHomeBookmarks];
+    if (![v isKindOfClass:NSDictionary.class]) return @{};
+    NSMutableDictionary<NSString *, NSString *> *out = [NSMutableDictionary dictionary];
+    for (id key in (NSDictionary *)v) {
+        id value = ((NSDictionary *)v)[key];
+        if ([key isKindOfClass:NSString.class] && [value isKindOfClass:NSString.class]) {
+            out[key] = value;
+        }
+    }
+    return out;
+}
+
+- (nullable NSData *)bookmarkForGameHome:(NSString *)path {
+    if (path.length == 0) return nil;
+    NSString *encoded = self.bookmarkStore[path];
+    if (encoded.length == 0) return nil;
+    return [[NSData alloc] initWithBase64EncodedString:encoded options:0];
+}
+
+- (void)setBookmark:(nullable NSData *)bookmark forGameHome:(NSString *)path {
+    if (path.length == 0) return;
+    NSMutableDictionary<NSString *, NSString *> *store = [self.bookmarkStore mutableCopy];
+    if (bookmark.length > 0) {
+        store[path] = [bookmark base64EncodedStringWithOptions:0];
+    } else {
+        [store removeObjectForKey:path];
+    }
+    [self setObject:store forKey:A2SettingsKeyGameHomeBookmarks];
 }
 
 - (void)setCurrentAccountID:(NSString *)v {

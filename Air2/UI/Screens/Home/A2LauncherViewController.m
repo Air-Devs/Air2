@@ -38,6 +38,7 @@
 #import "A2Toast.h"
 #import "A2NavigationController.h"
 #import "A2VersionManager.h"
+#import "A2VersionIsolation.h"   // A2GamePath：主界面展示当前游戏目录名
 #import "A2AccountManager.h"
 #import "A2Account.h"
 #import "A2VersionSettingsViewController.h"
@@ -653,6 +654,9 @@
     [parts addObject:current.loaderInfo.length ? current.loaderInfo : @"原版"];
     [parts addObject:[NSString stringWithFormat:@"隔离·%@",
                       A2IsolationModeDisplayName(current.effectiveIsolationMode)]];
+    // 主界面要能看出游戏数据放在哪个目录 —— 只给名字（如 minecraft），
+    // 不给整条长路径（那条路径在版本管理左栏的副标题里）。
+    [parts addObject:[NSString stringWithFormat:@"目录·%@", A2GamePath.gameHomeDisplayName]];
     _versionMetaLabel.text = [parts componentsJoinedByString:@" · "];
 }
 

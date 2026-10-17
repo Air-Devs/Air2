@@ -271,7 +271,11 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
 
     // ---- 平台切换 ----
     _platformControl = [self makePlatformControl];
-    _platformControl.selectedSegmentIndex = (_platform == A2ContentPlatformCurseForge) ? 1 : 0;
+    // 选中项按「在 supportedPlatforms 里的位置」定位，不能写死 0/1：
+    // 存档这类只有 CurseForge 支持的分类只有一个分段，写死 1 会越界
+    // （UIKit 把 selectedSegmentIndex 置为 -1，控件看着像没选中）。
+    NSUInteger platformSlot = [_platformOptions indexOfObject:@(_platform)];
+    _platformControl.selectedSegmentIndex = (platformSlot == NSNotFound) ? 0 : (NSInteger)platformSlot;
     [stack addArrangedSubview:[self labeledBlock:@"平台" content:_platformControl]];
     _platformControl.translatesAutoresizingMaskIntoConstraints = NO;
 

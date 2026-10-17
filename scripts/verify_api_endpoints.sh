@@ -45,6 +45,12 @@ check() {
                -H "x-api-key: $KEY" -H "Accept: application/json" "$BASE$path" || echo "000")
     fi
 
+    # `curl ... || echo 000` 的经典坑：curl 打印了状态码却因写 -w 输出失败而返回非零时，
+    # 000 会被拼到状态码后面（"200000"），于是明明 200 也被判成失败。
+    # 这里统一取前三位，只看 HTTP 状态码本身。
+    code=$(printf '%s' "$code" | cut -c1-3)
+    [ -z "$code" ] && code="000"
+
     if [ "$code" = "200" ]; then
         printf "  ✓ %-30s HTTP %s\n" "$desc" "$code"
     else
@@ -58,6 +64,11 @@ check "搜索模组"     "/mods/search?gameId=432&classId=6&pageSize=5"
 check "搜索整合包"   "/mods/search?gameId=432&classId=4471&pageSize=5"
 check "搜索资源包"   "/mods/search?gameId=432&classId=12&pageSize=5"
 check "搜索光影"     "/mods/search?gameId=432&classId=6552&pageSize=5"
+# 存档（classId=17）与数据包（classId=6945）曾是唯一没被本脚本覆盖的两个大类：
+# 用户在「搜索存档」页看到 404 时，端点清单里根本没有这一行。
+check "搜索存档"     "/mods/search?gameId=432&classId=17&pageSize=5"
+check "搜索数据包"   "/mods/search?gameId=432&classId=6945&pageSize=5"
+check "存档分类"     "/categories?gameId=432&classId=17"
 check "项目详情"     "/mods/238222"
 check "项目文件列表" "/mods/238222/files?pageSize=5"
 check "分类列表"     "/categories?gameId=432"

@@ -57,6 +57,12 @@ FOUNDATION_EXPORT NSString *const A2SettingsKeyMirrorEnabled;
 FOUNDATION_EXPORT NSString *const A2SettingsKeyCurrentAccountID;
 FOUNDATION_EXPORT NSString *const A2SettingsKeyCurrentVersionName;
 FOUNDATION_EXPORT NSString *const A2SettingsKeyAutoLogin;
+/// 游戏根目录（用户选定的那个）。缺省时由 A2GamePath.defaultGameHome 给 Documents/minecraft。
+FOUNDATION_EXPORT NSString *const A2SettingsKeyGameHome;
+/// 已添加过的游戏目录列表（NSString 数组，最近的在前）—— 版本管理左栏用它渲染可切换项。
+FOUNDATION_EXPORT NSString *const A2SettingsKeyGameHomes;
+/// 上一条对应的安全作用域书签（path → base64 字典）。目录在沙盒外时必须靠它拿访问权。
+FOUNDATION_EXPORT NSString *const A2SettingsKeyGameHomeBookmarks;
 
 /// 内容平台取值（对应 A2ContentPlatform，存 NSInteger 避免跨层 import）。
 static const NSInteger A2SettingsPlatformModrinth = 0;
@@ -133,6 +139,19 @@ static const NSInteger A2SettingsMinRAMMB = 256;
 
 /// 启动时自动登录（校验/续期当前账号凭据）。默认 YES。
 @property (nonatomic, assign) BOOL autoLogin;
+
+#pragma mark 游戏目录
+
+/// 用户选定的游戏根目录；未选过时为 nil（调用方回落到 A2GamePath.defaultGameHome）。
+/// 写入只走 A2GamePath.setGameHome:bookmark:error: —— 它还会校验目录、维护列表与书签。
+@property (nonatomic, copy, nullable) NSString *gameHome;
+/// 已添加过的游戏目录（最近的在前）。至少包含当前目录；未设置过为空数组。
+@property (nonatomic, copy) NSArray<NSString *> *gameHomes;
+
+/// 某个游戏目录的安全作用域书签（沙盒内目录返回 nil）。
+/// 按目录记：外部目录不止一个，切走再切回时仍要拿得到访问权。
+- (nullable NSData *)bookmarkForGameHome:(NSString *)path;
+- (void)setBookmark:(nullable NSData *)bookmark forGameHome:(NSString *)path;
 
 @end
 

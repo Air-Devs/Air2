@@ -58,6 +58,11 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithCategories:(NSArray<A2NavCategory *> *)categories;
 - (void)selectIndex:(NSInteger)index animated:(BOOL)animated;
 
+/// 正在加载的分类索引（-1 = 没有）。
+/// 该项的图标位置换成转圈：切换大类时右侧内容页要重建（耗时操作），
+/// 左栏必须先给出反馈，否则用户只看到「点了没反应」。
+- (void)setLoadingIndex:(NSInteger)index;
+
 @end
 
 NS_ASSUME_NONNULL_END

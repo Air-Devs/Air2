@@ -34,12 +34,25 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// resourceClass 的「未标注」取值。
+/// A2ContentClass 定义在 Core/Addons/A2ContentSource.h —— Core/Download 不 import 它
+/// （Addons 的实现层已经 import 本层的 A2DownloadEngine.h，头文件再反向引用会形成环）。
+/// 与 A2Settings 传递「平台 / 隔离档位」的做法一致：枚举以 NSInteger 过界，调用方转换。
+extern const NSInteger A2DownloadResourceClassUnknown;
+
 @interface A2DownloadTask : NSObject
 
 @property (nonatomic, copy, readonly) NSString *taskID;
 @property (nonatomic, copy, readonly) NSString *title;
 @property (nonatomic, copy, readonly, nullable) NSString *subtitle;
 @property (nonatomic, assign, readonly) A2DownloadState state;
+
+/// 资源图标 URL（搜索页/详情页同一张图）；无图时为 nil，任务行显示首字母占位。
+@property (nonatomic, copy, readonly, nullable) NSString *iconURL;
+/// 资源类型：A2ContentClass 的数值（见上）。未知为 A2DownloadResourceClassUnknown。
+@property (nonatomic, assign, readonly) NSInteger resourceClass;
+/// 资源版本（版本号或文件显示名），任务行第二行展示；未知为 nil。
+@property (nonatomic, copy, readonly, nullable) NSString *resourceVersion;
 
 /// 总字节数；未知为 0。
 @property (nonatomic, assign, readonly) int64_t totalBytes;
@@ -73,6 +86,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) NSString *title;
 @property (nonatomic, copy, nullable) NSString *subtitle;
 @property (nonatomic, assign) A2DownloadState state;
+@property (nonatomic, copy, nullable) NSString *iconURL;
+@property (nonatomic, assign) NSInteger resourceClass;
+@property (nonatomic, copy, nullable) NSString *resourceVersion;
 @property (nonatomic, assign) int64_t totalBytes;
 @property (nonatomic, assign) int64_t downloadedBytes;
 @property (nonatomic, assign) double speed;
@@ -93,6 +109,12 @@ NS_ASSUME_NONNULL_BEGIN
 + (instancetype)taskWithTitle:(NSString *)title
                      subtitle:(nullable NSString *)subtitle
                     createdAt:(NSDate *)createdAt;
+
+/// 写入资源元信息（图标 / 类型 / 版本）。由 A2DownloadTaskCenter 在入队时调用一次，
+/// 之后不再变化；UI 只读，用于「下载任务」页的资源信息展示。
+- (void)applyResourceMetadataIconURL:(nullable NSString *)iconURL
+                       resourceClass:(NSInteger)resourceClass
+                     resourceVersion:(nullable NSString *)resourceVersion;
 
 /// 累加进度增量（引擎上报的负 delta 直接累加即回退），并更新总大小。
 - (void)applyProgressDelta:(int64_t)deltaBytes totalBytes:(int64_t)totalBytes;

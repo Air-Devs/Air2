@@ -122,6 +122,9 @@ extern NSNotificationName const A2VersionsDidChangeNotification;
 
 /// 当前游戏根目录（只读，切换用 setGameHome: —— 它会触发重新扫描）
 @property (nonatomic, copy, readonly) NSString *gameHome;
+/// 切换游戏根目录并重新扫描（版本管理左栏切换目录后调用）。
+/// 目录的校验与落盘由 A2GamePath.setGameHome:bookmark:error: 负责，这里只管重新扫描。
+- (void)setGameHome:(NSString *)gameHome;
 /// 所有已安装版本
 @property (nonatomic, copy, readonly) NSArray<A2Version *> *versions;
 /// 当前选中的版本（只读，切换请用 selectCurrentVersion:）

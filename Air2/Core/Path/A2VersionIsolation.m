@@ -21,6 +21,7 @@
 //
 
 #import "A2VersionIsolation.h"
+#import "A2Settings.h"
 #import "A2Log.h"
 
 NSString *A2IsolationModeToString(A2IsolationMode mode) {
@@ -200,9 +201,95 @@ static NSArray<NSString *> *A2IsolationStandardSubdirectories(void) {
 static NSString *const kGameHomeDirName = @"minecraft";
 
 + (NSString *)defaultGameHome {
+    // 用户选过别的目录就用那个：这里是全应用唯一的游戏根目录出口。
+    NSString *chosen = A2Settings.shared.gameHome;
+    if (chosen.length > 0) return chosen;
     NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory,
                                                         NSUserDomainMask, YES).firstObject;
     return [docs stringByAppendingPathComponent:kGameHomeDirName];
+}
+
++ (NSString *)gameHomeDisplayName {
+    NSString *home = [self defaultGameHome];
+    NSString *name = home.lastPathComponent;
+    // 兜底：路径只有 "/" 时 lastPathComponent 为空，此时退回整条路径（总比空标题好）。
+    return name.length ? name : home;
+}
+
+/// 进程内持有的安全作用域访问权。选定的目录在沙盒外时，
+/// 只有持有它期间才能读写；进程退出自然释放，故不主动 stop。
+static NSURL *A2GameHomeScopedURL = nil;
+
++ (void)restoreGameHomeAccess {
+    NSString *home = [self defaultGameHome];
+    NSData *bookmark = [A2Settings.shared bookmarkForGameHome:home];
+    if (bookmark.length == 0) return;   // 沙盒内目录：不需要书签
+
+    NSError *error = nil;
+    BOOL stale = NO;
+    // 选项传 0：iOS 上文档选择器给的书签本身就是安全作用域的，
+    // NSURLBookmarkResolutionWithSecurityScope 只在 macOS 上存在（iOS 编不过）。
+    NSURL *url = [NSURL URLByResolvingBookmarkData:bookmark
+                                           options:0
+                                     relativeToURL:nil
+                               bookmarkDataIsStale:&stale
+                                             error:&error];
+    if (!url) {
+        [A2Log criterion:@"[A2-GAMEDIR] 书签解析失败，退回默认目录 err=%@",
+                        error.localizedDescription ?: @"未知错误"];
+        return;
+    }
+    // 目录可能在「文件」App 里被删/被移走：拿不到访问权时如实记一行，
+    // 后续读目录会走各自的错误分支，不在这里编造成功。
+    BOOL scoped = [url startAccessingSecurityScopedResource];
+    A2GameHomeScopedURL = url;
+    [A2Log criterion:@"[A2-GAMEDIR] 恢复目录访问 path=%@ scoped=%@ stale=%@",
+                    url.path, scoped ? @"YES" : @"NO", stale ? @"YES" : @"NO"];
+}
+
++ (BOOL)setGameHome:(NSString *)path bookmark:(NSData *)bookmark error:(NSError **)error {
+    NSString *trimmed = path;
+    while (trimmed.length > 1 && [trimmed hasSuffix:@"/"]) {
+        trimmed = [trimmed substringToIndex:trimmed.length - 1];
+    }
+    if (trimmed.length == 0) {
+        if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain
+                                               code:NSFileNoSuchFileError
+                                           userInfo:@{NSLocalizedDescriptionKey: @"目录路径为空"}];
+        return NO;
+    }
+
+    NSFileManager *fm = NSFileManager.defaultManager;
+    BOOL isDir = NO;
+    if (![fm fileExistsAtPath:trimmed isDirectory:&isDir] || !isDir) {
+        if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain
+                                               code:NSFileNoSuchFileError
+                                           userInfo:@{NSLocalizedDescriptionKey: @"目录不存在"}];
+        return NO;
+    }
+    if (![fm isWritableFileAtPath:trimmed]) {
+        if (error) *error = [NSError errorWithDomain:NSCocoaErrorDomain
+                                               code:NSFileWriteNoPermissionError
+                                           userInfo:@{NSLocalizedDescriptionKey: @"目录不可写"}];
+        return NO;
+    }
+
+    A2Settings *settings = A2Settings.shared;
+    settings.gameHome = trimmed;
+    if (bookmark.length > 0) {
+        [settings setBookmark:bookmark forGameHome:trimmed];
+    }
+
+    // 记入「已添加的目录」列表（去重、最近的在前），版本管理左栏据此渲染可切换项。
+    NSMutableArray<NSString *> *homes = [NSMutableArray arrayWithObject:trimmed];
+    for (NSString *existing in settings.gameHomes) {
+        if (![existing isEqualToString:trimmed]) [homes addObject:existing];
+    }
+    settings.gameHomes = homes;
+
+    [A2Log criterion:@"[A2-GAMEDIR] 切换游戏目录 path=%@ 已知=%lu bookmark=%@",
+                    trimmed, (unsigned long)homes.count, bookmark.length ? @"YES" : @"NO"];
+    return YES;
 }
 
 - (NSString *)versionsHome   { return [self.gameHome stringByAppendingPathComponent:@"versions"]; }

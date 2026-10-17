@@ -45,6 +45,9 @@
 @interface A2NavItemButton : UIControl
 @property (nonatomic, strong) UIImageView *iconView;
 @property (nonatomic, strong) UILabel *label;
+@property (nonatomic, strong) UIActivityIndicatorView *spinner;
+/// 该分类正在加载：图标位换成转圈。
+@property (nonatomic, assign) BOOL loading;
 // selected 沿用 UIControl 自带的，不重声明
 - (instancetype)initWithCategory:(A2NavCategory *)category;
 - (void)applyTheme;
@@ -78,12 +81,23 @@
     [self addSubview:_iconView];
     [self addSubview:_label];
 
+    // 加载态：与图标同位置的小转圈（图标与它互斥显示）。
+    _spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:
+                UIActivityIndicatorViewStyleMedium];
+    _spinner.translatesAutoresizingMaskIntoConstraints = NO;
+    _spinner.hidesWhenStopped = YES;
+    _spinner.transform = CGAffineTransformMakeScale(0.8, 0.8);
+    [self addSubview:_spinner];
+
     [NSLayoutConstraint activateConstraints:@[
         // 图标在上：距顶 8，尺寸 24
         [_iconView.topAnchor constraintEqualToAnchor:self.topAnchor constant:A2SpaceS],
         [_iconView.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
         [_iconView.widthAnchor constraintEqualToConstant:24],
         [_iconView.heightAnchor constraintEqualToConstant:24],
+
+        [_spinner.centerXAnchor constraintEqualToAnchor:_iconView.centerXAnchor],
+        [_spinner.centerYAnchor constraintEqualToAnchor:_iconView.centerYAnchor],
 
         // 文字在下：距图标 4，距底 8
         [_label.topAnchor constraintEqualToAnchor:_iconView.bottomAnchor constant:A2SpaceXS],
@@ -109,8 +123,20 @@
     [self applyTheme];
 }
 
+- (void)setLoading:(BOOL)loading {
+    _loading = loading;
+    _iconView.hidden = loading;
+    _label.alpha = loading ? 0.6 : 1.0;
+    if (loading) {
+        [_spinner startAnimating];
+    } else {
+        [_spinner stopAnimating];
+    }
+}
+
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
+    _spinner.color = t.cPrimary;
     if (self.isSelected) {
         self.backgroundColor = t.cSecondaryContainer;
         _iconView.tintColor = t.cOnSecondaryContainer;
@@ -261,6 +287,12 @@
     }
 
     if (self.onSelect) self.onSelect(index);
+}
+
+- (void)setLoadingIndex:(NSInteger)index {
+    for (A2NavItemButton *b in _buttons) {
+        b.loading = (b.tag == index);
+    }
 }
 
 - (void)applyTheme {

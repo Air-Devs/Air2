@@ -41,6 +41,8 @@
 #import "A2TextField.h"
 #import "A2VersionManager.h"
 #import "A2VersionRowView.h"
+#import "A2VersionIsolation.h"   // A2GamePath：游戏目录的校验 / 切换 / 显示名
+#import "A2Settings.h"
 #import "A2GlassCard.h"
 #import "A2PrimaryButton.h"
 #import "A2Toast.h"
@@ -48,12 +50,16 @@
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
+#import "A2Log.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 /// 游戏目录项
 @interface A2GamePathRow : UIControl
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UILabel *pathLabel;
 @property (nonatomic, assign, getter=isCurrent) BOOL current;
+/// 该行代表的目录全路径（切换时原样交给 A2GamePath 校验）。
+@property (nonatomic, copy) NSString *path;
 - (instancetype)initWithTitle:(NSString *)title path:(NSString *)path;
 - (void)applyTheme;
 @end
@@ -81,6 +87,7 @@
     _pathLabel.text = path;
     _pathLabel.numberOfLines = 2;
     _pathLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
+    _path = [path copy];
 
     [self addSubview:_titleLabel];
     [self addSubview:_pathLabel];
@@ -126,7 +133,7 @@
 
 #pragma mark - 版本管理页
 
-@interface A2VersionListViewController ()
+@interface A2VersionListViewController () <UIDocumentPickerDelegate>
 @property (nonatomic, strong) UIScrollView *pathScroll;
 @property (nonatomic, strong) UIStackView *pathStack;
 @property (nonatomic, strong) UIScrollView *listScroll;
@@ -174,6 +181,8 @@
 /// 每次回到本页都重刷（设置页改名/删除、安装页装完回来时列表不能是旧的）。
 - (void)viewWillAppear:(BOOL)animated {
     [super viewWillAppear:animated];
+    // 目录列表也要重刷：别的页面/别的地方换过目录时左栏不能还停在旧项上。
+    [self buildPathList];
     [self reloadVersionList];
 }
 
@@ -289,19 +298,126 @@
     return field;
 }
 
+/// 左栏：当前游戏目录 + 已添加过的其它目录 + 「添加游戏目录」。
+/// 原先只显示一条长路径且 `userInteractionEnabled = NO`（批注：不支持添加/切换游戏目录）。
 - (void)buildPathList {
-    // 只显示真实的游戏目录。目录切换没有实现，不放假条目。
-    NSString *home = A2VersionManager.shared.gameHome;
-    A2GamePathRow *row = [[A2GamePathRow alloc] initWithTitle:@"游戏目录" path:home];
-    row.current = YES;
-    row.userInteractionEnabled = NO;
-    [_pathStack addArrangedSubview:row];
+    for (UIView *v in [_pathStack.arrangedSubviews copy]) {
+        [_pathStack removeArrangedSubview:v];
+        [v removeFromSuperview];
+    }
+
+    NSString *current = A2VersionManager.shared.gameHome;
+
+    // 当前目录一定在列表里；其余来自设置里记的「已添加目录」（去重、当前在前）。
+    NSMutableArray<NSString *> *homes = [NSMutableArray array];
+    if (current.length) [homes addObject:current];
+    for (NSString *path in A2Settings.shared.gameHomes) {
+        if (![homes containsObject:path]) [homes addObject:path];
+    }
+
+    for (NSString *path in homes) {
+        // 标题用目录名（如 minecraft），完整路径作副标题 —— 不再让长路径当标题。
+        NSString *name = path.lastPathComponent.length ? path.lastPathComponent : path;
+        A2GamePathRow *row = [[A2GamePathRow alloc] initWithTitle:name path:path];
+        row.current = [path isEqualToString:current];
+        [row addTarget:self
+                action:@selector(gamePathRowTapped:)
+      forControlEvents:UIControlEventTouchUpInside];
+        [_pathStack addArrangedSubview:row];
+    }
+
+    A2GamePathRow *addRow = [[A2GamePathRow alloc] initWithTitle:@"添加游戏目录"
+                                                           path:@"从「文件」中选择一个文件夹"];
+    addRow.current = NO;
+    [addRow addTarget:self
+               action:@selector(presentGameDirectoryPicker)
+     forControlEvents:UIControlEventTouchUpInside];
+    [_pathStack addArrangedSubview:addRow];
 
     // 撑起剩余空间
     UIView *filler = [[UIView alloc] initWithFrame:CGRectZero];
     filler.translatesAutoresizingMaskIntoConstraints = NO;
     [filler setContentHuggingPriority:1 forAxis:UILayoutConstraintAxisVertical];
     [_pathStack addArrangedSubview:filler];
+}
+
+#pragma mark - 游戏目录切换 / 添加
+
+- (void)gamePathRowTapped:(A2GamePathRow *)row {
+    NSString *path = row.path;
+    if (path.length == 0 || row.isCurrent) return;
+
+    NSError *error = nil;
+    // 外部目录切回来时用它自己的书签恢复访问权；沙盒内目录没有书签，传 nil。
+    NSData *bookmark = [A2Settings.shared bookmarkForGameHome:path];
+    if (![A2GamePath setGameHome:path bookmark:bookmark error:&error]) {
+        [A2Toast show:(error.localizedDescription ?: @"无法切换到该目录") inView:self.view];
+        return;
+    }
+    [A2VersionManager.shared setGameHome:A2GamePath.defaultGameHome];
+    [self buildPathList];
+    [self reloadVersionList];
+    [A2Log log:@"version-list: 切换游戏目录 %@", path];
+    [A2Toast show:[NSString stringWithFormat:@"已切换到 %@", A2GamePath.gameHomeDisplayName]
+           inView:self.view];
+}
+
+- (void)presentGameDirectoryPicker {
+    UIDocumentPickerViewController *picker =
+        [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeFolder]
+                                                                  asCopy:NO];
+    picker.delegate = self;
+    picker.allowsMultipleSelection = NO;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+#pragma mark - UIDocumentPickerDelegate
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller
+ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    NSURL *url = urls.firstObject;
+    if (!url) return;
+
+    // 沙盒外的目录要安全作用域：先取访问权，再存书签供下次启动恢复。
+    BOOL scoped = [url startAccessingSecurityScopedResource];
+    BOOL insideSandbox = [url.path hasPrefix:NSHomeDirectory()];
+
+    NSData *bookmark = nil;
+    if (!insideSandbox) {
+        NSError *bookmarkError = nil;
+        // 选项 0：iOS 上不支持 NSURLBookmarkCreationWithSecurityScope（那是 macOS 专用），
+        // 文档选择器给的 URL 本身带安全作用域，直接存书签即可。
+        bookmark = [url bookmarkDataWithOptions:0
+                 includingResourceValuesForKeys:nil
+                                  relativeToURL:nil
+                                          error:&bookmarkError];
+        if (!bookmark) {
+            if (scoped) [url stopAccessingSecurityScopedResource];
+            [A2Toast show:[NSString stringWithFormat:@"无法记住该目录：%@",
+                           bookmarkError.localizedDescription ?: @"书签创建失败"]
+                   inView:self.view];
+            return;
+        }
+    }
+
+    NSError *error = nil;
+    if (![A2GamePath setGameHome:url.path bookmark:bookmark error:&error]) {
+        if (scoped) [url stopAccessingSecurityScopedResource];
+        [A2Toast show:(error.localizedDescription ?: @"无法使用该目录") inView:self.view];
+        return;
+    }
+
+    [A2VersionManager.shared setGameHome:A2GamePath.defaultGameHome];
+    [self buildPathList];
+    [self reloadVersionList];
+    [A2Log log:@"version-list: 添加游戏目录 %@（沙盒内=%@ 书签=%@）",
+           url.path, insideSandbox ? @"是" : @"否", bookmark ? @"有" : @"无"];
+    [A2Toast show:[NSString stringWithFormat:@"已添加并切换到 %@", url.path.lastPathComponent]
+           inView:self.view];
+}
+
+- (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller {
+    [A2Log log:@"version-list: 取消选择游戏目录"];
 }
 
 - (void)buildVersionList {

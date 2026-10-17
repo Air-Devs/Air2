@@ -36,8 +36,11 @@
 #import "A2DownloadTasksViewController.h"
 #import "A2DownloadTaskCenter.h"
 #import "A2DownloadTask.h"
+#import "A2ContentSource.h"
 #import "A2GlassCard.h"
 #import "A2ProgressBar.h"
+#import "A2RemoteImageView.h"
+#import "A2ResourceBadge.h"
 #import "A2Typography.h"
 #import "A2Metrics.h"
 #import "A2ThemeManager.h"
@@ -45,6 +48,9 @@
 #import "A2Toast.h"
 
 static NSString *const kDownloadTaskCellID = @"A2DownloadTaskCell";
+
+/// 任务行左侧资源图标边长。
+static const CGFloat A2DownloadTaskIconSize = 44;
 
 /// 分组：进行中 / 已完成
 typedef NS_ENUM(NSInteger, A2DownloadTaskSection) {
@@ -153,6 +159,9 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
 
 @interface A2DownloadTaskCell ()
 @property (nonatomic, strong) A2GlassCard *card;
+@property (nonatomic, strong) A2RemoteImageView *iconView;
+@property (nonatomic, strong) A2ClassBadge *classBadge;
+@property (nonatomic, strong) UILabel *versionLabel;
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UILabel *statusLabel;
 @property (nonatomic, strong) UILabel *subtitleLabel;
@@ -189,6 +198,33 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
     self.titleLabel.font = [A2Typography titleCard];
     self.titleLabel.numberOfLines = 1;
     self.titleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+
+    // 资源图标：与搜索页/详情页同一张图，走 A2RemoteImageView（自带缓存与首字母占位）。
+    self.iconView = [[A2RemoteImageView alloc] initWithFrame:CGRectZero];
+    self.iconView.translatesAutoresizingMaskIntoConstraints = NO;
+    self.iconView.cornerRadius = A2RadiusM;
+    self.iconView.contentMode = UIViewContentModeScaleAspectFill;
+    self.iconView.clipsToBounds = YES;
+
+    // 资源类型徽标：复用资源卡片上的同一个组件（图标 + 名称），不另画一套。
+    self.classBadge = [[A2ClassBadge alloc] initWithContentClass:A2ContentClassMod];
+    self.classBadge.translatesAutoresizingMaskIntoConstraints = NO;
+    self.classBadge.hidden = YES;
+
+    // 资源版本（版本号 / 文件显示名）。
+    self.versionLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    self.versionLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    self.versionLabel.font = [A2Typography caption];
+    self.versionLabel.numberOfLines = 1;
+    self.versionLabel.lineBreakMode = NSLineBreakByTruncatingTail;
+    self.versionLabel.hidden = YES;
+
+    UIStackView *metaRow = [[UIStackView alloc] initWithArrangedSubviews:
+                            @[self.classBadge, self.versionLabel, A2DownloadFlexibleSpacer()]];
+    metaRow.translatesAutoresizingMaskIntoConstraints = NO;
+    metaRow.axis = UILayoutConstraintAxisHorizontal;
+    metaRow.spacing = A2SpaceS;
+    metaRow.alignment = UIStackViewAlignmentCenter;
 
     self.statusLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     self.statusLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -234,13 +270,21 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
     self.actionRow.alignment = UIStackViewAlignmentCenter;
 
     UIStackView *contentStack = [[UIStackView alloc] initWithArrangedSubviews:
-                                 @[titleRow, self.subtitleLabel, self.bar,
+                                 @[titleRow, metaRow, self.subtitleLabel, self.bar,
                                    self.errorLabel, self.actionRow]];
     contentStack.translatesAutoresizingMaskIntoConstraints = NO;
     contentStack.axis = UILayoutConstraintAxisVertical;
     contentStack.spacing = A2SpaceS;
     contentStack.alignment = UIStackViewAlignmentFill;
-    [cv addSubview:contentStack];
+
+    // 图标在左、文字区在右：图标顶对齐，行高由文字区决定。
+    UIStackView *bodyRow = [[UIStackView alloc] initWithArrangedSubviews:
+                            @[self.iconView, contentStack]];
+    bodyRow.translatesAutoresizingMaskIntoConstraints = NO;
+    bodyRow.axis = UILayoutConstraintAxisHorizontal;
+    bodyRow.spacing = A2SpaceM;
+    bodyRow.alignment = UIStackViewAlignmentTop;
+    [cv addSubview:bodyRow];
 
     [NSLayoutConstraint activateConstraints:@[
         [self.card.topAnchor constraintEqualToAnchor:self.contentView.topAnchor],
@@ -249,10 +293,13 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
         [self.card.bottomAnchor constraintEqualToAnchor:self.contentView.bottomAnchor
                                               constant:-A2CardSpacing],
 
-        [contentStack.topAnchor constraintEqualToAnchor:cv.topAnchor],
-        [contentStack.bottomAnchor constraintEqualToAnchor:cv.bottomAnchor],
-        [contentStack.leadingAnchor constraintEqualToAnchor:cv.leadingAnchor],
-        [contentStack.trailingAnchor constraintEqualToAnchor:cv.trailingAnchor],
+        [self.iconView.widthAnchor constraintEqualToConstant:A2DownloadTaskIconSize],
+        [self.iconView.heightAnchor constraintEqualToConstant:A2DownloadTaskIconSize],
+
+        [bodyRow.topAnchor constraintEqualToAnchor:cv.topAnchor],
+        [bodyRow.bottomAnchor constraintEqualToAnchor:cv.bottomAnchor],
+        [bodyRow.leadingAnchor constraintEqualToAnchor:cv.leadingAnchor],
+        [bodyRow.trailingAnchor constraintEqualToAnchor:cv.trailingAnchor],
     ]];
 
     [self applyTheme];
@@ -271,6 +318,8 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
     [super prepareForReuse];
     self.taskID = nil;
     self.delegate = nil;
+    // 复用时必须掐掉上一次的下载回调，否则上一张图会落到新行上。
+    [self.iconView cancelLoading];
 }
 
 #pragma mark - 配置
@@ -284,6 +333,21 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
     self.statusLabel.text = A2DownloadStateText(task.state);
     self.subtitleLabel.text = task.subtitle;
     self.subtitleLabel.hidden = (task.subtitle.length == 0);
+
+    // 资源图标 / 类型 / 版本 —— 这三项就是「下载任务页过于简陋」缺的信息。
+    // 先给首字母兜底再请求网络图：无图项目也不会留下空方块。
+    self.iconView.fallbackText = task.title.length ? [task.title substringToIndex:1] : nil;
+    [self.iconView setImageURL:task.iconURL placeholder:nil];
+
+    if (task.resourceClass == A2DownloadResourceClassUnknown) {
+        self.classBadge.hidden = YES;
+    } else {
+        self.classBadge.contentClass = (A2ContentClass)task.resourceClass;
+        self.classBadge.hidden = NO;
+    }
+
+    self.versionLabel.text = task.resourceVersion;
+    self.versionLabel.hidden = (task.resourceVersion.length == 0);
 
     BOOL showsError = (task.state == A2DownloadStateFailed && task.errorMessage.length > 0);
     self.errorLabel.text = task.errorMessage;
@@ -357,8 +421,10 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
 
     self.titleLabel.textColor = t.cOnSurface;
     self.subtitleLabel.textColor = t.cOnSurfaceVariant;
+    self.versionLabel.textColor = t.cOnSurfaceVariant;
     self.errorLabel.textColor = t.cError;
     self.statusLabel.textColor = A2DownloadStateColor(self.rowState, t);
+    [self.iconView applyTheme];
     [self.bar applyTheme];
 
     // 主操作（暂停/继续、重试）用主色实心；取消是次要操作，用中性容器色。
