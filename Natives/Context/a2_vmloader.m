@@ -10,6 +10,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <signal.h>
+#include <sys/types.h>
 #include <mach/mach.h>
 #include <mach/arm/thread_status.h>
 
@@ -108,6 +109,15 @@ static void *a2_vm_stuck_probe(void *ctx) {
                  (unsigned long)pc, imgPC, offPC, ipc.dli_sname ?: "?",
                  (unsigned long)lr, imgLR, offLR, ilr.dli_sname ?: "?",
                  (unsigned long)(uintptr_t)st.__sp, (unsigned long)(uintptr_t)st.__fp);
+
+        // ★让 HotSpot 自己吐线程栈★（2026-10-17）
+        //   卡在 InstanceKlass::call_class_initializer 时，光看 native 栈不知道是“哪个类的
+        //   <clinit> 卡在等什么”。HotSpot 收到 SIGQUIT 会打印 Full thread dump（Java 栈 +
+        //   等锁信息）到 stderr ⇒ 直接进我们的单一日志。定位完应删除。
+        if (getenv("A2VMDumpOnStuck") == NULL || strcmp(getenv("A2VMDumpOnStuck"), "0") != 0) {
+            a2_log_f(@"[A2JVM] 发送 SIGQUIT ⇒ 请 JVM 打印 Full thread dump（看它卡在哪个类的 <clinit>/等什么锁）");
+            kill(getpid(), SIGQUIT);
+        }
 
         // ★栈回溯★：arm64 帧记录 = {fp_prev, lr}；逐帧 dladdr 出符号，
         //   这样能看清 JavaCalls::call_helper 是被 VM 初始化哪一步调起来的。
