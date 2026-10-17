@@ -40,9 +40,18 @@
     return self;
 }
 
+/// ★关键★：本视图是 UIView 子类，自身没有 intrinsicContentSize ⇒ 放进 UIStackView(Fill)
+/// 时会被当成“可拉伸”，把整行剩余宽度全吃掉 ⇒ 真机上 MODRINTH 药丸横跨整行、压住标题。
+/// 这里按内部 label 的固有宽度 + 左右各 5pt 内边距给出固有尺寸（高度=1+label+1）。
+- (CGSize)intrinsicContentSize {
+    CGSize labelSize = self.label.intrinsicContentSize;
+    return CGSizeMake(labelSize.width + 10.0, labelSize.height + 2.0);
+}
+
 - (void)setPlatform:(A2ContentPlatform)platform {
     _platform = platform;
     [self applyTheme];
+    [self invalidateIntrinsicContentSize];
 }
 
 /// 用两家的品牌色，不做主题适配 —— 用户要一眼分辨来源
