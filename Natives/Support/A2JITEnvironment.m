@@ -424,8 +424,20 @@ static void *a2_jit_brk69_bounded(NSTimeInterval deadlineSec, const char *why) {
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
     __block void *res = NULL;
     NSTimeInterval t0 = [NSDate date].timeIntervalSince1970;
+    // ★区域大小（真机探针之后改）★
+    //   证据：卡在 VM 创建时 pc 不在任何镜像里（JIT 代码）、lr=JavaCalls::call_helper
+    //   ⇒ VM 已起来、正在执行 JIT 代码时停住。而 JVM 的 code cache 是 64MB
+    //     （-XX:ReservedCodeCacheSize=64m）+ MirrorMappedCodeCache 会把它映射进
+    //     调试器分配的 RX 区 ⇒ 只讨一页(16KB)根本不够放 JIT 代码。
+    //   默认讨 64MB；偏好键 A2JITRegionMB 可覆盖（1~256）。
+    NSInteger a2jitMB = [NSUserDefaults.standardUserDefaults integerForKey:@"A2JITRegionMB"];
+    if (a2jitMB <= 0) a2jitMB = 64;
+    if (a2jitMB > 256) a2jitMB = 256;
+    size_t a2jitWantBytes = (size_t)a2jitMB * 1024u * 1024u;
+    a2_jit_log("[A2JIT] 请求 JIT 区大小=%ldMB（原为一页 %d 字节；键 A2JITRegionMB）",
+               (long)a2jitMB, getpagesize());
     NSThread *worker = [[NSThread alloc] initWithBlock:^{
-        res = a2_jit_brk69_create_region_safe((size_t)getpagesize());
+        res = a2_jit_brk69_create_region_safe(a2jitWantBytes);
         os_unfair_lock_lock(&gA2JITBrkLock);
         gA2JITBrkInFlight = 0;   // 已返回 ⇒ 允许下一发
         os_unfair_lock_unlock(&gA2JITBrkLock);
