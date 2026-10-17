@@ -52,6 +52,11 @@ static void A2Main(dispatch_block_t block) {
 @property (nonatomic, assign) BOOL reuseVanilla;
 @property (nonatomic, assign) BOOL cancelled;
 @property (nonatomic, strong) NSURLSession *session;
+
+// ★批量下载总量进度★
+@property (nonatomic) BOOL a2InBatch;
+@property (nonatomic) int64_t a2BatchBytesDone;
+@property (nonatomic) int64_t a2BatchBytesTotal;
 @property (nonatomic, copy, nullable) void (^progressBlock)(A2InstallStage, double, NSString *);
 @property (nonatomic, copy, nullable) void (^completionBlock)(BOOL, NSError *);
 @end
@@ -642,15 +647,36 @@ static void A2Main(dispatch_block_t block) {
 
     __weak typeof(self) weakSelf = self;
     __block int64_t acc = 0;
+    __block BOOL counted = NO;   // 每个文件只把总大小计入批次一次
     [[A2DownloadEngine sharedClient] startRequest:req
         progress:^(int64_t delta, int64_t total) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self || self.cancelled || total <= 0) return;
         // 用累计值算阶段进度
-        acc += delta;   // ★每个文件各自的累计器（原来是 static，所有文件共用）
+        acc += delta;
         if (acc < 0) acc = 0;
+
+        // ★批量模式：显示「整批」的已下载/总大小★（用户要求：总大小，不是单文件大小）
+        if (self.a2InBatch) {
+            @synchronized (self) {
+                if (total > 0 && !counted) {
+                    counted = YES;
+                    self.a2BatchBytesTotal += total;
+                }
+                self.a2BatchBytesDone += delta;
+                if (self.a2BatchBytesDone < 0) self.a2BatchBytesDone = 0;
+                double bp = (self.a2BatchBytesTotal > 0)
+                    ? MIN(1.0, (double)self.a2BatchBytesDone / (double)self.a2BatchBytesTotal)
+                    : 0.0;
+                [self report:stage progress:bp
+                     message:[NSString stringWithFormat:@"已下载 %.1f MB / 共 %.1f MB",
+                              (double)self.a2BatchBytesDone / 1048576.0,
+                              (double)self.a2BatchBytesTotal / 1048576.0]];
+            }
+            return;
+        }
+
         double p = MIN(1.0, (double)acc / (double)total);
-        // ★按大小显示★（用户要求：不要“第几个/共几个”，要 MB）
         [self report:stage progress:p
              message:[NSString stringWithFormat:@"%@  %.1f / %.1f MB",
                       message, (double)acc / 1048576.0, (double)total / 1048576.0]];
@@ -682,6 +708,11 @@ static void A2Main(dispatch_block_t block) {
 
     [A2Log log:@"[A2-DL] batch 总 %lu 个文件，并发=%ld（键 A2DownloadConcurrency，缺省 4）",
                  (unsigned long)total, (long)concurrency];
+    @synchronized (self) {
+        self.a2InBatch = YES;
+        self.a2BatchBytesDone = 0;
+        self.a2BatchBytesTotal = 0;
+    }
 
     __block NSUInteger index = 0;          // 下一个待发
     __block NSUInteger done = 0;           // 已完成（含失败）
@@ -719,8 +750,10 @@ static void A2Main(dispatch_block_t block) {
                 if (done >= total) {
                     if (finished) return;
                     finished = YES;
-                    [A2Log log:@"[A2-DL] batch 完成：%lu 个，失败 %lu",
-                                 (unsigned long)total, (unsigned long)failed];
+                    @synchronized (self) { self.a2InBatch = NO; }
+                    [A2Log log:@"[A2-DL] batch 完成：%lu 个，失败 %lu，总大小 %.1f MB",
+                                 (unsigned long)total, (unsigned long)failed,
+                                 (double)self.a2BatchBytesTotal / 1048576.0];
                     if (then) then(nil);
                     pump = nil;
                     return;
