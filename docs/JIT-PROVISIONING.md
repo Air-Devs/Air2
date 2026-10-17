@@ -551,6 +551,45 @@ USB 前提根本不存在 ⇒ `A2RPPairSetupUSBPathAvailable()` 如实回 `NO` �
 
 ---
 
+## 7. 脚本侧真机回归：`Skipping: instruction was not a brk` 与 `Failed to extract registers: tid=null…`
+
+真机（StikDebug 跑 `AmethystJIT69.js`）稳定复现过这一段：
+
+```
+Skipping: instruction was not a brk (was 0xa9bf7bfd)
+Continuing with signal 0x0a
+…
+Failed to extract registers: tid=null, pc=null, x16=null
+Script failed:
+```
+
+两条真因都在**脚本侧**（本脚本血统 = 上游 `UniversalJIT26.js`，这两处上游同样有）：
+
+1. **`vCont;S<sig>:<tid>` 是「单步」，不是「继续」。**
+   debugserver `RNBRemote.cpp`：`case 'S'` ⇒ `eStateStepping`（L4072–L4083），
+   `case 'C'` ⇒ `eStateRunning`（L4059–L4069）。⇒ 每次非 brk 停止，脚本只让进程前进**一条指令**，
+   于是 pc 落在函数序言 `stp x29,x30,[sp,#-16]!`（`0xa9bf7bfd`）、`ret`（`0xd65f03c0`）这类任意指令上，
+   判「不是 brk」，周而复始；App 永远走不到下一次 `brk #0x69`，`0x69` 真交付器一次都没被调用。
+   且 vCont 只恢复被点名的那一个线程、其余线程按 `eStateStopped` 处理（多线程 App 等于被冻住）。
+   **改法**：发 `C<sig>`（两位 hex，如 `C0a`）。★不能写成 `C<sig>;thread:<tid>`★ ——
+   `HandlePacket_C` 会把信号之后的 `;` 当成 **PC 地址**解析。
+2. **`tid=null, pc=null, x16=null` 不是「正则写错」，而是那一条回复根本不是停止回复。**
+   寄存器来自 `c` 的停止回复 `T<sig>thread:<tid>;…;20:<pc>;…`（每寄存器 16 hex、小端字节序）。
+   当回复是 `W<status>` / `X<sig>`（进程已退出）或 `E<nn>`（包错误）时，`T` 正则必然全不匹配 ⇒ 三个 null。
+   base 此时 `continue` 空转（在同一个死进程上反复 `c`），直到宿主按 `Script failed:` 把脚本收掉。
+   **改法**：`ameJITParseStopReply()` 分类（`stop`/`exited`/`error`/`empty`/`unknown`）+ **有界收尾**（连续 8 次），
+   日志带上 `kind` 与回复原文前 160 字符。
+
+顺带修掉三处「原地打转 / 整脚本抛异常」的路径：未注册的 `brk #imm` 之前不推进 PC（同一条 brk 无限重停）；
+`m` 读失败时 `littleEndianHexToU32` 抛 `TypeError`（→ 宿主 `Script failed:`）；同一 pc 反复 SIGTRAP。
+
+单测：`node tests/JIT/jit_script_tests.js` —— 98 例，用假 debugserver 直接断言**脚本发出的包**。
+真机复测判据（★需用户在 StikDebug 上做，本仓库未验证★）：出现
+`[AMETHYST-JIT69] hit #1: brk #0x69 BreakGetJITMapping(size=0x…) @pc=0x…`；
+不再刷 `Skipping: instruction was not a brk`；`Continuing with signal … (packet 'C0a')` 只在真信号时出现。
+
+---
+
 ## 相关文档
 
 - `docs/DECISIONS.md` —— **ADR-009**（本文的决策条目）、ADR-007（传统 `brk #0x69` 回退）、ADR-008（内置 JIT 工作流首版）

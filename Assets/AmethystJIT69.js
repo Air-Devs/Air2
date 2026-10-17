@@ -12,6 +12,15 @@
 //            真交付器（防止 App 下发 UniversalJIT26Extension.js 时把 0x69 又换成 rx 版）。
 //     [增]   文件前部插入配置常量 + 分配助手 + （照搬 UniversalJIT26Extension.js 的）
 //            commands[3]/[4] 两条 universal 命令注册，使本脚本可单独替代 base+Extension。
+//     [改-3] 主循环的「非 brk 停止 ⇒ 放行信号」：base 用 `vCont;S<sig>:<tid>` 是【单步】不是继续
+//            （debugserver RNBRemote.cpp L4072-L4083：case 'S' ⇒ eStateStepping；
+//              L4059-L4069：case 'C' ⇒ eStateRunning）。⇒ 回真机上表现为每停一次只前进【一条指令】，
+//            于是满屏 `Skipping: instruction was not a brk`（pc 落在函数序言 `stp x29,x30,[sp,#-16]!`
+//             / `ret` 这类任意指令上），永远走不到下一个 brk，App 也永远拿不到 0x69 的映射区。
+//             改为 `C<sig>`（带信号继续，全线程恢复），详见 ameJITResumePacket()。
+//     [改-4] 停止回复解析独立成纯函数 ameJITParseStopReply()，并把「拿不到停止回复」变成
+//            【有界、有原文】的失败：base 在 tid/pc/x16 全 null 时 `continue` 空转，最后被宿主
+//            以 `Script failed:` 收尾（真机日志：Handling signal 5 → Failed to extract registers）。 
 //
 // 命中传统 0x69 时打印 `[AMETHYST-JIT69] ...` 行，便于真机判据（见 D:\CTF\_JIT_SCRIPT.md）。
 // ============================================================================
@@ -65,6 +74,7 @@ const AME_JIT_REGION_MAX     = 268435456n;             // 上限 256 MiB（可�
 const AME_JIT_ERR_BAD_SIZE   = 0xE0000001n;            // 请求尺寸非法/超上限
 const AME_JIT_ERR_ALLOC_FAIL = 0xE0000002n;            // _M（rwx 与 rx 都）分配失败
 const AME_JIT_ERR_BLESS_FAIL = 0xE0000003n;            // prepare_memory_region 落实页失败
+const AME_JIT_SIGTRAP        = 0x05;                   // ★[改-3]★ brk 走的就是 SIGTRAP（5）
 let   ameJITBrk69Hits        = 0;                      // 命中计数（真机判据）
 let   ameJITInBrk69          = false;                  // ★防重入★：0x69 handler 一次只允许一层
 
@@ -140,6 +150,9 @@ log(`pid = ${pid}`);
 log(`attach_response = ${attachResponse}`);
     
 let totalBreakpoints = 0;
+let ameJITBadReplies = 0;               // ★[改-4]★ 连续「不是停止回复」的计数（有界失败，不许空转）
+let ameJITTrapPc      = null;           // ★[改-3]★ 上一次被吞掉的 SIGTRAP 所在 pc（防同一地址死循环）
+const AME_JIT_BAD_REPLY_LIMIT = 8;
 while (!detached) {
     totalBreakpoints++;
     log(`Handling signal ${totalBreakpoints}`);
@@ -147,46 +160,64 @@ while (!detached) {
     let brkResponse = send_command(`c`);
     log_verbose(`brkResponse = ${brkResponse}`);
     
-    // extract tid, pc, x16
-    let tmpMatch = /T[0-9a-f]+thread:(?<tid>[0-9a-f]+);/.exec(brkResponse);
-    tid = tmpMatch ? tmpMatch.groups['tid'] : null;
-    tmpMatch = /20:(?<reg>[0-9a-f]{16});/.exec(brkResponse);
-    pc = tmpMatch ? tmpMatch.groups['reg'] : null;
-    tmpMatch = /10:(?<reg>[0-9a-f]{16});/.exec(brkResponse);
-    x16 = tmpMatch ? tmpMatch.groups['reg'] : null;
-    if (!tid || !pc || !x16) {
-        log(`Failed to extract registers: tid=${tid}, pc=${pc}, x16=${x16}`);
+    // ★[改-4]★ 停止回复分类：T=停住 / W,X=进程已退出 / E=包错误 / 其它=空或垃圾
+    const stop = ameJITParseStopReply(brkResponse);
+    const signo = stop.signo;
+    if (stop.kind !== 'stop' || !stop.tid || !stop.pcHex || !stop.x16Hex) {
+        ameJITBadReplies++;
+        log(`Failed to extract registers: tid=${stop.tid}, pc=${stop.pcHex}, x16=${stop.x16Hex}`
+            + ` (kind=${stop.kind}, signo=${signo}, ${ameJITBadReplies}/${AME_JIT_BAD_REPLY_LIMIT},`
+            + ` raw='${ameJITClip(stop.raw, 160)}')`);
+        if (stop.kind === 'exited' || stop.kind === 'error'
+            || ameJITBadReplies >= AME_JIT_BAD_REPLY_LIMIT) {
+            // 进程已被杀 / 调试会话报错 / 连续拿不到停止回复 ⇒ 如实收尾（base 在这里无限空转，
+            // 最终被宿主按 `Script failed:` 结束，看不到任何原因）。
+            log(`[AMETHYST-JIT69] 停止服务：进程已退出或调试会话失效`
+                + `（kind=${stop.kind}, 连续无效回复=${ameJITBadReplies}）`);
+            break;
+        }
         continue;
     }
-    pc = littleEndianHexStringToNumber(pc);
-    x16 = littleEndianHexStringToNumber(x16);
+    ameJITBadReplies = 0;
+    tid = stop.tid;
+    pc  = littleEndianHexStringToNumber(stop.pcHex);
+    x16 = littleEndianHexStringToNumber(stop.x16Hex);
+    log_verbose(`stop: signo=0x${signo === null ? '??' : signo.toString(16)} tid=${tid} pc=0x${pc.toString(16)} x16=0x${x16.toString(16)}`);
     
     let instructionResponse = send_command(`m${pc.toString(16)},4`);
     log(`instruction at pc: ${instructionResponse}`);
     let instrU32 = littleEndianHexToU32(instructionResponse);
     
     // check if this is a brk
-    if ((instrU32 & 0xFFE0001F)>>>0 != 0xD4200000) {
+    if (!ameJITIsBrk(instrU32)) {
         log(`Skipping: instruction was not a brk (was 0x${instrU32.toString(16)})`);
-        let signum = /^T(?<sig>[a-z0-9;]{2})/.exec(brkResponse);
-        signum = signum ? signum.groups['sig'] : null;
-        if (!signum) {
-            log(`Failed to extract signal number: ${signum}`);
+        if (signo === AME_JIT_SIGTRAP) {
+            // SIGTRAP 是调试器自己的（brk 已在上一行判掉）⇒ 吞掉后继续；
+            // 若同一个 pc 连续第二次报 SIGTRAP，说明这条指令自身必停（例如读不出指令字的 brk），
+            // 越过它再继续，避免在同一地址无休止重停。
+            if (ameJITTrapPc !== null && ameJITTrapPc === pc) {
+                log(`[AMETHYST-JIT69] 同一 pc 连续 SIGTRAP ⇒ 跳过该指令 (pc=0x${pc.toString(16)})`);
+                ameJITSkipInstruction();
+            }
+            ameJITTrapPc = pc;
             continue;
         }
-        log(`Continuing with signal 0x${signum}`);
-        send_command(`vCont;S${signum}:${tid}`);
+        ameJITTrapPc = null;
+        // ★[改-3]★ base 这里发的是 `vCont;S<sig>:<tid>` —— S 是【单步】(RNBRemote.cpp L4072-4083)，
+        // 每停一次只前进一条指令，所以永远到不了下一个 brk。换成 `C<sig>`（带信号继续，全线程恢复）。
+        const resumePacket = ameJITResumePacket(signo);
+        log(`Continuing with signal 0x${signo === null ? '??' : signo.toString(16)} (packet '${resumePacket}')`);
+        send_command(resumePacket);
         continue;
     }
+    ameJITTrapPc = null;
     
     let brkImmediate = extractBrkImmediate(instrU32);
     log(`BRK immediate: 0x${brkImmediate.toString(16)} (${brkImmediate})`);
     if (legacyCommands[brkImmediate] != undefined) {
         // when we find a valid brk immediate command, parse x0 and x1
-        tmpMatch = /00:(?<reg>[0-9a-f]{16});/.exec(brkResponse);
-        x0 = tmpMatch ? tmpMatch.groups['reg'] : null;
-        tmpMatch = /01:(?<reg>[0-9a-f]{16});/.exec(brkResponse);
-        x1 = tmpMatch ? tmpMatch.groups['reg'] : null;
+        x0 = stop.x0Hex;
+        x1 = stop.x1Hex;
         if (!x0 || !x1) {
             log(`Failed to extract registers: x0=${x0}, x1=${x1}`);
             continue;
@@ -204,6 +235,8 @@ while (!detached) {
         command(brkResponse);
     } else {
         log(`Skipping breakpoint: brk immediate 0x${brkImmediate.toString(16)} was not handled by this script. You could add it by evaluating legacyCommands[0x${brkImmediate.toString(16)}] = yourFunction;`);
+        // ★[改-3]★ 必须越过这条 brk：不跳过的话 pc 一直停在这条 brk 上，循环会无休止重停同一条指令。
+        ameJITSkipInstruction();
         continue;
     }
 }
@@ -312,6 +345,73 @@ function JIT26PrepareRegion(brkResponse) {
 }
 
 // utilities
+// ---------------------------------------------------------------------------
+// ★[改-3]/[改-4] 停止回复与续跑（纯函数；tests/JIT/jit_script_tests.js 逐例覆盖）
+// ---------------------------------------------------------------------------
+// debugserver 的停止回复（arm64）形如：
+//   T05thread:1e03;00:<x0>;01:<x1>;…;10:<x16>;…;20:<pc>;21:<cpsr>;
+// 每个寄存器 16 个 hex 字符、目标字节序（小端）；20 = pc，10 = x16，00/01 = x0/x1。
+// 进程退出时回 W<status> / X<signal>，包出错回 E<nn> —— 这两种【没有】T/thread/寄存器字段，
+// base 的解析必然得到 tid=null,pc=null,x16=null（真机日志里那一行），然后原样 continue 空转。
+function ameJITPickReg(s, regNo) {
+    const m = new RegExp('(?:^|;)' + regNo + ':([0-9a-fA-F]{16})').exec(s);
+    return m ? m[1] : null;
+}
+
+function ameJITParseStopReply(reply) {
+    const out = {
+        kind: 'empty', signo: null, tid: null,
+        x0Hex: null, x1Hex: null, x16Hex: null, pcHex: null, raw: ''
+    };
+    if (reply === undefined || reply === null) return out;
+    const s = String(reply).trim();
+    out.raw = s;
+    if (s.length === 0) return out;
+    const head = s.charAt(0).toUpperCase();
+    if (head === 'T') {
+        out.kind = 'stop';
+        const sig = /^T([0-9a-fA-F]{2})/.exec(s);
+        out.signo = sig ? parseInt(sig[1], 16) : null;
+        const th = /thread:([0-9a-fA-F]+)/.exec(s);
+        out.tid = th ? th[1] : null;
+        out.x0Hex  = ameJITPickReg(s, '00');
+        out.x1Hex  = ameJITPickReg(s, '01');
+        out.x16Hex = ameJITPickReg(s, '10');
+        out.pcHex  = ameJITPickReg(s, '20');
+        return out;
+    }
+    if (head === 'W' || head === 'X') { out.kind = 'exited'; return out; }
+    if (head === 'E') { out.kind = 'error'; return out; }
+    out.kind = 'unknown';
+    return out;
+}
+
+// BRK #imm 的编码 = 0xD4200000 | (imm << 5)，判定 mask 0xFFE0001F
+function ameJITIsBrk(u32) {
+    if (typeof u32 !== 'number' || !isFinite(u32)) return false;
+    return ((u32 & 0xFFE0001F) >>> 0) === 0xD4200000;
+}
+
+// ★[改-3]★ 续跑包：`C<sig>` = 带信号继续（RNBRemote.cpp L4059-L4069：case 'C' ⇒ eStateRunning，
+// 且 SetDefaultThreadActionIfNeeded(eStateRunning) ⇒ 其余线程一起恢复）。
+// 绝不能写成 `vCont;S<sig>:<tid>`：S ⇒ eStateStepping（L4072-L4083），只前进一条指令。
+// 也绝不能写成 `C<sig>;thread:<tid>`：HandlePacket_C 会把信号之后的 ';' 当成【PC 地址】解析。
+function ameJITResumePacket(signo) {
+    if (typeof signo !== 'number' || !(signo >= 0 && signo <= 0xff)) return 'c';
+    return `C${signo.toString(16).padStart(2, '0')}`;
+}
+
+// 越过当前指令（pc += 4），用于「这条 brk 没人认领」与「同一 pc 反复 SIGTRAP」
+function ameJITSkipInstruction() {
+    const pcPlus4Response = send_command(`P20=${numberToLittleEndianHexString(pc + 4n)};thread:${tid};`);
+    log_verbose(`pcPlus4Response = ${pcPlus4Response}`);
+}
+
+function ameJITClip(s, n) {
+    s = (s === undefined || s === null) ? '' : String(s);
+    return s.length <= n ? s : `${s.slice(0, n)}…`;
+}
+
 function littleEndianHexStringToNumber(hexStr) {
     const bytes = [];
     for (let i = 0; i < hexStr.length; i += 2) {
@@ -337,7 +437,12 @@ function numberToLittleEndianHexString(num) {
 }
 
 function littleEndianHexToU32(hexStr) {
-    return parseInt(hexStr.match(/../g).reverse().join(''), 16);
+    // ★[改-4]★ 读内存失败时宿主回的是 "E01"/空串 —— base 直接 .match() 会抛 TypeError，
+    // 整个脚本被宿主以 `Script failed:` 收尾。这里改成返回 NaN（调用方按「指令未知」处理）。
+    const s = (hexStr === undefined || hexStr === null) ? '' : String(hexStr).trim();
+    const m = /^[0-9a-fA-F]{8}/.exec(s);
+    if (!m) return NaN;
+    return parseInt(m[0].match(/../g).reverse().join(''), 16);
 }
 
 function extractBrkImmediate(u32) {
