@@ -47,6 +47,11 @@ static void *a2_vm_heartbeat(void *ctx) {
         seconds += 10;
         if (atomic_load(&gA2VMInFlight) == 0) break;
         a2_log_f(@"[A2JVM] 建 VM 仍在进行（已 %ds）—— JNI_CreateJavaVM 未返回", seconds);
+        // 40 秒再补一发 SIGQUIT：20s 那次可能早于 JVM 装好 SIGQUIT 处理器（真机实测没有 dump）
+        if (seconds == 40) {
+            a2_log_f(@"[A2JVM] 40s 再发一次 SIGQUIT（补抓线程栈）");
+            kill(getpid(), SIGQUIT);
+        }
     }
     return NULL;
 }
