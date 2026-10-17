@@ -42,6 +42,10 @@
 #import "A2VersionManager.h"
 #import "A2InputDialog.h"
 #import "A2ModListViewController.h"
+#import "A2OptionSheet.h"          // 实例级「Java 运行时 / 渲染器」单选（MD3 弹窗）
+#import "A2JavaRuntimeCatalog.h"    // JRE 档位清单
+#import "A2RendererCatalog.h"       // 渲染器清单
+#import "A2RuntimeStrings.h"        // 渲染器显示名（缺 key 回退技术名）
 
 @interface A2VersionSettingsViewController ()
 /// 版本名（在 init 里赋值，后续只读）
@@ -249,6 +253,75 @@
     section.footerText = @"留空则使用全局设置。这些配置存在版本的 .air_version/config.json 里。";
 
     A2VersionIsolation *iso = _version.isolation;
+
+    // ---- ★实例级 Java 运行时★（空 = 跟随全局）----
+    A2SettingsRow *javaRow = [[A2SettingsRow alloc] init];
+    javaRow.symbolName = @"cup.and.saucer";
+    javaRow.title = @"Java 运行时";
+    javaRow.valueText = iso.javaRuntime.length ? iso.javaRuntime : @"跟随全局";
+    javaRow.accessory = A2SettingsRowAccessoryDisclosure;
+    __weak A2SettingsRow *weakJavaRow = javaRow;
+    javaRow.onTap = ^{
+        __weak typeof(self) weakSelf = self;
+        A2OptionSheet *sheet = [A2OptionSheet sheetWithTitle:@"Java 运行时"
+                                                     message:@"实例级覆盖；「跟随全局」用设置 → 游戏 → 运行环境 里的那档"];
+        [sheet addOptionWithTitle:@"跟随全局"
+                         selected:(weakSelf.version.isolation.javaRuntime.length == 0)
+                      destructive:NO
+                          handler:^{
+            weakSelf.version.isolation.javaRuntime = nil;
+            [weakSelf.version saveConfig];
+            weakJavaRow.valueText = @"跟随全局";
+        }];
+        for (NSString *dir in [A2JavaRuntimeCatalog allDirectoryNames]) {
+            [sheet addOptionWithTitle:dir
+                             selected:[dir isEqualToString:weakSelf.version.isolation.javaRuntime ?: @""]
+                          destructive:NO
+                              handler:^{
+                weakSelf.version.isolation.javaRuntime = dir;
+                [weakSelf.version saveConfig];
+                weakJavaRow.valueText = dir;
+            }];
+        }
+        [sheet presentFrom:weakSelf];
+    };
+    [section addRow:javaRow];
+
+    // ---- ★实例级渲染器★（空 = 跟随全局）----
+    A2SettingsRow *rendererRow = [[A2SettingsRow alloc] init];
+    rendererRow.symbolName = @"paintbrush";
+    rendererRow.title = @"渲染器";
+    rendererRow.valueText = iso.renderer.length ? iso.renderer : @"跟随全局";
+    rendererRow.accessory = A2SettingsRowAccessoryDisclosure;
+    __weak A2SettingsRow *weakRendererRow = rendererRow;
+    rendererRow.onTap = ^{
+        __weak typeof(self) weakSelf = self;
+        A2OptionSheet *sheet = [A2OptionSheet sheetWithTitle:@"渲染器"
+                                                     message:@"实例级覆盖；「跟随全局」用设置 → 游戏 → 运行环境 里的那项"];
+        [sheet addOptionWithTitle:@"跟随全局"
+                         selected:(weakSelf.version.isolation.renderer.length == 0)
+                      destructive:NO
+                          handler:^{
+            weakSelf.version.isolation.renderer = nil;
+            [weakSelf.version saveConfig];
+            weakRendererRow.valueText = @"跟随全局";
+        }];
+        for (A2Renderer *r in [A2RendererCatalog allCandidates]) {
+            NSString *key = [A2RendererCatalog nameLocalizationKeyForIdentifier:r.identifier];
+            NSString *name = [A2RuntimeStrings stringForKey:key];
+            if (name.length == 0 || [name isEqualToString:key]) name = r.displayName ?: r.identifier;
+            [sheet addOptionWithTitle:name
+                             selected:[r.identifier isEqualToString:weakSelf.version.isolation.renderer ?: @""]
+                          destructive:NO
+                              handler:^{
+                weakSelf.version.isolation.renderer = r.identifier;
+                [weakSelf.version saveConfig];
+                weakRendererRow.valueText = name;
+            }];
+        }
+        [sheet presentFrom:weakSelf];
+    };
+    [section addRow:rendererRow];
 
     A2SettingsRow *jvmRow = [[A2SettingsRow alloc] init];
     jvmRow.symbolName = @"terminal";

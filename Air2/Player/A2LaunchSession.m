@@ -134,15 +134,23 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
     //   中文与稳定 tag 并存：真机换语言也能 grep 到（source=user / source=default）。
     // ★选到未内置的 ⇒ 如实阻断★（不给 VM，不静默换一个渲染器）。
     // ========================================================================
-    NSString *selRenderer = [NSUserDefaults.standardUserDefaults stringForKey:A2SelectedRendererPrefKey];
+    // ★实例级覆盖优先★：实例设置 → 启动配置 → 渲染器（写点 = A2VersionSettingsViewController）。
+    //   实例没选（空）⇒ 落回全局设置 → 缺省值；source 字段区分三种来源。
+    NSString *instanceRenderer = version.isolation.renderer;
+    NSString *selRenderer = instanceRenderer.length
+        ? instanceRenderer
+        : [NSUserDefaults.standardUserDefaults stringForKey:A2SelectedRendererPrefKey];
     A2Renderer *renderer = [A2RendererCatalog candidateForIdentifier:selRenderer ?: @""]
-                           ?: [A2RendererCatalog defaultCandidate];
+        ?: [A2RendererCatalog defaultCandidate];
     BOOL rendererFromUser = (selRenderer.length > 0);
-    NSString *rendererSourceWord = [A2RuntimeStrings stringForKey:(rendererFromUser
-                                                                    ? @"runtime.source.user"
-                                                                    : @"runtime.source.default")];
+    NSString *rendererSource = instanceRenderer.length
+        ? @"instance" : (rendererFromUser ? @"user" : @"default");
+    NSString *rendererSourceWord = instanceRenderer.length
+        ? @"实例设置"
+        : [A2RuntimeStrings stringForKey:(rendererFromUser ? @"runtime.source.user"
+                                                           : @"runtime.source.default")];
     [A2Log log:@"[A2-RENDERER] chosen=%@(源: %@; source=%@)",
-     renderer.identifier, rendererSourceWord, rendererFromUser ? @"user" : @"default"];
+                 renderer.identifier, rendererSourceWord, rendererSource];
 
     if (![A2RendererCatalog isBundled:renderer frameworksPath:frameworks]) {
         NSString *nameKey = [A2RendererCatalog nameLocalizationKeyForIdentifier:renderer.identifier];
@@ -166,14 +174,23 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
     // ========================================================================
     NSString *runtimesDir = [bundle stringByAppendingPathComponent:
                              [A2JavaRuntimeCatalog javaRuntimesDirectoryName]];
-    NSString *selJRE = [NSUserDefaults.standardUserDefaults stringForKey:A2SelectedJavaRuntimePrefKey];
-    BOOL jreFromUser = (selJRE.length > 0 && [[A2JavaRuntimeCatalog allDirectoryNames] containsObject:selJRE]);
+    // ★实例级覆盖优先★：实例设置 → 启动配置 → Java 运行时；空 ⇒ 全局 → 主推档。
+    NSString *instanceJRE = version.isolation.javaRuntime;
+    BOOL jreFromInstance = (instanceJRE.length > 0 &&
+                            [[A2JavaRuntimeCatalog allDirectoryNames] containsObject:instanceJRE]);
+    NSString *selJRE = jreFromInstance
+        ? instanceJRE
+        : [NSUserDefaults.standardUserDefaults stringForKey:A2SelectedJavaRuntimePrefKey];
+    BOOL jreFromUser = (selJRE.length > 0 &&
+                        [[A2JavaRuntimeCatalog allDirectoryNames] containsObject:selJRE]);
     NSString *jreDir = jreFromUser ? selJRE : [A2JavaRuntimeCatalog defaultDirectoryName];
-    NSString *javaHome = [runtimesDir stringByAppendingPathComponent:jreDir];
-    NSString *jreSourceWord = [A2RuntimeStrings stringForKey:(jreFromUser ? @"runtime.source.user"
-                                                                         : @"runtime.source.default")];
+    NSString *jreSource = jreFromInstance ? @"instance" : (jreFromUser ? @"user" : @"default");
+    NSString *jreSourceWord = jreFromInstance
+        ? @"实例设置"
+        : [A2RuntimeStrings stringForKey:(jreFromUser ? @"runtime.source.user"
+                                                      : @"runtime.source.default")];
     [A2Log log:@"[A2-JRE] chosen=%@(源: %@; source=%@)",
-     jreDir, jreSourceWord, jreFromUser ? @"user" : @"default"];
+                 jreDir, jreSourceWord, jreSource];
 
     // ========================================================================
     // ★[FRAME-PERF] 渲染分辨率倍率：用户选择 → 启动链的表面尺寸★
