@@ -641,16 +641,19 @@ static void A2Main(dispatch_block_t block) {
     req.allowZipFallbackCheck = YES;
 
     __weak typeof(self) weakSelf = self;
+    __block int64_t acc = 0;
     [[A2DownloadEngine sharedClient] startRequest:req
         progress:^(int64_t delta, int64_t total) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self || self.cancelled || total <= 0) return;
         // 用累计值算阶段进度
-        static int64_t acc = 0;
-        acc += delta;
+        acc += delta;   // ★每个文件各自的累计器（原来是 static，所有文件共用）
         if (acc < 0) acc = 0;
         double p = MIN(1.0, (double)acc / (double)total);
-        [self report:stage progress:p message:message];
+        // ★按大小显示★（用户要求：不要“第几个/共几个”，要 MB）
+        [self report:stage progress:p
+             message:[NSString stringWithFormat:@"%@  %.1f / %.1f MB",
+                      message, (double)acc / 1048576.0, (double)total / 1048576.0]];
     }
         speed:nil
         completion:^(BOOL success, NSError *error) {
@@ -705,17 +708,14 @@ static void A2Main(dispatch_block_t block) {
             }
 
             [self download:@[url] to:dest stageLabel:stage
-                   message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
-                            base, (unsigned long)(currentIndex + 1), (unsigned long)total]
+                   message:base
                    thenRun:^(NSError *error) {
                 __strong typeof(weakSelf) self = weakSelf;
                 if (!self) return;
                 // 单个文件失败不中断整体 —— 依赖库里有可选组件，下载不到不影响启动
                 if (error) failed++;
                 done++;
-                [self report:stage progress:(double)done / (double)total
-                     message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
-                              base, (unsigned long)done, (unsigned long)total]];
+                [self report:stage progress:(double)done / (double)total message:base];
                 if (done >= total) {
                     if (finished) return;
                     finished = YES;
