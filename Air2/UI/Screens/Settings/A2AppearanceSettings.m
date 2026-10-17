@@ -38,6 +38,7 @@
 #import "A2ColorThemeDialog.h"
 #import "A2CurseForgeAPI.h"
 #import "A2MirrorResolver.h"
+#import "A2RendererPluginViewController.h"
 #import "A2Toast.h"
 
 @implementation A2AppearanceSettings
