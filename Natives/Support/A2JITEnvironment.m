@@ -563,7 +563,7 @@ static int gA2JITEnsureKickInflight = 0;
     //   从“StikDebug 9000+ 请求 + 建 VM 卡死”里摘出去，判断到底是谁在刷。
     //   定位完必须默认关掉（那意味着放弃 JIT 校验）。
     id a2skipVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2SkipJITMachinery"];
-    BOOL a2skip = (a2skipVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2SkipJITMachinery"];
+    BOOL a2skip = (a2skipVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2SkipJITMachinery"];
     if (a2skip) {
         if (whyOut) *whyOut = @"排查模式:已跳过整条 JIT 取证链(A2SkipJITMachinery=YES)";
         gA2JITRegionVerdict = A2JITRegionVerdictUsable;

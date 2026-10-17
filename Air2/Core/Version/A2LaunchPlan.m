@@ -465,7 +465,7 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     //   ⇒ 默认改成★关✗★，让 JVM 用自己的 code cache 分配（进程在调试器下可执行内存本就可申请）。
     //   要恢复镜射：偏好键 A2UseMirrorCodeCache = YES。
     id a2mirrorVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2UseMirrorCodeCache"];
-    BOOL a2useMirror = (a2mirrorVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2UseMirrorCodeCache"];
+    BOOL a2useMirror = (a2mirrorVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2UseMirrorCodeCache"];
     [A2Log criterion:@"[A2JIT] MirrorMappedCodeCache=%d（键 A2UseMirrorCodeCache 未设 ⇒ 默认关：真机证据是镜射进 16KB 区导致卡死）",
           (int)a2useMirror];
     if (javaMajorVersion >= 17 && a2useMirror) {
