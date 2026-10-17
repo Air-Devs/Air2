@@ -163,8 +163,9 @@ int main(int argc, const char *argv[]) {
         NSArray<NSString *> *j8 = [PlanNoFacts() jvmOptionsWithMemoryMB:1024 javaMajorVersion:8];
         NSArray<NSString *> *want8 = @[
             @"-Xms128M", @"-Xmx1024M",
-            @"-XX:MaxMetaspaceSize=192M", @"-XX:CompressedClassSpaceSize=128M",
-            @"-XX:ReservedCodeCacheSize=64M", @"-XX:MaxDirectMemorySize=512M",
+            // ★真机崩溃修复后✗★：不再下发 CompressedClassSpaceSize/MaxMetaspace/CodeCache/DirectMemory，
+            // 改为显式关闭压缩类指针（依据 iPhone 17 Pro 崩溃报告 + 老线 JavaLauncher.m:2563/3469 的已验证行为）。
+            @"-XX:-UseCompressedClassPointers",
             @"-Xss1m", @"-XX:SoftRefLRUPolicyMSPerMB=250",
             [NSString stringWithFormat:@"-Djava.system.class.loader=%@", A2LaunchGameClassLoaderName],
         ];
@@ -183,8 +184,7 @@ int main(int argc, const char *argv[]) {
         NSArray<NSString *> *j25 = [PlanNoFacts() jvmOptionsWithMemoryMB:2048 javaMajorVersion:25];
         NSArray<NSString *> *want17 = @[
             @"-Xms128M", @"-Xmx2048M",
-            @"-XX:MaxMetaspaceSize=192M", @"-XX:CompressedClassSpaceSize=128M",
-            @"-XX:ReservedCodeCacheSize=64M", @"-XX:MaxDirectMemorySize=512M",
+            @"-XX:-UseCompressedClassPointers",
             @"-Xss1m", @"-XX:SoftRefLRUPolicyMSPerMB=250",
             @"-XX:+UnlockExperimentalVMOptions", @"-XX:+UseG1GC",
             @"-XX:MaxGCPauseMillis=50", @"-XX:+UseStringDeduplication",
@@ -215,8 +215,8 @@ int main(int argc, const char *argv[]) {
         BOOL anyXmx = NO;
         for (NSString *s in none) if ([s hasPrefix:@"-Xmx"]) anyXmx = YES;
         ok(!anyXmx, @"memoryMB=0 ⇒ 一条 -Xmx 都不产出");
-        ok(ArrayContains(none, @"-XX:MaxMetaspaceSize=192M") && ArrayContains(none, @"-Xss1m"),
-           @"非堆上限/线程栈与堆无关 ⇒ 照常下发");
+        ok(ArrayContains(none, @"-XX:-UseCompressedClassPointers") && ArrayContains(none, @"-Xss1m"),
+           @"非堆项/线程栈与堆无关 ⇒ 照常下发");
         ok(ArrayContains(none, @"-XX:+UseG1GC"), @"Java 25 档在 memoryMB=0 时仍有 G1 组（与堆无关）");
 
         // ================================================================= ⑩

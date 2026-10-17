@@ -389,18 +389,17 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
         [options addObject:[NSString stringWithFormat:@"-Xmx%ldM", (long)memoryMB]];
     }
 
-    // ---- ② 非堆上限：这几项 JVM 默认「无上限」，长时间玩会缓慢涨（方法清单 §A6）----
-    //   · MaxMetaspaceSize=192M：元数据常驻上限；默认无上限 ⇒ 类加载泄漏时无界增长。MC + 加载器
-    //     （Forge/Fabric）的类元数据量级，192M 是给足余量的封顶。
-    //   · CompressedClassSpaceSize=128M：压缩类指针区（arm64 堆 < 32G 时生效）的保留区大小。
-    //   · ReservedCodeCacheSize=64M：JIT 代码缓存；默认 240M（64 位）在手机上过大，64M 够 MC 用。
-    //   · MaxDirectMemorySize=512M：NIO 直接内存（LWJGL/纹理上传会走）。默认 = -Xmx ⇒ 手机上等于
-    //     把堆预算又复制一份，必须显式封顶。
-    //   ★四个值均为「按量级封顶」的保守取值，出处 D:\CTF\_MEM_OPT.md §A6；★未真机标定★。★
-    [options addObject:@"-XX:MaxMetaspaceSize=192M"];
-    [options addObject:@"-XX:CompressedClassSpaceSize=128M"];
-    [options addObject:@"-XX:ReservedCodeCacheSize=64M"];
-    [options addObject:@"-XX:MaxDirectMemorySize=512M"];
+    // ---- ② 非堆上限：★这一组按真机崩溃报告改过✗★ ----
+    //   【证据】iPhone 17 Pro / iOS 27.2 崩溃报告(SIGABRT)：
+    //     JNI_CreateJavaVM → Threads::create_vm → universe_init → Metaspace::global_initialize →
+    //     CompressedKlassPointers::initialize(...) → report_fatal → abort
+    //   ⇒ 本平台(受限地址空间/JIT 区)★建不出压缩类指针区✗★；老线早已因此显式关闭它：
+    //     runtime_native/Natives/JavaLauncher.m:2563 与 :3469 ⇒ `-XX:-UseCompressedClassPointers`
+    //   ⇒ 因此：①不再下发 CompressedClassSpaceSize（那是"要求开启压缩类指针"的参数，与上面相冲）
+    //            ②显式下发 -XX:-UseCompressedClassPointers（照老线已验证行为）
+    //   其余封顶项(MaxMetaspace/CodeCache/DirectMemory)老线都没设 ⇒ 本轮先★只保留老线验证过的那套✗★，
+    //   需要时再逐项加回并用真机数据标定。
+    [options addObject:@"-XX:-UseCompressedClassPointers"];
 
     // ---- ③ 线程栈 + 软引用宽限（出处：老线 JavaLauncher.m:2429-2430）----
     //   · -Xss1m：JVM 在本平台每线程 commit 2MB，而 MC 线程多、栈深用不到 ⇒ 压到桌面 Linux 默认 1MB。
