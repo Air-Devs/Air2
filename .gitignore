@@ -14,8 +14,17 @@
 *.a
 *.dylib
 *.so
-!Libraries/**/*.dylib
 *.xcarchive
+
+# ---------- 预编译依赖（约 250MB，用 scripts/fetch_deps.sh 下载）----------
+# 不提交的理由：MobileGL 两个库就 85MB×2，Mesa 17MB，
+# 整个 Frameworks 约 237MB。提交进 git 会让 clone 极慢。
+Libraries/Frameworks/*.dylib
+Libraries/Frameworks/*.framework/
+Libraries/Jars/**/*.jar
+Natives/terracotta/**/*.a
+!Libraries/Jars/.gitkeep
+!Libraries/Frameworks/.gitkeep
 
 # ---------- Xcode ----------
 xcuserdata/
@@ -47,8 +56,6 @@ Carthage/Build/
 *.class
 *.jar
 !.mvn/wrapper/*.jar
-!JavaApp/libs/**/*.jar
-!Libraries/**/*.jar
 target/
 .gradle/
 hs_err_pid*
