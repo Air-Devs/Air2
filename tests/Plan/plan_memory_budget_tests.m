@@ -231,6 +231,14 @@ int main(int argc, const char *argv[]) {
             printf("FAIL  G1 组不足 4 条或找不到起点，无法比对（实际 %lu 条）\n",
                    (unsigned long)j25NoGC.count);
         }
+        // Java 8 档为了开 DisablePrimordialThreadGuardPages(诊断项)自己也带 Unlock；
+        // 而上面摘 G1 组时把 Unlock 一起摘掉了 ⇒ 这里补回到同一位置再比。
+        if (![j25NoGC containsObject:@"-XX:+UnlockExperimentalVMOptions"]) {
+            NSUInteger softRef = [j25NoGC indexOfObject:@"-XX:SoftRefLRUPolicyMSPerMB=250"];
+            if (softRef != NSNotFound) {
+                [j25NoGC insertObject:@"-XX:+UnlockExperimentalVMOptions" atIndex:softRef + 1];
+            }
+        }
         ok(ArrayEquals(j25NoGC, want8b),
            [NSString stringWithFormat:@"去掉 G1 4 条后与 Java 8 档逐项相同（实际：%@）", Join(j25NoGC)]);
 
