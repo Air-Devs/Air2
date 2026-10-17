@@ -395,9 +395,11 @@ console.log('== K. 源码级不变量（防止有人把这几个坑改回去）'
     ok(SRC.indexOf('prepare_memory_region') >= 0, 'K6 仍然用宿主的 prepare_memory_region 落实页');
     // 小区(<=1MiB)仍走 _M<size>,rx + 逐页 prepare；大区改单条 _M<size>,rwx
     // （64MiB 逐页 prepare = 4096 条调试命令 = 真机 6000~10000 请求的根源）
-    ok(SRC.indexOf("const perms = (x1 > AME_BIG_REGION) ? 'rwx' : 'rx';") >= 0,
-       'K7 小区域用 rx、大区域用 rwx（一次分配，不再逐页 prepare）');
-    ok(SRC.indexOf('const AME_BIG_REGION = 1048576n;') >= 0, 'K7b 大区阈值 1MiB 存在');
+    // 官方交付路径（2026-10-17 对照结论）：不要 AME_BIG_REGION 捷径；
+    // 大区也走 `_M<size>,rx` + prepare_memory_region（会把请求尺寸真的交付出来）。
+    ok(SRC.indexOf('_M${x1.toString(16)},rx') >= 0, 'K7 用官方 _M<size>,rx 分配');
+    ok(SRC.indexOf('const AME_BIG_REGION') === -1, 'K7b 不再有 AME_BIG_REGION 捷径');
+    ok(SRC.indexOf('prepare_memory_region(jitPageAddress, x1)') >= 0, 'K7c 仍走逐页 prepare_memory_region');
 }
 
 console.log('');

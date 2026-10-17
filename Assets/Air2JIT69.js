@@ -327,26 +327,25 @@ function JIT26PrepareRegion(brkResponse) {
     //   旧实现会先 `_M<size>,rx` 再 `_M<size>,rwx`（两次分配 ⇒ 双倍命令 + 双倍内存）。
     //   大区(>1MiB)直接 `_M<size>,rwx` 一条；小区才走「分配 + 逐页 prepare」官方路径。
     //   逐页 prepare 的代价：64MiB ⇒ 4096 条命令（真机 6000+ 请求的根源）。
-    const AME_BIG_REGION = 1048576n;   // 1MiB
+    // ★恢复官方交付路径（2026-10-17 对照结论）★
+    //   老 Air 的 UniversalJIT26 就是这条：`_M<size>,rx` + prepare_memory_region(addr,size)。
+    //   它对 64MB 会发约 4096 条命令（StikDebug 里几千条请求），但★真的把请求尺寸交出来★；
+    //   而我们前一轮的“单条 _M<size>,rwx 捷径”只换回 16384 字节 ⇒ JVM 拿不到要的尺寸 ⇒ 卡死。
+    //   ⇒ 先求“能启动”，噪声交给 L2'（自写宿主）解决。
     let jitPageAddress = x0;
-    let usedBigRegion = false;
     if (x0 == 0n) {
-        const perms = (x1 > AME_BIG_REGION) ? 'rwx' : 'rx';
-        let allocResp = send_command(`_M${x1.toString(16)},${perms}`);
-        log_verbose(`allocResponse(${perms}) = ${allocResp}`);
+        let allocResp = send_command(`_M${x1.toString(16)},rx`);
+        log_verbose(`allocResponse(rx) = ${allocResp}`);
         if (!allocResp || allocResp.length === 0) {
-            log(`[AIR2-JIT69] 分配失败(size=0x${x1.toString(16)} perms=${perms})`);
+            log(`[AIR2-JIT69] 分配失败(size=0x${x1.toString(16)})`);
             return;
         }
         jitPageAddress = BigInt(`0x${allocResp}`);
-        usedBigRegion = (x1 > AME_BIG_REGION);
-        log(`[AIR2-JIT69] 一次分配 ok: addr=0x${jitPageAddress.toString(16)} size=0x${x1.toString(16)} perms=${perms}`);
+        log(`[AIR2-JIT69] 分配 ok: addr=0x${jitPageAddress.toString(16)} size=0x${x1.toString(16)}（随后逐页 prepare，请求数≈size/16KB）`);
     }
+    let prepareJITPageResponse = prepare_memory_region(jitPageAddress, x1);
+    log(`prepareJITPageResponse = ${prepareJITPageResponse}`);
 
-    if (!usedBigRegion && x1 <= AME_BIG_REGION) {
-        let prepareJITPageResponse = prepare_memory_region(jitPageAddress, x1);
-        log(`prepareJITPageResponse = ${prepareJITPageResponse}`);
-    }
 
     let putX0Response = send_command(`P0=${numberToLittleEndianHexString(jitPageAddress)};thread:${tid};`);
     log(`putX0Response = ${putX0Response}`);
