@@ -124,9 +124,17 @@
 }
 
 - (void)rebuildList {
-    for (A2SettingsRow *row in [_listSection.rows copy]) {
-        [_listSection removeRow:row];
+    // A2SettingsSection 不支持移除单行（它的 rows 是只读的），
+    // 所以重建整个 section —— 移除旧的、建新的。
+    // 这比给组件加 removeRow: 更简单，且不影响其他地方的使用。
+    if (_listSection) {
+        [_listSection removeFromSuperview];
+        _listSection = nil;
     }
+
+    _listSection = [[A2SettingsSection alloc] initWithTitle:@"可用渲染器"];
+    _listSection.footerText = @"「来自插件」的渲染器由用户导入。"
+                               "导入的库需要与 Air2 使用相同签名才能加载。";
 
     A2RendererRegistry *reg = A2RendererRegistry.shared;
     NSArray<A2RendererEntry *> *all = reg.allRenderers;
@@ -167,7 +175,25 @@
         [_listSection addRow:row];
     }
 
+    // 放到「插件」分组之前 —— 用 insert 保证顺序稳定
+    [self insertSection:_listSection before:nil];
+
     [self refreshCurrentRow];
+}
+
+/// 把 section 插到内容栈中。before 为 nil 时插到末尾之前的位置。
+///
+/// 为什么需要它：重建列表后要把新 section 放回原位置，
+/// 而不是每次 addSection 到最末尾（那样顺序会乱）。
+- (void)insertSection:(UIView *)section before:(nullable UIView *)before {
+    if (self.contentStack) {
+        if (before && [self.contentStack.arrangedSubviews containsObject:before]) {
+            NSUInteger idx = [self.contentStack.arrangedSubviews indexOfObject:before];
+            [self.contentStack insertArrangedSubview:section atIndex:idx];
+            return;
+        }
+    }
+    [self addSection:section];
 }
 
 - (void)onPluginsChanged {

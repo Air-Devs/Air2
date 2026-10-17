@@ -299,9 +299,13 @@ static void A2Main(dispatch_block_t b) {
 }
 
 /// 从 OptiFine 官方页面解析。
+///
 /// 页面地址：https://optifine.net/downloads
-/// 每个条目形如：
-///   <a href="adloadx?f=OptiFine_1.10.2_HD_U_C1.jar">...
+///
+/// 每个条目是一个带 href 的链接，href 里含文件名，形如
+/// `adloadx?f=OptiFine_1.10.2_HD_U_C1.jar`。
+/// 我们从整页里正则提取所有 `OptiFine_*.jar` 形态的文件名，
+/// 不依赖具体标签结构 —— 页面改版时更不容易挂。
 - (void)fetchOptiFineFromHTML:(NSString *)mcVersion
                    completion:(void (^)(NSArray<A2ModLoaderVersion *> *, NSError *))completion {
 

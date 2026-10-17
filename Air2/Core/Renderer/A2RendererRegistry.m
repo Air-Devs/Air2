@@ -5,6 +5,7 @@
 
 #import "A2RendererRegistry.h"
 #import "A2RendererImporter.h"
+#import "A2RendererLoader.h"
 #import "A2Logger.h"
 
 static NSString *const kSelectedRendererKey = @"A2SelectedRendererID";
@@ -49,6 +50,16 @@ static NSString *const kSelectedRendererKey = @"A2SelectedRendererID";
     if (!self) return nil;
     _allRenderers = @[];
     [self reload];
+
+    // 插件变化时自动重新合并 —— 任何地方导入插件后注册表都是最新的，
+    // 调用方不用手动 reload
+    [NSNotificationCenter.defaultCenter addObserverForName:A2RendererPluginsDidChangeNotification
+                                                    object:nil
+                                                     queue:NSOperationQueue.mainQueue
+                                                usingBlock:^(NSNotification *note) {
+        (void)note;
+        [A2RendererRegistry.shared reload];
+    }];
     return self;
 }
 
@@ -205,6 +216,94 @@ static NSString *const kSelectedRendererKey = @"A2SelectedRendererID";
     }
 
     return env;
+}
+
+#pragma mark - 启动流程入口
+
+- (A2RendererHandle *)prepareRendererForMCVersion:(NSString *)mcVersion
+                                            error:(NSError **)error {
+
+    NSString *ident = self.selectedIdentifier;
+    A2RendererEntry *entry = [self rendererWithIdentifier:ident];
+
+    if (!entry) {
+        if (error) {
+            *error = [self err:@"没有选择渲染器"];
+        }
+        return nil;
+    }
+
+    // ---- 1. 可用性 ----
+    if (entry.availability != A2RendererAvailabilityAvailable) {
+        if (error) {
+            *error = [self err:(entry.unavailableReason ?: @"渲染器不可用")];
+        }
+        return nil;
+    }
+
+    // ---- 2. 版本兼容 ----
+    if (![self renderer:entry supportsMCVersion:mcVersion]) {
+        if (error) {
+            NSString *range = [NSString stringWithFormat:@"%@ ~ %@",
+                               entry.minMCVer ?: @"不限", entry.maxMCVer ?: @"不限"];
+            *error = [self err:[NSString stringWithFormat:
+                @"%@ 不支持游戏版本 %@（支持范围：%@）",
+                entry.displayName, mcVersion, range]];
+        }
+        return nil;
+    }
+
+    // ---- 3. 环境变量 + 加载 ----
+    NSDictionary<NSString *, NSString *> *env = [self environmentForRenderer:entry];
+    A2RendererLoader *loader = [A2RendererLoader new];
+
+    if (entry.plugin) {
+        return [loader loadPlugin:entry.plugin environment:env error:error];
+    }
+
+    // 内置渲染器：库路径按约定拼
+    //
+    // 约定：内置库放在 Air2.app/Frameworks/ 下，文件名与标识对应。
+    // 具体路径在启动流程实现时确认（CMake 产物名决定）。
+    NSString *glName = [self builtinGLNameForEntry:entry];
+    if (glName.length == 0) {
+        if (error) {
+            *error = [self err:[NSString stringWithFormat:
+                @"%@ 的库路径未配置（内置渲染器需在 CMake 中产出对应 dylib）",
+                entry.displayName]];
+        }
+        return nil;
+    }
+
+    NSString *path = [NSBundle.mainBundle pathForAuxiliaryExecutable:glName];
+    if (!path) {
+        if (error) {
+            *error = [self err:[NSString stringWithFormat:
+                @"找不到内置渲染器库 %@ —— 可能未打包进 IPA", glName]];
+        }
+        return nil;
+    }
+
+    // 内置渲染器目前都按合并库处理（GL + EGL 同库）
+    return [loader loadLibrariesAtGLPath:path
+                                 eglPath:nil
+                                  layout:A2RendererLibraryLayoutCombined
+                             environment:env
+                                   error:error];
+}
+
+/// 内置渲染器标识 → 库文件名
+- (NSString *)builtinGLNameForEntry:(A2RendererEntry *)entry {
+    if ([entry.identifier isEqualToString:@"builtin.nggl4es"])  return @"libnggl4es.dylib";
+    if ([entry.identifier isEqualToString:@"builtin.zink"])     return @"libzink.dylib";
+    if ([entry.identifier isEqualToString:@"builtin.mobilegl"]) return @"libMobileGlues.dylib";
+    if ([entry.identifier isEqualToString:@"builtin.virgl"])    return @"libvirgl.dylib";
+    return nil;
+}
+
+- (NSError *)err:(NSString *)msg {
+    return [NSError errorWithDomain:@"A2RendererRegistry" code:1
+                           userInfo:@{NSLocalizedDescriptionKey: msg ?: @"渲染器错误"}];
 }
 
 @end

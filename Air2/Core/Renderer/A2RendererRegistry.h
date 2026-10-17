@@ -70,7 +70,26 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// 解析出某个渲染器在当前用户配置下应设置的环境变量。
 /// 返回 [{key, value}]，直接 setenv 即可。
+/// 解析出某个渲染器在当前用户配置下应设置的环境变量。
+/// 返回 {key: value}，直接 setenv 即可。
 - (NSDictionary<NSString *, NSString *> *)environmentForRenderer:(A2RendererEntry *)renderer;
+
+#pragma mark - 启动流程入口
+
+/// 为启动游戏准备渲染器 —— 一步到位。
+///
+/// 做三件事：
+///   1. 检查选中的渲染器是否可用、是否支持该 MC 版本
+///   2. 应用环境变量（必须在 dlopen 之前）
+///   3. 加载动态库并校验符号
+///
+/// 启动流程（Bridge 层）只需调这一个方法，拿到 handle 后
+/// 交给 LWJGL 的 GL 函数表。
+///
+/// @param mcVersion 要启动的游戏版本（用于兼容性检查）
+/// @param error 失败原因（给人看的）
+- (nullable A2RendererHandle *)prepareRendererForMCVersion:(NSString *)mcVersion
+                                                      error:(NSError **)error;
 
 @end
 
