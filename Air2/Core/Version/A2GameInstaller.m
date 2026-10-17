@@ -660,53 +660,77 @@ static void A2Main(dispatch_block_t block) {
     }];
 }
 
-/// 批量下载（逐个串行，避免并发过高被限流）
+/// 批量下载（★有上限并行★）。
+/// 上游原本是「逐个串行」——几十个库 + 上千个资源文件时慢得明显；
+/// 这里只改“同时在飞几个”，每个文件仍走同一条 download: 路径（候选/校验/断点不变），
+/// 单文件失败仍只计数、不中断整体。并发数默认 4，可用偏好键 A2DownloadConcurrency 覆盖(1~8)。
 - (void)downloadBatch:(NSArray<NSArray<NSString *> *> *)items
                 stage:(A2InstallStage)stage
-          messageBase:(NSString *)base
-             thenRun:(void (^)(NSError * _Nullable))then {
+           messageBase:(NSString *)base
+              thenRun:(void (^)(NSError * _Nullable))then {
 
-    __block NSUInteger index = 0;
-    __block NSUInteger total = items.count;
+    NSUInteger total = items.count;
+    if (total == 0) { if (then) then(nil); return; }
+
+    NSInteger concurrency = [NSUserDefaults.standardUserDefaults integerForKey:@"A2DownloadConcurrency"];
+    if (concurrency <= 0) concurrency = 4;
+    concurrency = MAX(1, MIN(8, concurrency));
+    if (concurrency > (NSInteger)total) concurrency = (NSInteger)total;
+
+    [A2Log log:@"[A2-DL] batch 总 %lu 个文件，并发=%ld（键 A2DownloadConcurrency，缺省 4）",
+                 (unsigned long)total, (long)concurrency];
+
+    __block NSUInteger index = 0;          // 下一个待发
+    __block NSUInteger done = 0;           // 已完成（含失败）
     __block NSUInteger failed = 0;
-
-    __block void (^next)(void) = nil;
+    __block BOOL finished = NO;
     __weak typeof(self) weakSelf = self;
 
-    next = ^{
+    __block void (^pump)(void) = nil;
+    pump = ^{
         __strong typeof(weakSelf) self = weakSelf;
-        if (!self || self.cancelled) return;
-        if (index >= total) {
-            if (then) then(nil);
-            next = nil;
-            return;
-        }
+        if (!self || finished) return;
+        if (self.cancelled) { finished = YES; pump = nil; return; }
 
-        NSArray<NSString *> *pair = items[index];
-        NSString *url = pair[0];
-        NSString *dest = pair[1];
-        NSUInteger currentIndex = index;
-
-        [self download:@[url] to:dest stageLabel:stage
-               message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
-                        base, (unsigned long)(currentIndex + 1), (unsigned long)total]
-               thenRun:^(NSError *error) {
-            __strong typeof(weakSelf) self = weakSelf;
-            if (!self || self.cancelled) return;
-
-            // 单个文件失败不中断整体 —— 依赖库里有可选组件，
-            // 下载不到不影响启动
-            if (error) failed++;
-
+        // 补满窗口
+        while (index < total && index - done < (NSUInteger)concurrency) {
+            NSUInteger currentIndex = index;
             index++;
-            [self report:stage progress:(double)index / (double)total
-                 message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
-                          base, (unsigned long)index, (unsigned long)total]];
-            if (next) next();
-        }];
+
+            NSArray<NSString *> *pair = items[currentIndex];
+            NSString *url = pair.count > 0 ? pair[0] : nil;
+            NSString *dest = pair.count > 1 ? pair[1] : nil;
+            if (url.length == 0 || dest.length == 0) {
+                done++; failed++; continue;
+            }
+
+            [self download:@[url] to:dest stageLabel:stage
+                   message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
+                            base, (unsigned long)(currentIndex + 1), (unsigned long)total]
+                   thenRun:^(NSError *error) {
+                __strong typeof(weakSelf) self = weakSelf;
+                if (!self) return;
+                // 单个文件失败不中断整体 —— 依赖库里有可选组件，下载不到不影响启动
+                if (error) failed++;
+                done++;
+                [self report:stage progress:(double)done / (double)total
+                     message:[NSString stringWithFormat:@"%@ (%lu/%lu)",
+                              base, (unsigned long)done, (unsigned long)total]];
+                if (done >= total) {
+                    if (finished) return;
+                    finished = YES;
+                    [A2Log log:@"[A2-DL] batch 完成：%lu 个，失败 %lu",
+                                 (unsigned long)total, (unsigned long)failed];
+                    if (then) then(nil);
+                    pump = nil;
+                    return;
+                }
+                if (pump) pump();
+            }];
+        }
     };
 
-    next();
+    pump();
 }
 
 #pragma mark - 回调
