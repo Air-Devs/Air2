@@ -168,6 +168,8 @@ A2ClasspathForm a2_classpath_form_from_name(NSString *name) {
 - (void)setClasspath:(NSString *)classpath { _classpath = [classpath copy]; }
 - (NSString *)classpath { return _classpath; }
 
+- (NSArray<NSString *> *)rawOptions { return [_options copy]; }
+
 - (NSString *)mainClass { return _mainClass; }
 
 - (NSArray<NSString *> *)programArgs { return [_programArgs copy]; }

@@ -95,6 +95,10 @@
         // ★[GL-BRIDGE]：所选后端是 EGL/GL 系但没建出 GL 上下文（缺库/无表面/EGL 失败）。
         //   具体缺什么由 Natives/Renderer/a2_gl_bridge 的 `[A2-GLBRIDGE]` 判据行点名。
         case -12: why = @"所选渲染器是 EGL/GL 系，但未能建出 GL 上下文（缺库/无表面/EGL 失败）⇒ 阻断启动（详见 [A2-GLBRIDGE] 日志）"; break;
+        // ★[JLI-LAUNCH]：libjli + JLI_Launch 入口的两个新码（-13 启动器/主类异常退出、
+        //   -14 入口入参非法）。-10/-11/-12 已被上面渲染器/JRE/GL 桥占用，故本单顺延。
+        case -13: why = @"JLI_Launch 已返回但 rc≠0（主类/启动器异常退出）"; break;
+        case -14: why = @"JLI 入口入参非法（javaHome/主类/argv 为空）⇒ 未启动"; break;
         default:  why = [NSString stringWithFormat:@"未知返回码 %ld", (long)rc]; break;
     }
     return [NSString stringWithFormat:@"③ 建 VM 失败 rc=%ld：%@（见 a2_launch.h 契约）",

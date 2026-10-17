@@ -9,12 +9,17 @@
 //   · 去重：原「runtime 层启用」行（与开关行重复）已删；开关行本身即里程碑。
 // ★ [RT-STRICT] 回退门：全链唯一回退点（facade）经 a2_fallback_gate 处理 —— 默认打默认可见
 //   高亮告警 `[RT-STRICT] FALLBACK -> 旧链: 原因=…` + 回退计数；RT_P1_STRICT=1 则禁止回退、阻断启动。
+// ★ [JLI-LAUNCH] 建 VM 的入口改了：优先 dlopen(libjli) + JLI_Launch（老线真机验过的 HotSpot
+//   自带启动器，内部完成「建 VM + 跑 main」）；只有 libjli 不可用才回退 dlopen(libjvm) +
+//   JNI_CreateJavaVM。原因：后者在真机上停在 `[A2JVM] R4 调用 JNI_CreateJavaVM` 之后不返回。
 // ============================================================================
 #import "a2_launch.h"
 #import "a2_log.h"            // R7
 #import "a2_argbuilder.h"     // R3
 #import "a2_resourcepaths.h"  // R4
 #import "a2_vmloader.h"       // R2
+#import "a2_jli_entry.h"      // ★[JLI-LAUNCH] argv 组装/回退判定（纯逻辑）
+#import "a2_jli_launch.h"     // ★[JLI-LAUNCH] dlopen(libjli) + JLI_Launch（默认入口）
 
 #include <stdlib.h>
 
@@ -338,6 +343,53 @@ int a2_launch_jvm_with_argv(int argc, const char *const argv[], A2LaunchInput in
              builder.mainClass.UTF8String ?: "(nil)", (unsigned long)cpItems,
              (cpForm == A2ClasspathFormOption) ? "B" : "A",
              (unsigned long)builder.programArgs.count);
+
+    // ============================================================================
+    // ★[JLI-LAUNCH] 入口选择：优先 JLI_Launch（老线真机验证过的 HotSpot 自带启动器）
+    // ----------------------------------------------------------------------------
+    // 病象：本层原先直接 dlopen(libjvm) + JNI_CreateJavaVM，真机日志停在
+    //   `[A2JVM] R4 调用 JNI_CreateJavaVM` 之后再无 `R5 返回` ⇒ 卡在 VM 初始化里。
+    // 结论：老线根本不走 JNI_CreateJavaVM —— 它 dlopen(<javaHome>/lib[/jli]/libjli.dylib)
+    //   → dlsym(JLI_Launch) → JLI_Launch(argv)，由 HotSpot 自带启动器完成「建 VM + 跑 main」。
+    // 分工：argv 怎么排 = a2_jli_entry（纯函数，有单测）；dlopen/dlsym/调用/J1/J2/J3 =
+    //   a2_jli_launch；本处只做「选入口 + 决定是否回退」。
+    // ★日志判读（务必按此读，别把 J3 缺失当卡死）★：
+    //   J1 dlopen libjli ok → J2 JLI_Launch 已调用 →（游戏真起来时）MC 自己的 stderr 行；
+    //   J3 只在主类 main 结束/进程退出时才出现 —— 属于「退出时事件」，不是启动判据。
+    // 回退：只有 JLI 不可用（libjli 打不开 / 缺 JLI_Launch 符号）才走下方既有的
+    //   JNI_CreateJavaVM 路径 —— 该路径保留但不再默认。
+    // ============================================================================
+    {
+        NSArray<NSString *> *jliArgv = a2_jli_build_argv(input.javaHome, [builder rawOptions],
+                                                         builder.classpath, builder.mainClass,
+                                                         builder.programArgs);
+        a2_progress_enter(A2StageJVMStarting);   // 阶段6：JLI 即将接管（建 VM 在它内部完成）
+        // 阶段7 与老线同款语义：JLI_Launch 起 JVM 后本线程就阻塞在这个调用里，
+        // 直到主类 main 结束（老线把「等待首帧」压在这里，遮罩由 Java 侧首帧回调撤）。
+        a2_progress_enter(A2StageWaitingFirstFrame);
+        int jliRC = 0;
+        int lrc = a2_vm_launch_with_jli(input.javaHome, jliArgv, builder.classpath,
+                                        builder.mainClass, &jliRC);
+        if (lrc == A2JLIRCCalled) {
+            // JLI 已经把主类 main 跑完（建 VM 也由它完成）⇒ 绝不再走 a2_run_main（会二次派发）
+            if (jliRC == 0) {
+                a2_progress_enter(A2StageCompleted);
+                a2_log_f(@"[RT-P1] JLI 入口：主类 main 正常结束、JLI_Launch 返回 rc=0（本次启动收尾）");
+                return 0;
+            }
+            a2_progress_fail(A2StageWaitingFirstFrame, [NSString stringWithFormat:@"JLI rc=%d", jliRC]);
+            a2_log_fatal(@"[RT-P1] JLI 入口：主类 main 结束但 JLI_Launch 返回 rc=%d（非 0 ⇒ 启动器/主类异常退出）", jliRC);
+            return -13;
+        }
+        if (!a2_jli_should_fallback(lrc)) {
+            // 入参非法（javaHome/主类/argv 空）：不靠回退掩盖 —— 同一份错参数换条路只会再错一次
+            a2_progress_fail(A2StageJVMStarting, [NSString stringWithFormat:@"JLI 入参非法 rc=%d", lrc]);
+            a2_log_fatal(@"[RT-P1] JLI 入口入参非法 rc=%d（javaHome/主类/argv 为空）⇒ 不启动，也不回退", lrc);
+            return -14;
+        }
+        // JLI 不可用 ⇒ 保留的 JNI_CreateJavaVM 路径（异常安全网；默认已不是主路）
+        a2_log_f(@"[RT-P1] JLI 入口不可用 rc=%d（libjli 打不开或缺 JLI_Launch）⇒ 回退 JNI_CreateJavaVM 路径", lrc);
+    }
 
     // ---- R2：定位 libjvm + 建 VM ----
     NSString *libjvm = a2_vm_resolve_libjvm(input.javaHome);

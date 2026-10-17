@@ -72,6 +72,12 @@ A2ClasspathForm a2_classpath_form_from_name(NSString *name);
 - (void)setClasspath:(NSString *)classpath;
 - (NSString *)classpath;
 
+/// ★[JLI-LAUNCH] 原始选项表快照（只读、保序、已按 -D key 去重）。
+/// 为什么要它：JLI 入口（a2_jli_build_argv）要「VM 选项 + 单独的 -cp <classpath>」两段命令行，
+/// 而 buildInitArgsWithVersion: 产出的 JavaVMInitArgs 里 classpath 已被折叠成 `-cp` / `-Djava.class.path=`；
+/// 从那里反推会把 classpath 注入两次。本访问器给的是**未注入 classpath 的原始选项**。
+- (NSArray<NSString *> *)rawOptions;
+
 // —— 主类 / 程序参数（由 ingestArgv: 填充；读取供 dispatch 用）——
 - (NSString *)mainClass;
 - (NSArray<NSString *> *)programArgs;

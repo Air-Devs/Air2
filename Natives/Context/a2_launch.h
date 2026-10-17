@@ -73,18 +73,21 @@ BOOL a2_launch_no_agent_enabled(void);
 /// reason/loc/details 均为 UTF-8 C 串（可空，空则记 "(未提供)"）。
 int a2_fallback_gate(const char *reason, const char *loc, const char *details);
 
-/// 运行时层启动：R3 摄取旧 margv → R4 产出并注入资源路径 → 构建 JavaVMInitArgs → R2 建 VM
-/// → 在 VM 内 dispatch 主类 main。返回值：
-///    0  = 成功（main 正常返回）
+/// 运行时层启动：R3 摄取旧 margv → R4 产出并注入资源路径 → ★JLI_Launch 入口（默认）★
+/// → JLI 不可用时才回退 JNI_CreateJavaVM（建 VM 后在本层 dispatch 主类 main）。返回值：
+///    0  = 成功（JLI 走到 main 结束并 rc=0；或回退路径下主类 main 正常返回）
 ///   -1  = R3 判定 jarMode（`-jar` 落在主类之前的 JLI 选项区）⇒ facade **须回退旧链**（尚未建 VM）
 ///         ★[RT-STRICT] 严格模式下不回退：facade 经 a2_fallback_gate 判定后阻断启动。
 ///   -8  = R3 摄取失败（未解析出主类 / 参数不足）⇒ facade **须回退旧链**（尚未建 VM）
 ///         ★[RT-STRICT] 同上：严格模式下阻断而非回退。
 ///   -2  = 主类为空
-///   -3  = 未找到 libjvm.dylib
-///   -4  = R2 建 VM 失败
+///   -3  = 未找到 libjvm.dylib（仅回退路径；JLI 入口不需要它）
+///   -4  = R2 建 VM 失败（仅回退路径）
 ///   -9  = ★[VS-GAP][G6] classpath 与 R3 摄取不一致（版本/路径漂移）⇒ **阻断启动**（不得回退）
-///   -5..-7 = 主类 main dispatch 失败（FindClass/GetStaticMethodID/执行抛异常）
+///   -13 = ★[JLI-LAUNCH] JLI_Launch 已返回但 rc≠0（主类/启动器异常退出）
+///   -14 = ★[JLI-LAUNCH] JLI 入口入参非法（javaHome/主类/argv 为空）⇒ 不启动、也不回退
+///   （★返回码分配★：-10/-11/-12 已被渲染器 / JRE 档位 / GL 桥的阻断码占用，本单取 -13/-14）
+///   -5..-7 = 主类 main dispatch 失败（FindClass/GetStaticMethodID/执行抛异常；仅回退路径）
 /// ★ argc 为「条目计数」（含 argv[0]）；argv[0] 应是 "<javaHome>/bin/java"（R3 会丢弃）。
 /// ★ 主类之后出现的 `-jar` 不是 JLI 选项（是传给主类的程序参数）⇒ 归 R3 程序参数，不再是 jarMode。
 int a2_launch_jvm_with_argv(int argc, const char *const argv[], A2LaunchInput input);

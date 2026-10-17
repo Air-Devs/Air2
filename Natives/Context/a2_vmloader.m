@@ -56,7 +56,7 @@ static void *a2_vm_heartbeat(void *ctx) {
 ///   signal(SIGSEGV/SIGPIPE/SIGILL/SIGFPE, SIG_DFL) —— HotSpot 要靠
 ///   SIGSEGV(隐式空指针检查/安全点轮询)自己接管;若被 App 的 handler 占着,
 ///   VM 初始化会停在原地(JNI_CreateJavaVM 不返回,死因与真机现象一致)。
-static void a2_vm_reset_signal_handlers(void) {
+void a2_vm_reset_signal_handlers(void) {
     signal(SIGSEGV, SIG_DFL);
     signal(SIGBUS,  SIG_DFL);
     signal(SIGILL,  SIG_DFL);

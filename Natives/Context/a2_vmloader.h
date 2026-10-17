@@ -17,6 +17,13 @@
 /// 说明：这是「在已选定的 JRE home 内找库」，属 VMLoader 职责；跨多个候选 home 的 R1 定位由上层负责。
 NSString *a2_vm_resolve_libjvm(NSString *javaHome);
 
+/// ★[JLI-LAUNCH] 把 App 崩溃兜底装的信号处理器复位为 SIG_DFL★
+/// （SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGPIPE/SIGTRAP）。
+/// 依据：老线 Natives/JavaLauncher.m:2762-2771 在 JLI_Launch 之前显式复位 —— HotSpot 要靠
+/// SIGSEGV 做隐式空指针检查/安全点轮询，被 App 的 handler 占着就会停在 VM 初始化里。
+/// ★两条入口共用本实现★：a2_vm_create（JNI_CreateJavaVM）与 a2_vm_launch_with_jli（libjli）。
+void a2_vm_reset_signal_handlers(void);
+
 /// dlopen(libjvm, RTLD_NOW|RTLD_LOCAL) → dlsym(JNI_CreateJavaVM) → 版本自适应创建 VM。
 /// options 由调用方（R3）给定；本函数不内建任何参数。
 /// 返回：0=JNI_OK（回填 vm/env/usedVersion）；1=参数非法 2=dlopen 失败 3=dlsym 失败 4=CreateJavaVM 失败。
