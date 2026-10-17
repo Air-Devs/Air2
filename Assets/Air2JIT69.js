@@ -323,32 +323,27 @@ function JIT26PrepareRegion(brkResponse) {
         return;
     }
 
+    // ★一次分配，不重复★
+    //   旧实现会先 `_M<size>,rx` 再 `_M<size>,rwx`（两次分配 ⇒ 双倍命令 + 双倍内存）。
+    //   大区(>1MiB)直接 `_M<size>,rwx` 一条；小区才走「分配 + 逐页 prepare」官方路径。
+    //   逐页 prepare 的代价：64MiB ⇒ 4096 条命令（真机 6000+ 请求的根源）。
+    const AME_BIG_REGION = 1048576n;   // 1MiB
     let jitPageAddress = x0;
+    let usedBigRegion = false;
     if (x0 == 0n) {
-        let requestRXResponse = send_command(`_M${x1.toString(16)},rx`);
-        log_verbose(`requestRXResponse = ${requestRXResponse}`);
-        
-        if (!requestRXResponse || requestRXResponse.length === 0) {
-            log(`Failed to allocate RX memory`);
+        const perms = (x1 > AME_BIG_REGION) ? 'rwx' : 'rx';
+        let allocResp = send_command(`_M${x1.toString(16)},${perms}`);
+        log_verbose(`allocResponse(${perms}) = ${allocResp}`);
+        if (!allocResp || allocResp.length === 0) {
+            log(`[AIR2-JIT69] 分配失败(size=0x${x1.toString(16)} perms=${perms})`);
             return;
         }
-        
-        jitPageAddress = BigInt(`0x${requestRXResponse}`);
-        log(`Allocated JIT page at address: 0x${jitPageAddress.toString(16)}`);
+        jitPageAddress = BigInt(`0x${allocResp}`);
+        usedBigRegion = (x1 > AME_BIG_REGION);
+        log(`[AIR2-JIT69] 一次分配 ok: addr=0x${jitPageAddress.toString(16)} size=0x${x1.toString(16)} perms=${perms}`);
     }
 
-    // ★大区不逐页 prepare★ prepare_memory_region 是逐页实现：64MiB ⇒ 4096 条调试命令
-    //   （真机表现为 StikDebug 收到 6000+ 请求并卡死）。超过 1MiB 改为单条 _M<size>,rwx。
-    const AME_BIG_REGION = 1048576n;   // 1MiB
-    if (x1 > AME_BIG_REGION) {
-        let rwx = send_command(`_M${x1.toString(16)},rwx`);
-        if (!rwx || rwx.length === 0) {
-            log(`[AIR2-JIT69] 大区 rwx 分配失败(size=0x${x1.toString(16)})`);
-            return;
-        }
-        jitPageAddress = BigInt(`0x${rwx}`);
-        log(`[AIR2-JIT69] 大区 rwx 一次分配 ok: addr=0x${jitPageAddress.toString(16)} size=0x${x1.toString(16)}`);
-    } else {
+    if (!usedBigRegion && x1 <= AME_BIG_REGION) {
         let prepareJITPageResponse = prepare_memory_region(jitPageAddress, x1);
         log(`prepareJITPageResponse = ${prepareJITPageResponse}`);
     }

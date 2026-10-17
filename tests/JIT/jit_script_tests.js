@@ -393,7 +393,11 @@ console.log('== K. 源码级不变量（防止有人把这几个坑改回去）'
     ok(SRC.indexOf('ameJITParseStopReply') >= 0, 'K4 停止回复走 ameJITParseStopReply()');
     ok(SRC.indexOf('brk #0x69') >= 0, 'K5 0x69 契约注释仍在');
     ok(SRC.indexOf('prepare_memory_region') >= 0, 'K6 仍然用宿主的 prepare_memory_region 落实页');
-    ok(SRC.indexOf('_M${x1.toString(16)},rx') >= 0, 'K7 仍然用官方 _M<size>,rx 分配');
+    // 小区(<=1MiB)仍走 _M<size>,rx + 逐页 prepare；大区改单条 _M<size>,rwx
+    // （64MiB 逐页 prepare = 4096 条调试命令 = 真机 6000~10000 请求的根源）
+    ok(SRC.indexOf("const perms = (x1 > AME_BIG_REGION) ? 'rwx' : 'rx';") >= 0,
+       'K7 小区域用 rx、大区域用 rwx（一次分配，不再逐页 prepare）');
+    ok(SRC.indexOf('const AME_BIG_REGION = 1048576n;') >= 0, 'K7b 大区阈值 1MiB 存在');
 }
 
 console.log('');

@@ -374,6 +374,7 @@ A2JITExecProbeResult a2_jit_exec_probe_anonymous(void) {
 // ============================================================================
 
 static void *gA2JITVerifiedRegion = NULL;
+static int gA2JITBrkCount = 0;   // ★排查用★ 本进程发了几次 brk #0x69
 static BOOL   gA2JITVerified = NO;
 static NSTimeInterval gA2JITLastVerifyAttempt = 0;
 static int    gA2JITVerifyAttempts = 0;
@@ -467,7 +468,20 @@ static void *a2_jit_brk69_bounded(NSTimeInterval deadlineSec, const char *why) {
 static BOOL a2_jit_verify_region_bounded(NSTimeInterval deadline, const char *why) {
     size_t len = (size_t)getpagesize();
     gA2JITVerifyAttempts++;
+
+    // ★复用★：已经拿到并仍映射的区域直接复用，不再每次重发 brk
+    //   （每次发都是 64MB 分配；真机 StikDebug 的请求计数就是这么涨上去的）
+    if (gA2JITVerifiedRegion != NULL) {
+        unsigned int cur0 = 0, max0 = 0; unsigned long long sz0 = 0;
+        if (a2_jit_query_region_prot(gA2JITVerifiedRegion, len, &cur0, &max0, &sz0) == 0) {
+            a2_jit_log("[A2JIT] verify: 复用已交付区域 %p（size=%llu），不再重发 brk #0x69",
+                       gA2JITVerifiedRegion, sz0);
+            goto a2_verify_have_region;
+        }
+    }
+
     void *r = a2_jit_brk69_bounded(deadline, why);   // 无人服务/超时返回 NULL 不致死
+    gA2JITBrkCount++;
     if (r == NULL) {
         a2_jit_log("[A2JIT] false-positive guard triggered (#%d, why=%s): brk #0x69 NOT serviced -- "
                    "NOT counting JIT as enabled", gA2JITVerifyAttempts, why);
@@ -475,6 +489,9 @@ static BOOL a2_jit_verify_region_bounded(NSTimeInterval deadline, const char *wh
         gA2JITRegionVerdict = A2JITRegionVerdictNotServiced;
         return NO;
     }
+
+a2_verify_have_region:
+    if (gA2JITVerifiedRegion != NULL) { r = gA2JITVerifiedRegion; }
 
     // ① 挡掉 legacy 通道的哨兵 / 显然垃圾的返回值。
     //    新版 Universal 脚本已废弃 legacy brk #0x69：应答 0xE0000069（“请指派 Universal JIT 脚本”）。
