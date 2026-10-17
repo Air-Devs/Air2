@@ -79,12 +79,6 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
 @property (nonatomic, strong) A2TextField *gameVersionField;
 @property (nonatomic, strong) UIView *loaderSection;
 
-// 可展开筛选卡
-@property (nonatomic, strong) A2GlassCard *filterCard;
-@property (nonatomic, strong) UILabel *filterSummaryLabel;
-@property (nonatomic, strong) UIImageView *filterChevron;
-@property (nonatomic, strong) UIStackView *filterBody;
-@property (nonatomic, assign) BOOL filterExpanded;
 @property (nonatomic, strong) NSMutableArray<UILabel *> *sectionLabels;
 
 @property (nonatomic, strong) UISegmentedControl *platformControl;
@@ -200,48 +194,6 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
         return (A2ContentPlatform)n.integerValue;
     }
     return preferred;
-}
-
-- (NSInteger)indexForPlatform:(A2ContentPlatform)platform {
-    for (NSInteger i = 0; i < _platformOptions.count; i++) {
-        NSNumber *n = _platformOptions[i];
-        if (n.integerValue == (NSInteger)platform) return i;
-    }
-    return 0;
-}
-
-- (void)selectPlatformControlForPlatform:(A2ContentPlatform)platform {
-    NSInteger idx = [self indexForPlatform:platform];
-    if (idx >= 0 && idx < (NSInteger)_platformControl.numberOfSegments) {
-        _platformControl.selectedSegmentIndex = idx;
-    }
-}
-
-- (void)platformControlChanged {
-    NSInteger idx = _platformControl.selectedSegmentIndex;
-    if (idx < 0 || idx >= (NSInteger)_platformOptions.count) return;
-    NSNumber *pickedNumber = _platformOptions[idx];
-    A2ContentPlatform picked = (A2ContentPlatform)pickedNumber.integerValue;
-    A2ContentPlatform previous = self.platform;
-    if (picked == previous) return;
-
-    // Key 是内置的，两个平台都开箱可用，不需要任何拦截。
-    (void)previous;
-    [self applyPlatform:picked remember:YES];
-}
-
-/// 平台切换的实际生效：记忆选择 + 重建分类 + 重载结果。
-- (void)applyPlatform:(A2ContentPlatform)platform remember:(BOOL)remember {
-    self.platform = platform;
-    self.source = [A2ContentSource sourceForPlatform:platform];
-    if (remember) [A2ContentSource setPreferredPlatform:platform];
-    [self selectPlatformControlForPlatform:platform];
-    [A2Log log:@"resource-search: 平台切换 class=%ld → %@",
-          (long)self.contentClass, self.source.displayName];
-
-    // 分类标识两家不通用，切换平台后清空已选分类并重新拉取
-    [self loadCategories];
-    [self reload];
 }
 
 #pragma mark - UI：左右分栏
@@ -446,6 +398,10 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
 
 /// 平台切换控件
 - (UISegmentedControl *)makePlatformControl {
+    // ★回归修复★：74d07fc 把筛选区改成常驻侧栏时丢掉了这一行，platformOptions 恒为 nil
+    // ⇒ makePlatformControl 造出空控件、平台取值与切源全部提前返回，
+    //   「平台切换」整段落成死行。补回一行即恢复（发布说明里该功能一直记为已交付）。
+    self.platformOptions = [self supportedPlatforms];
     NSMutableArray<NSString *> *titles = [NSMutableArray array];
     for (NSNumber *n in _platformOptions) {
         [titles addObject:A2PlatformDisplayName((A2ContentPlatform)n.integerValue)];

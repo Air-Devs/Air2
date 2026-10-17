@@ -757,7 +757,7 @@ python3 scripts/gen_xcodeproj.py
 接手人的第一个任务建议从 **`Core/Settings/` 全局设置注册表**开始，因为：
 
 - 它是 P1，且**多个模块依赖它**（渲染器选择、内存分配、Java 运行时都要读设置）
-- 目前设置散落在 `A2GlobalGameSettings` 和裸的 UserDefaults 里，
+- 目前设置散落在 `A2Settings` 和裸的 UserDefaults 里，
   每加一个设置就要改三处，已经是负担
 - 可以独立开发，不阻塞其他部分
 - ZL2 有完整的参考实现：`setting/AllSettings.kt`、`setting/SettingsRegistry.kt`
@@ -768,7 +768,7 @@ python3 scripts/gen_xcodeproj.py
    - 设置项的类型安全定义（Bool / Int / String / Enum）
    - 默认值 + 持久化 + 变更通知
    - 集中注册，避免散落
-3. 把现有的 `A2GlobalGameSettings` 迁移进去
+3. 把现有的 `A2Settings` 迁移进去
 
 **第二个任务**：`Core/Renderer/` 渲染后端注册与选择。
 这部分 UI 已有入口（设置页），但后端是空的。
@@ -1118,7 +1118,7 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
 - [x] 新增共享组件 `UI/Components/A2FilterChip.h/.m`：`filterValue` 携带真实筛选值，
       `+chip` 工厂（走 alloc/init，确保命中 init 里的样式与主题监听），`setSelected:` 触发
       `applyTheme`；列表页与详情页共用，删除列表页内同名私有类与 `styleChip:`。
-- [x] 详情页 `A2ProjectDetailViewController` 新增「游戏版本 + 加载器」两行 chip 筛选：选项从
+- [x] 详情页 `A2ResourceDetailViewController` 新增「游戏版本 + 加载器」两行 chip 筛选：选项从
       已拉回的版本聚合（版本号数字感知降序、加载器去重），**客户端过滤**；无关行整行 `hidden`
       让外层竖直 stack 连高度一起塌陷；「下载最新版」与更新检测以未筛选的 `allVersions` 为准，
       避免筛了旧版误判有新版本。
@@ -1175,7 +1175,7 @@ find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
 - [x] 可展开筛选卡（卡头挂手势而非 `card.tappable`，避免抢子控件点击）：平台切换 + **资源分类多选**
       + 加载器 + 游戏版本**两者并存** + 排序 + 重置；收起态显示摘要。
 - [x] 平台按 `supportsContentClass:` 裁剪（存档只列 CurseForge），默认平台不支持本类时自动回落；
-      切 CurseForge 无 Key 走 `A2CurseForgeKeyPrompt`，取消回退不留坏状态。
+      两家平台 Key 均已内置，无需用户填写（原 `A2CurseForgeKeyPrompt` 已删除）。
 - [x] 结果卡含真实图标（`A2RemoteImageView`）、作者、简介、下载量、分类标签、**已安装**角标与
       **收藏**星标（订阅 `A2FavoritesDidChangeNotification` 刷新）；分页 `limit=20`；四态独立文案
       （加载中 / 无结果 / 请求失败 / 平台不支持）。

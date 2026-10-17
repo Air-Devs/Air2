@@ -42,7 +42,6 @@
 		CEBCE40DED2386E621FE1198 /* A2ResourceScanner.m in Sources */ = {isa = PBXBuildFile; fileRef = 354E0D6D2FD88A0DA1EBAF70 /* A2ResourceScanner.m */; };
 		006F90647E36FA45B54D7B39 /* A2ZipReader.m in Sources */ = {isa = PBXBuildFile; fileRef = C7F15DE318744485CEE00538 /* A2ZipReader.m */; };
 		5DFE00B49A996C511291A505 /* A2ZipWriter.m in Sources */ = {isa = PBXBuildFile; fileRef = 025FEA920C79EED2B15C509E /* A2ZipWriter.m */; };
-		4486969AD52C845F0A5F88A7 /* A2BatchDownloader.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F8A5B15D5AD998096528CD6 /* A2BatchDownloader.m */; };
 		9F125686BA18A3A79AC3C941 /* A2DownloadEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = 1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */; };
 		04806F8C420A200707485301 /* A2DownloadFavorites.m in Sources */ = {isa = PBXBuildFile; fileRef = 3F6494DF9E525C24C5D69098 /* A2DownloadFavorites.m */; };
 		E6679E2C4F527A9777EA6CEC /* A2DownloadManifest.m in Sources */ = {isa = PBXBuildFile; fileRef = 2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */; };
@@ -248,7 +247,6 @@
 		354E0D6D2FD88A0DA1EBAF70 /* A2ResourceScanner.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceScanner.m"; sourceTree = "<group>"; };
 		C7F15DE318744485CEE00538 /* A2ZipReader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ZipReader.m"; sourceTree = "<group>"; };
 		025FEA920C79EED2B15C509E /* A2ZipWriter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ZipWriter.m"; sourceTree = "<group>"; };
-		6F8A5B15D5AD998096528CD6 /* A2BatchDownloader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BatchDownloader.m"; sourceTree = "<group>"; };
 		1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadEngine.m"; sourceTree = "<group>"; };
 		3F6494DF9E525C24C5D69098 /* A2DownloadFavorites.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadFavorites.m"; sourceTree = "<group>"; };
 		2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadManifest.m"; sourceTree = "<group>"; };
@@ -446,7 +444,6 @@
 		C1B1480DB49DF49D264D7A98 /* A2ResourceScanner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceScanner.h"; sourceTree = "<group>"; };
 		AFAF6FCA941790ECF1D16844 /* A2ZipReader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ZipReader.h"; sourceTree = "<group>"; };
 		2847F2CA5DB2AC03ADB15B8C /* A2ZipWriter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ZipWriter.h"; sourceTree = "<group>"; };
-		BD5AE965BB08676C6D4D0512 /* A2BatchDownloader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BatchDownloader.h"; sourceTree = "<group>"; };
 		DE956596465BDFF25E578448 /* A2DownloadEngine.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadEngine.h"; sourceTree = "<group>"; };
 		1EDE5D2DBCB81396D185C97D /* A2DownloadFavorites.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadFavorites.h"; sourceTree = "<group>"; };
 		D3ABD890B860FD03E77A2B0C /* A2DownloadManifest.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadManifest.h"; sourceTree = "<group>"; };
@@ -990,13 +987,11 @@
 		6D1D1D1337AE93B0607365A8 /* Download */ = {
 			isa = PBXGroup;
 			children = (
-				6F8A5B15D5AD998096528CD6 /* A2BatchDownloader.m */,
 				1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */,
 				3F6494DF9E525C24C5D69098 /* A2DownloadFavorites.m */,
 				2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */,
 				AE757274F8E1E206F093F68A /* A2DownloadTask.m */,
 				49E73CAF4B5DFDDC5E9F20AF /* A2DownloadTaskCenter.m */,
-				BD5AE965BB08676C6D4D0512 /* A2BatchDownloader.h */,
 				DE956596465BDFF25E578448 /* A2DownloadEngine.h */,
 				1EDE5D2DBCB81396D185C97D /* A2DownloadFavorites.h */,
 				D3ABD890B860FD03E77A2B0C /* A2DownloadManifest.h */,
@@ -1474,7 +1469,6 @@
 				CEBCE40DED2386E621FE1198 /* A2ResourceScanner.m in Sources */,
 				006F90647E36FA45B54D7B39 /* A2ZipReader.m in Sources */,
 				5DFE00B49A996C511291A505 /* A2ZipWriter.m in Sources */,
-				4486969AD52C845F0A5F88A7 /* A2BatchDownloader.m in Sources */,
 				9F125686BA18A3A79AC3C941 /* A2DownloadEngine.m in Sources */,
 				04806F8C420A200707485301 /* A2DownloadFavorites.m in Sources */,
 				E6679E2C4F527A9777EA6CEC /* A2DownloadManifest.m in Sources */,
