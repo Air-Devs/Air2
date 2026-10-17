@@ -162,6 +162,7 @@ int main(int argc, const char *argv[]) {
         printf("[⑥] ★参数集逐项 + 逐位置断言★（Java 8 档：无 G1 组）\n");
         NSArray<NSString *> *j8 = [PlanNoFacts() jvmOptionsWithMemoryMB:1024 javaMajorVersion:8];
         NSArray<NSString *> *want8 = @[
+            @"-Xint",
             @"-Xms128M", @"-Xmx1024M",
             // ★真机崩溃修复后✗★：不再下发 CompressedClassSpaceSize/MaxMetaspace/CodeCache/DirectMemory，
             // 改为显式关闭压缩类指针（依据 iPhone 17 Pro 崩溃报告 + 老线 JavaLauncher.m:2563/3469 的已验证行为）。
@@ -189,6 +190,7 @@ int main(int argc, const char *argv[]) {
         printf("[⑦] ★参数集逐项 + 逐位置断言★（Java 17+ 档：含 G1 组）\n");
         NSArray<NSString *> *j25 = [PlanNoFacts() jvmOptionsWithMemoryMB:2048 javaMajorVersion:25];
         NSArray<NSString *> *want17 = @[
+            @"-Xint",
             @"-Xms128M", @"-Xmx2048M",
             @"-XX:-UseCompressedClassPointers",
             @"-Xss1m", @"-XX:SoftRefLRUPolicyMSPerMB=250",

@@ -413,6 +413,14 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     //   出处：老线 JavaLauncher.m:2407+ —— 「仅对 Java 17+ 启用 G1GC 调优；Java 8 的 G1GC 不够成熟，
     //   保持默认」。★未知档按 8 处理★是安全侧选择：给 Java 8 加 G1 参数会让 JVM 直接起不来。
     //   · UseStringDeduplication 是实验特性 ⇒ 需先 UnlockExperimentalVMOptions（老线同款）。
+    // ★诊断开关(2026-10-17)★ A2XintMode=YES(默认) ⇒ 加 -Xint：纯解释器、不生成任何 JIT 代码。
+    //   目的：区分「卡在 JIT/code cache」与「卡在 VM 其它初始化」。定位完必须关掉。
+    id a2xintVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2XintMode"];
+    BOOL a2xint = (a2xintVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2XintMode"];
+    if (a2xint) {
+        [options addObject:@"-Xint"];
+    }
+
     if ([A2LaunchMemory usesG1TuningForJavaMajorVersion:javaMajorVersion]) {
         [options addObject:@"-XX:+UnlockExperimentalVMOptions"];
         [options addObject:@"-XX:+UseG1GC"];
