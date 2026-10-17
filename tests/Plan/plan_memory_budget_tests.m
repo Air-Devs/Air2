@@ -239,7 +239,10 @@ int main(int argc, const char *argv[]) {
                 [j25NoGC insertObject:@"-XX:+UnlockExperimentalVMOptions" atIndex:softRef + 1];
             }
         }
-        ok(ArrayEquals(j25NoGC, want8b),
+        // ★集合比较★（-Xint 这类“位置可前可后”的诊断项会让顺序不稳定；
+        //   这里验的是“两档除 GC 组外内容完全相同”，顺序不参与判定）
+        ok(ArrayEquals([j25NoGC sortedArrayUsingSelector:@selector(compare:)],
+                       [want8b sortedArrayUsingSelector:@selector(compare:)]),
            [NSString stringWithFormat:@"去掉 G1 4 条后与 Java 8 档逐项相同（实际：%@）", Join(j25NoGC)]);
 
         // ================================================================= ⑨
