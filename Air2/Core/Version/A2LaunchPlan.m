@@ -439,6 +439,12 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
         [options addObject:@"-XX:+MirrorMappedCodeCache"];
     }
 
+    // ---- ③‴ 建 VM 卡死诊断（★临时★）----
+    //   真机现象：阶段6「创建 JVM」之后只剩 OpenJDK 的 deprecation 警告，再无输出。
+    //   VM 自己的统一日志能把这中间的初始化阶段逐条打出来（输出量很小），
+    //   卡住的最后一行即是断点。定位到原因后这行随即删除。
+    [options addObject:@"-Xlog:init=debug:stderr"];   // ★必须指定 stderr★：App 里 stdout 无处可去
+
     // ★追加类路径的唯一可行方式（Java 9+）：必须带，否则 A2Entry 追加 MC 库时被模块系统挡下。
     [options addObject:[NSString stringWithFormat:@"-Djava.system.class.loader=%@", A2LaunchGameClassLoaderName]];
 
