@@ -441,9 +441,16 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
         [options addObject:@"-XX:+UnlockExperimentalVMOptions"];   // 上面三条属于实验/诊断选项
     }
     [options addObject:@"-XX:+DisablePrimordialThreadGuardPages"];
-    [options addObject:@"-XX:ReservedCodeCacheSize=64m"];
-    [options addObject:@"-XX:InitialCodeCacheSize=16m"];
-    [options addObject:@"-XX:CodeCacheExpansionSize=4m"];
+    // ★真机请求洪水(2026-10-17)★：MirrorMappedCodeCache 是★按 16KB 页★向调试器要
+    //   “祝福”(cmd 4：读+m 写+M 两条命令/页)的 —— 64MB 代码缓存 = 4096 页 ≈ 8000 条请求，
+    //   这就是 StikDebug 里 6300+ 请求的来源。默认降到 16MB(1024 页)并把扩容量压到 1MB，
+    //   请求数降到 1/4；要大代码缓存再用偏好键 A2CodeCacheMB 覆盖。
+    NSInteger a2ccMB = [NSUserDefaults.standardUserDefaults integerForKey:@"A2CodeCacheMB"];
+    if (a2ccMB <= 0) a2ccMB = 16;
+    if (a2ccMB > 64) a2ccMB = 64;
+    [options addObject:[NSString stringWithFormat:@"-XX:ReservedCodeCacheSize=%ldm", (long)a2ccMB]];
+    [options addObject:[NSString stringWithFormat:@"-XX:InitialCodeCacheSize=%ldm", (long)MIN(a2ccMB, (NSInteger)2)]];
+    [options addObject:@"-XX:CodeCacheExpansionSize=1m"];
     // ★开关(真机证据 2026-10-17)★:我们请求 64MB 的 JIT 区,但调试器只交付了
     //   ★16384 字节✗★(见 [A2JIT] region … size=16384) ⇒ MirrorMappedCodeCache 要把 64MB
     //   code cache 映射进 16KB 区里,VM 在初始化期跑 JIT 代码时卡住。

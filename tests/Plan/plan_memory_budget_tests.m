@@ -171,9 +171,9 @@ int main(int argc, const char *argv[]) {
             //   且没有 MirrorMappedCodeCache（Java 8 的 libjvm 不认，老线 ISSUE-FIX #70）。
             @"-XX:+UnlockExperimentalVMOptions",
             @"-XX:+DisablePrimordialThreadGuardPages",
-            @"-XX:ReservedCodeCacheSize=64m",
-            @"-XX:InitialCodeCacheSize=16m",
-            @"-XX:CodeCacheExpansionSize=4m",
+            @"-XX:ReservedCodeCacheSize=16m",
+            @"-XX:InitialCodeCacheSize=2m",
+            @"-XX:CodeCacheExpansionSize=1m",
             @"-Xlog:init=debug:stderr",
         ];
         ok(ArrayEquals(j8, want8),
@@ -196,9 +196,9 @@ int main(int argc, const char *argv[]) {
             @"-XX:MaxGCPauseMillis=50", @"-XX:+UseStringDeduplication",
             // ★JIT/代码缓存组★（Unlock 已在 G1 组里 ⇒ 这里不重复）+ Java≥17 的镜像映射
             @"-XX:+DisablePrimordialThreadGuardPages",
-            @"-XX:ReservedCodeCacheSize=64m",
-            @"-XX:InitialCodeCacheSize=16m",
-            @"-XX:CodeCacheExpansionSize=4m",
+            @"-XX:ReservedCodeCacheSize=16m",
+            @"-XX:InitialCodeCacheSize=2m",
+            @"-XX:CodeCacheExpansionSize=1m",
             @"-XX:+MirrorMappedCodeCache",
             @"-Xlog:init=debug:stderr",
         ];
