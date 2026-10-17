@@ -219,3 +219,52 @@
     本单未改；它们由同一条断言覆盖（玻璃命中 = 0）。
 - **来源**：本仓 `Air2/UI/Screens/A2BaseViewController.m`、`Air2/UI/Components/A2GlassCard.[hm]`、
   `Air2/UI/Screens/Home/A2LauncherViewController.m`、`scripts/check_no_glass.py`。
+
+---
+
+## ADR-011：原版下载走「国内镜像候选链 + 失败自动切源」，并发默认提到 6
+
+- **状态**：已接受（实现已落；★真机网速实测未做★，判定表见 `D:\CTF\_AIR2_MIRROR.md`）
+- **日期**：2026-10-17
+- **背景**：
+  - 用户真机反馈：原版游戏资源（版本清单 / 依赖库 / 资源）下载**慢**。
+  - 对照证据（★只读老线 Air 1 的行为与参数约定★）：
+    `runtime_native/Natives/AI/AiAssetTools.m:1168-1170` 版本清单默认走 BMCLAPI、失败切官方；
+    `:1282-1286` 版本 JSON 的官方域名失败后替换成 `bmclapi2.bangbang93.com` 重试；
+    `Natives/PLMirrorCenter.m:40-77` 给出完整前缀映射表（库 → `/maven`、资源 → `/assets`）；
+    `Natives/DownloadTaskManager.m:13` 并发上限 = 3。
+  - 本仓现状：`A2MirrorResolver` 的映射表**只覆盖资源站**（MCIM），Mojang 三个域名一个都没覆盖；
+    `A2GameInstaller` 的下载候选只吃 manifest 原始 URL（`req.candidateURLs` 仅一条）；
+    版本清单写死一个官方 URL；并发默认 3。
+- **决策**：
+  1. **映射表扩容**：`A2MirrorResolver` 的「官方前缀 → 镜像前缀」表补上 Mojang 原版分发
+     （`piston-meta` / `piston-data` / `launchermeta` / `launcher.mojang.com` → BMCLAPI 根；
+     `libraries.minecraft.net` → `/maven`；`resources.download.minecraft.net` → `/assets`，
+     http / https 都认）。**前缀须后跟 `/` 才命中**，避免同前缀异主机被误改写。
+  2. **候选链 + 自动切源**：候选顺序 = 镜像优先 → 官方兜底（`mirrorPriority` 默认由官方优先
+     ★改为镜像优先★：镜像只在「官方先失败」后才用上，对提速没有意义）；
+     失败切源复用下载引擎既有的候选遍历（退避重试耗尽 ⇒ 下一个候选），并新增 `failover` 判据行。
+  3. **默认只在判定为大陆时启用**：判据 = 系统时区（`Asia/Shanghai` 等），
+     与老线 `PLMirrorIsChinaMainland` 同口径；判错只影响快慢，不影响功能。
+  4. **一键关闭**：设置页「使用国内镜像加速」开关（key `A2MirrorEnabled`，存 `Documents/config.json`）。
+  5. **并发 3 → 6**：上限仍 8，`air2.install.concurrency` 覆盖仍有效。
+  6. **判据行**：前缀 `[A2-MIRROR]`，默认可见、可 grep（开关 + 依据 + 每阶段实际源 + 失败切源）。
+- **理由**：
+  - 只镜像版本清单对总耗时几乎没有改善 —— 安装阶段的耗时大头是**资源（上万文件）与依赖库**，
+    官方域名在国内的单连接吞吐才是瓶颈。
+  - 做成候选链而不是硬替换，是为了「镜像坏了也不至于装不上」：官方源永远在链上，
+    且用户可一键关掉。★镜像链不是把用户绑到第三方镜像上★。
+  - 老线是「配置项 + 域名替换 + 失败重试」这套已验证的行为，本单只对齐行为与参数约定，实现自写。
+- **风险与合规（必须写明）**：
+  - BMCLAPI（作者 bangbang93）与 MCIM（`mod.mcimirror.top`）都是**第三方公益镜像**，
+    与 Mojang / 本仓无隶属关系，**不提供 SLA**，也可能随时下线或限速；
+    它们分发的文件未经本仓校验，成品的完整性仍由下载引擎的校验把关。
+  - 因此：可一键关闭、官方源恒在候选链上、UI 文案里写明出处与风险。
+- **影响 / 边界**：
+  - 老线对 `resources.download.minecraft.net` 有「即使镜像优先也官方优先」的减压例外，
+    本单★未沿用★ —— 资源正是最慢的一段，沿用等于不提速；减压改由档位承担。
+  - 未做源级熔断：镜像整体不可用时，每个文件仍会各付一次退避重试（1s+2s+4s）。
+  - ★未在真机实测网速 / 耗时改进★；本单的判据只覆盖 URL 改写、候选链顺序、开关、并发常量。
+- **来源**：本仓 `Air2/Core/Addons/A2MirrorResolver.[hm]`、`Air2/Core/Version/A2GameInstaller.m`、
+  `Air2/Core/Download/A2DownloadEngine.m`、`Air2/Core/Settings/A2Settings.[hm]`、
+  `Air2/UI/Screens/Settings/A2AppearanceSettings.m`、`tests/Mirror/`、`tests/Core/test_install_concurrency.py`。

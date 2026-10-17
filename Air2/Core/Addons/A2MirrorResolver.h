@@ -20,18 +20,31 @@
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
 //
-//  下载地址的镜像替换（对应 ZL2 的 MCIMMirror）。
+//  下载地址的镜像替换（对应 ZL2 的 MCIMMirror + 老线 Air 1 的 PLMirrorCenter）。
 //
 //  为什么需要：
-//    CurseForge 与 Modrinth 的 CDN 在国内访问很慢甚至不通。
-//    MCIM（mod.mcimirror.top）把这两个 CDN 做了反向代理，
-//    把域名替换掉即可走国内节点。
+//    国内直连 Mojang（版本清单 / 依赖库 / 资源对象）与
+//    CurseForge / Modrinth 的 CDN 都很慢甚至不通。
+//    这里把官方域名替换成国内镜像域名，把下载流量导到镜像节点。
 //
-//  策略（与 ZL2 一致）：
+//  镜像链（两条，各管一摊）：
+//    · Mojang 原版分发 → BMCLAPI（`bmclapi2.bangbang93.com`，★第三方公益镜像★）
+//        piston-meta / piston-data / launchermeta / launcher.mojang.com → 镜像根
+//        libraries.minecraft.net        → 镜像根 + /maven
+//        resources.download.minecraft.net → 镜像根 + /assets
+//    · Modrinth / CurseForge 文件 CDN → MCIM（`mod.mcimirror.top`，★第三方★）
+//        edge.forgecdn.net / cdn.modrinth.com / media.forgecdn.net → 镜像根
+//
+//  策略（与 ZL2 / 老线一致）：
 //    · 只在检测到中国大陆网络时启用 —— 海外用镜像反而更慢
-//    · 用户可选「官方优先」或「镜像优先」
+//    · 用户可选「官方优先」或「镜像优先」，并在设置里★一键关掉★
 //    · 返回的是候选列表，按优先级排列，
-//      下载引擎本来就是多候选依次尝试，天然兼容
+//      下载引擎本来就是多候选依次尝试，天然兼容「失败自动切源」
+//
+//  ★风险★：两个镜像都是第三方公益服务（非 Mojang / 非本仓），
+//    不承诺可用性，也不对本仓的下载结果负责；出问题时的逃逸路径是
+//    设置页的「使用国内镜像加速」开关（关掉即回官方单源）。
+//    详见 docs/DECISIONS.md 的镜像链条目。
 //
 
 #import <Foundation/Foundation.h>
@@ -56,7 +69,7 @@ typedef NS_ENUM(NSInteger, A2MirrorPriority) {
 
 /// 把单个下载地址展开成候选列表（可能含镜像地址）。
 ///
-/// 不可镜像的地址（如 Mojang 官方 CDN）原样返回。
+/// 不可镜像的地址（如已指向镜像站的地址、或本仓未登记的域名）原样返回。
 - (NSArray<NSString *> *)candidateURLsForURL:(NSString *)url;
 
 /// 批量展开
@@ -64,6 +77,29 @@ typedef NS_ENUM(NSInteger, A2MirrorPriority) {
 
 /// 该地址是否可被镜像
 + (BOOL)isMirrorableURL:(NSString *)url;
+
+#pragma mark - 纯函数缝（供单测与判据使用）
+
+/// 该地址对应的镜像地址；不可镜像返回 nil。
++ (nullable NSString *)mirroredURLFor:(NSString *)url;
+
+/// 是否在中国大陆（依据 = 系统时区，见实现注释）。
++ (BOOL)isChinaMainland;
+
+/// 这个地址现在指向镜像还是官方：`mirror(bmclapi)` / `mirror(mcim)` / `official`。
++ (NSString *)sourceLabelForURL:(NSString *)url;
+
+/// 候选列表的纯函数实现：把「开关 / 优先级 / 是否大陆」当参数传进来，
+/// 不读单例状态 ⇒ 单测可把四种组合（开+镜像优先 / 开+官方优先 /
+/// 关 / 非大陆）逐条真跑。
++ (NSArray<NSString *> *)candidateURLsForURL:(NSString *)url
+                                     enabled:(BOOL)enabled
+                                    priority:(A2MirrorPriority)priority
+                               chinaMainland:(BOOL)mainland;
+
+/// 一行判据（镜像开关 + 判定依据 + 生效结论 + 镜像出处）。
+/// 只返回字符串、不写日志 —— 调用方自行交给 A2Log。
+- (NSString *)auditSummary;
 
 @end
 

@@ -42,6 +42,7 @@
 
 #import "A2DownloadEngine.h"
 #import "A2Logger.h"
+#import "A2Log.h"
 #import <CommonCrypto/CommonDigest.h>
 #import <zlib.h>
 
@@ -497,6 +498,20 @@ didCompleteWithError:(NSError *)error {
     [self.candidateErrors addObject:error];
     self.retryCount = 0;
     self.candidateIndex++;
+
+    // ★[A2-MIRROR] 判据行：失败切源（镜像 ⇄ 官方）★
+    //   本轮命令里加镜像链后，候选链默认是「镜像优先 → 官方兜底」，
+    //   所以这条行是「真机上到底切没切、切到哪」的唯一证据。
+    {
+        NSUInteger total = self.request.candidateURLs.count;
+        NSString *from = self.request.candidateURLs[(NSUInteger)(self.candidateIndex - 1)].absoluteString;
+        NSString *to = self.candidateIndex < (NSInteger)total
+            ? self.request.candidateURLs[(NSUInteger)self.candidateIndex].absoluteString
+            : @"(无更多候选)";
+        [A2Log log:@"[A2-MIRROR] failover 候选=%ld/%lu from=%@ to=%@ 原因=%@",
+              (long)self.candidateIndex, (unsigned long)total, from, to,
+              error.localizedDescription ?: @"(未知)"];
+    }
 
     // 换源时进度回退（新源从头下）
     if (self.receivedBytes > 0 && self.progressHandler) {

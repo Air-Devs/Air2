@@ -673,3 +673,37 @@ action sheet 列全部候选，**未内置的项照列但标「未内置」**（
 
 **已知推论**：二级页面**不再显示壁纸**（壁纸层就是玻璃的载体）。若要「留壁纸、只让卡片不透明」，
 回退点集中在 `A2BaseViewController.m`（3 行）+ 判据白名单放开一行。
+
+### 国内镜像链（原版 + 模组 CDN）—— [A2-MIRROR]
+
+**口径（用户原话）**：原版资源（版本清单 / 依赖库 / 资源）下载**慢**；要加国内镜像链并把并发提上去。
+
+**实现（四处机制，展开规则只有一处）**
+
+| 文件 | 层 | 职责 |
+|---|---|---|
+| `Air2/Core/Addons/A2MirrorResolver.[hm]` | Core | ★域名映射的唯一实现处★：一张「官方前缀 → 镜像前缀」有序表，覆盖 Mojang 原版分发（`piston-meta` / `piston-data` / `launchermeta` / `launcher.mojang.com` → BMCLAPI 根；`libraries.minecraft.net` → `/maven`；`resources.download.minecraft.net` → `/assets`）与 Modrinth / CurseForge 文件 CDN（→ MCIM）。另有纯函数缝 `candidateURLsForURL:enabled:priority:chinaMainland:` 与判据串 `auditSummary` |
+| `Air2/Core/Version/A2GameInstaller.m` | Core | 下载候选按镜像展开（★唯一入口在 `download:…` 里展开候选链★，版本 json / jar / 索引 / 库 / 资源全覆盖）；版本清单改为**逐候选源依次尝试**（镜像源失败 → 自动切官方兜底）；每阶段打一条判据行；并发默认值 6 |
+| `Air2/Core/Download/A2DownloadEngine.m` | Core | 候选链的**换源点**：前一个候选退避重试耗尽 ⇒ 切换下一个，并打 `failover` 判据行（本轮之前这条切换是静默的） |
+| `Air2/Core/Settings/A2Settings.[hm]` | Core | `mirrorEnabled`（开关）/ `mirrorPriority`（默认改为**镜像优先**）的唯一读写点 |
+| `Air2/UI/Screens/Settings/A2AppearanceSettings.m` | UI | 「使用国内镜像加速」开关＝★一键关闭入口★（文案写明第三方出处与风险） |
+| `tests/Mirror/`、`tests/Core/test_install_concurrency.py` | tests | ★真编译 + 真运行★ URL 重写表（逐域名 / 逐路径 / 不改写反例）、国内判定、开关与优先级四组合；并发常量的源码级断言 |
+
+**判据行（默认可见、可 grep，前缀 `[A2-MIRROR]`）**
+- `enabled=… priority=… mainland=… tz=… verdict=…`：开关 + 判定依据（时区名）+ 生效结论 + 镜像出处（每次安装一条）；
+- `stage=<阶段> 首选=… source=mirror(bmclapi|mcim)|official 候选=N 样本=…`：每阶段一条（版本清单 / version-json / client-jar / 索引 / libraries / assets）；
+- `stage=manifest 失败切源 …` / `failover 候选=i/N from=… to=… 原因=…`：失败切源的证据。
+
+**开关（★交付必备：可关★）**：设置页「使用国内镜像加速」开关，落盘 key `A2MirrorEnabled`。
+关掉 ⇒ 镜像链整体不生效（官方单源）。★默认只在判定为大陆时区时启用★（依据 = 系统时区，
+判错只影响快慢，不影响功能；判据行会把时区名打出来）。
+
+**风险与合规**：两个镜像都是**第三方公益服务**（BMCLAPI 作者 bangbang93；MCIM `mod.mcimirror.top`），
+与 Mojang / 本仓无隶属关系，不提供 SLA。故本单只做「候选链 + 一键关闭」，
+不把镜像写死成唯一来源；出问题时官方源始终在候选链里。详见 `docs/DECISIONS.md` 的 ADR-011。
+
+**边界（本单不做 / 未验证）**：未在真机实测网速与耗时（只证 URL 改写与候选链、并发常量）；
+未做源级熔断（镜像整体不可用时，每个文件仍会各付一次退避重试）；
+老线 Air 1 对 `resources.download.minecraft.net` 有「即使镜像优先也官方优先」的减压例外，
+本单★未沿用★（资源正是最慢的一段，沿用等于不提速），改由「一键关闭 / 官方优先」档位承担。
+

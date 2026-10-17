@@ -23,6 +23,7 @@
 //
 
 #import "A2RemoteVersions.h"
+#import "A2MirrorResolver.h"
 #import "A2Log.h"
 
 /// 与 A2GameInstaller.m 的 kVersionManifestURL 同值，改地址两处一起改。
@@ -59,51 +60,97 @@ static NSString *const kVersionManifestURL = @"https://piston-meta.mojang.com/mc
         else dispatch_async(dispatch_get_main_queue(), ^{ completion(v, e); });
     };
     [A2Log log:@"remote-versions: 拉取版本清单"];
-    NSURL *url = [NSURL URLWithString:kVersionManifestURL];
-    if (!url) {
-        done(nil, [self err:@"清单地址非法"]);
+
+    // 候选源与安装器同一套：镜像优先 → 官方兜底（关掉镜像或不在大陆时只剩官方）。
+    NSArray<NSString *> *cands = [[A2MirrorResolver shared] candidateURLsForURL:kVersionManifestURL];
+    if (cands.count == 0) cands = @[kVersionManifestURL];
+
+    // 一次拉取复用同一个解析器：清单近千条，避免逐条新建。
+    [self fetchVersionsFromCandidates:cands
+                                index:0
+                            lastError:nil
+                                  iso:[NSISO8601DateFormatter new]
+                                 done:done];
+}
+
+/// 逐候选源尝试拉清单：任一源失败（网络错 / 非 2xx / 不是 JSON / 缺 versions）就换下一个，
+/// 全部耗尽才回调失败 —— 与安装期的版本清单同一条链、同一套判据。
++ (void)fetchVersionsFromCandidates:(NSArray<NSString *> *)cands
+                              index:(NSUInteger)index
+                          lastError:(NSError *)lastError
+                                iso:(NSISO8601DateFormatter *)iso
+                               done:(void (^)(NSArray<A2RemoteVersion *> *, NSError *))done {
+    if (index >= cands.count) {
+        done(nil, lastError ?: [self err:@"版本清单不可用：镜像与官方源均失败"]);
         return;
     }
+
+    NSString *urlString = cands[index];
+    NSString *source = [A2MirrorResolver sourceLabelForURL:urlString];
+    NSURL *url = [NSURL URLWithString:urlString];
+    if (!url) {
+        [A2Log log:@"[A2-MIRROR] stage=version-list 失败切源 source=%@ 原因=清单地址非法 url=%@",
+              source, urlString];
+        [self fetchVersionsFromCandidates:cands index:index + 1
+                                lastError:[self err:@"清单地址非法"] iso:iso done:done];
+        return;
+    }
+
+    [A2Log log:@"[A2-MIRROR] stage=version-list 候选=%lu/%lu source=%@ url=%@",
+          (unsigned long)(index + 1), (unsigned long)cands.count, source, urlString];
+
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
     req.timeoutInterval = 30;
     [req setValue:@"Air-Devs/Air2/0.1.0 (github.com/Air-Devs/Air2)" forHTTPHeaderField:@"User-Agent"];
-    // 一次拉取复用同一个解析器：清单近千条，避免逐条新建。
-    NSISO8601DateFormatter *iso = [NSISO8601DateFormatter new];
+
     [[NSURLSession.sharedSession dataTaskWithRequest:req
                                    completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
-        if (error) { done(nil, error); return; }
-        NSHTTPURLResponse *http = (NSHTTPURLResponse *)resp;
-        if (http.statusCode < 200 || http.statusCode >= 300) {
-            done(nil, [self err:[NSString stringWithFormat:@"服务返回 HTTP %ld",
-                                 (long)http.statusCode]]);
+        NSError *attemptError = error;
+        NSArray<A2RemoteVersion *> *parsed = nil;
+
+        if (!attemptError) {
+            NSInteger code = [resp isKindOfClass:NSHTTPURLResponse.class]
+                ? ((NSHTTPURLResponse *)resp).statusCode : 200;
+            NSError *jsonErr = nil;
+            NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data ?: [NSData data]
+                                                                 options:0 error:&jsonErr];
+            NSArray *raw = [json isKindOfClass:NSDictionary.class] ? json[@"versions"] : nil;
+            if (code < 200 || code >= 300) {
+                attemptError = [self err:[NSString stringWithFormat:@"服务返回 HTTP %ld（源 %@）",
+                                          (long)code, source]];
+            } else if (![json isKindOfClass:NSDictionary.class]) {
+                attemptError = [self err:[NSString stringWithFormat:@"清单不是合法 JSON（源 %@）", source]];
+            } else if (![raw isKindOfClass:NSArray.class]) {
+                attemptError = [self err:[NSString stringWithFormat:@"清单缺 versions（源 %@）", source]];
+            } else {
+                NSMutableArray<A2RemoteVersion *> *out = [NSMutableArray array];
+                for (NSDictionary *d in raw) {
+                    if (![d isKindOfClass:NSDictionary.class]) continue;
+                    NSString *vid = [d[@"id"] isKindOfClass:NSString.class] ? d[@"id"] : nil;
+                    NSString *type = [d[@"type"] isKindOfClass:NSString.class] ? d[@"type"] : nil;
+                    if (!vid.length || !type.length) continue;
+                    // releaseTime 形如 2024-11-13T10:12:14+00:00。
+                    // 解析失败只置 nil，不因此丢掉整个版本条目。
+                    NSString *rt = [d[@"releaseTime"] isKindOfClass:NSString.class] ? d[@"releaseTime"] : nil;
+                    NSDate *releaseTime = rt.length ? [iso dateFromString:rt] : nil;
+                    [out addObject:[[A2RemoteVersion alloc] initWithVersionID:vid
+                                                                         type:type
+                                                                  releaseTime:releaseTime]];
+                }
+                parsed = [out copy];
+            }
+        }
+
+        if (parsed) {
+            [A2Log log:@"[A2-MIRROR] stage=version-list 采用 source=%@ url=%@", source, urlString];
+            done(parsed, nil);
             return;
         }
-        NSError *jsonErr = nil;
-        NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&jsonErr];
-        if (![json isKindOfClass:NSDictionary.class]) {
-            done(nil, [self err:@"清单不是合法 JSON"]);
-            return;
-        }
-        NSArray *raw = json[@"versions"];
-        if (![raw isKindOfClass:NSArray.class]) {
-            done(nil, [self err:@"清单缺 versions"]);
-            return;
-        }
-        NSMutableArray<A2RemoteVersion *> *out = [NSMutableArray array];
-        for (NSDictionary *d in raw) {
-            if (![d isKindOfClass:NSDictionary.class]) continue;
-            NSString *vid = [d[@"id"] isKindOfClass:NSString.class] ? d[@"id"] : nil;
-            NSString *type = [d[@"type"] isKindOfClass:NSString.class] ? d[@"type"] : nil;
-            if (!vid.length || !type.length) continue;
-            // releaseTime 形如 2024-11-13T10:12:14+00:00。
-            // 解析失败只置 nil，不因此丢掉整个版本条目。
-            NSString *rt = [d[@"releaseTime"] isKindOfClass:NSString.class] ? d[@"releaseTime"] : nil;
-            NSDate *releaseTime = rt.length ? [iso dateFromString:rt] : nil;
-            [out addObject:[[A2RemoteVersion alloc] initWithVersionID:vid
-                                                                 type:type
-                                                          releaseTime:releaseTime]];
-        }
-        done([out copy], nil);
+
+        [A2Log log:@"[A2-MIRROR] stage=version-list 失败切源 source=%@ 原因=%@ url=%@",
+              source, attemptError.localizedDescription ?: @"(未知)", urlString];
+        [self fetchVersionsFromCandidates:cands index:index + 1
+                                lastError:attemptError iso:iso done:done];
     }] resume];
 }
 
