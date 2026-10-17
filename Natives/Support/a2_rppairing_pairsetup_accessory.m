@@ -11,6 +11,7 @@
 #import "a2_rppairing_pairsetup_accessory.h"
 #import "a2_rppairing.h"          // A2RPPairingIdentity
 #import "a2_rppairing_rsd.h"      // ★复用★服务类型常量 A2RPRSDServicePairableHost（不另造）
+#import "a2_rppairing_pairable_host_wire.h"  // [A2-PAIRPIN] 线上契约纯函数（判据行/十六进制前缀）
 #import "a2_remotexpc_session.h"  // A2RemoteXPCErrorKind
 #import "a2_log.h"                // a2_log_criterion：判据行的统一出口（控制台 + 会话日志文件）
 
@@ -108,19 +109,23 @@ static A2RPPairSetupAccessoryListenerFactory const A2RPPWProductionListenerFacto
                                                      altIRK:altIRK];
 };
 
-/// 生产装配：真传输（RemoteXPC；★本侧是 accessory ⇒ originatedBy=device★）。
-/// ★真机互操作未验证★：`originatedBy` 的取值是公开实现的通行口径，仍以真机对拍为准（见报告）。
+/// 生产装配：真传输（pairable-host 连接上的 JSON/RPPairing 线；★本侧是 accessory ⇒ originatedBy=device★）。
+/// ★本单修复点★：这条路是【裸 TCP + "RPPairing" + 大端长度 + JSON 信封】，
+/// 不是 §2b `_remoted._tcp` 的 RemoteXPC（HTTP/2 前导 + XPC 字典）。
+/// 用 RemoteXPC 会话包这条连接 ⇒ 设备收到的是 HTTP/2 前导而非握手响应 ⇒
+/// 它永远不发 M1 ⇒ 界面停在「已连入」且★从不弹 6 位码输入框★（用户反馈的现象）。
 static A2RPPairSetupAccessoryTransportFactory const A2RPPWProductionTransportFactory =
     ^id<A2RPPairSetupMessageTransport>(id<A2RPByteStream> stream, NSString *hostName,
                                        NSString **_Nullable reason) {
-    A2RemoteXPCErrorKind err = A2RemoteXPCErrorNone;
-    return [A2RPPairSetupRemoteXPCTransport transportOverByteStream:stream
-                                                       originatedBy:@"device"
-                                                           hostName:hostName
-                                                        wireVersion:A2RPPairableHostWireProtocolVersion
-                                                            timeout:30.0
-                                                             reason:reason
-                                                              error:&err];
+    A2RPPairSetupPairableHostJSONTransport *t =
+        [A2RPPairSetupPairableHostJSONTransport transportWithStream:stream hostName:hostName];
+    if (t == nil) {
+        if (reason) {
+            *reason = @"pairable-host JSON 传输构造失败（字节通道为 nil）";
+        }
+        return nil;
+    }
+    return t;
 };
 
 @implementation A2RPPairSetupAccessory
@@ -229,6 +234,13 @@ static A2RPPairSetupAccessoryTransportFactory const A2RPPWProductionTransportFac
           run.authTagBase64, A2RPPairableHostWireProtocolVersion]);
     A2RPPairWireCriterionLog(@"等待设备连入（请到 设置 › 通用 › VPN 与设备管理 找「与 Air2 … 配对」；"
                              @"部分机型在 设置 › 隐私与安全性 › 开发者模式）");
+    // ★机器判据（连入前）★：TXT 键集 + firstBytes=(none) + m2=fail ⇒ 一眼区分
+    //   「通告契约不对」与「通了但握手没走」。连入后由传输层接着打同格式的行。
+    a2_log_criterion(@"%@", A2RPPHWCriterionLine(@"advertise",
+                                                 [[A2RPPairableHostTXTRecords(run.advertisedName, @"Mac17,7",
+                                                                              identity.identifier, altIRK)
+                                                   allKeys] sortedArrayUsingSelector:@selector(compare:)],
+                                                 nil, NO, @"listener-ready; 等设备连入"));
 
     NSTimeInterval advBudget = MAX(1.0, budget * 0.9);
     NSString *advWhy = nil;
@@ -277,6 +289,38 @@ static A2RPPairSetupAccessoryTransportFactory const A2RPPWProductionTransportFac
                     ([NSString stringWithFormat:@"建 pair-setup 传输失败：%@", tWhy ?: @"原因未记录"]));
     }
     A2RPPW_CANCELLED_IF_NEEDED();
+
+    // ---- ④b ★握手（设备连上后的第一帧是握手请求）★ ----
+    //   ★本单修复点★：不回这一帧，设备永远不发 PS-Msg01 ⇒ 界面停在「已连入」、
+    //   且★从不弹 6 位码输入框★。握手响应里的 `allowsPinlessPairing=NO` 才是
+    //   「本机要求用户输 6 位码」的正式声明。
+    if ([transport isKindOfClass:[A2RPPairSetupPairableHostJSONTransport class]]) {
+        A2RPPairSetupPairableHostJSONTransport *wire = (A2RPPairSetupPairableHostJSONTransport *)transport;
+        // 判据行要如实回显「这一轮广告了哪几个 TXT 键」——用与广告器同一个纯函数算，
+        // 不另抄一份键表（同输入 ⇒ 同键集）。
+        NSDictionary<NSString *, NSString *> *txt =
+            A2RPPairableHostTXTRecords(run.advertisedName, @"Mac17,7", identity.identifier, altIRK);
+        NSString *hwhy = nil;
+        BOOL ok = [wire beginSessionWithName:run.advertisedName
+                                       model:@"Mac17,7"
+                                  identifier:identity.identifier
+                                 wireVersion:A2RPPairableHostWireProtocolVersion
+                                     txtKeys:[[txt allKeys] sortedArrayUsingSelector:@selector(compare:)]
+                                     timeout:30.0
+                                      reason:&hwhy];
+        if (!ok) {
+            A2RPPW_FAIL(wire.lastFailureKind == A2RPPairSetupTransportFailureFormat
+                            ? A2RPPairSetupAccessoryFailureProtocolError
+                            : A2RPPairSetupAccessoryFailureTransportFailed,
+                        ([NSString stringWithFormat:@"pairable-host 握手未完成（firstBytes=%@）：%@",
+                          A2RPPHWHexPrefix(wire.firstBytes, 16), hwhy ?: @"原因未记录"]));
+        }
+        emit(A2RPPairSetupAccessoryPhaseVerifying, A2RPPairSetupStepIdle,
+             [NSString stringWithFormat:
+              @"握手完成 线=RPPairing+JSON 信封 对端首段字节=%@（★设备此后才发 M1★）",
+              A2RPPHWHexPrefix(wire.firstBytes, 16)]);
+    }
+
     emit(A2RPPairSetupAccessoryPhaseVerifying, A2RPPairSetupStepIdle,
          @"传输就绪 角色=device/accessory（会话由对端 host/controller 发起，本机先收后回）");
 

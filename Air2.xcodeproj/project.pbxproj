@@ -197,6 +197,7 @@
 		212CC2B590E73733FC492C45 /* a2_rppairing_crypto.m in Sources */ = {isa = PBXBuildFile; fileRef = 61AFC07262B2A26D0B531D85 /* a2_rppairing_crypto.m */; };
 		E07E486F2F322557DE9BB97C /* a2_rppairing_ed25519.m in Sources */ = {isa = PBXBuildFile; fileRef = BB39CD8A99C42623B61DDF56 /* a2_rppairing_ed25519.m */; };
 		2938FADF387CF104B5DDC809 /* a2_rppairing_pairable_host.m in Sources */ = {isa = PBXBuildFile; fileRef = 07E08CF29323DC1338BC640A /* a2_rppairing_pairable_host.m */; };
+		306758CC9D6636B707230C85 /* a2_rppairing_pairable_host_wire.m in Sources */ = {isa = PBXBuildFile; fileRef = 6C4988F2A21A8934749FD14F /* a2_rppairing_pairable_host_wire.m */; };
 		29C3641F12813D9EF7C9C0F1 /* a2_rppairing_pairsetup.m in Sources */ = {isa = PBXBuildFile; fileRef = B6CB3E3E25542FA51ACAF960 /* a2_rppairing_pairsetup.m */; };
 		E82A620287CE02C2887253CD /* a2_rppairing_pairsetup_accessory.m in Sources */ = {isa = PBXBuildFile; fileRef = B8F28247AC5FB880379DA60A /* a2_rppairing_pairsetup_accessory.m */; };
 		76DE2B4705BD41CD96AE2C46 /* a2_rppairing_pairsetup_transport.m in Sources */ = {isa = PBXBuildFile; fileRef = 63F6ABC34B3800F1BDA1A521 /* a2_rppairing_pairsetup_transport.m */; };
@@ -402,6 +403,7 @@
 		61AFC07262B2A26D0B531D85 /* a2_rppairing_crypto.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_crypto.m"; sourceTree = "<group>"; };
 		BB39CD8A99C42623B61DDF56 /* a2_rppairing_ed25519.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_ed25519.m"; sourceTree = "<group>"; };
 		07E08CF29323DC1338BC640A /* a2_rppairing_pairable_host.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_pairable_host.m"; sourceTree = "<group>"; };
+		6C4988F2A21A8934749FD14F /* a2_rppairing_pairable_host_wire.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_pairable_host_wire.m"; sourceTree = "<group>"; };
 		B6CB3E3E25542FA51ACAF960 /* a2_rppairing_pairsetup.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_pairsetup.m"; sourceTree = "<group>"; };
 		B8F28247AC5FB880379DA60A /* a2_rppairing_pairsetup_accessory.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_pairsetup_accessory.m"; sourceTree = "<group>"; };
 		63F6ABC34B3800F1BDA1A521 /* a2_rppairing_pairsetup_transport.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_pairsetup_transport.m"; sourceTree = "<group>"; };
@@ -595,6 +597,7 @@
 		79B56484F1E69AA6295350B5 /* a2_rppairing_crypto.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_crypto.h"; sourceTree = "<group>"; };
 		A09AED31B25AF3A3729E20AE /* a2_rppairing_ed25519.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_ed25519.h"; sourceTree = "<group>"; };
 		7020DE052BE01500DD8B6917 /* a2_rppairing_pairable_host.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_pairable_host.h"; sourceTree = "<group>"; };
+		4D8C31ACA774AA05C253FBAD /* a2_rppairing_pairable_host_wire.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_pairable_host_wire.h"; sourceTree = "<group>"; };
 		A36999C5D2FE22C4776CDA3F /* a2_rppairing_pairsetup.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_pairsetup.h"; sourceTree = "<group>"; };
 		34D2A74916257EFD767731EB /* a2_rppairing_pairsetup_accessory.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_pairsetup_accessory.h"; sourceTree = "<group>"; };
 		380BF3751376F74E7DBB6D46 /* a2_rppairing_pairsetup_transport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_pairsetup_transport.h"; sourceTree = "<group>"; };
@@ -887,6 +890,7 @@
 				61AFC07262B2A26D0B531D85 /* a2_rppairing_crypto.m */,
 				BB39CD8A99C42623B61DDF56 /* a2_rppairing_ed25519.m */,
 				07E08CF29323DC1338BC640A /* a2_rppairing_pairable_host.m */,
+				6C4988F2A21A8934749FD14F /* a2_rppairing_pairable_host_wire.m */,
 				B6CB3E3E25542FA51ACAF960 /* a2_rppairing_pairsetup.m */,
 				B8F28247AC5FB880379DA60A /* a2_rppairing_pairsetup_accessory.m */,
 				63F6ABC34B3800F1BDA1A521 /* a2_rppairing_pairsetup_transport.m */,
@@ -908,6 +912,7 @@
 				79B56484F1E69AA6295350B5 /* a2_rppairing_crypto.h */,
 				A09AED31B25AF3A3729E20AE /* a2_rppairing_ed25519.h */,
 				7020DE052BE01500DD8B6917 /* a2_rppairing_pairable_host.h */,
+				4D8C31ACA774AA05C253FBAD /* a2_rppairing_pairable_host_wire.h */,
 				A36999C5D2FE22C4776CDA3F /* a2_rppairing_pairsetup.h */,
 				34D2A74916257EFD767731EB /* a2_rppairing_pairsetup_accessory.h */,
 				380BF3751376F74E7DBB6D46 /* a2_rppairing_pairsetup_transport.h */,
@@ -1624,6 +1629,7 @@
 				212CC2B590E73733FC492C45 /* a2_rppairing_crypto.m in Sources */,
 				E07E486F2F322557DE9BB97C /* a2_rppairing_ed25519.m in Sources */,
 				2938FADF387CF104B5DDC809 /* a2_rppairing_pairable_host.m in Sources */,
+				306758CC9D6636B707230C85 /* a2_rppairing_pairable_host_wire.m in Sources */,
 				29C3641F12813D9EF7C9C0F1 /* a2_rppairing_pairsetup.m in Sources */,
 				E82A620287CE02C2887253CD /* a2_rppairing_pairsetup_accessory.m in Sources */,
 				76DE2B4705BD41CD96AE2C46 /* a2_rppairing_pairsetup_transport.m in Sources */,
