@@ -795,6 +795,14 @@ static void A2Main(dispatch_block_t block) {
     [self preflightSizesForItems:items completion:^{
         __strong typeof(weakPrefetch) strongSelf = weakPrefetch;
         if (!strongSelf || strongSelf.cancelled) return;
+        // 开工瞬间就把总量写上，避免第一秒还显示上一阶段的文案（那一下就是"闪"）
+        @synchronized (strongSelf) {
+            if (strongSelf.a2BatchBytesTotal > 0) {
+                [strongSelf report:stage progress:0
+                           message:[NSString stringWithFormat:@"已下载 0.0 MB / 共 %.1f MB · 0%%",
+                                    (double)strongSelf.a2BatchBytesTotal / 1048576.0]];
+            }
+        }
         pump();
     }];
 }
