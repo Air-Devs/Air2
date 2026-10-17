@@ -9,6 +9,7 @@
 #include <dlfcn.h>
 #include <stdlib.h>
 #include <string.h>
+#include <signal.h>
 
 // 输入签名：JNI_CreateJavaVM(JavaVM **pvm, void **penv, void *args)
 typedef jint (*a2_create_vm_fn)(JavaVM **, void **, void *);
@@ -47,11 +48,29 @@ static void *a2_vm_heartbeat(void *ctx) {
     return NULL;
 }
 
+
+/// ★建 VM 前必须把崩溃兜底装的信号处理器复位★
+/// 依据:老线 Natives/JavaLauncher.m:2762-2771 在 JLI_Launch 之前显式
+///   signal(SIGSEGV/SIGPIPE/SIGILL/SIGFPE, SIG_DFL) —— HotSpot 要靠
+///   SIGSEGV(隐式空指针检查/安全点轮询)自己接管;若被 App 的 handler 占着,
+///   VM 初始化会停在原地(JNI_CreateJavaVM 不返回,死因与真机现象一致)。
+static void a2_vm_reset_signal_handlers(void) {
+    signal(SIGSEGV, SIG_DFL);
+    signal(SIGBUS,  SIG_DFL);
+    signal(SIGILL,  SIG_DFL);
+    signal(SIGFPE,  SIG_DFL);
+    signal(SIGPIPE, SIG_DFL);
+    signal(SIGTRAP, SIG_DFL);
+    a2_log_f(@"[A2JVM] 信号处理器已复位 SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGPIPE/SIGTRAP -> SIG_DFL（JVM 要自己接管）");
+}
+
 int a2_vm_create(NSString *libjvmPath,
                  const char *const optionStrings[], int nOptions,
                  BOOL ignoreUnrecognized,
                  JavaVM **outVM, JNIEnv **outEnv, jint *outUsedVersion) {
     if (libjvmPath.length == 0 || nOptions < 0) return 1;
+
+    a2_vm_reset_signal_handlers();
 
     // R2.1 dlopen(libjvm)：RTLD_NOW 立即绑定、RTLD_LOCAL 不污染全局符号表（§3.2 主路径）
     void *libjvm = dlopen(libjvmPath.UTF8String, RTLD_NOW | RTLD_LOCAL);
