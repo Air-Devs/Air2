@@ -18,6 +18,10 @@
 | `scripts/` | 构建与辅助脚本 | — |
 | `docs/` | 设计文档、决策记录、依赖清单 | — |
 | `tests/` | 单元测试 | 被测层 |
+| `depends/` | **JRE 源包与解压产物**（`make jre` 生成，不进 git，约 440MB） | — |
+| `java_runtimes/` | **打包进 IPA 的 JRE**（`make jre` 复制） | depends |
+| `build/` | **构建中间产物**（`make natives` 等生成，不进 git） | — |
+| `artifacts/` | **最终产物**（IPA，`make package` 生成，不进 git） | build |
 
 ---
 

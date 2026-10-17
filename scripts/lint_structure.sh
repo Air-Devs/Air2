@@ -30,7 +30,16 @@ collect() {
 # 1. 顶层目录白名单
 # ------------------------------------------------------------
 echo "==> 1. 顶层目录检查"
-ALLOWED_TOP="Air2 Air2.xcodeproj Natives JavaApp Libraries Assets cmake scripts docs tests .github"
+# 顶层目录白名单。
+# 新增目录必须先在这里登记，并在 docs/ARCHITECTURE.md 写清职责 ——
+# 这是「禁止石山代码」的第一道闸：目录结构失控通常先于代码失控。
+#
+# 后四个是构建产物目录（不进 git，但在本地会存在）：
+#   depends/        JRE 源包与解压产物（make jre）
+#   java_runtimes/  打包进 IPA 的 JRE（make jre 复制）
+#   build/          构建中间产物
+#   artifacts/      最终产物（IPA）
+ALLOWED_TOP="Air2 Air2.xcodeproj Natives JavaApp Libraries Assets cmake scripts docs tests .github depends java_runtimes build artifacts"
 bad_top=0
 for path in * .github; do
     [ -e "$path" ] || continue

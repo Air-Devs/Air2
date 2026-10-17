@@ -19,6 +19,8 @@
 # ---------- 预编译依赖（约 250MB，用 scripts/fetch_deps.sh 下载）----------
 # 不提交的理由：MobileGL 两个库就 85MB×2，Mesa 17MB，
 # 整个 Frameworks 约 237MB。提交进 git 会让 clone 极慢。
+# ---------- JRE（约 440MB，用 scripts/fetch_jre.py 下载）----------
+/depends/
 Libraries/Frameworks/*.dylib
 Libraries/Frameworks/*.framework/
 Libraries/Jars/**/*.jar
