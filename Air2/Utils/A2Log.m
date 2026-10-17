@@ -252,6 +252,11 @@ static void a2_log_console_open(void) {
         close(fd);
         return;
     }
+    // ★stdout 也接进同一份日志★（2026-10-17）
+    //   HotSpot 的线程栈（SIGQUIT 的 Full thread dump）与部分 VM 输出默认走 stdout；
+    //   之前只 dup2 了 stderr ⇒ 真机上 SIGQUIT 之后一行 dump 都没有。
+    //   stdout 不参与崩溃恢复，接失败不影响任何逻辑。
+    (void)dup2(fd, STDOUT_FILENO);
     // ★不 close(fd)★：轮转（ftruncate）还要用它；它与 stderr 同一个打开文件描述。
     gConsoleFd = fd;
     a2_log_console_install_guard_timer();
