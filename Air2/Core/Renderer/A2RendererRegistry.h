@@ -21,6 +21,10 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// 前向声明 —— 加载器与注册表互相引用，
+/// 用前向声明比互相 import 干净（A2RendererLoader.h 会引本文件）。
+@class A2RendererHandle;
+
 /// 统一的渲染器条目
 @interface A2RendererEntry : NSObject
 /// 全局唯一标识（内置用固定字符串，插件用 rendererId）
