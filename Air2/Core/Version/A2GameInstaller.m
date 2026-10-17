@@ -57,8 +57,16 @@ static void A2Main(dispatch_block_t block) {
 @property (nonatomic) BOOL a2InBatch;
 @property (nonatomic) int64_t a2BatchBytesDone;
 @property (nonatomic) int64_t a2BatchBytesTotal;
+// ★PCL 式总大小★ 批开始前先用 HEAD 探出每个文件的大小 ⇒ 进度条一开始就有"共 X MB"，
+//   不再等每个文件真正开始下载才知道总量（之前用户看到的就是"总大小」一路往上跳）。
+@property (nonatomic) BOOL a2BatchTotalKnown;
+@property (nonatomic) NSTimeInterval a2LastReportAt;
 @property (nonatomic, copy, nullable) void (^progressBlock)(A2InstallStage, double, NSString *);
 @property (nonatomic, copy, nullable) void (^completionBlock)(BOOL, NSError *);
+
+/// 批开始前预统计总大小（HEAD），见实现处注释。
+- (void)preflightSizesForItems:(NSArray<NSArray<NSString *> *> *)items
+                    completion:(void (^)(void))completion;
 @end
 
 @implementation A2InstallRequest
@@ -661,17 +669,25 @@ static void A2Main(dispatch_block_t block) {
             @synchronized (self) {
                 if (total > 0 && !counted) {
                     counted = YES;
-                    self.a2BatchBytesTotal += total;
+                    // 预统计成功时总量已经算进去了，这里不要再累加（否则总量翻倍）
+                    if (!self.a2BatchTotalKnown) self.a2BatchBytesTotal += total;
                 }
                 self.a2BatchBytesDone += delta;
                 if (self.a2BatchBytesDone < 0) self.a2BatchBytesDone = 0;
                 double bp = (self.a2BatchBytesTotal > 0)
                     ? MIN(1.0, (double)self.a2BatchBytesDone / (double)self.a2BatchBytesTotal)
                     : 0.0;
+                // ★单一文案 + 限流★ 每 0.15s 最多刷一次，且永远是同一个格式串，
+                //   避免"来回闪"（之前不同文件带不同前缀，用户看到文字在跳）。
+                NSTimeInterval now = [NSDate date].timeIntervalSince1970;
+                if (now - self.a2LastReportAt < 0.15 && bp < 1.0) return;
+                self.a2LastReportAt = now;
+                NSString *totalText = self.a2BatchBytesTotal > 0
+                    ? [NSString stringWithFormat:@"%.1f MB", (double)self.a2BatchBytesTotal / 1048576.0]
+                    : @"统计中…";
                 [self report:stage progress:bp
-                     message:[NSString stringWithFormat:@"已下载 %.1f MB / 共 %.1f MB",
-                              (double)self.a2BatchBytesDone / 1048576.0,
-                              (double)self.a2BatchBytesTotal / 1048576.0]];
+                     message:[NSString stringWithFormat:@"已下载 %.1f MB / 共 %@ · %.0f%%",
+                              (double)self.a2BatchBytesDone / 1048576.0, totalText, bp * 100.0]];
             }
             return;
         }
@@ -712,6 +728,8 @@ static void A2Main(dispatch_block_t block) {
         self.a2InBatch = YES;
         self.a2BatchBytesDone = 0;
         self.a2BatchBytesTotal = 0;
+        self.a2BatchTotalKnown = NO;
+        self.a2LastReportAt = 0;
     }
 
     __block NSUInteger index = 0;          // 下一个待发
@@ -746,7 +764,16 @@ static void A2Main(dispatch_block_t block) {
                 // 单个文件失败不中断整体 —— 依赖库里有可选组件，下载不到不影响启动
                 if (error) failed++;
                 done++;
-                [self report:stage progress:(double)done / (double)total message:base];
+                // ★文案统一★：整批只用"已下载 X / 共 Y · P%"这一种串，进度按文件数推进，
+                //   ★不再★在文件完成瞬间切成别的文案（那正是"来回闪"的来源）。
+                {
+                    double fp = (double)done / (double)total;
+                    [self report:stage progress:fp
+                         message:[NSString stringWithFormat:@"已下载 %.1f MB / 共 %.1f MB · %.0f%%",
+                                  (double)self.a2BatchBytesDone / 1048576.0,
+                                  (double)self.a2BatchBytesTotal / 1048576.0,
+                                  fp * 100.0]];
+                }
                 if (done >= total) {
                     if (finished) return;
                     finished = YES;
@@ -763,7 +790,93 @@ static void A2Main(dispatch_block_t block) {
         }
     };
 
-    pump();
+    // ★先算总量，再开工★（PCL 式：进度一开始就是「已下载 0.0 / 共 X MB · 0%」）
+    __weak typeof(self) weakPrefetch = self;
+    [self preflightSizesForItems:items completion:^{
+        __strong typeof(weakPrefetch) strongSelf = weakPrefetch;
+        if (!strongSelf || strongSelf.cancelled) return;
+        pump();
+    }];
+}
+
+#pragma mark - 总大小预统计（PCL 式）
+
+/// ★PCL 式预统计★ 批开始前用 HEAD 把每个文件的大小问出来，
+/// 让进度条从第一秒就显示「已下载 0.0 MB / 共 X MB · 0%」，
+/// 而不是像之前那样"总量"随着每个文件开始下载才一截一截往上跳。
+/// 探不到的（服务端不给 Content-Length）不计入，之后仍按实际下载补。
+- (void)preflightSizesForItems:(NSArray<NSArray<NSString *> *> *)items
+                    completion:(void (^)(void))completion {
+    if (items.count == 0) { if (completion) completion(); return; }
+
+    NSMutableArray<NSString *> *urls = [NSMutableArray arrayWithCapacity:items.count];
+    for (NSArray<NSString *> *pair in items) {
+        NSString *u = (pair.count > 0) ? pair[0] : nil;
+        if (u.length) [urls addObject:u];
+    }
+    if (urls.count == 0) { if (completion) completion(); return; }
+
+    NSURLSessionConfiguration *cfg = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+    cfg.timeoutIntervalForRequest = 8;
+    cfg.HTTPMaximumConnectionsPerHost = 6;
+    cfg.requestCachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:cfg];
+
+    NSLock *lock = [NSLock new];
+    __block int64_t sum = 0;
+    __block NSUInteger pending = urls.count;
+    __block BOOL finished = NO;
+    NSTimeInterval deadline = [NSDate date].timeIntervalSince1970 + 15.0;
+
+    __block void (^finishIfDone)(void) = nil;
+    finishIfDone = ^{
+        BOOL fire = NO;
+        int64_t value = 0;
+        [lock lock];
+        if (!finished && (pending == 0 || [NSDate date].timeIntervalSince1970 > deadline)) {
+            finished = YES;
+            fire = YES;
+        }
+        value = sum;
+        [lock unlock];
+        if (!fire) return;
+        [session finishTasksAndInvalidate];
+        if (value > 0) {
+            @synchronized (self) {
+                self.a2BatchBytesTotal = value;
+                self.a2BatchTotalKnown = YES;
+            }
+        }
+        [A2Log log:@"[A2-DL] 预统计：%lu 个文件，总大小 %.1f MB（%s）",
+                    (unsigned long)urls.count, (double)value / 1048576.0,
+                    value > 0 ? "HEAD 命中" : "服务端未给大小，边下边算"];
+        if (completion) completion();
+    };
+
+    // 到点强制收尾（有文件一直不返回时不能让下载干等）
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15.0 * NSEC_PER_SEC)),
+                   dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{ finishIfDone(); });
+
+    for (NSString *u in urls) {
+        NSURL *url = [NSURL URLWithString:u];
+        if (!url) {
+            [lock lock]; if (pending > 0) pending--; [lock unlock];
+            finishIfDone();
+            continue;
+        }
+        NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
+        req.HTTPMethod = @"HEAD";
+        req.timeoutInterval = 8;
+        [[session dataTaskWithRequest:req
+                  completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
+            int64_t len = (error == nil) ? (int64_t)resp.expectedContentLength : 0;
+            [lock lock];
+            if (len > 0) sum += len;
+            if (pending > 0) pending--;
+            [lock unlock];
+            finishIfDone();
+        }] resume];
+    }
 }
 
 #pragma mark - 回调

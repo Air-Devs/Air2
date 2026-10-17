@@ -389,9 +389,11 @@ static void *a2_jit_brk69_bounded(NSTimeInterval deadlineSec, const char *why) {
     NSInteger a2jitMB = [NSUserDefaults.standardUserDefaults integerForKey:@"A2JITRegionMB"];
     size_t a2jitWantBytes = (a2jitMB > 0)
         ? (size_t)MIN(a2jitMB, (NSInteger)256) * 1024u * 1024u
-        : (size_t)getpagesize();
-    a2_jit_log("[A2JIT] 请求 JIT 区大小=%s（键 A2JITRegionMB 未设 ⇒ 一页 %d 字节，与原版一致）",
-               a2jitMB > 0 ? "自定义" : "默认", getpagesize());
+        : (size_t)64 * 1024u * 1024u;   // ★真机证据(lastlog-7)：只讨一页时交付区=16384，
+                                        // JVM 把 code cache 镜射进去后卡在 String.<clinit>；
+                                        // 改为默认讨 64MB（与 ReservedCodeCacheSize=16m 留足余量）
+    a2_jit_log("[A2JIT] 请求 JIT 区大小=%s：%zu 字节（键 A2JITRegionMB 未设 ⇒ 默认 64MB）",
+               a2jitMB > 0 ? "自定义" : "默认", a2jitWantBytes);
     NSThread *worker = [[NSThread alloc] initWithBlock:^{
         res = a2_jit_brk69_create_region_safe(a2jitWantBytes);
         os_unfair_lock_lock(&gA2JITBrkLock);
