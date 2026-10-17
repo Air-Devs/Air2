@@ -440,8 +440,11 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     //   code cache 映射进 16KB 区里,VM 在初始化期跑 JIT 代码时卡住。
     //   ⇒ 默认★不开镜像映射★(让 JVM 走自己的 code cache 分配),需要时置偏好键
     //     A2UseMirrorCodeCache=YES 开回。
+    // ★对齐原版★：Air 原版在 iOS26+ 上默认就带 -XX:+MirrorMappedCodeCache（老线
+    //   JavaLauncher.m:2377-2384）。之前我把它默认关了是为了排查，现在恢复默认开；
+    //   要关就显式把偏好键 A2UseMirrorCodeCache 置 NO。
     id a2mirrorVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2UseMirrorCodeCache"];
-    BOOL a2useMirror = (a2mirrorVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2UseMirrorCodeCache"];
+    BOOL a2useMirror = (a2mirrorVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2UseMirrorCodeCache"];
     if (javaMajorVersion >= 17 && a2useMirror) {
         [options addObject:@"-XX:+MirrorMappedCodeCache"];
     }
