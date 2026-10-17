@@ -217,6 +217,12 @@ static const CGFloat kA2OptionSheetOptionsMaxHeightRatio = 0.5;
     NSLayoutConstraint *optionsMaxHeight =
         [_optionsScroll.heightAnchor constraintLessThanOrEqualToAnchor:self.view.heightAnchor
                                                             multiplier:kA2OptionSheetOptionsMaxHeightRatio];
+    // ★[OPTIONSHEET-FIT] 让选项区高度跟着内容走(否则 UIScrollView 在竖直 stack 里高度解成 0 ⇒
+    //   选项全看不见,只看到标题与 message —— 真机反馈"点配对码来源只显示了一行配置状态"就是它)。
+    //   优先级低于 required 的 maxHeight ⇒ 内容短时贴合内容、内容长时被 maxHeight 截住并可滚动。
+    NSLayoutConstraint *optionsFitContent =
+        [_optionsScroll.heightAnchor constraintEqualToAnchor:_optionsScroll.contentLayoutGuide.heightAnchor];
+    optionsFitContent.priority = UILayoutPriorityRequired - 1;
 
     [NSLayoutConstraint activateConstraints:@[
         [_card.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
@@ -225,6 +231,7 @@ static const CGFloat kA2OptionSheetOptionsMaxHeightRatio = 0.5;
         [_card.widthAnchor constraintLessThanOrEqualToAnchor:self.view.widthAnchor multiplier:0.92],
         [_card.heightAnchor constraintLessThanOrEqualToAnchor:self.view.heightAnchor multiplier:0.92],
         optionsMaxHeight,
+        optionsFitContent,
 
         [stack.topAnchor constraintEqualToAnchor:_card.topAnchor constant:A2SpaceXL],
         [stack.leadingAnchor constraintEqualToAnchor:_card.leadingAnchor constant:A2SpaceXL],
