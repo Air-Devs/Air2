@@ -290,7 +290,7 @@ static void A2Main(dispatch_block_t block) {
     NSString *dest = [path versionJSONPath:self.baseVersionName];
 
     [self logStage:@"stage=version-json" sample:url];
-    [self download:[self candidatesForURL:url]
+    [self download:@[url]
                 to:dest
         stageLabel:A2InstallStageDownloadJSON
            message:@"正在下载版本信息"
@@ -324,7 +324,7 @@ static void A2Main(dispatch_block_t block) {
 
     [self report:A2InstallStageDownloadJar progress:0 message:@"正在下载客户端…"];
     [self logStage:@"stage=client-jar" sample:jarURL];
-    [self download:[self candidatesForURL:jarURL] to:jarDest stageLabel:A2InstallStageDownloadJar
+    [self download:@[jarURL] to:jarDest stageLabel:A2InstallStageDownloadJar
            message:@"正在下载客户端"
            thenRun:^(NSError *error) {
         if (error) { [self failWithError:error]; return; }
@@ -438,7 +438,7 @@ static void A2Main(dispatch_block_t block) {
 
     [self report:A2InstallStageDownloadAssets progress:0 message:@"正在下载资源索引…"];
     [self logStage:@"stage=assets-index" sample:indexURL];
-    [self download:[self candidatesForURL:indexURL] to:indexPath stageLabel:A2InstallStageDownloadAssets
+    [self download:@[indexURL] to:indexPath stageLabel:A2InstallStageDownloadAssets
            message:@"正在下载资源索引"
            thenRun:^(NSError *error) {
         if (error) { [self failWithError:error]; return; }
@@ -642,7 +642,10 @@ static void A2Main(dispatch_block_t block) {
 #pragma mark 镜像链
 
 /// 单个地址 → 候选链（镜像优先 → 官方兜底；关掉镜像时只有官方一条）。
-/// 展开规则集中在 A2MirrorResolver，本类不重复实现任何域名判断。
+///
+/// ★只给判据行用★：真正的候选展开发生在 `download:…` 里（唯一入口）。
+/// 调用方一律把 manifest 里的**原始官方地址**交给 `download:`，
+/// 若这里再展开一次，下载请求的候选链就会变成 [镜像, 官方, 镜像, 官方]。
 - (NSArray<NSString *> *)candidatesForURL:(NSString *)url {
     NSArray<NSString *> *cands = [[A2MirrorResolver shared] candidateURLsForURL:url];
     return cands.count > 0 ? cands : @[url];

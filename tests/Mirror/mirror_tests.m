@@ -321,10 +321,12 @@ static void testWiring(void) {
     // ★候选展开的唯一入口★
     ok([installer containsString:@"for (NSString *c in [self candidatesForURL:u])"],
        @"★download: 里把传入地址统一展开成候选链（唯一入口）★");
-    ok([installer containsString:@"[self candidatesForURL:url]"] &&
-       [installer containsString:@"[self candidatesForURL:jarURL]"] &&
-       [installer containsString:@"[self candidatesForURL:indexURL]"],
-       @"★版本 json / 客户端 jar / 资源索引都走候选链（不再只吃 manifest 原始 URL）★");
+    ok([installer containsString:@"[self download:@[url]"] &&
+       [installer containsString:@"[self download:@[jarURL]"] &&
+       [installer containsString:@"[self download:@[indexURL]"],
+       @"★版本 json / 客户端 jar / 资源索引把 manifest 原始 URL 交给 download:★");
+    ok(![installer containsString:@"[self download:[self candidatesForURL:"],
+       @"★展开只有一处（否则候选链会重复成 [镜像,官方,镜像,官方]）★");
     ok([installer containsString:@"[[A2MirrorResolver shared] candidateURLsForURL:kVersionManifestURL]"],
        @"★版本清单候选源 = 镜像优先 → 官方兜底★");
 
