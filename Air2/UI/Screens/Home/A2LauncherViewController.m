@@ -42,6 +42,7 @@
 #import "A2Account.h"
 #import "A2VersionSettingsViewController.h"
 #import "A2PrimaryButton.h"
+#import "A2Log.h"                 // [A2-LAUNCH] tap / 看门狗 判据行（与 [A2-CHAIN] 同一出口）
 #import "A2SkinHeadView.h"
 
 #import "A2AccountViewController.h"
@@ -703,9 +704,28 @@
 #pragma mark - 动作与导航
 
 - (void)launchGame {
+    BOOL chainOn = [A2LaunchSession runtimeChainEnabled];
+    A2Version *cur = A2VersionManager.shared.currentVersion;
+    // ★点下去第一行就要有★：开关状态 + 当前版本，免得“点了没反应、日志也没有”。
+    [A2Log log:@"[A2-LAUNCH] tap：启动链开关=%@ 版本=%@",
+                 chainOn ? @"开" : @"关", cur.name ?: @"(未选版本)"];
     _launchButton.loading = YES;
+
+    __block BOOL finished = NO;
+    __weak typeof(self) weakSelf = self;
+    // ★看门狗★：链在后台队列里跑（建 VM 可能卡住），不能无限转圈 ——
+    //   90 秒还没回来就如实收尾并提示；最后一步看上面那条 [A2-CHAIN]/[A2-LAUNCH] 行。
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(90 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        if (finished) return;
+        [A2Log log:@"[A2-LAUNCH] ★看门狗：90 秒未返回★（最后一步见上一条 [A2-CHAIN]/[A2-LAUNCH] 判据行）"];
+        weakSelf.launchButton.loading = NO;
+        [A2Toast show:@"启动链 90 秒没有返回，已停止等待（详情见日志）" inView:weakSelf.view];
+    });
+
     // 自研启动链默认关 ⇒ 结果恒为「未启用」，下面仍弹原来那句提示，**开箱行为不变**。
     [A2LaunchSession startCurrentVersionWithCompletion:^(A2LaunchSessionResult *result) {
+        finished = YES;
         self.launchButton.loading = NO;
         if (result.started) {
             [A2Toast show:@"启动链已返回（见日志 [A2-LAUNCH]）" inView:self.view];

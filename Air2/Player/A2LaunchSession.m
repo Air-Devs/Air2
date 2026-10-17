@@ -334,6 +334,8 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
                                                   javaMajorVersion:jreMajor];
 
     // 建 VM 会阻塞 ⇒ 放后台队列；结果回主线程。
+    [A2Log log:@"[A2-LAUNCH] 进入后台链：plan=%@ renderer=%@ jre=%@",
+                 planPath.lastPathComponent ?: @"(nil)", renderer.identifier, jreDir];
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         // ★[JIT↔VM] 启动链：① 下发脚本 → ② 探测 JIT → ③ 建 VM★
         //   ★「走到哪一步 / 为什么停」只由 chain.stage + chain.failureReason 一处持有★；
@@ -374,6 +376,7 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
                                                            enableJIT:YES
                                                           reasonText:@"JIT 已就绪 ⇒ 走带 JIT 的启动参数路径"
                                                             evidence:probe.lastEvidence]];
+                [A2Log log:@"[A2-LAUNCH] ③ 建 VM 开始（可能要 10~60 秒；若之后没有“建 VM 返回”行 ⇒ 卡在建 VM）"];
                 vmRC = [A2LaunchRunner launchWithPlanPath:planPath
                                              entryJarPath:entryJar
                                            patchJarPath:patchJar
@@ -387,6 +390,7 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
                                            frameworksPath:frameworks
                                             rendererDylib:renderer.identifier
                                               renderScale:renderScale];
+                [A2Log log:@"[A2-LAUNCH] ③ 建 VM 返回 rc=%d", vmRC];
                 if (vmRC == 0) {
                     return YES;
                 }
