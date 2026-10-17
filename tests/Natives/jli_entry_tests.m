@@ -164,8 +164,18 @@ static void testArgvSingleClasspathSource(void) {
     NSArray<NSString *> *opts = @[ @"-cp", @"WRONG-CP", @"-classpath", @"ALSO-WRONG",
                                    @"-Djava.class.path=THIRD-WRONG", @"-jar", @"x.jar" ];
     eqArgv(a2_jli_build_argv(@"/j", opts, @"/RIGHT", @"M", nil),
-           (@[ @"/j/bin/java", @"x.jar", @"-cp", @"/RIGHT", @"M" ]),
-           @"-cp/-classpath/-Djava.class.path=/-jar 全丢（classpath 只认参数那一份）；x.jar 保留");
+           (@[ @"/j/bin/java", @"-cp", @"/RIGHT", @"M" ]),
+           @"-cp/-classpath/-jar ★连值★与 -Djava.class.path= 全丢（classpath 只认参数那一份）");
+
+    // 只丢旗标不丢值 = 那个值会顶上主类位置 ⇒ 必须成对丢（本套单测最易回归的一条）
+    eqArgv(a2_jli_build_argv(@"/j", @[ @"-cp", @"WRONG-CP" ], @"/RIGHT", @"M", nil),
+           (@[ @"/j/bin/java", @"-cp", @"/RIGHT", @"M" ]),
+           @"-cp 的值被一起丢掉（不会残留成第二个主类）");
+
+    // 末尾孤立旗标（无值）不得越界读
+    eqArgv(a2_jli_build_argv(@"/j", @[ @"-Xmx1G", @"-cp" ], @"", @"M", nil),
+           (@[ @"/j/bin/java", @"-Xmx1G", @"M" ]),
+           @"末尾孤立 -cp（无值）⇒ 只丢旗标、不越界、不崩");
 
     eqArgv(a2_jli_build_argv(@"/j", @[ @"-Djava.class.path" ], @"", @"M", nil),
            (@[ @"/j/bin/java", @"-Djava.class.path", @"M" ]),

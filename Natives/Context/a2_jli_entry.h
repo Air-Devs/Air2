@@ -50,9 +50,9 @@ NSString *a2_jli_resolve_libjli(NSString *javaHome);
 ///
 /// 规则（逐条都有单测）：
 ///   · argv[0]：javaHome 非空 ⇒ `<javaHome>/bin/java`（多余尾斜杠先归并）；为空 ⇒ `"java"`；
-///   · options：**原序保留**；空串跳过；★`-cp` / `-classpath` / `-Djava.class.path=*` / `-jar`
-///     一律丢弃★ —— JLI 的 classpath 只认本函数的 `-cp <classpath>` 一处（单一来源），
-///     重复注入会让「哪份 classpath 生效」变得不可判；
+///   · options：**原序保留**；空串跳过；★`-cp` / `-classpath` / `-jar` 连其**值**一起丢弃、
+///     `-Djava.class.path=*` 丢自身★ —— JLI 的 classpath 只认本函数的 `-cp <classpath>` 一处
+///     （单一来源）；只丢旗标不丢值，那个值会顶上主类位置（最难看出的错法）；
 ///   · classpath 为空 ⇒ ★不产生 `-cp` 条目★（JLI 按 java 语义用默认 classpath，而非空的 -cp）；
 ///   · 主类为空 ⇒ 返回 nil（拒绝组 argv：没有主类的 JLI 命令行无意义）；
 ///   · programArgs 按原序追加在主类之后（`-jar` / `--plan` 这类在【主类之后】的 token 属程序参数，

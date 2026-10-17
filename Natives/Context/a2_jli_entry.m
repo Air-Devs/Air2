@@ -12,15 +12,20 @@ static NSString *a2_jli_trim_trailing_slashes(NSString *path) {
     return (n == path.length) ? path : [path substringToIndex:n];
 }
 
-// 这些 token 不进 JLI 选项区：
-//   -cp / -classpath         —— classpath 由 a2_jli_build_argv 单独注入（单一来源）
-//   -Djava.class.path=…      —— 同上（形态 A 的等价写法）
-//   -jar                     —— jar 模式在 facade 已判 jarMode 并处理；留在选项区会让 JLI 找 jar 而不是主类
+// 这些 token 不进 JLI 选项区（★带值的旗标要连值一起丢★）：
+//   -cp <值> / -classpath <值>  —— classpath 由 a2_jli_build_argv 单独注入（单一来源）；
+//                                 ★只丢 -cp 不动它的值，那个值会变成 JLI 眼里的主类★，
+//                                 真主类反而沦为程序参数 —— 这正是最难从日志看出的错法。
+//   -jar <值>                   —— jar 模式在 facade 已判 jarMode；残留会抢走主类位置，同样连值丢。
+//   -Djava.class.path=<值>      —— 形态 A 的等价写法，只丢自身（单 token）。
+static BOOL a2_jli_is_paired_flag(NSString *token) {
+    return ([token isEqualToString:@"-cp"] ||
+            [token isEqualToString:@"-classpath"] ||
+            [token isEqualToString:@"-jar"]);
+}
+
 static BOOL a2_jli_is_reserved_token(NSString *token) {
-    if ([token isEqualToString:@"-cp"] || [token isEqualToString:@"-classpath"]) return YES;
-    if ([token isEqualToString:@"-jar"]) return YES;
-    if ([token hasPrefix:@"-Djava.class.path="]) return YES;
-    return NO;
+    return [token hasPrefix:@"-Djava.class.path="];
 }
 
 NSArray<NSString *> *a2_jli_candidate_paths(NSString *javaHome) {
@@ -51,9 +56,14 @@ NSArray<NSString *> *a2_jli_build_argv(NSString *javaHome,
     // argv[0]：老线同款 `<javaHome>/bin/java`（JLI 用它作进程名/启动器身份）
     [argv addObject:(home.length > 0 ? [home stringByAppendingPathComponent:@"bin/java"] : @"java")];
 
-    // VM 选项：原序保留，丢掉空串与 classpath/jar 保留字
-    for (NSString *opt in options) {
+    // VM 选项：原序保留，丢掉空串与 classpath/jar 残留（带值的连值一起丢）
+    for (NSUInteger i = 0; i < options.count; i++) {
+        NSString *opt = options[i];
         if (opt.length == 0) continue;
+        if (a2_jli_is_paired_flag(opt)) {
+            if (i + 1 < options.count) i += 1;     // 吞掉它的值（末尾无值则只丢旗标）
+            continue;
+        }
         if (a2_jli_is_reserved_token(opt)) continue;
         [argv addObject:opt];
     }
