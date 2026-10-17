@@ -466,8 +466,8 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     //   要恢复镜射：偏好键 A2UseMirrorCodeCache = YES。
     id a2mirrorVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2UseMirrorCodeCache"];
     BOOL a2useMirror = (a2mirrorVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2UseMirrorCodeCache"];
-    A2Log(@"[A2JIT] MirrorMappedCodeCache=%d（键 A2UseMirrorCodeCache 未设 ⇒ 默认关：真机证据是镜射进 16KB 区导致卡死）",
-          (int)a2useMirror);
+    [A2Log criterion:@"[A2JIT] MirrorMappedCodeCache=%d（键 A2UseMirrorCodeCache 未设 ⇒ 默认关：真机证据是镜射进 16KB 区导致卡死）",
+          (int)a2useMirror];
     if (javaMajorVersion >= 17 && a2useMirror) {
         [options addObject:@"-XX:+MirrorMappedCodeCache"];
     }
