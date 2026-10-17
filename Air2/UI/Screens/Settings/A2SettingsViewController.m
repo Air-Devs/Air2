@@ -33,6 +33,7 @@
 #import "A2Metrics.h"
 
 #import "A2SettingsSections.h"
+#import "A2RendererSettingsViewController.h"
 #import "A2DiagnosticsSettings.h"
 
 @interface A2SettingsViewController ()
