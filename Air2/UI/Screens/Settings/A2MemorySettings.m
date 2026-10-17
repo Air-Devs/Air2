@@ -25,6 +25,7 @@
 #import "A2LaunchMemory.h"   // 内存档位枚举（A2LaunchMemoryMode）—— 本文件直接用它的取值
 #import "A2Toast.h"
 #import "A2Log.h"
+#import "A2OptionSheet.h"   // [MD3-SECONDARY] 二级选择器统一用 MD3 面板
 
 /// 手动档的堆上限预设（MB）。★边界与启动侧同源★：下限 = A2LaunchMemoryMinXmxMB、
 /// 上限 = A2LaunchMemoryMaxXmxMB（本组预设都落在 [256, 4096] 内）—— 不在这里另定一套边界。
@@ -71,66 +72,53 @@ static NSArray<NSNumber *> *A2MemoryPresetMB(void) {
         UIViewController *hostVC = weakHost;
         if (hostVC == nil) return;
 
-        UIAlertController *sheet =
-            [UIAlertController alertControllerWithTitle:@"内存档位"
-                                                message:@"自动按设备可用内存动态定 -Xmx；手动固定堆上限（仍受安全顶钳制）"
-                                         preferredStyle:UIAlertControllerStyleActionSheet];
+        A2OptionSheet *sheet =
+            [A2OptionSheet sheetWithTitle:@"堆上限"
+                                  message:@"手动档的 -Xmx（MB）；下发前仍会压回设备安全顶"];
 
-        NSArray<NSString *> *titles = @[ @"自动（推荐）", @"手动" ];
-        NSArray<NSNumber *> *modes = @[ @(A2LaunchMemoryModeAuto), @(A2LaunchMemoryModeManual) ];
-        A2LaunchMemoryMode cur = A2Settings.shared.memoryMode;
-        for (NSUInteger i = 0; i < titles.count; i++) {
-            A2LaunchMemoryMode mode = (A2LaunchMemoryMode)modes[i].integerValue;
-            NSString *title = (mode == cur) ? [@"✓ " stringByAppendingString:titles[i]] : titles[i];
-            [sheet addAction:[UIAlertAction actionWithTitle:title
-                                                     style:UIAlertActionStyleDefault
-                                                   handler:^(UIAlertAction *a) {
-                A2Settings.shared.memoryMode = mode;
-                [A2Log log:@"settings: 内存档位 → %@",
-                 (mode == A2LaunchMemoryModeManual ? @"manual" : @"auto")];
+        NSInteger cur = A2Settings.shared.ramAllocationMB;
+        for (NSNumber *value in A2MemoryPresetMB()) {
+            NSInteger mb = value.integerValue;
+            [sheet addOptionWithTitle:[NSString stringWithFormat:@"%ld MB", (long)mb]
+                             selected:(mb == cur)
+                          destructive:NO
+                              handler:^{
+                A2Settings.shared.ramAllocationMB = mb;
+                [A2Log log:@"settings: 堆上限 → %ld MB", (long)mb];
                 refresh();
-                [A2Toast show:[NSString stringWithFormat:@"已切换到「%@」", titles[i]]
+                [A2Toast show:[NSString stringWithFormat:@"堆上限 %ld MB", (long)mb]
                        inView:hostVC.view];
-            }]];
+            }];
         }
-        [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
-                                                 style:UIAlertActionStyleCancel handler:nil]];
-        A2SettingsRow *r = weakMode;
-        sheet.popoverPresentationController.sourceView = r ?: hostVC.view;
-        sheet.popoverPresentationController.sourceRect = r ? r.bounds : hostVC.view.bounds;
-        [hostVC presentViewController:sheet animated:YES completion:nil];
+        [sheet presentFrom:hostVC];
     };
 
     amountRow.onTap = ^{
         UIViewController *hostVC = weakHost;
         if (hostVC == nil) return;
 
-        UIAlertController *sheet =
-            [UIAlertController alertControllerWithTitle:@"堆上限"
-                                                message:@"手动档的 -Xmx（MB）；下发前仍会压回设备安全顶"
-                                         preferredStyle:UIAlertControllerStyleActionSheet];
+        A2OptionSheet *sheet =
+            [A2OptionSheet sheetWithTitle:@"内存档位"
+                                  message:@"自动按设备可用内存动态定 -Xmx；手动固定堆上限（仍受安全顶钳制）"];
 
-        NSInteger cur = A2Settings.shared.ramAllocationMB;
-        for (NSNumber *value in A2MemoryPresetMB()) {
-            NSInteger mb = value.integerValue;
-            NSString *title = [NSString stringWithFormat:@"%ld MB", (long)mb];
-            if (mb == cur) title = [@"✓ " stringByAppendingString:title];
-            [sheet addAction:[UIAlertAction actionWithTitle:title
-                                                     style:UIAlertActionStyleDefault
-                                                   handler:^(UIAlertAction *a) {
-                A2Settings.shared.ramAllocationMB = mb;
-                [A2Log log:@"settings: 堆上限 → %ld MB", (long)mb];
+        NSArray<NSString *> *titles = @[ @"自动（推荐）", @"手动" ];
+        NSArray<NSNumber *> *modes = @[ @(A2LaunchMemoryModeAuto), @(A2LaunchMemoryModeManual) ];
+        A2LaunchMemoryMode cur = A2Settings.shared.memoryMode;
+        for (NSUInteger i = 0; i < titles.count; i++) {
+            A2LaunchMemoryMode mode = (A2LaunchMemoryMode)modes[i].integerValue;
+            [sheet addOptionWithTitle:titles[i]
+                             selected:(mode == cur)
+                          destructive:NO
+                              handler:^{
+                A2Settings.shared.memoryMode = mode;
+                [A2Log log:@"settings: 内存档位 → %@",
+                      (mode == A2LaunchMemoryModeManual ? @"manual" : @"auto")];
                 refresh();
-                [A2Toast show:[NSString stringWithFormat:@"堆上限 %ld MB", (long)mb]
+                [A2Toast show:[NSString stringWithFormat:@"已切换到「%@」", titles[i]]
                        inView:hostVC.view];
-            }]];
+            }];
         }
-        [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
-                                                 style:UIAlertActionStyleCancel handler:nil]];
-        A2SettingsRow *r = weakAmount;
-        sheet.popoverPresentationController.sourceView = r ?: hostVC.view;
-        sheet.popoverPresentationController.sourceRect = r ? r.bounds : hostVC.view.bounds;
-        [hostVC presentViewController:sheet animated:YES completion:nil];
+        [sheet presentFrom:hostVC];
     };
 
     [section addRow:modeRow];
