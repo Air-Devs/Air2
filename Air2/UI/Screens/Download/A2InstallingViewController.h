@@ -41,7 +41,17 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithMCVersion:(NSString *)mcVersion
                       versionName:(NSString *)versionName
                        loaderType:(nullable NSNumber *)loaderType
-                    loaderVersion:(nullable NSString *)loaderVersion;
+                    loaderVersion:(nullable NSString *)loaderVersion
+                          apiType:(nullable NSNumber *)apiType
+                       apiVersion:(nullable NSString *)apiVersion;
+
+/// 整合包安装模式。
+///
+/// 与「装原版 + 加载器」的区别：整合包是一整个游戏实例 ——
+/// 要解析清单、装对应加载器、下载清单里的所有文件、解压 overrides。
+/// 步骤清单在整合包模式下会换成整合包专属的阶段名。
+- (instancetype)initWithModPackPath:(NSString *)zipPath
+                        versionName:(NSString *)versionName;
 
 @end
 

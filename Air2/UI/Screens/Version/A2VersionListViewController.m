@@ -35,6 +35,7 @@
 
 #import "A2VersionListViewController.h"
 #import "A2VersionSettingsViewController.h"
+#import "A2VersionExportViewController.h"
 #import "A2GameVersionListViewController.h"
 #import "A2InputDialog.h"
 #import "A2TextField.h"
@@ -496,6 +497,17 @@
     [sheet addOptionWithTitle:@"复制" selected:NO destructive:NO handler:^{
         __strong typeof(weakSelf) self = weakSelf;
         [self showCopyDialogForVersion:version fromView:nil];
+    }];
+    // 导出整合包 —— 把整个版本打包分享给别人（对齐上游新增功能；
+    // 弹窗仍走 A2OptionSheet，二级界面不使用系统 UIAlertController）
+    [sheet addOptionWithTitle:@"导出为整合包" selected:NO destructive:NO handler:^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+
+        A2VersionExportViewController *vc =
+            [[A2VersionExportViewController alloc] initWithVersionName:version.name
+                                                            versionPath:version.versionPath];
+        [self.navigationController pushViewController:vc animated:YES];
     }];
     [sheet addOptionWithTitle:@"删除" selected:NO destructive:YES handler:^{
         __strong typeof(weakSelf) self = weakSelf;

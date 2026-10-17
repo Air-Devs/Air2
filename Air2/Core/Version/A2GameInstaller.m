@@ -21,9 +21,11 @@
 //
 
 #import "A2GameInstaller.h"
+#import "A2Logger.h"
 #import "A2VersionIsolation.h"
 #import "A2ModLoaderInstaller.h"
 #import "A2MirrorResolver.h"
+#import "A2APIModDownloader.h"
 #import "A2Log.h"
 
 /// 官方版本清单地址（Mojang piston-meta）—— 镜像链的「原始地址」，
@@ -501,6 +503,7 @@ static void A2Main(dispatch_block_t block) {
 
 - (void)installLoaderIfNeeded {
     if (!self.request.loaderType) {
+        // 没有加载器时 API 模组无法工作 —— 直接跳过并收尾
         [self endInstallation];
         return;
     }
@@ -566,9 +569,95 @@ static void A2Main(dispatch_block_t block) {
             __strong typeof(weakSelf) self = weakSelf;
             if (self.cancelled) return;
             if (!success) { [self failWithError:error]; return; }
+            [self installAPIModIfNeeded];
+        }];
+    }];
+}
+
+/// 安装前置模组（Fabric API 等）。
+///
+/// 对照 ZL2：API 模组是独立的下载项 —— 它本质上是个普通模组，
+/// 只是几乎所有模组都依赖它，所以值得在界面上单列、在流程里必装。
+/// 它落在版本的 mods 目录下，不走加载器那套版本 json 合并。
+- (void)installAPIModIfNeeded {
+    if (!self.request.apiModType) {
+        [self endInstallation];
+        return;
+    }
+
+    A2ModLoaderType apiType = (A2ModLoaderType)self.request.apiModType.integerValue;
+    NSString *apiName = [A2ModLoaderAPI displayNameForType:apiType];
+
+    [self report:A2InstallStageInstallLoader progress:0
+         message:[NSString stringWithFormat:@"正在获取 %@…", apiName]];
+
+    __weak typeof(self) weakSelf = self;
+    [[A2ModLoaderAPI shared] versionsForLoader:apiType
+                                     mcVersion:self.request.mcVersion
+                                    completion:^(NSArray<A2ModLoaderVersion *> *versions,
+                                                 NSError *error) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self || self.cancelled) return;
+        if (error || versions.count == 0) {
+            // API 模组失败不阻断整个安装 —— 用户仍可手动补装
+            [A2Logger warning:@"GameInstaller"
+                   message:[NSString stringWithFormat:
+                            @"%@ 获取失败，跳过（不影响游戏本体）", apiName]];
+            [self report:A2InstallStageInstallLoader progress:1
+                 message:[NSString stringWithFormat:@"%@ 获取失败，已跳过", apiName]];
+            [self endInstallation];
+            return;
+        }
+
+        // 选定版本
+        A2ModLoaderVersion *chosen = versions.firstObject;
+        if (self.request.apiModVersion.length) {
+            for (A2ModLoaderVersion *v in versions) {
+                if ([v.version isEqualToString:self.request.apiModVersion]) { chosen = v; break; }
+            }
+        }
+
+        [A2Logger info:@"GameInstaller"
+               message:[NSString stringWithFormat:@"%@ 选定版本 %@", apiName, chosen.version]];
+
+        // 真的下载并装到版本的 mods 目录
+        [[A2APIModDownloader shared]
+            installAPIType:apiType
+                 mcVersion:self.request.mcVersion
+               versionName:self.request.versionName
+                  gameHome:self.request.gameHome
+          preferredVersion:chosen.version
+                  progress:^(double p, NSString *msg) {
+            [self report:A2InstallStageInstallLoader progress:p message:msg];
+        }
+                completion:^(BOOL success, NSError *apiError) {
+            // 失败不阻断 —— 用户仍可手动补装，游戏本体已经装好了
+            if (!success) {
+                [A2Logger warning:@"GameInstaller"
+                       message:[NSString stringWithFormat:@"%@ 安装失败：%@（不影响游戏本体）",
+                                apiName, apiError.localizedDescription ?: @""]];
+            }
             [self endInstallation];
         }];
     }];
+}
+
+/// 把 API 模组的选择写进版本配置，供后续补装
+- (void)recordAPIModSelection:(A2ModLoaderType)type version:(NSString *)version {
+    A2GamePath *path = [A2GamePath pathWithGameHome:self.request.gameHome];
+    NSString *dir = [path launcherDataPath:self.request.versionName];
+    [NSFileManager.defaultManager createDirectoryAtPath:dir
+                            withIntermediateDirectories:YES attributes:nil error:nil];
+
+    NSDictionary *info = @{
+        @"apiModType": [A2ModLoaderAPI identifierForType:type],
+        @"apiModVersion": version,
+    };
+    NSData *data = [NSJSONSerialization dataWithJSONObject:info
+                                                   options:NSJSONWritingPrettyPrinted
+                                                     error:nil];
+    NSString *dest = [dir stringByAppendingPathComponent:@"api_mod.json"];
+    [data writeToFile:dest atomically:YES];
 }
 
 #pragma mark - 收尾

@@ -74,6 +74,13 @@ NS_ASSUME_NONNULL_BEGIN
 /// 已选中的加载器版本；原版卡与未选中时为 nil。
 @property (nonatomic, strong, readonly, nullable) A2ModLoaderVersion *selectedVersion;
 
+/// 与当前已选项冲突（灰显但仍可点，点了会提示冲突）。
+///
+/// 与 unavailableReason 的区别：
+///   unavailableReason 是「这个加载器本身用不了」（如 OptiFine 无自动安装接口）
+///   conflicting 是「它本身可用，但与已选的加载器互斥」（如已选 Forge 时的 Fabric）
+@property (nonatomic, assign, getter=isConflicting) BOOL conflicting;
+
 /// 非空表示该卡不可用（灰显、不可展开，副标题显示该原因）。
 /// 典型的两种：OptiFine 官方无自动安装接口；或拉取后发现该 MC 版本不被支持。
 @property (nonatomic, copy, nullable) NSString *unavailableReason;

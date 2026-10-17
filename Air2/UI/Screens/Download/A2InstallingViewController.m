@@ -33,6 +33,9 @@
 #import "A2Typography.h"
 #import "A2Metrics.h"
 #import "A2GameInstaller.h"
+#import "A2ModPackInstaller.h"
+#import "A2TaskLogOutput.h"
+#import "A2TaskLogCard.h"
 #import "A2VersionManager.h"
 #import "A2ModLoaderAPI.h"
 #import "A2Log.h"
@@ -158,6 +161,11 @@ typedef NS_ENUM(NSInteger, A2InstallStepState) {
 @property (nonatomic, copy, nullable) NSString *loaderVersion;
 
 @property (nonatomic, strong) A2GameInstaller *installer;
+/// 整合包模式：zip 路径（nil 表示普通安装）
+@property (nonatomic, strong, nullable) NSNumber *apiType;
+@property (nonatomic, copy, nullable) NSString *apiVersion;
+@property (nonatomic, copy, nullable) NSString *modPackPath;
+@property (nonatomic, strong, nullable) A2ModPackInstaller *packInstaller;
 @property (nonatomic, assign) BOOL finished;
 
 @property (nonatomic, strong) A2RingProgress *ring;
@@ -173,6 +181,11 @@ typedef NS_ENUM(NSInteger, A2InstallStepState) {
 @property (nonatomic, strong) A2GlassCard *successCard;
 
 @property (nonatomic, assign) A2InstallStage currentStage;
+
+// 安装日志卡片（A2InstallingViewController.m:250/335 使用 _logOutput/_logCard）
+// —— 此前只写了使用点、漏了属性声明，导致 CI 报 “use of undeclared identifier”。
+@property (nonatomic, strong) A2TaskLogOutput *logOutput;
+@property (nonatomic, strong) A2TaskLogCard *logCard;
 
 @end
 
@@ -194,22 +207,39 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
 - (instancetype)initWithMCVersion:(NSString *)mcVersion
                       versionName:(NSString *)versionName
                        loaderType:(NSNumber *)loaderType
-                    loaderVersion:(NSString *)loaderVersion {
+                    loaderVersion:(NSString *)loaderVersion
+                          apiType:(NSNumber *)apiType
+                       apiVersion:(NSString *)apiVersion {
     self = [super init];
     if (!self) return nil;
     _mcVersion = [mcVersion copy];
     _versionName = [versionName copy];
     _loaderType = loaderType;
     _loaderVersion = [loaderVersion copy];
+    _apiType = apiType;
+    _apiVersion = [apiVersion copy];
     _stepRows = [NSMutableArray array];
     _installer = [[A2GameInstaller alloc] init];
     _currentStage = A2InstallStageFetchManifest;
     return self;
 }
 
+- (instancetype)initWithModPackPath:(NSString *)zipPath
+                        versionName:(NSString *)versionName {
+    self = [super initWithNibName:nil bundle:nil];
+    if (!self) return nil;
+    _mcVersion = @"";        // 整合包的 MC 版本从清单里解析
+    _versionName = [versionName copy];
+    _modPackPath = [zipPath copy];
+    _stepRows = [NSMutableArray array];
+    _packInstaller = [[A2ModPackInstaller alloc] init];
+    _currentStage = A2InstallStageFetchManifest;
+    return self;
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.pageTitle = @"安装中";
+    self.pageTitle = _modPackPath.length ? @"安装整合包" : @"安装中";
 
     __weak typeof(self) weakSelf = self;
     self.onBack = ^{
@@ -222,8 +252,11 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
         }
     };
 
+    _logOutput = [[A2TaskLogOutput alloc] initWithTitle:[NSString stringWithFormat:@"安装 %@", _versionName]];
+
     [self setupProgressCard];
     [self setupStepList];
+    [self setupLogCard];
     [self setupCancelButton];
     [self setupFailureCard];
     [self setupSuccessCard];
@@ -301,6 +334,17 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     ]];
 
     [self addSection:card];
+}
+
+- (void)setupLogCard {
+    _logCard = [[A2TaskLogCard alloc] initWithFrame:CGRectZero];
+    _logCard.logOutput = _logOutput;
+    [self addSection:_logCard];
+
+    // 日志区要占满剩余空间 —— 它是这个页面信息量最大的部分
+    [NSLayoutConstraint activateConstraints:@[
+        [_logCard.heightAnchor constraintGreaterThanOrEqualToConstant:140],
+    ]];
 }
 
 - (void)setupStepList {
@@ -430,11 +474,19 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
 #pragma mark - 安装
 
 - (void)startInstall {
+    // 整合包模式走另一条流程 —— 它的阶段划分与「装原版+加载器」不同。
+    if (_modPackPath.length) {
+        [self startModPackInstall];
+        return;
+    }
+
     A2InstallRequest *req = [A2InstallRequest new];
     req.mcVersion = _mcVersion;
     req.versionName = _versionName;
     req.loaderType = _loaderType;
     req.loaderVersion = _loaderVersion;
+    req.apiModType = _apiType;
+    req.apiModVersion = _apiVersion;
     req.gameHome = A2VersionManager.shared.gameHome;
 
     __weak typeof(self) weakSelf = self;
@@ -444,6 +496,28 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     }
         completion:^(BOOL success, NSError *error) {
         [weakSelf applyCompletion:success error:error];
+    }];
+}
+
+/// 整合包安装。
+///
+/// 阶段与普通安装不同（解析清单 / 装加载器 / 下载文件 / 解压覆盖），
+/// 但复用同一套进度 UI —— 把安装器的回调映射到 A2InstallStage 的语义位置。
+- (void)startModPackInstall {
+    __weak typeof(self) weakSelf = self;
+    [_packInstaller installPackAtPath:_modPackPath
+                          versionName:_versionName
+                             gameHome:A2VersionManager.shared.gameHome
+                             progress:^(double progress, NSString *message) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        // 整合包进度总体映射到「下载资源」阶段 —— 它是耗时最长的一段
+        [self applyStage:A2InstallStageDownloadAssets progress:progress message:message];
+    }
+                           completion:^(BOOL success, NSError *error) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        [self applyCompletion:success error:error];
     }];
 }
 
@@ -470,11 +544,31 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     [self handleCompletion:success error:error];
 }
 
+/// 阶段的中文名（日志里用）
+- (NSString *)stageDisplayName:(A2InstallStage)stage {
+    switch (stage) {
+        case A2InstallStageFetchManifest:     return @"[清单]";
+        case A2InstallStageDownloadJSON:      return @"[版本信息]";
+        case A2InstallStageDownloadJar:       return @"[客户端]";
+        case A2InstallStageDownloadLibraries: return @"[依赖库]";
+        case A2InstallStageDownloadAssets:    return @"[资源]";
+        case A2InstallStageInstallLoader:     return @"[加载器]";
+        case A2InstallStageFinalize:          return @"[收尾]";
+        default:                              return @"[安装]";
+    }
+}
+
 - (void)updateForStage:(A2InstallStage)stage progress:(double)progress message:(NSString *)message {
     _currentStage = stage;
     _stageLabel.text = message.length ? message : @"安装中…";
     [A2Log log:@"download: 安装阶段 %ld 进度 %.0f%% %@",
         (long)stage, progress * 100, message ?: @""];
+
+    // 阶段切换时写一行明确的日志；阶段内的高频进度用覆盖式
+    NSString *stageName = [self stageDisplayName:stage];
+    if (message.length > 0) {
+        [_logOutput appendProgress:[NSString stringWithFormat:@"%@ %@", stageName, message]];
+    }
 
     double total = ((double)stage + progress) / (double)A2InstallStageCount;
     [_ring setProgress:total animated:YES];

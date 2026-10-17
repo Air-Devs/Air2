@@ -64,6 +64,30 @@ FOUNDATION_EXPORT NSString *const A2SkinModelSlim;    // slim
 - (void)refreshWardrobeForAccount:(A2Account *)account
                        completion:(void (^)(BOOL success, NSError * _Nullable error))completion;
 
+#pragma mark - 本地皮肤（离线账号用）
+
+/// 给账号设置本地皮肤。
+///
+/// 为什么需要：离线账号的 UUID 是本地算的，Mojang 那边不存在，
+/// 所以拉不到远端材质 —— 界面只能显示首字母占位。
+/// 但用户可以自己选一张皮肤图（游戏内同样可以这样用本地皮肤）。
+///
+/// ⚠️ 参数是 NSData 而不是 UIImage —— Core 层不引 UIKit
+///（这是分层硬约束，CI 会检查）。UI 层负责把图片转成 PNG 数据。
+/// 数据会被规整到标准皮肤尺寸后落盘，并回填 account.skinPath。
+- (void)setLocalSkinData:(NSData *)pngData
+              forAccount:(A2Account *)account
+              completion:(void (^)(BOOL success))completion;
+
+/// 从文件路径设置皮肤。命名用 apply 而非 set —— 返回 BOOL 的方法不能用 setter 形式。
+- (BOOL)applyLocalSkinFromPath:(NSString *)path forAccount:(A2Account *)account;
+
+/// 该账号是否有可用皮肤（本地或远端缓存）
+- (BOOL)hasSkinForAccount:(A2Account *)account;
+
+/// 清除本地皮肤
+- (void)clearLocalSkinForAccount:(A2Account *)account;
+
 @end
 
 NS_ASSUME_NONNULL_END

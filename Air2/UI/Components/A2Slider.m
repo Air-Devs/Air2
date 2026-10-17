@@ -9,7 +9,6 @@
 
 static const CGFloat kTrackHeight = 6;
 static const CGFloat kThumbWidth = 3;
-static const CGFloat kThumbHeight = 18;
 static const CGFloat kPillHeight = 36;
 
 @interface A2Slider () {

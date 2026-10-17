@@ -147,9 +147,9 @@
 
 + (A2SettingsSection *)buildSourceSectionWithHost:(UIViewController *)host {
     A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"资源下载"];
-    section.footerText = @"Modrinth 无需配置。CurseForge 需要 API Key，"
-                          "可在 console.curseforge.com 免费申请。"
-                          "Key 保存在设备钥匙串中，不会随备份外传。";
+    // Key 已内置，不再让用户申请 —— 文案必须与实际一致
+    section.footerText = @"Modrinth 与 CurseForge 均可直接使用，无需额外配置。"
+                          "国内网络建议保持镜像加速开启。";
 
     BOOL hasKey = [A2CurseForgeAPI hasAPIKey];
 

@@ -43,8 +43,8 @@
 #import "A2CategoryNavView.h"
 #import "A2NavigationController.h"
 #import "A2GameVersionListViewController.h"
-#import "A2DownloadListViewController.h"
 #import "A2ResourceSearchViewController.h"
+#import "A2ModPackImportViewController.h"
 #import "A2SearchByIdViewController.h"
 #import "A2FavoritesViewController.h"
 #import "A2DownloadTasksViewController.h"
@@ -108,7 +108,8 @@
         [A2NavCategory title:@"光影"   symbol:@"sun.max.fill"],
         [A2NavCategory title:@"按 ID"  symbol:@"number" division:YES],
         [A2NavCategory title:@"收藏"   symbol:@"star.fill"],
-        [A2NavCategory title:@"任务"   symbol:@"arrow.down.circle.fill" division:YES],
+        [A2NavCategory title:@"导入"   symbol:@"square.and.arrow.down" division:YES],
+        [A2NavCategory title:@"任务"   symbol:@"arrow.down.circle.fill"],
     ];
 
     __weak typeof(self) weakSelf = self;
@@ -162,17 +163,18 @@
 }
 
 /// 分类索引 → 内容页。索引与 setupCategoryNav 的顺序一一对应。
-/// 资源类（模组/资源包/数据包/存档/光影）全部走共用的 A2ResourceSearchViewController，
-/// 只有整合包仍用旧的 A2DownloadListViewController（重写范围排除它）。
+///
+/// 所有资源类（含整合包）统一走 A2ResourceSearchViewController ——
+/// 之前整合包单独用旧的 A2DownloadListViewController，
+/// 那套页面没接真实 API 与新的详情页，是被遗漏的一条链路。
+/// 整合包在详情页里有专门的安装流程。
 - (UIViewController *)makeContentViewControllerForIndex:(NSInteger)index {
     switch (index) {
         case 0:
             return [[A2GameVersionListViewController alloc] init];
-        case 1: {
-            A2DownloadListViewController *vc = [[A2DownloadListViewController alloc] init];
-            vc.category = A2DownloadCategoryModpack;
-            return vc;
-        }
+        case 1:
+            return [[A2ResourceSearchViewController alloc]
+                    initWithContentClass:A2ContentClassModPack];
         case 2:
             return [[A2ResourceSearchViewController alloc]
                     initWithContentClass:A2ContentClassMod];
@@ -193,6 +195,8 @@
         case 8:
             return [[A2FavoritesViewController alloc] init];
         case 9:
+            return [[A2ModPackImportViewController alloc] init];
+        case 10:
             return [[A2DownloadTasksViewController alloc] init];
         default:
             return [[A2ResourceSearchViewController alloc]

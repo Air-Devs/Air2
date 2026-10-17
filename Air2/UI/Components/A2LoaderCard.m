@@ -476,6 +476,13 @@ static void A2LoaderAccent(A2ModLoaderType type, A2ColorScheme *t,
     [a startAnimation];
 }
 
+- (void)setConflicting:(BOOL)conflicting {
+    _conflicting = conflicting;
+    // 冲突时降透明度但不隐藏 —— 用户要能看到有哪些选项、以及为什么不能选
+    self.alpha = conflicting ? 0.45 : 1.0;
+    self.userInteractionEnabled = YES;
+}
+
 - (void)collapse {
     if (!_expanded) return;
     [self setExpanded:NO animated:NO];

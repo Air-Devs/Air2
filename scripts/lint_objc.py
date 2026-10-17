@@ -58,6 +58,9 @@ def check_file(path, defined_classes):
     in_block_comment = False
     in_string = False
     in_char = False
+    # 同步构建「去掉注释与字符串字面量」的版本，
+    # 供后面的括号计数使用 —— 注释里的 "1)" 这类文本不该参与统计。
+    cleaned = []
     while i < n:
         c = src[i]
         nxt = src[i + 1] if i + 1 < n else ''
@@ -73,6 +76,8 @@ def check_file(path, defined_classes):
                 in_block_comment = False
                 i += 2
                 continue
+            if c == '\\n':
+                cleaned.append(c)
             i += 1
             continue
 
@@ -105,12 +110,15 @@ def check_file(path, defined_classes):
             continue
         if c == '"':
             in_string = True
+            cleaned.append(' ')
             i += 1
             continue
         if c == "'":
             in_char = True
+            cleaned.append(' ')
             i += 1
             continue
+        cleaned.append(c)
 
         if c == '{':
             depth += 1
@@ -125,7 +133,7 @@ def check_file(path, defined_classes):
     if depth != 0:
         errors.append(f"花括号不平衡，差值 {depth}")
 
-    stripped = src
+    stripped = "".join(cleaned)
 
     if stripped.count("(") != stripped.count(")"):
         errors.append(f"圆括号不平衡: {stripped.count('(')} vs {stripped.count(')')}")

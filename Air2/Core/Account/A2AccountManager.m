@@ -505,8 +505,12 @@ static void A2Main(dispatch_block_t b) {
         if (completion) completion(account);
         return;
     }
-    // 离线账号没有远端材质，交给 UI 用占位文字。
+    // 离线账号拉不到远端材质（UUID 是本地算的，Mojang 那边不存在），
+    // 但用户可能给它设过本地皮肤 —— 有就用，没有才交给 UI 用占位文字。
     if (account.type == A2AccountTypeOffline) {
+        if ([_wardrobe hasSkinForAccount:account]) {
+            [A2Log log:@"AccountManager: 账号 %@ 使用本地皮肤", account.username];
+        }
         if (completion) completion(account);
         return;
     }

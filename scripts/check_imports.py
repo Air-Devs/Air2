@@ -279,6 +279,10 @@ def check_component_dependencies():
     return issues
 
 
+
+
+
+
 def main():
     problems = []
     total_imports = 0
@@ -365,7 +369,7 @@ def main():
         return 1
 
     print("\u2713 \u7ec4\u4ef6\u95f4\u4f9d\u8d56\u5b8c\u6574")
-    return 0
+
     return 0
 
 

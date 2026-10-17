@@ -430,7 +430,9 @@ static NSNumber *A2CFModLoaderTypeForIdentifier(NSString *identifier) {
         }
     }
 
-    [self GET:@"/mods" query:items completion:^(id json, NSError *error) {
+    // 搜索端点是 /mods/search，不是 /mods。
+    // /mods 是「按 id 批量取模组」，不接搜索参数，会返回 404。
+    [self GET:@"/mods/search" query:items completion:^(id json, NSError *error) {
         if (error) { if (completion) completion(nil, error); return; }
 
         NSDictionary *dict = [json isKindOfClass:NSDictionary.class] ? json : nil;
@@ -500,6 +502,21 @@ static NSNumber *A2CFModLoaderTypeForIdentifier(NSString *identifier) {
             }
         }
         if (completion) completion(out, nil);
+    }];
+}
+
+/// 取单个文件。CurseForge 的端点：GET /v1/mods/{modId}/files/{fileId}
+- (void)fileWithProjectID:(NSInteger)projectID
+                    fileID:(NSInteger)fileID
+                completion:(void (^)(A2CFFile *, NSError *))completion {
+
+    NSString *path = [NSString stringWithFormat:@"/mods/%ld/files/%ld",
+                      (long)projectID, (long)fileID];
+    [self GET:path query:nil completion:^(id json, NSError *error) {
+        if (error) { if (completion) completion(nil, error); return; }
+        NSDictionary *dict = [json isKindOfClass:NSDictionary.class] ? json : nil;
+        A2CFFile *f = [A2CFFile fromJSON:dict[@"data"]];
+        if (completion) completion(f, f ? nil : [self err:@"文件不存在"]);
     }];
 }
 

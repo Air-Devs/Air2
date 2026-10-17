@@ -31,6 +31,8 @@
 #import "A2DownloadFavorites.h"
 #import "A2DownloadTaskCenter.h"
 #import "A2DownloadEngine.h"
+#import "A2ModPackInstaller.h"
+#import "A2InstallingViewController.h"
 #import "A2VersionIsolation.h"
 #import "A2GlassCard.h"
 #import "A2RemoteImageView.h"
@@ -736,6 +738,12 @@ static const CGFloat kHeaderIconSize = 72;
         return;
     }
 
+    // 整合包走完整安装流程（装本体+加载器+所有文件），不是单纯下载一个 jar。
+    if (_contentClass == A2ContentClassModPack) {
+        [self installModPackVersion:version];
+        return;
+    }
+
     NSString *fileName = version.fileName.length ? version.fileName
         : [NSString stringWithFormat:@"%@-%@.jar", _project.projectID, version.versionNumber];
     // 落盘路径走唯一出口（A2GamePath），View 不手拼 Documents 路径。
@@ -788,6 +796,79 @@ static const CGFloat kHeaderIconSize = 72;
     }];
     [A2Log log:@"resource-detail: 下载入队 taskID=%@ project=%@ version=%@ file=%@",
         taskID, _project.projectID, version.versionID, fileName];
+}
+
+#pragma mark - 整合包安装
+
+/// 安装整合包。
+///
+/// 与普通资源下载的区别：整合包是一整个游戏实例 ——
+/// 要建版本目录、装对应加载器、下载清单里的所有文件、解压 overrides。
+/// A2ModPackInstaller 负责这些，这里只处理「先下 zip 再交给它」。
+- (void)installModPackVersion:(A2ContentVersion *)version {
+    if (version.candidateURLs.count == 0) {
+        [A2Toast show:@"此整合包暂无可用下载地址" inView:self.view];
+        return;
+    }
+
+    NSString *fileName = version.fileName.length ? version.fileName
+        : [NSString stringWithFormat:@"%@.mrpack", _project.projectID];
+
+    // 临时下载到 Caches —— 整合包 zip 是中间产物，装完即弃，
+    // 不该留在游戏目录里占空间。
+    NSString *tmpDir = NSTemporaryDirectory();
+    NSString *zipPath = [tmpDir stringByAppendingPathComponent:fileName];
+
+    A2DownloadRequest *req = [A2DownloadRequest new];
+    NSMutableArray<NSURL *> *urls = [NSMutableArray array];
+    for (NSString *u in version.candidateURLs) {
+        NSURL *url = [NSURL URLWithString:u];
+        if (url) [urls addObject:url];
+    }
+    req.candidateURLs = urls;
+    req.destinationPath = zipPath;
+    req.expectedSize = version.fileSize;
+
+    [A2Toast show:@"正在下载整合包…" inView:self.view];
+
+    __weak typeof(self) weakSelf = self;
+    [[A2DownloadEngine sharedClient] startRequest:req
+        progress:nil
+           speed:nil
+      completion:^(BOOL success, NSError *error) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+
+        if (!success) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [A2Toast show:[NSString stringWithFormat:@"下载失败：%@",
+                               error.localizedDescription ?: @"未知错误"] inView:self.view];
+            });
+            return;
+        }
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self runPackInstallerWithZip:zipPath packName:self.project.title];
+        });
+    }];
+}
+
+/// 下载完成后执行安装，并把进度显示在安装进度页。
+- (void)runPackInstallerWithZip:(NSString *)zipPath packName:(NSString *)packName {
+    A2ModPackFormat fmt = [A2ModPackInstaller detectFormatAtPath:zipPath];
+    if (fmt == A2ModPackFormatUnknown) {
+        [A2Toast show:@"无法识别的整合包格式" inView:self.view];
+        return;
+    }
+
+    // 版本名用整合包名（去掉不合法字符）
+    NSString *versionName = [packName stringByReplacingOccurrencesOfString:@"/" withString:@"-"];
+
+    // 进安装进度页，由它展示安装过程
+    A2InstallingViewController *vc =
+        [[A2InstallingViewController alloc] initWithModPackPath:zipPath
+                                                    versionName:versionName];
+    [self.navigationController pushViewController:vc animated:YES];
 }
 
 #pragma mark - UITableViewDataSource

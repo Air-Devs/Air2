@@ -37,6 +37,7 @@
 #import "A2Icon.h"
 #import "A2Metrics.h"
 #import "A2ModLoaderAPI.h"
+#import "A2ModLoaderSelection.h"
 #import "A2ModLoaderInstaller.h"
 #import "A2VersionManager.h"
 #import "A2Log.h"
@@ -54,6 +55,8 @@
 @property (nonatomic, strong) UIStackView *loaderStack;
 /// 全部加载器卡（含原版卡）
 @property (nonatomic, strong) NSMutableArray<A2LoaderCard *> *loaderCards;
+/// 选择模型 —— 负责互斥与 API 配对（对照 ZL2 DownloadGameModLoaderLists）
+@property (nonatomic, strong) A2ModLoaderSelection *selection;
 /// 当前选中的卡。原版卡默认选中，因此不为 nil。
 @property (nonatomic, strong, nullable) A2LoaderCard *chosenLoaderCard;
 
@@ -138,14 +141,32 @@
     [_loaderCards addObject:vanilla];
     [_loaderStack addArrangedSubview:vanilla];
 
-    for (NSNumber *n in [A2ModLoaderAPI allLoaderTypes]) {
+    // 主加载器
+    for (NSNumber *n in [A2ModLoaderSelection allPrimaryLoaders]) {
         A2ModLoaderType type = (A2ModLoaderType)n.integerValue;
         A2LoaderCard *card = [[A2LoaderCard alloc] initWithLoaderType:type mcVersion:_versionID];
         card.delegate = self;
         // 官方没有稳定自动化接口的加载器只给入口、不给假希望。
         if (![A2ModLoaderInstaller supportsAutoInstall:type]) {
-            card.unavailableReason = @"官方无自动安装接口";
+            card.unavailableReason = @"官方无自动安装接口，需手动安装";
         }
+        [_loaderCards addObject:card];
+        [_loaderStack addArrangedSubview:card];
+    }
+
+    // API 模组 —— 对照 ZL2：它们是独立选项，依附于对应的主加载器。
+    // 比如选了 Fabric 才能选 Fabric API（它自身也是模组，只是必装）。
+    UILabel *apiHeader = [[UILabel alloc] initWithFrame:CGRectZero];
+    apiHeader.translatesAutoresizingMaskIntoConstraints = NO;
+    apiHeader.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+    apiHeader.text = @"前置模组";
+    [_loaderStack addArrangedSubview:apiHeader];
+
+    for (NSNumber *n in [A2ModLoaderSelection allAPIMods]) {
+        A2ModLoaderType type = (A2ModLoaderType)n.integerValue;
+        A2LoaderCard *card = [[A2LoaderCard alloc] initWithLoaderType:type mcVersion:_versionID];
+        card.delegate = self;
+        card.unavailableReason = @"需先选择对应的加载器";
         [_loaderCards addObject:card];
         [_loaderStack addArrangedSubview:card];
     }
@@ -171,23 +192,65 @@
 #pragma mark - 加载器选择
 
 - (void)loaderCardSelectionDidChange:(A2LoaderCard *)card {
-    _chosenLoaderCard = card;
-
-    for (A2LoaderCard *c in _loaderCards) {
-        if (c == card) continue;
-        c.chosen = NO;      // 置 NO 会一并清掉它已选的版本
-        [c collapse];
-    }
-
+    // 原版即「不装任何加载器」—— 清空全部选择
     if (card.isVanilla) {
-        [A2Log log:@"download: 选择加载器 原版"];
+        [_selection.versions removeAllObjects];
+        for (A2LoaderCard *c in _loaderCards) {
+            if (c != card) { c.chosen = NO; [c collapse]; }
+        }
+        _chosenLoaderCard = card;
+        [self refreshSelectionAvailability];
         [self syncNameForLoaderType:nil];
         return;
     }
 
-    [A2Log log:@"download: 选择加载器 %@（%@）",
-        [A2ModLoaderAPI displayNameForType:card.loaderType], _versionID];
-    [self syncNameForLoaderType:@(card.loaderType)];
+    A2ModLoaderType type = card.loaderType;
+
+    // 互斥检查：与已选冲突就不允许
+    if (![_selection canSelectType:type] && _selection.versions[@(type)] == nil) {
+        [A2Toast show:@"与已选的加载器冲突" inView:self.view];
+        card.chosen = NO;
+        return;
+    }
+
+    NSString *version = card.selectedVersion;
+    [_selection selectType:type version:version];
+
+    // 同步 UI：被互斥清掉的卡片要复位
+    [self syncCardsWithSelection];
+
+    // 只有主加载器影响版本命名；API 模组不参与
+    if (A2ModLoaderIsLoader(type)) {
+        _chosenLoaderCard = card;
+        [self syncNameForLoaderType:version.length ? @(type) : nil];
+    }
+}
+
+/// 让所有卡片的状态与选择模型一致。
+/// 被互斥清掉的卡片要取消选中并收起，冲突的卡片要置灰。
+- (void)syncCardsWithSelection {
+    for (A2LoaderCard *c in _loaderCards) {
+        if (c.isVanilla) continue;
+
+        BOOL selected = (_selection.versions[@(c.loaderType)] != nil);
+        if (selected) {
+            c.chosen = YES;
+        } else if (c.chosen) {
+            // 曾经选中但现在被互斥清掉了
+            c.chosen = NO;
+            [c collapse];
+        }
+
+        // 冲突态：与已选互斥且自己没被选
+        c.conflicting = [self.selection isConflictingType:c.loaderType];
+    }
+}
+
+/// 没有任何选择时回到「原版」
+- (void)refreshSelectionAvailability {
+    for (A2LoaderCard *c in _loaderCards) {
+        c.conflicting = [self.selection isConflictingType:c.loaderType];
+    }
 }
 
 - (void)loaderCardDidExpand:(A2LoaderCard *)card {
@@ -238,32 +301,41 @@
         return;
     }
 
-    NSNumber *loaderType = nil;
+    // 从选择模型取（它已处理互斥与 API 配对）
+    NSNumber *loaderType = _selection.selectedLoaderType;
     NSString *loaderVersion = nil;
-    A2LoaderCard *card = _chosenLoaderCard;
-    if (card && !card.isVanilla) {
-        A2ModLoaderVersion *picked = card.selectedVersion;
-        if (!picked) {
+    if (loaderType) {
+        loaderVersion = _selection.versions[loaderType];
+        if (loaderVersion.length == 0) {
             [A2Toast show:[NSString stringWithFormat:@"请先选择 %@ 的版本",
-                           [A2ModLoaderAPI displayNameForType:card.loaderType]]
+                           [A2ModLoaderAPI displayNameForType:
+                            (A2ModLoaderType)loaderType.integerValue]]
                    inView:self.view];
             return;
         }
-        loaderType = @(card.loaderType);
-        loaderVersion = picked.version;
     }
 
-    [A2Log log:@"download: 开始安装 mc=%@ 版本名=%@ 加载器=%@ 加载器版本=%@",
+    // API 模组（Fabric API 等）—— 它是独立的下载项，
+    // 装完加载器后要单独装。对照 ZL2：两者在界面上并列，
+    // 但下载流程是分开的两步。
+    NSNumber *apiType = _selection.selectedAPIType;
+    NSString *apiVersion = apiType ? _selection.versions[apiType] : nil;
+
+    [A2Log log:@"download: 开始安装 mc=%@ 版本名=%@ 加载器=%@ 加载器版本=%@ 前置模组=%@",
         _versionID, _nameField.text,
         loaderType ? [A2ModLoaderAPI displayNameForType:(A2ModLoaderType)loaderType.integerValue]
                    : @"原版",
-        loaderVersion ?: @"-"];
+        loaderVersion ?: @"-",
+        apiType ? [A2ModLoaderAPI displayNameForType:(A2ModLoaderType)apiType.integerValue]
+                : @"无"];
 
     A2InstallingViewController *vc =
         [[A2InstallingViewController alloc] initWithMCVersion:_versionID
                                                   versionName:_nameField.text
                                                    loaderType:loaderType
-                                                loaderVersion:loaderVersion];
+                                                loaderVersion:loaderVersion
+                                                     apiType:apiType
+                                                  apiVersion:apiVersion];
     [self.navigationController pushViewController:vc animated:YES];
 }
 

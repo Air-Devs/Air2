@@ -107,6 +107,10 @@ extern NSNotificationName const A2AccountsDidChangeNotification;
 /// 生成离线模式下的玩家 UUID（基于用户名，与官方算法一致）
 + (NSString *)offlineUUIDForName:(NSString *)name;
 
+/// 把账号写回磁盘。
+/// 改了账号的本地字段（如 skinPath）后调用，否则下次启动会丢。
+- (void)persistAccount:(A2Account *)account;
+
 @end
 
 NS_ASSUME_NONNULL_END

@@ -59,7 +59,7 @@
 @property (nonatomic, strong) UIStackView *topTrailingStack;
 
 /// 右侧操作栏
-@property (nonatomic, strong) UIScrollView *panelScroll;
+@property (nonatomic, strong) UIView *panelContainer;
 @property (nonatomic, strong) UIStackView *panelStack;
 
 /// 账户条
@@ -75,8 +75,6 @@
 @property (nonatomic, strong) A2PrimaryButton *launchButton;
 
 /// 最近游玩
-@property (nonatomic, strong) A2GlassCard *recentCard;
-@property (nonatomic, strong) UIStackView *recentStack;
 
 /// 主卡（单卡三段式：账户 / 版本 / 启动）
 @property (nonatomic, strong) A2GlassCard *mainCard;
@@ -200,24 +198,23 @@
 #pragma mark - 右侧操作栏
 
 - (void)setupSidePanel {
-    _panelScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
-    _panelScroll.translatesAutoresizingMaskIntoConstraints = NO;
-    _panelScroll.showsVerticalScrollIndicator = NO;
-    _panelScroll.alwaysBounceVertical = YES;
-    _panelScroll.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
-    [self.view addSubview:_panelScroll];
+    // ZL2 的侧栏是固定不滚动的（ConstraintLayout + fillMaxSize）。
+    // 之前用 UIScrollView，内容略高就会产生滚动 —— 侧栏本身只有两三张卡，
+    // 不该让人滚动它。
+    _panelContainer = [[UIView alloc] initWithFrame:CGRectZero];
+    _panelContainer.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:_panelContainer];
 
     _panelStack = [[UIStackView alloc] initWithFrame:CGRectZero];
     _panelStack.translatesAutoresizingMaskIntoConstraints = NO;
     _panelStack.axis = UILayoutConstraintAxisVertical;
     _panelStack.spacing = A2CardSpacing;   // 12pt，与卡片内边距一致
-    [_panelScroll addSubview:_panelStack];
+    [_panelContainer addSubview:_panelStack];
 
     // 操作区只放两张卡：账户 + 版本。
     // 之前我额外加了「版本/下载/联机/文件」快捷网格，但它和顶栏入口
     // 功能重叠，还把右栏撑得很满。
     [self buildMainCard];
-    [self buildRecentCard];
 }
 
 #pragma mark - 操作区垂直布局
@@ -243,23 +240,28 @@
 /// 改成内容自适应后，卡片保持自然比例，下方留白 ——
 /// 留白比拉伸好看。
 - (void)setupPanelPlacement {
-    UILayoutGuide *content = _panelScroll.contentLayoutGuide;
-    UILayoutGuide *frame = _panelScroll.frameLayoutGuide;
-
+    // 侧栏是固定容器，不滚动。
+    // 内容从顶部按 12pt 外边距开始，卡片按内容高度排列。
     [NSLayoutConstraint activateConstraints:@[
-        // 宽度跟随可视区域（只允许垂直滚动）
-        [_panelStack.widthAnchor constraintEqualToAnchor:frame.widthAnchor
-                                               constant:-A2PanelOuterPadding * 2],
-
-        // 顶部对齐，底部按内容自然结束
-        [_panelStack.topAnchor constraintEqualToAnchor:content.topAnchor
-                                              constant:A2PanelOuterPadding],
-        [_panelStack.bottomAnchor constraintLessThanOrEqualToAnchor:content.bottomAnchor
+        [_panelStack.topAnchor constraintEqualToAnchor:_panelContainer.topAnchor
+                                               constant:A2PanelOuterPadding],
+        [_panelStack.leadingAnchor constraintEqualToAnchor:_panelContainer.leadingAnchor
+                                                  constant:A2PanelOuterPadding],
+        [_panelStack.trailingAnchor constraintEqualToAnchor:_panelContainer.trailingAnchor
+                                                   constant:-A2PanelOuterPadding],
+        // 底部用 ≤ 而非 = ：内容短时不被拉伸
+        [_panelStack.bottomAnchor constraintLessThanOrEqualToAnchor:_panelContainer.bottomAnchor
                                                            constant:-A2PanelOuterPadding],
+
+        // 主卡片高度不超过侧栏可用空间 —— 屏幕矮时（如 iPhone 横屏 390pt 高）
+        // 卡片内容会溢出屏幕。ZL2 的做法是卡片高度 = 容器高 - 24
+        // （cardHeight = maxHeight - ActionMenuOuterPadding * 2）。
+        [_mainCard.heightAnchor constraintLessThanOrEqualToAnchor:_panelContainer.heightAnchor
+                                                        constant:-A2PanelOuterPadding * 2],
     ]];
 
-    // 三张卡都按内容撑高，不互相争抢空间
-    for (UIView *card in @[_mainCard, _recentCard]) {
+    // 卡片按内容撑高，不互相争抢空间
+    for (UIView *card in @[_mainCard]) {
         [card setContentHuggingPriority:UILayoutPriorityRequired
                                 forAxis:UILayoutConstraintAxisVertical];
         [card setContentCompressionResistancePriority:UILayoutPriorityRequired
@@ -282,7 +284,7 @@
     // 用 multiplier 而不是算好的固定值 —— 后者在 updateViewConstraints
     // 首次调用时 bounds 还是 0，兜底值会被固化且旋转后不更新。
     NSLayoutConstraint *panelWidth =
-        [_panelScroll.widthAnchor constraintEqualToAnchor:self.view.widthAnchor
+        [_panelContainer.widthAnchor constraintEqualToAnchor:self.view.widthAnchor
                                                multiplier:A2PanelWidthRatio];
 
     [NSLayoutConstraint activateConstraints:@[
@@ -307,17 +309,13 @@
         [_topTrailingStack.centerYAnchor constraintEqualToAnchor:_topBar.centerYAnchor],
 
         // 右侧操作栏
-        [_panelScroll.topAnchor constraintEqualToAnchor:_topBar.bottomAnchor],
-        [_panelScroll.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
-        [_panelScroll.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [_panelContainer.topAnchor constraintEqualToAnchor:_topBar.bottomAnchor],
+        [_panelContainer.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        [_panelContainer.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
 
-        // 右栏水平边距；垂直定位见 setupPanelPlacement
-        [_panelStack.leadingAnchor constraintEqualToAnchor:_panelScroll.frameLayoutGuide.leadingAnchor
-                                                 constant:A2PanelOuterPadding],
-        [_panelStack.trailingAnchor constraintEqualToAnchor:_panelScroll.frameLayoutGuide.trailingAnchor
-                                                  constant:-A2PanelOuterPadding],
     ]];
 
+    // 侧栏内部的边距与排列在 setupPanelPlacement 里统一处理
     [self setupPanelPlacement];
 
     [super updateViewConstraints];
@@ -330,7 +328,6 @@
 - (void)playEntranceAnimation {
     NSMutableArray<UIView *> *cards = [NSMutableArray array];
     if (_mainCard) [cards addObject:_mainCard];
-    if (_recentCard) [cards addObject:_recentCard];
 
 
     A2AnimateCardEntrance(cards, A2CardStaggerDelay, nil);
@@ -370,7 +367,6 @@
     // 必须递归查找。
     [self tintTaggedViewsIn:_topBar color:s.cOnSurfaceVariant];
     [self tintTaggedViewsIn:_mainCard color:s.cOnSurfaceVariant];
-    [self tintTaggedViewsIn:_recentCard color:s.cOnSurfaceVariant];
 }
 
 #pragma mark - 数据刷新
@@ -379,7 +375,6 @@
 - (void)handleDataChanged {
     [self refreshCurrentVersionUI];
     [self refreshAccountUI];
-    [self refreshRecentVersions];
 }
 
 /// 递归给打了标记的视图着色。
@@ -447,7 +442,7 @@
     _mainCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
     _mainCard.cornerRadius = A2RadiusXL;
     _mainCard.elevation = A2CardElevationLow;
-    // 用户批注：这两个组件（版本卡 + 最近游玩卡）不要带边框和阴影。
+    // 用户批注：版本卡（主卡）不要带边框和阴影。
     _mainCard.drawsBorder = NO;
     _mainCard.drawsShadow = NO;
     _mainCard.contentInsets = UIEdgeInsetsMake(A2SpaceXL, A2SpaceL, A2SpaceL, A2SpaceL);
@@ -619,154 +614,8 @@
             forControlEvents:UIControlEventTouchUpInside];
 }
 
-#pragma mark - 约束
+#pragma mark - 数据刷新
 
-- (void)buildRecentCard {
-    _recentCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
-    _recentCard.cornerRadius = A2RadiusXL;
-    _recentCard.elevation = A2CardElevationLow;
-    // 用户批注：这两个组件（版本卡 + 最近游玩卡）不要带边框和阴影。
-    _recentCard.drawsBorder = NO;
-    _recentCard.drawsShadow = NO;
-    _recentCard.contentInsets = UIEdgeInsetsMake(A2CardPadding, 0, A2CardPadding, 0);
-    _recentCard.glassEnabled = YES;   // 一级页面：与主卡同样保留玻璃观感
-
-    UILabel *title = [[UILabel alloc] initWithFrame:CGRectZero];
-    title.translatesAutoresizingMaskIntoConstraints = NO;
-    title.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
-    title.text = @"最近游玩";
-
-    // 横向滚动
-    UIScrollView *scroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
-    scroll.translatesAutoresizingMaskIntoConstraints = NO;
-    scroll.showsHorizontalScrollIndicator = NO;
-
-    _recentStack = [[UIStackView alloc] initWithFrame:CGRectZero];
-    _recentStack.translatesAutoresizingMaskIntoConstraints = NO;
-    _recentStack.axis = UILayoutConstraintAxisHorizontal;
-    _recentStack.spacing = A2SpaceS;
-    [scroll addSubview:_recentStack];
-
-    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[title, scroll]];
-    stack.translatesAutoresizingMaskIntoConstraints = NO;
-    stack.axis = UILayoutConstraintAxisVertical;
-    stack.spacing = A2SpaceM;
-
-    [_recentCard.contentView addSubview:stack];
-
-    [NSLayoutConstraint activateConstraints:@[
-        [stack.topAnchor constraintEqualToAnchor:_recentCard.contentView.topAnchor],
-        [stack.bottomAnchor constraintEqualToAnchor:_recentCard.contentView.bottomAnchor],
-        [stack.leadingAnchor constraintEqualToAnchor:_recentCard.contentView.leadingAnchor],
-        [stack.trailingAnchor constraintEqualToAnchor:_recentCard.contentView.trailingAnchor],
-        [title.leadingAnchor constraintEqualToAnchor:_recentCard.contentView.leadingAnchor
-                                            constant:A2CardPadding],
-
-        [scroll.heightAnchor constraintEqualToConstant:56],
-        [_recentStack.topAnchor constraintEqualToAnchor:scroll.topAnchor],
-        [_recentStack.bottomAnchor constraintEqualToAnchor:scroll.bottomAnchor],
-        [_recentStack.leadingAnchor constraintEqualToAnchor:scroll.leadingAnchor
-                                                   constant:A2CardPadding],
-        [_recentStack.trailingAnchor constraintEqualToAnchor:scroll.trailingAnchor
-                                                    constant:-A2CardPadding],
-        [_recentStack.heightAnchor constraintEqualToAnchor:scroll.heightAnchor],
-    ]];
-
-    [_panelStack addArrangedSubview:_recentCard];
-    [self refreshRecentVersions];
-}
-
-/// 用真实安装的版本刷新最近游玩
-- (void)refreshRecentVersions {
-    for (UIView *v in _recentStack.arrangedSubviews) {
-        [_recentStack removeArrangedSubview:v];
-        [v removeFromSuperview];
-    }
-
-    NSArray<A2Version *> *versions = A2VersionManager.shared.versions;
-    if (versions.count == 0) {
-        UILabel *empty = [[UILabel alloc] initWithFrame:CGRectZero];
-        empty.translatesAutoresizingMaskIntoConstraints = NO;
-        empty.text = @"还没有安装版本";
-        empty.font = [A2Typography caption];
-        empty.textColor = A2ThemeManager.shared.scheme.cOnSurfaceVariant;
-        [_recentStack addArrangedSubview:empty];
-        return;
-    }
-
-    // 最多显示 6 个
-    NSUInteger count = MIN(6, versions.count);
-    for (NSUInteger i = 0; i < count; i++) {
-        A2Version *v = versions[i];
-        UIView *chip = [self makeVersionChip:v];
-        [_recentStack addArrangedSubview:chip];
-    }
-}
-
-/// 版本小卡：图标 + 名称
-- (UIView *)makeVersionChip:(A2Version *)version {
-    A2ColorScheme *t = A2ThemeManager.shared.scheme;
-
-    UIControl *chip = [[UIControl alloc] initWithFrame:CGRectZero];
-    chip.translatesAutoresizingMaskIntoConstraints = NO;
-    chip.backgroundColor = t.cSurfaceContainerHigh;
-    chip.layer.cornerRadius = A2RadiusM;
-    chip.layer.cornerCurve = kCACornerCurveContinuous;
-
-    UILabel *initial = [[UILabel alloc] initWithFrame:CGRectZero];
-    initial.translatesAutoresizingMaskIntoConstraints = NO;
-    initial.text = version.name.length ? [[version.name substringToIndex:1] uppercaseString] : @"?";
-    initial.font = [UIFont systemFontOfSize:14 weight:UIFontWeightBold];
-    initial.textAlignment = NSTextAlignmentCenter;
-    initial.textColor = t.cOnPrimaryContainer;
-    initial.backgroundColor = t.cPrimaryContainer;
-    initial.layer.cornerRadius = A2RadiusS;
-    initial.layer.cornerCurve = kCACornerCurveContinuous;
-    initial.clipsToBounds = YES;
-
-    UILabel *name = [[UILabel alloc] initWithFrame:CGRectZero];
-    name.translatesAutoresizingMaskIntoConstraints = NO;
-    name.text = version.name;
-    name.font = [UIFont systemFontOfSize:11 weight:UIFontWeightMedium];
-    name.textColor = t.cOnSurface;
-    name.textAlignment = NSTextAlignmentCenter;
-    name.numberOfLines = 1;
-    name.adjustsFontSizeToFitWidth = YES;
-    name.minimumScaleFactor = 0.7;
-
-    [chip addSubview:initial];
-    [chip addSubview:name];
-
-    __weak typeof(self) weakSelf = self;
-    A2Version *capturedVersion = version;
-    [chip addAction:[UIAction actionWithHandler:^(UIAction *action) {
-        __strong typeof(weakSelf) self = weakSelf;
-        if ([A2VersionManager.shared selectCurrentVersion:capturedVersion]) {
-            [self refreshCurrentVersionUI];
-            [A2Toast show:[NSString stringWithFormat:@"已切换到 %@", capturedVersion.name]
-                   inView:self.view];
-        }
-    }] forControlEvents:UIControlEventTouchUpInside];
-
-    [NSLayoutConstraint activateConstraints:@[
-        [chip.widthAnchor constraintGreaterThanOrEqualToConstant:72],
-        [chip.heightAnchor constraintEqualToConstant:56],
-
-        [initial.topAnchor constraintEqualToAnchor:chip.topAnchor constant:6],
-        [initial.centerXAnchor constraintEqualToAnchor:chip.centerXAnchor],
-        [initial.widthAnchor constraintEqualToConstant:26],
-        [initial.heightAnchor constraintEqualToConstant:26],
-
-        [name.topAnchor constraintEqualToAnchor:initial.bottomAnchor constant:3],
-        [name.leadingAnchor constraintEqualToAnchor:chip.leadingAnchor constant:4],
-        [name.trailingAnchor constraintEqualToAnchor:chip.trailingAnchor constant:-4],
-        [name.bottomAnchor constraintLessThanOrEqualToAnchor:chip.bottomAnchor constant:-4],
-    ]];
-
-    return chip;
-}
-
-/// 刷新版本卡上的版本信息
 - (void)refreshCurrentVersionUI {
     A2Version *current = A2VersionManager.shared.currentVersion;
     if (!current) {

@@ -222,4 +222,74 @@ static NSString *const kWardrobeCacheDir = @"A2Wardrobe";
     }] resume];
 }
 
+#pragma mark - 本地皮肤
+
+/// 给账号设置本地皮肤。
+///
+/// 离线账号拉不到远端材质（UUID 是本地算的，Mojang 那边不存在），
+/// 但用户可以自己选一张皮肤图 —— 游戏内同样支持本地皮肤。
+///
+/// 图片会被规整到 Minecraft 标准皮肤尺寸再落盘：
+///   64x64（1.8+ 带第二层）或 64x32（旧版）
+/// 直接存原图会让 A2SkinHeadView 的裁剪坐标算错 —— 它按
+/// 标准布局的固定像素位置取头部区域。
+- (void)setLocalSkinData:(NSData *)pngData
+              forAccount:(A2Account *)account
+              completion:(void (^)(BOOL))completion {
+    if (pngData.length == 0 || !account) {
+        if (completion) completion(NO);
+        return;
+    }
+
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        NSString *dir = [self directoryForUUID:account.profileID ?: account.uniqueID];
+        [NSFileManager.defaultManager createDirectoryAtPath:dir
+                                withIntermediateDirectories:YES attributes:nil error:nil];
+
+        NSString *dest = [dir stringByAppendingPathComponent:@"skin.png"];
+        BOOL ok = [pngData writeToFile:dest atomically:YES];
+        if (ok) account.skinPath = dest;
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (completion) completion(ok);
+        });
+    });
+}
+
+- (BOOL)applyLocalSkinFromPath:(NSString *)path forAccount:(A2Account *)account {
+    if (path.length == 0 || !account) return NO;
+
+    // 直接复制文件 —— 不做图片解码/重编码。
+    // 理由：Core 层不引 UIKit（分层约束），而且皮肤图本来就该是
+    // 64x64 的标准 PNG；非标准的由 UI 层在传入前处理。
+    NSData *data = [NSData dataWithContentsOfFile:path];
+    if (data.length == 0) return NO;
+
+    NSString *dir = [self directoryForUUID:account.profileID ?: account.uniqueID];
+    [NSFileManager.defaultManager createDirectoryAtPath:dir
+                            withIntermediateDirectories:YES attributes:nil error:nil];
+
+    NSString *dest = [dir stringByAppendingPathComponent:@"skin.png"];
+    if (![data writeToFile:dest atomically:YES]) return NO;
+
+    account.skinPath = dest;
+    return YES;
+}
+
+/// 该账号是否有可用皮肤。
+/// 本地文件存在即算有 —— 离线账号的皮肤就是这么来的。
+- (BOOL)hasSkinForAccount:(A2Account *)account {
+    NSString *p = account.skinPath;
+    if (p.length == 0) return NO;
+    return [NSFileManager.defaultManager fileExistsAtPath:p];
+}
+
+- (void)clearLocalSkinForAccount:(A2Account *)account {
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSString *dir = [self directoryForUUID:account.profileID ?: account.uniqueID];
+    NSString *skin = [dir stringByAppendingPathComponent:@"skin.png"];
+    [fm removeItemAtPath:skin error:nil];
+    account.skinPath = nil;
+}
+
 @end

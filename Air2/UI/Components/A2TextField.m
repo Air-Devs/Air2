@@ -76,7 +76,10 @@ static const CGFloat kA2FieldHeight = 56;
     // ---- 填充框 ----
     _box = [[UIView alloc] initWithFrame:CGRectZero];
     _box.translatesAutoresizingMaskIntoConstraints = NO;
-    _box.layer.cornerRadius = A2RadiusXS;
+    // 胶囊形圆角（高度的一半）—— 之前是 A2RadiusXS(8)，在 40pt 高的框上
+    // 看起来就是个直角矩形，与 ZL2 的胶囊输入框差别明显。
+    // 高度在 layoutSubviews 里拿到后重算。
+    _box.layer.cornerRadius = 20;
     _box.layer.cornerCurve = kCACornerCurveContinuous;
     // MD3 填充式输入框只有上两角是圆的
     _box.layer.maskedCorners = kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner;
@@ -241,6 +244,16 @@ static const CGFloat kA2FieldHeight = 56;
 - (void)setSupportText:(NSString *)supportText {
     _supportText = [supportText copy];
     [self updateSupportLabel];
+}
+
+/// 高度已知后按「高度一半」设圆角 —— 标准胶囊形。
+/// 用固定值在高度变化时（动态字体、不同场景复用）会失配。
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    CGRect boxFrame = self.box.bounds;
+    if (CGRectGetHeight(boxFrame) > 0) {
+        self.box.layer.cornerRadius = CGRectGetHeight(boxFrame) / 2;
+    }
 }
 
 - (void)setErrorText:(NSString *)errorText {
