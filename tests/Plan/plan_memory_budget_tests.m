@@ -173,8 +173,7 @@ int main(int argc, const char *argv[]) {
            [NSString stringWithFormat:@"Java 8 档选项表逐项/逐位置一致（实际 %lu 条：%@）",
             (unsigned long)j8.count, Join(j8)]);
         ok(!ArrayContains(j8, @"-XX:+UseG1GC") && !ArrayContains(j8, @"-XX:MaxGCPauseMillis=50") &&
-           !ArrayContains(j8, @"-XX:+UseStringDeduplication") &&
-           !ArrayContains(j8, @"-XX:+UnlockExperimentalVMOptions"),
+           !ArrayContains(j8, @"-XX:+UseStringDeduplication"),
            @"★Java 8 档【一条 GC 参数都没有】（保持 JVM 默认 GC）★");
         ok([j8[0] isEqualToString:@"-Xms128M"] && [j8[1] isEqualToString:@"-Xmx1024M"],
            @"-Xms 紧接 -Xmx（初始堆小、上限由预算给）");

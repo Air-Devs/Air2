@@ -420,6 +420,25 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
         [options addObject:@"-XX:+UseStringDeduplication"];   // MC 大量重复字符串；G1 特性，仅 G1 下有
     }
 
+    // ---- ③″ JIT / CodeCache（★出处：老线 Natives/JavaLauncher.m:2327-2384，真机跑通过的参数集★）----
+    //   真机症状对照：只带 -XX:-UseCompressedClassPointers 时，「阶段6 创建 JVM」之后
+    //   进程无声停住（日志停在 OpenJDK 的 deprecation 警告）。老线同一台机器能起，
+    //   差的就是下面这组 —— 它们决定 JIT 代码缓存如何在 iOS 上取得可执行内存：
+    //     · DisablePrimordialThreadGuardPages：避开随机栈保护页分配崩溃（老线 :2329）
+    //     · Reserved/Initial/Expansion：CodeCache 满会导致 SIGILL（老线 :2365-2367，附实测注释）
+    //     · MirrorMappedCodeCache：iOS 26+ 把 JIT 代码映射进调试器分配的 RX 区（老线 :2380）
+    //       ★仅 Java 17+/21/25★：Java 8 的 libjvm 不识别该参数（老线 ISSUE-FIX #70）
+    if (![options containsObject:@"-XX:+UnlockExperimentalVMOptions"]) {
+        [options addObject:@"-XX:+UnlockExperimentalVMOptions"];   // 上面三条属于实验/诊断选项
+    }
+    [options addObject:@"-XX:+DisablePrimordialThreadGuardPages"];
+    [options addObject:@"-XX:ReservedCodeCacheSize=64m"];
+    [options addObject:@"-XX:InitialCodeCacheSize=16m"];
+    [options addObject:@"-XX:CodeCacheExpansionSize=4m"];
+    if (javaMajorVersion >= 17) {
+        [options addObject:@"-XX:+MirrorMappedCodeCache"];
+    }
+
     // ★追加类路径的唯一可行方式（Java 9+）：必须带，否则 A2Entry 追加 MC 库时被模块系统挡下。
     [options addObject:[NSString stringWithFormat:@"-Djava.system.class.loader=%@", A2LaunchGameClassLoaderName]];
 
