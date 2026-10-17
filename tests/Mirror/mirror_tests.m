@@ -332,12 +332,15 @@ static void testWiring(void) {
     ok([installer containsString:@"fetchManifestFromCandidate:index + 1"],
        @"★版本清单源失败 ⇒ 换下一个候选源（官方兜底）★");
 
-    // 每阶段判据行
-    for (NSString *stage in @[@"stage=manifest", @"version-json", @"client-jar",
-                              @"assets-index", @"libraries", @"assets"]) {
+    // 每阶段判据行（★完整 token 直接在源码里可 grep★）
+    for (NSString *stage in @[@"stage=manifest", @"stage=version-json", @"stage=client-jar",
+                              @"stage=assets-index", @"stage=libraries", @"stage=assets"]) {
         ok([installer containsString:stage],
-           [NSString stringWithFormat:@"有阶段判据/来源：%@", stage]);
+           [NSString stringWithFormat:@"有阶段判据 token：%@", stage]);
     }
+    ok([installer containsString:@"stage=version-list"] ||
+       [ReadRepo(@"Air2/Core/Version/A2RemoteVersions.m") containsString:@"stage=version-list"],
+       @"版本列表（A2RemoteVersions）也有阶段判据 token");
 
     // 换源判据行（引擎侧）
     ok([engine containsString:@"[A2-MIRROR] failover"],

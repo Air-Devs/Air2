@@ -289,7 +289,7 @@ static void A2Main(dispatch_block_t block) {
     // 加载器后面会读它、并把它的 jar 硬链到自己的版本目录。
     NSString *dest = [path versionJSONPath:self.baseVersionName];
 
-    [self logStage:@"version-json" sample:url];
+    [self logStage:@"stage=version-json" sample:url];
     [self download:[self candidatesForURL:url]
                 to:dest
         stageLabel:A2InstallStageDownloadJSON
@@ -323,7 +323,7 @@ static void A2Main(dispatch_block_t block) {
     }
 
     [self report:A2InstallStageDownloadJar progress:0 message:@"正在下载客户端…"];
-    [self logStage:@"client-jar" sample:jarURL];
+    [self logStage:@"stage=client-jar" sample:jarURL];
     [self download:[self candidatesForURL:jarURL] to:jarDest stageLabel:A2InstallStageDownloadJar
            message:@"正在下载客户端"
            thenRun:^(NSError *error) {
@@ -370,7 +370,7 @@ static void A2Main(dispatch_block_t block) {
         return;
     }
 
-    [self logStage:@"libraries" sample:pending.firstObject.firstObject];
+    [self logStage:@"stage=libraries" sample:pending.firstObject.firstObject];
     [self downloadBatch:pending
                   stage:A2InstallStageDownloadLibraries
             messageBase:@"正在下载依赖库"
@@ -437,7 +437,7 @@ static void A2Main(dispatch_block_t block) {
                            [indexID stringByAppendingPathExtension:@"json"]];
 
     [self report:A2InstallStageDownloadAssets progress:0 message:@"正在下载资源索引…"];
-    [self logStage:@"assets-index" sample:indexURL];
+    [self logStage:@"stage=assets-index" sample:indexURL];
     [self download:[self candidatesForURL:indexURL] to:indexPath stageLabel:A2InstallStageDownloadAssets
            message:@"正在下载资源索引"
            thenRun:^(NSError *error) {
@@ -486,7 +486,7 @@ static void A2Main(dispatch_block_t block) {
         return;
     }
 
-    [self logStage:@"assets" sample:pending.firstObject.firstObject];
+    [self logStage:@"stage=assets" sample:pending.firstObject.firstObject];
     [self downloadBatch:pending
                   stage:A2InstallStageDownloadAssets
             messageBase:[NSString stringWithFormat:@"正在下载资源（%lu 个文件）",
@@ -650,12 +650,16 @@ static void A2Main(dispatch_block_t block) {
 
 /// 阶段级判据行：本阶段实际会用的源（镜像 / 官方）+ 候选条数 + 样本地址。
 ///
+/// `stage` 传进来的就是完整判据 token（如 `stage=libraries`）—— 这样
+/// 「哪些阶段会打源判据」在源码里可 grep（`grep 'stage='` 一眼看全），
+/// 编译进包后也是一条完整字面量（包内自证可直接扫到）。
+///
 /// 每阶段一条而不是每文件一条 —— 库 / 资源阶段的文件数以千计，
 /// 逐条打会把日志刷爆，反而看不出「用的哪个源」。
 - (void)logStage:(NSString *)stage sample:(NSString *)url {
     NSArray<NSString *> *cands = [self candidatesForURL:url];
     NSString *first = cands.firstObject ?: @"";
-    [A2Log log:@"[A2-MIRROR] stage=%@ 首选=%@ source=%@ 候选=%lu 样本=%@",
+    [A2Log log:@"[A2-MIRROR] %@ 首选=%@ source=%@ 候选=%lu 样本=%@",
           stage, first, [A2MirrorResolver sourceLabelForURL:first],
           (unsigned long)cands.count, url];
 }
