@@ -572,6 +572,48 @@ static void A2Main(dispatch_block_t block) {
         [d writeToFile:configPath atomically:YES];
     }
 
+    // ========================================================================
+    // ★[A2-INSTANCE] 实例落位判据行（安装侧）★
+    // ------------------------------------------------------------------------
+    // 判据 = 启动链真的要打开的那两个文件：
+    //          <gameHome>/versions/<版本名>/<版本名>.json
+    //          <gameHome>/versions/<版本名>/<版本名>.jar
+    //   两者都走 A2GamePath 的同一处计算（与下载落点、与启动读取同一处，
+    //   不在这里另拼一份路径）。
+    // 带加载器时另查基底版本：加载器 json 以 inheritsFrom 指向它、
+    //   它的 jar 被硬链到加载器版本目录 —— 缺了照样起不来。
+    // ★判据为假 ⇒ 如实报失败★：报「安装完成」却不在 versions/ 里留下可用
+    //   实例，正是本单要消灭的半成品形态（包内 versions/ = 0 的成因）。
+    // ========================================================================
+    NSFileManager *fm = NSFileManager.defaultManager;
+    NSString *instanceJSON = [path versionJSONPath:self.request.versionName];
+    NSString *instanceJar = [path versionJarPath:self.request.versionName];
+    BOOL jsonExists = [fm fileExistsAtPath:instanceJSON];
+    BOOL jarExists = [fm fileExistsAtPath:instanceJar];
+    BOOL instanceOK = jsonExists && jarExists;
+
+    BOOL baseOK = YES;
+    NSString *baseField = @"";
+    if (![self.baseVersionName isEqualToString:self.request.versionName]) {
+        baseOK = [fm fileExistsAtPath:[path versionJSONPath:self.baseVersionName]]
+              && [fm fileExistsAtPath:[path versionJarPath:self.baseVersionName]];
+        baseField = [NSString stringWithFormat:@" base=%@ baseExists=%d",
+                     self.baseVersionName, baseOK ? 1 : 0];
+    }
+
+    // ★可 grep 的判据行（默认可见）★
+    [A2Log log:@"[A2-INSTANCE] id=%@ jar=%@ json=%@ exists=%d stage=install assets=%@ libraries=%@%@",
+     self.request.versionName, instanceJar, instanceJSON, instanceOK ? 1 : 0,
+     [path assetsHome], [path librariesHome], baseField];
+
+    if (!instanceOK || !baseOK) {
+        [self failWithMessage:[NSString stringWithFormat:
+            @"安装收尾校验未通过：versions/%@ 缺 json 或 jar（json=%d jar=%d）%@",
+            self.request.versionName, jsonExists ? 1 : 0, jarExists ? 1 : 0,
+            baseOK ? @"" : [NSString stringWithFormat:@"，且基底 %@ 不完整", self.baseVersionName]]];
+        return;
+    }
+
     [self report:A2InstallStageFinalize progress:1 message:@"安装完成"];
     [A2Log log:@"installer: 安装完成 %@", self.request.versionName];
     if (self.completionBlock) self.completionBlock(YES, nil);
