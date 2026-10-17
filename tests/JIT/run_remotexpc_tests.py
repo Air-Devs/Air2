@@ -33,6 +33,8 @@ SOURCES = [
     os.path.join(SUPPORT, "a2_remotexpc_framing.m"),
     os.path.join(SUPPORT, "a2_remotexpc_session.m"),
     os.path.join(SUPPORT, "a2_rppairing_pairsetup_transport.m"),
+    # ★[A2-PAIRPIN] 线上契约纯函数：JSON 传输（上面那个 .m）引用了它 ⇒ 必须一起链★
+    os.path.join(SUPPORT, "a2_rppairing_pairable_host_wire.m"),
     os.path.join(SUPPORT, "a2_rppairing_pairable_host.m"),
     # pairable-host 复用既有 RSD 层的服务类型常量（★不另造常量★）⇒ 需要链接该层。
     # 该层已在 tests/JIT/run_jit_tests.py 里被证明可在本编译配置下编过。

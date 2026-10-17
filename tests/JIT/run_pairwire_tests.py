@@ -35,6 +35,8 @@ SUPPORT = os.path.join(ROOT, "Natives", "Support")
 SOURCES = [
     # 判据行 / 日志（只依赖 Foundation + stdio）
     os.path.join(SUPPORT, "a2_log.m"),
+    # ★[A2-PAIRPIN] pairable-host 线上契约纯函数（accessory 驱动的判据行 / JSON 传输要用）★
+    os.path.join(SUPPORT, "a2_rppairing_pairable_host_wire.m"),
     # RPPairing 内核与密码学原语（pair-setup 会话要用）
     os.path.join(SUPPORT, "a2_rppairing.m"),
     os.path.join(SUPPORT, "a2_rppairing_crypto.m"),

@@ -10,6 +10,7 @@
 
 #import "a2_rppairing_pairsetup_transport.h"
 #import "a2_remotexpc_framing.h"
+#import "a2_rppairing_pairable_host_wire.h"
 #import "a2_log.h"
 
 #import <Network/Network.h>
@@ -417,3 +418,380 @@ static A2RPPairSetupTransportFailure A2RPPWMapRemoteXPCError(A2RemoteXPCErrorKin
 }
 
 @end
+
+#pragma mark - ★[A2-PAIRPIN] pairable-host 连接上的 JSON 传输★
+
+#if __has_include("a2_rppairing_pairsetup.h")
+
+/// 一帧最多跳过的无关帧数（防止对端用无意义事件把我们锁死在循环里）。
+#define A2RPPW_MAX_SKIPPED_FRAMES 8
+
+/// 从 TLV8 里读出 State（0x06）；读不到 ⇒ -1。★只读前若干条目，不做完整解码★。
+static int A2RPPWStateOfTLV(NSData *tlv) {
+    if (tlv.length < 3) {
+        return -1;
+    }
+    const uint8_t *b = (const uint8_t *)tlv.bytes;
+    NSUInteger n = tlv.length;
+    NSUInteger i = 0;
+    while (i + 2 <= n) {
+        uint8_t type = b[i];
+        uint8_t len = b[i + 1];
+        if (i + 2 + (NSUInteger)len > n) {
+            break;
+        }
+        if (type == 0x06 && len >= 1) {
+            return (int)b[i + 2];
+        }
+        i += 2 + (NSUInteger)len;
+    }
+    return -1;
+}
+
+@interface A2RPPairSetupPairableHostJSONTransport () <A2RPPairSetupMessageTransport>
+@property (nonatomic, strong, nullable) id<A2RPByteStream> stream;
+@property (nonatomic, copy) NSString *hostName;
+/// 已收但尚未消费的字节（底层 read 是「能读多少读多少」⇒ 必须自己攒帧）。
+@property (nonatomic, strong) NSMutableData *rxBuffer;
+/// 已解出、但当前调用用不上的信封载荷（例如握手前就到了的 M1）。
+@property (nonatomic, strong) NSMutableArray<id> *pendingValues;
+/// 本侧自己的发送序号（对端另有自己的；错开是正常的）。
+@property (nonatomic) NSUInteger txSequenceNumber;
+@property (nonatomic, readwrite) BOOL handshakeCompleted;
+@property (nonatomic, readwrite, copy, nullable) NSData *firstBytes;
+@property (nonatomic) BOOL sawAnyBytes;
+@property (nonatomic, copy, nullable) NSArray<NSString *> *txtKeys;
+@property (nonatomic, copy) NSString *advertisedName;
+@property (nonatomic, copy) NSString *model;
+@property (nonatomic, copy) NSString *identifier;
+@property (nonatomic) NSUInteger wireVersion;
+@property (nonatomic, readwrite) A2RPPairSetupTransportFailure lastFailureKind;
+@end
+
+@implementation A2RPPairSetupPairableHostJSONTransport
+
++ (instancetype)transportWithStream:(id<A2RPByteStream>)stream hostName:(NSString *)hostName {
+    if (stream == nil) {
+        return nil;
+    }
+    A2RPPairSetupPairableHostJSONTransport *t = [[self alloc] init];
+    t.stream = stream;
+    t.hostName = [hostName copy] ?: @"air2-rppairing";
+    t.rxBuffer = [NSMutableData data];
+    t.pendingValues = [NSMutableArray array];
+    t.txSequenceNumber = 0;
+    t.advertisedName = @"Air2";
+    t.model = @"Mac17,7";
+    t.identifier = @"";
+    t.wireVersion = 26;
+    t.lastFailureKind = A2RPPairSetupTransportFailureNone;
+    return t;
+}
+
+#pragma mark 判据行
+
+/// 打一行 `[A2-PAIRPIN] stage=… txKeys=… firstBytes=… m2=ok|fail reason=…`
+/// ★这是本单要求的机器判据★：真机日志里一眼看出卡在哪一步
+/// （`firstBytes=` 若不是 `525050616972696E67`=`RPPairing` ⇒ 根本不是这条线）。
+- (void)logStage:(NSString *)stage m2Sent:(BOOL)m2Sent reason:(NSString *)reason {
+    a2_log_criterion(@"%@", A2RPPHWCriterionLine(stage, self.txtKeys, self.firstBytes, m2Sent, reason));
+}
+
+#pragma mark 读写
+
+/// 把整帧写出。失败 ⇒ 分类 + reason。
+- (BOOL)writeFrame:(NSData *)frame reason:(NSString **)reason {
+    if (self.stream == nil) {
+        self.lastFailureKind = A2RPPairSetupTransportFailurePeerClosed;
+        if (reason) { *reason = @"字节通道已释放"; }
+        return NO;
+    }
+    NSString *why = nil;
+    A2RemoteXPCErrorKind err = A2RemoteXPCErrorNone;
+    if (![self.stream writeBytes:frame timeout:10.0 reason:&why error:&err]) {
+        self.lastFailureKind = A2RPPairSetupTransportFailurePeerClosed;
+        if (reason) { *reason = why ?: @"写帧失败"; }
+        return NO;
+    }
+    return YES;
+}
+
+/// 攒够一帧并交出 JSON 负载（★不含 magic/长度★）。
+- (NSData *)takeFramePayloadWithTimeout:(NSTimeInterval)timeout reason:(NSString **)reason {
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:MAX(0.1, timeout)];
+    for (;;) {
+        if (self.rxBuffer.length >= 11) {
+            NSUInteger need = 0;
+            NSString *hwhy = nil;
+            if (!A2RPPHWDecodeFrameHeader(self.rxBuffer, &need, &hwhy)) {
+                self.lastFailureKind = A2RPPairSetupTransportFailureFormat;
+                if (reason) { *reason = hwhy ?: @"帧头不符"; }
+                return nil;
+            }
+            if (self.rxBuffer.length >= 11 + need) {
+                NSData *payload = [self.rxBuffer subdataWithRange:NSMakeRange(11, need)];
+                [self.rxBuffer replaceBytesInRange:NSMakeRange(0, 11 + need) withBytes:NULL length:0];
+                return payload;
+            }
+        }
+        NSTimeInterval remain = [deadline timeIntervalSinceNow];
+        if (remain <= 0) {
+            self.lastFailureKind = A2RPPairSetupTransportFailureTimeout;
+            if (reason) { *reason = [NSString stringWithFormat:@"等帧超时（已有 %lu 字节）",
+                                      (unsigned long)self.rxBuffer.length]; }
+            return nil;
+        }
+        NSString *why = nil;
+        A2RemoteXPCErrorKind err = A2RemoteXPCErrorNone;
+        NSData *chunk = [self.stream readBytesWithTimeout:remain reason:&why error:&err];
+        if (chunk.length == 0) {
+            self.lastFailureKind = (err == A2RemoteXPCErrorReceiveTimeout)
+                ? A2RPPairSetupTransportFailureTimeout
+                : A2RPPairSetupTransportFailurePeerClosed;
+            if (reason) { *reason = why ?: @"读不到数据"; }
+            return nil;
+        }
+        if (!self.sawAnyBytes) {
+            self.sawAnyBytes = YES;
+            self.firstBytes = chunk;                 // ★只留第一段，判据行用★
+        }
+        [self.rxBuffer appendData:chunk];
+    }
+}
+
+/// 读一帧并解信封；返回整条信封，*outPlain 取 `message.plain._0`。
+- (NSDictionary *)readEnvelopeWithTimeout:(NSTimeInterval)timeout
+                                   plain:(id *)outPlain
+                                  reason:(NSString **)reason {
+    NSData *payload = [self takeFramePayloadWithTimeout:timeout reason:reason];
+    if (payload == nil) {
+        return nil;
+    }
+    NSString *why = nil;
+    id plain = nil;
+    NSDictionary *env = A2RPPHWDecodeEnvelope(payload, &plain, &why);
+    if (env == nil) {
+        self.lastFailureKind = A2RPPairSetupTransportFailureFormat;
+        if (reason) { *reason = why ?: @"信封不是合法 JSON"; }
+        return nil;
+    }
+    if (outPlain) {
+        *outPlain = plain;
+    }
+    return env;
+}
+
+/// 回握手响应（★`allowsPinlessPairing=NO` 就在这里声明★）。
+- (BOOL)answerHandshakeRequest:(id)plain reason:(NSString **)reason {
+    if (A2RPPHWHandshakeWantsPairVerify(plain)) {
+        self.lastFailureKind = A2RPPairSetupTransportFailureOther;
+        if (reason) {
+            *reason = @"设备握手请求里 hostOptions.attemptPairVerify=true —— "
+                      @"本侧只支持设备发起的 pair-setup，不支持 pair-verify（不假装能继续）";
+        }
+        [self logStage:@"handshake" m2Sent:NO reason:@"device-requested-pair-verify(unsupported)"];
+        return NO;
+    }
+    NSDictionary *response = A2RPPHWHandshakeResponse(self.advertisedName, self.model,
+                                                     self.identifier, @"", self.wireVersion);
+    NSString *why = nil;
+    NSData *json = A2RPPHWEncodeEnvelope(response, A2RPPHWOriginatedByAccessory,
+                                         self.txSequenceNumber, &why);
+    if (json == nil) {
+        self.lastFailureKind = A2RPPairSetupTransportFailureFormat;
+        if (reason) { *reason = why ?: @"握手响应序列化失败"; }
+        return NO;
+    }
+    NSData *frame = A2RPPHWEncodeFrame(json, &why);
+    if (frame == nil) {
+        self.lastFailureKind = A2RPPairSetupTransportFailureFormat;
+        if (reason) { *reason = why ?: @"握手响应装帧失败"; }
+        return NO;
+    }
+    if (![self writeFrame:frame reason:reason]) {
+        [self logStage:@"handshake" m2Sent:NO reason:@"write-handshake-response-failed"];
+        return NO;
+    }
+    self.txSequenceNumber += 1;
+    [self logStage:@"handshake" m2Sent:NO
+           reason:[NSString stringWithFormat:
+                   @"handshake-response-sent(seq=%lu, allowsPairSetup=YES, allowsPinlessPairing=NO)…"
+                   @"下一步等设备 M1", (unsigned long)(self.txSequenceNumber - 1)]];
+    return YES;
+}
+
+#pragma mark beginSession
+
+- (BOOL)beginSessionWithName:(NSString *)name
+                       model:(NSString *)model
+                  identifier:(NSString *)identifier
+                 wireVersion:(NSUInteger)wireVersion
+                     txtKeys:(NSArray<NSString *> *)txtKeys
+                     timeout:(NSTimeInterval)timeout
+                      reason:(NSString **)reason {
+    self.advertisedName = name.length > 0 ? name : self.advertisedName;
+    self.model = model.length > 0 ? model : self.model;
+    self.identifier = identifier ?: @"";
+    self.wireVersion = wireVersion;
+    self.txtKeys = txtKeys;
+
+    if (self.stream == nil || ![self.stream openStreamWithTimeout:timeout reason:reason error:NULL]) {
+        self.lastFailureKind = A2RPPairSetupTransportFailurePeerClosed;
+        [self logStage:@"handshake" m2Sent:NO reason:@"stream-not-open"];
+        return NO;
+    }
+
+    id plain = nil;
+    NSString *why = nil;
+    NSDictionary *env = [self readEnvelopeWithTimeout:timeout plain:&plain reason:&why];
+    if (env == nil) {
+        // ★最常见的失败就在这里★：对端第一段字节不是 `RPPairing`（例如它等 RemoteXPC 前导）。
+        [self logStage:@"handshake" m2Sent:NO
+               reason:[NSString stringWithFormat:@"no-handshake-frame(%@)", why ?: @"原因未记录"]];
+        if (reason) { *reason = why ?: @"收不到握手请求帧"; }
+        return NO;
+    }
+
+    if (A2RPPHWIsHandshakeRequest(plain)) {
+        if (![self answerHandshakeRequest:plain reason:reason]) {
+            return NO;
+        }
+    } else if (A2RPPHWIsPairingDataEvent(plain)) {
+        // 有的实现对端省掉握手直接发 M1 ⇒ 别丢，留给第一次 receive。
+        [self.pendingValues addObject:plain];
+        [self logStage:@"handshake" m2Sent:NO
+               reason:@"no-handshake-request(m1-kept, 对端直接进入 pair-setup)"];
+    } else {
+        self.lastFailureKind = A2RPPairSetupTransportFailureFormat;
+        [self logStage:@"handshake" m2Sent:NO reason:@"first-frame-neither-handshake-nor-pairingData"];
+        if (reason) { *reason = @"对端第一帧既不是握手请求也不是 pairingData"; }
+        return NO;
+    }
+    self.handshakeCompleted = YES;
+    return YES;
+}
+
+#pragma mark 缝原语
+
+- (NSData *)receivePairingDataWithKind:(NSString *)kind
+                               timeout:(NSTimeInterval)timeout
+                                reason:(NSString **)reason {
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:MAX(0.1, timeout)];
+    for (NSUInteger guard = 0; guard < A2RPPW_MAX_SKIPPED_FRAMES; guard++) {
+        id plain = nil;
+        if (self.pendingValues.count > 0) {
+            plain = self.pendingValues.firstObject;
+            [self.pendingValues removeObjectAtIndex:0];
+        } else {
+            NSTimeInterval remain = [deadline timeIntervalSinceNow];
+            if (remain <= 0) {
+                self.lastFailureKind = A2RPPairSetupTransportFailureTimeout;
+                if (reason) { *reason = @"等 pairingData 超时"; }
+                return nil;
+            }
+            NSString *why = nil;
+            if ([self readEnvelopeWithTimeout:remain plain:&plain reason:&why] == nil) {
+                if (reason) { *reason = why ?: @"收帧失败"; }
+                return nil;
+            }
+        }
+
+        if (A2RPPHWIsPairingDataEvent(plain)) {
+            NSString *why = nil;
+            NSString *evKind = nil;
+            NSData *tlv = A2RPPHWPairingDataFromEvent(plain, &evKind, &why);
+            if (tlv == nil) {
+                self.lastFailureKind = A2RPPairSetupTransportFailureFormat;
+                if (reason) { *reason = why ?: @"pairingData 负载不可解"; }
+                return nil;
+            }
+            int state = A2RPPWStateOfTLV(tlv);
+            if (state > 0 && (state % 2) == 1) {
+                [self logStage:[NSString stringWithFormat:@"m%d", state] m2Sent:NO
+                       reason:[NSString stringWithFormat:@"recv-M%d(tlv=%luB, kind=%@)",
+                               state, (unsigned long)tlv.length, evKind ?: kind ?: @"?"]];
+            }
+            return tlv;
+        }
+
+        if (A2RPPHWIsHandshakeRequest(plain)) {
+            NSString *why = nil;
+            if (![self answerHandshakeRequest:plain reason:&why]) {
+                if (reason) { *reason = why ?: @"重复握手请求处理失败"; }
+                return nil;
+            }
+            continue;
+        }
+
+        A2RXPCLog([NSString stringWithFormat:@"[A2-PAIRPIN] 跳过一帧无关事件（%lu 字节 JSON）",
+                   (unsigned long)[[plain description] length]]);
+    }
+    self.lastFailureKind = A2RPPairSetupTransportFailureFormat;
+    if (reason) { *reason = @"连续无关帧过多，放弃（不无限空转）"; }
+    return nil;
+}
+
+- (BOOL)sendPairingData:(NSData *)tlv
+                   kind:(NSString *)kind
+               startNew:(BOOL)startNewSession
+                 reason:(NSString **)reason {
+    if (tlv.length == 0) {
+        self.lastFailureKind = A2RPPairSetupTransportFailureFormat;
+        if (reason) { *reason = @"待发 pairingData 为空"; }
+        return NO;
+    }
+    NSDictionary *value = A2RPPHWEncodePairingDataEvent([tlv base64EncodedStringWithOptions:0],
+                                                       kind, startNewSession);
+    NSString *why = nil;
+    NSData *json = A2RPPHWEncodeEnvelope(value, A2RPPHWOriginatedByAccessory,
+                                         self.txSequenceNumber, &why);
+    if (json == nil) {
+        self.lastFailureKind = A2RPPairSetupTransportFailureFormat;
+        if (reason) { *reason = why ?: @"pairingData 信封序列化失败"; }
+        return NO;
+    }
+    NSData *frame = A2RPPHWEncodeFrame(json, &why);
+    if (frame == nil) {
+        self.lastFailureKind = A2RPPairSetupTransportFailureFormat;
+        if (reason) { *reason = why ?: @"pairingData 装帧失败"; }
+        return NO;
+    }
+    if (![self writeFrame:frame reason:reason]) {
+        [self logStage:@"send" m2Sent:NO reason:@"write-pairingData-failed"];
+        return NO;
+    }
+    self.txSequenceNumber += 1;
+
+    int state = A2RPPWStateOfTLV(tlv);
+    if (state > 0 && (state % 2) == 0) {
+        BOOL isM2 = (state == 2);
+        NSString *sentWhy = isM2
+            ? @"sent-M2(state=2, salt+B)——设备收到这一帧之后才弹「输 6 位码」"
+            : [NSString stringWithFormat:@"sent-M%d(tlv=%luB)", state, (unsigned long)tlv.length];
+        [self logStage:[NSString stringWithFormat:@"m%d", state] m2Sent:isM2 reason:sentWhy];
+    }
+    return YES;
+}
+
+- (NSData *)exchangePairingData:(NSData *)tlv
+                           kind:(NSString *)kind
+                       startNew:(BOOL)startNewSession
+                         reason:(NSString **)reason {
+    if (![self sendPairingData:tlv kind:kind startNew:startNewSession reason:reason]) {
+        return nil;
+    }
+    return [self receivePairingDataWithKind:kind timeout:30.0 reason:reason];
+}
+
+- (BOOL)transportObservedAwaitingUserConsent {
+    return NO;   // 设备发起配对没有「等设备同意」这一段（那是 Host 侧先行配对的语义）
+}
+
+- (void)close {
+    [self.stream closeStream];
+    self.stream = nil;
+}
+
+@end
+
+#endif  // __has_include("a2_rppairing_pairsetup.h") —— [A2-PAIRPIN] JSON 传输

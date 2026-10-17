@@ -25,6 +25,7 @@
 
 #import <Foundation/Foundation.h>
 #import "a2_remotexpc_session.h"
+#import "a2_rppairing_pairsetup.h"   // A2RPPairSetupTransportFailure（下方 JSON 传输的失败分类）
 
 NS_ASSUME_NONNULL_BEGIN
 
@@ -89,6 +90,48 @@ BOOL A2RPPairSetupUSBPathAvailable(NSString *_Nullable *_Nullable reason);
                                 startNew:(BOOL)startNewSession
                                   reason:(NSString *_Nullable *_Nullable)reason;
 
+- (void)close;
+
+@end
+
+#pragma mark - ★[A2-PAIRPIN] pairable-host 连接上的 JSON 传输（本单的修复点）★
+
+/// pairable-host 被设备连入之后的那条线上契约：`"RPPairing"` + 2B 大端长度 + UTF-8 JSON 信封。
+///
+/// ★为什么不能用 A2RPPairSetupRemoteXPCTransport★：那条路是 §2b `_remoted._tcp` 的
+/// RemoteXPC（HTTP/2 前导 + SETTINGS + WINDOW_UPDATE + HEADERS + XPC 字典）。
+/// 把 RemoteXPC 套在 pairable-host 连接上，设备收到的第一段字节是
+/// `PRI * HTTP/2.0…` 而不是握手响应 ⇒ 它永远不发 pair-setup M1 ⇒
+/// 界面停在「已连入」且★从不弹 6 位码输入框★（用户反馈的正是这一条）。
+///
+/// 本类只做三件事：
+///   ① 收/发帧（magic + 大端长度 + JSON），带缓冲（底层读是"能读多少读多少"）；
+///   ② 握手：收设备请求 → 回 `allowsPairSetup=YES / allowsPinlessPairing=NO` 的响应；
+///   ③ 把 pair-setup 的 TLV 装进 `event.pairingData`（data 为 base64）。
+/// 帧/信封/事件的全部编解码走 a2_rppairing_pairable_host_wire（纯函数，有单测）。
+@interface A2RPPairSetupPairableHostJSONTransport : NSObject
+
+/// 只包一条已被接受的字节通道；★不在这里握手★（上下文还用不上，见 beginSession）。
++ (nullable instancetype)transportWithStream:(nullable id<A2RPByteStream>)stream
+                                    hostName:(NSString *)hostName;
+
+/// ★握手（设备连上后的第一帧是握手请求，必须先回它）★。
+/// 失败 ⇒ NO 且 reason 写明卡在哪一步（同时已打 `[A2-PAIRPIN]` 判据行）。
+/// `txtKeys` 只用于判据行（证明通告的 TXT 契约），可为 nil。
+- (BOOL)beginSessionWithName:(NSString *)name
+                       model:(NSString *)model
+                  identifier:(NSString *)identifier
+                 wireVersion:(NSUInteger)wireVersion
+                     txtKeys:(nullable NSArray<NSString *> *)txtKeys
+                     timeout:(NSTimeInterval)timeout
+                      reason:(NSString *_Nullable *_Nullable)reason;
+
+/// 是否已完成握手（判据/UI 用）。
+@property (nonatomic, readonly) BOOL handshakeCompleted;
+/// 对端最先发来的原始字节（判据行的 `firstBytes=`）。
+@property (nonatomic, readonly, copy, nullable) NSData *firstBytes;
+/// 最近一次失败的分类（握手失败时调用方据此选「协议错」还是「传输错」）。
+@property (nonatomic, readonly) A2RPPairSetupTransportFailure lastFailureKind;
 - (void)close;
 
 @end
