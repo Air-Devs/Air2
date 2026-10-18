@@ -107,6 +107,7 @@
 		350233B9D218FD8C460EB615 /* dyld_patch_platform.m in Sources */ = {isa = PBXBuildFile; fileRef = B1B815C20ECE35E2086A818B /* dyld_patch_platform.m */; };
 		58B95958C0A7DDB769DF52F4 /* ios_uikit_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 462E6CD9270BB7206418B1C2 /* ios_uikit_bridge.m */; };
 		A7661EACDAE7C547662186E6 /* non_darwin_utils.m in Sources */ = {isa = PBXBuildFile; fileRef = F35AD048D88A48AB95377581 /* non_darwin_utils.m */; };
+		71AC99A05C9117753A2C45B3 /* A2AlertDialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 90E73BE653B804D2DFF4999F /* A2AlertDialog.m */; };
 		B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */ = {isa = PBXBuildFile; fileRef = 872075DCD0F565557A6554D2 /* A2BackgroundView.m */; };
 		BAF1CF7998AAC1E178EC66D0 /* A2CardPosition.m in Sources */ = {isa = PBXBuildFile; fileRef = C733462374B52500F6D83649 /* A2CardPosition.m */; };
 		D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */ = {isa = PBXBuildFile; fileRef = CA1D52969E0783051081B038 /* A2CardTitleBar.m */; };
@@ -153,7 +154,7 @@
 		B9AF292E811122649CF9FEE6 /* A2GameInstallOptionsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3448695748B18FEC501E0C2F /* A2GameInstallOptionsViewController.m */; };
 		6C998AE9614B2353B8C03DC2 /* A2GameVersionListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = AD5DE88799682F07A3341134 /* A2GameVersionListViewController.m */; };
 		7344000874E6AFAA9489A939 /* A2InstallingViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */; };
-		36BD9E3D29A1204C4DE1649E /* A2ModPackImportViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = EAF5FDB108BCF648BF323F13 /* A2ModPackImportViewController.m */; };
+		94AA447E5503E254731A53D6 /* A2ModPackImportCoordinator.m in Sources */ = {isa = PBXBuildFile; fileRef = 6B24CC83722D00DBDD6B0BCB /* A2ModPackImportCoordinator.m */; };
 		0C5E9A5111CB1B65E9B79ED9 /* A2ResourceDetailViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 39176526660F1CAEC3199C8F /* A2ResourceDetailViewController.m */; };
 		07F456A55641318A92B41F45 /* A2ResourceResultCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 05C7E85764E09AEA04C8DE32 /* A2ResourceResultCell.m */; };
 		D49F4495BA8F3A147387277B /* A2ResourceSearchViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 98024C5565241D478B54F4D6 /* A2ResourceSearchViewController.m */; };
@@ -293,6 +294,7 @@
 		B1B815C20ECE35E2086A818B /* dyld_patch_platform.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "dyld_patch_platform.m"; sourceTree = "<group>"; };
 		462E6CD9270BB7206418B1C2 /* ios_uikit_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "ios_uikit_bridge.m"; sourceTree = "<group>"; };
 		F35AD048D88A48AB95377581 /* non_darwin_utils.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "non_darwin_utils.m"; sourceTree = "<group>"; };
+		90E73BE653B804D2DFF4999F /* A2AlertDialog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AlertDialog.m"; sourceTree = "<group>"; };
 		872075DCD0F565557A6554D2 /* A2BackgroundView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BackgroundView.m"; sourceTree = "<group>"; };
 		C733462374B52500F6D83649 /* A2CardPosition.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CardPosition.m"; sourceTree = "<group>"; };
 		CA1D52969E0783051081B038 /* A2CardTitleBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CardTitleBar.m"; sourceTree = "<group>"; };
@@ -339,7 +341,7 @@
 		3448695748B18FEC501E0C2F /* A2GameInstallOptionsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameInstallOptionsViewController.m"; sourceTree = "<group>"; };
 		AD5DE88799682F07A3341134 /* A2GameVersionListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameVersionListViewController.m"; sourceTree = "<group>"; };
 		6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2InstallingViewController.m"; sourceTree = "<group>"; };
-		EAF5FDB108BCF648BF323F13 /* A2ModPackImportViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPackImportViewController.m"; sourceTree = "<group>"; };
+		6B24CC83722D00DBDD6B0BCB /* A2ModPackImportCoordinator.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPackImportCoordinator.m"; sourceTree = "<group>"; };
 		39176526660F1CAEC3199C8F /* A2ResourceDetailViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceDetailViewController.m"; sourceTree = "<group>"; };
 		05C7E85764E09AEA04C8DE32 /* A2ResourceResultCell.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceResultCell.m"; sourceTree = "<group>"; };
 		98024C5565241D478B54F4D6 /* A2ResourceSearchViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceSearchViewController.m"; sourceTree = "<group>"; };
@@ -471,6 +473,7 @@
 		47AE80A94AE81F737A013BA1 /* UpdateChecker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UpdateChecker.h"; sourceTree = "<group>"; };
 		A5BCB4E2C7BCE3A6A2BB25D4 /* ZeroTierBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ZeroTierBridge.h"; sourceTree = "<group>"; };
 		B198712AC6D520C821FCDD33 /* ios_uikit_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ios_uikit_bridge.h"; sourceTree = "<group>"; };
+		E181BB49FE0164A8C57E2770 /* A2AlertDialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AlertDialog.h"; sourceTree = "<group>"; };
 		930418C55810BF7B65B85AE9 /* A2BackgroundView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundView.h"; sourceTree = "<group>"; };
 		EB440E13AD4A8BB54186F381 /* A2CardPosition.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CardPosition.h"; sourceTree = "<group>"; };
 		1F985FAD5DEB8D4699A8B5AE /* A2CardTitleBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CardTitleBar.h"; sourceTree = "<group>"; };
@@ -518,7 +521,7 @@
 		A9F54FD3EE4B13741768C5AE /* A2GameInstallOptionsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameInstallOptionsViewController.h"; sourceTree = "<group>"; };
 		202A98989688120E4B50688E /* A2GameVersionListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameVersionListViewController.h"; sourceTree = "<group>"; };
 		C7770877217FAF37A3CE2F32 /* A2InstallingViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InstallingViewController.h"; sourceTree = "<group>"; };
-		13CFDC12BA665812C543D1A4 /* A2ModPackImportViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPackImportViewController.h"; sourceTree = "<group>"; };
+		C7770F7F044F1E7E7EDA9893 /* A2ModPackImportCoordinator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPackImportCoordinator.h"; sourceTree = "<group>"; };
 		3EA82DE1C4D37327845A0CE6 /* A2ResourceDetailViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceDetailViewController.h"; sourceTree = "<group>"; };
 		C88B6C791D172A2F08F35BF2 /* A2ResourceResultCell.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceResultCell.h"; sourceTree = "<group>"; };
 		C862BDE71D4C2C8EA8C47AB5 /* A2ResourceSearchViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceSearchViewController.h"; sourceTree = "<group>"; };
@@ -980,6 +983,7 @@
 		8B89578D010E17535991475E /* Components */ = {
 			isa = PBXGroup;
 			children = (
+				90E73BE653B804D2DFF4999F /* A2AlertDialog.m */,
 				872075DCD0F565557A6554D2 /* A2BackgroundView.m */,
 				C733462374B52500F6D83649 /* A2CardPosition.m */,
 				CA1D52969E0783051081B038 /* A2CardTitleBar.m */,
@@ -1013,6 +1017,7 @@
 				B498358055FFAD0453CC27C7 /* A2TextField.m */,
 				F3C972A56B473038ED5074FD /* A2Toast.m */,
 				DCF1F61258EDBCB81698B32B /* A2VersionCard.m */,
+				E181BB49FE0164A8C57E2770 /* A2AlertDialog.h */,
 				930418C55810BF7B65B85AE9 /* A2BackgroundView.h */,
 				EB440E13AD4A8BB54186F381 /* A2CardPosition.h */,
 				1F985FAD5DEB8D4699A8B5AE /* A2CardTitleBar.h */,
@@ -1140,7 +1145,7 @@
 				3448695748B18FEC501E0C2F /* A2GameInstallOptionsViewController.m */,
 				AD5DE88799682F07A3341134 /* A2GameVersionListViewController.m */,
 				6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */,
-				EAF5FDB108BCF648BF323F13 /* A2ModPackImportViewController.m */,
+				6B24CC83722D00DBDD6B0BCB /* A2ModPackImportCoordinator.m */,
 				39176526660F1CAEC3199C8F /* A2ResourceDetailViewController.m */,
 				05C7E85764E09AEA04C8DE32 /* A2ResourceResultCell.m */,
 				98024C5565241D478B54F4D6 /* A2ResourceSearchViewController.m */,
@@ -1152,7 +1157,7 @@
 				A9F54FD3EE4B13741768C5AE /* A2GameInstallOptionsViewController.h */,
 				202A98989688120E4B50688E /* A2GameVersionListViewController.h */,
 				C7770877217FAF37A3CE2F32 /* A2InstallingViewController.h */,
-				13CFDC12BA665812C543D1A4 /* A2ModPackImportViewController.h */,
+				C7770F7F044F1E7E7EDA9893 /* A2ModPackImportCoordinator.h */,
 				3EA82DE1C4D37327845A0CE6 /* A2ResourceDetailViewController.h */,
 				C88B6C791D172A2F08F35BF2 /* A2ResourceResultCell.h */,
 				C862BDE71D4C2C8EA8C47AB5 /* A2ResourceSearchViewController.h */,
@@ -1414,6 +1419,7 @@
 				350233B9D218FD8C460EB615 /* dyld_patch_platform.m in Sources */,
 				58B95958C0A7DDB769DF52F4 /* ios_uikit_bridge.m in Sources */,
 				A7661EACDAE7C547662186E6 /* non_darwin_utils.m in Sources */,
+				71AC99A05C9117753A2C45B3 /* A2AlertDialog.m in Sources */,
 				B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */,
 				BAF1CF7998AAC1E178EC66D0 /* A2CardPosition.m in Sources */,
 				D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */,
@@ -1460,7 +1466,7 @@
 				B9AF292E811122649CF9FEE6 /* A2GameInstallOptionsViewController.m in Sources */,
 				6C998AE9614B2353B8C03DC2 /* A2GameVersionListViewController.m in Sources */,
 				7344000874E6AFAA9489A939 /* A2InstallingViewController.m in Sources */,
-				36BD9E3D29A1204C4DE1649E /* A2ModPackImportViewController.m in Sources */,
+				94AA447E5503E254731A53D6 /* A2ModPackImportCoordinator.m in Sources */,
 				0C5E9A5111CB1B65E9B79ED9 /* A2ResourceDetailViewController.m in Sources */,
 				07F456A55641318A92B41F45 /* A2ResourceResultCell.m in Sources */,
 				D49F4495BA8F3A147387277B /* A2ResourceSearchViewController.m in Sources */,

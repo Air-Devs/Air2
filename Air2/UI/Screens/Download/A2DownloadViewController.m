@@ -44,7 +44,6 @@
 #import "A2NavigationController.h"
 #import "A2GameVersionListViewController.h"
 #import "A2ResourceSearchViewController.h"
-#import "A2ModPackImportViewController.h"
 #import "A2SearchByIdViewController.h"
 #import "A2FavoritesViewController.h"
 #import "A2DownloadTasksViewController.h"
@@ -104,7 +103,6 @@
         [A2NavCategory title:@"光影"   symbol:@"sun.max.fill"],
         [A2NavCategory title:@"按 ID"  symbol:@"number" division:YES],
         [A2NavCategory title:@"收藏"   symbol:@"star.fill"],
-        [A2NavCategory title:@"导入"   symbol:@"square.and.arrow.down" division:YES],
         [A2NavCategory title:@"任务"   symbol:@"arrow.down.circle.fill"],
     ];
 
@@ -191,8 +189,6 @@
         case 8:
             return [[A2FavoritesViewController alloc] init];
         case 9:
-            return [[A2ModPackImportViewController alloc] init];
-        case 10:
             return [[A2DownloadTasksViewController alloc] init];
         default:
             return [[A2ResourceSearchViewController alloc]

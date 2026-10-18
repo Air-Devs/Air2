@@ -38,6 +38,8 @@
 #import "A2DownloadManifest.h"
 #import "A2FilterChip.h"
 #import "A2GlassCard.h"
+#import "A2ModPackImportCoordinator.h"
+#import "A2PrimaryButton.h"
 #import "A2ResourceCard.h"
 #import "A2TextField.h"
 #import "A2PaginationBar.h"
@@ -119,6 +121,9 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
 @property (nonatomic, copy, nullable) NSString *selectedGameVersion;
 @property (nonatomic, assign) A2ContentSortField sortField;
 @property (nonatomic, strong) NSMutableSet<NSString *> *selectedCategories;
+
+/// 本地整合包导入流程协调器（运行期间由本页强持有，结束置 nil —— 见 A2ModPackImportCoordinator）
+@property (nonatomic, strong, nullable) A2ModPackImportCoordinator *modPackImporter;
 
 @end
 
@@ -343,6 +348,14 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     _resetButton = [self makeResetButton];
     [stack addArrangedSubview:_resetButton];
 
+    // ---- 导入本地整合包 ----
+    // 位置对齐 ZL2 的 SearchModPackScreen：导入入口长在筛选面板里，
+    // 不在下载区另开一个分类页 —— 用户「手上已经有文件」的场景，
+    // 本来就发生在挑整合包的地方。
+    if (_contentClass == A2ContentClassModPack) {
+        [stack addArrangedSubview:[self makeImportButton]];
+    }
+
     // 把筛选构建放在侧栏之后执行（依赖上面的 stack 已就绪）
     [self buildLoaderChips];
     [self buildSortChips];
@@ -475,6 +488,39 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
 /// 平台显示名（两家平台的中文/英文名）
 static NSString *A2PlatformDisplayName(A2ContentPlatform platform) {
     return (platform == A2ContentPlatformModrinth) ? @"Modrinth" : @"CurseForge";
+}
+
+/// 导入本地整合包入口 —— 只有整合包分类有这个按钮。
+/// 后续流程（免责提示 / 选文件 / 命名 / 进度 / 结果）全在 MD3 弹窗里，
+/// 见 A2ModPackImportCoordinator。
+- (UIView *)makeImportButton {
+    A2PrimaryButton *button =
+        [[A2PrimaryButton alloc] initWithTitle:@"导入整合包"
+                                         style:A2ButtonStyleSecondary];
+    button.icon = [UIImage systemImageNamed:@"square.and.arrow.down"];
+    // 与重置按钮同高，避免在矮屏机型把侧栏撑出可视区
+    button.minHeight = 40;
+    [button addTarget:self
+               action:@selector(importLocalModPackTapped)
+     forControlEvents:UIControlEventTouchUpInside];
+    return button;
+}
+
+- (void)importLocalModPackTapped {
+    // 已有一条在跑就忽略，避免叠出两个流程
+    if (self.modPackImporter) return;
+
+    A2ModPackImportCoordinator *coordinator =
+        [[A2ModPackImportCoordinator alloc] initWithHost:self];
+    self.modPackImporter = coordinator;
+
+    __weak typeof(self) weakSelf = self;
+    coordinator.onFinish = ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        self.modPackImporter = nil;
+    };
+    [coordinator start];
 }
 
 #pragma mark - 筛选交互

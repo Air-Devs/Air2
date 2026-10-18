@@ -51,6 +51,25 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// 安装器错误域与错误码
+FOUNDATION_EXPORT NSString *const A2ModPackErrorDomain;
+
+typedef NS_ENUM(NSInteger, A2ModPackErrorCode) {
+    A2ModPackErrorCancelled = 1,   ///< 用户主动取消
+};
+
+/// 安装阶段 —— 进度弹窗按此分步显示，与 +phaseTitles 一一对应。
+///
+/// 划分依据是安装器内部真实上报的进度值，不是 UI 层拍的：
+///   准备本体（含现装游戏本体与加载器）→ 0 ~ 0.5
+///   下载清单文件                     → 0.5 ~ 0.9
+///   解压 overrides 覆盖文件          → 0.9 ~ 1.0
+typedef NS_ENUM(NSInteger, A2ModPackPhase) {
+    A2ModPackPhasePreparingBase = 0,
+    A2ModPackPhaseDownloadingFiles,
+    A2ModPackPhaseExtractingOverrides,
+};
+
 /// 整合包格式
 typedef NS_ENUM(NSInteger, A2ModPackFormat) {
     A2ModPackFormatUnknown = 0,
@@ -95,6 +114,17 @@ typedef NS_ENUM(NSInteger, A2ModPackFormat) {
 /// 探测某个 zip 是哪种整合包格式（不安装，只识别）
 + (A2ModPackFormat)detectFormatAtPath:(NSString *)zipPath;
 
+#pragma mark - 进度换算（供 UI 分步显示）
+
+/// 分步标题，与 A2ModPackPhase 一一对应
++ (NSArray<NSString *> *)phaseTitles;
+
+/// 把总体进度（0~1）映射到阶段
++ (A2ModPackPhase)phaseForOverallProgress:(double)progress;
+
+/// 总体进度在该阶段内的百分比（0~1），用于该步的进度条
++ (double)fractionWithinPhaseForOverallProgress:(double)progress;
+
 /// 读取并解析清单
 - (void)parseManifestAtPath:(NSString *)zipPath
                  completion:(void (^)(A2ModPackManifest * _Nullable manifest,
@@ -111,6 +141,14 @@ typedef NS_ENUM(NSInteger, A2ModPackFormat) {
                  gameHome:(NSString *)gameHome
                  progress:(void (^)(double progress, NSString *message))progress
                completion:(void (^)(BOOL success, NSError * _Nullable error))completion;
+
+/// 取消安装。
+///
+/// 尽力而为：停掉进行中的下载、阻止后续步骤继续，
+/// 并通过 completion 回调 A2ModPackErrorCancelled。
+/// 已经在跑的本体安装（A2GameInstaller）无法中途掐断，
+/// 但它结束后流程不会再往下走。
+- (void)cancel;
 
 @end
 
