@@ -35,6 +35,7 @@
 #import "PLLogOutputView.h"
 #import "PLProfiles.h"
 // ★ [LAUNCH-PROGRESS] 启动阶段上报(遮罩进度条/阶段文字/步骤骨架的数据源)
+#import "AmeLaunchProgress.h"
 
 #define fm NSFileManager.defaultManager
 
@@ -2066,24 +2067,10 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
         PUSH_MARGV_LITERAL("-Dorg.lwjgl.spvc.libname=spirv-cross-c-shared.0");
     }
 
-      // 添加authlib-injector参数以支持第三方认证账户的皮肤显示
-    if ([accountId length] > 0 && [BaseAuthenticator.current isKindOfClass:[ThirdPartyAuthenticator class]]) {
-        BaseAuthenticator *currentAuth = BaseAuthenticator.current;
-        if (currentAuth.authData[@"authserver"] != nil) {
-            NSLog(@"[JavaLauncher] Adding authlib-injector arguments for third party account");
-            NSArray *authlibArgs = [(ThirdPartyAuthenticator *)currentAuth getJvmArgsForAuthlib];
-            if (authlibArgs.count > 0) {
-                for (NSString *arg in authlibArgs) {
-                    // arg 来自 authlibArgs 数组，是 strong 引用；但数组本身可能在循环外
-                    // 被释放，为防止悬垂，通过 PUSH_MARGV_FORMAT 持久化
-                    PUSH_MARGV_FORMAT(@"%@", arg);
-                    NSLog(@"[JavaLauncher] Added authlib-injector arg: %s", arg.UTF8String);
-                }     
-            } else {
-                NSLog(@"[JavaLauncher] Warning: No authlib-injector arguments available");
-            }
-        }
-    }
+    /* 第三方（Yggdrasil）账户本应追加 authlib-injector 的 -javaagent 参数，
+       Air2 尚未内置 authlib-injector.jar，账号层也只有 authServerURL，没有参数组装实现，
+       故暂不下发。等账号层补齐第三方认证资源后，在此按
+       A2AccountManager.shared.currentAccount.authServerURL 组装即可。 */
   
     NSString *librariesPath = [NSString stringWithFormat:@"%@/libs", NSBundle.mainBundle.bundlePath];
     PUSH_MARGV_FORMAT(@"-javaagent:%@/patchjna_agent.jar=", librariesPath);
