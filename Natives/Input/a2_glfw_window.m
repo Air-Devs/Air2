@@ -448,24 +448,27 @@ int a2_glfw_window_create(long window, int width, int height, const char *title)
 
     // ★UIKit 部分异步到主队列（见文件头「线程模型」）★
     dispatch_async(dispatch_get_main_queue(), ^{
-        UIWindow *win = nil;
-
-        // iOS 13+：优先挂到 App 的活跃 windowScene（否则窗口不上屏、收不到触摸）。
+        // ★2026-10-18 真机定位★ 逐行判据证明崩溃发生在「另建 UIWindow → addSubview」这条老路上
+        //   （日志停在 4/6 容器挂好，下一步 addSubview 即 objc_retain 崩）。
+        //   iOS 13+ 场景模型下，再建一个 UIWindow 并 makeKeyAndVisible 会与现有 scene 打架。
+        //   ⇒ 改成：直接把游戏视图挂到【现有 key window 的根视图】上，不再新建窗口。
+        UIWindow *keyWin = nil;
         for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
-            if ([scene isKindOfClass:[UIWindowScene class]] &&
-                scene.activationState == UISceneActivationStateForegroundActive) {
-                win = [[UIWindow alloc] initWithWindowScene:(UIWindowScene *) scene];
-                break;
+            if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+            for (UIWindow *w in ((UIWindowScene *)scene).windows) {
+                if (w.isKeyWindow) { keyWin = w; break; }
             }
+            if (keyWin != nil) break;
         }
-        if (win == nil) {
-            // 兜底：无活跃 scene 时仍建窗（尺寸可能不准，但生命周期与事件通道成立）。
-            win = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
+        if (keyWin == nil) keyWin = UIApplication.sharedApplication.windows.firstObject;
+        UIViewController *rootVC = keyWin.rootViewController;
+        UIView *container = rootVC.view;
+        if (container == nil) {
+            a2_log_f(@"[A2-GLFW] 建窗失败：没有可用的根视图（window=%ld）", window);
+            return;
         }
+        a2_log_criterion(@"[A2-GLFW] 建窗 1/6 取到现有 key window=%p rootView=%p", keyWin, container);
 
-        // ★逐行判据（2026-10-18）★ 真机在 objc_retain 崩、栈里全是 UIKit 匿名帧，
-        //   只能靠每一步的判据行把崩溃点钉死到具体调用。
-        a2_log_criterion(@"[A2-GLFW] 建窗 1/6 UIWindow 完成 win=%p", win);
         UIView *view = (UIView *) a2_glfw_input_make_view(window);
         if (view == nil) {
             a2_log_f(@"[A2-GLFW] 建窗失败：宿主视图创建失败（window=%ld）", window);
@@ -473,26 +476,18 @@ int a2_glfw_window_create(long window, int width, int height, const char *title)
         }
         a2_log_criterion(@"[A2-GLFW] 建窗 2/6 视图创建完成 view=%p", view);
 
-        // ★2026-10-18 真机定位★ 崩溃发生在 "vc.view = <自定义视图>" 这一步（objc_retain）。
-        //   原因：把自定义 UIView 直接当 UIViewController 的 rootView 会立刻走 UIKit 的
-        //   布局/持有路径，而此时视图尚未完成挂载。
-        //   ⇒ 改成：VC 用普通容器视图，我们的视图作为【子视图】加进去（布局由 autoresizing 负责）。
-        UIViewController *vc = [UIViewController new];
-        a2_log_criterion(@"[A2-GLFW] 建窗 3/6 VC 创建完成 vc=%p", vc);
-        UIView *container = [[UIView alloc] initWithFrame:win.bounds];
-        container.backgroundColor = [UIColor blackColor];
-        vc.view = container;
-        a2_log_criterion(@"[A2-GLFW] 建窗 4/6 容器视图挂好 container=%p", container);
         view.frame = container.bounds;
         view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        a2_log_criterion(@"[A2-GLFW] 建窗 3/6 视图 frame 设好 %.0fx%.0f",
+                         container.bounds.size.width, container.bounds.size.height);
+
         [container addSubview:view];
-        a2_log_criterion(@"[A2-GLFW] 建窗 4b/6 游戏视图已作为子视图加入");
-        win.rootViewController = vc;
-        a2_log_criterion(@"[A2-GLFW] 建窗 5/6 rootViewController 挂好");
-        [win makeKeyAndVisible];
-        a2_log_criterion(@"[A2-GLFW] 建窗 6/6 makeKeyAndVisible 完成");
+        a2_log_criterion(@"[A2-GLFW] 建窗 4/6 已加入根视图");
+        [container bringSubviewToFront:view];
         [view becomeFirstResponder];
-        a2_log_criterion(@"[A2-GLFW] 建窗 7/6 becomeFirstResponder 完成");
+        a2_log_criterion(@"[A2-GLFW] 建窗 5/6 becomeFirstResponder 完成");
+
+        UIWindow *win = keyWin;   // 后续代码沿用 win 变量名（不再新建窗口）
 
         CGRect b = win.bounds;
         CGFloat scale = (win.screen != nil) ? win.screen.scale : 1.0;
