@@ -733,9 +733,12 @@
     self.launchSplash = splash;
 
     __weak typeof(self) weakSelf = self;
+    // 签名对齐 ZL2 的 GameLaunchFlow：账号校验与文件校验分开跳过。
+    // 这里都不跳过 —— 走完整流程（检查 → 补全 → 准备 JRE）。
     [[A2GameLaunchCoordinator shared] launchVersion:current.name
-                                         skipCheck:NO
-                                        completion:^(BOOL success, NSError *error) {
+                                 skipAccountRefresh:NO
+                                skipIntegrityCheck:NO
+                                         completion:^(BOOL success, NSError *error) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
 
