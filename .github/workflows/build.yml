@@ -27,7 +27,10 @@ jobs:
     name: 规范检查
     runs-on: ubuntu-latest
     steps:
+      # 必须拉子模块：头文件引用检查要能解析 Libraries/external 下的第三方头
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: 目录与命名规范
         run: bash scripts/lint_structure.sh
@@ -47,6 +50,7 @@ jobs:
     needs: lint
     timeout-minutes: 60
     steps:
+      # 必须拉子模块：ZeroTierBridge.h 等引用了 Libraries/external 下的框架头
       - uses: actions/checkout@v4
         with:
           # ★CI 必须拉子模块★ 否则 Libraries/external/{fishhook,AFNetworking,
