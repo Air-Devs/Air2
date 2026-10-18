@@ -291,7 +291,24 @@ int a2_gl_bridge_backend_is_egl(const char *rendererName) {
     if (rendererName == NULL || rendererName[0] == '\0') return 0;
     // ★后端词汇表唯一来源是 a2_renderer.h 的常量★（不重复字面量）。
     // 将来多一个 EGL/GL 系后端 ⇒ 只在这里加一行比较。
-    return (strcmp(rendererName, A2RendererCompatDylibName) == 0) ? 1 : 0;
+    //
+    // ★2026-10-18 真机证据★ 只要后端最终把 GL 调用落到 ANGLE/GLES，就必须先有 EGL 上下文：
+    //   MC 的 `Minecraft.<init> → new GlDevice() → GL.createCapabilities()` 无条件执行，
+    //   而 LWJGL 会向 GLFW 要"当前上下文"，拿不到就抛
+    //   `IllegalStateException: There is no OpenGL context current in the current thread`。
+    //   metallum 是 GL→Metal 翻译器，同样需要这个上下文对象（它接管的是 GL 入口，不是 GLFW）。
+    //   只把 Vulkan 直通类（MoltenVK）排除在外。
+    static const char *kEglBackends[] = {
+        A2RendererCompatDylibName,   // libgl4es_114.dylib
+        "libmetallum.dylib",         // Metal（自研）
+        "libmobileglues.dylib",
+        "libnggl4es.dylib",
+        "libtinygl4angle.dylib",
+    };
+    for (size_t i = 0; i < sizeof(kEglBackends) / sizeof(kEglBackends[0]); i++) {
+        if (kEglBackends[i] != NULL && strcmp(rendererName, kEglBackends[i]) == 0) return 1;
+    }
+    return 0;
 }
 
 int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
