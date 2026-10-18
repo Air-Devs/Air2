@@ -482,6 +482,23 @@ int a2_launch_jvm_with_argv(int argc, const char *const argv[], A2LaunchInput in
         });
     }
     a2_log_line(@"[RT-P1] 主类 main 已派发到后台线程 ⇒ 启动器可以收转圈");
+
+    // ★心跳判据（2026-10-18）★ 真机出现「无崩溃报告、日志突然截断」的静默结束（SIGKILL），
+    //   信号处理器接不到。这里每 3 秒写一行，日志最后一条心跳的时刻 = 进程死亡时刻，
+    //   配合设备崩溃报告就能判定是"被系统杀"还是"我们卡住"。
+    {
+        static volatile int hbStop = 0;
+        hbStop = 0;
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            int n = 0;
+            while (!hbStop) {
+                sleep(3);
+                n += 3;
+                a2_log_f(@"[A2-HB] 存活 %ds（main 线程=%d）", n, (int)!NSThread.isMainThread);
+                if (n >= 600) break;   // 10 分钟后不再刷，避免日志无限长
+            }
+        });
+    }
     a2_progress_enter(A2StageCompleted);
     return 0;
 }
