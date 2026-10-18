@@ -42,6 +42,7 @@
 		E6679E2C4F527A9777EA6CEC /* A2DownloadManifest.m in Sources */ = {isa = PBXBuildFile; fileRef = 2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */; };
 		9B094A240FBA6A3C1821F88C /* A2DownloadTask.m in Sources */ = {isa = PBXBuildFile; fileRef = AE757274F8E1E206F093F68A /* A2DownloadTask.m */; };
 		7EA9A208AAFD076980572984 /* A2DownloadTaskCenter.m in Sources */ = {isa = PBXBuildFile; fileRef = 49E73CAF4B5DFDDC5E9F20AF /* A2DownloadTaskCenter.m */; };
+		181BCAA1916DE4DBFD2E08F9 /* A2JREManager.m in Sources */ = {isa = PBXBuildFile; fileRef = AD4D1573AAD6B66A99BF1719 /* A2JREManager.m */; };
 		0FB8591245DA858CF4BAF88B /* A2Logger.m in Sources */ = {isa = PBXBuildFile; fileRef = EA103E9122B1B77443B27069 /* A2Logger.m */; };
 		2C4A505B192563D676DFDD2E /* A2Multiplayer.m in Sources */ = {isa = PBXBuildFile; fileRef = 76E2F83DD8568E1BB073643E /* A2Multiplayer.m */; };
 		186C2F9B8B2FA203E76FC125 /* A2GameDirMigration.m in Sources */ = {isa = PBXBuildFile; fileRef = F03B93794DA818FF2F14D7D0 /* A2GameDirMigration.m */; };
@@ -166,6 +167,7 @@
 		231BA8D647ED52A70C2A644B /* A2ColorThemeDialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */; };
 		1E7FB60017717A3BE32B9A3C /* A2DiagnosticsSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */; };
 		C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB44E450592838BA6F7B061 /* A2GameSettings.m */; };
+		DCDEBCE58A13533B8A5DBDBB /* A2JREManageViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 832F97C49F2416C2C0488A79 /* A2JREManageViewController.m */; };
 		4F0C55C53DF109102154C739 /* A2RendererPluginViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = B53FD56CE6A8FAC76A2445BE /* A2RendererPluginViewController.m */; };
 		95B9DE285BF6EB5B2C8CC100 /* A2RendererSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = BAA21491506E419C480B4D51 /* A2RendererSettingsViewController.m */; };
 		1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */; };
@@ -226,6 +228,7 @@
 		2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadManifest.m"; sourceTree = "<group>"; };
 		AE757274F8E1E206F093F68A /* A2DownloadTask.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadTask.m"; sourceTree = "<group>"; };
 		49E73CAF4B5DFDDC5E9F20AF /* A2DownloadTaskCenter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadTaskCenter.m"; sourceTree = "<group>"; };
+		AD4D1573AAD6B66A99BF1719 /* A2JREManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JREManager.m"; sourceTree = "<group>"; };
 		EA103E9122B1B77443B27069 /* A2Logger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Logger.m"; sourceTree = "<group>"; };
 		76E2F83DD8568E1BB073643E /* A2Multiplayer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Multiplayer.m"; sourceTree = "<group>"; };
 		F03B93794DA818FF2F14D7D0 /* A2GameDirMigration.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameDirMigration.m"; sourceTree = "<group>"; };
@@ -350,6 +353,7 @@
 		5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorThemeDialog.m"; sourceTree = "<group>"; };
 		D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DiagnosticsSettings.m"; sourceTree = "<group>"; };
 		0FB44E450592838BA6F7B061 /* A2GameSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameSettings.m"; sourceTree = "<group>"; };
+		832F97C49F2416C2C0488A79 /* A2JREManageViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JREManageViewController.m"; sourceTree = "<group>"; };
 		B53FD56CE6A8FAC76A2445BE /* A2RendererPluginViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererPluginViewController.m"; sourceTree = "<group>"; };
 		BAA21491506E419C480B4D51 /* A2RendererSettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererSettingsViewController.m"; sourceTree = "<group>"; };
 		9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsViewController.m"; sourceTree = "<group>"; };
@@ -403,6 +407,7 @@
 		D3ABD890B860FD03E77A2B0C /* A2DownloadManifest.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadManifest.h"; sourceTree = "<group>"; };
 		0F59C20AA19682790BF7251E /* A2DownloadTask.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTask.h"; sourceTree = "<group>"; };
 		A9FC62B0E895E90CEEE39D8E /* A2DownloadTaskCenter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTaskCenter.h"; sourceTree = "<group>"; };
+		8F9742BF2853E93D86927BFF /* A2JREManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JREManager.h"; sourceTree = "<group>"; };
 		867390ED8965A503C3C46C99 /* A2Logger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Logger.h"; sourceTree = "<group>"; };
 		1942FF65DA97FDD7897CC10B /* A2Multiplayer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Multiplayer.h"; sourceTree = "<group>"; };
 		801FBE3D9BBD2833977FF7A9 /* A2GameDirMigration.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameDirMigration.h"; sourceTree = "<group>"; };
@@ -524,6 +529,7 @@
 		8A8A69E0C0117AD2228117A1 /* A2BackgroundSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundSettingsViewController.h"; sourceTree = "<group>"; };
 		137E26C858B461DBC6F3AB93 /* A2ColorThemeDialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorThemeDialog.h"; sourceTree = "<group>"; };
 		9CE1BE0BB775D12731066330 /* A2DiagnosticsSettings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DiagnosticsSettings.h"; sourceTree = "<group>"; };
+		7D32BA48E5B96160D5CA1A23 /* A2JREManageViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JREManageViewController.h"; sourceTree = "<group>"; };
 		838C7F8423E85E5E058FD819 /* A2RendererPluginViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererPluginViewController.h"; sourceTree = "<group>"; };
 		7C21A1EE7A69ED22A12A0588 /* A2RendererSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererSettingsViewController.h"; sourceTree = "<group>"; };
 		A309D45ADA810213043EDE96 /* A2SettingsSections.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsSections.h"; sourceTree = "<group>"; };
@@ -606,6 +612,7 @@
 				B31D400D67779826215CAD33 /* Account */,
 				184E0966D040B090B9F76405 /* Addons */,
 				6D1D1D1337AE93B0607365A8 /* Download */,
+				14D8A68BF0520B7B0A68241F /* Java */,
 				840E9F2E85929805E7338157 /* Logging */,
 				0DE8669EFBE7C26555887B84 /* Multiplayer */,
 				3C208AC8788CF22B0CC6CF18 /* Path */,
@@ -735,6 +742,16 @@
 				A9FC62B0E895E90CEEE39D8E /* A2DownloadTaskCenter.h */,
 			);
 			path = Download;
+			sourceTree = "<group>";
+		};
+
+		14D8A68BF0520B7B0A68241F /* Java */ = {
+			isa = PBXGroup;
+			children = (
+				AD4D1573AAD6B66A99BF1719 /* A2JREManager.m */,
+				8F9742BF2853E93D86927BFF /* A2JREManager.h */,
+			);
+			path = Java;
 			sourceTree = "<group>";
 		};
 
@@ -1184,12 +1201,14 @@
 				5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */,
 				D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */,
 				0FB44E450592838BA6F7B061 /* A2GameSettings.m */,
+				832F97C49F2416C2C0488A79 /* A2JREManageViewController.m */,
 				B53FD56CE6A8FAC76A2445BE /* A2RendererPluginViewController.m */,
 				BAA21491506E419C480B4D51 /* A2RendererSettingsViewController.m */,
 				9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */,
 				8A8A69E0C0117AD2228117A1 /* A2BackgroundSettingsViewController.h */,
 				137E26C858B461DBC6F3AB93 /* A2ColorThemeDialog.h */,
 				9CE1BE0BB775D12731066330 /* A2DiagnosticsSettings.h */,
+				7D32BA48E5B96160D5CA1A23 /* A2JREManageViewController.h */,
 				838C7F8423E85E5E058FD819 /* A2RendererPluginViewController.h */,
 				7C21A1EE7A69ED22A12A0588 /* A2RendererSettingsViewController.h */,
 				A309D45ADA810213043EDE96 /* A2SettingsSections.h */,
@@ -1330,6 +1349,7 @@
 				E6679E2C4F527A9777EA6CEC /* A2DownloadManifest.m in Sources */,
 				9B094A240FBA6A3C1821F88C /* A2DownloadTask.m in Sources */,
 				7EA9A208AAFD076980572984 /* A2DownloadTaskCenter.m in Sources */,
+				181BCAA1916DE4DBFD2E08F9 /* A2JREManager.m in Sources */,
 				0FB8591245DA858CF4BAF88B /* A2Logger.m in Sources */,
 				2C4A505B192563D676DFDD2E /* A2Multiplayer.m in Sources */,
 				186C2F9B8B2FA203E76FC125 /* A2GameDirMigration.m in Sources */,
@@ -1454,6 +1474,7 @@
 				231BA8D647ED52A70C2A644B /* A2ColorThemeDialog.m in Sources */,
 				1E7FB60017717A3BE32B9A3C /* A2DiagnosticsSettings.m in Sources */,
 				C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */,
+				DCDEBCE58A13533B8A5DBDBB /* A2JREManageViewController.m in Sources */,
 				4F0C55C53DF109102154C739 /* A2RendererPluginViewController.m in Sources */,
 				95B9DE285BF6EB5B2C8CC100 /* A2RendererSettingsViewController.m in Sources */,
 				1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */,

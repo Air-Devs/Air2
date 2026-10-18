@@ -34,6 +34,10 @@
 
 #import "A2SettingsSections.h"
 #import "A2RendererSettingsViewController.h"
+#import "A2JREManager.h"
+#import "A2ResolutionSettingsView.h"
+#import "A2ResolutionManager.h"
+#import "A2JREManageViewController.h"
 #import "A2DiagnosticsSettings.h"
 
 @interface A2SettingsViewController ()
@@ -196,6 +200,37 @@
     return sec;
 }
 
+/// 分辨率编辑弹窗 —— 复用 A2ResolutionSettingsView（游戏内也用同一个）。
+- (void)showResolutionEditor {
+    UIViewController *host = [[UIViewController alloc] init];
+    host.view.backgroundColor = A2ThemeManager.shared.scheme.cSurface;
+    host.title = @"渲染分辨率";
+
+    UIScrollView *scroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    [host.view addSubview:scroll];
+
+    A2ResolutionSettingsView *editor = [[A2ResolutionSettingsView alloc] initWithFrame:CGRectZero];
+    [scroll addSubview:editor];
+
+    UILayoutGuide *frame = scroll.frameLayoutGuide;
+    [NSLayoutConstraint activateConstraints:@[
+        [scroll.topAnchor constraintEqualToAnchor:host.view.safeAreaLayoutGuide.topAnchor],
+        [scroll.bottomAnchor constraintEqualToAnchor:host.view.bottomAnchor],
+        [scroll.leadingAnchor constraintEqualToAnchor:host.view.leadingAnchor],
+        [scroll.trailingAnchor constraintEqualToAnchor:host.view.trailingAnchor],
+
+        [editor.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:16],
+        [editor.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-24],
+        [editor.leadingAnchor constraintEqualToAnchor:frame.leadingAnchor constant:16],
+        [editor.trailingAnchor constraintEqualToAnchor:frame.trailingAnchor constant:-16],
+    ]];
+
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:host];
+    nav.modalPresentationStyle = UIModalPresentationFormSheet;
+    [self presentViewController:nav animated:YES completion:nil];
+}
+
 - (void)rebuildContentForIndex:(NSInteger)index {
     for (UIView *v in _detailStack.arrangedSubviews) {
         [_detailStack removeArrangedSubview:v];
@@ -222,6 +257,38 @@
             [self.navigationController pushViewController:vc animated:YES];
         };
         [sec addRow:row];
+
+        // ---- Java 运行时 ----
+        A2SettingsRow *jreRow = [[A2SettingsRow alloc] init];
+        jreRow.symbolName = @"cup.and.saucer.fill";
+        jreRow.title = @"Java 运行时";
+        NSArray<A2JRE *> *jres = A2JREManager.shared.allJREs;
+        jreRow.subtitle = jres.count > 0
+            ? [NSString stringWithFormat:@"已安装 %lu 个版本", (unsigned long)jres.count]
+            : @"尚未安装";
+        jreRow.accessory = A2SettingsRowAccessoryDisclosure;
+        jreRow.onTap = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            A2JREManageViewController *vc = [[A2JREManageViewController alloc] init];
+            [self.navigationController pushViewController:vc animated:YES];
+        };
+        [sec addRow:jreRow];
+
+        // ---- 分辨率 ----
+        A2SettingsRow *resRow = [[A2SettingsRow alloc] init];
+        resRow.symbolName = @"rectangle.compress.vertical";
+        resRow.title = @"渲染分辨率";
+        CGSize rs = A2ResolutionManager.shared.renderSize;
+        resRow.subtitle = [NSString stringWithFormat:@"当前 %.0f × %.0f",
+                           rs.width, rs.height];
+        resRow.accessory = A2SettingsRowAccessoryDisclosure;
+        resRow.showsSeparator = NO;
+        resRow.onTap = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            [self showResolutionEditor];
+        };
+        [sec addRow:resRow];
+
         [_detailStack addArrangedSubview:sec];
 
     } else if (index == 1) {
