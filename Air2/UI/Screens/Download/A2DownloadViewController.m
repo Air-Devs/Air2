@@ -44,6 +44,7 @@
 #import "A2NavigationController.h"
 #import "A2GameVersionListViewController.h"
 #import "A2ResourceSearchViewController.h"
+#import "A2AggregateSearchViewController.h"   // 聚合搜索页（Modrinth + CurseForge 同屏）
 #import "A2ModPackImportViewController.h"
 #import "A2SearchByIdViewController.h"
 #import "A2FavoritesViewController.h"
@@ -154,6 +155,11 @@
         [A2NavCategory title:@"收藏"   symbol:@"star.fill"],
         [A2NavCategory title:@"导入"   symbol:@"square.and.arrow.down" division:YES],
         [A2NavCategory title:@"任务"   symbol:@"arrow.down.circle.fill"],
+        // ★聚合搜索★：一个界面同时检索 Modrinth 与 CurseForge。
+        //   放在列表末尾而不是插在「模组」后面 —— 分类索引与
+        //   `-makeContentViewControllerForIndex:` 是按位置一一对应的，
+        //   插队会平移后面所有 case；追加不动任何既有映射。
+        [A2NavCategory title:@"聚合"   symbol:@"square.grid.2x2.fill" division:YES],
     ];
 
     __weak typeof(self) weakSelf = self;
@@ -262,6 +268,11 @@
             return [[A2ModPackImportViewController alloc] init];
         case 10:
             return [[A2DownloadTasksViewController alloc] init];
+        case 11:
+            // 「聚合」分类：把 Modrinth + CurseForge 放进同一个检索页（默认模组档位；
+            // 资源包/光影/数据包/整合包各有自己的分类入口，本页不重复摊开）
+            return [[A2AggregateSearchViewController alloc]
+                    initWithContentClass:A2ContentClassMod];
         default:
             return [[A2ResourceSearchViewController alloc]
                     initWithContentClass:A2ContentClassMod];

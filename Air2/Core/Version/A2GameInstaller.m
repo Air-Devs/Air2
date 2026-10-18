@@ -25,6 +25,7 @@
 #import "A2VersionIsolation.h"
 #import "A2ModLoaderInstaller.h"
 #import "A2APIModDownloader.h"
+#import "A2LegacyProfile.h"      // Core/Version —— 判定「要不要跳过 LWJGL 原生 jar」
 #import "A2Log.h"
 
 /// 官方版本清单地址（Mojang piston-meta）
@@ -254,9 +255,29 @@ static void A2Main(dispatch_block_t block) {
     A2GamePath *path = [A2GamePath pathWithGameHome:self.request.gameHome];
     NSString *libRoot = [path librariesHome];
 
+    // ★远古版本（1.12.2 及更早）★：跳过 `org.lwjgl.*`。
+    //   两条理由都是硬的：
+    //     ① 这些坐标里的 `*-platform` / `*-natives-*` 只有 win/linux/osx 的
+    //        .dll/.so/.jnilib，iOS 上根本加载不了 —— 下了也是死重量；
+    //     ② 它们一旦落进 libraries/，classpath 上 `libraries/*.jar` 排在
+    //        `libs/lwjgl-<ver>/*` **之前** ⇒ 会把 org.lwjgl.* 的类抢走，
+    //        让包内的 LWJGL2 兼容层（lwjgl-lwjglx.jar）完全失效。
+    //   判定在 A2LegacyProfile（Core/Version）一处，这里只问一句。
+    A2LegacyProfile *legacyProfile =
+        [A2LegacyProfile profileForVersionJSON:json
+                                     versionID:(self.baseVersionName.length > 0
+                                                ? self.baseVersionName : self.request.mcVersion)];
+    if (legacyProfile.requiresLWJGL2Compat) {
+        [A2Log log:@"[A2-LEGACY] 装库跳过 org.lwjgl.*（%@ 走 LWJGL2 兼容层，不装桌面原生库）",
+         legacyProfile.versionID];
+    }
+
     NSMutableArray<NSArray<NSString *> *> *pending = [NSMutableArray array];
     for (NSDictionary *lib in libraries) {
         if (![lib isKindOfClass:NSDictionary.class]) continue;
+
+        NSString *libName = [lib[@"name"] isKindOfClass:NSString.class] ? lib[@"name"] : @"";
+        if (legacyProfile.requiresLWJGL2Compat && [libName hasPrefix:@"org.lwjgl."]) continue;
 
         // 检查规则：allow/disallow（区分操作系统）
         if (![self isLibraryAllowed:lib]) continue;

@@ -27,6 +27,8 @@
 #import "A2JavaRuntimeCatalog.h"    // Core/Version —— Java 运行时候选表 + 可用性（[JRE-SEL]）
 #import "A2VersionIsolation.h"      // Core/Path —— A2GamePath：实例路径的唯一计算处（[A2-INSTANCE]）
 #import "A2RuntimeStrings.h"        // Player 同层 —— 四语文案（阻断文案 + 判据行的「源」）
+#import "A2LegacyProfile.h"         // Core/Version —— 远古版本画像（[A2-LEGACY] 闸门与 VM 参数）
+#import "A2LegacyAssetsMapper.h"    // Core/Version —— 远古资源映射（virtual / map_to_resources）
 #import "A2Log.h"
 
 // ② 有界探测预算（本函数在后台队列跑；对齐 A2JITEnvironment 的建议量级）。
@@ -364,8 +366,68 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
      (long)ceilingMB, (long)xmxMB, memProbe.source,
      (memMode == A2LaunchMemoryModeManual ? @"manual" : @"auto"),
      (long)jreMajor, [A2LaunchMemory gcNameForJavaMajorVersion:jreMajor]];
+
+    // ========================================================================
+    // ★[A2-LEGACY] 远古版本（1.0–1.6.4 / Alpha / Beta）兼容轨★
+    // ------------------------------------------------------------------------
+    // 三个闸门，任一不过就**如实阻断**（不静默换 JRE、不静默换渲染器）：
+    //   ① JRE 档位：1.12.2 及更早只认 Java 8（版本 JSON 声明的库与字节码都按 8 编译）；
+    //   ② LWJGL2 API 兼容层：1.12.2 及更早的客户端 import org.lwjgl.opengl.Display /
+    //      org.lwjgl.input.* / org.lwjgl.util.glu.*，这些类只有 lwjgl-lwjglx.jar 提供
+    //      （LWJGL3 的 jar 里根本没有）；缺了就必然走到 NoClassDefFoundError，
+    //      与其让用户看一句裸异常，不如在这里说清缺什么；
+    //   ③ 渲染器语义：1.0–1.6 是 GL 1.x 固定管线，只有 gl4es 家族能接。
+    // 通过后：堆上限钳到画像给的帽值，并追加远古 VM 参数（见下方 jvmOptions）。
+    // ★判定只在 A2LegacyProfile 一处★，本段只消费结果。
+    // ========================================================================
+    A2LegacyProfile *legacyProfile = [A2LegacyProfile profileForVersionDirectory:version.versionPath
+                                                                       versionID:version.name];
+    if (legacyProfile != nil && legacyProfile.isClassicGeneration) {
+        [A2Log criterion:@"%@", [legacyProfile diagnosticLine]];
+    }
+    if (legacyProfile != nil && ![legacyProfile acceptsJavaMajorVersion:jreMajor]) {
+        [A2Log criterion:@"[A2-LEGACY] ★阻断启动★：JRE=%ld 超出该版本上限 %ld（jre=%@）",
+         (long)jreMajor, (long)legacyProfile.maxJavaMajor, jreDir];
+        finish(NO, 0, [NSString stringWithFormat:
+                       @"该版本只能用 Java %ld 启动（当前选的是 Java %ld）。"
+                       @"请在「设置 → 运行环境 → Java 运行时」改选 java-8-openjdk 后重试。",
+                       (long)legacyProfile.maxJavaMajor, (long)jreMajor]);
+        return;
+    }
+    if (legacyProfile != nil && legacyProfile.requiresLWJGL2Compat) {
+        NSString *compatJar = [lwjglDir stringByAppendingPathComponent:@"lwjgl-lwjglx.jar"];
+        if (![NSFileManager.defaultManager fileExistsAtPath:compatJar]) {
+            [A2Log criterion:@"[A2-LEGACY] ★阻断启动★：缺 LWJGL2 API 兼容层 %@", compatJar];
+            finish(NO, 0, [NSString stringWithFormat:
+                           @"这个版本需要 LWJGL 2 的 API（org.lwjgl.opengl.Display 等），"
+                           @"但包内缺少兼容层：libs/%@/lwjgl-lwjglx.jar。"
+                           @"请先把它随包内置（构建脚本见 docs/LEGACY.md）后再启动。",
+                           lwjglDir.lastPathComponent]);
+            return;
+        }
+    }
+    if (legacyProfile != nil && legacyProfile.isClassicGeneration &&
+        ![A2LegacyProfile rendererSupportsFixedPipeline:renderer.identifier]) {
+        [A2Log criterion:@"[A2-LEGACY] ★阻断启动★：渲染器 %@ 不支持 GL 1.x 固定管线", renderer.identifier];
+        finish(NO, 0, [NSString stringWithFormat:
+                       @"这个版本（%@）用的是 OpenGL 1.x 固定管线，"
+                       @"当前渲染器 %@ 接不了。请在「设置 → 运行环境 → 渲染器」改选 gl4es 后重试。",
+                       version.name, renderer.identifier]);
+        return;
+    }
+    if (legacyProfile != nil && legacyProfile.heapCapMB > 0 && xmxMB > legacyProfile.heapCapMB) {
+        [A2Log criterion:@"[A2-LEGACY] 堆上限钳制：%ldMB -> %ldMB（远古版本无需大堆）",
+         (long)xmxMB, (long)legacyProfile.heapCapMB];
+        xmxMB = legacyProfile.heapCapMB;
+    }
+
     NSMutableArray<NSString *> *jvmOptions = [[plan jvmOptionsWithMemoryMB:xmxMB
                                                            javaMajorVersion:jreMajor] mutableCopy];
+    // 远古轨道额外参数（Xms / CodeCache 预算）：紧跟在计划的 VM 选项之后，
+    // 不覆盖、不重排 —— 计划那组仍是唯一产处。
+    if (legacyProfile != nil) {
+        [jvmOptions addObjectsFromArray:[legacyProfile jvmCompatOptions]];
+    }
 
     // ★2026-10-18 真机证据★ 两个决定性事实：
     //   ① 崩溃栈是 `Minecraft.<init> → new GlDevice() → GL.createCapabilities()` ⇒ MC 走的是
@@ -411,6 +473,33 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
     [A2Log log:@"[A2-LAUNCH] 进入后台链：plan=%@ renderer=%@ jre=%@",
                  planPath.lastPathComponent ?: @"(nil)", renderer.identifier, jreDir];
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        // ====================================================================
+        // ★[A2-LEGACY] 远古资源映射（virtual / map_to_resources）★
+        // --------------------------------------------------------------------
+        // 为什么放在这里（而不是安装阶段）：映射目标是 `<gameDir>/resources/`，
+        // 而 instance 的 gameDir 只有到这里才最终确定（实例隔离 / 自愈都会改它）。
+        // 幂等 + 硬链接 ⇒ 第二次启动几乎没有成本；放在建 VM 之前即可。
+        // 失败不拦路：映射不全会表现为「无音效 / 英文界面」，不该让整个启动失败。
+        // ====================================================================
+        if (legacyProfile != nil && legacyProfile.isClassicGeneration) {
+            NSError *mapError = nil;
+            A2LegacyAssetsMapResult *mapResult =
+                [A2LegacyAssetsMapper mapAssetsForVersionDirectory:version.versionPath
+                                                         versionID:version.name
+                                                        assetsRoot:assetsDir
+                                                           gameDir:gameDir
+                                                             error:&mapError];
+            if (mapResult != nil) {
+                [A2Log criterion:@"%@", [mapResult summaryLine]];
+                if (mapResult.missingObjects > 0) {
+                    [A2Log log:@"[A2-LEGACY] 有 %lu 个资源对象缺失（重装该版本可补齐）",
+                     (unsigned long)mapResult.missingObjects];
+                }
+            } else {
+                [A2Log log:@"[A2-LEGACY] 资源映射跳过：%@", mapError.localizedDescription ?: @"(无详情)"];
+            }
+        }
+
         // ★[JIT↔VM] 启动链：① 下发脚本 → ② 探测 JIT → ③ 建 VM★
         //   ★「走到哪一步 / 为什么停」只由 chain.stage + chain.failureReason 一处持有★；
         //   JIT 是否可用只由 A2JITEnvironment.lastRegionVerdict（经 probe）一处给出。
