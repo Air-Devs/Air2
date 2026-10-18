@@ -1918,12 +1918,12 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
     }
 
     // ============================================================================
-    // ★ [MP-RESTORE] ZeroTier 联机 SOCKS5 代理注入（联机恢复）
+    // ★ [MP-RESTORE] 联机 SOCKS5 代理注入（陶瓦联机用）
     // ============================================================================
-    // 当用户在联机界面连接到 ZeroTier 房间后，MultiplayerManager 会启动本地 SOCKS5 代理
+    // 当用户在联机界面加入房间后，MultiplayerManager 会启动本地 SOCKS5 代理
     // （127.0.0.1:1080），并通过环境变量 AMETHYST_SOCKS5_PROXY 传递（"host:port"）。
     // 这里检测该环境变量并注入 -DsocksProxyHost/-DsocksProxyPort；Java Socket 栈自动走
-    // SOCKS5 ⇒ MC 全部 TCP 流量经 libzt 转发到 ZeroTier 虚拟网，抵房主 MC 服务器。
+    // SOCKS5 ⇒ MC 全部 TCP 流量经代理转发，抵达房主的 MC 服务器。
     // 参照 FCL / ZL2 的 socksProxyHost/socksProxyPort 注入。
     // ============================================================================
     const char *socks5ProxyEnv = getenv("AMETHYST_SOCKS5_PROXY");
@@ -1943,8 +1943,8 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
                 PUSH_MARGV_FORMAT(@"-DsocksProxyPort=%@", proxyPortStr);
 
                 // 关键修复（C4/H13）：注入 -DsocksNonProxyHosts，让 MC 登录/认证/皮肤/披风/
-                // 版本库/Mod 下载等官方与第三方服务绕过 SOCKS5 代理（否则会被路由进 ZeroTier 虚拟网
-                // 导致登录失败/皮肤丢失/Mod 下不动）。房主 ZeroTier IP 经 socks 转发，不受此影响。
+                // 版本库/Mod 下载等官方与第三方服务绕过 SOCKS5 代理（否则会被路由进虚拟网
+                // 导致登录失败/皮肤丢失/Mod 下不动）。房主的内网 IP 经 socks 转发，不受此影响。
                 NSString *nonProxyHosts = @"localhost|127.*|[::1]|"
                                           @"*.minecraft.net|*.mojang.com|"
                                           @"*.microsoft.com|*.microsoftonline.com|"
@@ -1958,7 +1958,7 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
                                           @"172.29.*|172.30.*|172.31.*";
                 PUSH_MARGV_FORMAT(@"-DsocksNonProxyHosts=%@", nonProxyHosts);
 
-                NSLog(@"[JavaLauncher] Injected ZeroTier SOCKS5 proxy: %@:%@ (also injected socksNonProxyHosts to bypass proxy for login/skin/mod downloads)",
+                NSLog(@"[JavaLauncher] Injected SOCKS5 proxy: %@:%@ (also injected socksNonProxyHosts to bypass proxy for login/skin/mod downloads)",
                       proxyHost, proxyPortStr);
             } else {
                 NSLog(@"[JavaLauncher] AMETHYST_SOCKS5_PROXY invalid port: %@", proxyPortStr);

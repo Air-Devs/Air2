@@ -97,11 +97,9 @@
 		09C2D11C05593159E6AFB14E /* McLanPortDetector.m in Sources */ = {isa = PBXBuildFile; fileRef = 61F59F7BC6DF5C142349F29D /* McLanPortDetector.m */; };
 		F557065DCB94B26935C0C6EB /* PLCrashView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2BE3947518DFBB0E9F7EC65F /* PLCrashView.m */; };
 		F7943E2D531B0044ECFEA76E /* PLLogOutputView.m in Sources */ = {isa = PBXBuildFile; fileRef = 52D8A04AFEDE1A805DC7E208 /* PLLogOutputView.m */; };
-		0D22FCAB5A339930E7BCFED5 /* PortForwarder.m in Sources */ = {isa = PBXBuildFile; fileRef = 24356F0E9DF3A6AC7F0BBA17 /* PortForwarder.m */; };
 		ABC7EC799C91BF1A5C50EDE2 /* ScreenUtils.m in Sources */ = {isa = PBXBuildFile; fileRef = BF0A41C1E121405427C314A9 /* ScreenUtils.m */; };
 		3F05A2797AFFCA010B7F9D59 /* UIKit+hook.m in Sources */ = {isa = PBXBuildFile; fileRef = 869782D9D81E98D0AB7F435E /* UIKit+hook.m */; };
 		07FB28CDA0698A31D2A16F24 /* UpdateChecker.m in Sources */ = {isa = PBXBuildFile; fileRef = D7399A9719C4F69C7AB042BF /* UpdateChecker.m */; };
-		01A704B4C9929100B679BB63 /* ZeroTierBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = C4BC6DEF9424FD337321E29D /* ZeroTierBridge.m */; };
 		5F6D34E5A9CA09F3E7F4AF19 /* empty.m in Sources */ = {isa = PBXBuildFile; fileRef = 2E6F468284C1C07BB9061ABA /* empty.m */; };
 		0C00E5953847471FCD43814F /* xawt_fake.m in Sources */ = {isa = PBXBuildFile; fileRef = 5486E1FF3753ECA76163F90D /* xawt_fake.m */; };
 		02C6CDDF3160D8779F0546C7 /* dyld_bypass_validation.m in Sources */ = {isa = PBXBuildFile; fileRef = 7AC1534A173C53027749838F /* dyld_bypass_validation.m */; };
@@ -284,11 +282,9 @@
 		61F59F7BC6DF5C142349F29D /* McLanPortDetector.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "McLanPortDetector.m"; sourceTree = "<group>"; };
 		2BE3947518DFBB0E9F7EC65F /* PLCrashView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "PLCrashView.m"; sourceTree = "<group>"; };
 		52D8A04AFEDE1A805DC7E208 /* PLLogOutputView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "PLLogOutputView.m"; sourceTree = "<group>"; };
-		24356F0E9DF3A6AC7F0BBA17 /* PortForwarder.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "PortForwarder.m"; sourceTree = "<group>"; };
 		BF0A41C1E121405427C314A9 /* ScreenUtils.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "ScreenUtils.m"; sourceTree = "<group>"; };
 		869782D9D81E98D0AB7F435E /* UIKit+hook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "UIKit+hook.m"; sourceTree = "<group>"; };
 		D7399A9719C4F69C7AB042BF /* UpdateChecker.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "UpdateChecker.m"; sourceTree = "<group>"; };
-		C4BC6DEF9424FD337321E29D /* ZeroTierBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "ZeroTierBridge.m"; sourceTree = "<group>"; };
 		2E6F468284C1C07BB9061ABA /* empty.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "empty.m"; sourceTree = "<group>"; };
 		5486E1FF3753ECA76163F90D /* xawt_fake.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "xawt_fake.m"; sourceTree = "<group>"; };
 		7AC1534A173C53027749838F /* dyld_bypass_validation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "dyld_bypass_validation.m"; sourceTree = "<group>"; };
@@ -468,11 +464,9 @@
 		F5CCE8DB3512E656EC82EAC3 /* McLanPortDetector.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "McLanPortDetector.h"; sourceTree = "<group>"; };
 		E1893125C84095DEF8FD1357 /* PLCrashView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PLCrashView.h"; sourceTree = "<group>"; };
 		5A9E0C9370F3194F7E76A18B /* PLLogOutputView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PLLogOutputView.h"; sourceTree = "<group>"; };
-		0C541A61C8907F0DA288C7DC /* PortForwarder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PortForwarder.h"; sourceTree = "<group>"; };
 		45227C4C23E6FBB066F8B7A8 /* ScreenUtils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ScreenUtils.h"; sourceTree = "<group>"; };
 		ECD0D2D76994ED9F68466613 /* UIKit+hook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UIKit+hook.h"; sourceTree = "<group>"; };
 		47AE80A94AE81F737A013BA1 /* UpdateChecker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UpdateChecker.h"; sourceTree = "<group>"; };
-		A5BCB4E2C7BCE3A6A2BB25D4 /* ZeroTierBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ZeroTierBridge.h"; sourceTree = "<group>"; };
 		B198712AC6D520C821FCDD33 /* ios_uikit_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ios_uikit_bridge.h"; sourceTree = "<group>"; };
 		930418C55810BF7B65B85AE9 /* A2BackgroundView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundView.h"; sourceTree = "<group>"; };
 		EB440E13AD4A8BB54186F381 /* A2CardPosition.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CardPosition.h"; sourceTree = "<group>"; };
@@ -957,11 +951,9 @@
 				61F59F7BC6DF5C142349F29D /* McLanPortDetector.m */,
 				2BE3947518DFBB0E9F7EC65F /* PLCrashView.m */,
 				52D8A04AFEDE1A805DC7E208 /* PLLogOutputView.m */,
-				24356F0E9DF3A6AC7F0BBA17 /* PortForwarder.m */,
 				BF0A41C1E121405427C314A9 /* ScreenUtils.m */,
 				869782D9D81E98D0AB7F435E /* UIKit+hook.m */,
 				D7399A9719C4F69C7AB042BF /* UpdateChecker.m */,
-				C4BC6DEF9424FD337321E29D /* ZeroTierBridge.m */,
 				7AC1534A173C53027749838F /* dyld_bypass_validation.m */,
 				B1B815C20ECE35E2086A818B /* dyld_patch_platform.m */,
 				462E6CD9270BB7206418B1C2 /* ios_uikit_bridge.m */,
@@ -970,11 +962,9 @@
 				F5CCE8DB3512E656EC82EAC3 /* McLanPortDetector.h */,
 				E1893125C84095DEF8FD1357 /* PLCrashView.h */,
 				5A9E0C9370F3194F7E76A18B /* PLLogOutputView.h */,
-				0C541A61C8907F0DA288C7DC /* PortForwarder.h */,
 				45227C4C23E6FBB066F8B7A8 /* ScreenUtils.h */,
 				ECD0D2D76994ED9F68466613 /* UIKit+hook.h */,
 				47AE80A94AE81F737A013BA1 /* UpdateChecker.h */,
-				A5BCB4E2C7BCE3A6A2BB25D4 /* ZeroTierBridge.h */,
 				B198712AC6D520C821FCDD33 /* ios_uikit_bridge.h */,
 				9C8E9F6CAB6C863C2FF0B16C /* awt_xawt */,
 			);
@@ -1409,11 +1399,9 @@
 				09C2D11C05593159E6AFB14E /* McLanPortDetector.m in Sources */,
 				F557065DCB94B26935C0C6EB /* PLCrashView.m in Sources */,
 				F7943E2D531B0044ECFEA76E /* PLLogOutputView.m in Sources */,
-				0D22FCAB5A339930E7BCFED5 /* PortForwarder.m in Sources */,
 				ABC7EC799C91BF1A5C50EDE2 /* ScreenUtils.m in Sources */,
 				3F05A2797AFFCA010B7F9D59 /* UIKit+hook.m in Sources */,
 				07FB28CDA0698A31D2A16F24 /* UpdateChecker.m in Sources */,
-				01A704B4C9929100B679BB63 /* ZeroTierBridge.m in Sources */,
 				5F6D34E5A9CA09F3E7F4AF19 /* empty.m in Sources */,
 				0C00E5953847471FCD43814F /* xawt_fake.m in Sources */,
 				02C6CDDF3160D8779F0546C7 /* dyld_bypass_validation.m in Sources */,

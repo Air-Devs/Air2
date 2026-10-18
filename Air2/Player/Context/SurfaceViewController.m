@@ -3760,7 +3760,7 @@ CALayer *Amethyst_SDL3RenderLayer(void) {
     // LAN 端口检测器已改为手动输入模式，stopDetecting 已移除，无需调用。
 
     // ★ [MP-RESTORE] 联机恢复：游戏退出（存档关闭/JVM 结束）时清理联机资源
-    // 原代码仅停止 LanPortDetector，不清理 SOCKS5 代理 / PortForwarder / ZeroTier 网络 /
+    // 原代码仅停止 LanPortDetector，不清理 SOCKS5 代理 / 端口转发 /
     // AMETHYST_SOCKS5_PROXY 环境变量 / PLProfiles.serverIp ⇒ "存档关闭后端口仍在""下次进游戏仍显示连接服务器"。
     // dealloc 可能在异常路径触发，用 @try/@catch 防二次崩溃。
     @try {

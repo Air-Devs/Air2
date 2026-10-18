@@ -65,7 +65,7 @@ CGPoint lastVirtualMousePoint;
 - (void)actionToggleVirtualMouse;    // 虚拟鼠标开关
 - (void)actionToggleKeyboard;        // 游戏内键盘开关
 - (void)actionAdjustResolution;      // 分辨率调整
-- (void)actionOpenMultiplayer;       // 联机（ZeroTier）
+- (void)actionOpenMultiplayer;       // 联机（陶瓦）
 
 @end
 
