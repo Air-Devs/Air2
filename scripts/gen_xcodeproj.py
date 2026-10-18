@@ -442,7 +442,15 @@ def build():
                 # 与 egl_bridge.m 都是 #include <EGL/egl.h>，而 EGL/ 目录在仓库的
                 # ThirdParty/NG-GL4ES/include 与 Libraries/external/SimpleFPEWrapper/include 下。
                 # 不加这条 ⇒ CI 报 'EGL/egl.h' file not found（本地因为 Xcode 工程里手加过才没暴露）。
-                "HEADER_SEARCH_PATHS": '(\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t"$(SRCROOT)/ThirdParty/NG-GL4ES/include",\n\t\t\t\t\t"$(SRCROOT)/Libraries/external/SimpleFPEWrapper/include",\n\t\t\t\t)',
+                "HEADER_SEARCH_PATHS": "(" + "".join(
+                    chr(10) + chr(9) * 5 + '"%s",' % path for path in (
+                        "$(inherited)",
+                        "$(SRCROOT)/ThirdParty/NG-GL4ES/include",
+                        "$(SRCROOT)/Libraries/external/SimpleFPEWrapper/include",
+                        "$(SRCROOT)",
+                        "$(SRCROOT)/Libraries/external/mesa",
+                    )
+                ) + chr(10) + chr(9) * 4 + ")",
                 "CODE_SIGN_STYLE": "Automatic",
                 "CURRENT_PROJECT_VERSION": BUILD_VERSION,
                 "GENERATE_INFOPLIST_FILE": "NO",

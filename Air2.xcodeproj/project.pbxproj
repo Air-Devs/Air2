@@ -1572,6 +1572,8 @@
 					"$(inherited)",
 					"$(SRCROOT)/ThirdParty/NG-GL4ES/include",
 					"$(SRCROOT)/Libraries/external/SimpleFPEWrapper/include",
+					"$(SRCROOT)",
+					"$(SRCROOT)/Libraries/external/mesa",
 				);
 				INFOPLIST_FILE = "Air2/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1607,6 +1609,8 @@
 					"$(inherited)",
 					"$(SRCROOT)/ThirdParty/NG-GL4ES/include",
 					"$(SRCROOT)/Libraries/external/SimpleFPEWrapper/include",
+					"$(SRCROOT)",
+					"$(SRCROOT)/Libraries/external/mesa",
 				);
 				INFOPLIST_FILE = "Air2/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
