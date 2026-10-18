@@ -73,6 +73,34 @@ didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *
         [A2Log log:@"AppDelegate: 自动登录已关闭"];
     }
 
+    // ★崩溃界面（用户要求 2026-10-18）★
+    //   真崩溃是信号级杀进程，来不及弹窗 ⇒ 用「崩溃标记文件」在★下次启动★展示上次崩溃摘要。
+    //   机制：启动时若发现标记 ⇒ 说明上次没走到正常收尾 ⇒ 读 lastlog.old.txt 尾部当崩溃页内容；
+    //         然后把标记重新写上（本次也在跑），正常退出时由 applicationWillTerminate 删除。
+    {
+        NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+        NSString *marker = [docs stringByAppendingPathComponent:@".a2_last_session_running"];
+        BOOL crashed = [NSFileManager.defaultManager fileExistsAtPath:marker];
+        if (crashed) {
+            NSString *oldLog = [docs stringByAppendingPathComponent:@"lastlog.old.txt"];
+            NSString *tail = [NSString stringWithContentsOfFile:oldLog encoding:NSUTF8StringEncoding error:NULL];
+            if (tail.length > 4000) tail = [tail substringFromIndex:tail.length - 4000];
+            NSString *msg = tail.length ? tail : @"（上次会话日志为空）";
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                UIViewController *top = UIApplication.sharedApplication.keyWindow.rootViewController;
+                while (top.presentedViewController) top = top.presentedViewController;
+                UIAlertController *a = [UIAlertController alertControllerWithTitle:@"上次启动异常结束"
+                                                                          message:msg
+                                                                   preferredStyle:UIAlertControllerStyleAlert];
+                [a addAction:[UIAlertAction actionWithTitle:@"知道了" style:UIAlertActionStyleCancel handler:nil]];
+                [top presentViewController:a animated:YES completion:nil];
+            });
+            [A2Log log:@"[A2-CRASH-UI] 检测到上次会话异常结束，已排队展示崩溃摘要"];
+        }
+        [@"" writeToFile:marker atomically:YES encoding:NSUTF8StringEncoding error:NULL];
+    }
+
     [A2Log log:@"AppDelegate: didFinishLaunching 完成"];
     return YES;
 }
