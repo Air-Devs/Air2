@@ -66,6 +66,19 @@ void *a2_jit_brk69_create_region(size_t len) {
         "ret");
 }
 
+// brk #0xf00d cmd=3 = JIT26SetDetachAfterFirstBr(BOOL)
+//   ★照老 Air★ 它的日志里有 "SetDetachAfterFirstBr(1) serviced"。
+//   作用：让调试器在首个 brk 之后脱离，避免它一直挂着（真机上我们观察到进程在 ~8 秒
+//   被外部 SIGKILL、且没有崩溃报告 —— 与调试会话生命周期高度相关）。
+__attribute__((noinline, optnone, naked))
+static void a2_jit_brk_f00d_detach_cmd(void *value) {
+    asm("mov x16, #3 
+"
+        "brk #0xf00d 
+"
+        "ret");
+}
+
 // brk #0xf00d cmd=2 = 下发 JIT 脚本（脚本引擎注册的命令）。
 //   来源：utils.m L782–L787（BreakSendJITScript）。x16=2；x0=脚本指针、x1=长度（由 ABI 传入）。
 __attribute__((noinline, optnone, naked))
