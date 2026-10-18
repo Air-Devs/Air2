@@ -265,6 +265,7 @@ static void a2_glfw_observer_focus(int focused);
 - (void)a2_willResignActive:(NSNotification *)note;
 @end
 
+
 static A2GlfwObserverHub *gObserverHub = nil;
 
 @implementation A2GlfwObserverHub
@@ -287,42 +288,6 @@ static A2GlfwObserverHub *gObserverHub = nil;
         CGFloat scale = (win.screen != nil) ? win.screen.scale : 1.0;
         int wp = (int) lround(b.size.width);
         int hp = (int) lround(b.size.height);
-// ★2026-10-18★ 把宿主 UIView 的地址发布成 JVM 系统属性。
-//   来源：metallum 的 MetalBackend.readIOSSurfacePointer() 在 iOS 上**不读 GLFW**，
-//   而是读 `metallum.ios.view.pointer` / `pojav.view.pointer`（十六进制地址），
-//   都没有才调 metallum_ios_find_surface_view()（找 +[SurfaceViewController surface]，
-//   我们类名不同 ⇒ 找不到）。不发布 ⇒ BackendCreationException ⇒ 黑屏。
-//   时机：MC 调 glfwCreateWindow 之后、它创建 MetalBackend 之前（本函数就是那一刻）。
-static void a2_publish_ios_view_pointer(void *view, double scale) {
-    if (view == NULL) return;
-    // dlsym 取符号：不强制链接 libjvm（它由 JVM 层 dlopen）
-    typedef jint (*a2_get_vms_fn)(JavaVM **, jsize, jsize *);
-    static a2_get_vms_fn getVMs = NULL;
-    if (getVMs == NULL) getVMs = (a2_get_vms_fn) dlsym(RTLD_DEFAULT, "JNI_GetCreatedJavaVMs");
-    if (getVMs == NULL) return;
-    JavaVM *vms[1] = { NULL };
-    jsize count = 0;
-    if (getVMs(vms, 1, &count) != JNI_OK || count < 1 || vms[0] == NULL) return;
-    JNIEnv *env = NULL;
-    if ((*vms[0])->GetEnv(vms[0], (void **) &env, JNI_VERSION_1_8) != JNI_OK || env == NULL) return;
-    jclass sysCls = (*env)->FindClass(env, "java/lang/System");
-    if (sysCls == NULL) return;
-    jmethodID setProp = (*env)->GetStaticMethodID(
-        env, sysCls, "setProperty",
-        "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
-    if (setProp == NULL) return;
-    char hex[40];
-    snprintf(hex, sizeof(hex), "0x%llx", (unsigned long long) (uintptr_t) view);
-    const char *keys[] = { "metallum.ios.view.pointer", "pojav.view.pointer" };
-    for (int i = 0; i < 2; i++) {
-        jstring k = (*env)->NewStringUTF(env, keys[i]);
-        jstring v = (*env)->NewStringUTF(env, hex);
-        (*env)->CallStaticObjectMethod(env, sysCls, setProp, k, v);
-        if (k) (*env)->DeleteLocalRef(env, k);
-        if (v) (*env)->DeleteLocalRef(env, v);
-    }
-    a2_log_f(@"[A2-METAL] 已发布 UIView 地址 %s（scale=%.3f）给 metallum", hex, scale);
-}
 
         int wpx = (int) lround(b.size.width * scale);
         int hpx = (int) lround(b.size.height * scale);
@@ -359,6 +324,43 @@ static void a2_publish_ios_view_pointer(void *view, double scale) {
 }
 
 @end
+
+// ★2026-10-18★ 把宿主 UIView 的地址发布成 JVM 系统属性。
+//   来源：metallum 的 MetalBackend.readIOSSurfacePointer() 在 iOS 上**不读 GLFW**，
+//   而是读 `metallum.ios.view.pointer` / `pojav.view.pointer`（十六进制地址），
+//   都没有才调 metallum_ios_find_surface_view()（找 +[SurfaceViewController surface]，
+//   我们类名不同 ⇒ 找不到）。不发布 ⇒ BackendCreationException ⇒ 黑屏。
+//   时机：MC 调 glfwCreateWindow 之后、它创建 MetalBackend 之前（本函数就是那一刻）。
+static void a2_publish_ios_view_pointer(void *view, double scale) {
+    if (view == NULL) return;
+    // dlsym 取符号：不强制链接 libjvm（它由 JVM 层 dlopen）
+    typedef jint (*a2_get_vms_fn)(JavaVM **, jsize, jsize *);
+    static a2_get_vms_fn getVMs = NULL;
+    if (getVMs == NULL) getVMs = (a2_get_vms_fn) dlsym(RTLD_DEFAULT, "JNI_GetCreatedJavaVMs");
+    if (getVMs == NULL) return;
+    JavaVM *vms[1] = { NULL };
+    jsize count = 0;
+    if (getVMs(vms, 1, &count) != JNI_OK || count < 1 || vms[0] == NULL) return;
+    JNIEnv *env = NULL;
+    if ((*vms[0])->GetEnv(vms[0], (void **) &env, JNI_VERSION_1_8) != JNI_OK || env == NULL) return;
+    jclass sysCls = (*env)->FindClass(env, "java/lang/System");
+    if (sysCls == NULL) return;
+    jmethodID setProp = (*env)->GetStaticMethodID(
+        env, sysCls, "setProperty",
+        "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;");
+    if (setProp == NULL) return;
+    char hex[40];
+    snprintf(hex, sizeof(hex), "0x%llx", (unsigned long long) (uintptr_t) view);
+    const char *keys[] = { "metallum.ios.view.pointer", "pojav.view.pointer" };
+    for (int i = 0; i < 2; i++) {
+        jstring k = (*env)->NewStringUTF(env, keys[i]);
+        jstring v = (*env)->NewStringUTF(env, hex);
+        (*env)->CallStaticObjectMethod(env, sysCls, setProp, k, v);
+        if (k) (*env)->DeleteLocalRef(env, k);
+        if (v) (*env)->DeleteLocalRef(env, v);
+    }
+    a2_log_f(@"[A2-METAL] 已发布 UIView 地址 %s（scale=%.3f）给 metallum", hex, scale);
+}
 
 static void a2_glfw_observer_focus(int focused) {
     NSArray<A2GlfwHost *> *snapshot;
