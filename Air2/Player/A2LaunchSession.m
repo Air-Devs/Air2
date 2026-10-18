@@ -381,9 +381,16 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
             [jvmOptions addObject:[NSString stringWithFormat:@"-javaagent:%@/patchjna_agent.jar=", libs]];
             [jvmOptions addObject:[NSString stringWithFormat:@"-javaagent:%@/metallum_agent.jar=", libs]];
             [jvmOptions addObject:[NSString stringWithFormat:@"-Dmetallum.mc.version=%@", version.name]];
-            [A2Log criterion:@"[A2-AGENT] Metal 后端注入：-javaagent metallum_agent.jar（mcVersion=%@）",
+            // ★2026-10-18 真机证据★ 光注入 jar 不够：metallum agent 只认环境变量
+            //   AMETHYST_METAL=1 来打开渲染 patch（MetallumAgent.IS_METAL_RENDERER）。
+            //   不设 ⇒ 日志 "non-Metal renderer: … render patches disabled" ⇒ MC 回落
+            //   GlBackend/GlDevice ⇒ 又变成 "no OpenGL context current" 崩溃。
+            //   出处：老线 JavaLauncher.m:1623-1629（同一行注释写的就是这条）。
+            setenv("AMETHYST_METAL", "1", 1);
+            [A2Log criterion:@"[A2-AGENT] Metal 后端注入：-javaagent metallum_agent.jar（mcVersion=%@，AMETHYST_METAL=1）",
              version.name];
         } else {
+            unsetenv("AMETHYST_METAL");   // 非 Metal ⇒ 确保 agent 不会误开渲染 patch
             // LWJGL 的 GL 库名跟渲染器走（lib 前缀与 .dylib 后缀都要去掉）：
             //   libgl4es_114.dylib → gl4es_114；libnggl4es.dylib → nggl4es …
             NSString *bare = rendererID;
