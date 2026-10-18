@@ -111,6 +111,13 @@ public final class A2GameClassLoader extends URLClassLoader {
         if (bytes == null) {
             return super.findClass(name);
         }
+        // ★2026-10-18 真机证据★ metallum 通过 accesswidener 把这些包私有类
+        //   （SpvUniformBuffer / SpvSampler / SpvVariable / GlRenderPass …）
+        //   提升为 public 才能跨包访问；我们抢先定义时没做这一步 ⇒
+        //   IllegalAccessError: failed to access class …SpvUniformBuffer from
+        //   class com.metallum…MetalCrossShaderCompiler。
+        //   这里等价落实 "accessible class"：定义前把 class 的 ACC_PUBLIC 置位。
+        bytes = makePublicIfNeeded(bytes);
         // ★关键：不传 ProtectionDomain★ —— 没有 CodeSource 就没有 CodeSigner，
         //   与 metallum agent 反射 defineClass 定义进同包的类签名状态一致，
         //   ClassLoader.checkCerts 不会再抛 SecurityException。
@@ -136,6 +143,59 @@ public final class A2GameClassLoader extends URLClassLoader {
                 jars.add(f);
             }
         }
+    }
+
+    /**
+     * 把 class 文件的 access_flags 里 ACC_PUBLIC(0x0001) 置位（等价 accesswidener 的
+     * {@code accessible class}）。只改 access_flags 两个字节，其余字节不动。
+     *
+     * <p>解析路径与 JVM 一致：magic → cp_count → 常量池 → access_flags。
+     */
+    private static byte[] makePublicIfNeeded(byte[] classBytes) {
+        if (classBytes == null || classBytes.length < 24) {
+            return classBytes;
+        }
+        try {
+            int cpCount = ((classBytes[8] & 0xFF) << 8) | (classBytes[9] & 0xFF);
+            int pos = 10;
+            int index = 1;
+            while (index < cpCount) {
+                int tag = classBytes[pos] & 0xFF;
+                pos += 1;
+                switch (tag) {
+                    case 1: {   // Utf8
+                        int len = ((classBytes[pos] & 0xFF) << 8) | (classBytes[pos + 1] & 0xFF);
+                        pos += 2 + len;
+                        break;
+                    }
+                    case 7: case 8: case 16: case 19: case 20:
+                        pos += 2;
+                        break;
+                    case 15:
+                        pos += 3;
+                        break;
+                    case 3: case 4: case 9: case 10: case 11: case 12: case 17: case 18:
+                        pos += 4;
+                        break;
+                    case 5: case 6:   // Long / Double 占两个常量池槽
+                        pos += 8;
+                        index += 1;
+                        break;
+                    default:
+                        return classBytes;   // 解析不了就不动（宁可保持原样）
+                }
+                index += 1;
+            }
+            int flags = ((classBytes[pos] & 0xFF) << 8) | (classBytes[pos + 1] & 0xFF);
+            if ((flags & 0x0001) == 0) {
+                flags |= 0x0001;
+                classBytes[pos] = (byte) ((flags >> 8) & 0xFF);
+                classBytes[pos + 1] = (byte) (flags & 0xFF);
+            }
+        } catch (RuntimeException ignored) {
+            // 越界等异常 ⇒ 原样返回
+        }
+        return classBytes;
     }
 
     private byte[] readFromJars(String entryName) {
