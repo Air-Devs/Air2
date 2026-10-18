@@ -278,6 +278,11 @@ void a2_log_session_sink(const char *utf8Line) {
 @implementation A2Log
 
 + (void)startSession {
+    // ★2026-10-18★ HotSpot 的线程栈(SIGQUIT dump)、[JIT26] 诊断都走 stdout(fd 1)，
+    //   而 stdout 指向文件时是【全缓冲】⇒ VM 卡死时缓冲区还没刷，日志里什么都看不到。
+    //   这里把 stdout/stderr 设成无缓冲（只设一次，进程级），让诊断实时落盘。
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
     dispatch_sync(a2_log_queue(), ^{
         a2_log_rotate();
     });
