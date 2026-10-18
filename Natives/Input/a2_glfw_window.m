@@ -473,10 +473,20 @@ int a2_glfw_window_create(long window, int width, int height, const char *title)
         }
         a2_log_criterion(@"[A2-GLFW] 建窗 2/6 视图创建完成 view=%p", view);
 
+        // ★2026-10-18 真机定位★ 崩溃发生在 "vc.view = <自定义视图>" 这一步（objc_retain）。
+        //   原因：把自定义 UIView 直接当 UIViewController 的 rootView 会立刻走 UIKit 的
+        //   布局/持有路径，而此时视图尚未完成挂载。
+        //   ⇒ 改成：VC 用普通容器视图，我们的视图作为【子视图】加进去（布局由 autoresizing 负责）。
         UIViewController *vc = [UIViewController new];
         a2_log_criterion(@"[A2-GLFW] 建窗 3/6 VC 创建完成 vc=%p", vc);
-        vc.view = view;
-        a2_log_criterion(@"[A2-GLFW] 建窗 4/6 vc.view 挂好");
+        UIView *container = [[UIView alloc] initWithFrame:win.bounds];
+        container.backgroundColor = [UIColor blackColor];
+        vc.view = container;
+        a2_log_criterion(@"[A2-GLFW] 建窗 4/6 容器视图挂好 container=%p", container);
+        view.frame = container.bounds;
+        view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        [container addSubview:view];
+        a2_log_criterion(@"[A2-GLFW] 建窗 4b/6 游戏视图已作为子视图加入");
         win.rootViewController = vc;
         a2_log_criterion(@"[A2-GLFW] 建窗 5/6 rootViewController 挂好");
         [win makeKeyAndVisible];
