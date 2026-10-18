@@ -5,19 +5,35 @@
 
 #import "A2GameLaunchCoordinator.h"
 #import "A2GameInstaller.h"
+#import "A2IntegrityChecker.h"
 #import "A2JREManager.h"
 #import "A2ResolutionManager.h"
+#import "A2AccountManager.h"
 #import "A2Logger.h"
 
 NSNotificationName const A2LaunchProgressDidChangeNotification = @"A2LaunchProgressDidChangeNotification";
 
+#pragma mark - 进度
+
 @implementation A2LaunchProgress
 @end
 
+#pragma mark - 错误
+
+static NSError *A2LaunchError(A2LaunchErrorKind kind, NSString *msg) {
+    return [NSError errorWithDomain:@"A2LaunchCoordinator" code:1
+                           userInfo:@{NSLocalizedDescriptionKey: msg ?: @"启动失败",
+                                      @"kind": @(kind)}];
+}
+
+#pragma mark - 协调器
+
 @interface A2GameLaunchCoordinator ()
-@property (nonatomic, assign, readwrite) A2LaunchPhase phase;
 @property (nonatomic, assign, readwrite, getter=isLaunching) BOOL launching;
+@property (nonatomic, assign, readwrite) A2LaunchTask currentTask;
 @property (nonatomic, assign) BOOL cancelled;
+@property (nonatomic, strong, nullable) A2Version *version;
+@property (nonatomic, copy, nullable) void (^finalCompletion)(BOOL, NSError *);
 @end
 
 @implementation A2GameLaunchCoordinator
@@ -31,18 +47,56 @@ NSNotificationName const A2LaunchProgressDidChangeNotification = @"A2LaunchProgr
     return shared;
 }
 
-#pragma mark - 进度
+#pragma mark - 进度上报
 
-- (void)report:(A2LaunchPhase)phase fraction:(double)fraction message:(NSString *)message {
-    self.phase = phase;
+/// 四个 Task 的权重（对照 ZL2 的观感）
+///   账号 0.05 / 模组 0.05 / 校验 0.85 / 启动 0.05
+static double A2TaskStartFraction(A2LaunchTask task) {
+    switch (task) {
+        case A2LaunchTaskCheckAccount: return 0.0;
+        case A2LaunchTaskScanMods:     return 0.05;
+        case A2LaunchTaskVerifyFiles:  return 0.10;
+        case A2LaunchTaskStartGame:    return 0.95;
+    }
+    return 0;
+}
+
+static double A2TaskWeight(A2LaunchTask task) {
+    switch (task) {
+        case A2LaunchTaskCheckAccount: return 0.05;
+        case A2LaunchTaskScanMods:     return 0.05;
+        case A2LaunchTaskVerifyFiles:  return 0.85;
+        case A2LaunchTaskStartGame:    return 0.05;
+    }
+    return 0.1;
+}
+
+- (NSString *)titleForTask:(A2LaunchTask)task {
+    switch (task) {
+        case A2LaunchTaskCheckAccount: return @"校验账号";
+        case A2LaunchTaskScanMods:     return @"扫描模组";
+        case A2LaunchTaskVerifyFiles:  return @"校验游戏文件";
+        case A2LaunchTaskStartGame:    return @"启动游戏";
+    }
+    return @"";
+}
+
+- (void)reportTask:(A2LaunchTask)task
+           fraction:(double)fraction
+            message:(NSString *)message {
+
+    self.currentTask = task;
 
     A2LaunchProgress *p = [A2LaunchProgress new];
-    p.phase = phase;
-    p.fraction = MAX(0, MIN(1, fraction));
+    p.task = task;
+    p.taskFraction = MAX(0, MIN(1, fraction));
+    p.fraction = A2TaskStartFraction(task) + A2TaskWeight(task) * p.taskFraction;
+    p.title = [self titleForTask:task];
     p.message = message ?: @"";
 
-    [A2Logger info:@"Launch" message:[NSString stringWithFormat:@"[%ld] %.0f%% %@",
-                                     (long)phase, p.fraction * 100, p.message]];
+    [A2Logger info:@"Launch"
+           message:[NSString stringWithFormat:@"[%@] %.0f%% %@",
+                    p.title, p.taskFraction * 100, p.message]];
 
     dispatch_async(dispatch_get_main_queue(), ^{
         [NSNotificationCenter.defaultCenter postNotificationName:A2LaunchProgressDidChangeNotification
@@ -54,192 +108,254 @@ NSNotificationName const A2LaunchProgressDidChangeNotification = @"A2LaunchProgr
 #pragma mark - 主流程
 
 - (void)launchVersion:(NSString *)versionName
-            skipCheck:(BOOL)skipCheck
+   skipAccountRefresh:(BOOL)skipAccountRefresh
+  skipIntegrityCheck:(BOOL)skipIntegrityCheck
            completion:(void (^)(BOOL, NSError *))completion {
 
     if (self.launching) {
-        if (completion) {
-            completion(NO, [self err:@"已有启动流程在进行中"]);
-        }
+        if (completion) completion(NO, A2LaunchError(A2LaunchErrorKindUnknown, @"已有启动流程在进行"));
+        return;
+    }
+
+    A2Version *v = nil;
+    for (A2Version *x in A2VersionManager.shared.versions) {
+        if ([x.name isEqualToString:versionName]) { v = x; break; }
+    }
+    if (!v) {
+        if (completion) completion(NO, A2LaunchError(A2LaunchErrorKindUnknown,
+                                                     @"找不到该版本"));
         return;
     }
 
     self.launching = YES;
     self.cancelled = NO;
+    self.version = v;
+    self.finalCompletion = completion;
 
-    A2Version *target = nil;
-    for (A2Version *v in A2VersionManager.shared.versions) {
-        if ([v.name isEqualToString:versionName]) { target = v; break; }
-    }
+    // ---- Task 1：账号校验 ----
+    [self runTaskCheckAccount:skipAccountRefresh then:^{
+        // ---- Task 2：扫描模组 ----
+        [self runTaskScanMods:^{
+            // ---- Task 3：完整性校验 ----
+            [self runTaskVerifyFiles:skipIntegrityCheck then:^{
+                // ---- Task 4：启动 ----
+                [self runTaskStartGame];
+            }];
+        }];
+    }];
+}
 
-    if (!target) {
-        self.launching = NO;
-        if (completion) completion(NO, [self err:
-            [NSString stringWithFormat:@"找不到版本「%@」", versionName]]);
+#pragma mark - Task 1：账号校验
+
+/// 对照 ZL2 的 Task 1：
+///   条件：有网 && !skip && 需要校验
+///   微软账号：临近过期先刷新，否则 validate → 失败再 refresh
+///   外置账号：validateOrRefresh → 失败则 passwordLogin
+///
+/// 我们的 A2AccountManager 提供了 refreshCurrentAccountIfNeeded:，
+/// 它内部就是这个「需要才刷新」的语义（离线账号直接返回成功）。
+/// 失败分类保留：401/403 = 凭据被拒（要重新登录），其余 = 网络问题（可重试）。
+- (void)runTaskCheckAccount:(BOOL)skip then:(void (^)(void))then {
+
+    A2Account *account = A2AccountManager.shared.currentAccount;
+
+    if (skip || !account) {
+        [self reportTask:A2LaunchTaskCheckAccount fraction:1 message:@"跳过账号校验"];
+        then();
         return;
     }
+
+    // 离线账号没有远端凭据，不需要校验
+    if (account.type == A2AccountTypeOffline) {
+        [self reportTask:A2LaunchTaskCheckAccount fraction:1 message:@"离线账号"];
+        then();
+        return;
+    }
+
+    [self reportTask:A2LaunchTaskCheckAccount fraction:0.2
+             message:[NSString stringWithFormat:@"正在校验 %@", account.username ?: @""]];
+
+    [A2AccountManager.shared refreshCurrentAccountIfNeeded:^(BOOL success, NSError *error) {
+        if (self.cancelled) return;
+
+        if (!success) {
+            BOOL relogin = (error.code == 401 || error.code == 403);
+            A2LaunchErrorKind kind = relogin ? A2LaunchErrorKindReloginRequired
+                                             : A2LaunchErrorKindCheckFailed;
+            [self failWith:A2LaunchError(kind, relogin
+                ? @"登录凭据已失效，请重新登录"
+                : [NSString stringWithFormat:@"账号校验失败：%@",
+                   error.localizedDescription ?: @""])];
+            return;
+        }
+
+        [self reportTask:A2LaunchTaskCheckAccount fraction:1 message:@"账号有效"];
+        then();
+    }];
+}
+
+#pragma mark - Task 2：扫描模组
+
+/// 对照 ZL2 的 checkMods：
+///   · 读 mods 目录
+///   · lwjgl3ify 需要补丁 → 打补丁 → **重新检索依赖并下载**
+///
+/// 我们目前还没有 lwjgl3ify 补丁逻辑，但把结构留好 ——
+/// 补丁一旦引入，这里的「重下依赖」不能漏。
+- (void)runTaskScanMods:(void (^)(void))then {
+
+    [self reportTask:A2LaunchTaskScanMods fraction:0 message:@"正在扫描模组…"];
+
+    A2GamePath *path = [A2GamePath pathWithGameHome:A2VersionManager.shared.gameHome];
+    NSString *modsDir = [[path gameDirectoryForVersion:self.version.name
+                                             isolation:[self.version effectiveIsolationMode]]
+                         stringByAppendingPathComponent:@"mods"];
+
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSArray<NSString *> *files = [NSFileManager.defaultManager
+                                      contentsOfDirectoryAtPath:modsDir error:nil];
+        NSUInteger count = 0;
+        for (NSString *f in files) {
+            if ([f hasSuffix:@".jar"] || [f hasSuffix:@".disabled"]) count++;
+        }
+
+        // TODO(lwjgl3ify)：如果检测到需要打补丁的模组，
+        // 在这里改 manifest 并触发依赖重检 —— 参照 ZL2 的
+        // patchLwjgl3ifyIfNeeded + GameLibDownloader.schedule/download
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if (self.cancelled) return;
+            [self reportTask:A2LaunchTaskScanMods fraction:1
+                     message:[NSString stringWithFormat:@"发现 %lu 个模组", (unsigned long)count]];
+            then();
+        });
+    });
+}
+
+#pragma mark - Task 3：完整性校验
+
+/// 对照 ZL2 的 MinecraftDownloader(mode = VERIFY_AND_REPAIR)：
+///   只读【本地已存在的】版本 json → 按 sha1/size 校验 → 缺的补下、错的删除重下
+- (void)runTaskVerifyFiles:(BOOL)skip then:(void (^)(void))then {
+
+    if (skip) {
+        [self reportTask:A2LaunchTaskVerifyFiles fraction:1 message:@"跳过文件校验"];
+        [self prepareJRE:then];
+        return;
+    }
+
+    [self reportTask:A2LaunchTaskVerifyFiles fraction:0 message:@"正在校验游戏文件…"];
 
     NSString *gameHome = A2VersionManager.shared.gameHome;
-
-    // ---- 阶段 1：完整性检查 ----
-    void (^afterCheck)(void) = ^{
-        [self prepareJREForVersion:target completion:completion];
-    };
-
-    if (skipCheck) {
-        [self report:A2LaunchPhaseChecking fraction:1.0 message:@"跳过完整性检查"];
-        afterCheck();
-        return;
-    }
-
-    [self report:A2LaunchPhaseChecking fraction:0 message:@"正在检查游戏文件…"];
+    NSString *versionName = self.version.name;
 
     [[A2IntegrityChecker new] checkVersion:versionName
                                   gameHome:gameHome
                                       mode:A2IntegrityCheckModeQuick
-                                  progress:^(double progress, NSString *file) {
-        [self report:A2LaunchPhaseChecking fraction:progress
-             message:[NSString stringWithFormat:@"检查 %@", file]];
+                                  progress:^(double p, NSString *file) {
+        // 校验只占这段时间的前 30%
+        [self reportTask:A2LaunchTaskVerifyFiles fraction:p * 0.3
+                 message:[NSString stringWithFormat:@"检查 %@", file]];
     }
                                 completion:^(A2IntegrityReport *report) {
-        if (self.cancelled) { self.launching = NO; return; }
-
-        [A2Logger info:@"Launch"
-               message:[NSString stringWithFormat:@"完整性检查：%ld/%ld 正常，%lu 个问题",
-                        (long)report.okFiles, (long)report.totalFiles,
-                        (unsigned long)report.issues.count]];
+        if (self.cancelled) return;
 
         if (report.clean) {
-            [self report:A2LaunchPhaseChecking fraction:1 message:@"文件完整"];
-            afterCheck();
+            [self reportTask:A2LaunchTaskVerifyFiles fraction:0.3 message:@"文件完整"];
+            [self prepareJRE:then];
             return;
         }
 
-        // 有缺失/损坏 → 进入补全阶段
-        [self repairAndContinue:report version:target completion:completion];
-    }];
-}
+        // 有损坏/缺失 → 删损坏的，再补下载（剩余 70% 进度）
+        [[A2IntegrityChecker new] repairReport:report];
 
-/// 补下载：先删掉损坏的，再走安装器的「只下缺的」逻辑。
-- (void)repairAndContinue:(A2IntegrityReport *)report
-                  version:(A2Version *)version
-               completion:(void (^)(BOOL, NSError *))completion {
+        A2InstallRequest *req = [A2InstallRequest new];
+        req.mcVersion = self.version.mcVersion ?: versionName;
+        req.versionName = versionName;
+        req.gameHome = gameHome;
 
-    [self report:A2LaunchPhaseRepairing fraction:0
-         message:[NSString stringWithFormat:@"发现 %lu 个文件需要修复",
-                  (unsigned long)report.issues.count]];
-
-    // 删除损坏文件（大小不符 / SHA1 不符）。缺失的不用管。
-    NSInteger removed = [[A2IntegrityChecker new] repairReport:report];
-    [A2Logger info:@"Launch"
-           message:[NSString stringWithFormat:@"删除 %ld 个损坏文件，开始补下载", (long)removed]];
-
-    // 用安装器补齐。安装器的下载逻辑已经带 SHA1 校验，
-    // 会对「已存在且正确」的文件直接跳过，所以这里不会重复下载。
-    A2InstallRequest *req = [A2InstallRequest new];
-    req.mcVersion = version.mcVersion ?: version.name;
-    req.versionName = version.name;
-    req.gameHome = A2VersionManager.shared.gameHome;
-
-    A2GameInstaller *installer = [[A2GameInstaller alloc] init];
-    [installer install:req
-        progress:^(A2InstallStage stage, double progress, NSString *message) {
-        // 补齐阶段的进度映射到 0.3~1.0（前三成留给检查）
-        [self report:A2LaunchPhaseRepairing
-            fraction:0.3 + progress * 0.7
-             message:message];
-    }
-        completion:^(BOOL success, NSError *error) {
-        if (self.cancelled) { self.launching = NO; return; }
-
-        if (!success) {
-            self.launching = NO;
-            [self report:A2LaunchPhaseFailed fraction:0
-                 message:[NSString stringWithFormat:@"补齐失败：%@",
-                          error.localizedDescription ?: @""]];
-            if (completion) completion(NO, error);
-            return;
+        A2GameInstaller *installer = [[A2GameInstaller alloc] init];
+        [installer install:req
+            progress:^(A2InstallStage stage, double progress, NSString *message) {
+            [self reportTask:A2LaunchTaskVerifyFiles
+                    fraction:0.3 + progress * 0.7
+                     message:message];
         }
-
-        [self report:A2LaunchPhaseRepairing fraction:1 message:@"文件已补齐"];
-        [self prepareJREForVersion:version completion:completion];
+            completion:^(BOOL success, NSError *error) {
+            if (self.cancelled) return;
+            if (!success) {
+                [self failWith:A2LaunchError(A2LaunchErrorKindFileIntegrity,
+                    [NSString stringWithFormat:@"文件补齐失败：%@",
+                     error.localizedDescription ?: @""])];
+                return;
+            }
+            [self prepareJRE:then];
+        }];
     }];
 }
 
-#pragma mark - 阶段 2：JRE
+#pragma mark - JRE 准备（不属于 ZL2 的四个 Task，是我们特有的）
 
-- (void)prepareJREForVersion:(A2Version *)version
-                  completion:(void (^)(BOOL, NSError *))completion {
+/// ZL2 的 JRE 在 APK 里按版本打包好，运行时直接选；
+/// 我们打包了 4 个，需要按 MC 版本挑 —— 所以插一步。
+- (void)prepareJRE:(void (^)(void))then {
+    NSString *mc = self.version.mcVersion ?: self.version.name;
+    A2JRE *jre = [A2JREManager.shared jreForVersionName:self.version.name mcVersion:mc];
 
-    [self report:A2LaunchPhasePreparingJRE fraction:0 message:@"正在准备 Java 运行时…"];
-
-    NSString *mcVersion = version.mcVersion ?: version.name;
-    A2JRE *jre = [A2JREManager.shared jreForVersionName:version.name mcVersion:mcVersion];
-
-    if (!jre) {
-        self.launching = NO;
-        NSError *e = [self err:@"没有可用的 Java 运行时。请到 设置 → 渲染 → Java 运行时 检查"];
-        [self report:A2LaunchPhaseFailed fraction:0 message:e.localizedDescription];
-        if (completion) completion(NO, e);
+    if (!jre || !jre.valid) {
+        [self failWith:A2LaunchError(A2LaunchErrorKindNoJRE,
+            [NSString stringWithFormat:@"没有可用的 Java 运行时（%@ 需要 Java %ld）。"
+             @"请到 设置 → 渲染 → Java 运行时 检查",
+             mc, (long)[A2JREManager.shared requiredJavaVersionForMC:mc]])];
         return;
     }
 
-    if (!jre.valid) {
-        self.launching = NO;
-        NSError *e = [self err:[NSString stringWithFormat:@"%@ 不可用：%@",
-                                jre.displayName, jre.invalidReason ?: @""]];
-        [self report:A2LaunchPhaseFailed fraction:0 message:e.localizedDescription];
-        if (completion) completion(NO, e);
-        return;
-    }
-
-    [self report:A2LaunchPhasePreparingJRE fraction:1
-         message:[NSString stringWithFormat:@"使用 %@", jre.displayName]];
-
-    [self startGameForVersion:version jre:jre completion:completion];
+    [A2Logger info:@"Launch"
+           message:[NSString stringWithFormat:@"选用 %@（%@）", jre.displayName, jre.path]];
+    then();
 }
 
-#pragma mark - 阶段 3：拉起 JVM
+#pragma mark - Task 4：启动
 
-- (void)startGameForVersion:(A2Version *)version
-                        jre:(A2JRE *)jre
-                 completion:(void (^)(BOOL, NSError *))completion {
+- (void)runTaskStartGame {
+    [self reportTask:A2LaunchTaskStartGame fraction:0.5 message:@"正在拉起游戏…"];
 
-    [self report:A2LaunchPhaseStarting fraction:0 message:@"正在启动游戏…"];
-
-    // 应用分辨率（在 JVM 启动前设置好，surface 创建时就能用对尺寸）
-    CGSize renderSize = A2ResolutionManager.shared.renderSize;
+    // 分辨率在 JVM 启动前应用 —— surface 创建时就能拿到对的尺寸
+    CGSize rs = A2ResolutionManager.shared.renderSize;
     [A2Logger info:@"Launch"
-           message:[NSString stringWithFormat:@"渲染分辨率 %.0fx%.0f，JRE %@",
-                    renderSize.width, renderSize.height, jre.displayName]];
+           message:[NSString stringWithFormat:@"渲染分辨率 %.0fx%.0f", rs.width, rs.height]];
 
-    // ⚠️ JVM 启动需要 SurfaceViewController（它负责 surface 与 JVM 生命周期），
-    // 那是 UI 层的类。Core 层不依赖 UI，所以这里只做「准备」，
-    // 实际启动由 UI 层订阅本协调器的结果后自己调。
-    //
-    // 这样分层不破，并且 UI 层拿到的是一份「已校验、已补齐、
-    // JRE 已选好」的干净状态 —— 它不需要重复做任何检查。
+    // JVM 启动需要 SurfaceViewController（UI 层）——
+    // Core 不依赖 UI，所以这里只把「已就绪」交给上层。
+    [self reportTask:A2LaunchTaskStartGame fraction:1 message:@"准备就绪"];
+
     self.launching = NO;
-    [self report:A2LaunchPhaseSuccess fraction:1
-         message:[NSString stringWithFormat:@"已准备就绪（%@）", jre.displayName]];
-
-    if (completion) completion(YES, nil);
+    if (self.finalCompletion) {
+        void (^cb)(BOOL, NSError *) = self.finalCompletion;
+        self.finalCompletion = nil;
+        cb(YES, nil);
+    }
 }
 
-#pragma mark - 取消
+#pragma mark - 失败 / 取消
+
+- (void)failWith:(NSError *)error {
+    self.launching = NO;
+    [self reportTask:self.currentTask fraction:0
+             message:error.localizedDescription ?: @"启动失败"];
+
+    if (self.finalCompletion) {
+        void (^cb)(BOOL, NSError *) = self.finalCompletion;
+        self.finalCompletion = nil;
+        cb(NO, error);
+    }
+}
 
 - (void)cancel {
     self.cancelled = YES;
     self.launching = NO;
-    self.phase = A2LaunchPhaseIdle;
-    [self report:A2LaunchPhaseIdle fraction:0 message:@"已取消"];
-}
-
-#pragma mark - 工具
-
-- (NSError *)err:(NSString *)msg {
-    return [NSError errorWithDomain:@"A2LaunchCoordinator" code:1
-                           userInfo:@{NSLocalizedDescriptionKey: msg ?: @"启动失败"}];
+    self.finalCompletion = nil;
+    [A2Logger info:@"Launch" message:@"启动已取消"];
 }
 
 @end
