@@ -828,7 +828,7 @@ static void A2Main(dispatch_block_t block) {
 
     NSURLSessionConfiguration *cfg = [NSURLSessionConfiguration ephemeralSessionConfiguration];
     cfg.timeoutIntervalForRequest = 8;
-    cfg.HTTPMaximumConnectionsPerHost = 6;
+    cfg.HTTPMaximumConnectionsPerHost = 24;   // 预统计也跟着放宽（几千文件时 HEAD 也慢）
     cfg.requestCachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
     NSURLSession *session = [NSURLSession sessionWithConfiguration:cfg];
 
