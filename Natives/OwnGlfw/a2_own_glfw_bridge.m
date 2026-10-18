@@ -168,6 +168,32 @@ JNIEXPORT jboolean JNICALL Java_org_lwjgl_glfw_GLFW_nCreateWindow
     return JNI_TRUE;
 }
 
+// ★2026-10-18★ metallum（Metal 后端）需要真实的 UIView 去挂 CAMetalLayer：
+//   MetalBackend 调 GLFWNativeCocoa.glfwGetCocoaWindow/View，拿不到就 throw
+//   "glfwGetCocoaWindow returned null"，表现为黑屏 + 截图时 SIGSEGV。
+//   这两条把「本层建出来的宿主 UIView/UIWindow」如实回报（调用方只借用指针，不改所有权）。
+JNIEXPORT jlong JNICALL Java_org_lwjgl_glfw_GLFWNativeCocoa_glfwGetCocoaWindow0
+    (JNIEnv *env, jclass cls, jlong window) {
+    (void) env; (void) cls;
+    A2GlfwSurface surf;
+    if (a2_glfw_window_surface((long) window, &surf) != 1) return 0;
+    return (jlong) (intptr_t) surf.nativeWindow;
+}
+
+JNIEXPORT jlong JNICALL Java_org_lwjgl_glfw_GLFWNativeCocoa_glfwGetCocoaView0
+    (JNIEnv *env, jclass cls, jlong window) {
+    (void) env; (void) cls;
+    A2GlfwSurface surf;
+    if (a2_glfw_window_surface((long) window, &surf) != 1) return 0;
+    return (jlong) (intptr_t) surf.nativeView;
+}
+
+JNIEXPORT jint JNICALL Java_org_lwjgl_glfw_GLFWNativeCocoa_glfwGetCocoaMonitor0
+    (JNIEnv *env, jclass cls, jlong monitor) {
+    (void) env; (void) cls; (void) monitor;
+    return 0;   // iOS 无 NSScreen；返回 0 = 无显示器句柄（调用方已按 0 处理）
+}
+
 JNIEXPORT void JNICALL Java_org_lwjgl_glfw_GLFW_nDestroyWindow
   (JNIEnv* env, jclass cls, jlong window) {
     (void) env;
