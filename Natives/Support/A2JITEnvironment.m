@@ -70,6 +70,31 @@ static void a2_jit_brk_f00d_cmd4_prepare(void *addr, size_t len) {
         "ret");
 }
 
+// 前置声明：trap 窗口辅助函数定义在文件后面（C 需要先声明）
+static int a2_jit_trap_push(struct sigaction *oldsa, sigjmp_buf **outEnv);
+static void a2_jit_trap_pop(int idx, struct sigaction *oldsa);
+
+/// cmd4 的安全网版本：调试器没应答时不崩，只返回 NO。
+static BOOL a2_jit_brk_f00d_cmd4_prepare_safe(void *addr, size_t len) {
+    struct sigaction oldsa;
+    sigjmp_buf *env = NULL;
+    int idx = a2_jit_trap_push(&oldsa, &env);
+    if (idx < 0) {
+        a2_jit_log("[A2JIT] cmd4 跳过：陷阱窗口溢出");
+        return NO;
+    }
+    BOOL ok = NO;
+    if (sigsetjmp(*env, 1) == 0) {
+        a2_jit_brk_f00d_cmd4_prepare(addr, len);
+        ok = YES;
+    } else {
+        a2_jit_log("[A2JIT] cmd4 未被调试器服务（SIGTRAP）⇒ 该段祝福跳过");
+        ok = NO;
+    }
+    a2_jit_trap_pop(idx, &oldsa);
+    return ok;
+}
+
 static void *gA2JITExecRegion = NULL;
 static size_t gA2JITExecRegionSize = 0;
 
@@ -95,14 +120,20 @@ void *a2_jit_alloc_preblessed_region(size_t bytes) {
     }
     // 分段祝福：官方脚本的 cmd4 是整个区域的 m+M，16MB 一次包太大 ⇒ 按 1MB 分 16 次
     const size_t kChunk = 1u << 20;
+    size_t blessedChunks = 0, failedChunks = 0;
     for (size_t off = 0; off < bytes; off += kChunk) {
         size_t n = MIN(kChunk, bytes - off);
-        a2_jit_brk_f00d_cmd4_prepare((char *)p + off, n);
+        if (a2_jit_brk_f00d_cmd4_prepare_safe((char *)p + off, n)) {
+            blessedChunks++;
+        } else {
+            failedChunks++;
+            break;          // 没调试器/不认 cmd4 ⇒ 后面的也不用试了
+        }
     }
     // 祝福后再 mprotect 成 RX（TXM 下此时才拿到执行权）
     int rc = mprotect(p, bytes, PROT_READ | PROT_EXEC);
-    a2_jit_log("[A2JIT] JIT 区 %p size=%zu：祝福完成(cmd4×%zu)，mprotect(RX) rc=%d errno=%d",
-               p, bytes, (bytes + kChunk - 1) / kChunk, rc, rc == 0 ? 0 : errno);
+    a2_jit_log("[A2JIT] JIT 区 %p size=%zu：cmd4 成功 %zu 段、失败 %zu 段，mprotect(RX) rc=%d errno=%d",
+               p, bytes, blessedChunks, failedChunks, rc, rc == 0 ? 0 : errno);
     if (rc != 0) {
         a2_jit_log("[A2JIT] ★mprotect(RX) 失败★ ⇒ 该区不可执行（TXM 未祝福），后续按不可用处理");
     }
