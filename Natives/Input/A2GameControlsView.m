@@ -837,6 +837,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     int code = [self a2_keyForControl:cid fallback:def];
     if (code == -1) { a2_glfw_input_post_mouse_button(_window, 0, 1); a2_glfw_input_post_mouse_button(_window, 0, 0); return; }
     if (code == -2) { a2_glfw_input_post_mouse_button(_window, 1, 1); a2_glfw_input_post_mouse_button(_window, 1, 0); return; }
+    a2_log_f(@"[A2-CONTROLS] 按键合成 cid=%@ key=%d window=%ld", cid, code, _window);
     a2_glfw_input_post_key(_window, code, 1);
     a2_glfw_input_post_key(_window, code, 0);
 }
@@ -911,5 +912,25 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     a2_log_f(@"[A2-CONTROLS] 已导出 A2 布局到剪贴板（%lu 项）", (unsigned long) controls.count);
 }
 
+
+- (UIViewController *)a2_topViewController {
+    UIResponder *r = self;
+    while (r != nil && ![r isKindOfClass:UIViewController.class]) r = r.nextResponder;
+    UIViewController *vc = (UIViewController *) r;
+    // ★兜底★ 控件挂在"游戏视图"（普通 UIView）上，响应链常到 UIWindow 就断，
+    //   那样 present 会静默失败 —— 表现为「点了有高亮但没反应」。
+    if (vc == nil) vc = UIApplication.sharedApplication.keyWindow.rootViewController;
+    if (vc == nil) {
+        for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+            if (![scene isKindOfClass:UIWindowScene.class]) continue;
+            for (UIWindow *w in ((UIWindowScene *) scene).windows) {
+                if (w.isKeyWindow) { vc = w.rootViewController; break; }
+            }
+            if (vc != nil) break;
+        }
+    }
+    while (vc.presentedViewController) vc = vc.presentedViewController;
+    return vc;
+}
 
 @end
