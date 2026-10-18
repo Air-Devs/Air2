@@ -450,6 +450,17 @@ int a2_launch_jvm_with_argv(int argc, const char *const argv[], A2LaunchInput in
     }
     a2_log_f(@"[RT-P1] R2 VM ready: usedVer=0x%08x", (unsigned)usedVer);
 
+    // ★2026-10-18★ JNIEnv 是【每线程私有】的：VM 是在专用大栈线程上创建的，那个 env 只对
+    //   创建线程有效。本线程（dispatch 线程）必须 AttachCurrentThread 才能拿到可用 env，
+    //   否则 FindClass 会踩坏 JVM 的 SymbolTable —— 真机 SIGSEGV 正是崩在
+    //   SymbolTable::do_lookup ← jni_FindClass ← a2_launch_jvm_with_argv。
+    {
+        JNIEnv *threadEnv = NULL;
+        jint ar = (*vm)->AttachCurrentThread(vm, (void **)&threadEnv, NULL);
+        a2_log_f(@"[RT-P1] AttachCurrentThread rc=%d env=%p（创建线程的 env=%p）", ar, threadEnv, env);
+        if (ar == 0 && threadEnv != NULL) env = threadEnv;
+    }
+
     // ---- 阶段7：派发主类 main（此后由游戏/安装器接管；真·首帧完成由既有链路负责）----
     a2_progress_enter(A2StageWaitingFirstFrame);   // 阶段7
     int mrc = a2_run_main(env, builder.mainClass, builder.programArgs);
