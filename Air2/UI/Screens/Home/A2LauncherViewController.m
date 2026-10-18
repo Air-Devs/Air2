@@ -732,7 +732,9 @@
         finished = YES;
         self.launchButton.loading = NO;
         if (result.started) {
-            [A2Toast show:@"启动链已返回（见日志 [A2-LAUNCH]）" inView:self.view];
+            // ★2026-10-18★ 启动成功 ⇒ 不再弹提示（游戏视图会整屏盖上来）；
+            //   只记一行日志，方便判据。
+            [A2Log log:@"[A2-LAUNCH] 启动链完成，已交棒给游戏视图（不再弹提示）"];
             return;
         }
         if ([result.message hasPrefix:@"自研启动链未启用"]) {

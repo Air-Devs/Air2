@@ -161,6 +161,7 @@ void a2_glfw_event_post_empty(void) {
 @interface A2GlfwHost : NSObject
 @property (nonatomic, assign) long      handle;
 @property (nonatomic, strong) UIWindow *hostWindow;
+@property (nonatomic, strong) UIViewController *gameViewController;   // 整屏游戏页（防释放）
 @property (nonatomic, strong) UIView   *hostView;
 @property (nonatomic, copy)   NSString *title;
 @property (nonatomic, assign) int       widthPoints;
@@ -483,6 +484,21 @@ int a2_glfw_window_create(long window, int width, int height, const char *title)
 
         [container addSubview:view];
         a2_log_criterion(@"[A2-GLFW] 建窗 4/6 已加入根视图");
+
+        // ★2026-10-18★ 整屏呈现游戏页：否则启动器仍盖在上面，用户只看到启动器。
+        //   用「容器 VC + 子视图」的方式（不再把自定义视图当 rootView，那条路会崩）。
+        UIViewController *gameVC = [UIViewController new];
+        UIView *gameRoot = [[UIView alloc] initWithFrame:keyWin.bounds];
+        gameRoot.backgroundColor = [UIColor blackColor];
+        gameVC.view = gameRoot;
+        view.frame = gameRoot.bounds;
+        view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        [gameRoot addSubview:view];
+        gameVC.modalPresentationStyle = UIModalPresentationFullScreen;
+        UIViewController *presenter = rootVC;
+        while (presenter.presentedViewController) presenter = presenter.presentedViewController;
+        [presenter presentViewController:gameVC animated:NO completion:nil];
+        a2_log_criterion(@"[A2-GLFW] 建窗 4c/6 游戏页已整屏呈现 gameVC=%p", gameVC);
         [container bringSubviewToFront:view];
         [view becomeFirstResponder];
         a2_log_criterion(@"[A2-GLFW] 建窗 5/6 becomeFirstResponder 完成");
@@ -503,6 +519,7 @@ int a2_glfw_window_create(long window, int width, int height, const char *title)
         if (cur != nil) {
             cur.hostWindow = win;
             cur.hostView = view;
+            cur.gameViewController = gameVC;
             cur.widthPoints = wp;  cur.heightPoints = hp;
             cur.widthPixels = wpx; cur.heightPixels = hpx;
             cur.scaleX = (float) scale;
