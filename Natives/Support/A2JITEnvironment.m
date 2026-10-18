@@ -172,6 +172,23 @@ void *a2_jit_brk69_create_region_safe(size_t len) {
     return result;
 }
 
+/// cmd=3 的安全网版本（= 老 Air 的 JIT26SetDetachAfterFirstBr）。
+BOOL a2_jit_set_detach_after_first_br(BOOL detach) {
+    struct sigaction oldsa;
+    sigjmp_buf *env = NULL;
+    int idx = a2_jit_trap_push(&oldsa, &env);
+    if (idx < 0) return NO;
+    BOOL ok = NO;
+    if (sigsetjmp(*env, 1) == 0) {
+        a2_jit_brk_f00d_detach_cmd((void *)(uintptr_t)(detach ? 1 : 0));
+        ok = YES;
+    } else {
+        a2_jit_log("[A2JIT] cmd=3(SetDetachAfterFirstBr) 未被服务 —— 跳过");
+    }
+    a2_jit_trap_pop(idx, &oldsa);
+    return ok;
+}
+
 BOOL a2_jit_send_script_safe(const char *utf8, size_t len) {
     if (utf8 == NULL || len == 0) {
         a2_jit_log("[A2JIT] send_script skipped: empty script");
@@ -643,6 +660,10 @@ static int gA2JITEnsureKickInflight = 0;
         NSTimeInterval slice = remaining < 3.0 ? remaining : 3.0;
         if (a2_jit_verify_region_bounded(slice, "A2JITEnvironment.ensureVerifiedWithinBudget")) {
             if (whyOut) *whyOut = gA2JITRegionEvidence ?: @"verified JIT region (brk #0x69 serviced)";
+            // ★照老 Air★ 首个 brk 后让调试器脱离（它日志里有 SetDetachAfterFirstBr(1) serviced）。
+            //   真机观察：不这么做，进程会在 ~8 秒被外部 SIGKILL 且无崩溃报告。
+            BOOL detach = a2_jit_set_detach_after_first_br(YES);
+            a2_jit_log("[A2JIT] SetDetachAfterFirstBr(1) %s", detach ? "serviced" : "NOT serviced");
             return YES;
         }
         break;   // brk 明确未被服务 ⇒ 不再叠加（避免多个卡死的 brk 线程）
