@@ -158,31 +158,28 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
 #pragma mark - Background
 
 - (void)setupBackground {
-    // 适配自定义背景壁纸：让 BackgroundManager 的全局背景透出
-    [[BackgroundManager sharedManager] makeViewControllerTransparent:self];
+    // 背景走 Air2 的主题色板（A2ThemeManager），不再用 Air1 的壁纸透出
     self.view.backgroundColor = [UIColor clearColor];
 
     // 如果没有自定义背景，使用系统材质毛玻璃作为回退（自适应深浅色）
-    if (![[BackgroundManager sharedManager] hasBackground]) {
-        UIBlurEffect *blurEffect;
-        if (@available(iOS 13.0, *)) {
-            // ★ [GLASS-LIQUID] 走风格层:iOS≥26 ⇒ 系统 UIGlassEffect
-            blurEffect = (UIBlurEffect *)AmeGlassEffect(UIBlurEffectStyleSystemMaterial);
-        } else {
-            blurEffect = (UIBlurEffect *)AmeGlassEffect(UIBlurEffectStyleLight);
-        }
-        UIVisualEffectView *blurView = [[UIVisualEffectView alloc] initWithEffect:blurEffect];
-        blurView.translatesAutoresizingMaskIntoConstraints = NO;
-        [self.view addSubview:blurView];
-        [self.view sendSubviewToBack:blurView];
-
-        [NSLayoutConstraint activateConstraints:@[
-            [blurView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
-            [blurView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
-            [blurView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
-            [blurView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
-        ]];
+    UIBlurEffect *blurEffect;
+    if (@available(iOS 13.0, *)) {
+        // ★ [GLASS-LIQUID] 走风格层:iOS≥26 ⇒ 系统 UIGlassEffect
+        blurEffect = (UIBlurEffect *)AmeGlassEffect(UIBlurEffectStyleSystemMaterial);
+    } else {
+        blurEffect = (UIBlurEffect *)AmeGlassEffect(UIBlurEffectStyleLight);
     }
+    UIVisualEffectView *blurView = [[UIVisualEffectView alloc] initWithEffect:blurEffect];
+    blurView.translatesAutoresizingMaskIntoConstraints = NO;
+    [self.view addSubview:blurView];
+    [self.view sendSubviewToBack:blurView];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [blurView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [blurView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        [blurView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [blurView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+    ]];
 }
 
 #pragma mark - UI Setup
@@ -296,7 +293,7 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
     _errorCardView.translatesAutoresizingMaskIntoConstraints = NO;
     [_mainStackView addArrangedSubview:_errorCardView];
     // 应用毛玻璃效果（适配自定义背景壁纸）
-    [[BackgroundManager sharedManager] applyEffectToView:_errorCardView];
+    (void)0;
 
     // 顶部红色 accent 条（2pt 高的渐变层，从红色到透明）
     _accentGradientLayer = [CAGradientLayer layer];
@@ -427,7 +424,7 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
     _suggestionsCardView.translatesAutoresizingMaskIntoConstraints = NO;
     [_mainStackView addArrangedSubview:_suggestionsCardView];
     // 应用毛玻璃效果（适配自定义背景壁纸）
-    [[BackgroundManager sharedManager] applyEffectToView:_suggestionsCardView];
+    (void)0;
 
     // 顶部黄色 accent 条（提示性质，非致命错误）
     CAGradientLayer *suggestionAccent = [CAGradientLayer layer];
@@ -744,7 +741,7 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
     _logCardView.translatesAutoresizingMaskIntoConstraints = NO;
     // 注意：不在此处添加到 _mainStackView，由 setupUI 中的水平分栏容器管理
     // 应用毛玻璃效果（适配自定义背景壁纸）
-    [[BackgroundManager sharedManager] applyEffectToView:_logCardView];
+    (void)0;
 
     // 日志标题
     _logTitleLabel = [[UILabel alloc] init];
