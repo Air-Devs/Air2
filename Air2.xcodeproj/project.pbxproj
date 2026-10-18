@@ -71,6 +71,11 @@
 		8C992AF31FA8A22AC3526C37 /* SurfaceViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = CAEE71B0AFBCDAB3D6DE931F /* SurfaceViewController.m */; };
 		FC2EEB144AE1D45D9D71C15C /* main_hook.m in Sources */ = {isa = PBXBuildFile; fileRef = A3D0C5C637E9FA2B3F32F1BD /* main_hook.m */; };
 		32E98F4EECA61E102374FDE3 /* utils.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A5BAE11D028A2905E1791FC /* utils.m */; };
+		F2CB4E7B7F47FF18A957EFB5 /* A2ControlLayout.m in Sources */ = {isa = PBXBuildFile; fileRef = 1DD83AEE82FD5DB2400F3B8B /* A2ControlLayout.m */; };
+		FE909770F1329CB8E985AD5F /* A2ControlRenderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A1769FF5839C6F59DA3DB26 /* A2ControlRenderer.m */; };
+		7248BD00DBF94569DDA08C01 /* A2DefaultControls.m in Sources */ = {isa = PBXBuildFile; fileRef = 5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */; };
+		999713CBCD519FC8B0C363BE /* A2ResolutionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */; };
+		F56BA6557B260E7C004C2CE4 /* A2ResolutionSettingsView.m in Sources */ = {isa = PBXBuildFile; fileRef = F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */; };
 		8C279AEDAE884403944CA9B5 /* ControllerInput.m in Sources */ = {isa = PBXBuildFile; fileRef = 16CD6637FF9A9120236C23FD /* ControllerInput.m */; };
 		63B99E24B6EFA7080D43B69C /* GyroInput.m in Sources */ = {isa = PBXBuildFile; fileRef = 72E3D40518553547A372551D /* GyroInput.m */; };
 		8AF2C614A2C3F3AAA6BB9FB7 /* KeyboardInput.m in Sources */ = {isa = PBXBuildFile; fileRef = E5C6EB5CE20391935ED13F45 /* KeyboardInput.m */; };
@@ -250,6 +255,11 @@
 		CAEE71B0AFBCDAB3D6DE931F /* SurfaceViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "SurfaceViewController.m"; sourceTree = "<group>"; };
 		A3D0C5C637E9FA2B3F32F1BD /* main_hook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "main_hook.m"; sourceTree = "<group>"; };
 		6A5BAE11D028A2905E1791FC /* utils.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "utils.m"; sourceTree = "<group>"; };
+		1DD83AEE82FD5DB2400F3B8B /* A2ControlLayout.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlLayout.m"; sourceTree = "<group>"; };
+		6A1769FF5839C6F59DA3DB26 /* A2ControlRenderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlRenderer.m"; sourceTree = "<group>"; };
+		5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DefaultControls.m"; sourceTree = "<group>"; };
+		000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResolutionManager.m"; sourceTree = "<group>"; };
+		F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResolutionSettingsView.m"; sourceTree = "<group>"; };
 		16CD6637FF9A9120236C23FD /* ControllerInput.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "ControllerInput.m"; sourceTree = "<group>"; };
 		72E3D40518553547A372551D /* GyroInput.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "GyroInput.m"; sourceTree = "<group>"; };
 		E5C6EB5CE20391935ED13F45 /* KeyboardInput.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "KeyboardInput.m"; sourceTree = "<group>"; };
@@ -419,9 +429,16 @@
 		E8261C827E7878BDC2048E92 /* PLTaskStage.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PLTaskStage.h"; sourceTree = "<group>"; };
 		8834A7FBD3EE02CF2ACBFE5A /* PLTaskStages.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PLTaskStages.h"; sourceTree = "<group>"; };
 		31EB54C762722EDE895BBE30 /* SurfaceViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "SurfaceViewController.h"; sourceTree = "<group>"; };
+		297B7509422391BE3ABF004B /* config.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "config.h"; sourceTree = "<group>"; };
 		C186822A4D93C6ED1D4F4D90 /* environ.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "environ.h"; sourceTree = "<group>"; };
 		F95E35A558207B66D283C093 /* jni.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "jni.h"; sourceTree = "<group>"; };
 		D90D6323014B3918ACC20743 /* utils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "utils.h"; sourceTree = "<group>"; };
+		9A480B77A9493A4A99FCF1E2 /* A2ControlLayout.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlLayout.h"; sourceTree = "<group>"; };
+		1C4E55239DDFE7C5F66C96EF /* A2ControlRenderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlRenderer.h"; sourceTree = "<group>"; };
+		17EFE083DFCD2B631A9B9195 /* A2DefaultControls.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DefaultControls.h"; sourceTree = "<group>"; };
+		8F8DC63CC90EE44095B0B442 /* A2GameMenuOverlay.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameMenuOverlay.h"; sourceTree = "<group>"; };
+		9A380B08F835A986A05EA196 /* A2ResolutionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResolutionManager.h"; sourceTree = "<group>"; };
+		947208B1A4FAF92FA8883A17 /* A2ResolutionSettingsView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResolutionSettingsView.h"; sourceTree = "<group>"; };
 		ED376B63C03CB43B77351AEA /* ControllerInput.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ControllerInput.h"; sourceTree = "<group>"; };
 		C15C4D975D09A64629826AF8 /* GyroInput.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "GyroInput.h"; sourceTree = "<group>"; };
 		B7FB9EC370E3F461902C355F /* KeyboardInput.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "KeyboardInput.h"; sourceTree = "<group>"; };
@@ -448,7 +465,6 @@
 		ECD0D2D76994ED9F68466613 /* UIKit+hook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UIKit+hook.h"; sourceTree = "<group>"; };
 		47AE80A94AE81F737A013BA1 /* UpdateChecker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UpdateChecker.h"; sourceTree = "<group>"; };
 		A5BCB4E2C7BCE3A6A2BB25D4 /* ZeroTierBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ZeroTierBridge.h"; sourceTree = "<group>"; };
-		AC0E7BE260EA184B5A8919E6 /* ZipArchive.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ZipArchive.h"; sourceTree = "<group>"; };
 		B198712AC6D520C821FCDD33 /* ios_uikit_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ios_uikit_bridge.h"; sourceTree = "<group>"; };
 		930418C55810BF7B65B85AE9 /* A2BackgroundView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundView.h"; sourceTree = "<group>"; };
 		EB440E13AD4A8BB54186F381 /* A2CardPosition.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CardPosition.h"; sourceTree = "<group>"; };
@@ -605,6 +621,8 @@
 			isa = PBXGroup;
 			children = (
 				86E5F88D8B0C6AD482705BD3 /* Context */,
+				0BAD074392BFBB7D37D258C7 /* Controls */,
+				90A539DCE91F82FABE23328F /* GameUI */,
 				A58394A92A24973E7D4C0754 /* Input */,
 				CB139AD7F6209DC35B5EAAD9 /* Renderer */,
 				251D338764DFB1EA53AE6E38 /* Support */,
@@ -826,11 +844,39 @@
 				E8261C827E7878BDC2048E92 /* PLTaskStage.h */,
 				8834A7FBD3EE02CF2ACBFE5A /* PLTaskStages.h */,
 				31EB54C762722EDE895BBE30 /* SurfaceViewController.h */,
+				297B7509422391BE3ABF004B /* config.h */,
 				C186822A4D93C6ED1D4F4D90 /* environ.h */,
 				F95E35A558207B66D283C093 /* jni.h */,
 				D90D6323014B3918ACC20743 /* utils.h */,
 			);
 			path = Context;
+			sourceTree = "<group>";
+		};
+
+		0BAD074392BFBB7D37D258C7 /* Controls */ = {
+			isa = PBXGroup;
+			children = (
+				1DD83AEE82FD5DB2400F3B8B /* A2ControlLayout.m */,
+				6A1769FF5839C6F59DA3DB26 /* A2ControlRenderer.m */,
+				5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */,
+				9A480B77A9493A4A99FCF1E2 /* A2ControlLayout.h */,
+				1C4E55239DDFE7C5F66C96EF /* A2ControlRenderer.h */,
+				17EFE083DFCD2B631A9B9195 /* A2DefaultControls.h */,
+			);
+			path = Controls;
+			sourceTree = "<group>";
+		};
+
+		90A539DCE91F82FABE23328F /* GameUI */ = {
+			isa = PBXGroup;
+			children = (
+				000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */,
+				F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */,
+				8F8DC63CC90EE44095B0B442 /* A2GameMenuOverlay.h */,
+				9A380B08F835A986A05EA196 /* A2ResolutionManager.h */,
+				947208B1A4FAF92FA8883A17 /* A2ResolutionSettingsView.h */,
+			);
+			path = GameUI;
 			sourceTree = "<group>";
 		};
 
@@ -909,7 +955,6 @@
 				A5BCB4E2C7BCE3A6A2BB25D4 /* ZeroTierBridge.h */,
 				B198712AC6D520C821FCDD33 /* ios_uikit_bridge.h */,
 				9C8E9F6CAB6C863C2FF0B16C /* awt_xawt */,
-				BF81E81C64A753445B7A37C3 /* include */,
 			);
 			path = Support;
 			sourceTree = "<group>";
@@ -1039,15 +1084,6 @@
 				5486E1FF3753ECA76163F90D /* xawt_fake.m */,
 			);
 			path = awt_xawt;
-			sourceTree = "<group>";
-		};
-
-		BF81E81C64A753445B7A37C3 /* include */ = {
-			isa = PBXGroup;
-			children = (
-				AC0E7BE260EA184B5A8919E6 /* ZipArchive.h */,
-			);
-			path = include;
 			sourceTree = "<group>";
 		};
 
@@ -1323,6 +1359,11 @@
 				8C992AF31FA8A22AC3526C37 /* SurfaceViewController.m in Sources */,
 				FC2EEB144AE1D45D9D71C15C /* main_hook.m in Sources */,
 				32E98F4EECA61E102374FDE3 /* utils.m in Sources */,
+				F2CB4E7B7F47FF18A957EFB5 /* A2ControlLayout.m in Sources */,
+				FE909770F1329CB8E985AD5F /* A2ControlRenderer.m in Sources */,
+				7248BD00DBF94569DDA08C01 /* A2DefaultControls.m in Sources */,
+				999713CBCD519FC8B0C363BE /* A2ResolutionManager.m in Sources */,
+				F56BA6557B260E7C004C2CE4 /* A2ResolutionSettingsView.m in Sources */,
 				8C279AEDAE884403944CA9B5 /* ControllerInput.m in Sources */,
 				63B99E24B6EFA7080D43B69C /* GyroInput.m in Sources */,
 				8AF2C614A2C3F3AAA6BB9FB7 /* KeyboardInput.m in Sources */,

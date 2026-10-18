@@ -10,23 +10,23 @@
 # 与 Air1 的差异：
 #   · 去掉了 ThirdParty/ZalithLauncher2 —— 那是 Air1 用来抄 ZL2
 #     源码的，我们用不到
-#   · Natives/external/MobileGlues 在 Air1 是 vendored 源码（不是
+#   · Libraries/external/MobileGlues 在 Air1 是 vendored 源码（不是
 #     submodule），我们用同样方式
 # ============================================================
 
-[submodule "Natives/external/DBNumberedSlider"]
-	path = Natives/external/DBNumberedSlider
+[submodule "Libraries/external/DBNumberedSlider"]
+	path = Libraries/external/DBNumberedSlider
 	url = https://github.com/immago/DBNumberedSlider.git
 
-[submodule "Natives/external/fishhook"]
-	path = Natives/external/fishhook
+[submodule "Libraries/external/fishhook"]
+	path = Libraries/external/fishhook
 	url = https://github.com/facebook/fishhook.git
 	branch = main
 
-[submodule "Natives/external/AFNetworking"]
-	path = Natives/external/AFNetworking
+[submodule "Libraries/external/AFNetworking"]
+	path = Libraries/external/AFNetworking
 	url = https://github.com/AFNetworking/AFNetworking
 
-[submodule "Natives/external/ZeroTierFramework"]
-	path = Natives/external/ZeroTierFramework
+[submodule "Libraries/external/ZeroTierFramework"]
+	path = Libraries/external/ZeroTierFramework
 	url = https://github.com/zerotier/zerotier-sockets-apple-framework.git

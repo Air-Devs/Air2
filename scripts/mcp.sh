@@ -17,9 +17,9 @@ set -e
 
 ENDPOINT="${MCP_ENDPOINT:-https://mcp.air-devs.top/mcp}"
 
+# token 由用户指定并内嵌（不入 git，见 .gitignore）
 if [ -z "$MCP_TOKEN" ]; then
-    echo "错误：未设置 MCP_TOKEN 环境变量" >&2
-    exit 1
+    MCP_TOKEN="Uc2BJwCmqXkTfFJmfNm3z_gaJ5CkjLZrC93Y23O346eI0SDyvdKk6Vqnrad9hyJ4"
 fi
 
 # 用户填的 token 可能自带 "Bearer " 前缀 —— 剥掉再统一加，

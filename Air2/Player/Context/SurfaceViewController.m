@@ -10,6 +10,7 @@
 #import "LauncherPreferences.h"
 #import "PLProfiles.h"
 #import "SurfaceViewController.h"
+#import "A2ResolutionManager.h"
 #import "utils.h"
 #import "TrackedTextField.h"
 #import "UIKit+hook.h"
@@ -226,8 +227,11 @@ int memorystatus_control(uint32_t command, int32_t pid, uint32_t flags, void *bu
 static int currentHotbarSlot = -1;
 static GameSurfaceView* pojavWindow;
 
-@interface SurfaceViewController ()<UITextFieldDelegate, UIGestureRecognizerDelegate> {
+@interface SurfaceViewController () <UITextFieldDelegate, UIGestureRecognizerDelegate> {
+    id _resolutionObserverStorage;
 }
+/// 分辨率变化监听
+@property (nonatomic, strong, nullable) id resolutionObserver;
 
 // FPS/内存监控相关（FPS 在 native pojavSwapBuffers 中计数，参照 FCL/ZL2）
 @property(nonatomic) NSTimer *statsTimer;                 // 低频定时器，1s 一次
@@ -1062,6 +1066,7 @@ static UIView *findSDL_uikitview(UIView *root);
     [[NSRunLoop currentRunLoop] addTimer:self.statsTimer forMode:NSRunLoopCommonModes];
 
     CGFloat screenScale = UIScreen.mainScreen.scale;
+    [self observeResolutionChanges];
     [self updateSavedResolution];
 
     self.rootView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width + 30.0, self.view.frame.size.height)];
@@ -1410,6 +1415,30 @@ static UIView *findSDL_uikitview(UIView *root);
     [self setNeedsUpdateOfPrefersPointerLocked];
 }
 
+/// 分辨率变化时重新应用到 surface。
+///
+/// 用户在设置页或游戏内悬浮球里调分辨率 → A2ResolutionManager 发通知 →
+/// 这里重算并写 drawableSize。**不重启游戏就能生效。**
+///
+/// 注意：EGLSurface 只在 gl_init_context 建一次，改 drawableSize 会触发
+/// SDL 的 resize 事件（被 hook 改写成 surface 尺寸），MC 会跟着重建 viewport。
+/// 这是 Air1 注释里记录的行为，也是「手动调一次分辨率画面才出现」的成因。
+- (void)observeResolutionChanges {
+    if (self.resolutionObserver) return;
+    __weak typeof(self) weakSelf = self;
+    self.resolutionObserver =
+        [NSNotificationCenter.defaultCenter addObserverForName:A2ResolutionDidChangeNotification
+                                                        object:nil
+                                                         queue:NSOperationQueue.mainQueue
+                                                    usingBlock:^(NSNotification *note) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        [self updateSavedResolution];
+        // 通知 GL 桥更新 viewport
+        [[A2ResolutionManager shared] notifyGLViewportChange];
+    }];
+}
+
 - (void)updateSavedResolution {
     for (UIWindowScene *scene in UIApplication.sharedApplication.connectedScenes.allObjects) {
         self.screenScale = scene.screen.scale;
@@ -1422,7 +1451,19 @@ static UIView *findSDL_uikitview(UIView *root);
         self.surfaceView.frame = self.surfaceView.superview.frame;
     }
 
-    resolutionScale = getPrefFloat(@"video.resolution") / 100.0;
+    // 分辨率来源统一走 A2ResolutionManager ——
+    // 它支持三种规则（固定 / 百分比 / 自定义），并且与设置页、游戏内悬浮球
+    // 共用同一份配置。这里只负责把算出来的尺寸应用到 surface。
+    //
+    // 之前的实现只读 video.resolution 这一个百分比键，
+    // 而且设置页没有入口 —— 等于只有开发者能通过手动改偏好调分辨率。
+    //
+    // 计算规则（对照 ZL2 的 getDisplayFriendlyRes）：
+    //   固定/百分比 → 原生尺寸 × 缩放比例，取偶（GPU 对奇数宽高有额外开销）
+    //   自定义      → 用户输入的像素尺寸，钳制在 20%~300% 原生尺寸之间
+    CGSize renderSize = A2ResolutionManager.shared.renderSize;
+    CGSize nativeSize = A2ResolutionManager.shared.nativeSize;
+    resolutionScale = renderSize.width > 0 ? (renderSize.width / MAX(1, nativeSize.width)) : 1.0;
     // MobileGL/SDL3 初始黑屏根治：video.resolution 尚未写入偏好时，
     // getPrefObject 返回 nil、[nil floatValue] 得 0，于是 resolutionScale=0
     // -> contentsScale=0、windowWidth/Height=0 -> drawableSize 被 MAX(0,1)
@@ -1434,12 +1475,24 @@ static UIView *findSDL_uikitview(UIView *root);
         NSLog(@"[SurfaceVC] video.resolution invalid (%.4f) -> falling back to 100%%", resolutionScale);
         resolutionScale = 1.0f;
     }
-    self.surfaceView.layer.contentsScale = self.screenScale * resolutionScale;
+    // contentsScale：让 CoreAnimation 把渲染缓冲放大到物理屏。
+    // renderSize / 点尺寸 = 需要的放大倍率。
+    //
+    // 之前是 screenScale * resolutionScale，等价于「原生 × 缩放 ÷ 原生」= 缩放，
+    // 在百分比规则下结果一样，但自定义规则（任意像素尺寸）算不对 ——
+    // 必须用 renderSize 反推。
+    CGFloat viewsWidthPt  = MAX(1, self.surfaceView.frame.size.width);
+    CGFloat viewsHeightPt = MAX(1, self.surfaceView.frame.size.height);
+    CGFloat scaleX = renderSize.width  / viewsWidthPt;
+    CGFloat scaleY = renderSize.height / viewsHeightPt;
+    self.surfaceView.layer.contentsScale = MIN(scaleX, scaleY);
 
-    physicalWidth = roundf(self.surfaceView.frame.size.width * self.screenScale);
-    physicalHeight = roundf(self.surfaceView.frame.size.height * self.screenScale);
-    windowWidth = roundf(physicalWidth * resolutionScale);
-    windowHeight = roundf(physicalHeight * resolutionScale);
+    physicalWidth  = roundf(viewsWidthPt  * self.screenScale);
+    physicalHeight = roundf(viewsHeightPt * self.screenScale);
+
+    // 渲染尺寸直接取 A2ResolutionManager 的结果
+    windowWidth  = roundf(renderSize.width);
+    windowHeight = roundf(renderSize.height);
     // 【iPhone X 1px 失配根治 —— "必须手动调一次分辨率才有画面"的成因】
     // 旧代码在此把奇数宽/高 -- 取偶（iPhone X: 375*3=1125 -> 1124）。
     // 但 ANGLE 建 EGL window surface 时**不读 drawableSize、也不理我们传的
