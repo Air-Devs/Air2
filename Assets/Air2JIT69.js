@@ -87,7 +87,7 @@ commands[4] = function (brkResponse) {
 // ★自研 JIT 宿主区（brk #0x6942）★
 //   App 侧 mmap 一段 RW 内存后发这个 brk，把地址/长度交给调试器整段祝福成可执行；
 //   之后的 0x69（BreakGetJITMapping）直接交付这块，绕开 `_M<size>` 只回 16384 字节的限制。
-const AME_JIT_FORCE_ZERO = true;   // A 方案：true ⇒ 0x69 回 0，逼 VM 自己 mmap RX
+const AME_JIT_FORCE_ZERO = false;  // ★2026-10-18★ 改回 false：App 现在逐页向调试器要 rx 页(_M4000,rx)，需要脚本真去分配
 let ameJITBigRegion = 0n;
 let ameJITBigSize   = 0n;
 function ameJITHandleRegisterRegion(brkResponse) {
