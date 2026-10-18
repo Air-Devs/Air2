@@ -718,11 +718,13 @@ static void A2Main(dispatch_block_t block) {
     if (total == 0) { if (then) then(nil); return; }
 
     NSInteger concurrency = [NSUserDefaults.standardUserDefaults integerForKey:@"A2DownloadConcurrency"];
-    if (concurrency <= 0) concurrency = 4;
-    concurrency = MAX(1, MIN(8, concurrency));
+    // ★2026-10-18 提速★ 几千个资源文件是"延迟瓶颈"（每个请求几 ms~几十 ms 的往返），
+    //   并发 4 太保守。默认提到 16，上限 32；可用偏好键 A2DownloadConcurrency 覆盖。
+    if (concurrency <= 0) concurrency = 16;
+    concurrency = MAX(1, MIN(32, concurrency));
     if (concurrency > (NSInteger)total) concurrency = (NSInteger)total;
 
-    [A2Log log:@"[A2-DL] batch 总 %lu 个文件，并发=%ld（键 A2DownloadConcurrency，缺省 4）",
+    [A2Log log:@"[A2-DL] batch 总 %lu 个文件，并发=%ld（键 A2DownloadConcurrency，缺省 16）",
                  (unsigned long)total, (long)concurrency];
     @synchronized (self) {
         self.a2InBatch = YES;

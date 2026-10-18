@@ -200,7 +200,10 @@ static NSString *const kPartSuffix = @".part";
     NSURLSessionConfiguration *cfg = NSURLSessionConfiguration.defaultSessionConfiguration;
     cfg.timeoutIntervalForRequest = 60;
     cfg.timeoutIntervalForResource = 3600;
-    cfg.HTTPMaximumConnectionsPerHost = 8;
+    // ★2026-10-18 提速★ 小文件多 ⇒ 连接池上限要跟批量并发同量级，否则并发被压回 8。
+    cfg.HTTPMaximumConnectionsPerHost = 32;
+    cfg.HTTPShouldUsePipelining = YES;      // 老字段（现代系统多忽略），保留无害
+    cfg.waitsForConnectivity = NO;          // 无网时立即失败由上层重试，别在这里干等
     self.session = [NSURLSession sessionWithConfiguration:cfg delegate:self delegateQueue:nil];
 
     self.currentTask = [self.session dataTaskWithRequest:req];
