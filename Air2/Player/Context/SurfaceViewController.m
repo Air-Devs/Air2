@@ -1072,7 +1072,7 @@ static UIView *findSDL_uikitview(UIView *root);
     self.rootView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width + 30.0, self.view.frame.size.height)];
     [self.view addSubview:self.rootView];
 
-    self.ctrlView = [[ControlLayout alloc] initWithFrame:getSafeArea(self.view.frame)];
+    self.ctrlView = [[UIView alloc] initWithFrame:getSafeArea(self.view.frame)];
     [self performSelector:@selector(initCategory_Navigation)];
 
     self.surfaceView = [[GameSurfaceView alloc] initWithFrame:self.view.frame];
@@ -1392,7 +1392,9 @@ static UIView *findSDL_uikitview(UIView *root);
     self.mousePointerView.frame = virtualMouseFrame;
 
     self.shouldHideControlsFromRecording = getPrefFloat(@"control.recording_hide");
-    [self.ctrlView hideViewFromCapture:self.shouldHideControlsFromRecording];
+    if ([self.ctrlView respondsToSelector:@selector(hideViewFromCapture:)]) {
+        [(id)self.ctrlView hideViewFromCapture:self.shouldHideControlsFromRecording];
+    }
     self.ctrlView.frame = getSafeArea(self.view.frame);
 
     self.slideableHotbar = getPrefBool(@"control.slideable_hotbar");
