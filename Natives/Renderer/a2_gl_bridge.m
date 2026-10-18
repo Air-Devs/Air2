@@ -298,8 +298,9 @@ int a2_gl_bridge_backend_is_egl(const char *rendererName) {
     //   `IllegalStateException: There is no OpenGL context current in the current thread`。
     //   metallum 是 GL→Metal 翻译器，同样需要这个上下文对象（它接管的是 GL 入口，不是 GLFW）。
     //   只把 Vulkan 直通类（MoltenVK）排除在外。
-    static const char *kEglBackends[] = {
-        A2RendererCompatDylibName,   // libgl4es_114.dylib
+    // 注：A2RendererCompatDylibName 是 NSString 常量，不是编译期字面量 ⇒ 这里用字面量（值相同）。
+    const char *kEglBackends[] = {
+        "libgl4es_114.dylib",
         "libmetallum.dylib",         // Metal（自研）
         "libmobileglues.dylib",
         "libnggl4es.dylib",
