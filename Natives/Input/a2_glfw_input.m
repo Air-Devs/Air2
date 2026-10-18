@@ -118,6 +118,9 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 @property (nonatomic, assign) NSInteger activeTouches;
 /// 主触点（第一根手指）：多点触控时锁定它，避免光标在两根手指之间跳。
 @property (nonatomic, weak)   UITouch *a2PrimaryTouch;
+/// 抓取模式用的虚拟光标与上次触摸采样点（增量口径）。
+@property (nonatomic, assign) CGPoint a2VirtualCursor;
+@property (nonatomic, assign) CGPoint a2LastTouch;
 @property (nonatomic, assign) BOOL  touchLogged;
 @property (nonatomic, assign) BOOL  scrollLogged;
 @property (nonatomic) BOOL  a2ScrollGestureInstalled;
@@ -307,6 +310,9 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
     BOOL wasIdle = (self.activeTouches == 0);
     self.activeTouches += (NSInteger) touches.count;
     [self noteFirstTouch:p];
+    // 记下起点：抓取模式靠增量，不靠绝对位置
+    self.a2LastTouch = p;
+    self.a2VirtualCursor = p;
     [self postCursor:p];
     if (wasIdle) {
         [self postEnter:1];
@@ -320,7 +326,21 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
     if (t == nil || ![touches containsObject:t]) {
         return;   // 移动的是第二根手指 ⇒ 不影响光标
     }
-    [self postCursor:[t locationInView:self]];
+    CGPoint p = [t locationInView:self];
+    extern int a2_glfw_input_is_grabbing(void);
+    if (a2_glfw_input_is_grabbing()) {
+        // ★抓取模式(游戏内)★ 只送【两次采样之差】，绝对坐标只用于判定"点了什么"。
+        // 否则手指一落下光标瞬移到触点 ⇒ MC 收到巨大位移 ⇒ 视角锁死/乱飞。
+        CGFloat dx = p.x - self.a2LastTouch.x;
+        CGFloat dy = p.y - self.a2LastTouch.y;
+        self.a2VirtualCursor = CGPointMake(self.a2VirtualCursor.x + dx,
+                                           self.a2VirtualCursor.y + dy);
+        self.a2LastTouch = p;
+        [self postCursor:self.a2VirtualCursor];
+    } else {
+        self.a2LastTouch = p;
+        [self postCursor:p];
+    }
 }
 
 - (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {

@@ -137,6 +137,14 @@ static long   gShowingWindow  = 0;   // nglfwSetShowingWindow
 static double gCursorX        = 0.0; // nglfwGetCursorPos(A) 的最近值（来自光标事件）
 static double gCursorY        = 0.0;
 static int    gGrabbing       = 0;   // CallbackBridge.nativeSetGrabbing
+
+/// 供输入层查询：MC 是否已「抓取鼠标」（进世界 = 相对位移模式）。
+/// ★2026-10-18★ 抓取时必须发【位移增量】而不是触摸的绝对位置 ——
+///   否则手指落下瞬间光标瞬移到触点，MC 当成一次巨大位移 ⇒ 视角锁死/飞走
+///   （历史同一问题：用户原话「点中间 ⇒ 固定在一个点」）。
+int a2_glfw_input_is_grabbing(void) {
+    return gGrabbing;
+}
 static long   gPumpCount      = 0;   // pojavPumpEvents 调用次数（判据日志用）
 static long   gDispatched     = 0;   // 已派发进 Java 的事件条数（判据日志用）
 static long   gSwapCount      = 0;   // pojavSwapBuffers 调用次数（判据日志用）
