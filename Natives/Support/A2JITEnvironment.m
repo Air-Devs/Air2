@@ -46,6 +46,31 @@ void a2_jit_log(const char *fmt, ...) {
 //   来源：utils.m L752–L756（裸 JIT26CreateRegionLegacy）。
 //   ★不改语义★：naked + 只 brk + ret；区域地址由调试器经寄存器回填。
 // ============================================================================
+// brk #0x6942 = ★自研 JIT 宿主协议★：把「App 自己 mmap 的一段 RW 内存」整段祝福成可执行。
+//   为什么需要它：真机实测 brk #0x69 的 _M<size>,perm 不论请求多大都只回 16384 字节，
+//   而 libjvm 的 code cache 要 16MB ⇒ 必须由我们自己 mmap 再让调试器逐页祝福
+//   （官方 UniversalJIT26 的 prepare_memory_region(addr,len) 正是这个语义，x0≠0 时它不分配）。
+//   x0 = 区域首地址，x1 = 长度（ABI 直传，naked 函数不改寄存器）。
+__attribute__((noinline, optnone, naked))
+static void *a2_jit_brk6942_prepare_region(void *addr, size_t len) {
+    asm("brk #0x6942 
+"
+        "ret");
+}
+
+// 申请一段 RW 内存并整段祝福成可执行；失败返回 NULL。
+//   调用点：A2JITEnvironment.ensureVerifiedWithinBudget（建 VM 之前）。
+void *a2_jit_alloc_preblessed_region(size_t bytes) {
+    void *p = mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
+    if (p == MAP_FAILED) {
+        a2_jit_log("[A2JIT] 预分配 JIT 宿主区失败 mmap(%zu) errno=%d", bytes, errno);
+        return NULL;
+    }
+    a2_jit_brk6942_prepare_region(p, bytes);
+    a2_jit_log("[A2JIT] ★自研 JIT 宿主区★ addr=%p size=%zu（已请求调试器整段祝福）", p, bytes);
+    return p;
+}
+
 __attribute__((noinline, optnone, naked))
 void *a2_jit_brk69_create_region(size_t len) {
     asm("brk #0x69 \n"
@@ -323,6 +348,7 @@ A2JITExecProbeResult a2_jit_exec_probe_anonymous(void) {
 // 可用性判据主体 —— 搬运自 utils.m L1438–L1863。
 // ============================================================================
 
+static void *gA2JITPreblessed = NULL;   // 自研 JIT 宿主区（brk #0x6942）
 static void *gA2JITVerifiedRegion = NULL;
 static int gA2JITBrkCount = 0;   // ★排查用★ 本进程发了几次 brk #0x69
 static BOOL   gA2JITVerified = NO;
@@ -394,6 +420,9 @@ static void *a2_jit_brk69_bounded(NSTimeInterval deadlineSec, const char *why) {
                                         // 改为默认讨 64MB（与 ReservedCodeCacheSize=16m 留足余量）
     a2_jit_log("[A2JIT] 请求 JIT 区大小=%s：%zu 字节（键 A2JITRegionMB 未设 ⇒ 默认 64MB）",
                a2jitMB > 0 ? "自定义" : "默认", a2jitWantBytes);
+    // ★自研 JIT 宿主★ 先自己 mmap 一大段并整段祝福；脚本侧 0x69 会优先返回这块（见 Air2JIT69.js）
+    extern void *a2_jit_alloc_preblessed_region(size_t bytes);
+    gA2JITPreblessed = a2_jit_alloc_preblessed_region(a2jitWantBytes);
     NSThread *worker = [[NSThread alloc] initWithBlock:^{
         res = a2_jit_brk69_create_region_safe(a2jitWantBytes);
         os_unfair_lock_lock(&gA2JITBrkLock);

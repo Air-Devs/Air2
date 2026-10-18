@@ -57,9 +57,24 @@ const commands = {
     [CMD_PREPARE_REGION]: JIT26PrepareRegion,
     [CMD_NEW_BREAKPOINTS]: JIT26NewBreakpoints
 };
+// ★自研 JIT 宿主区（brk #0x6942）★
+//   App 侧 mmap 一段 RW 内存后发这个 brk，把地址/长度交给调试器整段祝福成可执行；
+//   之后的 0x69（BreakGetJITMapping）直接交付这块，绕开 `_M<size>` 只回 16384 字节的限制。
+let ameJITBigRegion = 0n;
+let ameJITBigSize   = 0n;
+function ameJITHandleRegisterRegion(brkResponse) {
+    ameJITBigRegion = x0;
+    ameJITBigSize   = x1;
+    let r = -1;
+    try { r = prepare_memory_region(ameJITBigRegion, ameJITBigSize); } catch (e) { log(`prepare 异常: ${e}`); }
+    log(`[AIR2-JIT69] 注册自研宿主区 addr=0x${ameJITBigRegion.toString(16)} size=0x${ameJITBigSize.toString(16)} prepare=${r}`);
+    ameJITReplyX0(0n);
+}
+
 const legacyCommands = {
     [0x68]: JIT26NewBreakpoints,
     [0x69]: JIT26HandleBrk0x69,
+    [0x6942]: ameJITHandleRegisterRegion,
     [0xf00d]: JIT26HandleBrk0xf00d
 };
 
@@ -291,7 +306,13 @@ function JIT26HandleBrk0x69(brkResponse) {
         }
         x1 = x0;                                               // 官方语义：size 挪到 x1
         x0 = 0;                                                // 官方语义：x0=0 ⇒ 由 host 分配
-        JIT26PrepareRegion(brkResponse);                       // 官方路径：分配 + prepare + 回填 x0
+        if (ameJITBigRegion != 0n && x1 <= ameJITBigSize) {
+            // ★优先交付自研宿主区★：它已经整段 prepare 过，尺寸由我们保证
+            log(`[AIR2-JIT69] 交付自研宿主区 0x${ameJITBigRegion.toString(16)} 给 size=0x${x1.toString(16)} 的请求`);
+            ameJITReplyX0(ameJITBigRegion);
+        } else {
+            JIT26PrepareRegion(brkResponse);                   // 官方路径：分配 + prepare + 回填 x0
+        }
         if (detachAfterFirstBr) {
             JIT26Detach();
         }
