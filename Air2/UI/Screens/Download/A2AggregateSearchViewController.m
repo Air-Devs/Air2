@@ -289,7 +289,7 @@ static NSString *A2AggregateSourceLabel(A2ContentPlatform platform) {
     row.axis = UILayoutConstraintAxisHorizontal;
     row.spacing = A2SpaceS;
     row.alignment = UIStackViewAlignmentLeading;
-    row.distribution = UIStackViewDistributionLeading;
+    row.distribution = UIStackViewDistributionFill;   // UIStackView 没有 Leading 分布（只有 Fill/FillEqually/FillProportionally/EqualSpacing/EqualCentering）
 
     for (NSUInteger i = 0; i < titles.count; i++) {
         A2FilterChip *chip = [A2FilterChip chip];
