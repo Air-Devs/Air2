@@ -98,6 +98,9 @@ typedef void      (*A2PFN_glGetIntegerv)(uint32_t, int *);
 // ---------------------------------------------------------------------------
 // 桥状态（一次性：attach 成功后驻留到进程结束/再次 attach）
 // ---------------------------------------------------------------------------
+/// 当前后端的 dylib 名（attach 时记录；帧回调据此跳过危险调用）。
+static char gBackendName[96] = {0};
+
 static void *gEglHandle  = NULL;
 static void *gGlesHandle = NULL;
 static void *gRendererHandle = NULL;   // 后端本体（compat 底 = libgl4es_114.dylib）
@@ -306,9 +309,6 @@ void a2_gl_bridge_present_frame(void) {
     // 不产帧、不记数（帧性能判据会如实报 frames=0）。
     a2_gl_bridge_frame_work();
 }
-
-/// 当前后端的 dylib 名（attach 时记录；帧回调据此跳过危险调用）。
-static char gBackendName[96] = {0};
 
 int a2_gl_bridge_backend_is_egl(const char *rendererName) {
     if (rendererName == NULL || rendererName[0] == '\0') return 0;
