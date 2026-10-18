@@ -450,6 +450,9 @@ def build():
                         "$(SRCROOT)",
                         "$(SRCROOT)/Libraries/external/mesa",
                         "$(SRCROOT)/Libraries",
+                        "$(SRCROOT)/Air2/Player/Context",
+                        "$(SRCROOT)/Air2/Player/Input",
+                        "$(SRCROOT)/Air2/Player/Renderer",
                     )
                 ) + chr(10) + chr(9) * 4 + ")",
                 "CODE_SIGN_STYLE": "Automatic",

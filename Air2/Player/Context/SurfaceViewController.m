@@ -2,9 +2,9 @@
 #import <GameController/GameController.h>
 #import <objc/runtime.h>
 
-#import "input/ControllerInput.h"
-#import "input/GyroInput.h"
-#import "input/KeyboardInput.h"
+#import "ControllerInput.h"
+#import "GyroInput.h"
+#import "KeyboardInput.h"
 
 #import "JavaLauncher.h"
 #import "LauncherPreferences.h"

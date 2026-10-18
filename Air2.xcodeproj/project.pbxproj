@@ -1587,6 +1587,9 @@
 					"$(SRCROOT)",
 					"$(SRCROOT)/Libraries/external/mesa",
 					"$(SRCROOT)/Libraries",
+					"$(SRCROOT)/Air2/Player/Context",
+					"$(SRCROOT)/Air2/Player/Input",
+					"$(SRCROOT)/Air2/Player/Renderer",
 				);
 				INFOPLIST_FILE = "Air2/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1625,6 +1628,9 @@
 					"$(SRCROOT)",
 					"$(SRCROOT)/Libraries/external/mesa",
 					"$(SRCROOT)/Libraries",
+					"$(SRCROOT)/Air2/Player/Context",
+					"$(SRCROOT)/Air2/Player/Input",
+					"$(SRCROOT)/Air2/Player/Renderer",
 				);
 				INFOPLIST_FILE = "Air2/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (

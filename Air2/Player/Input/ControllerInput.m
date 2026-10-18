@@ -1,10 +1,10 @@
 #import "ControllerInput.h"
-#import "../LauncherPreferences.h"
-#import "../PLProfiles.h"
-#import "../SurfaceViewController.h"
-#import "../utils.h"
+#import "LauncherPreferences.h"
+#import "PLProfiles.h"
+#import "SurfaceViewController.h"
+#import "utils.h"
 
-#include "../glfw_keycodes.h"
+#include "glfw_keycodes.h"
 
 // Left thumbstick directions
 #define DIRECTION_EAST 0
