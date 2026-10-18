@@ -100,7 +100,10 @@ public final class A2GameClassLoader extends URLClassLoader {
         // 只对「游戏自己的包」走无签名路径 —— 签名冲突只发生在这里（agent 往
         // com.mojang.blaze3d.* 定义类），把范围收窄可避免影响 LWJGL 等库
         // （它们会读 ProtectionDomain 的 CodeSource 去定位 native）。
-        boolean gameOwned = name.startsWith("com.mojang.") || name.startsWith("net.minecraft.");
+        // ★只覆盖 agent 真正注入的那 13 个包★（全部在 com.mojang.blaze3d.*）：
+        //   metallum_agent.jar 的 classes26*/ 条目就落在这里，签名冲突也只发生在这里。
+        //   范围越窄，越不会影响 MC 其它类/库对 CodeSource 的依赖。
+        boolean gameOwned = name.startsWith("com.mojang.blaze3d.");
         if (!gameOwned) {
             return super.findClass(name);
         }
