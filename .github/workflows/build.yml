@@ -122,6 +122,14 @@ jobs:
           done
 
           # ---- 注入 JRE ----
+          # ★fetch_jre.py 落盘在 depends/java-<v>-openjdk，打包需要根目录 java_runtimes/★
+          #   之前直接 cp java_runtimes 失败：cp: java_runtimes: No such file or directory
+          mkdir -p java_runtimes
+          for v in 8 17 21 25; do
+            src="depends/java-${v}-openjdk"
+            [ -d "$src" ] && cp -R "$src" java_runtimes/
+          done
+          ls java_runtimes | head -10
           cp -R java_runtimes "$APP/java_runtimes"
 
           # ---- 启动器资源 ----
