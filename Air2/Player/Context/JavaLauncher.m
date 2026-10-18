@@ -35,6 +35,9 @@
 #import "PLLogOutputView.h"
 #import "PLProfiles.h"
 #import "AmeLaunchProgress.h"
+
+// JavaLauncher.h 里是 extern 声明，这里给唯一定义
+JLI_Launch_func *pJLI_Launch = 0;
 // ★ [LAUNCH-PROGRESS] 启动阶段上报(遮罩进度条/阶段文字/步骤骨架的数据源)
 
 #define fm NSFileManager.defaultManager
