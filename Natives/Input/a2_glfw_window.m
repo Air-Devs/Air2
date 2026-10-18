@@ -27,6 +27,7 @@
 //  净室：独立编写，未参考 Pojav / Boardwalk / Amethyst / LWJGL 源码。
 // ============================================================================
 #import "a2_glfw_window.h"
+#import "A2GameControlsView.h"
 #import "a2_glfw_input.h"
 #import "a2_log.h"
 
@@ -585,6 +586,13 @@ int a2_glfw_window_create(long window, int width, int height, const char *title)
         if (cur != nil) {
             cur.hostWindow = win;
             cur.hostView = view;
+
+            // ★游戏内控件★ 阶段1：移动两套模式 + 潜行/疾跑 + 跳跃
+            //   挂在宿主视图最上层（透明层，空白处 hitTest 返回 nil ⇒ 不吃触摸）。
+            A2GameControlsView *controls = [[A2GameControlsView alloc] initWithWindowHandle:window];
+            controls.frame = view.bounds;
+            controls.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+            [view addSubview:controls];
             a2_publish_ios_view_pointer((__bridge void *) view, scale);
             cur.gameViewController = gameVC;
             cur.widthPoints = wp;  cur.heightPoints = hp;
