@@ -38,3 +38,15 @@ uint64_t hwRedirectOrig[6], hwRedirectTarget[6] = {0};
 
 // ---- utils.h ----
 BOOL debugLogEnabled = 0, isJailbroken = 0;
+
+// ---- GLFW 回调函数指针（environ.h 的 ADD_CALLBACK_WWIN 宏展开）----
+GLFW_invoke_Char_func* GLFW_invoke_Char = 0;
+GLFW_invoke_CharMods_func* GLFW_invoke_CharMods = 0;
+GLFW_invoke_CursorEnter_func* GLFW_invoke_CursorEnter = 0;
+GLFW_invoke_CursorPos_func* GLFW_invoke_CursorPos = 0;
+GLFW_invoke_FramebufferSize_func* GLFW_invoke_FramebufferSize = 0;
+GLFW_invoke_Key_func* GLFW_invoke_Key = 0;
+GLFW_invoke_MouseButton_func* GLFW_invoke_MouseButton = 0;
+GLFW_invoke_Scroll_func* GLFW_invoke_Scroll = 0;
+GLFW_invoke_WindowPos_func* GLFW_invoke_WindowPos = 0;
+GLFW_invoke_WindowSize_func* GLFW_invoke_WindowSize = 0;

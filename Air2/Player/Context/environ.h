@@ -60,7 +60,7 @@ extern jmethodID method_SystemClipboardDataReceived;
     extern int windowWidth, windowHeight;
     extern int physicalWidth, physicalHeight;
 #define ADD_CALLBACK_WWIN(NAME) \
-    GLFW_invoke_##NAME##_func* GLFW_invoke_##NAME;
+    extern GLFW_invoke_##NAME##_func* GLFW_invoke_##NAME;
     ADD_CALLBACK_WWIN(Char);
     ADD_CALLBACK_WWIN(CharMods);
     ADD_CALLBACK_WWIN(CursorEnter);
