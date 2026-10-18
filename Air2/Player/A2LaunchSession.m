@@ -10,6 +10,7 @@
 #import "A2LaunchSession.h"
 #import <UIKit/UIKit.h>   // 启动失败界面（UIAlertController / UIWindowScene）
 #import "A2LaunchPlan.h"
+#import "A2LaunchOverlay.h"
 #import "A2LaunchRunner.h"
 #import "A2LaunchChain.h"            // ①→②→③ 的顺序与状态（★单一真相源★）
 #import "A2LaunchFailure.h"          // 失败分类 / 判据行 / 用户文案（Player 纯逻辑）
@@ -92,6 +93,7 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
             //   弹一个可读的失败页，写清「停在哪一步 / 失败码 / 怎么下一步」，
             //   并提供「打开日志」直接看 lastlog。成功路径完全不受影响。
             if (!started) {
+                [A2LaunchOverlay hide];   // 遮罩先收，失败页才看得见
                 [A2LaunchSession a2_presentLaunchFailureWithMessage:message returnCode:rc];
             }
             completion(r);
@@ -404,6 +406,8 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
     }
 
     // 建 VM 会阻塞 ⇒ 放后台队列；结果回主线程。
+    // ★启动遮罩★ 从这里开始用户看不到任何进展 ⇒ 立刻盖上，阶段播报会驱动它。
+    [A2LaunchOverlay show];
     [A2Log log:@"[A2-LAUNCH] 进入后台链：plan=%@ renderer=%@ jre=%@",
                  planPath.lastPathComponent ?: @"(nil)", renderer.identifier, jreDir];
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{

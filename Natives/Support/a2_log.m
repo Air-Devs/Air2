@@ -90,6 +90,14 @@ void a2_progress_enter(A2Stage stage) {
     NSString *line = [NSString stringWithFormat:@"[LAUNCH-PROGRESS] 阶段 %ld/8：%@",
                       (long)stage, a2_stage_name(stage)];
     a2_emit("", line.UTF8String ?: "");
+    // ★启动遮罩★ 把阶段播报同步给 UI（名称为字面量，UI 侧 A2LaunchOverlay.h 同名字面量）。
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [NSNotificationCenter.defaultCenter postNotificationName:@"A2LaunchStageNotification"
+                                                         object:nil
+                                                       userInfo:@{ @"stage": @(stage),
+                                                                   @"name": a2_stage_name(stage),
+                                                                   @"failed": @NO }];
+    });
 }
 
 void a2_progress_fail(A2Stage stage, NSString *reason) {
@@ -97,6 +105,14 @@ void a2_progress_fail(A2Stage stage, NSString *reason) {
                       (long)stage, a2_stage_name(stage),
                       (reason.length ? reason : @"未提供原因")];
     a2_emit("", line.UTF8String ?: "");
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [NSNotificationCenter.defaultCenter postNotificationName:@"A2LaunchStageNotification"
+                                                         object:nil
+                                                       userInfo:@{ @"stage": @(stage),
+                                                                   @"name": a2_stage_name(stage),
+                                                                   @"failed": @YES,
+                                                                   @"reason": reason ?: @"" }];
+    });
 }
 
 void a2_log_fatal(NSString *fmt, ...) {
