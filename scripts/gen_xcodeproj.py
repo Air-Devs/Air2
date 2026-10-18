@@ -90,11 +90,14 @@ def scan_sources():
     """
     impl, headers = [], []
 
-    SKIP_DIRS = (
-        "Natives/external/",
-        "Natives/shader_glslang/",
-        "Natives/resources/",
-        "Natives/build/",
+    # Natives 只编译 pojav 启动核心的 4 个目录。
+    # 其余（external 是第三方、resources/shader_glslang 是资源）
+    # 不参与编译，resources 由打包阶段的 Resources 处理。
+    NATIVES_CORE_DIRS = (
+        "Natives/Context/",
+        "Natives/Renderer/",
+        "Natives/Input/",
+        "Natives/Support/",
     )
 
     for base_name in ("Air2", "Natives"):
@@ -104,11 +107,14 @@ def scan_sources():
 
         for dirpath, dirnames, files in os.walk(base):
             rel_dir = os.path.relpath(dirpath, ROOT).replace(os.sep, "/")
-            # 跳过排除目录（同时阻止递归进去）
-            if any(rel_dir.startswith(s.rstrip("/") + "/") or rel_dir == s.rstrip("/")
-                   for s in SKIP_DIRS):
-                dirnames[:] = []
-                continue
+
+            # Natives 只保留核心的 4 个目录
+            if base_name == "Natives":
+                keep = any(rel_dir == d.rstrip("/") or rel_dir.startswith(d)
+                           for d in NATIVES_CORE_DIRS)
+                if not keep:
+                    dirnames[:] = []
+                    continue
 
             for f in sorted(files):
                 rel = os.path.relpath(os.path.join(dirpath, f), ROOT).replace(os.sep, "/")
