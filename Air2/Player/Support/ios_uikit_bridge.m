@@ -1,5 +1,3 @@
-UIViewController* tmpRootVC = nil;
-
 #import "LauncherPreferences.h"
 #import "PLLogOutputView.h"
 #import "SurfaceViewController.h"
@@ -8,6 +6,9 @@ UIViewController* tmpRootVC = nil;
 #include <objc/runtime.h>
 #include "ios_uikit_bridge.h"
 #include "utils.h"
+
+// ios_uikit_bridge.h 里是 extern 声明，这里给唯一定义
+UIViewController* tmpRootVC = nil;
 
 // ===== ★ [GAME-LANDSCAPE] 游戏方向锁（幂等、成对）=====
 // 为什么放在这里：本文件已经拥有「启动器根 ⇄ 游戏曲面根」的唯一互换点
