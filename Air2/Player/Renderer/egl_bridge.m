@@ -21,7 +21,7 @@
 #include "osmesa_internal.h"
 #include "utils.h"
 // ★ [RENDERER-GAP] 新增渲染器引导（VGPU/GL4ESZL2/NG-GL4ES/VirGL）——纯追加。
-#include "ctxbridges/gl4es_family_boot.h"
+#include "gl4es_family_boot.h"
 
 // 默认 GL 路径，pojavInit() 会重新设置
 int clientAPI = GLFW_OPENGL_API;
