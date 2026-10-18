@@ -19,6 +19,7 @@ static const int kMouseLeft = 0, kMouseRight = 1;
 static NSString *const kA2MoveModeKey  = @"A2MoveMode";
 static NSString *const kA2LayoutsKey   = @"A2ControlLayouts";     // {方案名: {id: {x,y,w,h,a}}}
 static NSString *const kA2LayoutCurKey = @"A2ControlLayoutCurrent";
+static NSString *const kA2BindingsKey  = @"A2ControlBindings";   // {控件id: GLFW键码}
 
 /// 输入层：把一次输入合成进 GLFW 事件总线（实现见 Natives/Input/a2_glfw_input.m）
 extern void a2_glfw_input_post_key(long window, int key, int action);
@@ -175,6 +176,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     UITextField *_kbField;
     BOOL _kbVisible;
     BOOL _editing;
+    NSMutableDictionary<NSString *, NSNumber *> *_bindings;   // 控件id -> GLFW 键码
     NSMutableDictionary<NSString *, NSValue *> *_restFrames;  // 编辑前位置（取消用）
 
 
@@ -200,6 +202,8 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         }
         _hotbar = [NSMutableArray array];
         _movable = [NSMutableDictionary dictionary];
+        _bindings = [[NSUserDefaults.standardUserDefaults dictionaryForKey:kA2BindingsKey] mutableCopy]
+                    ?: [NSMutableDictionary dictionary];
         _restFrames = [NSMutableDictionary dictionary];
 
         [self a2_buildDPad];
@@ -510,6 +514,8 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         v.bounds = CGRectMake(0, 0, 60, 60);
         [v addGestureRecognizer:[[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)]];
         [v addGestureRecognizer:[[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(a2_pinchItem:)]];
+        UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(a2_tapControl:)];
+        [v addGestureRecognizer:tap];
     }
     _attackButton.bounds    = CGRectMake(0, 0, 76, 76);
     _useButton.bounds       = CGRectMake(0, 0, 76, 76);
@@ -612,8 +618,8 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 - (void)a2_attackUp   { a2_glfw_input_post_mouse_button(_window, kMouseLeft, 0);  _attackButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.14]; }
 - (void)a2_useDown    { a2_glfw_input_post_mouse_button(_window, kMouseRight, 1); _useButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.30]; }
 - (void)a2_useUp      { a2_glfw_input_post_mouse_button(_window, kMouseRight, 0); _useButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.14]; }
-- (void)a2_tapE       { a2_glfw_input_post_key(_window, kKeyE, 1);  a2_glfw_input_post_key(_window, kKeyE, 0); }
-- (void)a2_tapF3      { a2_glfw_input_post_key(_window, kKeyF3, 1); a2_glfw_input_post_key(_window, kKeyF3, 0); }
+- (void)a2_tapE       { [self a2_pressBound:@"inventory" fallback:kKeyE]; }
+- (void)a2_tapF3      { [self a2_pressBound:@"f3" fallback:kKeyF3]; }
 
 #pragma mark - 阶段4/5：自定义 + 多方案
 
@@ -748,6 +754,68 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         v.center = CGPointMake([e[@"x"] doubleValue], [e[@"y"] doubleValue]);
         v.alpha = [e[@"a"] doubleValue] > 0 ? [e[@"a"] doubleValue] : 1.0;
     }
+}
+
+
+#pragma mark - 任意键绑定
+
+/// 取某控件当前绑定的键码（没绑过就用默认）。
+- (int)a2_keyForControl:(NSString *)cid fallback:(int)def {
+    NSNumber *n = _bindings[cid];
+    return n != nil ? n.intValue : def;
+}
+
+- (void)a2_setKey:(int)key forControl:(NSString *)cid {
+    _bindings[cid] = @(key);
+    [NSUserDefaults.standardUserDefaults setObject:_bindings forKey:kA2BindingsKey];
+    a2_log_f(@"[A2-CONTROLS] 控件 %@ 绑定键码 %d", cid, key);
+}
+
+/// 编辑模式下点控件 = 改键位（拖动/捏合仍用于位置与大小）。
+- (void)a2_tapControl:(UITapGestureRecognizer *)tap {
+    if (!_editing) return;
+    NSString *cid = nil;
+    for (NSString *k in _movable) { if (_movable[k] == tap.view) { cid = k; break; } }
+    if (cid == nil) return;
+    [self a2_presentKeyPickerFor:cid];
+}
+
+- (void)a2_presentKeyPickerFor:(NSString *)cid {
+    NSArray<NSArray *> *groups = @[
+        @[ @"W", @87 ], @[ @"A", @65 ], @[ @"S", @83 ], @[ @"D", @68 ],
+        @[ @"空格", @32 ], @[ @"Shift", @340 ], @[ @"Ctrl", @341 ],
+        @[ @"E 背包", @69 ], @[ @"Q 丢弃", @81 ], @[ @"T 聊天", @84 ],
+        @[ @"Esc", @256 ], @[ @"Enter", @257 ], @[ @"F1", @290 ], @[ @"F3", @292 ], @[ @"F5", @294 ],
+        @[ @"鼠标左键", @(-1) ], @[ @"鼠标右键", @(-2) ],
+    ];
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"绑定按键"
+                                                                  message:[NSString stringWithFormat:@"控件：%@", cid]
+                                                           preferredStyle:UIAlertControllerStyleActionSheet];
+    __weak typeof(self) weakSelf = self;
+    for (NSArray *g in groups) {
+        [sheet addAction:[UIAlertAction actionWithTitle:g[0] style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            int code = [g[1] intValue];
+            if (code == -1)      { [weakSelf a2_setKey:-1 forControl:cid]; }
+            else if (code == -2) { [weakSelf a2_setKey:-2 forControl:cid]; }
+            else                 { [weakSelf a2_setKey:code forControl:cid]; }
+        }]];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
+        sheet.popoverPresentationController.sourceView = self;
+        sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.bounds),
+                                                                   CGRectGetMidY(self.bounds), 1, 1);
+    }
+    [self.a2_topViewController presentViewController:sheet animated:YES completion:nil];
+}
+
+/// 按绑定发一次「按下+抬起」（-1/-2 走鼠标左右键）。
+- (void)a2_pressBound:(NSString *)cid fallback:(int)def {
+    int code = [self a2_keyForControl:cid fallback:def];
+    if (code == -1) { a2_glfw_input_post_mouse_button(_window, 0, 1); a2_glfw_input_post_mouse_button(_window, 0, 0); return; }
+    if (code == -2) { a2_glfw_input_post_mouse_button(_window, 1, 1); a2_glfw_input_post_mouse_button(_window, 1, 0); return; }
+    a2_glfw_input_post_key(_window, code, 1);
+    a2_glfw_input_post_key(_window, code, 0);
 }
 
 
