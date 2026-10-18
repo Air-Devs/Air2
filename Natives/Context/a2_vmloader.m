@@ -115,6 +115,18 @@ static void *a2_vm_stuck_probe(void *ctx) {
                  (unsigned long)lr, imgLR, offLR, ilr.dli_sname ?: "?",
                  (unsigned long)(uintptr_t)st.__sp, (unsigned long)(uintptr_t)st.__fp);
 
+        // ★2026-10-18★ pc 落在 JIT 区里(说明"执行区拿到了"),但 VM 跑不出来。
+        //   抓 pc 处 32 字节：全 0 ⇒ 写侧别名没写穿(执行的是空指令)；有真实机器码 ⇒ 逻辑卡住。
+        {
+            unsigned char bytes[32];
+            memcpy(bytes, (const void *)(uintptr_t)pc, sizeof(bytes));
+            char hexbuf[3 * 32 + 1];
+            for (size_t i = 0; i < sizeof(bytes); i++) {
+                snprintf(hexbuf + i * 3, 4, "%02x ", bytes[i]);
+            }
+            a2_log_f(@"[A2JVM] pc 处 32 字节: %s", hexbuf);
+        }
+
         // ★让 HotSpot 自己吐线程栈★（2026-10-17）
         //   卡在 InstanceKlass::call_class_initializer 时，光看 native 栈不知道是“哪个类的
         //   <clinit> 卡在等什么”。HotSpot 收到 SIGQUIT 会打印 Full thread dump（Java 栈 +
