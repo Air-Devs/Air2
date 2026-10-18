@@ -4,6 +4,7 @@
 //
 
 #import "A2GameControlsView.h"
+#import "a2_log.h"
 
 // GLFW 键码（与 Java 侧 GLFW.java 常量一致）
 static const int kKeyW = 87, kKeyA = 65, kKeyS = 83, kKeyD = 68;
@@ -11,10 +12,18 @@ static const int kKeySpace = 32;
 static const int kKeyLeftShift = 340;
 static const int kKeyLeftControl = 341;
 
-static NSString *const kA2MoveModeKey = @"A2MoveMode";
+static const int kKeyE    = 69;
+static const int kKeyF3   = 292;
+static const int kMouseLeft = 0, kMouseRight = 1;
 
-/// 输入层：把一次按键合成进 GLFW 事件总线（实现见 Natives/Input/a2_glfw_input.m）
+static NSString *const kA2MoveModeKey  = @"A2MoveMode";
+static NSString *const kA2LayoutsKey   = @"A2ControlLayouts";     // {方案名: {id: {x,y,w,h,a}}}
+static NSString *const kA2LayoutCurKey = @"A2ControlLayoutCurrent";
+
+/// 输入层：把一次输入合成进 GLFW 事件总线（实现见 Natives/Input/a2_glfw_input.m）
 extern void a2_glfw_input_post_key(long window, int key, int action);
+extern void a2_glfw_input_post_mouse_button(long window, int button, int action);
+extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
 #pragma mark - 摇杆
 
@@ -152,6 +161,31 @@ extern void a2_glfw_input_post_key(long window, int key, int action);
     UIButton *_jumpButton;
 
     // 方向状态（0/1）
+    UIButton *_attackButton;
+    UIButton *_useButton;
+    UIButton *_inventoryButton;
+    UIButton *_f3Button;
+    UIButton *_keyboardButton;
+    UIButton *_editButton;
+    NSMutableArray<UIButton *> *_hotbar;
+    NSMutableDictionary<NSString *, UIView *> *_movable;   // 可自定义的控件（编辑模式用）
+    UITextField *_kbField;
+    BOOL _kbVisible;
+    BOOL _editing;
+    NSMutableDictionary<NSString *, NSValue *> *_restFrames;  // 编辑前位置（取消用）
+
+    UIButton *_attackButton;
+    UIButton *_useButton;
+    UIButton *_inventoryButton;
+    UIButton *_f3Button;
+    UIButton *_keyboardButton;
+    UIButton *_editButton;
+    NSMutableArray<UIButton *> *_hotbar;
+    NSMutableDictionary<NSString *, UIView *> *_movable;
+    UITextField *_kbField;
+    BOOL _kbVisible;
+    BOOL _editing;
+
     BOOL _pressed[4];           // W A S D
     BOOL _sneaking;
     BOOL _sprintHeld;
@@ -172,10 +206,18 @@ extern void a2_glfw_input_post_key(long window, int key, int action);
             _lastTapTime[i] = 0;
             _pressed[i] = NO;
         }
+        _hotbar = [NSMutableArray array];
+        _movable = [NSMutableDictionary dictionary];
+        _restFrames = [NSMutableDictionary dictionary];
+
         [self a2_buildDPad];
         [self a2_buildStick];
         [self a2_buildJump];
+        [self a2_buildActionButtons];
+        [self a2_buildHotbar];
+        [self a2_buildKeyboardField];
         [self a2_applyMode];
+        [self a2_applySavedLayout];
     }
     return self;
 }
@@ -434,5 +476,287 @@ extern void a2_glfw_input_post_key(long window, int key, int action);
         }
     }
 }
+
+#pragma mark - 阶段2：右侧按钮
+
+- (void)a2_buildActionButtons {
+    _attackButton = [self a2_makeButton:@"攻"];
+    [_attackButton addTarget:self action:@selector(a2_attackDown) forControlEvents:UIControlEventTouchDown];
+    [_attackButton addTarget:self action:@selector(a2_attackUp) forControlEvents:UIControlEventTouchUpInside|UIControlEventTouchUpOutside|UIControlEventTouchCancel];
+    [self addSubview:_attackButton];
+    _movable[@"attack"] = _attackButton;
+
+    _useButton = [self a2_makeButton:@"用"];
+    [_useButton addTarget:self action:@selector(a2_useDown) forControlEvents:UIControlEventTouchDown];
+    [_useButton addTarget:self action:@selector(a2_useUp) forControlEvents:UIControlEventTouchUpInside|UIControlEventTouchUpOutside|UIControlEventTouchCancel];
+    [self addSubview:_useButton];
+    _movable[@"use"] = _useButton;
+
+    _inventoryButton = [self a2_makeButton:@"包"];
+    [_inventoryButton addTarget:self action:@selector(a2_tapE) forControlEvents:UIControlEventTouchUpInside];
+    [self addSubview:_inventoryButton];
+    _movable[@"inventory"] = _inventoryButton;
+
+    _f3Button = [self a2_makeButton:@"F3"];
+    [_f3Button addTarget:self action:@selector(a2_tapF3) forControlEvents:UIControlEventTouchUpInside];
+    [self addSubview:_f3Button];
+    _movable[@"f3"] = _f3Button;
+
+    _keyboardButton = [self a2_makeButton:@"⌨"];
+    [_keyboardButton addTarget:self action:@selector(a2_toggleKeyboard) forControlEvents:UIControlEventTouchUpInside];
+    [self addSubview:_keyboardButton];
+    _movable[@"keyboard"] = _keyboardButton;
+
+    _editButton = [self a2_makeButton:@"⚙"];
+    [_editButton addTarget:self action:@selector(a2_toggleEdit) forControlEvents:UIControlEventTouchUpInside];
+    [self addSubview:_editButton];
+    _movable[@"edit"] = _editButton;
+
+    for (NSString *cid in _movable) {
+        UIView *v = _movable[cid];
+        v.translatesAutoresizingMaskIntoConstraints = YES;
+        v.bounds = CGRectMake(0, 0, 60, 60);
+        [v addGestureRecognizer:[[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)]];
+        [v addGestureRecognizer:[[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(a2_pinchItem:)]];
+    }
+    _attackButton.bounds    = CGRectMake(0, 0, 76, 76);
+    _useButton.bounds       = CGRectMake(0, 0, 76, 76);
+    _inventoryButton.bounds = CGRectMake(0, 0, 56, 56);
+    _f3Button.bounds        = CGRectMake(0, 0, 56, 56);
+    _keyboardButton.bounds  = CGRectMake(0, 0, 56, 56);
+    _editButton.bounds      = CGRectMake(0, 0, 44, 44);
+    [self a2_layoutDefaultButtons];
+}
+
+- (void)a2_layoutDefaultButtons {
+    CGFloat W = CGRectGetWidth(self.bounds)  > 0 ? CGRectGetWidth(self.bounds)  : 874;
+    CGFloat H = CGRectGetHeight(self.bounds) > 0 ? CGRectGetHeight(self.bounds) : 402;
+    _attackButton.center    = CGPointMake(W - 70,  H - 62);
+    _useButton.center       = CGPointMake(W - 152, H - 62);
+    _inventoryButton.center = CGPointMake(W - 44,  52);
+    _f3Button.center        = CGPointMake(W - 108, 52);
+    _keyboardButton.center  = CGPointMake(W - 172, 52);
+    _editButton.center      = CGPointMake(W - 224, 52);
+}
+
+#pragma mark - 阶段3：热键条 + 系统键盘
+
+- (void)a2_buildHotbar {
+    for (int i = 1; i <= 9; i++) {
+        UIButton *b = [self a2_makeButton:[NSString stringWithFormat:@"%d", i]];
+        b.tag = i;
+        b.translatesAutoresizingMaskIntoConstraints = YES;
+        b.bounds = CGRectMake(0, 0, 36, 36);
+        [b addTarget:self action:@selector(a2_hot:) forControlEvents:UIControlEventTouchUpInside];
+        [self addSubview:b];
+        [_hotbar addObject:b];
+        _movable[[NSString stringWithFormat:@"hot%d", i]] = b;
+        [b addGestureRecognizer:[[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)]];
+    }
+    [self a2_layoutHotbar];
+}
+
+- (void)a2_layoutHotbar {
+    CGFloat W = CGRectGetWidth(self.bounds)  > 0 ? CGRectGetWidth(self.bounds)  : 874;
+    CGFloat H = CGRectGetHeight(self.bounds) > 0 ? CGRectGetHeight(self.bounds) : 402;
+    CGFloat total = 9 * 36 + 8 * 6;
+    CGFloat x = (W - total) * 0.5 + 18;
+    for (UIButton *b in _hotbar) {
+        b.center = CGPointMake(x, H - 42);
+        x += 42;
+    }
+}
+
+- (void)a2_hot:(UIButton *)sender {
+    int key = 48 + (int) sender.tag;
+    a2_glfw_input_post_key(_window, key, 1);
+    a2_glfw_input_post_key(_window, key, 0);
+}
+
+- (void)a2_buildKeyboardField {
+    _kbField = [[UITextField alloc] initWithFrame:CGRectMake(-1000, -1000, 1, 1)];
+    _kbField.delegate = (id<UITextFieldDelegate>) self;
+    _kbField.autocorrectionType = UITextAutocorrectionTypeNo;
+    _kbField.autocapitalizationType = UITextAutocapitalizationTypeNone;
+    [self addSubview:_kbField];
+}
+
+- (BOOL)textField:(UITextField *)textField shouldChangeCharactersInRange:(NSRange)range replacementString:(NSString *)string {
+    if (string.length == 0) {
+        a2_glfw_input_post_key(_window, 259, 1);
+        a2_glfw_input_post_key(_window, 259, 0);
+        return NO;
+    }
+    for (NSUInteger i = 0; i < string.length; i++) {
+        a2_glfw_input_post_char(_window, (int)[string characterAtIndex:i], 0);
+    }
+    return NO;
+}
+
+- (BOOL)textFieldShouldReturn:(UITextField *)textField {
+    a2_glfw_input_post_key(_window, 257, 1);
+    a2_glfw_input_post_key(_window, 257, 0);
+    return NO;
+}
+
+- (void)a2_toggleKeyboard {
+    _kbVisible = !_kbVisible;
+    if (_kbVisible) {
+        _kbField.text = @" ";
+        [_kbField becomeFirstResponder];
+        _keyboardButton.backgroundColor = [UIColor colorWithRed:0.42 green:0.65 blue:1.0 alpha:0.45];
+        a2_log_f(@"[A2-CONTROLS] 系统键盘 唤出");
+    } else {
+        [_kbField resignFirstResponder];
+        _kbField.text = @"";
+        _keyboardButton.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.14];
+        a2_log_f(@"[A2-CONTROLS] 系统键盘 收回");
+    }
+}
+
+#pragma mark - 动作
+
+- (void)a2_attackDown { a2_glfw_input_post_mouse_button(_window, kMouseLeft, 1);  _attackButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.30]; }
+- (void)a2_attackUp   { a2_glfw_input_post_mouse_button(_window, kMouseLeft, 0);  _attackButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.14]; }
+- (void)a2_useDown    { a2_glfw_input_post_mouse_button(_window, kMouseRight, 1); _useButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.30]; }
+- (void)a2_useUp      { a2_glfw_input_post_mouse_button(_window, kMouseRight, 0); _useButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.14]; }
+- (void)a2_tapE       { a2_glfw_input_post_key(_window, kKeyE, 1);  a2_glfw_input_post_key(_window, kKeyE, 0); }
+- (void)a2_tapF3      { a2_glfw_input_post_key(_window, kKeyF3, 1); a2_glfw_input_post_key(_window, kKeyF3, 0); }
+
+#pragma mark - 阶段4/5：自定义 + 多方案
+
+- (void)a2_toggleEdit {
+    _editing = !_editing;
+    _editButton.backgroundColor = _editing
+        ? [UIColor colorWithRed:0.42 green:0.65 blue:1.0 alpha:0.45]
+        : [UIColor colorWithWhite:1.0 alpha:0.14];
+    if (!_editing) return;
+
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"控件编辑"
+                                                                  message:@"拖动=移动；双指捏=大小；可存多套方案"
+                                                           preferredStyle:UIAlertControllerStyleActionSheet];
+    __weak typeof(self) weakSelf = self;
+    [sheet addAction:[UIAlertAction actionWithTitle:@"保存到当前方案" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [weakSelf a2_saveLayout];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"新建方案…" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [weakSelf a2_askNewLayoutName];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"切换方案" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [weakSelf a2_presentLayoutPicker];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"恢复默认布局" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
+        [weakSelf a2_layoutDefaultButtons];
+        [weakSelf a2_layoutHotbar];
+        for (UIView *v in weakSelf.a2_movableViews) v.alpha = 1.0;
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"完成" style:UIAlertActionStyleCancel handler:nil]];
+
+    if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
+        sheet.popoverPresentationController.sourceView = self;
+        sheet.popoverPresentationController.sourceRect = _editButton.frame;
+    }
+    [self.a2_topViewController presentViewController:sheet animated:YES completion:nil];
+}
+
+- (NSArray<UIView *> *)a2_movableViews {
+    NSMutableArray *all = [NSMutableArray array];
+    for (UIView *v in _movable.allValues) [all addObject:v];
+    [all addObjectsFromArray:_hotbar];
+    return all;
+}
+
+- (void)a2_dragItem:(UIPanGestureRecognizer *)pan {
+    if (!_editing) return;
+    UIView *v = pan.view;
+    CGPoint t = [pan translationInView:self];
+    v.center = CGPointMake(v.center.x + t.x, v.center.y + t.y);
+    [pan setTranslation:CGPointZero inView:self];
+}
+
+- (void)a2_pinchItem:(UIPinchGestureRecognizer *)pinch {
+    if (!_editing) return;
+    UIView *v = pinch.view;
+    CGFloat s = pinch.scale;
+    v.bounds = CGRectMake(0, 0, MAX(28, v.bounds.size.width * s), MAX(28, v.bounds.size.height * s));
+    pinch.scale = 1.0;
+}
+
+- (void)a2_askNewLayoutName {
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"新建方案"
+                                                                  message:@"给它起个名字"
+                                                           preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) { tf.placeholder = @"方案名"; }];
+    __weak typeof(self) weakSelf = self;
+    [alert addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        NSString *name = alert.textFields.firstObject.text;
+        if (name.length == 0) name = @"自定义";
+        [NSUserDefaults.standardUserDefaults setObject:name forKey:kA2LayoutCurKey];
+        [weakSelf a2_saveLayout];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self.a2_topViewController presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)a2_presentLayoutPicker {
+    NSDictionary *store = [NSUserDefaults.standardUserDefaults dictionaryForKey:kA2LayoutsKey] ?: @{};
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"选择方案"
+                                                                  message:nil
+                                                           preferredStyle:UIAlertControllerStyleActionSheet];
+    __weak typeof(self) weakSelf = self;
+    for (NSString *name in store.allKeys) {
+        [sheet addAction:[UIAlertAction actionWithTitle:name style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            [NSUserDefaults.standardUserDefaults setObject:name forKey:kA2LayoutCurKey];
+            [weakSelf a2_applySavedLayout];
+        }]];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self.a2_topViewController presentViewController:sheet animated:YES completion:nil];
+}
+
+- (void)a2_saveLayout {
+    NSString *name = [NSUserDefaults.standardUserDefaults stringForKey:kA2LayoutCurKey] ?: @"默认";
+    NSMutableDictionary *store = [[NSUserDefaults.standardUserDefaults dictionaryForKey:kA2LayoutsKey] mutableCopy]
+                                 ?: [NSMutableDictionary dictionary];
+    NSMutableDictionary *entry = [NSMutableDictionary dictionary];
+    for (NSString *cid in _movable) {
+        UIView *v = _movable[cid];
+        entry[cid] = @{ @"x": @(v.center.x), @"y": @(v.center.y),
+                        @"w": @(v.bounds.size.width), @"h": @(v.bounds.size.height),
+                        @"a": @(v.alpha) };
+    }
+    for (NSUInteger i = 0; i < _hotbar.count; i++) {
+        UIView *v = _hotbar[i];
+        NSString *cid = [NSString stringWithFormat:@"hot%lu", (unsigned long)(i + 1)];
+        entry[cid] = @{ @"x": @(v.center.x), @"y": @(v.center.y),
+                        @"w": @(v.bounds.size.width), @"h": @(v.bounds.size.height),
+                        @"a": @(v.alpha) };
+    }
+    store[name] = entry;
+    [NSUserDefaults.standardUserDefaults setObject:store forKey:kA2LayoutsKey];
+    a2_log_f(@"[A2-CONTROLS] 方案已保存：%@（%lu 项）", name, (unsigned long) entry.count);
+}
+
+- (void)a2_applySavedLayout {
+    if (CGRectGetWidth(self.bounds) <= 0) return;
+    NSString *name = [NSUserDefaults.standardUserDefaults stringForKey:kA2LayoutCurKey] ?: @"默认";
+    NSDictionary *store = [NSUserDefaults.standardUserDefaults dictionaryForKey:kA2LayoutsKey];
+    NSDictionary *entry = store[name];
+    if (![entry isKindOfClass:NSDictionary.class]) return;
+
+    for (NSString *cid in entry) {
+        UIView *v = _movable[cid];
+        if (v == nil && [cid hasPrefix:@"hot"]) {
+            NSInteger idx = [[cid substringFromIndex:3] integerValue];
+            if (idx >= 1 && idx <= (NSInteger) _hotbar.count) v = _hotbar[(NSUInteger)(idx - 1)];
+        }
+        if (v == nil) continue;
+        NSDictionary *e = entry[cid];
+        v.bounds = CGRectMake(0, 0, [e[@"w"] doubleValue], [e[@"h"] doubleValue]);
+        v.center = CGPointMake([e[@"x"] doubleValue], [e[@"y"] doubleValue]);
+        v.alpha = [e[@"a"] doubleValue] > 0 ? [e[@"a"] doubleValue] : 1.0;
+    }
+}
+
 
 @end

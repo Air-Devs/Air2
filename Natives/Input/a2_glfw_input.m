@@ -433,6 +433,30 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 // ============================================================================
 //  工厂
 // ============================================================================
+/// ★控件用★ 合成鼠标按键（button: 0=左 1=右；action: 1=按下 0=抬起）。
+/// 调用方：A2GameControlsView 的攻击(左)/使用(右)。
+void a2_glfw_input_post_mouse_button(long window, int button, int action) {
+    A2GlfwEvent ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.window = window;
+    ev.type = A2_GLFW_EVENT_MOUSE_BUTTON;
+    ev.i0 = button;
+    ev.i1 = action;
+    ev.i2 = 0;   // mods
+    a2_glfw_event_post(&ev);
+}
+
+/// ★控件用★ 合成字符输入（系统键盘 → GLFW CHAR 事件）。
+void a2_glfw_input_post_char(long window, int codepoint, int mods) {
+    A2GlfwEvent ev;
+    memset(&ev, 0, sizeof(ev));
+    ev.window = window;
+    ev.type = A2_GLFW_EVENT_CHAR;
+    ev.i0 = codepoint;
+    ev.i1 = mods;
+    a2_glfw_event_post(&ev);
+}
+
 /// ★游戏内控件用★ 合成一次按键事件（key 用 GLFW 键码；action: 1=按下 0=抬起）。
 /// 调用方：Air2/Player/Controls/A2GameControlsView（屏幕上的方向/跳跃/潜行等按钮）。
 /// 为什么走同一条事件总线：MC 只认 GLFW 回调，绕开它自己造一条会与真实输入打架。
