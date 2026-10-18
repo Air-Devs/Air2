@@ -72,6 +72,9 @@
     if (!self) return nil;
     _versionID = [versionID copy];
     _loaderCards = [NSMutableArray array];
+    // ★2026-10-18 真 bug 修复★ selection 属性从来没被创建过 ⇒ 对 nil 发 canSelectType:
+    //   恒返回 NO ⇒ 用户「哪个加载器都没选」时点任何加载器都会弹「与已选的加载器冲突」。
+    _selection = [A2ModLoaderSelection new];
     _nameValid = YES;
     return self;
 }
