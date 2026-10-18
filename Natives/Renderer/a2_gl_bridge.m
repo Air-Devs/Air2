@@ -277,8 +277,7 @@ int a2_gl_bridge_make_current(void) {
         return -1;
     }
     A2EGLBoolean ok = gEglMakeCurrent(gDpy, gSurf, gSurf, gCtx);
-    a2_log_f(@"[A2-GLBRIDGE] makeCurrent -> %s（线程=%s）",
-              ok ? "OK" : "FAILED", pthread_main_np() ? "main" : "worker");
+    a2_log_f(@"[A2-GLBRIDGE] makeCurrent -> %s", ok ? "OK" : "FAILED");
     return ok ? 0 : -2;
 }
 
