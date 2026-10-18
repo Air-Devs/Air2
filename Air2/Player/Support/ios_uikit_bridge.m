@@ -1,6 +1,7 @@
 #import "LauncherPreferences.h"
 #import "PLLogOutputView.h"
 #import "SurfaceViewController.h"
+#import "A2RootViewController.h"
 
 #include <objc/runtime.h>
 #include "ios_uikit_bridge.h"
@@ -246,9 +247,12 @@ jstring UIKit_accessClipboard(JNIEnv* env, jint action, jbyteArray copySrc) {
 void UIKit_launchMinecraftSurfaceVC(UIWindow* window, NSDictionary* metadata) {
     // Leave this pref, might be useful later for launching with Quick Actions/Shortcuts/URL Scheme
     //setPreference(@"internal_launch_on_boot", getPreference(@"restart_before_launch"));
-    BaseAuthenticator *currentAuth = BaseAuthenticator.current;
-    // selected_account 存储 accountId（唯一标识），确保重启后能按 accountId 恢复登录状态
-    setPrefObject(@"internal.selected_account", currentAuth.authData[@"accountId"]);
+    // ★CI★ BaseAuthenticator 已从仓库移除 ⇒ 用调用方 metadata 里的 accountId 兜底，
+    //   没有就沿用既有偏好值（不再访问 authData）。
+    id acctId = metadata[@"accountId"] ?: getPrefObject(@"internal.selected_account");
+    if (acctId != nil) {
+        setPrefObject(@"internal.selected_account", acctId);
+    }
     dispatch_async(dispatch_get_main_queue(), ^{
         tmpRootVC = window.rootViewController;
         [UIView animateWithDuration:0.2 animations:^{
@@ -277,7 +281,7 @@ void UIKit_returnToSplitView() {
         UIWindow *window = UIWindow.mainWindow;
 
         // Return from JavaGUIViewController
-        if ([window.rootViewController isKindOfClass:LauncherSplitViewController.class]) {
+        if ([window.rootViewController isKindOfClass:A2RootViewController.class]) {
             [currentVC() dismissViewControllerAnimated:YES completion:nil];
             // ★ [GAME-LANDSCAPE] 这条路径不换根 ⇒ 这里补一次（幂等）确保解锁 + 主动转回。
             AmeGameLandscapeLockExit();
@@ -294,7 +298,7 @@ void UIKit_returnToSplitView() {
                 window.rootViewController = tmpRootVC;
                 tmpRootVC = nil;
             } else {
-                window.rootViewController = [[LauncherSplitViewController alloc] initWithStyle:UISplitViewControllerStyleDoubleColumn];
+                window.rootViewController = [[A2RootViewController alloc] init];
             }
             [window makeKeyAndVisible];
             // ★ [GAME-LANDSCAPE] 根已换回启动器 ⇒ 这一刻再调一次 Exit（幂等）：
@@ -305,12 +309,12 @@ void UIKit_returnToSplitView() {
 }
 
 void launchInitialViewController(UIWindow *window) {
-    window.rootViewController = [[LauncherSplitViewController alloc] initWithStyle:UISplitViewControllerStyleDoubleColumn];
+    window.rootViewController = [[A2RootViewController alloc] init];
 #if 0
     if (getPrefBool(@"internal.internal_launch_on_boot")) {
         window.rootViewController = [[SurfaceViewController alloc] init];
     } else {
-        window.rootViewController = [[LauncherSplitViewController alloc] initWithStyle:UISplitViewControllerStyleDoubleColumn];
+        window.rootViewController = [[A2RootViewController alloc] init];
     }
 #endif
 }
