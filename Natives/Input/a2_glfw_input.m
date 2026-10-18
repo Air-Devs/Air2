@@ -313,7 +313,13 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
     // 记下起点：抓取模式靠增量，不靠绝对位置
     self.a2LastTouch = p;
     self.a2VirtualCursor = p;
-    [self postCursor:p];
+    extern int a2_glfw_input_is_grabbing(void);
+    if (!a2_glfw_input_is_grabbing()) {
+        // ★2026-10-18 你的现象①「手指落下瞬间视角仍跳一下」★
+        //   抓取模式下这里不能再发绝对位置（那会变成一次「瞬间移动」→ 视角跳）。
+        //   只记录起点，位移从下一次 touchesMoved 开始算。
+        [self postCursor:p];
+    }
     if (wasIdle) {
         [self postEnter:1];
         [self postButton:A2_GLFW_MOUSE_BUTTON_LEFT action:A2_GLFW_PRESS mods:0];
