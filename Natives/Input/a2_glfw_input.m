@@ -116,6 +116,8 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 //   UIKit 把本视图加进层级时问 [view window] 会拿到句柄数字 ⇒ objc_msgSend 崩。
 @property (nonatomic, assign) long  glfwWindow;
 @property (nonatomic, assign) NSInteger activeTouches;
+/// 主触点（第一根手指）：多点触控时锁定它，避免光标在两根手指之间跳。
+@property (nonatomic, weak)   UITouch *a2PrimaryTouch;
 @property (nonatomic, assign) BOOL  touchLogged;
 @property (nonatomic, assign) BOOL  scrollLogged;
 @property (nonatomic) BOOL  a2ScrollGestureInstalled;
@@ -200,12 +202,20 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 
 // ---- 投递助手 ----
 - (void)postCursor:(CGPoint)p {
+    // ★2026-10-18 真机证据★ 触控坐标对不上（点的地方和响应位置差固定倍数）。
+    //   老 Air 的实现里 `callback_SurfaceViewController_touchHotbar` 等处把
+    //   locationInView 的结果 ★乘过 screen.scale★ ⇒ MC/GLFW 这一侧用的是
+    //   ★像素坐标★，而我们一直发的是点坐标(point) ⇒ 3x 屏上整体偏 1/3。
+    //   这里统一按屏幕缩放换算，且只在真的不同(scale>1)时乘，避免外接/1x 设备被放大。
+    CGFloat scale = self.window.screen.scale;
+    if (scale <= 0.0) scale = UIScreen.mainScreen.scale;
+    if (scale <= 0.0) scale = 1.0;
     A2GlfwEvent ev;
     memset(&ev, 0, sizeof(ev));
     ev.window = self.glfwWindow;
     ev.type = A2_GLFW_EVENT_CURSOR_POS;
-    ev.d0 = (double) p.x;
-    ev.d1 = (double) p.y;
+    ev.d0 = (double) (p.x * scale);
+    ev.d1 = (double) (p.y * scale);
     a2_glfw_event_post(&ev);
 }
 
@@ -288,7 +298,13 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 // ---- 触摸 ----
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     (void) event;
-    UITouch *t = [touches anyObject];
+    // ★多点触控★ 只认第一根手指为主触点：之前每帧 anyObject ⇒ 两指时在两者间跳变，
+    //   表现为光标乱窜/视角抖动。第二根手指只计数，不参与光标。
+    UITouch *t = self.a2PrimaryTouch;
+    if (t == nil || ![touches containsObject:t]) {
+        t = [touches anyObject];
+        self.a2PrimaryTouch = t;
+    }
     if (t == nil) {
         return;
     }
@@ -305,18 +321,19 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 
 - (void)touchesMoved:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     (void) event;
-    UITouch *t = [touches anyObject];
-    if (t == nil) {
-        return;
+    UITouch *t = self.a2PrimaryTouch;
+    if (t == nil || ![touches containsObject:t]) {
+        return;   // 移动的是第二根手指 ⇒ 不影响光标
     }
     [self postCursor:[t locationInView:self]];
 }
 
 - (void)touchesEnded:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     (void) event;
-    UITouch *t = [touches anyObject];
-    if (t != nil) {
+    UITouch *t = self.a2PrimaryTouch;
+    if (t != nil && [touches containsObject:t]) {
         [self postCursor:[t locationInView:self]];
+        self.a2PrimaryTouch = nil;
     }
     self.activeTouches -= (NSInteger) touches.count;
     if (self.activeTouches <= 0) {
