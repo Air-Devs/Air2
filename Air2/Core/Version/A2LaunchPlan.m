@@ -500,8 +500,17 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
         }
     }
 
-    if ([NSUserDefaults.standardUserDefaults boolForKey:@"A2UseSystemClassLoader"]) {
-        [options addObject:[NSString stringWithFormat:@"-Djava.system.class.loader=%@", A2LaunchGameClassLoaderName]];
+    // ★2026-10-18 真机证据★ 必须下发系统类加载器：
+    //   真机日志 A2Entry 抛 “无法向系统类加载器追加类路径。请让 margv 带
+    //   -Djava.system.class.loader=…A2GameClassLoader”，并附 InaccessibleObjectException
+    //   （module java.base does not "opens java.net"）——Java 9+ 用反射 addURL 已不可行。
+    //   ⇒ 默认开；要退回反射路径可置 A2UseSystemClassLoader = NO。
+    {
+        id sclVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2UseSystemClassLoader"];
+        BOOL useScl = (sclVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2UseSystemClassLoader"];
+        if (useScl) {
+            [options addObject:[NSString stringWithFormat:@"-Djava.system.class.loader=%@", A2LaunchGameClassLoaderName]];
+        }
     }
 
     // ---- ★运行时事实 ⇒ VM 级 -D★（Bridge 的 A2LaunchRunner 会把本数组原样注入 argv）----
