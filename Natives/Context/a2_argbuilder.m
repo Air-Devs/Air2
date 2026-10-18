@@ -213,7 +213,10 @@ A2ClasspathForm a2_classpath_form_from_name(NSString *name) {
             _classpath = [t substringFromIndex:(NSUInteger)[@"-Djava.class.path=" length]];
             continue;
         }
-        if ([t hasPrefix:@"-"]) {
+        // ★2026-10-18★ 只有【主类之前】的 "-" token 才是 VM/JLI 选项；
+        //   主类之后的（如 A2Entry 的 "--plan <path>"）必须原样当程序参数，
+        //   否则会被吞成 VM option ⇒ A2Entry 报“缺少启动计划参数”。
+        if (!sawMain && [t hasPrefix:@"-"]) {
             [self addRawOption:t];
             continue;
         }
