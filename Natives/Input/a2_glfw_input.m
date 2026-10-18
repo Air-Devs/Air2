@@ -202,20 +202,15 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 
 // ---- 投递助手 ----
 - (void)postCursor:(CGPoint)p {
-    // ★2026-10-18 真机证据★ 触控坐标对不上（点的地方和响应位置差固定倍数）。
-    //   老 Air 的实现里 `callback_SurfaceViewController_touchHotbar` 等处把
-    //   locationInView 的结果 ★乘过 screen.scale★ ⇒ MC/GLFW 这一侧用的是
-    //   ★像素坐标★，而我们一直发的是点坐标(point) ⇒ 3x 屏上整体偏 1/3。
-    //   这里统一按屏幕缩放换算，且只在真的不同(scale>1)时乘，避免外接/1x 设备被放大。
-    CGFloat scale = self.window.screen.scale;
-    if (scale <= 0.0) scale = UIScreen.mainScreen.scale;
-    if (scale <= 0.0) scale = 1.0;
+    // ★2026-10-18★ 坐标单位 = ★点(point)★，不要乘屏幕缩放：
+    //   实测单点触控坐标本来就是准的（用户验证），乘 scale 会变成 3 倍偏移。
+    //   （老 Air 的 touchHotbar 那处乘 scale 是热点条的另一条通道，与光标位置不同源。）
     A2GlfwEvent ev;
     memset(&ev, 0, sizeof(ev));
     ev.window = self.glfwWindow;
     ev.type = A2_GLFW_EVENT_CURSOR_POS;
-    ev.d0 = (double) (p.x * scale);
-    ev.d1 = (double) (p.y * scale);
+    ev.d0 = (double) p.x;
+    ev.d1 = (double) p.y;
     a2_glfw_event_post(&ev);
 }
 
