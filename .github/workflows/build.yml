@@ -80,6 +80,7 @@ jobs:
     needs: lint
     timeout-minutes: 60
     steps:
+      # 必须拉子模块：ZeroTierBridge.h 等引用了 Libraries/external 下的框架头
       - uses: actions/checkout@v4
         with:
           # ★CI 必须拉子模块★ 否则 Libraries/external/{fishhook,AFNetworking,
