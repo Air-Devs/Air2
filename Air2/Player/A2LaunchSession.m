@@ -362,8 +362,39 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
      (long)ceilingMB, (long)xmxMB, memProbe.source,
      (memMode == A2LaunchMemoryModeManual ? @"manual" : @"auto"),
      (long)jreMajor, [A2LaunchMemory gcNameForJavaMajorVersion:jreMajor]];
-    NSArray<NSString *> *jvmOptions = [plan jvmOptionsWithMemoryMB:xmxMB
-                                                  javaMajorVersion:jreMajor];
+    NSMutableArray<NSString *> *jvmOptions = [[plan jvmOptionsWithMemoryMB:xmxMB
+                                                           javaMajorVersion:jreMajor] mutableCopy];
+
+    // ★2026-10-18 真机证据★ 两个决定性事实：
+    //   ① 崩溃栈是 `Minecraft.<init> → new GlDevice() → GL.createCapabilities()` ⇒ MC 走的是
+    //      ★原版 GL 设备★，说明 metallum 的 GpuBackend 根本没生效 —— 它没被注入。
+    //   ② 老 Air 的同一件事由 `b12/JavaLauncher.m:2319` 做完：
+    //        -javaagent:<libs>/metallum_agent.jar=     （+ patchjna_agent.jar）
+    //      metallum 是 `GpuBackend` 替换型后端（MetalBackend.createDevice → MetalDevice），
+    //      ★不走 GL、也不建 EGL 面★；只有 agent 注入成功，MC 才不会实例化 GlDevice。
+    //   ⇒ 选 Metal 时按老线原样注入；其它渲染器照旧走 LWJGL 的 GL 库名。
+    {
+        NSString *rendererID = renderer.identifier ?: @"";
+        BOOL wantsMetalAgent = [rendererID.lowercaseString containsString:@"metallum"];
+        if (wantsMetalAgent) {
+            NSString *libs = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"libs"];
+            [jvmOptions addObject:[NSString stringWithFormat:@"-javaagent:%@/patchjna_agent.jar=", libs]];
+            [jvmOptions addObject:[NSString stringWithFormat:@"-javaagent:%@/metallum_agent.jar=", libs]];
+            [jvmOptions addObject:[NSString stringWithFormat:@"-Dmetallum.mc.version=%@", version.name]];
+            [A2Log criterion:@"[A2-AGENT] Metal 后端注入：-javaagent metallum_agent.jar（mcVersion=%@）",
+             version.name];
+        } else {
+            // LWJGL 的 GL 库名跟渲染器走（lib 前缀与 .dylib 后缀都要去掉）：
+            //   libgl4es_114.dylib → gl4es_114；libnggl4es.dylib → nggl4es …
+            NSString *bare = rendererID;
+            if ([bare hasPrefix:@"lib"]) bare = [bare substringFromIndex:3];
+            if ([bare hasSuffix:@".dylib"]) bare = [bare substringToIndex:bare.length - 6];
+            if (bare.length > 0) {
+                [jvmOptions addObject:[NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%@", bare]];
+                [A2Log criterion:@"[A2-AGENT] GL 后端：opengl.libname=%@", bare];
+            }
+        }
+    }
 
     // 建 VM 会阻塞 ⇒ 放后台队列；结果回主线程。
     [A2Log log:@"[A2-LAUNCH] 进入后台链：plan=%@ renderer=%@ jre=%@",

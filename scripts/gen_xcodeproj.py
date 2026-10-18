@@ -145,6 +145,13 @@ def runtime_stage_script():
         '  mkdir -p "$APP/libs/$(basename "$d")"',
         '  cp -f "$d"/*.jar "$APP/libs/$(basename "$d")/"',
         'done',
+        # ②b agent jar → <App>/libs/（-javaagent 的落地路径；metallum_agent 是 Metal 后端的唯一入口）
+        'if [ -d "$LIB/Agent" ]; then',
+        '  for f in "$LIB"/Agent/*.jar; do',
+        '    [ -f "$f" ] || continue',
+        '    cp -f "$f" "$APP/libs/"',
+        '  done',
+        'fi',
         # ③ JVM 运行时 → <App>/java_runtimes/<ver>/
         'if [ -d "$LIB/java_runtimes" ]; then',
         '  for r in "$LIB"/java_runtimes/*; do',
