@@ -22,6 +22,7 @@
 
 #import "A2CrashGuard.h"
 #import "A2Log.h"
+#import "A2CrashReportViewController.h"
 #import <UIKit/UIKit.h>
 #include <execinfo.h>
 #include <pthread.h>
@@ -118,12 +119,13 @@ static void A2SignalHandler(int sig) {
             if (text.length > 4000) text = [text substringFromIndex:text.length - 4000];
             UIViewController *top = UIApplication.sharedApplication.keyWindow.rootViewController;
             while (top.presentedViewController) top = top.presentedViewController;
-            UIAlertController *a = [UIAlertController alertControllerWithTitle:
-                                        [NSString stringWithFormat:@"游戏崩溃（信号 %d）", (int)gA2CrashSignal]
-                                                                      message:text ?: @"（无崩溃信息）"
-                                                               preferredStyle:UIAlertControllerStyleAlert];
-            [a addAction:[UIAlertAction actionWithTitle:@"知道了" style:UIAlertActionStyleCancel handler:nil]];
-            [top presentViewController:a animated:YES completion:nil];
+            // 与「上次启动异常」统一：整页崩溃报告（可滚动 + 导出日志），不用弹窗。
+            A2CrashReportViewController *vc =
+                [[A2CrashReportViewController alloc] initWithReport:(text ?: @"（无崩溃信息）")
+                                                             logPath:A2Log.currentLogPath];
+            UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
+            nav.modalPresentationStyle = UIModalPresentationFullScreen;
+            [top presentViewController:nav animated:YES completion:nil];
         });
         dispatch_resume(timer);
     }

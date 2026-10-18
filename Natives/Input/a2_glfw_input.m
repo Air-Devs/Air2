@@ -111,7 +111,9 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 //  宿主视图：触摸 + 外接键盘
 // ============================================================================
 @interface A2GlfwView : UIView
-@property (nonatomic, assign) long  window;
+// ★不能叫 window★：UIView 自带 readonly 的 `window`(UIWindow *)，同名 long 会把它覆盖掉，
+//   UIKit 把本视图加进层级时问 [view window] 会拿到句柄数字 ⇒ objc_msgSend 崩。
+@property (nonatomic, assign) long  glfwWindow;
 @property (nonatomic, assign) NSInteger activeTouches;
 @property (nonatomic, assign) BOOL  touchLogged;
 @property (nonatomic, assign) BOOL  scrollLogged;
@@ -125,7 +127,7 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 - (instancetype)initWithWindowHandle:(long)window {
     self = [super initWithFrame:CGRectZero];
     if (self != nil) {
-        _window = window;
+        _glfwWindow = window;
         self.multipleTouchEnabled = YES;
         self.backgroundColor = [UIColor blackColor];
         self.opaque = YES;
@@ -143,7 +145,7 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 
 - (void)didMoveToWindow {
     [super didMoveToWindow];
-    if (self.window == nil || _a2ScrollGestureInstalled) return;
+    if (self.window == nil /* ← UIView 真 window */ || _a2ScrollGestureInstalled) return;
     // ★再延后一个 runloop★：didMoveToWindow 发生时 UIKit 还在做布局/上屏，
     //   此时 addGestureRecognizer 仍可能踩到未稳定的容器（真机崩溃点 objc_retain）。
     //   下一个主队列轮次再装，那时视图层级已经稳定。
@@ -186,7 +188,7 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 - (void)postCursor:(CGPoint)p {
     A2GlfwEvent ev;
     memset(&ev, 0, sizeof(ev));
-    ev.window = self.window;
+    ev.window = self.glfwWindow;
     ev.type = A2_GLFW_EVENT_CURSOR_POS;
     ev.d0 = (double) p.x;
     ev.d1 = (double) p.y;
@@ -196,7 +198,7 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 - (void)postButton:(int)button action:(int)action mods:(int)mods {
     A2GlfwEvent ev;
     memset(&ev, 0, sizeof(ev));
-    ev.window = self.window;
+    ev.window = self.glfwWindow;
     ev.type = A2_GLFW_EVENT_MOUSE_BUTTON;
     ev.i0 = button;
     ev.i1 = action;
@@ -207,7 +209,7 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 - (void)postEnter:(int)entered {
     A2GlfwEvent ev;
     memset(&ev, 0, sizeof(ev));
-    ev.window = self.window;
+    ev.window = self.glfwWindow;
     ev.type = A2_GLFW_EVENT_CURSOR_ENTER;
     ev.i0 = entered;
     a2_glfw_event_post(&ev);
@@ -232,7 +234,7 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
     }
     A2GlfwEvent ev;
     memset(&ev, 0, sizeof(ev));
-    ev.window = self.window;
+    ev.window = self.glfwWindow;
     ev.type = A2_GLFW_EVENT_CHAR;
     ev.i0 = (int) cp;
     ev.i1 = mods;
@@ -250,11 +252,11 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
     if (!self.scrollLogged) {
         self.scrollLogged = YES;
         a2_log_f(@"[A2-GLFW] 首次滚动已到达输入层 window=%ld（间接输入→SCROLL 通道通则）",
-                 self.window);
+                 self.glfwWindow);
     }
     A2GlfwEvent ev;
     memset(&ev, 0, sizeof(ev));
-    ev.window = self.window;
+    ev.window = self.glfwWindow;
     ev.type = A2_GLFW_EVENT_SCROLL;
     ev.d0 = (double) (t.x / A2_GLFW_SCROLL_POINTS_PER_NOTCH);
     ev.d1 = (double) (-t.y / A2_GLFW_SCROLL_POINTS_PER_NOTCH);
@@ -265,7 +267,7 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
     if (!self.touchLogged) {
         self.touchLogged = YES;
         a2_log_f(@"[A2-GLFW] 首次触摸已到达输入层 window=%ld at=(%.0f,%.0f)（触摸→光标/左键通道通则）",
-                 self.window, (double) p.x, (double) p.y);
+                 self.glfwWindow, (double) p.x, (double) p.y);
     }
 }
 
@@ -327,7 +329,7 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
         }
         A2GlfwEvent ev;
         memset(&ev, 0, sizeof(ev));
-        ev.window = self.window;
+        ev.window = self.glfwWindow;
         ev.type = A2_GLFW_EVENT_KEY;
         ev.i0 = gkey;
         ev.i1 = (int) key.keyCode;                      // scancode = HID usage
@@ -353,7 +355,7 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
         }
         A2GlfwEvent ev;
         memset(&ev, 0, sizeof(ev));
-        ev.window = self.window;
+        ev.window = self.glfwWindow;
         ev.type = A2_GLFW_EVENT_KEY;
         ev.i0 = gkey;
         ev.i1 = (int) key.keyCode;

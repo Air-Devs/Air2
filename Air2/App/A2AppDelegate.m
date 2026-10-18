@@ -30,6 +30,7 @@
 #import "A2GameDirMigration.h"
 #import "A2VersionIsolation.h"   // A2GamePath：恢复用户选定目录的安全作用域访问权
 #import "A2Log.h"
+#import "A2CrashReportViewController.h"
 #import "A2PairingKeepAlive.h"   // [PAIRWIRE-KEEPALIVE] 配对期间保活
 
 @implementation A2AppDelegate
@@ -88,13 +89,15 @@ didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *
             NSString *msg = tail.length ? tail : @"（上次会话日志为空）";
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{
+                // ★不是弹窗★：整页崩溃报告（可滚动 + 导出日志），照老 Air 的做法。
                 UIViewController *top = UIApplication.sharedApplication.keyWindow.rootViewController;
                 while (top.presentedViewController) top = top.presentedViewController;
-                UIAlertController *a = [UIAlertController alertControllerWithTitle:@"上次启动异常结束"
-                                                                          message:msg
-                                                                   preferredStyle:UIAlertControllerStyleAlert];
-                [a addAction:[UIAlertAction actionWithTitle:@"知道了" style:UIAlertActionStyleCancel handler:nil]];
-                [top presentViewController:a animated:YES completion:nil];
+                A2CrashReportViewController *vc =
+                    [[A2CrashReportViewController alloc] initWithReport:msg logPath:oldLog];
+                UINavigationController *nav =
+                    [[UINavigationController alloc] initWithRootViewController:vc];
+                nav.modalPresentationStyle = UIModalPresentationFullScreen;
+                [top presentViewController:nav animated:YES completion:nil];
             });
             [A2Log log:@"[A2-CRASH-UI] 检测到上次会话异常结束，已排队展示崩溃摘要"];
         }
