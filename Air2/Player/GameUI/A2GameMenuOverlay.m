@@ -15,6 +15,8 @@ static const CGFloat kEdgeInset = 10;
 @property (nonatomic, strong) UILabel *statsLabel;
 @property (nonatomic, assign, readwrite, getter=isExpanded) BOOL expanded;
 @property (nonatomic, assign) CGPoint ballCenter;
+/// 浮球旋转（展开时 45°，收起时回正）
+- (void)rotateBallToAngle:(CGFloat)angle;
 @end
 
 @implementation A2GameMenuOverlay
@@ -131,20 +133,20 @@ static const CGFloat kEdgeInset = 10;
 
 - (void)toggle {
     self.expanded = !self.expanded;
-    [_ball transformToAngle:self.expanded ? M_PI_4 : 0];
+    [self rotateBallToAngle:self.expanded ? M_PI_4 : 0];
     // 菜单本体在 A2GameMenuPanel（下一步实现），这里先只切状态
 }
 
 - (void)expand {
     if (self.expanded) return;
     self.expanded = YES;
-    [_ball transformToAngle:M_PI_4];
+    [self rotateBallToAngle:M_PI_4];
 }
 
 - (void)collapse {
     if (!self.expanded) return;
     self.expanded = NO;
-    [_ball transformToAngle:0];
+    [self rotateBallToAngle:0];
 }
 
 #pragma mark - 显隐与统计
@@ -179,6 +181,21 @@ static const CGFloat kEdgeInset = 10;
     _statsLabel.text = text;
 }
 
+#pragma mark - 动画
+
+/// 浮球旋转。展开菜单时转 45°（像一颗被"拧开"的按钮），
+/// 收起时回正 —— 与 ZL2 的悬浮球一致。
+- (void)rotateBallToAngle:(CGFloat)angle {
+    [UIView animateWithDuration:0.2
+                          delay:0
+         usingSpringWithDamping:0.78
+          initialSpringVelocity:0.4
+                        options:0
+                     animations:^{
+        self.ball.transform = CGAffineTransformMakeRotation(angle);
+    } completion:nil];
+}
+
 #pragma mark - 主题
 
 - (void)applyTheme {
@@ -194,17 +211,4 @@ static const CGFloat kEdgeInset = 10;
 
 @end
 
-#pragma mark - 小工具
 
-@implementation UIView (A2Transform)
-- (void)transformToAngle:(CGFloat)angle {
-    [UIView animateWithDuration:0.2
-                          delay:0
-         usingSpringWithDamping:0.78
-          initialSpringVelocity:0.4
-                        options:0
-                     animations:^{
-        self.transform = CGAffineTransformMakeRotation(angle);
-    } completion:nil];
-}
-@end
