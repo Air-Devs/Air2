@@ -273,11 +273,11 @@ static void a2_gl_bridge_frame_work(void) {
 //   本函数把已有上下文设为【调用线程】的当前上下文 —— 由 GLFW 桥的 MakeContextCurrent 调用。
 int a2_gl_bridge_make_current(void) {
     if (gEglMakeCurrent == NULL || gDpy == A2_EGL_NO_DISPLAY || gCtx == A2_EGL_NO_CONTEXT) {
-        a2_gl_log("[A2-GLBRIDGE] makeCurrent 跳过：display/context 未就绪");
+        a2_log_f(@"[A2-GLBRIDGE] makeCurrent 跳过：display/context 未就绪");
         return -1;
     }
     A2EGLBoolean ok = gEglMakeCurrent(gDpy, gSurf, gSurf, gCtx);
-    a2_gl_log("[A2-GLBRIDGE] makeCurrent -> %s（线程=%s）",
+    a2_log_f(@"[A2-GLBRIDGE] makeCurrent -> %s（线程=%s）",
               ok ? "OK" : "FAILED", pthread_main_np() ? "main" : "worker");
     return ok ? 0 : -2;
 }
