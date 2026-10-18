@@ -81,7 +81,13 @@ didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *
     {
         NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
         NSString *marker = [docs stringByAppendingPathComponent:@".a2_last_session_running"];
-        BOOL crashed = [NSFileManager.defaultManager fileExistsAtPath:marker];
+        // ★2026-10-18 用户反馈「没崩也弹异常」★ 判定收紧：
+        //   marker 只说明"上次没走到 applicationWillTerminate"——用户大退/系统回收 RAM
+        //   也算没走到，但那不是崩溃。真正的崩溃由 A2CrashGuard 写 .a2_crash_report.txt。
+        //   ⇒ 只有★崩溃产物存在★才展示崩溃页；展示后立刻删除，保证只弹一次。
+        NSString *crashArtifact = [docs stringByAppendingPathComponent:@".a2_crash_report.txt"];
+        BOOL hadCrashArtifact = [NSFileManager.defaultManager fileExistsAtPath:crashArtifact];
+        BOOL crashed = hadCrashArtifact;
         if (crashed) {
             NSString *oldLog = [docs stringByAppendingPathComponent:@"lastlog.old.txt"];
             NSString *tail = [NSString stringWithContentsOfFile:oldLog encoding:NSUTF8StringEncoding error:NULL];
@@ -99,7 +105,10 @@ didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *
                 nav.modalPresentationStyle = UIModalPresentationFullScreen;
                 [top presentViewController:nav animated:YES completion:nil];
             });
-            [A2Log log:@"[A2-CRASH-UI] 检测到上次会话异常结束，已排队展示崩溃摘要"];
+            [A2Log log:@"[A2-CRASH-UI] 检测到崩溃产物（.a2_crash_report.txt），已排队展示崩溃摘要"];
+            [NSFileManager.defaultManager removeItemAtPath:crashArtifact error:NULL];   // 只弹一次
+        } else if ([NSFileManager.defaultManager fileExistsAtPath:marker]) {
+            [A2Log log:@"[A2-CRASH-UI] 上次未正常收尾但无崩溃产物（大退/被系统回收）⇒ 不打扰"];
         }
         [@"" writeToFile:marker atomically:YES encoding:NSUTF8StringEncoding error:NULL];
     }

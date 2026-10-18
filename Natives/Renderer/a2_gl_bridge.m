@@ -218,6 +218,13 @@ static void *a2_gl_bridge_egl_symbol(void *handle, const char *name, int *missin
 static void a2_gl_bridge_frame_work(void) {
     if (!gAttached) return;
 
+    // ★2026-10-18 真机证据★ EGL 上下文同一时刻只能绑在【一个】线程上。
+    //   我们过去在附着时 eglMakeCurrent 后一直占着它 ⇒ MC 渲染线程调
+    //   glfwMakeContextCurrent 得到 FAILED ⇒ MC 侧 GL.createCapabilities 抛
+    //   "There is no OpenGL context current in the current thread"。
+    //   ⇒ 本层每帧【借用】上下文：进来绑定，画完立刻归还（NO_SURFACE/NO_CONTEXT）。
+    if (gEglMakeCurrent != NULL) gEglMakeCurrent(gDpy, gSurf, gSurf, gCtx);
+
     gFrameCount++;
     uint32_t glErr = 0;
 
@@ -261,6 +268,9 @@ static void a2_gl_bridge_frame_work(void) {
              (void *)gSurf);
 
     if (gFrameCb != NULL) gFrameCb(gFrameUser);
+
+    // ★归还上下文★：把本线程的 current 解绑，MC 的渲染线程才绑得上。
+    if (gEglMakeCurrent != NULL) gEglMakeCurrent(gDpy, NULL, NULL, NULL);
 }
 
 // ============================================================================
