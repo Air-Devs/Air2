@@ -72,6 +72,7 @@
 		560326BE071A52289753CB07 /* SurfaceViewController+ExternalDisplay.m in Sources */ = {isa = PBXBuildFile; fileRef = 6CDC79F4F060961654E0BFBD /* SurfaceViewController+ExternalDisplay.m */; };
 		8D60447771F0B763C06B2F81 /* SurfaceViewController+LogView.m in Sources */ = {isa = PBXBuildFile; fileRef = 1D4C64F7E99D00A8C83F6461 /* SurfaceViewController+LogView.m */; };
 		8C992AF31FA8A22AC3526C37 /* SurfaceViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = CAEE71B0AFBCDAB3D6DE931F /* SurfaceViewController.m */; };
+		7FC10269A162141315B017EF /* environ_globals.m in Sources */ = {isa = PBXBuildFile; fileRef = 3379819526378EE72414030C /* environ_globals.m */; };
 		FC2EEB144AE1D45D9D71C15C /* main_hook.m in Sources */ = {isa = PBXBuildFile; fileRef = A3D0C5C637E9FA2B3F32F1BD /* main_hook.m */; };
 		32E98F4EECA61E102374FDE3 /* utils.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A5BAE11D028A2905E1791FC /* utils.m */; };
 		F2CB4E7B7F47FF18A957EFB5 /* A2ControlLayout.m in Sources */ = {isa = PBXBuildFile; fileRef = 1DD83AEE82FD5DB2400F3B8B /* A2ControlLayout.m */; };
@@ -261,6 +262,7 @@
 		6CDC79F4F060961654E0BFBD /* SurfaceViewController+ExternalDisplay.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "SurfaceViewController+ExternalDisplay.m"; sourceTree = "<group>"; };
 		1D4C64F7E99D00A8C83F6461 /* SurfaceViewController+LogView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "SurfaceViewController+LogView.m"; sourceTree = "<group>"; };
 		CAEE71B0AFBCDAB3D6DE931F /* SurfaceViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "SurfaceViewController.m"; sourceTree = "<group>"; };
+		3379819526378EE72414030C /* environ_globals.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "environ_globals.m"; sourceTree = "<group>"; };
 		A3D0C5C637E9FA2B3F32F1BD /* main_hook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "main_hook.m"; sourceTree = "<group>"; };
 		6A5BAE11D028A2905E1791FC /* utils.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "utils.m"; sourceTree = "<group>"; };
 		1DD83AEE82FD5DB2400F3B8B /* A2ControlLayout.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlLayout.m"; sourceTree = "<group>"; };
@@ -862,6 +864,7 @@
 				6CDC79F4F060961654E0BFBD /* SurfaceViewController+ExternalDisplay.m */,
 				1D4C64F7E99D00A8C83F6461 /* SurfaceViewController+LogView.m */,
 				CAEE71B0AFBCDAB3D6DE931F /* SurfaceViewController.m */,
+				3379819526378EE72414030C /* environ_globals.m */,
 				A3D0C5C637E9FA2B3F32F1BD /* main_hook.m */,
 				6A5BAE11D028A2905E1791FC /* utils.m */,
 				51994BE7CF4A796D8B8D6AF2 /* AmeLaunchProgress.h */,
@@ -1392,6 +1395,7 @@
 				560326BE071A52289753CB07 /* SurfaceViewController+ExternalDisplay.m in Sources */,
 				8D60447771F0B763C06B2F81 /* SurfaceViewController+LogView.m in Sources */,
 				8C992AF31FA8A22AC3526C37 /* SurfaceViewController.m in Sources */,
+				7FC10269A162141315B017EF /* environ_globals.m in Sources */,
 				FC2EEB144AE1D45D9D71C15C /* main_hook.m in Sources */,
 				32E98F4EECA61E102374FDE3 /* utils.m in Sources */,
 				F2CB4E7B7F47FF18A957EFB5 /* A2ControlLayout.m in Sources */,

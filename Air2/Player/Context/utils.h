@@ -183,7 +183,7 @@ static inline bool isRendererGapExtra(const char *renderer) {
 #define SPECIALBTN_MENU -9
 
 #define NSDebugLog(...) if (debugLogEnabled) { NSLog(__VA_ARGS__); }
-BOOL debugLogEnabled, isJailbroken;
+extern BOOL debugLogEnabled, isJailbroken;
 
 //__weak UIViewController *viewController;
 

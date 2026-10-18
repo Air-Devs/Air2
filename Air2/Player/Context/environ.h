@@ -33,32 +33,32 @@ typedef void GLFW_invoke_Scroll_func(void* window, double xoffset, double yoffse
 typedef void GLFW_invoke_WindowPos_func(void* window, int x, int y);
 typedef void GLFW_invoke_WindowSize_func(void* window, int width, int height);
 
-jclass class_CTCClipboard;
-jmethodID method_SystemClipboardDataReceived;
+extern jclass class_CTCClipboard;
+extern jmethodID method_SystemClipboardDataReceived;
 
 //struct pojav_environ_s {
     //render_window_t* mainWindowBundle;
     //BOOL force_vsync;
-    atomic_size_t eventCounter;
-    GLFWInputEvent events[8000];
-    double cursorX, cursorY, cLastX, cLastY;
+    extern atomic_size_t eventCounter;
+    extern GLFWInputEvent events[8000];
+    extern double cursorX, cursorY, cLastX, cLastY;
     //jmethodID method_accessAndroidClipboard;
     //jmethodID method_onGrabStateChanged;
     //jmethodID method_glfwSetWindowAttrib;
-    jmethodID method_internalWindowSizeChanged;
-    jclass bridgeClazz;
-    jclass vmGlfwClass;
-    jboolean isGrabbing;
-    jbyte* keyDownBuffer;
-    JavaVM* runtimeJavaVMPtr;
-    JNIEnv* runtimeJNIEnvPtr;
+    extern jmethodID method_internalWindowSizeChanged;
+    extern jclass bridgeClazz;
+    extern jclass vmGlfwClass;
+    extern jboolean isGrabbing;
+    extern jbyte* keyDownBuffer;
+    extern JavaVM* runtimeJavaVMPtr;
+    extern JNIEnv* runtimeJNIEnvPtr;
     //JavaVM* dalvikJavaVMPtr;
     //JNIEnv* dalvikJNIEnvPtr_ANDROID;
-    long showingWindow;
-    bool isInputReady, isCursorEntered, isUseStackQueueCall;
+    extern long showingWindow;
+    extern bool isInputReady, isCursorEntered, isUseStackQueueCall;
     //int savedWidth, savedHeight;
-    int windowWidth, windowHeight;
-    int physicalWidth, physicalHeight;
+    extern int windowWidth, windowHeight;
+    extern int physicalWidth, physicalHeight;
 #define ADD_CALLBACK_WWIN(NAME) \
     GLFW_invoke_##NAME##_func* GLFW_invoke_##NAME;
     ADD_CALLBACK_WWIN(Char);
@@ -75,12 +75,12 @@ jmethodID method_SystemClipboardDataReceived;
 #undef ADD_CALLBACK_WWIN
 //};
 
-int guiScale;
-float resolutionScale;
-BOOL virtualMouseEnabled, isControlModifiable;
+extern int guiScale;
+extern float resolutionScale;
+extern BOOL virtualMouseEnabled, isControlModifiable;
 
 // 硬件断点重定向数组（同步自上游，用于非 TXM 的 iOS 26+ 设备 dlopen 重定向）
 // 由 redirectFunctionHWBreakpoint 填充，由 catch_mach_exception_raise_state 读取
-uint64_t hwRedirectOrig[6], hwRedirectTarget[6];
+extern uint64_t hwRedirectOrig[6], hwRedirectTarget[6];
 
 #endif //POJAVLAUNCHER_ENVIRON_H
