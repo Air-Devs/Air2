@@ -263,6 +263,12 @@ static void a2_gl_bridge_frame_work(void) {
     // ---- ③ 记进帧性能判据（中立数值；draw=1 = 本帧一次清屏；shaderNew=0 = 本层不建着色器/管线）----
     a2_frame_perf_record_frame(1, 0, (gEglSwapBuffers != NULL) ? 1 : 0, clearW, clearH);
 
+    // ★首帧通知★ 第 60 帧（约 1 秒）时通知 UI 撤启动遮罩：此时游戏确实在画了。
+    if (gFrameCount == 60) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [NSNotificationCenter.defaultCenter postNotificationName:@"A2GameFirstFrame" object:nil];
+        });
+    }
     a2_log_f(@"%s 帧回调 #%d 已按缩放尺寸清屏/呈现（drawable=%dx%d 像素；scissor 读回=%dx%d %s）"
              "glGetError=0x%x ⇒ %s（surface=%p）",
              A2GlBridgeJudgementTag, gFrameCount, w, h, clearW, clearH,

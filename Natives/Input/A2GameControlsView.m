@@ -172,6 +172,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     UIButton *_f3Button;
     UIButton *_keyboardButton;
     UIButton *_editButton;
+    UIButton *_escButton;
     NSMutableArray<UIButton *> *_hotbar;
     NSMutableDictionary<NSString *, UIView *> *_movable;   // 可自定义的控件（编辑模式用）
     UITextField *_kbField;
@@ -232,7 +233,6 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     [b setTitle:title forState:UIControlStateNormal];
     [b setTitleColor:[UIColor colorWithWhite:1.0 alpha:0.9] forState:UIControlStateNormal];
     b.titleLabel.font = [UIFont systemFontOfSize:16.0 weight:UIFontWeightSemibold];
-    b.exclusiveTouch = YES;
     return b;
 }
 
@@ -307,16 +307,14 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 - (void)a2_buildJump {
     _jumpButton = [self a2_makeButton:@"跳"];
     _jumpButton.tag = kKeySpace;
+    _jumpButton.translatesAutoresizingMaskIntoConstraints = YES;
+    _jumpButton.bounds = CGRectMake(0, 0, 76, 76);
     [_jumpButton addTarget:self action:@selector(a2_jumpDown) forControlEvents:UIControlEventTouchDown];
     [_jumpButton addTarget:self action:@selector(a2_jumpUp) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
     [self addSubview:_jumpButton];
-
-    [NSLayoutConstraint activateConstraints:@[
-        [_jumpButton.trailingAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.trailingAnchor constant:-28],
-        [_jumpButton.bottomAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.bottomAnchor constant:-32],
-        [_jumpButton.widthAnchor constraintEqualToConstant:72],
-        [_jumpButton.heightAnchor constraintEqualToConstant:72],
-    ]];
+    _movable[@"jump"] = _jumpButton;
+    [_jumpButton addGestureRecognizer:[[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)]];
+    [_jumpButton addGestureRecognizer:[[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(a2_pinchItem:)]];
 }
 
 #pragma mark - 模式
@@ -504,6 +502,11 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     [self addSubview:_keyboardButton];
     _movable[@"keyboard"] = _keyboardButton;
 
+    _escButton = [self a2_makeButton:@"ESC"];
+    [_escButton addTarget:self action:@selector(a2_tapEsc) forControlEvents:UIControlEventTouchUpInside];
+    [self addSubview:_escButton];
+    _movable[@"esc"] = _escButton;
+
     _editButton = [self a2_makeButton:@"⚙"];
     [_editButton addTarget:self action:@selector(a2_toggleEdit) forControlEvents:UIControlEventTouchUpInside];
     [self addSubview:_editButton];
@@ -524,18 +527,25 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     _f3Button.bounds        = CGRectMake(0, 0, 56, 56);
     _keyboardButton.bounds  = CGRectMake(0, 0, 56, 56);
     _editButton.bounds      = CGRectMake(0, 0, 44, 44);
+    _escButton.bounds       = CGRectMake(0, 0, 56, 56);
     [self a2_layoutDefaultButtons];
 }
 
 - (void)a2_layoutDefaultButtons {
     CGFloat W = CGRectGetWidth(self.bounds)  > 0 ? CGRectGetWidth(self.bounds)  : 874;
     CGFloat H = CGRectGetHeight(self.bounds) > 0 ? CGRectGetHeight(self.bounds) : 402;
-    _attackButton.center    = CGPointMake(W - 70,  H - 62);
-    _useButton.center       = CGPointMake(W - 152, H - 62);
-    _inventoryButton.center = CGPointMake(W - 44,  52);
-    _f3Button.center        = CGPointMake(W - 108, 52);
-    _keyboardButton.center  = CGPointMake(W - 172, 52);
-    _editButton.center      = CGPointMake(W - 224, 52);
+
+    // 右下：跳 / 攻 / 用 三个分开摆（原来三者叠在一起）
+    _jumpButton.center      = CGPointMake(W - 74,  H - 150);
+    _attackButton.center    = CGPointMake(W - 74,  H - 62);
+    _useButton.center       = CGPointMake(W - 158, H - 62);
+
+    // 右上：下移到 y=96，避开刘海/状态条那一条"点不动"的区域；新增 ESC
+    _inventoryButton.center = CGPointMake(W - 46,  96);
+    _f3Button.center        = CGPointMake(W - 110, 96);
+    _keyboardButton.center  = CGPointMake(W - 174, 96);
+    _editButton.center      = CGPointMake(W - 238, 96);
+    _escButton.center       = CGPointMake(W - 302, 96);
 }
 
 #pragma mark - 阶段3：热键条 + 系统键盘
@@ -621,6 +631,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 - (void)a2_useUp      { a2_glfw_input_post_mouse_button(_window, kMouseRight, 0); _useButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.14]; }
 - (void)a2_tapE       { [self a2_pressBound:@"inventory" fallback:kKeyE]; }
 - (void)a2_tapF3      { [self a2_pressBound:@"f3" fallback:kKeyF3]; }
+- (void)a2_tapEsc     { [self a2_pressBound:@"esc" fallback:256]; }
 
 #pragma mark - 阶段4/5：自定义 + 多方案
 
@@ -643,6 +654,11 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"切换方案" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         [weakSelf a2_presentLayoutPicker];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:(_moveMode == A2MoveModeStick ? @"切换为：分键移动" : @"切换为：摇杆移动")
+                                                style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [weakSelf setMoveMode:(weakSelf.moveMode == A2MoveModeStick ? A2MoveModeDPad : A2MoveModeStick)];
+        [weakSelf a2_saveLayout];
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"导入布局(剪贴板)" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         [weakSelf a2_importLayoutFromClipboard];

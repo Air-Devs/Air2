@@ -111,6 +111,11 @@ static UIProgressView *gProgress = nil;
                                           selector:@selector(a2_stageChanged:)
                                               name:A2LaunchStageNotification
                                             object:nil];
+    // 首帧通知（native 在 GL 桥帧回调里发）：这才是"游戏真的在画"的时刻
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                          selector:@selector(a2_gameFirstFrame:)
+                                              name:@"A2GameFirstFrame"
+                                            object:nil];
 }
 
 + (void)hide {
@@ -119,12 +124,23 @@ static UIProgressView *gProgress = nil;
         return;
     }
     [NSNotificationCenter.defaultCenter removeObserver:self name:A2LaunchStageNotification object:nil];
+    [NSNotificationCenter.defaultCenter removeObserver:self name:@"A2GameFirstFrame" object:nil];
     if (gOverlayView != nil) {
         [gOverlayView removeFromSuperview];
     }
     gOverlayView = nil;
     gStageLabel = nil;
     gProgress = nil;
+}
+
++ (void)a2_gameFirstFrame:(NSNotification *)note {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ [self a2_gameFirstFrame:note]; });
+        return;
+    }
+    // 稍等一下让第一帧真正上屏，再淡出
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{ [self hide]; });
 }
 
 + (BOOL)isVisible {
@@ -148,8 +164,11 @@ static UIProgressView *gProgress = nil;
         gProgress.progress = 0.0;
         return;
     }
-    if (stage >= 8) {              // A2StageCompleted
-        [self hide];
+    if (stage >= 8) {
+        // ★不再在这里撤★ 阶段8 只代表"VM/主类已派发"，此时画面还是黑的。
+        //   真正撤遮罩由 native 的「首帧」通知驱动（A2GameFirstFrame）。
+        gStageLabel.text = @"游戏启动中…";
+        gProgress.progress = 0.95;
         return;
     }
     gStageLabel.text = name;
