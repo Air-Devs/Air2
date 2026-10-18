@@ -463,17 +463,26 @@ int a2_glfw_window_create(long window, int width, int height, const char *title)
             win = [[UIWindow alloc] initWithFrame:[UIScreen mainScreen].bounds];
         }
 
+        // ★逐行判据（2026-10-18）★ 真机在 objc_retain 崩、栈里全是 UIKit 匿名帧，
+        //   只能靠每一步的判据行把崩溃点钉死到具体调用。
+        a2_log_criterion(@"[A2-GLFW] 建窗 1/6 UIWindow 完成 win=%p", win);
         UIView *view = (UIView *) a2_glfw_input_make_view(window);
         if (view == nil) {
             a2_log_f(@"[A2-GLFW] 建窗失败：宿主视图创建失败（window=%ld）", window);
             return;
         }
+        a2_log_criterion(@"[A2-GLFW] 建窗 2/6 视图创建完成 view=%p", view);
 
         UIViewController *vc = [UIViewController new];
+        a2_log_criterion(@"[A2-GLFW] 建窗 3/6 VC 创建完成 vc=%p", vc);
         vc.view = view;
+        a2_log_criterion(@"[A2-GLFW] 建窗 4/6 vc.view 挂好");
         win.rootViewController = vc;
+        a2_log_criterion(@"[A2-GLFW] 建窗 5/6 rootViewController 挂好");
         [win makeKeyAndVisible];
+        a2_log_criterion(@"[A2-GLFW] 建窗 6/6 makeKeyAndVisible 完成");
         [view becomeFirstResponder];
+        a2_log_criterion(@"[A2-GLFW] 建窗 7/6 becomeFirstResponder 完成");
 
         CGRect b = win.bounds;
         CGFloat scale = (win.screen != nil) ? win.screen.scale : 1.0;
