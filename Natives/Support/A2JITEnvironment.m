@@ -122,6 +122,16 @@ static void *a2_jit_collect_pages(size_t pageSize, size_t pageCount) {
     return NULL;
 }
 
+// ★★ 关键符号 ★★
+//   libjvm 里 get_debug_jit_mapping() 用 dlsym(RTLD_DEFAULT, "DeviceHasTXM") 判断本机是否
+//   有 TXM（iOS 19+ 的内存执行保护）。★宿主 App 必须导出这个符号★：
+//     · 导出且返回 true  ⇒ libjvm 走 brk #0x69 让调试器分配可执行区（老 Air 的路径）
+//     · 没导出/返回 false ⇒ libjvm 自己 mmap(PROT_EXEC)  ⇒ iOS 26+ 执行即 SIGBUS（我们踩的坑）
+//   老 Air 就是这么导出的，所以它能拿到调试器给的 64MB。
+bool DeviceHasTXM(void) {
+    return true;
+}
+
 static void *gA2JITExecRegion = NULL;
 static size_t gA2JITExecRegionSize = 0;
 
