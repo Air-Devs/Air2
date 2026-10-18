@@ -518,14 +518,22 @@ static void *a2_jit_brk69_bounded(NSTimeInterval deadlineSec, const char *why) {
                                         // 改为默认讨 64MB（与 ReservedCodeCacheSize=16m 留足余量）
     a2_jit_log("[A2JIT] 请求 JIT 区大小=%s：%zu 字节（键 A2JITRegionMB 未设 ⇒ 默认 64MB）",
                a2jitMB > 0 ? "自定义" : "默认", a2jitWantBytes);
-    // ★自研 JIT 宿主★ 先自己 mmap 一大段并整段祝福；脚本侧 0x69 会优先返回这块（见 Air2JIT69.js）
-    // ★2026-10-18★ 无论走不走 0x69，都要准备这块「已祝福的可执行区」：
-    //   自编 libjvm 会用 dlsym("A2GetJITExecRegion") 直接拿它当 code cache。
+    // ★2026-10-18★ 默认★不发 cmd4★（真机证据：引擎里 commands[4] 报 "Script failed: undefined"
+    //   ⇒ 随后 Socket(NotConnected) ⇒ 我们收到 SIGTRAP 直接闪退）。
+    //   现在走老 Air 的原始链路：只发 brk #0x69 要 64MB，由调试器返回可执行区。
+    //   需要自研宿主区实验时才置 A2PreblessRegion = YES。
     {
-        extern void *a2_jit_alloc_preblessed_region(size_t bytes);
-        gA2JITPreblessed = a2_jit_alloc_preblessed_region(a2jitWantBytes);
-        a2_jit_log("[A2JIT] ★自研 JIT 宿主区★ addr=%p size=%zu（cmd4 祝福 + mprotect RX）",
-                   gA2JITPreblessed, a2jitWantBytes);
+        id preVal2 = [NSUserDefaults.standardUserDefaults objectForKey:@"A2PreblessRegion"];
+        BOOL prebless2 = (preVal2 == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2PreblessRegion"];
+        if (prebless2) {
+            extern void *a2_jit_alloc_preblessed_region(size_t bytes);
+            gA2JITPreblessed = a2_jit_alloc_preblessed_region(a2jitWantBytes);
+            a2_jit_log(@"[A2JIT] ★自研 JIT 宿主区★ addr=%p size=%zu（cmd4 祝福 + mprotect RX）",
+                       gA2JITPreblessed, a2jitWantBytes);
+        } else {
+            a2_jit_log(@"[A2JIT] 自研宿主区=关（A2PreblessRegion 未设）⇒ 走老 Air 链路：brk #0x69 要 %zu 字节",
+                       a2jitWantBytes);
+        }
     }
     NSThread *worker = [[NSThread alloc] initWithBlock:^{
         res = a2_jit_brk69_create_region_safe(a2jitWantBytes);
