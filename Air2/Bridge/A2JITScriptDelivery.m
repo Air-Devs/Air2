@@ -42,6 +42,14 @@ static NSString *const A2JITScriptDeliveryErrorDomain = @"A2JITScriptDeliveryErr
 }
 
 + (BOOL)deliverSelfContainedScriptWithError:(NSError **)error {
+    // ★2026-10-18 用户拍板★ 默认★不下发随包脚本★：JIT 环境交给 StikDebug 的附加(attach)。
+    //   要恢复随包脚本：偏好键 A2DeliverJITScript = YES。
+    id a2deliverVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2DeliverJITScript"];
+    BOOL a2deliver = (a2deliverVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2DeliverJITScript"];
+    if (!a2deliver) {
+        [A2Log criterion:@"[A2-CHAIN] ① 下发 JIT 脚本 = 关（键 A2DeliverJITScript 未设 ⇒ 用 StikDebug 的附加）"];
+        return YES;
+    }
     NSString *path = [self scriptPath];
     if (path.length == 0) {
         [A2Log log:@"[A2-CHAIN] ① 下发 JIT 脚本：随包脚本 %@ 未找到（不拦路；② 探测会兜底）",

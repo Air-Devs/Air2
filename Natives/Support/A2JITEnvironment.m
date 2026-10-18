@@ -421,8 +421,17 @@ static void *a2_jit_brk69_bounded(NSTimeInterval deadlineSec, const char *why) {
     a2_jit_log("[A2JIT] 请求 JIT 区大小=%s：%zu 字节（键 A2JITRegionMB 未设 ⇒ 默认 64MB）",
                a2jitMB > 0 ? "自定义" : "默认", a2jitWantBytes);
     // ★自研 JIT 宿主★ 先自己 mmap 一大段并整段祝福；脚本侧 0x69 会优先返回这块（见 Air2JIT69.js）
-    extern void *a2_jit_alloc_preblessed_region(size_t bytes);
-    gA2JITPreblessed = a2_jit_alloc_preblessed_region(a2jitWantBytes);
+    // ★2026-10-18★ 排查模式(不下发脚本、不用 brk)时不发 0x6942，否则无人应答会挂住。
+    {
+        id skipVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2SkipJITMachinery"];
+        BOOL skip = (skipVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2SkipJITMachinery"];
+        if (!skip) {
+            extern void *a2_jit_alloc_preblessed_region(size_t bytes);
+            gA2JITPreblessed = a2_jit_alloc_preblessed_region(a2jitWantBytes);
+        } else {
+            a2_jit_log("[A2JIT] 跳过自研 JIT 宿主区（A2SkipJITMachinery=YES：改用 StikDebug 附加 + 自编 libjvm mmap RX）");
+        }
+    }
     NSThread *worker = [[NSThread alloc] initWithBlock:^{
         res = a2_jit_brk69_create_region_safe(a2jitWantBytes);
         os_unfair_lock_lock(&gA2JITBrkLock);
@@ -594,7 +603,7 @@ static int gA2JITEnsureKickInflight = 0;
     //   从“StikDebug 9000+ 请求 + 建 VM 卡死”里摘出去，判断到底是谁在刷。
     //   定位完必须默认关掉（那意味着放弃 JIT 校验）。
     id a2skipVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2SkipJITMachinery"];
-    BOOL a2skip = (a2skipVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2SkipJITMachinery"];
+    BOOL a2skip = (a2skipVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2SkipJITMachinery"];
     if (a2skip) {
         if (whyOut) *whyOut = @"排查模式:已跳过整条 JIT 取证链(A2SkipJITMachinery=YES)";
         gA2JITRegionVerdict = A2JITRegionVerdictUsable;
