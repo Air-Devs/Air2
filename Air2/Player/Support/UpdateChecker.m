@@ -398,23 +398,13 @@ static NSString *AMENonEmpty(NSString * _Nullable s, NSString *fallback) {
 
 + (void)presentUpdateDialogForInfo:(UpdateInfo *)info fromPresenter:(UIViewController *)presenter {
     if (presenter == nil || info == nil) return;
-    if (presenter.presentedViewController != nil) {
-        /* 已有弹窗在屏幕上（例如首次启动的翻译提示）时不能直接叠加，
-           延后一拍重试一次；仍被占用就放弃，下次启动再说。 */
-        NSLog(@"[UpdateChecker] Another modal already presented, retrying update dialog in 3s");
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3.0 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            if (presenter.presentedViewController != nil) {
-                NSLog(@"[UpdateChecker] Still busy, skipping update dialog");
-                return;
-            }
-            UpdateDialogViewController *retryDialog = [UpdateDialogViewController dialogWithInfo:info];
-            [presenter presentViewController:retryDialog animated:YES completion:nil];
-        });
-        return;
-    }
-    UpdateDialogViewController *dialog = [UpdateDialogViewController dialogWithInfo:info];
-    [presenter presentViewController:dialog animated:YES completion:nil];
+    /* Air1 的 UpdateDialogViewController 已随 UI 层重写删除，且本类当前没有任何调用方。
+       这里降级为同文件内的简易提示，保留「发现新版本」的告知能力，不再新增依赖。 */
+    [self presentSimpleAlertWithTitle:[NSString stringWithFormat:@"%@ %@",
+                                       localize(@"check_update.available", @"New version"),
+                                       AMENonEmpty(info.latestVersion, @"-")]
+                              message:AMENonEmpty(info.releaseName, info.releaseNotes)
+                        fromPresenter:presenter];
 }
 
 #pragma mark - Open Release Page
