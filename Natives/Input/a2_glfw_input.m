@@ -21,6 +21,7 @@
 #import "a2_log.h"
 
 #import <UIKit/UIKit.h>
+#import <QuartzCore/QuartzCore.h>
 #import <string.h>
 
 // 鼠标左键（官方 glfw3.h：GLFW_MOUSE_BUTTON_LEFT = GLFW_MOUSE_BUTTON_1 = 0）
@@ -123,6 +124,19 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 @end
 
 @implementation A2GlfwView
+
+/// ★2026-10-18 真机证据★ metallum 的 iOS 路径直接假设
+///   `cocoaView.layer` 就是 CAMetalLayer（它注释里写明 GameSurfaceView 用
+///   `+layerClass` 覆写成 CAMetalLayer）。我们是普通 UIView ⇒ 快照时系统
+///   对它发 Metal 相关消息 ⇒ `-[MTLVertexAttributeInternal bounds]
+///   unrecognized selector` + 黑屏。
+///   只在 Metal 渲染器（AMETHYST_METAL=1）时启用，gl4es/EGL 路径保持 CALayer。
++ (Class)layerClass {
+    if (getenv("AMETHYST_METAL") != NULL) {
+        return [CAMetalLayer class];
+    }
+    return [super layerClass];
+}
 
 - (instancetype)initWithWindowHandle:(long)window {
     self = [super initWithFrame:CGRectZero];
