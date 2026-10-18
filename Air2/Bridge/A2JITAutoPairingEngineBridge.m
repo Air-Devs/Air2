@@ -86,19 +86,6 @@ static NSString *A2RPStateName(A2JITAutoPairingPreconditionState state) {
 }
 
 /// [JIT-AUTOPAIR-4] 设备发起档的阶段稳定名（日志可搜；★四语文案在 UI 侧★）。
-NSString *A2JITDeviceInitiatedPairingStageName(A2JITDeviceInitiatedPairingStage stage) {
-    switch (stage) {
-        case A2JITDeviceInitiatedPairingStageIdle:        return @"idle";
-        case A2JITDeviceInitiatedPairingStagePreparing:   return @"preparing";
-        case A2JITDeviceInitiatedPairingStageAdvertising: return @"advertising";
-        case A2JITDeviceInitiatedPairingStageConnected:   return @"connected";
-        case A2JITDeviceInitiatedPairingStageVerifying:   return @"verifying";
-        case A2JITDeviceInitiatedPairingStageSucceeded:   return @"succeeded";
-        case A2JITDeviceInitiatedPairingStageFailed:      return @"failed";
-        case A2JITDeviceInitiatedPairingStageCancelled:   return @"cancelled";
-    }
-    return @"unknown";
-}
 
 @interface A2JITAutoPairingEngineBridge ()
 /// 惰性缓存（自检只跑一次；读取无副作用）。

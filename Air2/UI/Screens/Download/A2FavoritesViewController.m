@@ -36,15 +36,7 @@
 
 static NSString *const kFavoriteCellID = @"A2FavoriteCell";
 
-static NSString *A2FavoritePlatformName(A2ContentPlatform platform) {
-    return (platform == A2ContentPlatformCurseForge) ? @"CurseForge" : @"Modrinth";
-}
 
-static NSString *A2FavoriteFormatCount(long long count) {
-    if (count >= 1000000) return [NSString stringWithFormat:@"%.1fM", count / 1000000.0];
-    if (count >= 1000) return [NSString stringWithFormat:@"%.1fK", count / 1000.0];
-    return [NSString stringWithFormat:@"%lld", count];
-}
 
 #pragma mark - 收藏项行
 

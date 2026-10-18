@@ -74,7 +74,6 @@ FOUNDATION_EXPORT BOOL A2ModLoaderIsAPIMod(A2ModLoaderType type);
 /// 是否支持自动安装（对照 ZL2 的 autoDownloadable）
 FOUNDATION_EXPORT BOOL A2ModLoaderSupportsAutoInstall(A2ModLoaderType type);
 /// 该加载器对应的前置模组（没有则返回 Unknown）
-FOUNDATION_EXPORT A2ModLoaderType A2ModLoaderCompanionAPIFor(A2ModLoaderType loader);
 
 /// 一个加载器版本
 @interface A2ModLoaderVersion : NSObject

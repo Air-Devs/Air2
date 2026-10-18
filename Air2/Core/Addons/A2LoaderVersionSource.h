@@ -46,22 +46,6 @@ typedef NS_ENUM(NSInteger, A2ForgeFileCategory) {
 };
 
 /// 一个 Forge 版本
-@interface A2ForgeVersionInfo : NSObject
-@property (nonatomic, copy) NSString *versionName;        ///< 如 55.0.1
-@property (nonatomic, copy) NSString *mcVersion;          ///< 继承的游戏版本
-@property (nonatomic, copy, nullable) NSString *branch;   ///< 分支后缀，如 1.7.10 的那些
-@property (nonatomic, copy, nullable) NSString *releaseTime;
-@property (nonatomic, copy, nullable) NSString *md5;
-@property (nonatomic, assign) BOOL recommended;
-@property (nonatomic, assign) A2ForgeFileCategory category;
-
-/// 用于拼接下载地址的文件版本名（可能含分支后缀）
-@property (nonatomic, copy, readonly) NSString *fileVersion;
-/// 产物扩展名（installer 是 jar，其余是 zip）
-@property (nonatomic, copy, readonly) NSString *fileExtension;
-/// 下载地址
-@property (nonatomic, copy, readonly) NSString *downloadURL;
-@end
 
 #pragma mark - NeoForge 版本信息
 

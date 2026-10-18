@@ -59,6 +59,5 @@ int a2_renderer_load_named(NSString *dylibName, NSString *frameworksPath);
 ///
 /// @param frameworksPath `<App>/Frameworks`（与 `-Djava.library.path` 同一目录）；空 ⇒ 直接判失败。
 /// @return 0 = 已加载（或此前已加载）；-1 = 未找到 / 加载失败（原因见日志行）。
-int a2_renderer_load_metal(NSString *frameworksPath);
 
 #endif /* A2_RENDERER_H */

@@ -26,38 +26,6 @@ static NSString *const kUserAgent =
 
 #pragma mark - Forge 版本
 
-@implementation A2ForgeVersionInfo
-
-- (NSString *)fileVersion {
-    return self.branch.length
-        ? [NSString stringWithFormat:@"%@-%@", self.versionName, self.branch]
-        : self.versionName;
-}
-
-- (NSString *)fileExtension {
-    return (self.category == A2ForgeFileCategoryInstaller) ? @"jar" : @"zip";
-}
-
-- (NSString *)categoryName {
-    switch (self.category) {
-        case A2ForgeFileCategoryInstaller: return @"installer";
-        case A2ForgeFileCategoryUniversal: return @"universal";
-        case A2ForgeFileCategoryClient:    return @"client";
-        default:                           return @"unknown";
-    }
-}
-
-/// Forge 的下载地址规则（对照 ZL2 的 getDownloadUrl）：
-///   {base}/{mcVersion}-{fileVersion}/forge-{mcVersion}-{fileVersion}-{category}.{ext}
-- (NSString *)downloadURL {
-    NSString *fv = self.fileVersion;
-    NSString *dir = [NSString stringWithFormat:@"%@-%@", self.mcVersion, fv];
-    NSString *file = [NSString stringWithFormat:@"forge-%@-%@-%@.%@",
-                      self.mcVersion, fv, [self categoryName], self.fileExtension];
-    return [NSString stringWithFormat:@"%@/%@/%@", kForgeMavenBase, dir, file];
-}
-
-@end
 
 #pragma mark - NeoForge 版本
 

@@ -24,6 +24,5 @@ void a2_failbanner_show_jit_unavailable(AMEJITRegionVerdict verdict,
                                         NSString *evidence);
 
 /// 阶段码 → 可读原因 的可见反馈（映射表见 .m）。任意线程可调。
-void a2_failbanner_show_stage_failure(int stageRc);
 
 #endif /* A2_FAILBANNER_H */

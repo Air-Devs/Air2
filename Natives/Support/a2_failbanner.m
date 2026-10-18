@@ -81,9 +81,6 @@ static NSString *a2_failbanner_stage_reason(int rc) {
 }
 
 /// 可见反馈：阶段码 → 可读原因。任意线程可调。
-void a2_failbanner_show_stage_failure(int stageRc) {
-    a2_failbanner_show(a2_failbanner_stage_reason(stageRc));
-}
 
 // ============================================================================
 // JIT 取证分流 → 可见文案

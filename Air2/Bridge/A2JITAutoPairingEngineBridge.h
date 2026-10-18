@@ -74,7 +74,6 @@ typedef NS_ENUM(NSInteger, A2JITDeviceInitiatedPairingStage) {
     A2JITDeviceInitiatedPairingStageCancelled   = 7,  ///< 已取消
 };
 /// 阶段稳定英文名（日志可搜）。
-NSString *A2JITDeviceInitiatedPairingStageName(A2JITDeviceInitiatedPairingStage stage);
 
 /// 自动配对引擎的 Bridge（RPPairing 真实现经 Bridge → Natives 落地）。
 @interface A2JITAutoPairingEngineBridge : NSObject <A2JITAutoPairingEngine>

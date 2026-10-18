@@ -51,29 +51,3 @@ int a2_renderer_load_named(NSString *dylibName, NSString *frameworksPath) {
     return 0;
 }
 
-int a2_renderer_load_metal(NSString *frameworksPath) {
-    if (frameworksPath.length == 0) {
-        a2_log_f(@"[A2-RENDERER] Metal 后端未选择：frameworksPath 为空（上层未解析出 <App>/Frameworks）");
-        return -1;
-    }
-
-    NSString *path = [frameworksPath stringByAppendingPathComponent:
-                      [NSString stringWithUTF8String:A2RendererMetalDylibName]];
-
-    if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
-        a2_log_f(@"[A2-RENDERER] Metal 后端未加载：包内缺 %s（期望 %s）", A2RendererMetalDylibName, path.UTF8String);
-        return -1;
-    }
-
-    // RTLD_GLOBAL：与老链一致（渲染器符号需对后续 dlopen 的库可见）。
-    void *handle = dlopen(path.UTF8String, RTLD_LAZY | RTLD_GLOBAL);
-    if (handle == NULL) {
-        const char *err = dlerror();
-        a2_log_f(@"[A2-RENDERER] Metal 后端 dlopen 失败：%s（%s）", path.UTF8String, err ? err : "(dlerror 无输出)");
-        return -1;
-    }
-
-    a2_log_f(@"[A2-RENDERER] 已显式选择并加载 Metal 后端：%s <- %s handle=%p",
-             A2RendererMetalDylibName, path.UTF8String, handle);
-    return 0;
-}

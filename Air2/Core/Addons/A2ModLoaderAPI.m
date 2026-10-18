@@ -91,15 +91,6 @@ BOOL A2ModLoaderSupportsAutoInstall(A2ModLoaderType type) {
     }
 }
 
-A2ModLoaderType A2ModLoaderCompanionAPIFor(A2ModLoaderType loader) {
-    switch (loader) {
-        case A2ModLoaderTypeFabric:       return A2ModLoaderTypeFabricAPI;
-        case A2ModLoaderTypeQuilt:        return A2ModLoaderTypeQuiltAPI;
-        case A2ModLoaderTypeLegacyFabric: return A2ModLoaderTypeLegacyFabricAPI;
-        case A2ModLoaderTypeBabric:       return A2ModLoaderTypeBabricAPI;
-        default:                          return A2ModLoaderTypeUnknown;
-    }
-}
 
 #pragma mark - 版本模型
 

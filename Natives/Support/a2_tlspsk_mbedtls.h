@@ -22,7 +22,6 @@ NS_ASSUME_NONNULL_BEGIN
 void A2TLSPskMbedTLSEnsureRegistered(void);
 
 /// 本二进制编译时是否带了 mbedTLS 头（= 后端是否被编入）。值由编译期决定，不猜。
-BOOL A2TLSPskMbedTLSCompiledIn(void);
 
 /// 期望的 mbedTLS 版本串（编译期常量；未编入则 «未编入»）。日志/自证用。
 NSString *A2TLSPskMbedTLSVersionString(void);

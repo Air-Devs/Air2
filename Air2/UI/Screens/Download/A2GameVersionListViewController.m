@@ -126,12 +126,6 @@ static const CGFloat kA2VersionHeaderRowHeight = 36;
 
 /// 类型 → 图标符号。
 /// 参考 ZL2「按版本类型给不同配图」的做法，符号本身用本项目自定的。
-static NSString *A2VersionSymbolForType(NSString *type) {
-    if ([type isEqualToString:@"release"]) return @"cube.fill";
-    if ([type isEqualToString:@"snapshot"]) return @"hammer.fill";
-    if ([type isEqualToString:@"old_beta"]) return @"archivebox.fill";
-    return @"archivebox";
-}
 
 /// 版本行：图标方块 + （版本号 + 类型徽标）/ 发布时间 + 右侧箭头。
 ///

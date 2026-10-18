@@ -41,13 +41,6 @@
 // ---------------------------------------------------------------------------
 // 编译期事实（不猜）
 // ---------------------------------------------------------------------------
-BOOL A2TLSPskMbedTLSCompiledIn(void) {
-#if A2_TLSPK_HAVE_MBEDTLS
-    return YES;
-#else
-    return NO;
-#endif
-}
 
 NSString *A2TLSPskMbedTLSVersionString(void) {
 #if A2_TLSPK_HAVE_MBEDTLS

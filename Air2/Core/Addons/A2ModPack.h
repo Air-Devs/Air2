@@ -73,16 +73,6 @@ typedef NS_ENUM(NSInteger, A2ModPackFormat) {
 @property (nonatomic, copy, readonly) NSArray<A2ModPackFile *> *files;
 @end
 
-@interface A2ModPackParser : NSObject
-
-/// 看 zip 里有没有两种清单，返回格式（不解析内容）。
-+ (A2ModPackFormat)detectFormatOfZipAtPath:(NSString *)zipPath;
-
-/// 解析成计划。格式不明/清单坏掉返回 nil 并填原因。
-+ (nullable A2ModPackPlan *)parseZipAtPath:(NSString *)zipPath
-                                     error:(NSError **)error;
-
-@end
 
 FOUNDATION_EXPORT NSString *const A2ModPackErrorDomain;
 
