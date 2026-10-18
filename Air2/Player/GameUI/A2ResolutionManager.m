@@ -15,6 +15,14 @@ static NSString *const kScaleKey = @"A2ResolutionScale";
 static NSString *const kCustomW  = @"A2ResolutionCustomW";
 static NSString *const kCustomH  = @"A2ResolutionCustomH";
 
+// ★CI★ `nativeSize` 在 .h 里是 readonly 且本文件手写了 getter，
+//   编译器不会自动合成 _nativeSize 实例变量 ⇒ 报 use of undeclared identifier '_nativeSize'。
+//   这里显式声明该 ivar（只补声明，不改语义）。
+@interface A2ResolutionManager () {
+    CGSize _nativeSize;
+}
+@end
+
 @implementation A2ResolutionManager
 
 + (instancetype)shared {
