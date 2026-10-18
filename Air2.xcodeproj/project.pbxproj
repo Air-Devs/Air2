@@ -57,6 +57,7 @@
 		2005F5B368FB32F5221D4DFB /* A2RendererRegistry.m in Sources */ = {isa = PBXBuildFile; fileRef = EF194CE5DE12660BE86A1C1E /* A2RendererRegistry.m */; };
 		E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */ = {isa = PBXBuildFile; fileRef = 035FB3CC4FE4018F44632AD5 /* A2Settings.m */; };
 		15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */; };
+		20B189CC369DA2AC61DD52DF /* A2IntegrityChecker.m in Sources */ = {isa = PBXBuildFile; fileRef = FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */; };
 		42E2F81428F01FB2F3F912BC /* A2RemoteVersions.m in Sources */ = {isa = PBXBuildFile; fileRef = C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */; };
 		2BC4E80EA8F83E9426E4BA2E /* A2VersionInfo.m in Sources */ = {isa = PBXBuildFile; fileRef = 3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */; };
 		7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 643B820206971C227F265607 /* A2VersionManager.m */; };
@@ -243,6 +244,7 @@
 		EF194CE5DE12660BE86A1C1E /* A2RendererRegistry.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererRegistry.m"; sourceTree = "<group>"; };
 		035FB3CC4FE4018F44632AD5 /* A2Settings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Settings.m"; sourceTree = "<group>"; };
 		044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameInstaller.m"; sourceTree = "<group>"; };
+		FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2IntegrityChecker.m"; sourceTree = "<group>"; };
 		C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RemoteVersions.m"; sourceTree = "<group>"; };
 		3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionInfo.m"; sourceTree = "<group>"; };
 		643B820206971C227F265607 /* A2VersionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionManager.m"; sourceTree = "<group>"; };
@@ -422,6 +424,7 @@
 		B5290E0419DA2C9F2A8A3BA0 /* A2RendererRegistry.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererRegistry.h"; sourceTree = "<group>"; };
 		8D9149596220C9F4F49C460D /* A2Settings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Settings.h"; sourceTree = "<group>"; };
 		8407C36C2C93136130B9F07E /* A2GameInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameInstaller.h"; sourceTree = "<group>"; };
+		89044710CFCCD81045E82677 /* A2IntegrityChecker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2IntegrityChecker.h"; sourceTree = "<group>"; };
 		797843066906C8A344CE1344 /* A2RemoteVersions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RemoteVersions.h"; sourceTree = "<group>"; };
 		CE5120FF6E52910A07272F53 /* A2VersionInfo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionInfo.h"; sourceTree = "<group>"; };
 		8566CA5C1C5F50A603ACC370 /* A2VersionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionManager.h"; sourceTree = "<group>"; };
@@ -825,10 +828,12 @@
 			isa = PBXGroup;
 			children = (
 				044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */,
+				FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */,
 				C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */,
 				3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */,
 				643B820206971C227F265607 /* A2VersionManager.m */,
 				8407C36C2C93136130B9F07E /* A2GameInstaller.h */,
+				89044710CFCCD81045E82677 /* A2IntegrityChecker.h */,
 				797843066906C8A344CE1344 /* A2RemoteVersions.h */,
 				CE5120FF6E52910A07272F53 /* A2VersionInfo.h */,
 				8566CA5C1C5F50A603ACC370 /* A2VersionManager.h */,
@@ -1364,6 +1369,7 @@
 				2005F5B368FB32F5221D4DFB /* A2RendererRegistry.m in Sources */,
 				E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */,
 				15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */,
+				20B189CC369DA2AC61DD52DF /* A2IntegrityChecker.m in Sources */,
 				42E2F81428F01FB2F3F912BC /* A2RemoteVersions.m in Sources */,
 				2BC4E80EA8F83E9426E4BA2E /* A2VersionInfo.m in Sources */,
 				7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */,

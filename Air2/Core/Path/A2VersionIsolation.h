@@ -133,6 +133,10 @@ FOUNDATION_EXPORT NSString *A2VersionFolderDisplayName(A2VersionFolder folder);
 - (NSString *)versionsHome;
 - (NSString *)librariesHome;
 - (NSString *)assetsHome;
+/// 资源索引目录：{assets}/indexes
+- (NSString *)assetsIndexesHome;
+/// 资源对象目录：{assets}/objects
+- (NSString *)assetsObjectsHome;
 - (NSString *)versionPath:(NSString *)versionName;
 - (NSString *)versionJSONPath:(NSString *)versionName;
 - (NSString *)versionJarPath:(NSString *)versionName;

@@ -228,9 +228,14 @@ static void A2Main(dispatch_block_t block) {
         return;
     }
 
+    // 客户端 jar 也带完整性字段 —— MC 版本 json 里 downloads.client
+    // 就给了 sha1 与 size，直接透传。
+    NSString *jarSHA1 = client[@"sha1"];
+    NSNumber *jarSize = client[@"size"];
+
     [self report:A2InstallStageDownloadJar progress:0 message:@"正在下载客户端…"];
     [self download:@[jarURL] to:jarDest stageLabel:A2InstallStageDownloadJar
-           message:@"正在下载客户端"
+           message:@"正在下载客户端" sha1:jarSHA1 size:jarSize
            thenRun:^(NSError *error) {
         if (error) { [self failWithError:error]; return; }
         [self installLibrariesFromJSON:json];
@@ -264,9 +269,19 @@ static void A2Main(dispatch_block_t block) {
         if (!relPath.length || !url.length) continue;
 
         NSString *dest = [libRoot stringByAppendingPathComponent:relPath];
-        if ([NSFileManager.defaultManager fileExistsAtPath:dest]) continue;   // 已有就跳过
 
-        [pending addObject:@[url, dest]];
+        // ⚠️ 不要在这里用 fileExistsAtPath: 跳过！
+        //
+        // 之前就是「文件存在就跳过」—— 大小对、内容是坏的（镜像给错区间、
+        // 续传拼错）也照样通过，最后在启动时报 NoClassDefFoundError，
+        // 用户完全看不出是下载问题。
+        //
+        // 正确做法（对照 ZL2）：把 sha1 交给下载引擎，由它在【开始前】
+        // 校验本地文件 —— 一致就跳过（省掉整个下载），不一致就重下。
+        NSString *sha1 = artifact[@"sha1"];
+        NSNumber *size = artifact[@"size"];
+
+        [pending addObject:@[url, dest, sha1 ?: @"", size ?: @0]];
     }
 
     if (pending.count == 0) {
@@ -376,11 +391,13 @@ static void A2Main(dispatch_block_t block) {
         NSString *dir = [objectsRoot stringByAppendingPathComponent:sub];
         NSString *dest = [dir stringByAppendingPathComponent:hash];
 
-        if ([NSFileManager.defaultManager fileExistsAtPath:dest]) continue;
-
+        // 不在这里判存在 —— 交给下载引擎按 SHA1 校验。
+        // 资源文件的 hash 字段【就是】它的 SHA1（MC 资源索引的定义），
+        // 只判存在会漏掉损坏的纹理/音效/语言文件。
         NSString *url = [NSString stringWithFormat:@"%@/%@/%@",
                          kResourcesBaseURL, sub, hash];
-        [pending addObject:@[url, dest]];
+        NSNumber *size = obj[@"size"];
+        [pending addObject:@[url, dest, hash, size ?: @0]];
     }
 
     if (pending.count == 0) {
@@ -591,6 +608,8 @@ static void A2Main(dispatch_block_t block) {
               to:(NSString *)dest
       stageLabel:(A2InstallStage)stage
          message:(NSString *)message
+            sha1:(nullable NSString *)sha1
+            size:(nullable NSNumber *)size
          thenRun:(void (^)(NSError * _Nullable))then {
 
     // 同样展开镜像候选
@@ -608,6 +627,12 @@ static void A2Main(dispatch_block_t block) {
     req.candidateURLs = list;
     req.destinationPath = dest;
     req.allowZipFallbackCheck = YES;
+
+    // 完整性字段。引擎会在两处用它们：
+    //   1. 开始前：本地已有且 SHA1 一致 → 直接跳过（不重下）
+    //   2. 完成后：SHA1 不符 → 丢弃半成品、换源重试
+    if (sha1.length) req.expectedSHA1 = sha1;
+    if (size) req.expectedSize = size.longLongValue;
 
     __weak typeof(self) weakSelf = self;
     [[A2DownloadEngine sharedClient] startRequest:req
@@ -672,6 +697,19 @@ static void A2Main(dispatch_block_t block) {
         req.candidateURLs = urls;
         req.destinationPath = pair[1];
         req.allowZipFallbackCheck = YES;
+
+        // 完整性字段：[url, dest, sha1, size]
+        //
+        // 交给引擎做两件事（对照 ZL2 的 scheduleDownload(urls, hash, file, size)）：
+        //   1. 开始前：本地文件 SHA1 一致 → 直接跳过（重装会非常快）
+        //   2. 完成后：SHA1 不一致 → 丢弃、换源重试
+        if (pair.count >= 3 && [pair[2] length] > 0) {
+            req.expectedSHA1 = pair[2];
+        }
+        if (pair.count >= 4) {
+            req.expectedSize = [pair[3] longLongValue];
+        }
+
         [requests addObject:req];
     }
 

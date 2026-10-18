@@ -208,6 +208,8 @@ static NSString *const kGameHomeDirName = @"minecraft";
 - (NSString *)versionsHome   { return [self.gameHome stringByAppendingPathComponent:@"versions"]; }
 - (NSString *)librariesHome  { return [self.gameHome stringByAppendingPathComponent:@"libraries"]; }
 - (NSString *)assetsHome     { return [self.gameHome stringByAppendingPathComponent:@"assets"]; }
+- (NSString *)assetsIndexesHome { return [self.assetsHome stringByAppendingPathComponent:@"indexes"]; }
+- (NSString *)assetsObjectsHome { return [self.assetsHome stringByAppendingPathComponent:@"objects"]; }
 
 - (NSString *)versionPath:(NSString *)versionName {
     return [[self versionsHome] stringByAppendingPathComponent:versionName];
