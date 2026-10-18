@@ -32,6 +32,9 @@
 #import "A2Typography.h"
 #import "A2ContentSource.h"
 #import "A2DownloadEngine.h"
+#import "A2SettingsSection.h"
+#import "A2SettingsRow.h"
+#import "A2ModPackImportCoordinator.h"
 
 static NSString *const kCellID = @"A2DownloadCell";
 
@@ -178,6 +181,9 @@ static NSString *const kCellID = @"A2DownloadCell";
 @property (nonatomic, assign) A2ContentSortField sortField;
 @property (nonatomic, copy) NSString *gameVersionFilter;
 @property (nonatomic, copy) NSString *loaderFilter;
+/// 整合包分类下的本地导入入口（其它分类为 nil）
+@property (nonatomic, strong, nullable) A2SettingsSection *importSection;
+@property (nonatomic, strong) A2ModPackImportCoordinator *importCoordinator;
 @end
 
 @implementation A2DownloadListViewController
@@ -192,9 +198,17 @@ static NSString *const kCellID = @"A2DownloadCell";
 
     [self setupSearchBar];
     [self setupFilterBar];
+    [self setupImportEntry];
     [self setupTable];
 
     [self reload];
+}
+
+- (A2ModPackImportCoordinator *)importCoordinator {
+    if (!_importCoordinator) {
+        _importCoordinator = [[A2ModPackImportCoordinator alloc] init];
+    }
+    return _importCoordinator;
 }
 
 - (NSString *)titleForCategory {
@@ -471,7 +485,46 @@ static NSString *const kCellID = @"A2DownloadCell";
     [a startAnimation];
 }
 
+/// 整合包分类的本地导入入口。
+///
+/// 位置对齐 ZL2 的整合包页：进入该分类后，入口就在列表上方、
+/// 与筛选区同一块内容区里，作为「不想在线搜、我有本地包」的直接出路。
+/// 其它分类没有这个需求，所以只在整合包分类下建。
+- (void)setupImportEntry {
+    if (self.category != A2DownloadCategoryModpack) {
+        return;
+    }
+
+    A2SettingsRow *row = [[A2SettingsRow alloc] init];
+    row.symbolName = @"square.and.arrow.down";
+    row.title = @"导入整合包";
+    row.subtitle = @"从本地选择 .mrpack / CurseForge 压缩包";
+    row.accessory = A2SettingsRowAccessoryDisclosure;
+
+    __weak typeof(self) weakSelf = self;
+    row.onTap = ^{
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        [strongSelf.importCoordinator startFrom:strongSelf];
+    };
+
+    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:nil];
+    [section addRow:row];
+    [self.plainContentView addSubview:section];
+    _importSection = section;
+
+    [NSLayoutConstraint activateConstraints:@[
+        [section.topAnchor constraintEqualToAnchor:_platformSwitch.bottomAnchor constant:A2SpaceS],
+        [section.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
+                                              constant:A2PageMargin],
+        [section.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
+                                               constant:-A2PageMargin],
+    ]];
+}
+
 - (void)setupTable {
+    // 整合包分类下筛选条排在导入入口之后；其它分类直接接平台切换
+    UIView *filterAnchor = self.importSection ?: _platformSwitch;
+
     _countLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _countLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _countLabel.font = [A2Typography caption];
@@ -501,7 +554,7 @@ static NSString *const kCellID = @"A2DownloadCell";
         [_searchBar.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor constant:-A2SpaceS],
         [_searchBar.heightAnchor constraintEqualToConstant:44],
 
-        [_filterBar.topAnchor constraintEqualToAnchor:_platformSwitch.bottomAnchor
+        [_filterBar.topAnchor constraintEqualToAnchor:filterAnchor.bottomAnchor
                                             constant:A2SpaceS],
         [_filterBar.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor],
         [_filterBar.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
