@@ -65,10 +65,8 @@ static void *a2_jit_brk6942_prepare_region(void *addr, size_t len) {
 //   这条命令 StikDebug 自带脚本就有，不需要我们再下发自定义脚本。
 __attribute__((noinline, optnone, naked))
 static void a2_jit_brk_f00d_cmd4_prepare(void *addr, size_t len) {
-    asm("mov x16, #4 
-"
-        "brk #0xf00d 
-"
+    asm("mov x16, #4 \n"
+        "brk #0xf00d \n"
         "ret");
 }
 
