@@ -12,8 +12,11 @@
 # define CONFIG_TYPE "development"
 #endif
 
-/* #undef CONFIG_BRANCH */ "@CONFIG_BRANCH@"
-/* #undef CONFIG_COMMIT */ "@CONFIG_COMMIT@"
+/* #undef CONFIG_BRANCH */
+/* #undef CONFIG_COMMIT */
+/* ★CI★ 这两行原本是 CMake 配置占位（"@CONFIG_BRANCH@" / "@CONFIG_COMMIT@"），
+   但仓库里没有跑 configure 这一步 ⇒ 编译直接报 expected identifier or '('。
+   保留下面的 #ifndef 兜底（"unknown"），语义不变。 */
 
 #ifndef CONFIG_BRANCH
 # define CONFIG_BRANCH "unknown"
