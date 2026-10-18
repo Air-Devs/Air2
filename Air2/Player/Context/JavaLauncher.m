@@ -34,6 +34,7 @@
 #import "LauncherPreferences.h"
 #import "PLLogOutputView.h"
 #import "PLProfiles.h"
+#import "AmeLaunchProgress.h"
 // ★ [LAUNCH-PROGRESS] 启动阶段上报(遮罩进度条/阶段文字/步骤骨架的数据源)
 
 #define fm NSFileManager.defaultManager
@@ -2066,6 +2067,9 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
         PUSH_MARGV_LITERAL("-Dorg.lwjgl.spvc.libname=spirv-cross-c-shared.0");
     }
 
+#if 0   /* ★CI★ 本段引用的 BaseAuthenticator / ThirdPartyAuthenticator 在仓库里已不存在
+           （CI: use of undeclared identifier 'BaseAuthenticator'）。整段保留不参与编译，
+           待认证体系恢复后再启用。 */
       // 添加authlib-injector参数以支持第三方认证账户的皮肤显示
     if ([accountId length] > 0 && [BaseAuthenticator.current isKindOfClass:[ThirdPartyAuthenticator class]]) {
         BaseAuthenticator *currentAuth = BaseAuthenticator.current;
@@ -2085,6 +2089,8 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
         }
     }
   
+#endif
+
     NSString *librariesPath = [NSString stringWithFormat:@"%@/libs", NSBundle.mainBundle.bundlePath];
     PUSH_MARGV_FORMAT(@"-javaagent:%@/patchjna_agent.jar=", librariesPath);
     // [Metallum agent] 原生 Metal 后端（26.2 / 26.3）：
