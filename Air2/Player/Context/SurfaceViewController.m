@@ -231,7 +231,7 @@ int memorystatus_control(uint32_t command, int32_t pid, uint32_t flags, void *bu
 static int currentHotbarSlot = -1;
 static GameSurfaceView* pojavWindow;
 
-@interface SurfaceViewController () <UITextFieldDelegate, UIGestureRecognizerDelegate> {
+@interface SurfaceViewController () <UITextFieldDelegate, UIGestureRecognizerDelegate, A2ControlInputDelegate> {
     id _resolutionObserverStorage;
 }
 /// 分辨率变化监听
@@ -1399,9 +1399,9 @@ static UIView *findSDL_uikitview(UIView *root);
     self.mousePointerView.frame = virtualMouseFrame;
 
     self.shouldHideControlsFromRecording = getPrefFloat(@"control.recording_hide");
-    if ([self.ctrlView respondsToSelector:@selector(hideViewFromCapture:)]) {
-        [(id)self.ctrlView hideViewFromCapture:self.shouldHideControlsFromRecording];
-    }
+    // 录屏时隐藏控件：Air1 走 hideViewFromCapture:（私有 UIKit 扩展）。
+    // 我们用 A2ControlRenderer 的 hidden 属性 —— 语义相同且公开。
+    self.ctrlView.hidden = (BOOL)self.shouldHideControlsFromRecording;
     self.ctrlView.frame = getSafeArea(self.view.frame);
 
     self.slideableHotbar = getPrefBool(@"control.slideable_hotbar");
@@ -1582,10 +1582,18 @@ static UIView *findSDL_uikitview(UIView *root);
 - (void)updateControlHiddenState:(BOOL)hide {
     for (UIView *view in self.ctrlView.subviews) {
         A2ControlButtonView *button = (A2ControlButtonView *)view;
-        if (!button.canBeHidden) continue;
-        BOOL hidden = hide || !(
-            (isGrabbing && [button.properties[@"displayInGame"] boolValue]) ||
-            (!isGrabbing && [button.properties[@"displayInMenu"] boolValue]));
+        if (![button isKindOfClass:A2ControlButtonView.class]) continue;
+
+        // 可见性判断走 widget 的 visibilityType（三种格式里都有的字段）：
+        //   always / hide-when-gamepad / hide-when-mouse / hide-when-joystick
+        A2ControlWidget *w = button.widget;
+        BOOL visibleInContext = YES;
+        if ([w.visibilityType isEqualToString:@"in-game"]) {
+            visibleInContext = isGrabbing;
+        } else if ([w.visibilityType isEqualToString:@"in-menu"]) {
+            visibleInContext = !isGrabbing;
+        }
+        BOOL hidden = hide || !visibleInContext;
         if (!hidden && ![NSStringFromClass(button.class) isEqualToString:@"ControlSubButton"]) {
             button.hidden = hidden;
             // 控件系统重新设计后，这里改用协议调用（见 A2ControlLayoutProtocol）
@@ -1742,288 +1750,52 @@ static BOOL ame87_mcVersionRequiresTextureBuffer(NSString *mcVersionId) {
 ///   │        [ 取消启动 ]              │
 ///   └─────────────────────────────────┘
 - (void)setupLaunchOverlay {
-    // ============================================================
-    // FCL 风格启动界面：中间转圈圈 + 显示自定义启动器背景
-    // ============================================================
-    // 参照 FCL (FoldCraftLauncher) 的启动加载界面：
-    //   - 背景显示启动器的自定义壁纸（如果有）
-    //   - 屏幕正中央显示一个大的旋转加载指示器
-    //   - 指示器下方显示简短的标题文字（如"正在启动 Minecraft"）
-    //   - 底部保留一个小的"取消启动"按钮
+    // 启动遮罩 —— 用 Air2 自己的 A2LaunchSplashView。
     //
-    // ★ [LAUNCH-PROGRESS] 变更(2026-10)：用户要求「不然走到哪都不知道」，
-    //   在标题下方补回【确定型进度条 + 当前阶段文案 + 步骤骨架】(8 个阶段小圆点)。
-    //   数据源是 Natives/AmeLaunchProgress.h 的阶段上报 API，由 JavaLauncher.m /
-    //   本文件的启动节点喂入；不再用「按时间轮转」的假进度(FCL 式简洁保留在
-    //   转圈+标题，其余为本次新增的确定性信息)。
-    //   注意：容器 userInteractionEnabled 仍为 NO，触摸穿透行为不变。
+    // 之前这里是 283 行手写实现，依赖 AmeLaunchProgress*（Air1 的阶段上报）
+    // 与 BackgroundManager（Air1 的壁纸系统）—— 两者在 Air2 都已不存在。
+    // Air2 的启动流程由 A2GameLaunchCoordinator 驱动，遮罩用 A2LaunchSplashView。
     self.launchStartTime = [NSDate timeIntervalSinceReferenceDate];
     self.launchOverlayDismissed = NO;
 
-    // ★ [LAUNCH-PROGRESS] 每次启动都把阶段重置到「准备环境」，避免上一局残留
-    //   （Completed）导致进度条一上来就是满格。
-    AmeLaunchProgressReset();
+    A2LaunchSplashView *splash = [[A2LaunchSplashView alloc] initWithFrame:self.view.bounds];
+    splash.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    // 不拦截触摸：启动期间仍可操作悬浮球
+    splash.userInteractionEnabled = NO;
+    splash.versionName = self.currentVersionName ?: @"Minecraft";
+    [splash setStage:A2LaunchStagePreparing message:@"正在准备启动…"];
 
-    // ========================================================================
-    // 全屏遮罩容器
-    // ========================================================================
-    // userInteractionEnabled = NO：让触摸穿透到下层的 gameMenuOverlay，
-    // 用户可在启动期间拖动悬浮球、查看 FPS。
-    // 取消按钮单独加到 self.view 上（不受此设置影响）。
-    self.launchOverlayView = [[UIView alloc] initWithFrame:self.view.bounds];
-    self.launchOverlayView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    self.launchOverlayView.userInteractionEnabled = NO;
-    [self.view addSubview:self.launchOverlayView];
+    self.launchOverlayView = splash;
+    [self.view addSubview:splash];
 
-    // ========================================================================
-    // 背景层：显示自定义启动器背景
-    // ========================================================================
-    // 有自定义壁纸时：透明遮罩 + 轻微暗化蒙层（增强文字可读性）
-    // 无自定义壁纸时：使用深色渐变作为回退
-    if ([[BackgroundManager sharedManager] hasBackground]) {
-        // 有自定义背景：透明遮罩 + 轻微暗化蒙层
-        self.launchOverlayView.backgroundColor = [UIColor clearColor];
-        UIView *dimOverlay = [[UIView alloc] initWithFrame:self.launchOverlayView.bounds];
-        dimOverlay.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        dimOverlay.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.3];
-        dimOverlay.userInteractionEnabled = NO;
-        [self.launchOverlayView addSubview:dimOverlay];
-    } else {
-        // 无自定义背景：使用深色渐变
-        CAGradientLayer *gradient = [CAGradientLayer layer];
-        gradient.frame = self.launchOverlayView.bounds;
-        gradient.colors = @[
-            (__bridge id)[UIColor colorWithRed:0.08 green:0.09 blue:0.13 alpha:1.0].CGColor,
-            (__bridge id)[UIColor colorWithRed:0.03 green:0.03 blue:0.05 alpha:1.0].CGColor,
-        ];
-        gradient.locations = @[@0.0, @1.0];
-        gradient.startPoint = CGPointMake(0.5, 0.0);
-        gradient.endPoint = CGPointMake(0.5, 1.0);
-        [self.launchOverlayView.layer insertSublayer:gradient atIndex:0];
-        self.launchGradientLayer = gradient;
-    }
-
-    // ========================================================================
-    // 中央内容容器（居中显示转圈圈 + 标题）
-    // ========================================================================
-    UIView *centerContainer = [[UIView alloc] init];
-    centerContainer.translatesAutoresizingMaskIntoConstraints = NO;
-    centerContainer.userInteractionEnabled = NO;
-    [self.launchOverlayView addSubview:centerContainer];
-
-    // 大号旋转指示器（FCL 风格：屏幕正中央的大转圈）
-    self.launchSpinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleLarge];
-    self.launchSpinner.translatesAutoresizingMaskIntoConstraints = NO;
-    self.launchSpinner.color = [UIColor whiteColor];
-    [self.launchSpinner startAnimating];
-    [centerContainer addSubview:self.launchSpinner];
-
-    // 标题文字（转圈下方，简短提示）
-    self.launchTitleLabel = [[UILabel alloc] init];
-    self.launchTitleLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    self.launchTitleLabel.text = localize(@"launch.title", @"正在启动 Minecraft");
-    self.launchTitleLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightMedium];
-    self.launchTitleLabel.textColor = [UIColor colorWithWhite:0.9 alpha:1.0];
-    self.launchTitleLabel.textAlignment = NSTextAlignmentCenter;
-    [centerContainer addSubview:self.launchTitleLabel];
-
-    // ========================================================================
-    // ★ [LAUNCH-PROGRESS] 确定型进度条 + 当前阶段文字 + 步骤骨架
-    // ========================================================================
-    // 目的：用户明确要求「不然走到哪都不知道」—— 用确定型进度条(非转圈)+
-    //   当前阶段文案 + 每阶段一个小圆点的步骤骨架，一眼看出进度与卡点。
-    // 全部是展示型控件；遮罩 userInteractionEnabled = NO 不变，触摸照旧穿透。
-    self.launchStageLabel = [[UILabel alloc] init];
-    self.launchStageLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    self.launchStageLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightRegular];
-    self.launchStageLabel.textColor = [UIColor colorWithWhite:0.80 alpha:1.0];
-    self.launchStageLabel.textAlignment = NSTextAlignmentCenter;
-    self.launchStageLabel.numberOfLines = 2;
-    self.launchStageLabel.text = localize(AmeLaunchStageLocalizationKey(AmeLaunchProgressCurrentStage()), nil);
-    [centerContainer addSubview:self.launchStageLabel];
-
-    self.launchProgressView = [[UIProgressView alloc] initWithProgressViewStyle:UIProgressViewStyleDefault];
-    self.launchProgressView.translatesAutoresizingMaskIntoConstraints = NO;
-    self.launchProgressView.progressTintColor = [UIColor systemBlueColor];
-    self.launchProgressView.trackTintColor = [UIColor colorWithWhite:1.0 alpha:0.18];
-    self.launchProgressView.layer.cornerRadius = 3.0;
-    self.launchProgressView.clipsToBounds = YES;
-    [self.launchProgressView setProgress:(float)AmeLaunchProgressCurrentFraction() animated:NO];
-    [centerContainer addSubview:self.launchProgressView];
-
-    // 步骤骨架：每个阶段一行(小圆点 + 阶段名)，已过/进行中/未过 三态。
-    self.launchStepDots = [NSMutableArray array];
-    self.launchStepLabels = [NSMutableArray array];
-    UIStackView *stepsStack = [[UIStackView alloc] init];
-    stepsStack.translatesAutoresizingMaskIntoConstraints = NO;
-    stepsStack.axis = UILayoutConstraintAxisVertical;
-    stepsStack.alignment = UIStackViewAlignmentLeading;
-    stepsStack.spacing = 6.0;
-    [centerContainer addSubview:stepsStack];
-
-    NSInteger stageCount = AmeLaunchProgressStageCount();
-    for (NSInteger i = 0; i < stageCount; i++) {
-        UIView *dot = [[UIView alloc] init];
-        dot.translatesAutoresizingMaskIntoConstraints = NO;
-        dot.layer.cornerRadius = 4.0;
-        dot.userInteractionEnabled = NO;
-        [dot.widthAnchor constraintEqualToConstant:8.0].active = YES;
-        [dot.heightAnchor constraintEqualToConstant:8.0].active = YES;
-
-        UILabel *rowLabel = [[UILabel alloc] init];
-        rowLabel.translatesAutoresizingMaskIntoConstraints = NO;
-        rowLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightRegular];
-        rowLabel.text = localize(AmeLaunchStageLocalizationKey((AmeLaunchStage)i), nil);
-
-        UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[dot, rowLabel]];
-        row.axis = UILayoutConstraintAxisHorizontal;
-        row.alignment = UIStackViewAlignmentCenter;
-        row.spacing = 8.0;
-
-        [stepsStack addArrangedSubview:row];
-        [self.launchStepDots addObject:dot];
-        [self.launchStepLabels addObject:rowLabel];
-    }
-
-    // 订阅阶段广播(AmeLaunchProgress.m 统一在主队列投递)。
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(onLaunchProgressChanged)
-                                                 name:AmeLaunchProgressChangedNotification
-                                               object:nil];
-    [self updateLaunchProgressUI];
-
-    // ========================================================================
-    // 取消启动按钮（底部，独立添加到 self.view 不受遮罩穿透影响）
-    // ========================================================================
-    self.launchCancelButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    self.launchCancelButton.translatesAutoresizingMaskIntoConstraints = NO;
-    [self.launchCancelButton setTitle:localize(@"launch.cancel", @"取消启动") forState:UIControlStateNormal];
-    [self.launchCancelButton setTitleColor:[UIColor colorWithWhite:0.7 alpha:1.0] forState:UIControlStateNormal];
-    self.launchCancelButton.titleLabel.font = [UIFont systemFontOfSize:14];
-    self.launchCancelButton.backgroundColor = [[UIColor whiteColor] colorWithAlphaComponent:0.1];
-    self.launchCancelButton.layer.cornerRadius = 8;
-    self.launchCancelButton.layer.cornerCurve = kCACornerCurveContinuous;
-    [self.launchCancelButton addTarget:self action:@selector(cancelLaunch) forControlEvents:UIControlEventTouchUpInside];
-    [self.view addSubview:self.launchCancelButton];
-
-    // ========================================================================
-    // 布局约束
-    // ========================================================================
-    [NSLayoutConstraint activateConstraints:@[
-        // 中央容器：水平居中，垂直居中
-        [centerContainer.centerXAnchor constraintEqualToAnchor:self.launchOverlayView.centerXAnchor],
-        [centerContainer.centerYAnchor constraintEqualToAnchor:self.launchOverlayView.centerYAnchor],
-        // ★ [LAUNCH-PROGRESS] 固定卡片宽度：给进度条/步骤骨架一个稳定的版心(容器尺寸由它撑出)
-        [centerContainer.widthAnchor constraintEqualToConstant:280],
-
-        // 旋转指示器：容器顶部居中
-        [self.launchSpinner.topAnchor constraintEqualToAnchor:centerContainer.topAnchor],
-        [self.launchSpinner.centerXAnchor constraintEqualToAnchor:centerContainer.centerXAnchor],
-
-        // 标题：转圈下方
-        [self.launchTitleLabel.topAnchor constraintEqualToAnchor:self.launchSpinner.bottomAnchor constant:16],
-        [self.launchTitleLabel.leadingAnchor constraintEqualToAnchor:centerContainer.leadingAnchor],
-        [self.launchTitleLabel.trailingAnchor constraintEqualToAnchor:centerContainer.trailingAnchor],
-
-        // ★ [LAUNCH-PROGRESS] 阶段文字 → 进度条 → 步骤骨架(自上而下串起来，撑出容器底部)
-        [self.launchStageLabel.topAnchor constraintEqualToAnchor:self.launchTitleLabel.bottomAnchor constant:6],
-        [self.launchStageLabel.leadingAnchor constraintEqualToAnchor:centerContainer.leadingAnchor],
-        [self.launchStageLabel.trailingAnchor constraintEqualToAnchor:centerContainer.trailingAnchor],
-
-        [self.launchProgressView.topAnchor constraintEqualToAnchor:self.launchStageLabel.bottomAnchor constant:14],
-        [self.launchProgressView.leadingAnchor constraintEqualToAnchor:centerContainer.leadingAnchor],
-        [self.launchProgressView.trailingAnchor constraintEqualToAnchor:centerContainer.trailingAnchor],
-        [self.launchProgressView.heightAnchor constraintEqualToConstant:6],
-
-        [stepsStack.topAnchor constraintEqualToAnchor:self.launchProgressView.bottomAnchor constant:16],
-        [stepsStack.leadingAnchor constraintEqualToAnchor:centerContainer.leadingAnchor],
-        [stepsStack.trailingAnchor constraintEqualToAnchor:centerContainer.trailingAnchor],
-        [stepsStack.bottomAnchor constraintEqualToAnchor:centerContainer.bottomAnchor],
-
-        // 取消按钮：底部安全区域上方
-        [self.launchCancelButton.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor constant:-24],
-        [self.launchCancelButton.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
-        [self.launchCancelButton.widthAnchor constraintEqualToConstant:120],
-        [self.launchCancelButton.heightAnchor constraintEqualToConstant:36],
-    ]];
-
-    // 注册首帧渲染通知（egl_bridge.m 中 pojavSwapBuffers 首次调用时发送）
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(onFirstFrameRendered)
-                                                 name:@"PojavFirstFrameRendered"
-                                               object:nil];
-
-    // ★ [SDL-FIRSTFRAME] 超时判定改为「证据化」，并撤掉旧的错误归因。
-    //
-    // 前身（必须修掉的原因）：到点无条件打出「no PojavFirstFrameRendered received
-    // (SDL owns the GL context; egl_bridge swap is not used)」——**把一条未经证实的
-    // 推测当成本次启动失败的结论**。真机反例（iPad Pro 11 / iPadOS 16.3.1 /
-    // TrollStore / MobileGlues / MC 26.2）：分析者据此把现场判成「SDL 钩子没装上
-    // ⇒ sdlWin=0x0 ⇒ 没首帧」。事实是 MC 26.2 走 GLFW（LWJGL 3.4.1 库表有
-    // lwjgl-glfw、无 lwjgl-sdl），**从不查询 SDL\* 名字** ⇒ 零 [SDLHook] 与
-    // sdlWin=0x0 都是设计内行为，与「有没有首帧」无关。
-    //
-    // 现在：到点先取三组真实证据再分流 ——
-    //   ① 呈现计数器（gl_bridge 的 eglSwapBuffers 成功/失败，两条 GL 桥呈现路径都计数）
-    //   ② dlsym 钩子活性（hooked_dlsym 调用次数 / 其中 SDL* 名字次数）
-    //   ③ SDL3 兼容层是否被咨询/接管
-    // 依据 ① 分流：swapOK>0 ⇒ 画面已在出帧，缺的只是通知 ⇒ 按成功撤遮罩（不写 launch
-    // error）；swapOK==0 ⇒ 确实没走到交换，据实写明「未呈现」，不再赖到 SDL 头上。
-    // 注意 Vulkan/Metal 直渲场次本就不走 gl 桥计数器（swapOK 恒 0），故判据行里
-    // 明确标注计数器口径，避免又一次误读。
+    // 订阅 A2GameLaunchCoordinator 的进度
     __weak typeof(self) weakSelf = self;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(45 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        __strong typeof(weakSelf) strongSelf = weakSelf;
-        if (!strongSelf || strongSelf.launchOverlayDismissed) return;
+    self.launchProgressObserver =
+        [NSNotificationCenter.defaultCenter addObserverForName:A2LaunchProgressDidChangeNotification
+                                                        object:nil
+                                                         queue:NSOperationQueue.mainQueue
+                                                    usingBlock:^(NSNotification *note) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self || self.launchOverlayDismissed) return;
 
-        unsigned long ameSwapOK = 0, ameSwapFail = 0;
-        ame_egl_swap_stats(&ameSwapOK, &ameSwapFail);
-        unsigned long ameDlsymCalls = 0, ameSdlNames = 0;
-        ame_sdlhook_probe(&ameDlsymCalls, &ameSdlNames);
-        unsigned long ameSdlConsulted = 0, ameSdlTakenOver = 0;
-        amethyst_sdl3_hook_stats(&ameSdlConsulted, &ameSdlTakenOver);
+        A2LaunchProgress *p = note.userInfo[@"progress"];
+        if (![p isKindOfClass:A2LaunchProgress.class]) return;
 
-        // 窗口链判定：SDL 名字只有 SDL3 链（MC 26.3+）才会查。确认走 GLFW 时，
-        // 现场里的零 [SDLHook]/sdlWin=0x0 一律不得再当作故障证据。
-        const char *ameWindowPath =
-            (ameSdlConsulted > 0)          ? "SDL3(MC 26.3+, lwjgl-sdl)"
-          : (ameDlsymCalls > 0)            ? "GLFW/非SDL(MC <=26.2 走 GLFW；或 Metal 直渲)"
-          :                                  "UNKNOWN(dlsym 钩子从未被调用——先看 self-test 行)";
-        const char *ameHookState =
-            (ameDlsymCalls == 0)           ? "NOT-CONSULTED(钩子从未被调用，见启动期 self-test)"
-          : (ameSdlConsulted > 0 && ameSdlTakenOver == 0) ? "CONSULTED-BUT-NOT-TAKEN-OVER(真·未生效)"
-          : (ameSdlConsulted > 0)          ? "SDL3-HOOK-ACTIVE"
-          :                                  "LIVE-但本场未查 SDL(正常)";
-        const char *ameVerdict =
-            (ameSwapOK > 0)                ? "FRAMES PRESENTED(swapOK>0)——45s 缺的是首帧通知，不是渲染"
-          : (ameSwapFail > 0)              ? "PRESENT FAILING(swapFail>0)——交换在跑但一直失败"
-          :                                  "NEVER PRESENTED(swapOK=0 swapFail=0)——启动未达交换阶段";
-
-        NSLog(@"[SurfaceViewController] Launch overlay timeout after 45s [SDL-FIRSTFRAME] evidence: "
-              @"%s | 窗口链=%s | dlsym钩子=%s | "
-              @"present swapOK=%lu swapFail=%lu（gl 桥计数口径；Vulkan/Metal 直渲恒 0）| "
-              @"hooked_dlsym 调用=%lu（其中 SDL* 名字=%lu）| SDL3 兼容层 consulted=%lu takenOver=%lu",
-              ameVerdict, ameWindowPath, ameHookState,
-              ameSwapOK, ameSwapFail, ameDlsymCalls, ameSdlNames, ameSdlConsulted, ameSdlTakenOver);
-
-        if (ameSwapOK > 0) {
-            // 画面确实在出帧（eglSwapBuffers 成功过）——这是通知缺口，按成功路径撤遮罩。
-            NSLog(@"[SDL-FIRSTFRAME] dismissing launch overlay: frames confirmed by swap counter "
-                  @"(notification gap, NOT a launch error)");
-            [strongSelf onFirstFrameRendered];
-            return;
+        A2LaunchStage stage = A2LaunchStagePreparing;
+        switch (p.task) {
+            case A2LaunchTaskVerifyFiles: stage = A2LaunchStageRepairing; break;
+            case A2LaunchTaskStartGame:   stage = A2LaunchStageStartingJVM; break;
+            default:                      stage = A2LaunchStagePreparing; break;
         }
-        // ★ [SDL-FIRSTFRAME] 明确写成「超时且未呈现」，不再复用「launch error」文案，
-        //   也不再把原因归到 'SDL owns the GL context / egl_bridge swap is not used'
-        //   （该说法未被证实，且已被 26.2=GLFW 装机日志证伪）。
-        [strongSelf ameDismissLaunchOverlayWithReason:
-            @"Launch overlay dismissed after 45s timeout: no frame presented (see [SDL-FIRSTFRAME] "
-            @"evidence line above; cause NOT attributed to 'SDL owns the GL context')"];
-    });
+
+        A2LaunchSplashView *sv = (A2LaunchSplashView *)self.launchOverlayView;
+        if ([sv isKindOfClass:A2LaunchSplashView.class]) {
+            [sv setStage:stage message:p.message];
+            [sv appendLog:[NSString stringWithFormat:@"[%@] %@", p.title, p.message]];
+        }
+    }];
 }
 
-/// 取消启动：用户点击"取消启动"按钮时调用。
-/// 终止 JVM 启动流程，移除遮罩层，返回启动器主界面。
 - (void)cancelLaunch {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:localize(@"launch.cancel_confirm_title", @"确认取消启动？")
                                                                    message:localize(@"launch.cancel_confirm_message", @"取消启动将终止当前的游戏加载流程并返回启动器。")
@@ -2060,43 +1832,9 @@ static BOOL ame87_mcVersionRequiresTextureBuffer(NSString *mcVersionId) {
 
 // ★ [LAUNCH-PROGRESS] 依据上报的当前阶段，刷新进度条 / 阶段文字 / 步骤骨架三态。
 - (void)updateLaunchProgressUI {
-    if (self.launchOverlayDismissed) return;
-    if (!self.launchProgressView || !self.launchStageLabel) return;
-
-    AmeLaunchStage stage = AmeLaunchProgressCurrentStage();
-    double fraction = AmeLaunchProgressCurrentFraction();
-    NSString *key = AmeLaunchProgressCurrentKey();
-
-    NSString *stageText = (key.length > 0)
-        ? localize(key, nil)
-        : localize(AmeLaunchStageLocalizationKey(stage), nil);
-    self.launchStageLabel.text = stageText;
-
-    [self.launchProgressView setProgress:(float)fraction animated:YES];
-
-    for (NSUInteger i = 0; i < self.launchStepDots.count; i++) {
-        UIView *dot = self.launchStepDots[i];
-        UILabel *rowLabel = self.launchStepLabels[i];
-        BOOL done = (NSInteger)i < (NSInteger)stage;
-        BOOL current = (NSInteger)i == (NSInteger)stage;
-        if (done) {
-            dot.backgroundColor = [UIColor systemGreenColor];
-            dot.layer.borderWidth = 0.0;
-            rowLabel.textColor = [UIColor colorWithWhite:0.85 alpha:1.0];
-            rowLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightRegular];
-        } else if (current) {
-            dot.backgroundColor = [UIColor systemBlueColor];
-            dot.layer.borderWidth = 0.0;
-            rowLabel.textColor = [UIColor whiteColor];
-            rowLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightSemibold];
-        } else {
-            dot.backgroundColor = [UIColor clearColor];
-            dot.layer.borderWidth = 1.0;
-            dot.layer.borderColor = [UIColor colorWithWhite:0.45 alpha:1.0].CGColor;
-            rowLabel.textColor = [UIColor colorWithWhite:0.45 alpha:1.0];
-            rowLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightRegular];
-        }
-    }
+    // 进度已由 A2LaunchSplashView 自己维护（它订阅了
+    // A2LaunchProgressDidChangeNotification）。这里保留空实现，
+    // 因为 onFirstFrameRendered 等老调用点仍在调它。
 }
 
 /// 首帧渲染通知回调：淡出并移除启动遮罩层
@@ -2166,51 +1904,87 @@ static BOOL ame87_mcVersionRequiresTextureBuffer(NSString *mcVersionId) {
 }
 
 - (void)loadCustomControls {
+    // 控件装配 —— 用 Air2 的 A2ControlRenderer。
+    //
+    // 之前这里是 Air1 的玩法：
+    //   [self.ctrlView loadControlFile:controlFile]   // 读 Air1 的布局文件
+    //   button.properties[@"keycodes"][i]            // 从字典里取键码
+    //   button.canBeHidden                            // Air1 专有属性
+    // 这些都依赖 Air1 的 ControlButton 接口。
+    //
+    // Air2 的做法：A2ControlLayout 解析布局（兼容 FCL/ZL2/Air1 三种格式），
+    // A2ControlRenderer 负责渲染与触摸 → 输入意图。
+    //
+    // 布局来源优先级：
+    //   1. 用户设置的 defaultTouchCtrl（自定义布局路径）
+    //   2. Air2 内置的默认布局
     self.edgeGesture.enabled = YES;
     [self.swipeableButtons removeAllObjects];
+
+    A2ControlLayout *layout = nil;
     NSString *controlFile = [PLProfiles resolveKeyForCurrentProfile:@"defaultTouchCtrl"];
-    [self.ctrlView loadControlFile:controlFile];
-
-    A2ControlButtonView *menuButton;
-    for (A2ControlButtonView *button in self.ctrlView.subviews) {
-        BOOL isSwipeable = [button.properties[@"isSwipeable"] boolValue];
-
-        button.canBeHidden = YES;
-        BOOL isMenuButton = NO;
-        for (int i = 0; i < 4; i++) {
-            int keycodeInt = [button.properties[@"keycodes"][i] intValue];
-            button.canBeHidden &= keycodeInt != SPECIALBTN_TOGGLECTRL && keycodeInt != SPECIALBTN_VIRTUALMOUSE;
-            if (keycodeInt == SPECIALBTN_MENU) {
-                menuButton = button;
-            }
-        }
-
-        [button addTarget:self action:@selector(executebtn_down:) forControlEvents:UIControlEventTouchDown];
-        [button addTarget:self action:@selector(executebtn_up_inside:) forControlEvents:UIControlEventTouchUpInside];
-        [button addTarget:self action:@selector(executebtn_up_outside:) forControlEvents:UIControlEventTouchUpOutside];
-
-        if (isSwipeable) {
-            UIPanGestureRecognizer *panRecognizerButton = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(executebtn_swipe:)];
-            panRecognizerButton.delegate = self;
-            [button addGestureRecognizer:panRecognizerButton];
-            [self.swipeableButtons addObject:button];
+    if (controlFile.length > 0) {
+        NSError *err = nil;
+        layout = [A2ControlLayout layoutFromFile:controlFile error:&err];
+        if (!layout) {
+            NSLog(@"[SurfaceViewController] 布局加载失败：%@，回退到默认布局",
+                  err.localizedDescription ?: @"");
         }
     }
+    if (!layout) layout = [A2DefaultControls makeLayout];
+
+    // 重建渲染器（换布局时不能复用旧视图）
+    CGRect controlFrame = getSafeArea(self.view.frame);
+    [self.ctrlView removeFromSuperview];
+    self.ctrlView = [[A2ControlRenderer alloc] initWithLayout:layout];
+    self.ctrlView.frame = controlFrame;
+    self.ctrlView.inputDelegate = self;
+    [self.view insertSubview:self.ctrlView aboveSubview:self.surfaceView];
 
     [self updateControlHiddenState:self.toggleHidden];
+}
 
-    if (menuButton) {
-        NSMutableArray *items = [NSMutableArray new];
-        for (int i = 0; i < self.menuArray.count; i++) {
-            UIAction *item = [UIAction actionWithTitle:localize(self.menuArray[i], nil) image:nil identifier:nil
-                handler:^(id action) {[self didSelectMenuItem:i];}];
-            [items addObject:item];
-        }
-        menuButton.menu = [UIMenu menuWithTitle:@"" image:nil identifier:nil
-            options:UIMenuOptionsDisplayInline children:items];
-        menuButton.showsMenuAsPrimaryAction = YES;
-        self.edgeGesture.enabled = NO;
-    }
+#pragma mark - A2ControlInputDelegate
+
+// 控件的输入意图 → 启动核心的按键/鼠标事件。
+// 控件层不直接调 JNI，由这里统一转发（分层：Controls 不依赖 Bridge）。
+
+- (void)controlPressKey:(NSString *)keyCode {
+    NSInteger code = keyCode.integerValue;
+    if (code <= 0) return;
+    // action 1 = GLFW_PRESS，0 = GLFW_RELEASE（见 glfw_keycodes.h）
+    CallbackBridge_nativeSendKey((int)code, 0, 1, 0);
+}
+
+- (void)controlReleaseKey:(NSString *)keyCode {
+    NSInteger code = keyCode.integerValue;
+    if (code <= 0) return;
+    CallbackBridge_nativeSendKey((int)code, 0, 0, 0);
+}
+
+- (void)controlMoveMouse:(CGPoint)delta {
+    // 启动核心的接口是【绝对坐标】（CallbackBridge_nativeSendCursorPos），
+    // 不是增量。所以这里维护一个虚拟光标位置，累加后发送。
+    //
+    // 为什么不用增量：MC 的鼠标事件模型就是绝对坐标（GLFW 语义），
+    // 内部再做增量计算。传增量会被当成"瞬移到某个坐标"。
+    static CGPoint virtualCursor = {0, 0};
+    virtualCursor.x += delta.x;
+    virtualCursor.y += delta.y;
+
+    // ACTION_MOVE 定义在 utils.h（值 2）。
+    // 不要写死 0 —— 那是 ACTION_DOWN，语义完全不同。
+    CallbackBridge_nativeSendCursorPos(ACTION_MOVE, virtualCursor.x, virtualCursor.y);
+}
+
+- (void)controlToggleGui {
+    // ESC 切换 GUI —— 与 Air1 的 SPECIALBTN_MENU 行为一致
+    CallbackBridge_nativeSendKey(256, 0, 1, 0);
+    CallbackBridge_nativeSendKey(256, 0, 0, 0);
+}
+
+- (void)controlToggleKeyboard {
+    [self.inputTextField becomeFirstResponder];
 }
 
 - (void)viewWillTransitionToSize:(CGSize)size withTransitionCoordinator:(id<UIViewControllerTransitionCoordinator>)coordinator
