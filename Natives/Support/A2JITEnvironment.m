@@ -128,6 +128,8 @@ static void *a2_jit_collect_pages(size_t pageSize, size_t pageCount) {
 //     · 导出且返回 true  ⇒ libjvm 走 brk #0x69 让调试器分配可执行区（老 Air 的路径）
 //     · 没导出/返回 false ⇒ libjvm 自己 mmap(PROT_EXEC)  ⇒ iOS 26+ 执行即 SIGBUS（我们踩的坑）
 //   老 Air 就是这么导出的，所以它能拿到调试器给的 64MB。
+//   ★必须真正导出到符号表★：加 used + default visibility，避免被死代码剥离后 dlsym 找不到。
+__attribute__((used, visibility("default")))
 bool DeviceHasTXM(void) {
     return true;
 }
