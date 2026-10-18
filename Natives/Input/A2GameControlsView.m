@@ -174,17 +174,6 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     BOOL _editing;
     NSMutableDictionary<NSString *, NSValue *> *_restFrames;  // 编辑前位置（取消用）
 
-    UIButton *_attackButton;
-    UIButton *_useButton;
-    UIButton *_inventoryButton;
-    UIButton *_f3Button;
-    UIButton *_keyboardButton;
-    UIButton *_editButton;
-    NSMutableArray<UIButton *> *_hotbar;
-    NSMutableDictionary<NSString *, UIView *> *_movable;
-    UITextField *_kbField;
-    BOOL _kbVisible;
-    BOOL _editing;
 
     BOOL _pressed[4];           // W A S D
     BOOL _sneaking;
