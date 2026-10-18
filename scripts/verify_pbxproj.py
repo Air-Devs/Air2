@@ -125,11 +125,25 @@ def main():
         print("✓ 无孤立对象")
 
     # ---------- 3. 源文件覆盖 ----------
+    # 扫描范围必须与 gen_xcodeproj.py 的 scan_sources() 一致，
+    # 否则会出现「生成器纳入了但校验认为缺」的假警报。
+    # 排除规则也同步：external/ 是第三方（submodule / CMake），
+    # shader_glslang、resources 不是编译单元。
     on_disk = []
-    for dirpath, _, files in os.walk(os.path.join(ROOT, "Air2")):
-        for f in files:
-            if f.endswith((".m", ".mm")):
-                on_disk.append(os.path.relpath(os.path.join(dirpath, f), ROOT))
+    SKIP = ("external/", "shader_glslang/", "resources/", "build/")
+    for base_name in ("Air2", "Natives"):
+        base = os.path.join(ROOT, base_name)
+        if not os.path.isdir(base):
+            continue
+        for dirpath, dirnames, files in os.walk(base):
+            rel_dir = os.path.relpath(dirpath, ROOT)
+            if any(rel_dir.startswith(f"{base_name}/{sk}") or f"/{sk}" in rel_dir + "/"
+                   for sk in SKIP):
+                dirnames[:] = []
+                continue
+            for f in files:
+                if f.endswith((".m", ".mm")) or (base_name == "Natives" and f.endswith(".c")):
+                    on_disk.append(os.path.relpath(os.path.join(dirpath, f), ROOT))
     on_disk = sorted(on_disk)
 
     src_seg = section(src, "PBXSourcesBuildPhase")
