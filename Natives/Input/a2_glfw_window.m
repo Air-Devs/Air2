@@ -331,18 +331,32 @@ static A2GlfwObserverHub *gObserverHub = nil;
 //   都没有才调 metallum_ios_find_surface_view()（找 +[SurfaceViewController surface]，
 //   我们类名不同 ⇒ 找不到）。不发布 ⇒ BackendCreationException ⇒ 黑屏。
 //   时机：MC 调 glfwCreateWindow 之后、它创建 MetalBackend 之前（本函数就是那一刻）。
+/// 由 JVM 创建方（A2JVMContext）回填的 JavaVM；窗口层只读。
+/// ★为什么必须回填★ dlsym(RTLD_DEFAULT, "JNI_GetCreatedJavaVMs") 在 libjvm
+///   以局部作用域 dlopen 时取不到 ⇒ 发布 UIView 地址那段会静默 return，
+///   真机表现为「没有 [A2-METAL] 日志 + 黑屏」。
+static void *gA2JavaVM = NULL;
+
+void a2_glfw_window_set_java_vm(void *vm) {
+    gA2JavaVM = vm;
+}
+
 static void a2_publish_ios_view_pointer(void *view, double scale) {
     if (view == NULL) return;
-    // dlsym 取符号：不强制链接 libjvm（它由 JVM 层 dlopen）
-    typedef jint (*a2_get_vms_fn)(JavaVM **, jsize, jsize *);
-    static a2_get_vms_fn getVMs = NULL;
-    if (getVMs == NULL) getVMs = (a2_get_vms_fn) dlsym(RTLD_DEFAULT, "JNI_GetCreatedJavaVMs");
-    if (getVMs == NULL) return;
-    JavaVM *vms[1] = { NULL };
-    jsize count = 0;
-    if (getVMs(vms, 1, &count) != JNI_OK || count < 1 || vms[0] == NULL) return;
+    JavaVM *vm = (JavaVM *) gA2JavaVM;
+    if (vm == NULL) {
+        // 兜底：JVM 创建方还没回填时，试一次全局符号（多数情况下取不到，只作防御）
+        typedef jint (*a2_get_vms_fn)(JavaVM **, jsize, jsize *);
+        a2_get_vms_fn getVMs = (a2_get_vms_fn) dlsym(RTLD_DEFAULT, "JNI_GetCreatedJavaVMs");
+        if (getVMs != NULL) {
+            JavaVM *vms[1] = { NULL };
+            jsize count = 0;
+            if (getVMs(vms, 1, &count) == JNI_OK && count >= 1) vm = vms[0];
+        }
+    }
+    if (vm == NULL) return;
     JNIEnv *env = NULL;
-    if ((*vms[0])->GetEnv(vms[0], (void **) &env, JNI_VERSION_1_8) != JNI_OK || env == NULL) return;
+    if ((*vm)->GetEnv(vm, (void **) &env, JNI_VERSION_1_8) != JNI_OK || env == NULL) return;
     jclass sysCls = (*env)->FindClass(env, "java/lang/System");
     if (sysCls == NULL) return;
     jmethodID setProp = (*env)->GetStaticMethodID(

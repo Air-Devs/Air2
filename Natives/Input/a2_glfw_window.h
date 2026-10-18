@@ -133,6 +133,9 @@ void a2_glfw_window_destroy(long window);
 int   a2_glfw_window_is_focused(long window);
 int   a2_glfw_window_surface(long window, A2GlfwSurface *out);
 
+/// JVM 创建方回填 JavaVM（发布 UIView 地址给 metallum 时要用）。
+void  a2_glfw_window_set_java_vm(void *vm);
+
 #ifdef __cplusplus
 }
 #endif

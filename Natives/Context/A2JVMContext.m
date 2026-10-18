@@ -193,7 +193,14 @@ static A2JVMContext *a2_jvm_fail(A2JVMStage stage, NSString *why,
 
         vm = NULL; env = NULL;
         rc = createVM(&vm, (void **)&env, &args);
-        if (rc == JNI_OK) { usedVer = kVersions[i]; break; }
+        if (rc == JNI_OK) {
+            usedVer = kVersions[i];
+            // ★2026-10-18★ 把 JavaVM 交给窗口层：建窗后需要用它发布 UIView 地址
+            //   （metallum 的 metallum.ios.view.pointer），否则 Metal 没有渲染目标 ⇒ 黑屏。
+            extern void a2_glfw_window_set_java_vm(void *vm);
+            a2_glfw_window_set_java_vm((void *) vm);
+            break;
+        }
         a2_jit_log("[A2JVM] JNI_CreateJavaVM attempt ver=%s -> rc=%d",
                    a2_jvm_jni_version_string(kVersions[i]).UTF8String, rc);
         if (rc != JNI_EVERSION) break;   // 非版本问题，重试无意义
