@@ -72,11 +72,7 @@ static void A2SignalHandler(int sig) {
         int fd2 = open(gA2CrashReportPath, O_WRONLY | O_CREAT | O_TRUNC, 0644);
         if (fd2 >= 0) {
             char head[192];
-            int n2 = snprintf(head, sizeof(head), "崩溃信号: %d
-时间戳: %ld
-
-栈:
-", sig, (long)time(NULL));
+            int n2 = snprintf(head, sizeof(head), "崩溃信号: %d\n时间戳: %ld\n\n栈:\n", sig, (long)time(NULL));
             if (n2 > 0) { ssize_t w = write(fd2, head, (size_t)n2); (void)w; }
             void *stack2[64];
             int frames2 = backtrace(stack2, 64);
