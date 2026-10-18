@@ -127,6 +127,15 @@ def scan_sources():
                     if base_name == "Air2/Player":
                         impl.append(rel)
 
+    # ★第三方 C 源（必须显式列出）★
+    #   Libraries/external 不在上面的遍历范围里，但 main_hook.m 调用了 fishhook 的
+    #   rebind_symbols ⇒ 不把 fishhook.c 编进来就是链接错误：
+    #     "_rebind_symbols", referenced from _installZinkStrideFix in main_hook.o
+    for extra in ("Libraries/external/fishhook/fishhook.c",):
+        p2 = os.path.join(ROOT, extra)
+        if os.path.isfile(p2) and extra not in impl:
+            impl.append(extra)
+
     return sorted(impl), sorted(headers)
 
 
