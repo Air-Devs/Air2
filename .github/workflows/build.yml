@@ -48,6 +48,12 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
+        with:
+          # ★CI 必须拉子模块★ 否则 Libraries/external/{fishhook,AFNetworking,
+          # DBNumberedSlider,ZeroTierFramework} 是空壳目录，编译时报：
+          #   Air2/Player/Context/main_hook.m:26 'external/fishhook/fishhook.h' file not found
+          # （这些路径是 gitlink，actions/checkout 默认不初始化子模块）
+          submodules: recursive
 
       - name: 环境信息
         run: |
