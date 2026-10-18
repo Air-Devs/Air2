@@ -60,6 +60,7 @@ const commands = {
 // ★自研 JIT 宿主区（brk #0x6942）★
 //   App 侧 mmap 一段 RW 内存后发这个 brk，把地址/长度交给调试器整段祝福成可执行；
 //   之后的 0x69（BreakGetJITMapping）直接交付这块，绕开 `_M<size>` 只回 16384 字节的限制。
+const AME_JIT_FORCE_ZERO = true;   // A 方案：true ⇒ 0x69 回 0，逼 VM 自己 mmap RX
 let ameJITBigRegion = 0n;
 let ameJITBigSize   = 0n;
 function ameJITHandleRegisterRegion(brkResponse) {
@@ -321,7 +322,13 @@ function JIT26HandleBrk0x69(brkResponse) {
         }
         x1 = x0;                                               // 官方语义：size 挪到 x1
         x0 = 0;                                                // 官方语义：x0=0 ⇒ 由 host 分配
-        if (ameJITBigRegion != 0n && x1 <= ameJITBigSize) {
+        // ★A 方案开关(2026-10-18)★ AME_JIT_FORCE_ZERO=true ⇒ 对 0x69 一律回 0，
+        //   逼 libjvm 走它自己的备胎：mmap(PROT_READ|PROT_EXEC)。
+        //   目的：一次性判定「本进程到底能不能 mmap 可执行内存」。
+        if (AME_JIT_FORCE_ZERO) {
+            log(`[AIR2-JIT69] FORCE_ZERO: 0x69 回 0（size=0x${x1.toString(16)}）⇒ 让 VM 自己 mmap RX`);
+            ameJITReplyX0(0n);
+        } else if (ameJITBigRegion != 0n && x1 <= ameJITBigSize) {
             // ★优先交付自研宿主区★：它已经整段 prepare 过，尺寸由我们保证
             log(`[AIR2-JIT69] 交付自研宿主区 0x${ameJITBigRegion.toString(16)} 给 size=0x${x1.toString(16)} 的请求`);
             ameJITReplyX0(ameJITBigRegion);
