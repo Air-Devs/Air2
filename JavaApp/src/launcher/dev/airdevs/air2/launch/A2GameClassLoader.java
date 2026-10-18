@@ -36,4 +36,30 @@ public final class A2GameClassLoader extends URLClassLoader {
             }
         }
     }
+
+    /**
+     * {@code -javaagent} 的落地约定：JVM 用系统类加载器把 agent jar 挂上类路径时，
+     * 反射调用本方法（签名固定为 {@code (String)}）。
+     *
+     * <p><b>为什么必须实现</b>：真机日志（2026-10-18）——
+     * <pre>
+     * System class loader does not define the appendToClassPathForInstrumentation method
+     * FATAL ERROR in native method: processing of -javaagent failed,
+     *          appending to system class path failed   ⇒  VM 直接 abort
+     * </pre>
+     * 缺了它，任何 {@code -javaagent}（metallum_agent / patchjna_agent）都会在
+     * {@code JNI_CreateJavaVM} 的 VMInit 阶段把进程打死。
+     *
+     * <p>调用点：{@code libinstrument.dylib} 的 {@code eventHandlerVMInit}（agent premain 之前）。
+     */
+    public void appendToClassPathForInstrumentation(String path) {
+        if (path == null || path.isEmpty()) {
+            return;
+        }
+        try {
+            super.addURL(new java.io.File(path).toURI().toURL());
+        } catch (java.net.MalformedURLException e) {
+            throw new IllegalArgumentException("agent 路径无法转 URL: " + path, e);
+        }
+    }
 }
