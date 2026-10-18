@@ -82,6 +82,16 @@ typedef NS_ENUM(NSInteger, A2ModPackFormat) {
 + (nullable A2ModPackPlan *)parseZipAtPath:(NSString *)zipPath
                                      error:(NSError **)error;
 
+/// 把清单里的加载器标识解析为 A2ModLoaderType（包成 NSNumber 便于可空）。
+/// 识别 "forge-47.2.0" / "fabric-loader-0.16.10" / "quilt-loader-…" /
+/// "neoforge-…" / "legacyfabric-…" / "optifine-…" 这类形式；无法识别返回 nil。
+/// 包成 NSNumber 是为了让「无加载器（原版）」与「不认识的加载器」区分开：
+/// 前者标识为空串，后者标识非空但本方法返回 nil。
++ (nullable NSNumber *)loaderTypeForIdentifier:(nullable NSString *)identifier;
+
+/// 取加载器标识里的版本号（如 "forge-47.2.0" → "47.2.0"）；取不到返回 nil。
++ (nullable NSString *)loaderVersionForIdentifier:(nullable NSString *)identifier;
+
 @end
 
 FOUNDATION_EXPORT NSString *const A2ModPackErrorDomain;

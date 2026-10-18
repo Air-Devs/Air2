@@ -23,6 +23,7 @@
 		A83EEEB1694635A4E2D8A05C /* A2ModLoaderAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */; };
 		06B9E837FB19EE06FB5B8001 /* A2ModLoaderInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */; };
 		B93BF19B9A5817F070177A3E /* A2ModPack.m in Sources */ = {isa = PBXBuildFile; fileRef = 818837C4F3F9187CAE2C7B85 /* A2ModPack.m */; };
+		233C8ED69D6FB00835F7FDEF /* A2ModPackInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = F9D1523FC914A5D7AD7339A1 /* A2ModPackInstaller.m */; };
 		FAE87882A16451C5E2E43DDE /* A2ModrinthAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */; };
 		006F90647E36FA45B54D7B39 /* A2ZipReader.m in Sources */ = {isa = PBXBuildFile; fileRef = C7F15DE318744485CEE00538 /* A2ZipReader.m */; };
 		9F125686BA18A3A79AC3C941 /* A2DownloadEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = 1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */; };
@@ -95,6 +96,7 @@
 		A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderAPI.m"; sourceTree = "<group>"; };
 		452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderInstaller.m"; sourceTree = "<group>"; };
 		818837C4F3F9187CAE2C7B85 /* A2ModPack.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPack.m"; sourceTree = "<group>"; };
+		F9D1523FC914A5D7AD7339A1 /* A2ModPackInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPackInstaller.m"; sourceTree = "<group>"; };
 		B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModrinthAPI.m"; sourceTree = "<group>"; };
 		C7F15DE318744485CEE00538 /* A2ZipReader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ZipReader.m"; sourceTree = "<group>"; };
 		1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadEngine.m"; sourceTree = "<group>"; };
@@ -161,6 +163,7 @@
 		2CDA5A9BDC1B71E004D187AD /* A2ModLoaderAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderAPI.h"; sourceTree = "<group>"; };
 		D845B0CEB9AEB5591C34C008 /* A2ModLoaderInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderInstaller.h"; sourceTree = "<group>"; };
 		82C5CA51B322A62C9A8716A5 /* A2ModPack.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPack.h"; sourceTree = "<group>"; };
+		F9584853622B68DEDF2D6287 /* A2ModPackInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPackInstaller.h"; sourceTree = "<group>"; };
 		BEB699597AD1A56E18E868F6 /* A2ModrinthAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModrinthAPI.h"; sourceTree = "<group>"; };
 		AFAF6FCA941790ECF1D16844 /* A2ZipReader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ZipReader.h"; sourceTree = "<group>"; };
 		DE956596465BDFF25E578448 /* A2DownloadEngine.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadEngine.h"; sourceTree = "<group>"; };
@@ -337,6 +340,7 @@
 				A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */,
 				452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */,
 				818837C4F3F9187CAE2C7B85 /* A2ModPack.m */,
+				F9D1523FC914A5D7AD7339A1 /* A2ModPackInstaller.m */,
 				B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */,
 				C7F15DE318744485CEE00538 /* A2ZipReader.m */,
 				7452A96D7665BFCA516E1759 /* A2ContentSource.h */,
@@ -345,6 +349,7 @@
 				2CDA5A9BDC1B71E004D187AD /* A2ModLoaderAPI.h */,
 				D845B0CEB9AEB5591C34C008 /* A2ModLoaderInstaller.h */,
 				82C5CA51B322A62C9A8716A5 /* A2ModPack.h */,
+				F9584853622B68DEDF2D6287 /* A2ModPackInstaller.h */,
 				BEB699597AD1A56E18E868F6 /* A2ModrinthAPI.h */,
 				AFAF6FCA941790ECF1D16844 /* A2ZipReader.h */,
 			);
@@ -651,6 +656,7 @@
 				A83EEEB1694635A4E2D8A05C /* A2ModLoaderAPI.m in Sources */,
 				06B9E837FB19EE06FB5B8001 /* A2ModLoaderInstaller.m in Sources */,
 				B93BF19B9A5817F070177A3E /* A2ModPack.m in Sources */,
+				233C8ED69D6FB00835F7FDEF /* A2ModPackInstaller.m in Sources */,
 				FAE87882A16451C5E2E43DDE /* A2ModrinthAPI.m in Sources */,
 				006F90647E36FA45B54D7B39 /* A2ZipReader.m in Sources */,
 				9F125686BA18A3A79AC3C941 /* A2DownloadEngine.m in Sources */,

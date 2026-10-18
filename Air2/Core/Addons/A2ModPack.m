@@ -26,6 +26,7 @@
 
 #import "A2ModPack.h"
 #import "A2ZipReader.h"
+#import "A2ModLoaderAPI.h"
 
 NSString *const A2ModPackErrorDomain = @"A2ModPack";
 
@@ -68,6 +69,11 @@ static NSString *const kMRIndexName = @"modrinth.index.json";
 @end
 
 @implementation A2ModPackPlan
+@end
+
+@interface A2ModPackParser ()
+/// 取标识前缀族名，并把 "-loader" 归一掉（"fabric-loader-…" → "fabric"）。
++ (nullable NSString *)familyOfLoaderIdentifier:(nullable NSString *)identifier;
 @end
 
 @implementation A2ModPackParser
@@ -113,6 +119,16 @@ static NSString *const kMRIndexName = @"modrinth.index.json";
     NSDictionary *deps = [json[@"dependencies"] isKindOfClass:NSDictionary.class] ? json[@"dependencies"] : @{};
     id mc = deps[@"minecraft"];
     plan.gameVersion = [mc isKindOfClass:NSString.class] ? mc : nil;
+    // 加载器：Modrinth 把加载器写在独立依赖键里（value 为加载器版本号）。
+    // 归一成 "<族名>-<版本>" 形式，与 CurseForge 的 modLoaders.id 对齐，
+    // 这样执行层只需要解析同一种标识。
+    for (NSString *key in @[@"fabric-loader", @"quilt-loader", @"forge", @"neoforge"]) {
+        id v = deps[key];
+        if ([v isKindOfClass:NSString.class] && [v length] > 0) {
+            plan.loaderID = [NSString stringWithFormat:@"%@-%@", key, v];
+            break;
+        }
+    }
     plan.overridesDir = @"overrides";
 
     NSMutableArray<A2ModPackFile *> *files = [NSMutableArray array];
@@ -220,6 +236,44 @@ static NSString *const kMRIndexName = @"modrinth.index.json";
 + (NSError *)err:(A2ModPackError)code message:(NSString *)message {
     return [NSError errorWithDomain:A2ModPackErrorDomain code:code
                            userInfo:@{NSLocalizedDescriptionKey: message}];
+}
+
+#pragma mark - 加载器标识解析
+
++ (nullable NSString *)familyOfLoaderIdentifier:(nullable NSString *)identifier {
+    if (identifier.length == 0) return nil;
+    NSString *lower = identifier.lowercaseString;
+    // 已知族名。legacyfabric 必须排在 fabric 前面，否则会被 fabric 抢先匹配。
+    for (NSString *fam in @[@"legacyfabric", @"neoforge", @"fabric", @"quilt", @"forge", @"optifine"]) {
+        if (![lower hasPrefix:fam]) continue;
+        if (lower.length == fam.length) return fam;              // 只有族名，无版本
+        NSString *sep = [lower substringWithRange:NSMakeRange(fam.length, 1)];
+        if ([sep isEqualToString:@"-"]) return fam;              // "<族名>-<版本>"
+    }
+    return nil;
+}
+
++ (nullable NSNumber *)loaderTypeForIdentifier:(nullable NSString *)identifier {
+    NSString *family = [self familyOfLoaderIdentifier:identifier];
+    if (family == nil) return nil;
+    if ([family isEqualToString:@"fabric"])       return @(A2ModLoaderTypeFabric);
+    if ([family isEqualToString:@"quilt"])        return @(A2ModLoaderTypeQuilt);
+    if ([family isEqualToString:@"legacyfabric"]) return @(A2ModLoaderTypeLegacyFabric);
+    if ([family isEqualToString:@"forge"])        return @(A2ModLoaderTypeForge);
+    if ([family isEqualToString:@"neoforge"])     return @(A2ModLoaderTypeNeoForge);
+    if ([family isEqualToString:@"optifine"])     return @(A2ModLoaderTypeOptiFine);
+    return nil;
+}
+
++ (nullable NSString *)loaderVersionForIdentifier:(nullable NSString *)identifier {
+    NSString *family = [self familyOfLoaderIdentifier:identifier];
+    if (family == nil) return nil;
+    // 先去掉 "<族名>" 前缀，再顺带去掉可能残留的 "loader-"
+    //（Modrinth 的 "fabric-loader-0.16.10" 去前缀后是 "loader-0.16.10"）。
+    NSString *rest = [identifier substringFromIndex:family.length];
+    if ([rest hasPrefix:@"-"]) rest = [rest substringFromIndex:1];
+    if ([rest.lowercaseString hasPrefix:@"loader-"]) rest = [rest substringFromIndex:7];
+    return rest.length > 0 ? rest : nil;
 }
 
 @end
