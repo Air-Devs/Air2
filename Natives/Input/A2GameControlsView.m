@@ -5,6 +5,7 @@
 
 #import "A2GameControlsView.h"
 #import "a2_log.h"
+#import "A2ControlLayoutIO.h"
 
 // GLFW 键码（与 Java 侧 GLFW.java 常量一致）
 static const int kKeyW = 87, kKeyA = 65, kKeyS = 83, kKeyD = 68;
@@ -643,6 +644,12 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     [sheet addAction:[UIAlertAction actionWithTitle:@"切换方案" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
         [weakSelf a2_presentLayoutPicker];
     }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"导入布局(剪贴板)" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [weakSelf a2_importLayoutFromClipboard];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"导出布局(复制到剪贴板)" style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        [weakSelf a2_exportLayoutToClipboard];
+    }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"恢复默认布局" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
         [weakSelf a2_layoutDefaultButtons];
         [weakSelf a2_layoutHotbar];
@@ -816,6 +823,76 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     if (code == -2) { a2_glfw_input_post_mouse_button(_window, 1, 1); a2_glfw_input_post_mouse_button(_window, 1, 0); return; }
     a2_glfw_input_post_key(_window, code, 1);
     a2_glfw_input_post_key(_window, code, 0);
+}
+
+
+#pragma mark - 多格式导入导出（A2 / FCL / ZL2）
+
+- (NSArray<NSDictionary *> *)a2_currentControlsNormalized {
+    NSMutableArray *out = [NSMutableArray array];
+    CGFloat W = MAX(1.0, CGRectGetWidth(self.bounds));
+    CGFloat H = MAX(1.0, CGRectGetHeight(self.bounds));
+    for (NSString *cid in _movable) {
+        UIView *v = _movable[cid];
+        [out addObject:@{
+            @"id": cid,
+            @"x": @(v.center.x / W), @"y": @(v.center.y / H),
+            @"w": @(v.bounds.size.width / W), @"h": @(v.bounds.size.height / H),
+            @"a": @(v.alpha),
+            @"key": _bindings[cid] ?: @0,
+            @"label": [v isKindOfClass:UIButton.class] ? ([((UIButton *)v) titleForState:UIControlStateNormal] ?: @"") : @"",
+        }];
+    }
+    return out;
+}
+
+- (void)a2_applyControlsNormalized:(NSArray<NSDictionary *> *)controls {
+    CGFloat W = CGRectGetWidth(self.bounds), H = CGRectGetHeight(self.bounds);
+    NSInteger applied = 0;
+    for (NSDictionary *c in controls) {
+        NSString *cid = c[@"id"];
+        UIView *v = _movable[cid];
+        if (v == nil) continue;   // 外部布局里我们不认识的控件：跳过并计数
+        v.bounds = CGRectMake(0, 0, [c[@"w"] doubleValue] * W, [c[@"h"] doubleValue] * H);
+        v.center = CGPointMake([c[@"x"] doubleValue] * W, [c[@"y"] doubleValue] * H);
+        if (c[@"a"] != nil) v.alpha = MAX(0.15, [c[@"a"] doubleValue]);
+        if (c[@"key"] != nil) [self a2_setKey:[c[@"key"] intValue] forControl:cid];
+        applied++;
+    }
+    a2_log_f(@"[A2-CONTROLS] 已导入 %ld/%lu 项（其余为外部格式中我们不认识的控件）",
+             (long) applied, (unsigned long) controls.count);
+}
+
+- (void)a2_importLayoutFromClipboard {
+    NSString *text = UIPasteboard.generalPasteboard.string;
+    if (text.length == 0) {
+        a2_log_f(@"[A2-CONTROLS] 剪贴板为空，无法导入");
+        return;
+    }
+    NSError *err = nil;
+    id json = [NSJSONSerialization JSONObjectWithData:[text dataUsingEncoding:NSUTF8StringEncoding]
+                                              options:0 error:&err];
+    if (json == nil) {
+        a2_log_f(@"[A2-CONTROLS] 导入失败：不是合法 JSON（%@）", err.localizedDescription ?: @"");
+        return;
+    }
+    A2ControlLayoutFormat fmt = [A2ControlLayoutIO detectFormat:json];
+    NSArray<NSDictionary *> *controls = [A2ControlLayoutIO parseJSON:json format:fmt];
+    if (controls.count == 0) {
+        a2_log_f(@"[A2-CONTROLS] 导入失败：没有解析出控件（格式=%ld）", (long) fmt);
+        return;
+    }
+    [self a2_applyControlsNormalized:controls];
+    a2_log_f(@"[A2-CONTROLS] 导入完成：格式=%ld 共 %lu 项", (long) fmt, (unsigned long) controls.count);
+}
+
+- (void)a2_exportLayoutToClipboard {
+    NSArray<NSDictionary *> *controls = [self a2_currentControlsNormalized];
+    id json = [A2ControlLayoutIO exportControls:controls format:A2ControlLayoutFormatA2 name:@"默认"];
+    NSData *data = [NSJSONSerialization dataWithJSONObject:json options:NSJSONWritingPrettyPrinted error:NULL];
+    if (data == nil) return;
+    UIPasteboard.generalPasteboard.string = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    a2_log_f(@"[A2-CONTROLS] 已导出 A2 布局到剪贴板（%lu 项）", (unsigned long) controls.count);
 }
 
 
