@@ -21,6 +21,7 @@
 //
 
 #import "A2VersionManager.h"
+#import "A2GamePathManager.h"
 #import "A2Logger.h"
 #import "A2Settings.h"
 #import "A2Log.h"
@@ -263,9 +264,24 @@ static void A2RenameVersionPayload(NSString *dir, NSString *oldName, NSString *n
     self = [super init];
     if (!self) return nil;
 
-    // 默认游戏目录：收敛到 A2GamePath，不手写拼接。
-    _gameHome = [A2GamePath defaultGameHome];
+    // 游戏目录来自 A2GamePathManager —— 用户可以在「版本管理」里
+    // 切换多个目录（沙盒内默认 / 外部文件夹 / iCloud）。
+    // 之前写死 defaultGameHome，导致无法切换。
+    _gameHome = A2GamePathManager.shared.currentGameHome;
     _versions = @[];
+
+    // 目录切换时重新扫描
+    __weak typeof(self) weakSelf = self;
+    [NSNotificationCenter.defaultCenter addObserverForName:A2GamePathsDidChangeNotification
+                                                    object:nil
+                                                     queue:NSOperationQueue.mainQueue
+                                                usingBlock:^(NSNotification *note) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        NSString *newHome = A2GamePathManager.shared.currentGameHome;
+        if ([self.gameHome isEqualToString:newHome]) return;
+        self.gameHome = newHome;
+    }];
 
     // 构造期只扫描、不发通知：此刻 shared 的 dispatch_once 还没返回，
     // 观察者在回调里再取一次 shared 会重入同一个 dispatch_once 而死锁（SIGTRAP）。

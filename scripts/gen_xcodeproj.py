@@ -73,15 +73,54 @@ def collect_resources():
 
 
 def scan_sources():
-    """扫描 Air2/ 下的所有编译单元与头文件"""
+    """扫描所有需要编译的源码。
+
+    **两个来源**：
+      · Air2/     —— 我们的应用层（UI、Core、App）
+      · Natives/  —— 移植自 Air1 的 pojav 启动核心与原生层
+
+    之前只扫 Air2/，导致 Natives 下 549 个源文件根本没进工程 ——
+    这也是为什么打出来的 IPA 只有 711KB（只有 UI 代码）。
+
+    **排除规则**：
+      · Natives/external/   —— 第三方库，由 CMake 单独编译
+                               或作为 submodule 引入
+      · Natives/shader_glslang/ —— 着色器资源，不是编译单元
+      · Natives/resources/  —— 资源，走 Resources 阶段
+    """
     impl, headers = [], []
-    base = os.path.join(ROOT, "Air2")
-    for dirpath, _, files in os.walk(base):
-        for f in sorted(files):
-            if f.endswith(".m") or f.endswith(".mm"):
-                impl.append(os.path.relpath(os.path.join(dirpath, f), ROOT).replace(os.sep, "/"))
-            elif f.endswith(".h"):
-                headers.append(os.path.relpath(os.path.join(dirpath, f), ROOT).replace(os.sep, "/"))
+
+    SKIP_DIRS = (
+        "Natives/external/",
+        "Natives/shader_glslang/",
+        "Natives/resources/",
+        "Natives/build/",
+    )
+
+    for base_name in ("Air2", "Natives"):
+        base = os.path.join(ROOT, base_name)
+        if not os.path.isdir(base):
+            continue
+
+        for dirpath, dirnames, files in os.walk(base):
+            rel_dir = os.path.relpath(dirpath, ROOT).replace(os.sep, "/")
+            # 跳过排除目录（同时阻止递归进去）
+            if any(rel_dir.startswith(s.rstrip("/") + "/") or rel_dir == s.rstrip("/")
+                   for s in SKIP_DIRS):
+                dirnames[:] = []
+                continue
+
+            for f in sorted(files):
+                rel = os.path.relpath(os.path.join(dirpath, f), ROOT).replace(os.sep, "/")
+                if f.endswith(".m") or f.endswith(".mm"):
+                    impl.append(rel)
+                elif f.endswith(".h"):
+                    headers.append(rel)
+                elif f.endswith(".c"):
+                    # Natives 里有 .c（shim、sandbox 等），要编进来
+                    if base_name == "Natives":
+                        impl.append(rel)
+
     return sorted(impl), sorted(headers)
 
 

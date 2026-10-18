@@ -40,6 +40,8 @@
 #import "A2InputDialog.h"
 #import "A2TextField.h"
 #import "A2VersionManager.h"
+#import "A2GamePathManager.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import "A2VersionRowView.h"
 #import "A2GlassCard.h"
 #import "A2PrimaryButton.h"
@@ -53,11 +55,19 @@
 @property (nonatomic, strong) UILabel *titleLabel;
 @property (nonatomic, strong) UILabel *pathLabel;
 @property (nonatomic, assign, getter=isCurrent) BOOL current;
-- (instancetype)initWithTitle:(NSString *)title path:(NSString *)path;
-- (void)applyTheme;
+/// 长按时弹出的操作
+@property (nonatomic, copy, nullable) void (^onDelete)(void);
+@property (nonatomic, copy, nullable) void (^onRename)(void);
 @end
 
-@implementation A2GamePathRow
+/// 选中回调放在单独的协议里，避免与 UIControl 的 target-action 混淆
+@interface A2GamePathRow (Selection)
+@property (nonatomic, copy, nullable) void (^onSelect)(void);
+@end
+
+@implementation A2GamePathRow {
+    BOOL _interactionsInstalled;
+}
 
 - (instancetype)initWithTitle:(NSString *)title path:(NSString *)path {
     self = [super initWithFrame:CGRectZero];
@@ -121,11 +131,60 @@
         : t.cOnSurfaceVariant;
 }
 
+/// 点击 = 切换目录；长按 = 删除/重命名菜单。
+/// 放在这里而不是调用方设置，是因为 UIControl 的 target-action
+/// 与 block 回调混用容易乱。
+- (void)installInteractionsIfNeeded {
+    if (_interactionsInstalled) return;
+    _interactionsInstalled = YES;
+
+    [self addTarget:self action:@selector(handleTap) forControlEvents:UIControlEventTouchUpInside];
+
+    UILongPressGestureRecognizer *lp =
+        [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
+    lp.minimumPressDuration = 0.5;
+    [self addGestureRecognizer:lp];
+}
+
+- (void)handleTap {
+    if (self.onSelect) self.onSelect();
+}
+
+- (void)handleLongPress:(UILongPressGestureRecognizer *)g {
+    if (g.state != UIGestureRecognizerStateBegan) return;
+
+    UIAlertController *sheet =
+        [UIAlertController alertControllerWithTitle:self.titleLabel.text
+                                            message:nil
+                                     preferredStyle:UIAlertControllerStyleActionSheet];
+    if (self.onRename) {
+        [sheet addAction:[UIAlertAction actionWithTitle:@"重命名"
+                                                 style:UIAlertActionStyleDefault
+                                               handler:^(UIAlertAction *a) {
+            if (self.onRename) self.onRename();
+        }]];
+    }
+    if (self.onDelete) {
+        [sheet addAction:[UIAlertAction actionWithTitle:@"移除"
+                                                 style:UIAlertActionStyleDestructive
+                                               handler:^(UIAlertAction *a) {
+            if (self.onDelete) self.onDelete();
+        }]];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
+                                             style:UIAlertActionStyleCancel handler:nil]];
+
+    UIViewController *host = self.window.rootViewController;
+    sheet.popoverPresentationController.sourceView = self;
+    sheet.popoverPresentationController.sourceRect = self.bounds;
+    [host presentViewController:sheet animated:YES completion:nil];
+}
+
 @end
 
 #pragma mark - 版本管理页
 
-@interface A2VersionListViewController ()
+@interface A2VersionListViewController () <UIDocumentPickerDelegate>
 @property (nonatomic, strong) UIScrollView *pathScroll;
 @property (nonatomic, strong) UIStackView *pathStack;
 @property (nonatomic, strong) UIScrollView *listScroll;
@@ -134,6 +193,9 @@
 @property (nonatomic, strong) NSArray<NSDictionary<NSString *, id> *> *versions;
 @property (nonatomic, copy) NSString *filterText;
 @property (nonatomic, strong) NSMutableArray<A2VersionRowView *> *rowViews;
+@property (nonatomic, strong) UIButton *addPathButton;
+/// 文件选择器回调要区分是「选目录」还是「选整合包」，用标记区分
+@property (nonatomic, assign) BOOL pickingFolder;
 @property (nonatomic, weak, nullable) UILabel *emptyTitleLabel;
 @property (nonatomic, weak, nullable) UILabel *emptySubtitleLabel;
 @end
@@ -289,18 +351,172 @@
 }
 
 - (void)buildPathList {
-    // 只显示真实的游戏目录。目录切换没有实现，不放假条目。
-    NSString *home = A2VersionManager.shared.gameHome;
-    A2GamePathRow *row = [[A2GamePathRow alloc] initWithTitle:@"游戏目录" path:home];
-    row.current = YES;
-    row.userInteractionEnabled = NO;
-    [_pathStack addArrangedSubview:row];
+    // 目录列表来自 A2GamePathManager —— 对照 ZL2 的 GamePathManager。
+    // 用户可以添加多个游戏目录（沙盒内 / 外部文件夹 / iCloud），
+    // 点哪一项就切到哪个目录，右侧的版本列表跟着变。
+    for (UIView *v in [_pathStack.arrangedSubviews copy]) {
+        [_pathStack removeArrangedSubview:v];
+        [v removeFromSuperview];
+    }
+
+    A2GamePathManager *mgr = A2GamePathManager.shared;
+    NSString *current = mgr.currentPath.identifier;
+
+    for (A2GamePathItem *item in mgr.allPaths) {
+        A2GamePathRow *row = [[A2GamePathRow alloc] initWithTitle:item.name path:item.path];
+        row.current = [item.identifier isEqualToString:current];
+
+        __weak typeof(self) weakSelf = self;
+        __weak A2GamePathRow *weakRow = row;
+        row.onSelect = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            (void)weakRow;
+            [self selectGamePath:item];
+        };
+        row.onDelete = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            [self deleteGamePath:item];
+        };
+        row.onRename = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            [self renameGamePath:item];
+        };
+
+        [_pathStack addArrangedSubview:row];
+    }
+
+    // 添加目录按钮
+    UIButton *add = [UIButton buttonWithType:UIButtonTypeSystem];
+    add.translatesAutoresizingMaskIntoConstraints = NO;
+    [add setTitle:@"＋ 添加游戏目录" forState:UIControlStateNormal];
+    add.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+    add.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+    add.contentEdgeInsets = UIEdgeInsetsMake(0, A2SpaceM, 0, A2SpaceM);
+    add.layer.cornerRadius = A2RadiusM;
+    add.layer.cornerCurve = kCACornerCurveContinuous;
+    add.layer.borderWidth = 1;
+    [add.heightAnchor constraintEqualToConstant:40].active = YES;
+    [add addTarget:self action:@selector(addGamePath) forControlEvents:UIControlEventTouchUpInside];
+    [_pathStack addArrangedSubview:add];
+    self.addPathButton = add;
 
     // 撑起剩余空间
     UIView *filler = [[UIView alloc] initWithFrame:CGRectZero];
     filler.translatesAutoresizingMaskIntoConstraints = NO;
     [filler setContentHuggingPriority:1 forAxis:UILayoutConstraintAxisVertical];
     [_pathStack addArrangedSubview:filler];
+
+    [self applyPathListTheme];
+}
+
+- (void)applyPathListTheme {
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+    _addPathButton.tintColor = t.cPrimary;
+    _addPathButton.layer.borderColor = t.cOutlineVariant.CGColor;
+    _addPathButton.backgroundColor = t.cSurfaceContainer;
+}
+
+#pragma mark - 游戏目录操作
+
+- (void)selectGamePath:(A2GamePathItem *)item {
+    A2GamePathManager *mgr = A2GamePathManager.shared;
+    if ([item.identifier isEqualToString:mgr.currentPath.identifier]) return;
+
+    NSError *err = nil;
+    if (![mgr selectPathWithIdentifier:item.identifier error:&err]) {
+        [A2Toast show:(err.localizedDescription ?: @"切换失败") inView:self.view];
+        return;
+    }
+
+    // A2VersionManager 会收到目录变化通知并重新扫描，
+    // 这里只需重建左栏的选中态
+    [self buildPathList];
+    [A2Toast show:[NSString stringWithFormat:@"已切换到「%@」", item.name] inView:self.view];
+}
+
+- (void)addGamePath {
+    // 用文件选择器选一个目录
+    UIDocumentPickerViewController *picker;
+    if (@available(iOS 14.0, *)) {
+        picker = [[UIDocumentPickerViewController alloc]
+                  initForOpeningContentTypes:@[UTTypeFolder]];
+    } else {
+        picker = [[UIDocumentPickerViewController alloc]
+                  initWithDocumentTypes:@[@"public.folder"]
+                                 inMode:UIDocumentPickerModeOpen];
+    }
+    picker.allowsMultipleSelection = NO;
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller
+didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    NSURL *url = urls.firstObject;
+    if (!url) return;
+
+    A2GamePathManager *mgr = A2GamePathManager.shared;
+    NSError *err = nil;
+    if (![mgr addPathFromURL:url name:nil error:&err]) {
+        [A2Toast show:(err.localizedDescription ?: @"添加失败") inView:self.view];
+        return;
+    }
+
+    [self buildPathList];
+    [A2Toast show:[NSString stringWithFormat:@"已添加「%@」", url.lastPathComponent]
+           inView:self.view];
+}
+
+- (void)deleteGamePath:(A2GamePathItem *)item {
+    if (item.isDefault) {
+        [A2Toast show:@"默认目录不能删除" inView:self.view];
+        return;
+    }
+
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"移除游戏目录"
+                                            message:[NSString stringWithFormat:
+                                                     @"确定要移除「%@」吗？\n文件不会被删除。",
+                                                     item.name]
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消"
+                                             style:UIAlertActionStyleCancel handler:nil]];
+    __weak typeof(self) weakSelf = self;
+    [alert addAction:[UIAlertAction actionWithTitle:@"移除"
+                                             style:UIAlertActionStyleDestructive
+                                           handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        NSError *err = nil;
+        if ([A2GamePathManager.shared removePathWithIdentifier:item.identifier error:&err]) {
+            [self buildPathList];
+        } else {
+            [A2Toast show:(err.localizedDescription ?: @"移除失败") inView:self.view];
+        }
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)renameGamePath:(A2GamePathItem *)item {
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"重命名目录"
+                                            message:nil
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
+        tf.text = item.name;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消"
+                                             style:UIAlertActionStyleCancel handler:nil]];
+    __weak typeof(self) weakSelf = self;
+    [alert addAction:[UIAlertAction actionWithTitle:@"确定"
+                                             style:UIAlertActionStyleDefault
+                                           handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        NSString *name = alert.textFields.firstObject.text ?: @"";
+        if (name.length == 0) return;
+        [A2GamePathManager.shared renamePathWithIdentifier:item.identifier to:name error:nil];
+        [self buildPathList];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 - (void)buildVersionList {

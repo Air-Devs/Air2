@@ -45,6 +45,7 @@ jobs:
     name: 编译打包
     runs-on: macos-15
     needs: lint
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -59,12 +60,24 @@ jobs:
       - name: 校验工程
         run: python3 scripts/verify_pbxproj.py
 
+      - name: 下载预编译依赖
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 246MB 动态库 + jar。不进 git，用脚本按准确大小校验下载。
+          # 必须走镜像：raw.githubusercontent.com 对大文件会静默截断
+          # （实测 8 个文件被截断过，最严重的只下到 6%）
+          python3 scripts/fetch_deps.py
+
+      - name: 下载 JRE
+        run: |
+          # 4 个版本（8/17/21/25）共 440MB
+          python3 scripts/fetch_jre.py
+
       - name: 编译（未签名）
         run: |
           set -o pipefail
           mkdir -p logs
-          # 输出同时进终端和文件：xcactivitylog 是二进制且常为空，
-          # 直接存文本日志才可靠
           xcodebuild \
             -project Air2.xcodeproj \
             -scheme Air2 \
@@ -82,23 +95,60 @@ jobs:
         if: failure()
         run: |
           echo "===== 编译错误摘要 ====="
-          grep -E "error:|warning:.*deprecated" logs/xcodebuild.log | head -50 || true
+          grep -E "error:" logs/xcodebuild.log | head -50 || true
 
-      - name: 打包 IPA
+      - name: 注入 Frameworks 与 JRE 并打包
+        if: success()
         run: |
           set -e
           APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
           if [ -z "$APP" ]; then
             echo "::error::找不到编译产物 .app"
-            find build/Build/Products -maxdepth 3 -type d | head -20
             exit 1
           fi
           echo "产物: $APP"
+
+          # ---- 注入动态库 ----
+          mkdir -p "$APP/Frameworks"
+          cp Libraries/Frameworks/*.dylib "$APP/Frameworks/" 2>/dev/null || true
+          for f in Libraries/Frameworks/*.framework; do
+            [ -d "$f" ] && cp -R "$f" "$APP/Frameworks/"
+          done
+
+          # ---- 注入 JRE ----
+          cp -R java_runtimes "$APP/java_runtimes"
+
+          # ---- 启动器资源 ----
+          for f in Natives/resources/*; do
+            b=$(basename "$f")
+            case "$b" in Frameworks|*.lproj) continue ;; esac
+            cp -R "$f" "$APP/" 2>/dev/null || true
+          done
+
+          # ---- 统计 ----
+          echo "== 注入后体积 =="
+          du -sh "$APP/Frameworks" 2>/dev/null || echo "  Frameworks: 0"
+          du -sh "$APP/java_runtimes" 2>/dev/null || echo "  JRE: 0"
+
+          # ---- ad-hoc 签名（TrollStore 可用）----
+          find "$APP/Frameworks" -name '*.dylib' -exec codesign -f -s - {} \; 2>/dev/null || true
+          codesign -f -s - --deep "$APP" 2>/dev/null || true
+
+          # ---- 打包 ----
           mkdir -p artifacts/Payload
           cp -R "$APP" artifacts/Payload/
           cd artifacts
           zip -qry Air2-unsigned.ipa Payload
           rm -rf Payload
+
+          # ---- 体积校验 ----
+          SIZE_MB=$(( ($(stat -f%z Air2-unsigned.ipa 2>/dev/null || stat -c%s Air2-unsigned.ipa)) / 1048576 ))
+          echo "IPA: ${SIZE_MB} MB"
+          if [ "$SIZE_MB" -lt 50 ]; then
+            echo "::error::IPA 只有 ${SIZE_MB} MB，Frameworks/JRE 没注入成功"
+            ls -la "$APP/Frameworks" | head -20
+            exit 1
+          fi
           ls -lh Air2-unsigned.ipa
 
       - name: 上传 IPA
