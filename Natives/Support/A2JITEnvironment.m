@@ -46,81 +46,6 @@ void a2_jit_log(const char *fmt, ...) {
 //   来源：utils.m L752–L756（裸 JIT26CreateRegionLegacy）。
 //   ★不改语义★：naked + 只 brk + ret；区域地址由调试器经寄存器回填。
 // ============================================================================
-// brk #0x6942 = ★自研 JIT 宿主协议★：把「App 自己 mmap 的一段 RW 内存」整段祝福成可执行。
-//   为什么需要它：真机实测 brk #0x69 的 _M<size>,perm 不论请求多大都只回 16384 字节，
-//   而 libjvm 的 code cache 要 16MB ⇒ 必须由我们自己 mmap 再让调试器逐页祝福
-//   （官方 UniversalJIT26 的 prepare_memory_region(addr,len) 正是这个语义，x0≠0 时它不分配）。
-//   x0 = 区域首地址，x1 = 长度（ABI 直传，naked 函数不改寄存器）。
-__attribute__((noinline, optnone, naked))
-// 注:brk 立即数 0x6942 = 自研宿主区协议(见上)。
-static void *a2_jit_brk6942_prepare_region(void *addr, size_t len) {
-    asm("brk #0x6942 \n"
-        "ret");
-}
-
-// 申请一段 RW 内存并整段祝福成可执行；失败返回 NULL。
-//   调用点：A2JITEnvironment.ensureVerifiedWithinBudget（建 VM 之前）。
-// brk #0xf00d cmd=4 = JIT26PrepareRegionForPatching(addr,len)：官方 Universal 脚本自带的
-//   "准备/祝福"命令（脚本侧做 m 读 + M 写回）。x0=地址 x1=长度，x16=4。
-//   这条命令 StikDebug 自带脚本就有，不需要我们再下发自定义脚本。
-__attribute__((noinline, optnone, naked))
-static void a2_jit_brk_f00d_cmd4_prepare(void *addr, size_t len) {
-    asm("mov x16, #4 \n"
-        "brk #0xf00d \n"
-        "ret");
-}
-
-// 前置声明：trap 窗口辅助函数定义在文件后面（C 需要先声明）
-static int a2_jit_trap_push(struct sigaction *oldsa, sigjmp_buf **outEnv);
-static void a2_jit_trap_pop(int idx, struct sigaction *oldsa);
-
-/// cmd4 的安全网版本：调试器没应答时不崩，只返回 NO。
-static BOOL a2_jit_brk_f00d_cmd4_prepare_safe(void *addr, size_t len) {
-    struct sigaction oldsa;
-    sigjmp_buf *env = NULL;
-    int idx = a2_jit_trap_push(&oldsa, &env);
-    if (idx < 0) {
-        a2_jit_log("[A2JIT] cmd4 跳过：陷阱窗口溢出");
-        return NO;
-    }
-    BOOL ok = NO;
-    if (sigsetjmp(*env, 1) == 0) {
-        a2_jit_brk_f00d_cmd4_prepare(addr, len);
-        ok = YES;
-    } else {
-        a2_jit_log("[A2JIT] cmd4 未被调试器服务（SIGTRAP）⇒ 该段祝福跳过");
-        ok = NO;
-    }
-    a2_jit_trap_pop(idx, &oldsa);
-    return ok;
-}
-
-// ★逐页取 rx 实验(2026-10-18)★
-//   背景：mmap(PROT_EXEC) 在 iOS 26+ TXM 下只给地址不给执行权（执行即 SIGBUS），
-//   而调试器 `_M<size>,rx` 返回的页实测 cur=0x5（可执行）。
-//   本函数连续向调试器要 N 个页，记录是否连续：
-//     连续 ⇒ 可以把首地址当一整块交给 JVM；
-//     不连续 ⇒ 只能拿到若干 16KB 碎片（那就得改 libjvm 支持分片）。
-static void *a2_jit_collect_pages(size_t pageSize, size_t pageCount) {
-    void *first = NULL, *prev = NULL;
-    size_t got = 0, contiguous = 0;
-    for (size_t i = 0; i < pageCount; i++) {
-        void *pg = a2_jit_brk69_create_region_safe(pageSize);
-        if (pg == NULL) break;
-        got++;
-        if (first == NULL) { first = pg; prev = pg; contiguous = 1; continue; }
-        if ((char *)pg == (char *)prev + pageSize) contiguous++;
-        prev = pg;
-    }
-    a2_jit_log("[A2JIT] 逐页取 rx：要求 %zu 页，拿到 %zu 页，连续 %zu 页；first=%p last=%p",
-               pageCount, got, contiguous, first, prev);
-    if (got == pageCount && contiguous == pageCount) {
-        a2_jit_log("[A2JIT] ★连续★ 可用作整块 code cache：base=%p size=%zu", first, pageSize * pageCount);
-        return first;
-    }
-    a2_jit_log("[A2JIT] ★不连续★（碎片 %zu 页）⇒ 需要 libjvm 侧支持分片映射", got);
-    return NULL;
-}
 
 // ★★ 关键符号 ★★
 //   libjvm 里 get_debug_jit_mapping() 用 dlsym(RTLD_DEFAULT, "DeviceHasTXM") 判断本机是否
@@ -134,52 +59,6 @@ bool DeviceHasTXM(void) {
     return true;
 }
 
-static void *gA2JITExecRegion = NULL;
-static size_t gA2JITExecRegionSize = 0;
-
-/// 给 libjvm 用：返回「已祝福 + 已 mprotect(RX)」的可执行区。libjvm 里 dlsym 这个名字。
-void *A2GetJITExecRegion(size_t *len) {
-    if (len) *len = gA2JITExecRegionSize;
-    return gA2JITExecRegion;
-}
-
-/// 申请一块 RW → 逐段祝福(cmd 4) → mprotect(RX)。
-///   为什么要分三步：iOS 26+ TXM 下 mmap(PROT_EXEC) 只给地址、不给执行权，
-///   必须先让调试器"碰"过这些页，再 mprotect 成 RX 才有执行权（真机实测）。
-void *a2_jit_alloc_preblessed_region(size_t bytes) {
-    if (gA2JITExecRegion != NULL && gA2JITExecRegionSize >= bytes) {
-        a2_jit_log("[A2JIT] 复用已祝福的可执行区 %p（size=%zu ≥ 请求 %zu）",
-                   gA2JITExecRegion, gA2JITExecRegionSize, bytes);
-        return gA2JITExecRegion;
-    }
-    void *p = mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
-    if (p == MAP_FAILED) {
-        a2_jit_log("[A2JIT] 申请 JIT 区失败 mmap(%zu) errno=%d", bytes, errno);
-        return NULL;
-    }
-    // 分段祝福：官方脚本的 cmd4 是整个区域的 m+M，16MB 一次包太大 ⇒ 按 1MB 分 16 次
-    const size_t kChunk = 1u << 20;
-    size_t blessedChunks = 0, failedChunks = 0;
-    for (size_t off = 0; off < bytes; off += kChunk) {
-        size_t n = MIN(kChunk, bytes - off);
-        if (a2_jit_brk_f00d_cmd4_prepare_safe((char *)p + off, n)) {
-            blessedChunks++;
-        } else {
-            failedChunks++;
-            break;          // 没调试器/不认 cmd4 ⇒ 后面的也不用试了
-        }
-    }
-    // 祝福后再 mprotect 成 RX（TXM 下此时才拿到执行权）
-    int rc = mprotect(p, bytes, PROT_READ | PROT_EXEC);
-    a2_jit_log("[A2JIT] JIT 区 %p size=%zu：cmd4 成功 %zu 段、失败 %zu 段，mprotect(RX) rc=%d errno=%d",
-               p, bytes, blessedChunks, failedChunks, rc, rc == 0 ? 0 : errno);
-    if (rc != 0) {
-        a2_jit_log("[A2JIT] ★mprotect(RX) 失败★ ⇒ 该区不可执行（TXM 未祝福），后续按不可用处理");
-    }
-    gA2JITExecRegion = p;
-    gA2JITExecRegionSize = bytes;
-    return p;
-}
 
 __attribute__((noinline, optnone, naked))
 void *a2_jit_brk69_create_region(size_t len) {
@@ -458,7 +337,6 @@ A2JITExecProbeResult a2_jit_exec_probe_anonymous(void) {
 // 可用性判据主体 —— 搬运自 utils.m L1438–L1863。
 // ============================================================================
 
-static void *gA2JITPreblessed = NULL;   // 自研 JIT 宿主区（brk #0x6942）
 static void *gA2JITVerifiedRegion = NULL;
 static int gA2JITBrkCount = 0;   // ★排查用★ 本进程发了几次 brk #0x69
 static BOOL   gA2JITVerified = NO;
@@ -530,23 +408,8 @@ static void *a2_jit_brk69_bounded(NSTimeInterval deadlineSec, const char *why) {
                                         // 改为默认讨 64MB（与 ReservedCodeCacheSize=16m 留足余量）
     a2_jit_log("[A2JIT] 请求 JIT 区大小=%s：%zu 字节（键 A2JITRegionMB 未设 ⇒ 默认 64MB）",
                a2jitMB > 0 ? "自定义" : "默认", a2jitWantBytes);
-    // ★2026-10-18★ 默认★不发 cmd4★（真机证据：引擎里 commands[4] 报 "Script failed: undefined"
-    //   ⇒ 随后 Socket(NotConnected) ⇒ 我们收到 SIGTRAP 直接闪退）。
-    //   现在走老 Air 的原始链路：只发 brk #0x69 要 64MB，由调试器返回可执行区。
-    //   需要自研宿主区实验时才置 A2PreblessRegion = YES。
-    {
-        id preVal2 = [NSUserDefaults.standardUserDefaults objectForKey:@"A2PreblessRegion"];
-        BOOL prebless2 = (preVal2 == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2PreblessRegion"];
-        if (prebless2) {
-            extern void *a2_jit_alloc_preblessed_region(size_t bytes);
-            gA2JITPreblessed = a2_jit_alloc_preblessed_region(a2jitWantBytes);
-            a2_jit_log(@"[A2JIT] ★自研 JIT 宿主区★ addr=%p size=%zu（cmd4 祝福 + mprotect RX）",
-                       gA2JITPreblessed, a2jitWantBytes);
-        } else {
-            a2_jit_log(@"[A2JIT] 自研宿主区=关（A2PreblessRegion 未设）⇒ 走老 Air 链路：brk #0x69 要 %zu 字节",
-                       a2jitWantBytes);
-        }
-    }
+    // 2026-10-18：不再自建「可执行区」（cmd4/prebless 实验已删除，真机会闪退）。
+    //   只向调试器要 brk #0x69（老 Air 的已验证路径）。
     NSThread *worker = [[NSThread alloc] initWithBlock:^{
         res = a2_jit_brk69_create_region_safe(a2jitWantBytes);
         os_unfair_lock_lock(&gA2JITBrkLock);
@@ -724,30 +587,8 @@ static int gA2JITEnsureKickInflight = 0;
         gA2JITRegionVerdict = A2JITRegionVerdictUsable;
         gA2JITRegionEvidence = @"排查模式:未做任何 brk/自证";
         a2_jit_log("[A2JIT] ★排查模式★ A2SkipJITMachinery=YES ⇒ 跳过 brk #0x69 / exec-probe / 区域自证，直接放行建 VM");
-        // ★2026-10-18★ 排查模式下同样要准备「已祝福的可执行区」：
-        //   自编 libjvm 通过 dlsym("A2GetJITExecRegion") 拿它当 code cache。
-        // ★2026-10-18★ 默认★关★（真机实测：cmd4 不被服务时会在点启动瞬间崩，连日志都拿不到）。
-        //   要试新路径：偏好键 A2PreblessRegion = YES。
-        id preVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2PreblessRegion"];
-        BOOL prebless = (preVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2PreblessRegion"];
-        if (!prebless) {
-            // ★默认走这里★：逐页向调试器要 rx（实测可执行），并报告连续性。
-            //   App 不再自己 mmap RX（那条路在 TXM 下执行必 SIGBUS）。
-            size_t pageSize = (size_t)getpagesize();
-            size_t pageCount = (size_t)(16 * 1024 * 1024 / pageSize);
-            void *base = a2_jit_collect_pages(pageSize, pageCount);
-            if (base) {
-                gA2JITExecRegion = base;
-                gA2JITExecRegionSize = pageSize * pageCount;
-            }
-        } else {
-            extern void *a2_jit_alloc_preblessed_region(size_t bytes);
-            NSInteger mb = [NSUserDefaults.standardUserDefaults integerForKey:@"A2JITRegionMB"];
-            size_t want = (mb > 0) ? (size_t)MIN(mb, (NSInteger)256) * 1024u * 1024u
-                                   : (size_t)64 * 1024u * 1024u;
-            void *r = a2_jit_alloc_preblessed_region(want);
-            a2_jit_log(@"[A2JIT] ★自研 JIT 宿主区★ addr=%p size=%zu（排查模式：cmd4 祝福 + mprotect RX）", r, want);
-        }
+        // 2026-10-18：自研 JIT 宿主区实验已移除（真机证明该路径会闪退）。
+        //   现在只走 brk #0x69（由调试器交付可执行区），与老 Air 的已验证做法一致。
         return YES;
     }
 
