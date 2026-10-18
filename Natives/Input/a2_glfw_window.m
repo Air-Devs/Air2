@@ -356,7 +356,15 @@ static void a2_publish_ios_view_pointer(void *view, double scale) {
     }
     if (vm == NULL) return;
     JNIEnv *env = NULL;
-    if ((*vm)->GetEnv(vm, (void **) &env, JNI_VERSION_1_8) != JNI_OK || env == NULL) return;
+    jint getEnvRc = (*vm)->GetEnv(vm, (void **) &env, JNI_VERSION_1_8);
+    BOOL attachedHere = NO;
+    if (getEnvRc == JNI_EDETACHED || env == NULL) {
+        // ★2026-10-18★ 建窗发生在渲染线程/主线程，都没挂到 JVM 上 ⇒ 先 Attach，
+        //   否则 GetEnv 返回 JNI_EDETACHED，导致 UIView 地址从来没发布出去
+        //   （真机表现：日志无 [A2-METAL]，metallum 回落到自己的视图 ⇒ 黑屏）。
+        if ((*vm)->AttachCurrentThread(vm, (void **) &env, NULL) != JNI_OK || env == NULL) return;
+        attachedHere = YES;
+    }
     jclass sysCls = (*env)->FindClass(env, "java/lang/System");
     if (sysCls == NULL) return;
     jmethodID setProp = (*env)->GetStaticMethodID(
@@ -374,6 +382,9 @@ static void a2_publish_ios_view_pointer(void *view, double scale) {
         if (v) (*env)->DeleteLocalRef(env, v);
     }
     a2_log_f(@"[A2-METAL] 已发布 UIView 地址 %s（scale=%.3f）给 metallum", hex, scale);
+    if (attachedHere) {
+        (*vm)->DetachCurrentThread(vm);
+    }
 }
 
 static void a2_glfw_observer_focus(int focused) {
