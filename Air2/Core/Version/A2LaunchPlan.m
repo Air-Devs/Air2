@@ -521,6 +521,27 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
         }
     }
 
+    // ---- ★模块开放（Java 17+ 必需）★ ----
+    //   真机证据（2026-10-18 lastlog-44）：
+    //     [MetallumAgent] defineMetallumClasses failed: InaccessibleObjectException:
+    //     Unable to make protected final ClassLoader.defineClass(...) accessible
+    //   ⇒ metallum 一个类都没定义上 ⇒ 没有 Metal 后端 ⇒ 有声音没画面。
+    //   出处：老线 JavaLauncher.m [FIX262] 同款注释（agent 用反射 defineClass）。
+    //   ★这些参数对 Java 8 无效（Java 8 无模块系统），故只在 Java 9+ 下发。
+    if (javaMajorVersion >= 9) {
+        for (NSString *opt in @[
+                 @"--add-opens=java.base/java.lang=ALL-UNNAMED",
+                 @"--add-opens=java.base/java.lang.invoke=ALL-UNNAMED",
+                 @"--add-opens=java.base/java.util=ALL-UNNAMED",
+                 @"--add-opens=java.base/java.net=ALL-UNNAMED",
+                 @"--add-opens=java.base/java.nio=ALL-UNNAMED",
+                 @"--add-opens=java.base/java.io=ALL-UNNAMED",
+                 @"--add-opens=java.base/sun.nio.ch=ALL-UNNAMED",
+             ]) {
+            [options addObject:opt];
+        }
+    }
+
     // ---- ★LWJGL 平台库选择（照老 Air 的已验证参数）★ ----
     //   真机证据：不加这些，MC 的 GL.create() 会去拿 macOS 的 com.apple.opengl
     //   ⇒ UnsatisfiedLinkError: Failed to retrieve bundle with identifier: com.apple.opengl。
