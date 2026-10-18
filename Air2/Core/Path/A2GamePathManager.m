@@ -171,8 +171,10 @@ static NSString *const kCurrentKey = @"A2GamePathCurrent";
         if (bm) {
             BOOL ok = NO;
             NSError *bmErr = nil;
+            // 同理：NSURLBookmarkResolutionWithoutUI 也是 macOS 专属，
+            // iOS 上传 0 即可。
             NSURL *url = [NSURL URLByResolvingBookmarkData:bm
-                                                   options:NSURLBookmarkResolutionWithoutUI
+                                                   options:0
                                              relativeToURL:nil
                                        bookmarkDataIsStale:&ok
                                                      error:&bmErr];
@@ -215,12 +217,24 @@ static NSString *const kCurrentKey = @"A2GamePathCurrent";
         }
     }
 
-    // 持久化安全书签 —— 否则重启后没有权限访问外部目录
+    // 持久化安全书签 —— 否则重启后没有权限访问外部目录。
+    //
+    // ⚠️ 不要用 NSURLBookmarkCreationWithSecurityScope：
+    //    这个选项是 macOS 专属的，iOS 上会报
+    //    "'NSURLBookmarkCreationWithSecurityScope' is unavailable"。
+    //    iOS 的沙盒机制下，书签本身就是安全作用域的，
+    //    直接传 0（无额外选项）即可。
     NSError *bmErr = nil;
-    NSData *bookmark = [url bookmarkDataWithOptions:NSURLBookmarkCreationWithSecurityScope
+    NSData *bookmark = [url bookmarkDataWithOptions:0
                      includingResourceValuesForKeys:nil
                                       relativeToURL:nil
                                               error:&bmErr];
+
+    if (!bookmark) {
+        [A2Logger warning:@"A2GamePathManager"
+                  message:[NSString stringWithFormat:@"书签创建失败（重启后可能需要重新授权）：%@",
+                           bmErr.localizedDescription ?: @""]];
+    }
 
     A2GamePathItem *item = [A2GamePathItem new];
     item.identifier = [[NSUUID UUID] UUIDString];
