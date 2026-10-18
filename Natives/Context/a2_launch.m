@@ -461,16 +461,27 @@ int a2_launch_jvm_with_argv(int argc, const char *const argv[], A2LaunchInput in
         if (ar == 0 && threadEnv != NULL) env = threadEnv;
     }
 
-    // ---- 阶段7：派发主类 main（此后由游戏/安装器接管；真·首帧完成由既有链路负责）----
+    // ---- 阶段7：派发主类 main ----
+    // ★2026-10-18 真机行为修正★
+    //   MC 的 main 是【不会返回】的（它一直跑到游戏退出）。旧实现同步调用它 ⇒
+    //   启动完成回调永远不触发 ⇒ 启动器一直转圈。
+    //   ⇒ 把 main 派发到后台线程，主流程立即返回成功（启动器收转圈），游戏侧继续跑。
     a2_progress_enter(A2StageWaitingFirstFrame);   // 阶段7
-    int mrc = a2_run_main(env, builder.mainClass, builder.programArgs);
-    if (mrc != 0) {
-        a2_progress_fail(A2StageWaitingFirstFrame, [NSString stringWithFormat:@"main rc=%d", mrc]);
-        a2_log_fatal(@"[RT-P1] 主类 main 派发失败 rc=%d", mrc);
-        return mrc;
+    {
+        JavaVM *vmRef = vm;
+        NSString *mainCls = [builder.mainClass copy];
+        NSArray *pargs = [builder.programArgs copy];
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            JNIEnv *tenv = NULL;
+            if (vmRef == NULL || (*vmRef)->AttachCurrentThread(vmRef, (void **)&tenv, NULL) != 0 || tenv == NULL) {
+                a2_log_fatal(@"[RT-P1] main 派发线程 AttachCurrentThread 失败");
+                return;
+            }
+            int mrc2 = a2_run_main(tenv, mainCls, pargs);
+            a2_log_f(@"[RT-P1] 主类 main 返回 rc=%d（后台线程；MC 正常运行时不会走到这里）", mrc2);
+        });
     }
-
+    a2_log_line(@"[RT-P1] 主类 main 已派发到后台线程 ⇒ 启动器可以收转圈");
     a2_progress_enter(A2StageCompleted);
-    a2_log_line(@"[RT-P1] 主类 main 正常返回（runtime 链收尾）");
     return 0;
 }
