@@ -14,6 +14,9 @@
 #import "A2ControlRenderer.h"
 #import "A2ControlLayout.h"
 #import "A2DefaultControls.h"
+#import "A2AccountManager.h"
+#import "A2LaunchSplashView.h"
+#import "A2GameLaunchCoordinator.h"
 #import "A2ResolutionManager.h"
 #import "utils.h"
 #import "TrackedTextField.h"
@@ -349,6 +352,10 @@ static GameSurfaceView* pojavWindow;
 //        - 命中 → 返回对应控件，用户可拖动/点击
 //        - 未命中 → 返回 nil，触摸继续穿透到游戏画面
 @property(nonatomic, strong) UIView *launchOverlayView;
+/// 启动遮罩的进度订阅（订阅 A2GameLaunchCoordinator）
+@property(nonatomic, strong, nullable) id launchProgressObserver;
+/// 当前启动的版本名（遮罩上显示，未设置时用 "Minecraft"）
+@property(nonatomic, copy, nullable) NSString *currentVersionName;
 @property(nonatomic, strong) CAGradientLayer *launchGradientLayer;
 @property(nonatomic, strong) UIActivityIndicatorView *launchSpinner;
 @property(nonatomic, strong) UILabel *launchTitleLabel;
@@ -1687,26 +1694,21 @@ static BOOL ame87_mcVersionRequiresTextureBuffer(NSString *mcVersionId) {
             minVersion = 8; // Default to Java 8
         }
         
-        // Validate authenticator
-        BaseAuthenticator *currentAuth = BaseAuthenticator.current;
-        if (!currentAuth) {
-            NSLog(@"[SurfaceViewController] Error: no authenticator available");
+        // 账号：Air2 用 A2AccountManager（Air1 的 BaseAuthenticator 已不存在）
+        A2Account *account = A2AccountManager.shared.currentAccount;
+        if (!account) {
+            NSLog(@"[SurfaceViewController] Error: no account available");
             dispatch_async(dispatch_get_main_queue(), ^{
                 [self dismissLaunchOverlayOnError];
-                showDialog(localize(@"Error", nil), @"请先登录账户");  // ★ [ACCT-AUDIT]
+                showDialog(localize(@"Error", nil), @"请先登录账户");
             });
             return;
         }
-        
-        // Validate accountId（用作账户文件名，传给 Java 端加载对应账户）
-        NSString *accountId = currentAuth.authData[@"accountId"];
-        if (!accountId || accountId.length == 0) {
-            // 兜底：极少数情况下 accountId 缺失（如旧账户未迁移），回退到 username
-            accountId = currentAuth.authData[@"username"];
-            if (!accountId || accountId.length == 0) {
-                accountId = @"Player";
-            }
-        }
+
+        // accountId 用作账户文件名，传给 Java 端加载对应账户。
+        // 优先 profileID（微软账号的 UUID），其次 username。
+        NSString *accountId = account.profileID.length ? account.profileID : account.username;
+        if (accountId.length == 0) accountId = @"Player";
 
         NSLog(@"[SurfaceViewController] Launching Minecraft with accountId: %@, version: %d, size: %dx%d",
               accountId, minVersion, windowWidth, windowHeight);
