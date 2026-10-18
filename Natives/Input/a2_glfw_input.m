@@ -296,10 +296,17 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 // ---- 触摸 ----
 - (void)touchesBegan:(NSSet<UITouch *> *)touches withEvent:(UIEvent *)event {
     (void) event;
-    // ★多点触控★ 只认第一根手指为主触点：之前每帧 anyObject ⇒ 两指时在两者间跳变，
-    //   表现为光标乱窜/视角抖动。第二根手指只计数，不参与光标。
+    // ★多点触控（2026-10-18 第二轮）★
+    //   已有主触点时，第二根手指按下必须【整段忽略】：
+    //   否则下面会把 a2VirtualCursor 重置成这根手指的位置 ⇒ 抓取模式下视角跳一下。
+    //   （用户实测：单手跟手正常，多指就跳 —— 就是这一处。）
+    if (self.a2PrimaryTouch != nil && [touches containsObject:self.a2PrimaryTouch]) {
+        self.activeTouches += (NSInteger) touches.count;
+        return;
+    }
     UITouch *t = self.a2PrimaryTouch;
-    if (t == nil || ![touches containsObject:t]) {
+    if (t == nil) {
+        // 主触点已抬起（或还没建立）⇒ 用本批里的第一根当新的主触点
         t = [touches anyObject];
         self.a2PrimaryTouch = t;
     }
