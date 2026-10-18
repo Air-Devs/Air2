@@ -587,12 +587,16 @@ int a2_glfw_window_create(long window, int width, int height, const char *title)
             cur.hostWindow = win;
             cur.hostView = view;
 
-            // ★游戏内控件★ 阶段1：移动两套模式 + 潜行/疾跑 + 跳跃
-            //   挂在宿主视图最上层（透明层，空白处 hitTest 返回 nil ⇒ 不吃触摸）。
-            A2GameControlsView *controls = [[A2GameControlsView alloc] initWithWindowHandle:window];
-            controls.frame = view.bounds;
-            controls.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-            [view addSubview:controls];
+            // ★游戏内控件★
+            //   ⚠️ 必须在主线程创建：控件层内部用 Auto Layout，而这段代码跑在建窗线程
+            //   （真机崩溃：NSInternalInconsistencyException "Modifications to the layout engine
+            //   must not be performed from a background thread"）。
+            dispatch_async(dispatch_get_main_queue(), ^{
+                A2GameControlsView *controls = [[A2GameControlsView alloc] initWithWindowHandle:window];
+                controls.frame = view.bounds;
+                controls.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+                [view addSubview:controls];
+            });
             a2_publish_ios_view_pointer((__bridge void *) view, scale);
             cur.gameViewController = gameVC;
             cur.widthPoints = wp;  cur.heightPoints = hp;
