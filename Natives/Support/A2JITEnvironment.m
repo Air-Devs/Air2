@@ -83,6 +83,11 @@ void *A2GetJITExecRegion(size_t *len) {
 ///   为什么要分三步：iOS 26+ TXM 下 mmap(PROT_EXEC) 只给地址、不给执行权，
 ///   必须先让调试器"碰"过这些页，再 mprotect 成 RX 才有执行权（真机实测）。
 void *a2_jit_alloc_preblessed_region(size_t bytes) {
+    if (gA2JITExecRegion != NULL && gA2JITExecRegionSize >= bytes) {
+        a2_jit_log("[A2JIT] 复用已祝福的可执行区 %p（size=%zu ≥ 请求 %zu）",
+                   gA2JITExecRegion, gA2JITExecRegionSize, bytes);
+        return gA2JITExecRegion;
+    }
     void *p = mmap(NULL, bytes, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANON, -1, 0);
     if (p == MAP_FAILED) {
         a2_jit_log("[A2JIT] 申请 JIT 区失败 mmap(%zu) errno=%d", bytes, errno);
@@ -641,6 +646,16 @@ static int gA2JITEnsureKickInflight = 0;
         gA2JITRegionVerdict = A2JITRegionVerdictUsable;
         gA2JITRegionEvidence = @"排查模式:未做任何 brk/自证";
         a2_jit_log("[A2JIT] ★排查模式★ A2SkipJITMachinery=YES ⇒ 跳过 brk #0x69 / exec-probe / 区域自证，直接放行建 VM");
+        // ★2026-10-18★ 排查模式下同样要准备「已祝福的可执行区」：
+        //   自编 libjvm 通过 dlsym("A2GetJITExecRegion") 拿它当 code cache。
+        {
+            extern void *a2_jit_alloc_preblessed_region(size_t bytes);
+            NSInteger mb = [NSUserDefaults.standardUserDefaults integerForKey:@"A2JITRegionMB"];
+            size_t want = (mb > 0) ? (size_t)MIN(mb, (NSInteger)256) * 1024u * 1024u
+                                   : (size_t)64 * 1024u * 1024u;
+            void *r = a2_jit_alloc_preblessed_region(want);
+            a2_jit_log(@"[A2JIT] ★自研 JIT 宿主区★ addr=%p size=%zu（排查模式：cmd4 祝福 + mprotect RX）", r, want);
+        }
         return YES;
     }
 

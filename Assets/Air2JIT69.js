@@ -57,6 +57,33 @@ const commands = {
     [CMD_PREPARE_REGION]: JIT26PrepareRegion,
     [CMD_NEW_BREAKPOINTS]: JIT26NewBreakpoints
 };
+
+// universal cmd 4 = JIT26PrepareRegionForPatching(addr, len)
+//   App 侧 mmap 一段 RW 后发它，脚本把页「读 + 原样写回」—— 这是让页拿到
+//   TXM 可执行祝福的唯一手段（官方 Extension 就是这么做的）。
+//   ★内部分块★：一次 m 读 1MB 会拼出 2MB 的十六进制文本，包太大 ⇒ 每 64KB 一块。
+commands[4] = function (brkResponse) {
+    let addr = x0;
+    let len  = x1;
+    const CH = 0x10000n;          // 64 KiB
+    let off = 0n;
+    let ok = 0;
+    let fail = 0;
+    while (off < len) {
+        let n = (len - off) < CH ? (len - off) : CH;
+        let a = (addr + off).toString(16);
+        let s = n.toString(16);
+        let bytes = send_command(`m${a},${s}`);
+        if (bytes && /^[0-9a-fA-F]+$/.test(String(bytes))) {
+            send_command(`M${a},${s}:${bytes}`);
+            ok++;
+        } else {
+            fail++;
+        }
+        off += n;
+    }
+    log(`[AIR2-JIT69] cmd4 prepare addr=0x${addr.toString(16)} len=0x${len.toString(16)} ok=${ok} fail=${fail}`);
+};
 // ★自研 JIT 宿主区（brk #0x6942）★
 //   App 侧 mmap 一段 RW 内存后发这个 brk，把地址/长度交给调试器整段祝福成可执行；
 //   之后的 0x69（BreakGetJITMapping）直接交付这块，绕开 `_M<size>` 只回 16384 字节的限制。
