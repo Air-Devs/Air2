@@ -115,6 +115,7 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 @property (nonatomic, assign) NSInteger activeTouches;
 @property (nonatomic, assign) BOOL  touchLogged;
 @property (nonatomic, assign) BOOL  scrollLogged;
+@property (nonatomic) BOOL  a2ScrollGestureInstalled;
 // 滚动（间接输入）：声明在类内，避免 GCC_WARN_UNDECLARED_SELECTOR 警告。
 - (void)a2_scroll:(UIPanGestureRecognizer *)pan;
 @end
@@ -133,21 +134,34 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
         //   allowedScrollTypesMask 让 pan 手势也认滚轮/触控板（Apple 文档）；
         //   maximumNumberOfTouches = 0 ⇒ 只认间接输入，不吃直接触摸
         //   （直接触摸仍走 touchesBegan/Moved/Ended，指针语义不变）。
-        // ★2026-10-18 真机证据★ iOS 27 上 addGestureRecognizer(UIPanGestureRecognizer,
-        //   allowedScrollTypesMask=All, maximumNumberOfTouches=0) 会在
-        //   _UIGestureRecognizerRegisterInContainer 里直接把进程打崩（信号 6）。
-        //   ⇒ 默认不装滚轮手势；需要时置偏好键 A2EnableScrollGesture = YES。
-        id a2sgVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2EnableScrollGesture"];
-        BOOL a2sg = (a2sgVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2EnableScrollGesture"];
-        if (a2sg) {
-            UIPanGestureRecognizer *scroll = [[UIPanGestureRecognizer alloc]
-                                              initWithTarget:self action:@selector(a2_scroll:)];
-            scroll.allowedScrollTypesMask = UIScrollTypeMaskAll;
-            scroll.maximumNumberOfTouches = 0;
-            [self addGestureRecognizer:scroll];
-        }
+        // ★滚轮手势延迟到 didMoveToWindow 安装★（真因：iOS 27 下在"视图还没进窗口层级"
+        //   时调用 addGestureRecognizer，会在 _UIGestureRecognizerRegisterInContainer 里崩，信号 6）。
+        _a2ScrollGestureInstalled = NO;
     }
     return self;
+}
+
+- (void)didMoveToWindow {
+    [super didMoveToWindow];
+    if (self.window == nil || _a2ScrollGestureInstalled) return;
+    if (!NSThread.isMainThread) {
+        __weak typeof(self) ws = self;
+        dispatch_async(dispatch_get_main_queue(), ^{ [ws didMoveToWindow]; });
+        return;
+    }
+    id a2sg = [NSUserDefaults.standardUserDefaults objectForKey:@"A2EnableScrollGesture"];
+    BOOL enable = (a2sg == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2EnableScrollGesture"];
+    if (!enable) return;
+
+    // 滚轮/触控板（间接输入）滚动：allowedScrollTypesMask 让 pan 也认滚轮；
+    // maximumNumberOfTouches=0 ⇒ 只认间接输入、不吃手指（手指仍走 touchesBegan/Moved）。
+    UIPanGestureRecognizer *scroll = [[UIPanGestureRecognizer alloc]
+                                      initWithTarget:self action:@selector(a2_scroll:)];
+    scroll.allowedScrollTypesMask = UIScrollTypeMaskAll;
+    scroll.maximumNumberOfTouches = 0;
+    [self addGestureRecognizer:scroll];
+    _a2ScrollGestureInstalled = YES;
+    [A2Log log:@"[A2-INPUT] 滚轮手势已安装（视图已进窗口层级）"];
 }
 
 - (BOOL)canBecomeFirstResponder {
