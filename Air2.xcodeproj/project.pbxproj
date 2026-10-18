@@ -78,6 +78,7 @@
 		FE909770F1329CB8E985AD5F /* A2ControlRenderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A1769FF5839C6F59DA3DB26 /* A2ControlRenderer.m */; };
 		7248BD00DBF94569DDA08C01 /* A2DefaultControls.m in Sources */ = {isa = PBXBuildFile; fileRef = 5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */; };
 		062C9510C87BE5CE71B8FCA7 /* A2TouchTransport.m in Sources */ = {isa = PBXBuildFile; fileRef = BC32DEDE020A2112CC01EF75 /* A2TouchTransport.m */; };
+		FC9219FD2D0892A86120A148 /* A2GameMenuOverlay.m in Sources */ = {isa = PBXBuildFile; fileRef = BA1CDFB3C78F08B828B7EEDC /* A2GameMenuOverlay.m */; };
 		04FA0FC85CCBBA11454EF9AE /* A2LaunchSplashView.m in Sources */ = {isa = PBXBuildFile; fileRef = 96009B3F837E8AD9139F1044 /* A2LaunchSplashView.m */; };
 		999713CBCD519FC8B0C363BE /* A2ResolutionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */; };
 		F56BA6557B260E7C004C2CE4 /* A2ResolutionSettingsView.m in Sources */ = {isa = PBXBuildFile; fileRef = F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */; };
@@ -266,6 +267,7 @@
 		6A1769FF5839C6F59DA3DB26 /* A2ControlRenderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlRenderer.m"; sourceTree = "<group>"; };
 		5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DefaultControls.m"; sourceTree = "<group>"; };
 		BC32DEDE020A2112CC01EF75 /* A2TouchTransport.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TouchTransport.m"; sourceTree = "<group>"; };
+		BA1CDFB3C78F08B828B7EEDC /* A2GameMenuOverlay.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameMenuOverlay.m"; sourceTree = "<group>"; };
 		96009B3F837E8AD9139F1044 /* A2LaunchSplashView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchSplashView.m"; sourceTree = "<group>"; };
 		000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResolutionManager.m"; sourceTree = "<group>"; };
 		F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResolutionSettingsView.m"; sourceTree = "<group>"; };
@@ -899,6 +901,7 @@
 		90A539DCE91F82FABE23328F /* GameUI */ = {
 			isa = PBXGroup;
 			children = (
+				BA1CDFB3C78F08B828B7EEDC /* A2GameMenuOverlay.m */,
 				96009B3F837E8AD9139F1044 /* A2LaunchSplashView.m */,
 				000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */,
 				F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */,
@@ -1395,6 +1398,7 @@
 				FE909770F1329CB8E985AD5F /* A2ControlRenderer.m in Sources */,
 				7248BD00DBF94569DDA08C01 /* A2DefaultControls.m in Sources */,
 				062C9510C87BE5CE71B8FCA7 /* A2TouchTransport.m in Sources */,
+				FC9219FD2D0892A86120A148 /* A2GameMenuOverlay.m in Sources */,
 				04FA0FC85CCBBA11454EF9AE /* A2LaunchSplashView.m in Sources */,
 				999713CBCD519FC8B0C363BE /* A2ResolutionManager.m in Sources */,
 				F56BA6557B260E7C004C2CE4 /* A2ResolutionSettingsView.m in Sources */,

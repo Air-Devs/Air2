@@ -12,6 +12,7 @@
 @implementation A2ControlButtonView {
     UILabel *_label;
     BOOL _pressed;
+    NSDictionary *_compatProperties;
 }
 
 - (instancetype)initWithWidget:(A2ControlWidget *)widget {
@@ -42,8 +43,46 @@
         [_label.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor constant:-2],
     ]];
 
+    [self buildCompatProperties];
     [self applyTheme];
     return self;
+}
+
+/// 把 widget 转成 Air1 风格的属性字典。
+/// SurfaceViewController 的 executebtn: 系列按 keycodes[i] 取键码。
+- (void)buildCompatProperties {
+    NSMutableDictionary *d = [NSMutableDictionary dictionary];
+
+    // keycodes：从 clickEvents 里取 SendKey 的键码
+    NSMutableArray *codes = [NSMutableArray array];
+    for (int i = 0; i < 4; i++) {
+        if (i < (NSInteger)self.widget.clickEvents.count) {
+            A2ControlEvent *e = self.widget.clickEvents[i];
+            [codes addObject:e.key.length ? @(e.key.integerValue) : @0];
+        } else {
+            [codes addObject:@0];
+        }
+    }
+    d[@"keycodes"] = codes;
+    d[@"isSwipeable"] = @(self.widget.isSwipple);
+    d[@"isToggleable"] = @(self.widget.isToggleable);
+    _compatProperties = [d copy];
+}
+
+- (NSDictionary *)properties {
+    return _compatProperties ?: @{};
+}
+
+- (UILabel *)titleLabel {
+    return _label;
+}
+
+- (BOOL)isToggleOn {
+    return self.isOn;
+}
+
+- (void)setIsToggleOn:(BOOL)isToggleOn {
+    self.on = isToggleOn;
 }
 
 - (void)layoutSubviews {

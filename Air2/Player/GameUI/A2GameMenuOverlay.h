@@ -82,6 +82,11 @@ typedef NS_ENUM(NSInteger, A2FPSDisplayMode) {
 
 - (void)applyTheme;
 
+/// 更新 FPS / 内存显示（悬浮球旁的小字）。
+/// 对应 ZL2 的 FPS 与内存显示开关 —— 数据由 SurfaceViewController 的
+/// statsTimer 每秒喂一次。
+- (void)updateFPS:(double)fps memoryUsageMB:(double)memoryMB;
+
 @end
 
 NS_ASSUME_NONNULL_END

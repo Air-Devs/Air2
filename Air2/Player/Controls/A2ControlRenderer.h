@@ -51,6 +51,29 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign, getter=isOn) BOOL on;
 - (instancetype)initWithWidget:(A2ControlWidget *)widget;
 - (void)applyTheme;
+
+// ---- 兼容属性 ----
+// SurfaceViewController 的 executebtn: 系列是从 Air1 沿用下来的，
+// 它按 Air1 的 ControlButton 接口访问这些字段。这里补齐，
+// 让那部分逻辑不用改（而且语义与 Air1 一致）。
+//
+// 为什么不反过来改成 widget.xxx：
+//   那边有几十处访问，改一处漏一处就是编译错误；
+//   而这里的实现只有几行 —— 把复杂度收敛在我们自己的类里。
+
+/// 控件的原始属性字典（来自布局文件）。
+/// 支持 properties[@"keycodes"][i] 这种 Air1 风格的访问。
+@property (nonatomic, copy, readonly) NSDictionary *properties;
+
+/// Toggleable 控件的开关态（Air1 的 isToggleOn 同名兼容）
+@property (nonatomic, assign) BOOL isToggleOn;
+
+/// 按下前的背景色，松开时恢复（兼容 Air1 的做法）
+@property (nonatomic, strong, nullable) UIColor *savedBackgroundColor;
+
+/// 显示文字（Air1 用 titleLabel.text）
+@property (nonatomic, strong, readonly) UILabel *titleLabel;
+
 @end
 
 @interface A2ControlRenderer : UIView

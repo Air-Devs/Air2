@@ -16,6 +16,7 @@
 #import "A2DefaultControls.h"
 #import "A2AccountManager.h"
 #import "A2LaunchSplashView.h"
+#import "A2GameMenuOverlay.h"
 #import "A2GameLaunchCoordinator.h"
 #import "A2ResolutionManager.h"
 #import "utils.h"
@@ -1842,7 +1843,11 @@ static BOOL ame87_mcVersionRequiresTextureBuffer(NSString *mcVersionId) {
 /// 首帧渲染通知回调：淡出并移除启动遮罩层
 - (void)onFirstFrameRendered {
     // ★ [LAUNCH-PROGRESS] 首帧渲染 = 启动完成，先把阶段推到 Completed。
-    AmeLaunchProgressSetStage(AmeLaunchStageCompleted);
+    // 首帧渲染 = 启动完成。用 A2 的遮罩自己收尾
+    // （A2LaunchSplashView.finishAndDismissWithCompletion:）。
+    if ([self.launchOverlayView isKindOfClass:A2LaunchSplashView.class]) {
+        [(A2LaunchSplashView *)self.launchOverlayView finishAndDismissWithCompletion:nil];
+    }
     dispatch_async(dispatch_get_main_queue(), ^{
         if (self.launchOverlayDismissed) return;
         // ★ [LAUNCH-PROGRESS] 撤遮罩前把进度条刷到满格 —— updateLaunchProgressUI 会
@@ -1872,7 +1877,7 @@ static BOOL ame87_mcVersionRequiresTextureBuffer(NSString *mcVersionId) {
             [self.launchCancelButton removeFromSuperview];
             self.launchCancelButton = nil;
             [[NSNotificationCenter defaultCenter] removeObserver:self name:@"PojavFirstFrameRendered" object:nil];
-            [[NSNotificationCenter defaultCenter] removeObserver:self name:AmeLaunchProgressChangedNotification object:nil];
+            // AmeLaunchProgressChangedNotification 是 Air1 的通知名，已不存在
             NSLog(@"[SurfaceViewController] Launch overlay dismissed after %.1f seconds", elapsed);
         }];
     });
@@ -1894,7 +1899,7 @@ static BOOL ame87_mcVersionRequiresTextureBuffer(NSString *mcVersionId) {
 
         [self.launchSpinner stopAnimating];
         [[NSNotificationCenter defaultCenter] removeObserver:self name:@"PojavFirstFrameRendered" object:nil];
-        [[NSNotificationCenter defaultCenter] removeObserver:self name:AmeLaunchProgressChangedNotification object:nil];
+        // AmeLaunchProgressChangedNotification 是 Air1 的通知名，已不存在
 
         [self.launchOverlayView removeFromSuperview];
         self.launchOverlayView = nil;
@@ -3474,8 +3479,8 @@ CALayer *Amethyst_SDL3RenderLayer(void) {
     double memoryMB = [self currentPhysFootprintMB];
 
     // 3. 更新 UI（GameMenuOverlayView 内部会 dispatch 到主线程）
-    if ([self.gameMenuOverlay isKindOfClass:[GameMenuOverlayView class]]) {
-        [(GameMenuOverlayView *)self.gameMenuOverlay updateFPS:fps memoryUsageMB:memoryMB];
+    if ([self.gameMenuOverlay isKindOfClass:A2GameMenuOverlay.class]) {
+        [(A2GameMenuOverlay *)self.gameMenuOverlay updateFPS:fps memoryUsageMB:memoryMB];
     }
 }
 
@@ -3511,7 +3516,7 @@ CALayer *Amethyst_SDL3RenderLayer(void) {
     // 清理启动遮罩层资源
     [[NSNotificationCenter defaultCenter] removeObserver:self name:@"PojavFirstFrameRendered" object:nil];
     // ★ [LAUNCH-PROGRESS] 一并移除阶段广播观察者(与上面同一处清理)
-    [[NSNotificationCenter defaultCenter] removeObserver:self name:AmeLaunchProgressChangedNotification object:nil];
+    // AmeLaunchProgressChangedNotification 是 Air1 的通知名，已不存在
     self.launchOverlayView = nil;
     self.launchGradientLayer = nil;
 
