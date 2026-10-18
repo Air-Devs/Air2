@@ -408,13 +408,28 @@ static NSString *AMENonEmpty(NSString * _Nullable s, NSString *fallback) {
                 NSLog(@"[UpdateChecker] Still busy, skipping update dialog");
                 return;
             }
-            UpdateDialogViewController *retryDialog = [UpdateDialogViewController dialogWithInfo:info];
-            [presenter presentViewController:retryDialog animated:YES completion:nil];
+            [self presentUpdateDialogForInfo:info fromPresenter:presenter];
         });
         return;
     }
-    UpdateDialogViewController *dialog = [UpdateDialogViewController dialogWithInfo:info];
-    [presenter presentViewController:dialog animated:YES completion:nil];
+
+    // ★CI 修复★ 原实现引用 UpdateDialogViewController —— 该类在仓库里不存在
+    //   （CI: use of undeclared identifier 'UpdateDialogViewController'）。
+    //   这里用本文件已有的 UIAlertController 路径实现同等提示，不新增类。
+    NSString *title = info.releaseName.length ? info.releaseName : @"发现新版本";
+    NSString *message = info.releaseNotes.length ? info.releaseNotes : @"有新版本可用，是否前往下载？";
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
+                                                                  message:message
+                                                           preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"前往下载"
+                                              style:UIAlertActionStyleDefault
+                                            handler:^(__unused UIAlertAction *action) {
+        [self openReleasePageForInfo:info];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"稍后"
+                                              style:UIAlertActionStyleCancel
+                                            handler:nil]];
+    [presenter presentViewController:alert animated:YES completion:nil];
 }
 
 #pragma mark - Open Release Page

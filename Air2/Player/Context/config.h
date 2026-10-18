@@ -1,6 +1,6 @@
 // Configuration macros
 
-/* #undef CONFIG_RELEASE */ 1
+/* #undef CONFIG_RELEASE */
 
 #if !(CONFIG_RELEASE)
 # define CONFIG_RELEASE 0
