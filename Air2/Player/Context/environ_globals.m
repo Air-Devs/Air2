@@ -48,7 +48,6 @@ GLFW_invoke_WindowSize_func* GLFW_invoke_WindowSize = 0;
 
 // ---- 这几个之前被误判为"别处已定义"而删掉，实际只有引用、没有定义 ----
 GLFWInputEvent events[8000] = {0};
-int guiScale = 0;
 jboolean isGrabbing = 0;
 jbyte* keyDownBuffer = 0;
 JavaVM* runtimeJavaVMPtr = 0;
