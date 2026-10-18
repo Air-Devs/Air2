@@ -5,6 +5,7 @@
 
 #import "A2IntegrityChecker.h"
 #import "A2Logger.h"
+#import "A2VersionIsolation.h"
 #import <CommonCrypto/CommonDigest.h>
 
 @implementation A2IntegrityIssue
