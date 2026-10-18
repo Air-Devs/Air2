@@ -52,6 +52,7 @@ void a2_jit_log(const char *fmt, ...) {
 //   （官方 UniversalJIT26 的 prepare_memory_region(addr,len) 正是这个语义，x0≠0 时它不分配）。
 //   x0 = 区域首地址，x1 = 长度（ABI 直传，naked 函数不改寄存器）。
 __attribute__((noinline, optnone, naked))
+// 注:brk 立即数 0x6942 = 自研宿主区协议(见上)。
 static void *a2_jit_brk6942_prepare_region(void *addr, size_t len) {
     asm("brk #0x6942 
 "
