@@ -441,6 +441,10 @@ def build():
                 "CODE_SIGN_STYLE": "Automatic",
                 "CURRENT_PROJECT_VERSION": BUILD_VERSION,
                 "GENERATE_INFOPLIST_FILE": "NO",
+                # natives 层引用第三方头（<EGL/egl.h>、<GL/osmesa.h>）：
+                # 搜索路径取自 cmake/CMakeLists.txt 的 include_directories。
+                # 之前工程里没写，Air2/Player 一直编不过。
+                "HEADER_SEARCH_PATHS": '(\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t"$(SRCROOT)/Libraries/external/mesa",\n\t\t\t\t)',
                 "INFOPLIST_FILE": "Air2/Info.plist",
                 "LD_RUNPATH_SEARCH_PATHS": '(\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t"@executable_path/Frameworks",\n\t\t\t\t)',
                 "OTHER_LDFLAGS": terracotta_ldflags(),

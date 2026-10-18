@@ -1,4 +1,4 @@
-#include "../jni.h"
+#include "../../Context/jni.h"
 
 //jfieldID colorValueID;
 

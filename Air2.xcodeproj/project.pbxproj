@@ -1580,6 +1580,10 @@
 				CODE_SIGN_STYLE = "Automatic";
 				CURRENT_PROJECT_VERSION = "1";
 				GENERATE_INFOPLIST_FILE = "NO";
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Libraries/external/mesa",
+				);
 				INFOPLIST_FILE = "Air2/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
@@ -1610,6 +1614,10 @@
 				CODE_SIGN_STYLE = "Automatic";
 				CURRENT_PROJECT_VERSION = "1";
 				GENERATE_INFOPLIST_FILE = "NO";
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/Libraries/external/mesa",
+				);
 				INFOPLIST_FILE = "Air2/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
