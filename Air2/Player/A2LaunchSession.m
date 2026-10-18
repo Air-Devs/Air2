@@ -8,6 +8,7 @@
 //
 
 #import "A2LaunchSession.h"
+#import <UIKit/UIKit.h>   // 启动失败界面（UIAlertController / UIWindowScene）
 #import "A2LaunchPlan.h"
 #import "A2LaunchRunner.h"
 #import "A2LaunchChain.h"            // ①→②→③ 的顺序与状态（★单一真相源★）
@@ -68,6 +69,11 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
     }
     return nil;
 }
+
+@interface A2LaunchSession ()
+/// 启动失败页（finish() 在定义之前调用 ⇒ 需要前置声明）
++ (void)a2_presentLaunchFailureWithMessage:(NSString *)message returnCode:(NSInteger)rc;
+@end
 
 @implementation A2LaunchSession
 
