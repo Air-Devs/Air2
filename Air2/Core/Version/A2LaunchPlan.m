@@ -385,6 +385,14 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     //     与「-Xms≈-Xmx 减少伸缩抖动」相斥，老线选了前者（低内存设备上常驻更重要）。
     //   · memoryMB<=0 ⇒ 两条都不下发（既有语义：没有堆指令就交给 JVM 默认）。
     if (memoryMB > 0) {
+        // ★2026-10-18★ 允许用偏好键覆盖堆上限（排查「系统杀进程」用）：
+        //   真机日志显示 MC 跑到 60s 时进程被系统杀掉（无信号栈 ⇒ SIGKILL/jetsam），
+        //   先把 Xmx 调小验证是不是内存问题。键 A2XmxMB（0/未设 = 用自动预算）。
+        NSInteger overrideMB = [NSUserDefaults.standardUserDefaults integerForKey:@"A2XmxMB"];
+        if (overrideMB > 0 && overrideMB < memoryMB) {
+            memoryMB = overrideMB;
+            [A2Log criterion:@"[A2-MEM] ★Xmx 被偏好键覆盖★ 自动预算已改用 %ldM（键 A2XmxMB）", (long)memoryMB];
+        }
         [options addObject:@"-Xms128M"];
         [options addObject:[NSString stringWithFormat:@"-Xmx%ldM", (long)memoryMB]];
     }
