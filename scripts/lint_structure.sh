@@ -89,7 +89,7 @@ BAD='(Utils2|ManagerNew|NewManager|Common|Helper)\.'
 # 排除移植来的第三方 / Air1 代码 —— 它们的命名不是我们定的，
 # 改名会破坏 Air1 内部的引用链。只在【我们自己写的新代码】里禁止。
 found=$(cat /tmp/.air2_files.$$ | grep -E "$BAD" \
-    | grep -vE '^(Natives/(SSZip|ModLoaderIconHelper|non_darwin_utils|utils)|ThirdParty/|JavaApp/|Libraries/)' || true)
+    | grep -vE '^(Natives/(SSZip|ModLoaderIconHelper|non_darwin_utils|utils)|Natives/external/|ThirdParty/|JavaApp/|Libraries/)' || true)
 if [ -n "$found" ]; then
     for f in $found; do err "禁用命名: $f"; done
 else
