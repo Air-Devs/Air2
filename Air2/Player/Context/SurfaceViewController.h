@@ -10,14 +10,15 @@ dispatch_group_t fatalExitGroup;
 CGRect virtualMouseFrame;
 CGPoint lastVirtualMousePoint;
 
+// 前置声明必须放在 @interface 外面 —— 放进里面会报
+// "missing '@end'"（Objective-C 的 @class 是文件级声明，不是成员）。
+@class A2ControlRenderer;
+
 @interface SurfaceViewController : UIViewController
 
-/* ★CI★ 原为 ControlLayout*，该类在仓库中不存在（新模型 A2ControlLayout 是 NSObject 数据模型），
-   这里按「控件层视图」的真实用途声明为 UIView，避免引用不存在的类型。 */
 /// 控件容器 —— 类型是 A2ControlRenderer（不是裸 UIView），
 /// 因为 loadCustomControls 与 updateControlHiddenState 需要它的
 /// inputDelegate / 控件枚举能力。
-@class A2ControlRenderer;
 @property(nonatomic) A2ControlRenderer *ctrlView;
 @property(nonatomic) GameSurfaceView* surfaceView;
 @property(nonatomic) UIView *touchView;

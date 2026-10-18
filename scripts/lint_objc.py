@@ -165,6 +165,20 @@ def check_file(path, defined_classes):
             f"@interface({ifaces}) + @implementation({impls}) + @protocol({protos}) "
             f"= {ifaces+impls+protos} ≠ @end({ends})")
 
+    # ---------- @class 不能在 @interface / @implementation 内 ----------
+    # 这条错误我实际踩过：把 @class A2ControlRenderer; 插到了
+    # @interface 的 @property 中间，编译报 "missing '@end'" 与
+    # 一串 "unexpected '@' in program"，很难一眼看出根因。
+    _depth = 0
+    for _i, _line in enumerate(src.split("\n"), 1):
+        _st = _line.strip()
+        if _st.startswith(("@interface", "@implementation", "@protocol ")):
+            _depth += 1
+        elif _st.startswith("@end"):
+            _depth = max(0, _depth - 1)
+        elif _st.startswith("@class") and _depth > 0:
+            errors.append(f"第 {_i} 行: @class 在 @interface 内 —— 必须移到外面")
+
     # ---------- 只读属性赋值 ----------
     for var, prop in re.findall(r'\b(\w+)\.(delay|isRunning|state)\s*=', src):
         # delay 只在 UIViewPropertyAnimator 上只读，其他类型（如 CABasicAnimation）可写
