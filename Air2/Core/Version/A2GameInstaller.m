@@ -674,6 +674,11 @@ static void A2Main(dispatch_block_t block) {
                 }
                 self.a2BatchBytesDone += delta;
                 if (self.a2BatchBytesDone < 0) self.a2BatchBytesDone = 0;
+                // ★2026-10-18 修统计口径★ HEAD 预统计可能偏低（有的服务端不给 Content-Length /
+                //   被重定向）⇒ 已下字节超过总量时，把总量抬到"已下"，百分比就不会虚高到 100%。
+                if (self.a2BatchBytesDone > self.a2BatchBytesTotal) {
+                    self.a2BatchBytesTotal = self.a2BatchBytesDone;
+                }
                 double bp = (self.a2BatchBytesTotal > 0)
                     ? MIN(1.0, (double)self.a2BatchBytesDone / (double)self.a2BatchBytesTotal)
                     : 0.0;
@@ -769,12 +774,20 @@ static void A2Main(dispatch_block_t block) {
                 // ★文案统一★：整批只用"已下载 X / 共 Y · P%"这一种串，进度按文件数推进，
                 //   ★不再★在文件完成瞬间切成别的文案（那正是"来回闪"的来源）。
                 {
-                    double fp = (double)done / (double)total;
-                    [self report:stage progress:fp
-                         message:[NSString stringWithFormat:@"已下载 %.1f MB / 共 %.1f MB · %.0f%%",
-                                  (double)self.a2BatchBytesDone / 1048576.0,
-                                  (double)self.a2BatchBytesTotal / 1048576.0,
-                                  fp * 100.0]];
+                    // ★只按字节算★（按文件个数算会与字节进度打架 ⇒ 用户看到 100%/60% 闪）
+                    @synchronized (self) {
+                        if (self.a2BatchBytesDone > self.a2BatchBytesTotal) {
+                            self.a2BatchBytesTotal = self.a2BatchBytesDone;
+                        }
+                        double bp = (self.a2BatchBytesTotal > 0)
+                            ? MIN(1.0, (double)self.a2BatchBytesDone / (double)self.a2BatchBytesTotal)
+                            : 0.0;
+                        [self report:stage progress:bp
+                             message:[NSString stringWithFormat:@"已下载 %.1f MB / 共 %.1f MB · %.0f%%",
+                                      (double)self.a2BatchBytesDone / 1048576.0,
+                                      (double)self.a2BatchBytesTotal / 1048576.0,
+                                      bp * 100.0]];
+                    }
                 }
                 if (done >= total) {
                     if (finished) return;
