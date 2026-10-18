@@ -254,7 +254,11 @@ static void a2_gl_bridge_frame_work(void) {
     if (gGLDisable != NULL) gGLDisable(A2_GL_SCISSOR_TEST);   // ★还原状态★：不把 scissor 留给后续使用者
 
     if (gEglSwapBuffers != NULL) gEglSwapBuffers(gDpy, gSurf);
-    if (gGLGetError != NULL)     glErr = gGLGetError();
+    // ★2026-10-18 真机证据★ 渲染器 = MobileGlues 时 glGetError 会打进它尚未初始化的
+    //   跳转表 ⇒ pc=0x0 SIGSEGV（libmobileglues.dylib+0x3e4f8 glGetError+0x14）。
+    //   这句只为打判据行，不值得为它崩，所以该后端下跳过（其余后端照旧）。
+    BOOL backendIsMG = (strstr(gBackendName, "mobileglues") != NULL);
+    if (gGLGetError != NULL && !backendIsMG) glErr = gGLGetError();
 
     // ---- ③ 记进帧性能判据（中立数值；draw=1 = 本帧一次清屏；shaderNew=0 = 本层不建着色器/管线）----
     a2_frame_perf_record_frame(1, 0, (gEglSwapBuffers != NULL) ? 1 : 0, clearW, clearH);
@@ -297,6 +301,9 @@ void a2_gl_bridge_present_frame(void) {
     a2_gl_bridge_frame_work();
 }
 
+/// 当前后端的 dylib 名（attach 时记录；帧回调据此跳过危险调用）。
+static char gBackendName[96] = {0};
+
 int a2_gl_bridge_backend_is_egl(const char *rendererName) {
     if (rendererName == NULL || rendererName[0] == '\0') return 0;
     // ★后端词汇表唯一来源是 a2_renderer.h 的常量★（不重复字面量）。
@@ -329,6 +336,9 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     }
 
     const char *rendererName = host->rendererName;
+    if (rendererName != NULL) {
+        snprintf(gBackendName, sizeof(gBackendName), "%s", rendererName);
+    }
 
     // ---- ① 后端判定：不是 EGL/GL 系 ⇒ 本层不负责（★不阻断、也不替换成别的后端★）----
     if (!a2_gl_bridge_backend_is_egl(rendererName)) {
