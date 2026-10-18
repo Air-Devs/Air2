@@ -42,6 +42,17 @@ NS_ASSUME_NONNULL_BEGIN
 @end
 
 /// 整个控件层的容器视图
+/// 单个控件视图 —— 公开是因为 SurfaceViewController 的
+/// executebtn: 系列方法需要它的类型签名。
+@interface A2ControlButtonView : UIView
+@property (nonatomic, strong) A2ControlWidget *widget;
+@property (nonatomic, weak, nullable) id<A2ControlInputDelegate> inputDelegate;
+@property (nonatomic, assign) BOOL editing;
+@property (nonatomic, assign, getter=isOn) BOOL on;
+- (instancetype)initWithWidget:(A2ControlWidget *)widget;
+- (void)applyTheme;
+@end
+
 @interface A2ControlRenderer : UIView
 
 @property (nonatomic, strong, readonly) A2ControlLayout *layout;

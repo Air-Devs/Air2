@@ -77,6 +77,7 @@
 		F2CB4E7B7F47FF18A957EFB5 /* A2ControlLayout.m in Sources */ = {isa = PBXBuildFile; fileRef = 1DD83AEE82FD5DB2400F3B8B /* A2ControlLayout.m */; };
 		FE909770F1329CB8E985AD5F /* A2ControlRenderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A1769FF5839C6F59DA3DB26 /* A2ControlRenderer.m */; };
 		7248BD00DBF94569DDA08C01 /* A2DefaultControls.m in Sources */ = {isa = PBXBuildFile; fileRef = 5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */; };
+		062C9510C87BE5CE71B8FCA7 /* A2TouchTransport.m in Sources */ = {isa = PBXBuildFile; fileRef = BC32DEDE020A2112CC01EF75 /* A2TouchTransport.m */; };
 		04FA0FC85CCBBA11454EF9AE /* A2LaunchSplashView.m in Sources */ = {isa = PBXBuildFile; fileRef = 96009B3F837E8AD9139F1044 /* A2LaunchSplashView.m */; };
 		999713CBCD519FC8B0C363BE /* A2ResolutionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */; };
 		F56BA6557B260E7C004C2CE4 /* A2ResolutionSettingsView.m in Sources */ = {isa = PBXBuildFile; fileRef = F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */; };
@@ -264,6 +265,7 @@
 		1DD83AEE82FD5DB2400F3B8B /* A2ControlLayout.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlLayout.m"; sourceTree = "<group>"; };
 		6A1769FF5839C6F59DA3DB26 /* A2ControlRenderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlRenderer.m"; sourceTree = "<group>"; };
 		5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DefaultControls.m"; sourceTree = "<group>"; };
+		BC32DEDE020A2112CC01EF75 /* A2TouchTransport.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TouchTransport.m"; sourceTree = "<group>"; };
 		96009B3F837E8AD9139F1044 /* A2LaunchSplashView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchSplashView.m"; sourceTree = "<group>"; };
 		000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResolutionManager.m"; sourceTree = "<group>"; };
 		F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResolutionSettingsView.m"; sourceTree = "<group>"; };
@@ -445,6 +447,7 @@
 		9A480B77A9493A4A99FCF1E2 /* A2ControlLayout.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlLayout.h"; sourceTree = "<group>"; };
 		1C4E55239DDFE7C5F66C96EF /* A2ControlRenderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlRenderer.h"; sourceTree = "<group>"; };
 		17EFE083DFCD2B631A9B9195 /* A2DefaultControls.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DefaultControls.h"; sourceTree = "<group>"; };
+		ABBA497DBC96475F112E489F /* A2TouchTransport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TouchTransport.h"; sourceTree = "<group>"; };
 		8F8DC63CC90EE44095B0B442 /* A2GameMenuOverlay.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameMenuOverlay.h"; sourceTree = "<group>"; };
 		1C687E2D44BB19258F377A63 /* A2LaunchSplashView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchSplashView.h"; sourceTree = "<group>"; };
 		9A380B08F835A986A05EA196 /* A2ResolutionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResolutionManager.h"; sourceTree = "<group>"; };
@@ -883,9 +886,11 @@
 				1DD83AEE82FD5DB2400F3B8B /* A2ControlLayout.m */,
 				6A1769FF5839C6F59DA3DB26 /* A2ControlRenderer.m */,
 				5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */,
+				BC32DEDE020A2112CC01EF75 /* A2TouchTransport.m */,
 				9A480B77A9493A4A99FCF1E2 /* A2ControlLayout.h */,
 				1C4E55239DDFE7C5F66C96EF /* A2ControlRenderer.h */,
 				17EFE083DFCD2B631A9B9195 /* A2DefaultControls.h */,
+				ABBA497DBC96475F112E489F /* A2TouchTransport.h */,
 			);
 			path = Controls;
 			sourceTree = "<group>";
@@ -1389,6 +1394,7 @@
 				F2CB4E7B7F47FF18A957EFB5 /* A2ControlLayout.m in Sources */,
 				FE909770F1329CB8E985AD5F /* A2ControlRenderer.m in Sources */,
 				7248BD00DBF94569DDA08C01 /* A2DefaultControls.m in Sources */,
+				062C9510C87BE5CE71B8FCA7 /* A2TouchTransport.m in Sources */,
 				04FA0FC85CCBBA11454EF9AE /* A2LaunchSplashView.m in Sources */,
 				999713CBCD519FC8B0C363BE /* A2ResolutionManager.m in Sources */,
 				F56BA6557B260E7C004C2CE4 /* A2ResolutionSettingsView.m in Sources */,

@@ -241,7 +241,7 @@ static GameSurfaceView* pojavWindow;
 @property(nonatomic) NSDictionary* metadata;
 @property(nonatomic) TrackedTextField *inputTextField;
 @property(nonatomic) NSMutableArray* swipeableButtons;
-@property(nonatomic) ControlButton* swipingButton;
+@property(nonatomic) A2ControlButtonView* swipingButton;
 @property(nonatomic) UITouch *primaryTouch, *hotbarTouch;
 
 @property(nonatomic) UILongPressGestureRecognizer* longPressGesture, *longPressTwoGesture;
@@ -382,7 +382,7 @@ static UIView *findSDL_uikitview(UIView *root);
         while (weakSelf.touchControllerTransportHandle >= 0 && ![weakSelf isViewDismissed]) {
             @autoreleasepool {
                 NSMutableData *buffer = [NSMutableData dataWithLength:256];
-                int result = [TouchControllerBridge receiveFromTransport:weakSelf.touchControllerTransportHandle buffer:buffer];
+                int result = [A2TouchTransportManager receiveFromTransport:weakSelf.touchControllerTransportHandle buffer:buffer];
 
                 if (result > 0) {
                     [buffer setLength:result];
@@ -445,7 +445,7 @@ static UIView *findSDL_uikitview(UIView *root);
     }
 
     if (self.touchControllerTransportHandle >= 0 && messageData) {
-        [TouchControllerBridge sendToTransport:self.touchControllerTransportHandle data:messageData];
+        [A2TouchTransportManager sendToTransport:self.touchControllerTransportHandle data:messageData];
     }
 }
 
@@ -592,7 +592,7 @@ static UIView *findSDL_uikitview(UIView *root);
                                               selectionLength:(int)selectionLength
                                               selectionLeft:NO];
 
-    [TouchControllerBridge sendToTransport:self.touchControllerTransportHandle data:messageData];
+    [A2TouchTransportManager sendToTransport:self.touchControllerTransportHandle data:messageData];
 }
 
 // åéåæ ä½ç½®ä¿¡æ¯
@@ -600,7 +600,7 @@ static UIView *findSDL_uikitview(UIView *root);
     if (self.touchControllerTransportHandle < 0) return;
 
     NSData *messageData = [self encodeInputCursorMessageWithRect:rect];
-    [TouchControllerBridge sendToTransport:self.touchControllerTransportHandle data:messageData];
+    [A2TouchTransportManager sendToTransport:self.touchControllerTransportHandle data:messageData];
 }
 
 // åéè¾å¥åºåä¿¡æ¯
@@ -608,7 +608,7 @@ static UIView *findSDL_uikitview(UIView *root);
     if (self.touchControllerTransportHandle < 0) return;
 
     NSData *messageData = [self encodeInputAreaMessageWithRect:rect];
-    [TouchControllerBridge sendToTransport:self.touchControllerTransportHandle data:messageData];
+    [A2TouchTransportManager sendToTransport:self.touchControllerTransportHandle data:messageData];
 }
 
 #pragma mark - TouchController Vibration Support
@@ -659,7 +659,7 @@ static UIView *findSDL_uikitview(UIView *root);
     // åæ¶åé VibrateMessage å° TouchController
     if (self.touchControllerTransportHandle >= 0) {
         NSData *messageData = [self encodeVibrateMessageWithKind:kind];
-        [TouchControllerBridge sendToTransport:self.touchControllerTransportHandle data:messageData];
+        [A2TouchTransportManager sendToTransport:self.touchControllerTransportHandle data:messageData];
     }
 }
 
@@ -703,11 +703,11 @@ static UIView *findSDL_uikitview(UIView *root);
 
     // 发送 text_status 能力：声明启动器会通过 InputStatusMessage 上报文本编辑状态
     NSData *textStatusCap = [self encodeCapabilityMessageWithName:@"text_status" enabled:YES];
-    [TouchControllerBridge sendToTransport:self.touchControllerTransportHandle data:textStatusCap];
+    [A2TouchTransportManager sendToTransport:self.touchControllerTransportHandle data:textStatusCap];
 
     // 发送 keyboard_show 能力：声明启动器会响应 KeyboardShowMessage 显示/隐藏键盘
     NSData *keyboardShowCap = [self encodeCapabilityMessageWithName:@"keyboard_show" enabled:YES];
-    [TouchControllerBridge sendToTransport:self.touchControllerTransportHandle data:keyboardShowCap];
+    [A2TouchTransportManager sendToTransport:self.touchControllerTransportHandle data:keyboardShowCap];
 
     NSLog(@"[TouchController] Sent capabilities: text_status, keyboard_show");
 }
@@ -743,7 +743,7 @@ static UIView *findSDL_uikitview(UIView *root);
         NSData *messageData = [self encodeMoveViewMessageWithScreenBased:YES
                                                               deltaPitch:deltaPitch
                                                                deltaYaw:deltaYaw];
-        [TouchControllerBridge sendToTransport:self.touchControllerTransportHandle data:messageData];
+        [A2TouchTransportManager sendToTransport:self.touchControllerTransportHandle data:messageData];
     }
 }
 
@@ -974,7 +974,7 @@ static UIView *findSDL_uikitview(UIView *root);
                                               selectionStart:0
                                               selectionLength:0
                                               selectionLeft:NO];
-    [TouchControllerBridge sendToTransport:self.touchControllerTransportHandle data:messageData];
+    [A2TouchTransportManager sendToTransport:self.touchControllerTransportHandle data:messageData];
 }
 
 #pragma mark - Initialization
@@ -1072,7 +1072,10 @@ static UIView *findSDL_uikitview(UIView *root);
     self.rootView = [[UIView alloc] initWithFrame:CGRectMake(0, 0, self.view.frame.size.width + 30.0, self.view.frame.size.height)];
     [self.view addSubview:self.rootView];
 
-    self.ctrlView = [[UIView alloc] initWithFrame:getSafeArea(self.view.frame)];
+    // 控件容器用 A2ControlRenderer（它同时负责渲染与触摸）。
+    // 上游曾临时改成裸 UIView —— 那样控件系统就没接上，
+    // 这里恢复成完整实现。
+    self.ctrlView = [[A2ControlRenderer alloc] initWithLayout:[A2DefaultControls makeLayout]];
     [self performSelector:@selector(initCategory_Navigation)];
 
     self.surfaceView = [[GameSurfaceView alloc] initWithFrame:self.view.frame];
@@ -1243,9 +1246,9 @@ static UIView *findSDL_uikitview(UIView *root);
     // åå§å TouchController éæåº Transport
     if (getPrefBool(@"control.mod_touch_enable")) {
         NSInteger mode = [getPrefObject(@"control.mod_touch_mode") integerValue];
-        if (mode == 2 && [TouchControllerBridge isTouchControllerAvailable]) {
+        if (mode == 2 && [A2TouchTransportManager isTouchControllerAvailable]) {
             // éæåºæ¨¡å¼ï¼åå»º Transport
-            self.touchControllerTransportHandle = [TouchControllerBridge createTransportWithName:@"/tmp/touchcontroller.sock"];
+            self.touchControllerTransportHandle = [A2TouchTransportManager createTransportWithName:@"/tmp/touchcontroller.sock"];
             if (self.touchControllerTransportHandle < 0) {
                 NSLog(@"[TouchController] Failed to create transport for static library mode");
             } else {
@@ -1574,7 +1577,7 @@ static UIView *findSDL_uikitview(UIView *root);
 
 - (void)updateControlHiddenState:(BOOL)hide {
     for (UIView *view in self.ctrlView.subviews) {
-        ControlButton *button = (ControlButton *)view;
+        A2ControlButtonView *button = (A2ControlButtonView *)view;
         if (!button.canBeHidden) continue;
         BOOL hidden = hide || !(
             (isGrabbing && [button.properties[@"displayInGame"] boolValue]) ||
@@ -2164,8 +2167,8 @@ static BOOL ame87_mcVersionRequiresTextureBuffer(NSString *mcVersionId) {
     NSString *controlFile = [PLProfiles resolveKeyForCurrentProfile:@"defaultTouchCtrl"];
     [self.ctrlView loadControlFile:controlFile];
 
-    ControlButton *menuButton;
-    for (ControlButton *button in self.ctrlView.subviews) {
+    A2ControlButtonView *menuButton;
+    for (A2ControlButtonView *button in self.ctrlView.subviews) {
         BOOL isSwipeable = [button.properties[@"isSwipeable"] boolValue];
 
         button.canBeHidden = YES;
@@ -2823,7 +2826,7 @@ static btRawAXFunc btRawAXGet(void) {
 
 #pragma mark - On-screen button functions
 
-- (void)executebtn:(ControlButton *)sender withAction:(int)action {
+- (void)executebtn:(A2ControlButtonView *)sender withAction:(int)action {
     int held = action == ACTION_DOWN;
     for (int i = 0; i < 4; i++) {
         int keycode = ((NSNumber *)sender.properties[@"keycodes"][i]).intValue;
@@ -2889,7 +2892,7 @@ static btRawAXFunc btRawAXGet(void) {
     }
 }
 
-- (void)executebtn_down:(ControlButton *)sender
+- (void)executebtn_down:(A2ControlButtonView *)sender
 {
     if(self.shouldTriggerHaptic) { [self.lightHaptic impactOccurred]; }
     if (sender.savedBackgroundColor == nil) { [self executebtn:sender withAction:ACTION_DOWN]; }
@@ -2903,17 +2906,17 @@ static btRawAXFunc btRawAXGet(void) {
         return;
     }
     CGPoint location = [sender locationInView:self.ctrlView];
-    for (ControlButton *button in self.swipeableButtons) {
-        if (CGRectContainsPoint(button.frame, location) && (ControlButton *)self.swipingButton != button) {
+    for (A2ControlButtonView *button in self.swipeableButtons) {
+        if (CGRectContainsPoint(button.frame, location) && (A2ControlButtonView *)self.swipingButton != button) {
             [self executebtn_up:self.swipingButton isOutside:NO];
-            self.swipingButton = (ControlButton *)button;
+            self.swipingButton = (A2ControlButtonView *)button;
             [self executebtn:self.swipingButton withAction:ACTION_DOWN];
             break;
         }
     }
 }
 
-- (void)executebtn_up:(ControlButton *)sender isOutside:(BOOL)isOutside
+- (void)executebtn_up:(A2ControlButtonView *)sender isOutside:(BOOL)isOutside
 {
     if (self.swipingButton == sender) {
         [self executebtn:self.swipingButton withAction:ACTION_UP];
@@ -2937,8 +2940,8 @@ static btRawAXFunc btRawAXGet(void) {
     if(self.shouldTriggerHaptic) { [self.lightHaptic impactOccurred]; }
 }
 
-- (void)executebtn_up_inside:(ControlButton *)sender { [self executebtn_up:sender isOutside:NO]; }
-- (void)executebtn_up_outside:(ControlButton *)sender { [self executebtn_up:sender isOutside:YES]; }
+- (void)executebtn_up_inside:(A2ControlButtonView *)sender { [self executebtn_up:sender isOutside:NO]; }
+- (void)executebtn_up_outside:(A2ControlButtonView *)sender { [self executebtn_up:sender isOutside:YES]; }
 
 - (void)executebtn_special_togglebtn:(int)held {
     if (held) return;
@@ -3774,7 +3777,7 @@ CALayer *Amethyst_SDL3RenderLayer(void) {
 
     //æ¸ç TouchController èµæº
     if (self.touchControllerTransportHandle >= 0) {
-        [TouchControllerBridge destroyTransport:self.touchControllerTransportHandle];
+        [A2TouchTransportManager destroyTransport:self.touchControllerTransportHandle];
         self.touchControllerTransportHandle = -1;
     }
 }

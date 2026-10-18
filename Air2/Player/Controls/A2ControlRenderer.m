@@ -9,16 +9,6 @@
 
 #pragma mark - 单个控件
 
-/// 一个可交互的控件视图
-@interface A2ControlButtonView : UIView
-@property (nonatomic, strong) A2ControlWidget *widget;
-@property (nonatomic, weak, nullable) id<A2ControlInputDelegate> inputDelegate;
-@property (nonatomic, assign) BOOL editing;
-@property (nonatomic, assign, getter=isOn) BOOL on;   // Toggleable 的开关态
-- (instancetype)initWithWidget:(A2ControlWidget *)widget;
-- (void)applyTheme;
-@end
-
 @implementation A2ControlButtonView {
     UILabel *_label;
     BOOL _pressed;
