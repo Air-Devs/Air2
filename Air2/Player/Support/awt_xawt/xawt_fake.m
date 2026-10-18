@@ -1,4 +1,5 @@
-#include "../jni.h"
+// jni.h 在 Air2/Player/Context/ 下（原 "../jni.h" 指向 Support/ ⇒ CI 找不到）
+#include "../../Context/jni.h"
 
 //jfieldID colorValueID;
 

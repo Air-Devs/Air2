@@ -438,6 +438,11 @@ def build():
                 # 强制要求图标，编译能过；装到设备上显示系统默认图标。
                 # 设计好图标后放进 Assets/Images.xcassets/AppIcon.appiconset，
                 # 并在这里加回这一行。
+                # 第三方 EGL 头的搜索路径：Air2/Player/Renderer/{gl_bridge.h,osm_bridge.h}
+                # 与 egl_bridge.m 都是 #include <EGL/egl.h>，而 EGL/ 目录在仓库的
+                # ThirdParty/NG-GL4ES/include 与 Libraries/external/SimpleFPEWrapper/include 下。
+                # 不加这条 ⇒ CI 报 'EGL/egl.h' file not found（本地因为 Xcode 工程里手加过才没暴露）。
+                "HEADER_SEARCH_PATHS": '(\n\t\t\t\t\t"$(inherited)",\n\t\t\t\t\t"$(SRCROOT)/ThirdParty/NG-GL4ES/include",\n\t\t\t\t\t"$(SRCROOT)/Libraries/external/SimpleFPEWrapper/include",\n\t\t\t\t)',
                 "CODE_SIGN_STYLE": "Automatic",
                 "CURRENT_PROJECT_VERSION": BUILD_VERSION,
                 "GENERATE_INFOPLIST_FILE": "NO",
