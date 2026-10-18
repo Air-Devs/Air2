@@ -7,6 +7,14 @@
 #import "A2Logger.h"
 #import <sys/socket.h>
 
+/// readonly 属性在类外不能直接写 ivar ——
+/// 需要在实现文件里用类扩展重声明为 readwrite。
+@interface A2TouchTransport ()
+@property (nonatomic, readwrite) long long handle;
+@property (nonatomic, copy, readwrite) NSString *name;
+@property (nonatomic, assign, readwrite, getter=isActive) BOOL active;
+@end
+
 @implementation A2TouchTransport
 @end
 
@@ -76,9 +84,9 @@
     long long handle = m.nextHandle++;
 
     A2TouchTransport *ch = [A2TouchTransport new];
-    ch->_handle = handle;
-    ch->_name = [name copy];
-    ch->_active = YES;
+    ch.handle = handle;
+    ch.name = [name copy];
+    ch.active = YES;
 
     // 存两个 fd（写入端 + 读取端）
     m.channels[@(handle)] = @{
