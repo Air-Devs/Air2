@@ -81,7 +81,15 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
         A2LaunchSessionResult *r = [A2LaunchSessionResult resultWithStarted:started
                                                                  returnCode:rc
                                                                     message:message];
-        dispatch_async(dispatch_get_main_queue(), ^{ completion(r); });
+        dispatch_async(dispatch_get_main_queue(), ^{
+            // ★崩溃界面（用户要求 2026-10-18）★ 启动失败时不要只是闪退：
+            //   弹一个可读的失败页，写清「停在哪一步 / 失败码 / 怎么下一步」，
+            //   并提供「打开日志」直接看 lastlog。成功路径完全不受影响。
+            if (!started) {
+                [A2LaunchSession a2_presentLaunchFailureWithMessage:message returnCode:rc];
+            }
+            completion(r);
+        });
     };
 
     if (![self runtimeChainEnabled]) {
@@ -444,6 +452,35 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
         }
         finish(NO, 0, chainError.localizedDescription ?: @"启动链未完成");
     });
+}
+
+
+#pragma mark - 启动失败界面
+
+/// 启动失败时呈现一个可读的失败页（替代“直接闪退”）。
+///   入口：A2LaunchSession.finish()（started == NO）。
++ (void)a2_presentLaunchFailureWithMessage:(NSString *)message returnCode:(NSInteger)rc {
+    UIWindow *keyWin = nil;
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:UIWindowScene.class]) continue;
+        for (UIWindow *w in ((UIWindowScene *)scene).windows) {
+            if (w.isKeyWindow) { keyWin = w; break; }
+        }
+    }
+    UIViewController *top = keyWin.rootViewController;
+    while (top.presentedViewController) top = top.presentedViewController;
+    if (top == nil) return;
+
+    NSString *title = [NSString stringWithFormat:@"启动失败（rc=%ld）", (long)rc];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
+                                                                  message:message ?: @"启动链未完成"
+                                                           preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"打开日志" style:UIAlertActionStyleDefault
+                                            handler:^(UIAlertAction *a) {
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"A2ShowLogRequested" object:nil];
+    }]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleCancel handler:nil]];
+    [top presentViewController:alert animated:YES completion:nil];
 }
 
 @end

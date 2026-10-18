@@ -133,11 +133,19 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
         //   allowedScrollTypesMask 让 pan 手势也认滚轮/触控板（Apple 文档）；
         //   maximumNumberOfTouches = 0 ⇒ 只认间接输入，不吃直接触摸
         //   （直接触摸仍走 touchesBegan/Moved/Ended，指针语义不变）。
-        UIPanGestureRecognizer *scroll = [[UIPanGestureRecognizer alloc]
-                                          initWithTarget:self action:@selector(a2_scroll:)];
-        scroll.allowedScrollTypesMask = UIScrollTypeMaskAll;
-        scroll.maximumNumberOfTouches = 0;
-        [self addGestureRecognizer:scroll];
+        // ★2026-10-18 真机证据★ iOS 27 上 addGestureRecognizer(UIPanGestureRecognizer,
+        //   allowedScrollTypesMask=All, maximumNumberOfTouches=0) 会在
+        //   _UIGestureRecognizerRegisterInContainer 里直接把进程打崩（信号 6）。
+        //   ⇒ 默认不装滚轮手势；需要时置偏好键 A2EnableScrollGesture = YES。
+        id a2sgVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2EnableScrollGesture"];
+        BOOL a2sg = (a2sgVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2EnableScrollGesture"];
+        if (a2sg) {
+            UIPanGestureRecognizer *scroll = [[UIPanGestureRecognizer alloc]
+                                              initWithTarget:self action:@selector(a2_scroll:)];
+            scroll.allowedScrollTypesMask = UIScrollTypeMaskAll;
+            scroll.maximumNumberOfTouches = 0;
+            [self addGestureRecognizer:scroll];
+        }
     }
     return self;
 }
