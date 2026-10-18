@@ -168,12 +168,17 @@ static void A2Main(dispatch_block_t block) {
             return;
         }
 
-        // 找到目标版本的清单 URL
+        // 找到目标版本的清单 URL —— 同时取出 sha1 与 size 做完整性校验。
+        // 版本 JSON 里给了 sha1，之前没传，等于放弃了这一层的校验。
         NSArray *versions = json[@"versions"];
         NSString *url = nil;
+        NSString *sha1 = nil;
+        NSNumber *size = nil;
         for (NSDictionary *v in versions) {
             if ([v[@"id"] isEqualToString:self.request.mcVersion]) {
                 url = v[@"url"];
+                sha1 = v[@"sha1"];
+                size = v[@"size"];
                 break;
             }
         }
@@ -185,12 +190,12 @@ static void A2Main(dispatch_block_t block) {
 
         [self report:A2InstallStageFetchManifest progress:1 message:@"版本清单已获取"];
         [self report:A2InstallStageDownloadJSON progress:0 message:@"正在下载版本信息…"];
-        [self downloadVersionJSON:url];
+        [self downloadVersionJSON:url sha1:sha1 size:size];
     }];
     [t resume];
 }
 
-- (void)downloadVersionJSON:(NSString *)url {
+- (void)downloadVersionJSON:(NSString *)url sha1:(NSString *)sha1 size:(NSNumber *)size {
     A2GamePath *path = [A2GamePath pathWithGameHome:self.request.gameHome];
     // 原版一律落到基底版本目录：带加载器时是 versions/<mcVersion>/，
     // 加载器后面会读它、并把它的 jar 硬链到自己的版本目录。
@@ -200,6 +205,8 @@ static void A2Main(dispatch_block_t block) {
                 to:dest
         stageLabel:A2InstallStageDownloadJSON
            message:@"正在下载版本信息"
+              sha1:sha1
+              size:size
            thenRun:^(NSError *error) {
         if (error) { [self failWithError:error]; return; }
         [self afterVersionJSON:dest];
@@ -356,8 +363,11 @@ static void A2Main(dispatch_block_t block) {
                            [indexID stringByAppendingPathExtension:@"json"]];
 
     [self report:A2InstallStageDownloadAssets progress:0 message:@"正在下载资源索引…"];
+    // 资源索引同样带 sha1 与 size（MC 的版本 json 里 assetIndex 字段）
     [self download:@[indexURL] to:indexPath stageLabel:A2InstallStageDownloadAssets
            message:@"正在下载资源索引"
+              sha1:assetIndex[@"sha1"]
+              size:assetIndex[@"size"]
            thenRun:^(NSError *error) {
         if (error) { [self failWithError:error]; return; }
         [self downloadAssetObjects:indexPath assetsRoot:assetsRoot];
