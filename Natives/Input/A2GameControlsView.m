@@ -146,6 +146,9 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 #pragma mark - 控件主视图
 
 @interface A2GameControlsView () <A2StickDelegate>
+// 前置声明：这些在 @implementation 里定义得较晚，self.xxx 的点语法需要先见到声明
+- (UIViewController *)a2_topViewController;
+- (NSArray<UIView *> *)a2_movableViews;
 @end
 
 @implementation A2GameControlsView {
