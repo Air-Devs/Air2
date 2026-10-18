@@ -475,9 +475,19 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
                                                                   message:message ?: @"启动链未完成"
                                                            preferredStyle:UIAlertControllerStyleAlert];
-    [alert addAction:[UIAlertAction actionWithTitle:@"打开日志" style:UIAlertActionStyleDefault
+    [alert addAction:[UIAlertAction actionWithTitle:@"日志在哪" style:UIAlertActionStyleDefault
                                             handler:^(UIAlertAction *a) {
-        [[NSNotificationCenter defaultCenter] postNotificationName:@"A2ShowLogRequested" object:nil];
+        // ★不做死钩子★：这里直接给出日志文件的真实路径（A2Log 的唯一真相源），
+        //   并把它复制到剪贴板，用户可直接去「文件」App 打开。
+        NSString *path = [A2Log currentLogPath] ?: @"(未知)";
+        UIPasteboard.generalPasteboard.string = path;
+        UIAlertController *p2 = [UIAlertController alertControllerWithTitle:@"日志路径（已复制）"
+                                                                    message:path
+                                                             preferredStyle:UIAlertControllerStyleAlert];
+        [p2 addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleCancel handler:nil]];
+        UIViewController *t2 = top;
+        while (t2.presentedViewController) t2 = t2.presentedViewController;
+        [t2 presentViewController:p2 animated:YES completion:nil];
     }]];
     [alert addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleCancel handler:nil]];
     [top presentViewController:alert animated:YES completion:nil];
