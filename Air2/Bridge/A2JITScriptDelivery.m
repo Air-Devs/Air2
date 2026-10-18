@@ -45,9 +45,9 @@ static NSString *const A2JITScriptDeliveryErrorDomain = @"A2JITScriptDeliveryErr
     // ★2026-10-18 用户拍板★ 默认★不下发随包脚本★：JIT 环境交给 StikDebug 的附加(attach)。
     //   要恢复随包脚本：偏好键 A2DeliverJITScript = YES。
     id a2deliverVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2DeliverJITScript"];
-    BOOL a2deliver = (a2deliverVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2DeliverJITScript"];
+    BOOL a2deliver = (a2deliverVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2DeliverJITScript"];
     if (!a2deliver) {
-        [A2Log criterion:@"[A2-CHAIN] ① 下发 JIT 脚本 = 关（键 A2DeliverJITScript 未设 ⇒ 用 StikDebug 的附加）"];
+        [A2Log criterion:@"[A2-CHAIN] ① 下发 JIT 脚本 = 关（A2DeliverJITScript=NO）"];
         return YES;
     }
     NSString *path = [self scriptPath];
@@ -80,6 +80,18 @@ static NSString *const A2JITScriptDeliveryErrorDomain = @"A2JITScriptDeliveryErr
     [A2Log log:@"[A2-CHAIN] ① 下发 JIT 脚本 %@（%lu B）ok=%d%@",
      path.lastPathComponent, (unsigned long)data.length, (int)ok,
      ok ? @"" : @"（脚本引擎未应答 —— 无调试器时属预期，不拦路）"];
+
+    // ★照老 Air 的链路★ 再下发一次 Extension：base 里 0x69 只回 legacy 哨兵，
+    //   真正的 JIT26PrepareRegionForPatching/0x69 覆盖都在 Extension 里。
+    {
+        NSString *extPath = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"Air2JIT69Ext.js"];
+        NSData *extData = [NSData dataWithContentsOfFile:extPath];
+        if (extData.length > 0) {
+            BOOL extOk = a2_jit_send_script_safe((const char *)extData.bytes, (size_t)extData.length);
+            [A2Log log:@"[A2-CHAIN] ① 下发 Extension Air2JIT69Ext.js（%lu B）ok=%d",
+                   (unsigned long)extData.length, (int)extOk];
+        }
+    }
 
     if (!ok && error) {
         *error = [NSError errorWithDomain:A2JITScriptDeliveryErrorDomain
