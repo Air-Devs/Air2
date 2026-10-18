@@ -47,10 +47,6 @@
                                        displayName:@"MoltenVK"
                                          dylibName:@"libMoltenVK.dylib"
                                              notes:@"experimental"],
-            [[A2Renderer alloc] initWithIdentifier:@"libOSMesa.8.dylib"
-                                       displayName:@"OSMesa (Zink)"
-                                         dylibName:@"libOSMesa.8.dylib"
-                                             notes:@"experimental"],
             [[A2Renderer alloc] initWithIdentifier:@"libtinygl4angle.dylib"
                                        displayName:@"ANGLE (tinygl4)"
                                          dylibName:@"libtinygl4angle.dylib"
