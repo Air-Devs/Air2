@@ -72,10 +72,8 @@ void *a2_jit_brk69_create_region(size_t len) {
 //   被外部 SIGKILL、且没有崩溃报告 —— 与调试会话生命周期高度相关）。
 __attribute__((noinline, optnone, naked))
 static void a2_jit_brk_f00d_detach_cmd(void *value) {
-    asm("mov x16, #3 
-"
-        "brk #0xf00d 
-"
+    asm("mov x16, #3 \n"
+        "brk #0xf00d \n"
         "ret");
 }
 
