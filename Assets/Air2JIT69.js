@@ -67,7 +67,22 @@ function ameJITHandleRegisterRegion(brkResponse) {
     ameJITBigSize   = x1;
     let r = -1;
     try { r = prepare_memory_region(ameJITBigRegion, ameJITBigSize); } catch (e) { log(`prepare 异常: ${e}`); }
-    log(`[AIR2-JIT69] 注册自研宿主区 addr=0x${ameJITBigRegion.toString(16)} size=0x${ameJITBigSize.toString(16)} prepare=${r}`);
+    // ★关键★ prepare 只让页“可写/可补丁”，实测整段做完 cur=0x3(rw)、还不是 r-x。
+    //   官方 UniversalJIT26Extension 的 commands[4] 用「m 读 + M 写回」来让页真正拿到可执行祝福。
+    //   64MB 整包一次不现实 ⇒ 逐页(16KB)做一次 1 字节读+写回；只祝福前 16MB（= code cache 大小）。
+    const PAGE = 0x4000n;
+    const CAP  = 0x1000000n;                     // 16 MiB
+    let limit = ameJITBigSize < CAP ? ameJITBigSize : CAP;
+    let blessed = 0;
+    for (let off = 0n; off < limit; off += PAGE) {
+        let a = ameJITBigRegion + off;
+        let hex = send_command(`m${a.toString(16)},1`);
+        if (hex && /^[0-9a-fA-F]{1,4}$/.test(hex)) {
+            send_command(`M${a.toString(16)},1:${hex}`);
+            blessed++;
+        }
+    }
+    log(`[AIR2-JIT69] 注册自研宿主区 addr=0x${ameJITBigRegion.toString(16)} size=0x${ameJITBigSize.toString(16)} prepare=${r} blessed=${blessed} pages`);
     ameJITReplyX0(0n);
 }
 
