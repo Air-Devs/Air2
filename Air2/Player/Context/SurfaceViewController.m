@@ -17,6 +17,7 @@
 #import "A2AccountManager.h"
 #import "A2LaunchSplashView.h"
 #import "A2GameMenuOverlay.h"
+#import "A2Multiplayer.h"
 #import "A2GameLaunchCoordinator.h"
 #import "A2ResolutionManager.h"
 #import "utils.h"
@@ -3554,7 +3555,9 @@ CALayer *Amethyst_SDL3RenderLayer(void) {
     // AMETHYST_SOCKS5_PROXY 环境变量 / PLProfiles.serverIp ⇒ "存档关闭后端口仍在""下次进游戏仍显示连接服务器"。
     // dealloc 可能在异常路径触发，用 @try/@catch 防二次崩溃。
     @try {
-        [[MultiplayerManager sharedManager] stopAllMultiplayerServices];
+        // A2Multiplayer.stopSession 等价于 Air1 的 stopAllMultiplayerServices：
+        // 断开联机会话、关闭本地代理、清理 SOCKS5 环境变量。
+        [A2Multiplayer.shared stopSession];
         NSLog(@"[SurfaceViewController] dealloc: Multiplayer resources cleaned up");
     } @catch (NSException *e) {
         NSLog(@"[SurfaceViewController] dealloc: Exception while cleaning up multiplayer resources: %@", e);
