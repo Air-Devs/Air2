@@ -727,7 +727,6 @@ static int gA2JITEnsureKickInflight = 0;
                                    : (size_t)64 * 1024u * 1024u;
             void *r = a2_jit_alloc_preblessed_region(want);
             a2_jit_log(@"[A2JIT] ★自研 JIT 宿主区★ addr=%p size=%zu（排查模式：cmd4 祝福 + mprotect RX）", r, want);
-            }
         }
         return YES;
     }
