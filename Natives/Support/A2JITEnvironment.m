@@ -54,8 +54,7 @@ void a2_jit_log(const char *fmt, ...) {
 __attribute__((noinline, optnone, naked))
 // 注:brk 立即数 0x6942 = 自研宿主区协议(见上)。
 static void *a2_jit_brk6942_prepare_region(void *addr, size_t len) {
-    asm("brk #0x6942 
-"
+    asm("brk #0x6942 \n"
         "ret");
 }
 
