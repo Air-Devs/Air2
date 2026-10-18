@@ -161,7 +161,7 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
     scroll.maximumNumberOfTouches = 0;
     [self addGestureRecognizer:scroll];
     _a2ScrollGestureInstalled = YES;
-    [A2Log log:@"[A2-INPUT] 滚轮手势已安装（视图已进窗口层级）"];
+    a2_log_criterion(@"[A2-INPUT] 滚轮手势已安装（视图已进窗口层级）");
 }
 
 - (BOOL)canBecomeFirstResponder {
