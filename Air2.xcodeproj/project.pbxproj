@@ -1585,6 +1585,7 @@
 					"$(SRCROOT)",
 					"$(SRCROOT)/Libraries",
 					"$(SRCROOT)/Libraries/external/mesa",
+					"$(SRCROOT)/Libraries/external/MobileGlues/src/main/cpp/include",
 				);
 				INFOPLIST_FILE = "Air2/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1621,6 +1622,7 @@
 					"$(SRCROOT)",
 					"$(SRCROOT)/Libraries",
 					"$(SRCROOT)/Libraries/external/mesa",
+					"$(SRCROOT)/Libraries/external/MobileGlues/src/main/cpp/include",
 				);
 				INFOPLIST_FILE = "Air2/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (

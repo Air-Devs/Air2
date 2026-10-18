@@ -23,8 +23,8 @@
 #include <dlfcn.h>
 
 #include "utils.h"
-#include "ctxbridges/gl4es_family_boot.h"
-#include "ctxbridges/virgl_server.h"
+#include "gl4es_family_boot.h"
+#include "virgl_server.h"
 
 // ---------------------------------------------------------------------------
 // Task204 后端符号解析器：ANGLE 框架里解析 egl*/gl* 符号，钉给 gl4es 家族的

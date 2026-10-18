@@ -1,7 +1,7 @@
 #import "KeyboardInput.h"
-#import "../utils.h"
+#import "utils.h"
 
-#include "../glfw_keycodes.h"
+#include "glfw_keycodes.h"
 
 @implementation KeyboardInput
 
