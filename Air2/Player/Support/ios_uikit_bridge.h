@@ -5,7 +5,7 @@
 #define CLIPBOARD_COPY 2000
 #define CLIPBOARD_PASTE 2001
 
-UIViewController* tmpRootVC;
+extern UIViewController* tmpRootVC;
 
 void showDialog(NSString* title, NSString* message);
 jstring UIKit_accessClipboard(JNIEnv* env, jint action, jstring copySrc);

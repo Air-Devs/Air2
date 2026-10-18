@@ -1,3 +1,5 @@
+UIViewController* tmpRootVC = nil;
+
 #import "LauncherPreferences.h"
 #import "PLLogOutputView.h"
 #import "SurfaceViewController.h"

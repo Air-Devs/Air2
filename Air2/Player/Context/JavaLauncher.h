@@ -15,7 +15,7 @@ typedef jint JLI_Launch_func(int argc, const char ** argv, /* main argc, argc */
         jboolean javaw,                         /* windows-only javaw */
         jint ergo                               /* ergonomics class policy */
 );
-JLI_Launch_func *pJLI_Launch;
+extern JLI_Launch_func *pJLI_Launch;
 
 int launchJVM(NSString *accountId, id launchTarget, int width, int height, int minVersion);
 
