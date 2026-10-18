@@ -62,6 +62,13 @@
 
 + (A2Renderer *)defaultCandidate {
     // 主推 = 表首（自研 Metal）。★默认项要合理★：它是包内一定随仓的那一个。
+    // ★2026-10-18 实验★ 临时改用 gl4es：GL 桥只负责 EGL/GL 系渲染器，
+    //   选 metallum(Metal) 时桥"按设计跳过"⇒ 没有 EGL 上下文 ⇒ MC 报
+    //   "There is no OpenGL context current in the current thread"。
+    //   先用 gl4es 验证能否出画面，之后再把 metallum 接回来。
+    for (A2Renderer *r in [self allCandidates]) {
+        if ([r.identifier isEqualToString:@"libgl4es_114.dylib"]) return r;
+    }
     return [self allCandidates].firstObject;
 }
 
