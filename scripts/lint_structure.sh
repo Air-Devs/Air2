@@ -39,7 +39,7 @@ echo "==> 1. 顶层目录检查"
 #   java_runtimes/  打包进 IPA 的 JRE（make jre 复制）
 #   build/          构建中间产物
 #   artifacts/      最终产物（IPA）
-ALLOWED_TOP="Air2 Air2.xcodeproj Natives JavaApp Libraries Assets cmake scripts docs tests .github depends java_runtimes build artifacts ThirdParty patches"
+ALLOWED_TOP="Air2 Air2.xcodeproj Air2/Player JavaApp Libraries Assets cmake scripts docs tests .github depends java_runtimes build artifacts ThirdParty patches"
 bad_top=0
 for path in * .github; do
     [ -e "$path" ] || continue
@@ -68,7 +68,7 @@ done
 echo "==> 2. 文件规模检查（提示性）"
 HINT=1000
 big=0
-collect Air2 Natives JavaApp > /tmp/.air2_files.$$
+collect Air2 Air2/Player JavaApp > /tmp/.air2_files.$$
 while IFS= read -r f; do
     [ -n "$f" ] || continue
     [ -f "$f" ] || continue
@@ -89,7 +89,7 @@ BAD='(Utils2|ManagerNew|NewManager|Common|Helper)\.'
 # 排除移植来的第三方 / Air1 代码 —— 它们的命名不是我们定的，
 # 改名会破坏 Air1 内部的引用链。只在【我们自己写的新代码】里禁止。
 found=$(cat /tmp/.air2_files.$$ | grep -E "$BAD" \
-    | grep -vE '^(Natives/(SSZip|ModLoaderIconHelper|non_darwin_utils|utils)|Natives/external/|ThirdParty/|JavaApp/|Libraries/)' || true)
+    | grep -vE '^(Air2/Player/(SSZip|ModLoaderIconHelper|non_darwin_utils|utils)|Libraries/external/|ThirdParty/|JavaApp/|Libraries/)' || true)
 if [ -n "$found" ]; then
     for f in $found; do err "禁用命名: $f"; done
 else

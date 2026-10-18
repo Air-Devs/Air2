@@ -5,7 +5,6 @@
 #import "SurfaceViewController.h"
 #import "ios_uikit_bridge.h"
 #import "utils.h"
-#import "BackgroundManager.h"
 
 @interface PLCrashView ()
 // 数据

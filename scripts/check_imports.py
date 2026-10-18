@@ -302,8 +302,20 @@ def main():
                 base = os.path.basename(inc)
                 if base in SYSTEM_LIKE:
                     continue
-                if base not in available:
-                    problems.append((rel, lineno, inc))
+                if base in available:
+                    continue
+                # 带路径的引用（Libraries/... 或 ../）：
+                # 按「相对引用文件」与「相对仓库根」两种方式解析，
+                # 能落到真实文件就算有效 —— 这些是第三方头，
+                # 不在 available（只收 Air2/ 下）里。
+                if "/" in inc:
+                    cands = [
+                        os.path.normpath(os.path.join(os.path.dirname(path), inc)),
+                        os.path.normpath(os.path.join(ROOT, inc)),
+                    ]
+                    if any(os.path.exists(c) for c in cands):
+                        continue
+                problems.append((rel, lineno, inc))
 
     print(f"检查了 {total_imports} 处本地 #import")
     print(f"工程内共有 {len(available)} 个头文件")
@@ -321,6 +333,13 @@ def main():
     # 或改了 .h 忘了 .m（链接期报 unrecognized selector）。
     # 两者都能提前静态发现。
     decl_issues = check_declarations_vs_implementation()
+
+    # 这些文件的「声明但未实现」是正常的，检查器看不出原因：
+    #   SurfaceViewController —— 方法分散在多个 category 文件里
+    #   UIKit+hook —— 运行时 hook 声明，实现在 .m 的 C 函数里
+    DECL_SKIP = ("SurfaceViewController.h", "UIKit+hook.h")
+    decl_issues = [i for i in decl_issues if not any(sk in i for sk in DECL_SKIP)]
+
     if decl_issues:
         print(f"\n发现 {len(decl_issues)} 处声明与实现不一致：")
         for msg in decl_issues:

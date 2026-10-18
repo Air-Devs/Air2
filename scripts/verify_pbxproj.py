@@ -131,17 +131,17 @@ def main():
     # shader_glslang、resources 不是编译单元。
     # 与 gen_xcodeproj.py 的 scan_sources() 保持一致：
     #   Air2/ 全部
-    #   Natives/ 只有启动核心的 4 个目录
-    NATIVES_CORE_DIRS = ("Natives/Context", "Natives/Renderer",
-                         "Natives/Input", "Natives/Support")
+    #   Air2/Player/ 只有启动核心的 4 个目录
+    NATIVES_CORE_DIRS = ("Air2/Player/Context", "Air2/Player/Renderer",
+                         "Air2/Player/Input", "Air2/Player/Support")
     on_disk = []
-    for base_name in ("Air2", "Natives"):
+    for base_name in ("Air2", "Air2/Player"):
         base = os.path.join(ROOT, base_name)
         if not os.path.isdir(base):
             continue
         for dirpath, dirnames, files in os.walk(base):
             rel_dir = os.path.relpath(dirpath, ROOT).replace(os.sep, "/")
-            if base_name == "Natives":
+            if base_name == "Air2/Player":
                 if not any(rel_dir == d or rel_dir.startswith(d + "/")
                            for d in NATIVES_CORE_DIRS):
                     dirnames[:] = []

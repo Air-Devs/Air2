@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """patch_angle_surface_freeze.py — Task 57 二进制补丁（画面分裂根治）
 
-目标: Natives/resources/Frameworks/libGLESv2.framework/libGLESv2（自带 ANGLE
+目标: Libraries/Frameworks/libGLESv2.framework/libGLESv2（自带 ANGLE
 Metal 后端，经 libEGL 垫片动态加载，surface 创建/查询/呈现全在此镜像内）。
 
 == 根因（bbe6d63 日志 + 反汇编铁证链）==

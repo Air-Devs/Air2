@@ -21,7 +21,7 @@
 //
 
 #import <Foundation/Foundation.h>
-#import "external/ZeroTierFramework/ios-example-app/zt.framework/Headers/ZeroTierSockets.h"
+#import "../../../Libraries/external/ZeroTierFramework/ios-example-app/zt.framework/Headers/ZeroTierSockets.h"
 
 NS_ASSUME_NONNULL_BEGIN
 

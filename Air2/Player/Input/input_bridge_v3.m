@@ -8,7 +8,6 @@
  */
 
 #import <UIKit/UIKit.h>
-#import "AppDelegate.h"
 #import "SurfaceViewController.h"
 
 #include <assert.h>

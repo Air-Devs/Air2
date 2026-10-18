@@ -1,0 +1,54 @@
+refactor: 按 ZL2 方式重组目录，取消 Natives 目录
+
+## 用户要求
+「Natives 别用这个目录，参考 zl2 的方式重新归类」
+
+## ZL2 的组织方式
+按职责分模块：game/ ui/ bridge/ path/ setting/ terracotta/ crashlogs/
+而不是按「原生 / Java」分 —— 那只是实现语言，不是职责。
+
+## 重组结果
+
+  Air2/
+    App/        应用入口、生命周期
+    Core/       业务（账号 / 版本 / 下载 / 插件 / 路径 / 设置）
+    UI/         自研 UI
+    Player/     ← 原 Natives 的内容，按运行时职责分
+      Context/    24  JVM 生命周期、类加载、启动参数
+      Renderer/   26  EGL / GL 桥、Metal、SDL3 hook
+      Input/       4  键盘 / 手柄 / 陀螺仪注入
+      Controls/     控件系统（待重新设计）
+      Support/    23  dyld 补丁、crash 捕获、日志
+    Utils/
+
+  Assets/
+    ModLoaderIcons/   6 个加载器图标（保留，UI 要用）
+    shader_glslang/   着色器编译
+    runtime/          运行时资源
+    Images.xcassets/  图标资源
+
+  Libraries/
+    Frameworks/   预编译 dylib
+    Jars/         LWJGL jar
+    external/     第三方源码（submodule）
+    terracotta/   联机库
+    prebuilt/     其他
+
+  cmake/            CMakeLists.txt + config.h.in
+  scripts/natives/  构建脚本（patch / pack 类）
+
+## 顺带修复
+
+1. **删除遗漏的 Swift 文件**（AmeTabBar.swift）
+2. **保留模组加载器图标**（用户指出可以用上）
+3. **解耦 SurfaceViewController 对控件系统的硬依赖** ——
+   改用字符串类名判断 + respondsToSelector，
+   这样控件系统重做后不需要改 SurfaceViewController
+4. **检查器的 4 个真实缺陷**：
+   · #pragma 行里的 ")" 被当成代码（`#pragma mark - 1) xxx`）
+   · @interface / @implementation / @end 计数用了原始 src，
+     注释里的 "@implementation block" 被误算
+   · @protocol 前置声明被当成需要 @end 的声明
+   · 带路径的 #import（Libraries/...）不解析就报缺失
+
+编译单元 173 个，全部在工程内。

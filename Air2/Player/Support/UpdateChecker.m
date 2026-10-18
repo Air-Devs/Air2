@@ -1,6 +1,5 @@
 #import "utils.h"
 #import "UpdateChecker.h"
-#import "UpdateDialogViewController.h"
 #import "LauncherPreferences.h"
 #import <UIKit/UIKit.h>
 

@@ -241,9 +241,9 @@ def verify_and_trim(version):
 
 def copy_awt_patch(version):
     """补入自编的 libawt_xawt.dylib（Air1 编译的 AWT 补丁）"""
-    local = os.path.join(ROOT, "Natives/libawt_xawt.dylib")
+    local = os.path.join(ROOT, "Air2/Player/libawt_xawt.dylib")
     if not os.path.exists(local):
-        print(f"  · 跳过 AWT 补丁（Natives/libawt_xawt.dylib 不存在）")
+        print(f"  · 跳过 AWT 补丁（Air2/Player/libawt_xawt.dylib 不存在）")
         return
 
     dest_dir = os.path.join(jre_dir(version), "lib")

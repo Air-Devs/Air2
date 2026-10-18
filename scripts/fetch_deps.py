@@ -58,55 +58,55 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DEPENDENCIES = {
     # ---- Frameworks ----
     "Libraries/Frameworks/libEGL.framework/libEGL":
-        "Natives/resources/Frameworks/libEGL.framework/libEGL",
+        "Libraries/Frameworks/libEGL.framework/libEGL",
     "Libraries/Frameworks/libEGL.framework/Info.plist":
-        "Natives/resources/Frameworks/libEGL.framework/Info.plist",
+        "Libraries/Frameworks/libEGL.framework/Info.plist",
     "Libraries/Frameworks/libGLESv2.framework/libGLESv2":
-        "Natives/resources/Frameworks/libGLESv2.framework/libGLESv2",
+        "Libraries/Frameworks/libGLESv2.framework/libGLESv2",
     "Libraries/Frameworks/libGLESv2.framework/Info.plist":
-        "Natives/resources/Frameworks/libGLESv2.framework/Info.plist",
+        "Libraries/Frameworks/libGLESv2.framework/Info.plist",
     "Libraries/Frameworks/libMobileGL.dylib":
-        "Natives/resources/Frameworks/libMobileGL.dylib",
+        "Libraries/Frameworks/libMobileGL.dylib",
     "Libraries/Frameworks/libMobileGL-gles.dylib":
-        "Natives/resources/Frameworks/libMobileGL-gles.dylib",
+        "Libraries/Frameworks/libMobileGL-gles.dylib",
     "Libraries/Frameworks/libMoltenVK.dylib":
-        "Natives/resources/Frameworks/libMoltenVK.dylib",
+        "Libraries/Frameworks/libMoltenVK.dylib",
     "Libraries/Frameworks/libOSMesa.8.dylib":
-        "Natives/resources/Frameworks/libOSMesa.8.dylib",
+        "Libraries/Frameworks/libOSMesa.8.dylib",
     "Libraries/Frameworks/libSDL3.dylib":
-        "Natives/resources/Frameworks/libSDL3.dylib",
+        "Libraries/Frameworks/libSDL3.dylib",
     "Libraries/Frameworks/liblwjgl.dylib":
-        "Natives/resources/Frameworks/liblwjgl.dylib",
+        "Libraries/Frameworks/liblwjgl.dylib",
     "Libraries/Frameworks/liblwjgl_opengl.dylib":
-        "Natives/resources/Frameworks/liblwjgl_opengl.dylib",
+        "Libraries/Frameworks/liblwjgl_opengl.dylib",
     "Libraries/Frameworks/liblwjgl_tinyfd.dylib":
-        "Natives/resources/Frameworks/liblwjgl_tinyfd.dylib",
+        "Libraries/Frameworks/liblwjgl_tinyfd.dylib",
     "Libraries/Frameworks/liblwjgl_stb.dylib":
-        "Natives/resources/Frameworks/liblwjgl_stb.dylib",
+        "Libraries/Frameworks/liblwjgl_stb.dylib",
     "Libraries/Frameworks/liblwjgl_nanovg.dylib":
-        "Natives/resources/Frameworks/liblwjgl_nanovg.dylib",
+        "Libraries/Frameworks/liblwjgl_nanovg.dylib",
     "Libraries/Frameworks/liblwjgl_vma.dylib":
-        "Natives/resources/Frameworks/liblwjgl_vma.dylib",
+        "Libraries/Frameworks/liblwjgl_vma.dylib",
     "Libraries/Frameworks/libopenal_impl.dylib":
-        "Natives/resources/Frameworks/libopenal_impl.dylib",
+        "Libraries/Frameworks/libopenal_impl.dylib",
     "Libraries/Frameworks/libglslang.dylib":
-        "Natives/resources/Frameworks/libglslang.dylib",
+        "Libraries/Frameworks/libglslang.dylib",
     "Libraries/Frameworks/libglslang.16.dylib":
-        "Natives/resources/Frameworks/libglslang.16.dylib",
+        "Libraries/Frameworks/libglslang.16.dylib",
     "Libraries/Frameworks/libshaderc.dylib":
-        "Natives/resources/Frameworks/libshaderc.dylib",
+        "Libraries/Frameworks/libshaderc.dylib",
     "Libraries/Frameworks/libshaderc_impl.dylib":
-        "Natives/resources/Frameworks/libshaderc_impl.dylib",
+        "Libraries/Frameworks/libshaderc_impl.dylib",
     "Libraries/Frameworks/libspirv-cross.dylib":
-        "Natives/resources/Frameworks/libspirv-cross.dylib",
+        "Libraries/Frameworks/libspirv-cross.dylib",
     "Libraries/Frameworks/libfreetype.dylib":
-        "Natives/resources/Frameworks/libfreetype.dylib",
+        "Libraries/Frameworks/libfreetype.dylib",
     "Libraries/Frameworks/libmetallum.dylib":
-        "Natives/resources/Frameworks/libmetallum.dylib",
+        "Libraries/Frameworks/libmetallum.dylib",
     "Libraries/Frameworks/libglapi.0.dylib":
-        "Natives/resources/Frameworks/libglapi.0.dylib",
+        "Libraries/Frameworks/libglapi.0.dylib",
     "Libraries/Frameworks/libvulkan.1.dylib":
-        "Natives/resources/Frameworks/libvulkan.1.dylib",
+        "Libraries/Frameworks/libvulkan.1.dylib",
 
     # ---- LWJGL 3.3.3 ----
     "Libraries/Jars/lwjgl-333/lwjgl.jar": "JavaApp/libs/lwjgl-333/lwjgl.jar",
@@ -129,12 +129,12 @@ DEPENDENCIES = {
     "Libraries/Jars/lwjgl-341/lwjgl-opengl.jar": "JavaApp/libs/lwjgl-341/lwjgl-opengl.jar",
 
     # ---- 陶瓦联机 ----
-    "Natives/terracotta/libterracotta.xcframework/Info.plist":
-        "Natives/terracotta/libterracotta.xcframework/Info.plist",
-    "Natives/terracotta/libterracotta.xcframework/ios-arm64/Headers/terracotta.h":
-        "Natives/terracotta/libterracotta.xcframework/ios-arm64/Headers/terracotta.h",
-    "Natives/terracotta/libterracotta.xcframework/ios-arm64/libterracotta.a":
-        "Natives/terracotta/libterracotta.xcframework/ios-arm64/libterracotta.a",
+    "Libraries/terracotta/libterracotta.xcframework/Info.plist":
+        "Libraries/terracotta/libterracotta.xcframework/Info.plist",
+    "Libraries/terracotta/libterracotta.xcframework/ios-arm64/Headers/terracotta.h":
+        "Libraries/terracotta/libterracotta.xcframework/ios-arm64/Headers/terracotta.h",
+    "Libraries/terracotta/libterracotta.xcframework/ios-arm64/libterracotta.a":
+        "Libraries/terracotta/libterracotta.xcframework/ios-arm64/libterracotta.a",
 }
 
 

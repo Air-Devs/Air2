@@ -51,6 +51,10 @@ def check_file(path, defined_classes):
     # 用状态机逐字符扫描，而不是正则去注释 ——
     # 正则很容易把字符串里的 /* 或 // 当成注释起点，
     # 导致后续内容被整段吃掉、括号统计失准（踩过这个坑）。
+    # #pragma / #warning 等编译指令整行不参与括号计数。
+    # 典型：#pragma mark - 1) 某某  —— 这里的 ")" 会让计数失衡。
+    src = re.sub(r'^[ \t]*#\s*(pragma|warning|error)\b[^\n]*$', '', src, flags=re.M)
+
     depth = 0
     i = 0
     n = len(src)
@@ -139,10 +143,22 @@ def check_file(path, defined_classes):
         errors.append(f"圆括号不平衡: {stripped.count('(')} vs {stripped.count(')')}")
 
     # ---------- @interface / @implementation / @end ----------
-    ifaces = len(re.findall(r'@interface\b', src))
-    impls = len(re.findall(r'@implementation\b', src))
-    protos = len(re.findall(r'@protocol\b', src))
-    ends = len(re.findall(r'@end\b', src))
+    # 用 stripped（已去注释与字符串）计数 —— 注释里写 "@implementation block"
+    # 这种说明文字会被误算，导致段数对不上。
+    _seg = stripped
+    ifaces = len(re.findall(r'@interface\b', _seg))
+    impls = len(re.findall(r'@implementation\b', _seg))
+    # @protocol 有两种：
+    #   @protocol Foo <Bar> ... @end    ← 声明，需要 @end
+    #   @protocol Foo;                  ← 前置声明，不需要 @end
+    # 之前没区分，导致前置声明多算一个 @end。
+    # @protocol 有两种：
+    #   @protocol Foo <Bar> ... @end   ← 声明，需要 @end
+    #   @protocol Foo;                 ← 前置声明，不需要
+    # 判据：后面跟 "<" 或换行（声明体）才算声明。
+    # 另外 @interface Foo () 是类扩展，也需配对 @end —— 已计入 ifaces，不重复算。
+    protos = len(re.findall(r'@protocol\s+\w+\s*(?:<|(?=\n))', _seg))
+    ends = len(re.findall(r'@end\b', _seg))
     # 注意 @protocol 也有配对的 @end，之前漏算了会误报
     if ifaces + impls + protos != ends:
         errors.append(
@@ -304,7 +320,12 @@ def check_file(path, defined_classes):
     # 而 ObjC 要求 setter 必须返回 void，否则报
     # "type of setter must be void"。
     # 这类方法应改用动词命名（如 selectXxx: / applyXxx:）。
+    # Air1 移植来的代码保持原样 —— setXxx: 返回非 void 是它的既有风格，
+    # 改签名会牵连大量调用点。这是我们自己的规范，不适用于第三方代码。
+    _skip_setter = "/Player/" in path
     for m in re.finditer(r'^\s*-\s*\(\s*(?!void)\w[\w\s\*<>]*\)\s*(set[A-Z]\w*)\s*:', src, re.M):
+        if _skip_setter:
+            continue
         line = src[:m.start()].count('\n') + 1
         errors.append(
             f"第 {line} 行: {m.group(1)}: 是 setter 形式但返回非 void，"

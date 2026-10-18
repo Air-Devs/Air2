@@ -27,8 +27,6 @@
 #include "ZinkConfig.h"
 
 // god knows why Copilot was trying to add this.
-#import "authenticator/BaseAuthenticator.h"
-#import "authenticator/ThirdPartyAuthenticator.h"
 // 鬼知道为什么copilot要把这玩意加里头……
 
 #import "ios_uikit_bridge.h"
@@ -37,7 +35,6 @@
 #import "PLLogOutputView.h"
 #import "PLProfiles.h"
 // ★ [LAUNCH-PROGRESS] 启动阶段上报(遮罩进度条/阶段文字/步骤骨架的数据源)
-#import "AmeLaunchProgress.h"
 
 #define fm NSFileManager.defaultManager
 

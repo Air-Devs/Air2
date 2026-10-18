@@ -9,7 +9,7 @@
 # 现在做完整流程：
 #   1. 前置检查（依赖、JRE、工程）
 #   2. 编译原生层（CMake）→ .dylib
-#   3. xcodebuild archive（含 Natives 源码）
+#   3. xcodebuild archive（含 Air2/Player 源码）
 #   4. **把 Frameworks/ 与 java_runtimes/ 装进 .app**
 #   5. 重新签名 + 打包 IPA
 #   6. 体积校验（小于阈值直接失败，避免又产出"空壳"）
@@ -67,13 +67,13 @@ NATIVES_BUILD="$ROOT/build/natives"
 NATIVES_LIBS="$ROOT/build/natives-libs"
 mkdir -p "$NATIVES_LIBS"
 
-if [ -f "$ROOT/Natives/CMakeLists.txt" ] && command -v cmake >/dev/null 2>&1; then
+if [ -f "$ROOT/cmake/CMakeLists.txt" ] && command -v cmake >/dev/null 2>&1; then
     echo ""
     echo "==> 编译原生层（CMake）"
 
     SDK=$(xcrun --sdk iphoneos --show-sdk-path 2>/dev/null || echo "")
     if [ -n "$SDK" ]; then
-        cmake -S "$ROOT/Natives" -B "$NATIVES_BUILD" \
+        cmake -S "$ROOT/Air2/Player" -B "$NATIVES_BUILD" \
             -DCMAKE_SYSTEM_NAME=iOS \
             -DCMAKE_OSX_SYSROOT="$SDK" \
             -DCMAKE_OSX_ARCHITECTURES=arm64 \
@@ -87,7 +87,7 @@ if [ -f "$ROOT/Natives/CMakeLists.txt" ] && command -v cmake >/dev/null 2>&1; th
     fi
 else
     echo ""
-    echo "==> 跳过原生层编译（Natives/CMakeLists.txt 或 cmake 不存在）"
+    echo "==> 跳过原生层编译（cmake/CMakeLists.txt 或 cmake 不存在）"
 fi
 
 # ------------------------------------------------------------
@@ -159,8 +159,8 @@ if [ -d "$JRE_DIR" ]; then
 fi
 
 # ---- 4.5 启动器资源 ----
-if [ -d "$ROOT/Natives/resources" ]; then
-    for f in "$ROOT/Natives/resources"/*; do
+if [ -d "$ROOT/Air2/Player/resources" ]; then
+    for f in "$ROOT/Air2/Player/resources"/*; do
         [ -e "$f" ] || continue
         base=$(basename "$f")
         case "$base" in

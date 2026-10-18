@@ -14,7 +14,7 @@ $(VERBOSE).SILENT:
 
 SOURCEDIR   := $(CURDIR)
 OUTPUTDIR   := $(SOURCEDIR)/artifacts
-NATIVESDIR  := $(SOURCEDIR)/Natives
+NATIVESDIR  := $(SOURCEDIR)/Air2/Player
 JAVADIR     := $(SOURCEDIR)/JavaApp
 BUILDDIR    := $(SOURCEDIR)/build
 DEPENDSDIR  := $(SOURCEDIR)/depends
@@ -41,7 +41,7 @@ help:
 	@echo "  make bootstrap   准备构建环境"
 	@echo "  make deps        下载预编译依赖（Libraries/，约 246MB）"
 	@echo "  make jre         下载并处理 JRE（约 440MB）"
-	@echo "  make natives     编译原生层（Natives/ → build/）"
+	@echo "  make natives     编译原生层（Air2/Player/ → build/）"
 	@echo "  make java        编译 Java 启动核心"
 	@echo "  make assets      复制资源"
 	@echo "  make payload     组装 .app 目录"
@@ -108,7 +108,7 @@ natives: bootstrap
 			-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0; \
 		cmake --build "$(BUILDDIR)/natives" --parallel; \
 	else \
-		echo "  (Natives/CMakeLists.txt 尚未就绪)"; \
+		echo "  (cmake/CMakeLists.txt 尚未就绪)"; \
 	fi
 
 # ------------------------------------------------------------

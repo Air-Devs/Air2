@@ -283,7 +283,7 @@ target_link_libraries(audio_capture
 )
 
 # ============================================================================
-# ★ [SWIFT-BAR] SwiftUI 底部标签栏(Natives/AmeTabBar.swift)编译规则
+# ★ [SWIFT-BAR] SwiftUI 底部标签栏(Air2/Player/AmeTabBar.swift)编译规则
 # ----------------------------------------------------------------------------
 #  为什么必须单开一条 swiftc 规则:本工程的 C/OBJC 都用 clang(CMake 的 C 编译器),
 #  **clang 编不了 Swift**;而工程是纯 CMake(没有 Xcode 工程文件)⇒ 用
@@ -689,7 +689,7 @@ if(AME_TABBAR_NEEDS_BUILD)
 endif()
 
 # Add ModLoaderIcons PNG files into the app bundle Resources/ModLoaderIcons so they are available at runtime.
-# This will copy all *.png under Natives/ModLoaderIcons into the bundle at Resources/ModLoaderIcons/<name>.png
+# This will copy all *.png under Air2/Player/ModLoaderIcons into the bundle at Resources/ModLoaderIcons/<name>.png
 set(MODLOADER_ICONS_DIR "${CMAKE_CURRENT_LIST_DIR}/ModLoaderIcons")
 if(EXISTS "${MODLOADER_ICONS_DIR}")
   file(GLOB MODLOADER_ICON_FILES "${MODLOADER_ICONS_DIR}/*.png")
@@ -757,7 +757,7 @@ set_target_properties(AngelAuraAmethyst PROPERTIES
 
 # ============================================================================
 # ★ [RENDERER-GAP] VGPU 渲染器（PojavLauncherTeam/VGPU，gl4es 分支）——可选目标。
-#   来源：Gsjsjzhznsz/Air-Minecraft-iOS-Launcher 的 Natives/CMakeLists.txt（Task173）。
+#   来源：Gsjsjzhznsz/Air-Minecraft-iOS-Launcher 的 cmake/CMakeLists.txt（Task173）。
 #   源码已 vendored 于 external/vgpu（含 Task173 的 iOS 移植补丁：pack/load.c 库名
 #   指向 libGLESv2.framework、glx.c/printf_def.h 去 android/log.h）。
 #   构建口径与 Android.mk 一致：-DNOX11 -DNO_GBM -DNOEGL -DDEFAULT_ES=3 -DSHAREDLIB。

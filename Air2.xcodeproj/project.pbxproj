@@ -59,6 +59,48 @@
 		42E2F81428F01FB2F3F912BC /* A2RemoteVersions.m in Sources */ = {isa = PBXBuildFile; fileRef = C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */; };
 		2BC4E80EA8F83E9426E4BA2E /* A2VersionInfo.m in Sources */ = {isa = PBXBuildFile; fileRef = 3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */; };
 		7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 643B820206971C227F265607 /* A2VersionManager.m */; };
+		1EAA4088A23E5288FE47CD4B /* AmeLaunchProgress.m in Sources */ = {isa = PBXBuildFile; fileRef = FFB0E2399504AE38B12CDCF6 /* AmeLaunchProgress.m */; };
+		33F561A7EA802A8ACA46A4C8 /* GameSurfaceView.m in Sources */ = {isa = PBXBuildFile; fileRef = 622E3DB2F220A0CD6E0943DF /* GameSurfaceView.m */; };
+		AF347EF95CBD682B91081DB5 /* JavaLauncher.m in Sources */ = {isa = PBXBuildFile; fileRef = 05531083602CC4CC9ADFF035 /* JavaLauncher.m */; };
+		DC948E735D38C071A0BF693F /* LauncherPreferences.m in Sources */ = {isa = PBXBuildFile; fileRef = F4318F35FE1B821173E3D9FA /* LauncherPreferences.m */; };
+		21D0529E1DCA37C36D4AF376 /* PLPreferences.m in Sources */ = {isa = PBXBuildFile; fileRef = AC657CF7DD69342C4AC4CA18 /* PLPreferences.m */; };
+		B10922116CB4B6E341F1E08C /* PLProfiles.m in Sources */ = {isa = PBXBuildFile; fileRef = 67CFEFE3CFBAF99FC4B99E28 /* PLProfiles.m */; };
+		B17DDB99AE2E0EB4B6DA03A5 /* PLTaskStage.m in Sources */ = {isa = PBXBuildFile; fileRef = B4557A4B9E2DB6ABF426D792 /* PLTaskStage.m */; };
+		560326BE071A52289753CB07 /* SurfaceViewController+ExternalDisplay.m in Sources */ = {isa = PBXBuildFile; fileRef = 6CDC79F4F060961654E0BFBD /* SurfaceViewController+ExternalDisplay.m */; };
+		8D60447771F0B763C06B2F81 /* SurfaceViewController+LogView.m in Sources */ = {isa = PBXBuildFile; fileRef = 1D4C64F7E99D00A8C83F6461 /* SurfaceViewController+LogView.m */; };
+		8C992AF31FA8A22AC3526C37 /* SurfaceViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = CAEE71B0AFBCDAB3D6DE931F /* SurfaceViewController.m */; };
+		FC2EEB144AE1D45D9D71C15C /* main_hook.m in Sources */ = {isa = PBXBuildFile; fileRef = A3D0C5C637E9FA2B3F32F1BD /* main_hook.m */; };
+		32E98F4EECA61E102374FDE3 /* utils.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A5BAE11D028A2905E1791FC /* utils.m */; };
+		8C279AEDAE884403944CA9B5 /* ControllerInput.m in Sources */ = {isa = PBXBuildFile; fileRef = 16CD6637FF9A9120236C23FD /* ControllerInput.m */; };
+		63B99E24B6EFA7080D43B69C /* GyroInput.m in Sources */ = {isa = PBXBuildFile; fileRef = 72E3D40518553547A372551D /* GyroInput.m */; };
+		8AF2C614A2C3F3AAA6BB9FB7 /* KeyboardInput.m in Sources */ = {isa = PBXBuildFile; fileRef = E5C6EB5CE20391935ED13F45 /* KeyboardInput.m */; };
+		2C4993FFDDB94E65C157CF63 /* TrackedTextField.m in Sources */ = {isa = PBXBuildFile; fileRef = D7DD31F231F7C27A2387130B /* TrackedTextField.m */; };
+		E11B0E2509F9D5A48EA9D8E3 /* input_bridge_v3.m in Sources */ = {isa = PBXBuildFile; fileRef = 29A644FD215BCBE0DED58CF5 /* input_bridge_v3.m */; };
+		DD464082336DE87E5FB314F4 /* ZinkConfig.m in Sources */ = {isa = PBXBuildFile; fileRef = 52EBA7667EECC1A31AFBCF47 /* ZinkConfig.m */; };
+		2313D67563988A809D80ABBC /* egl_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = E368CBF075B0AB8032581171 /* egl_bridge.m */; };
+		F399FA9A45B20F687631E9C8 /* gl4es_family_boot.m in Sources */ = {isa = PBXBuildFile; fileRef = 2056A2513B531351EF6F4613 /* gl4es_family_boot.m */; };
+		CA5FB58293C7CE4B1660D42D /* gl_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 3D6BFFADE137E817AFABBEE7 /* gl_bridge.m */; };
+		D963E662806828468DA83EB7 /* osm_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = B430480194987DFD0DE5B92A /* osm_bridge.m */; };
+		256656C1B3B9BB729BD49F20 /* sdl3_hook.m in Sources */ = {isa = PBXBuildFile; fileRef = 877D37201914962A265F7875 /* sdl3_hook.m */; };
+		A66C61E1FD25ECFA681BD47E /* shader_cap_probe.m in Sources */ = {isa = PBXBuildFile; fileRef = 41167DA379475CE71BECC431 /* shader_cap_probe.m */; };
+		F997B7FAC2D0C9449D7B34B9 /* shaderc_sandbox.m in Sources */ = {isa = PBXBuildFile; fileRef = 05B22A1299F6F9FA174C3C57 /* shaderc_sandbox.m */; };
+		B9BB52B9AB6950D8832318B5 /* virgl_server.m in Sources */ = {isa = PBXBuildFile; fileRef = 7DDE616B504E6BC2BD95893F /* virgl_server.m */; };
+		AFB451E7DE6E2EF951660264 /* vk_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A147B235573B1F4D128EC56 /* vk_bridge.m */; };
+		775874999E7CA10F74D67F52 /* LanPortDetector.m in Sources */ = {isa = PBXBuildFile; fileRef = E147FF8C8EEE4B039515EF61 /* LanPortDetector.m */; };
+		09C2D11C05593159E6AFB14E /* McLanPortDetector.m in Sources */ = {isa = PBXBuildFile; fileRef = 61F59F7BC6DF5C142349F29D /* McLanPortDetector.m */; };
+		F557065DCB94B26935C0C6EB /* PLCrashView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2BE3947518DFBB0E9F7EC65F /* PLCrashView.m */; };
+		F7943E2D531B0044ECFEA76E /* PLLogOutputView.m in Sources */ = {isa = PBXBuildFile; fileRef = 52D8A04AFEDE1A805DC7E208 /* PLLogOutputView.m */; };
+		0D22FCAB5A339930E7BCFED5 /* PortForwarder.m in Sources */ = {isa = PBXBuildFile; fileRef = 24356F0E9DF3A6AC7F0BBA17 /* PortForwarder.m */; };
+		ABC7EC799C91BF1A5C50EDE2 /* ScreenUtils.m in Sources */ = {isa = PBXBuildFile; fileRef = BF0A41C1E121405427C314A9 /* ScreenUtils.m */; };
+		3F05A2797AFFCA010B7F9D59 /* UIKit+hook.m in Sources */ = {isa = PBXBuildFile; fileRef = 869782D9D81E98D0AB7F435E /* UIKit+hook.m */; };
+		07FB28CDA0698A31D2A16F24 /* UpdateChecker.m in Sources */ = {isa = PBXBuildFile; fileRef = D7399A9719C4F69C7AB042BF /* UpdateChecker.m */; };
+		01A704B4C9929100B679BB63 /* ZeroTierBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = C4BC6DEF9424FD337321E29D /* ZeroTierBridge.m */; };
+		5F6D34E5A9CA09F3E7F4AF19 /* empty.m in Sources */ = {isa = PBXBuildFile; fileRef = 2E6F468284C1C07BB9061ABA /* empty.m */; };
+		0C00E5953847471FCD43814F /* xawt_fake.m in Sources */ = {isa = PBXBuildFile; fileRef = 5486E1FF3753ECA76163F90D /* xawt_fake.m */; };
+		02C6CDDF3160D8779F0546C7 /* dyld_bypass_validation.m in Sources */ = {isa = PBXBuildFile; fileRef = 7AC1534A173C53027749838F /* dyld_bypass_validation.m */; };
+		350233B9D218FD8C460EB615 /* dyld_patch_platform.m in Sources */ = {isa = PBXBuildFile; fileRef = B1B815C20ECE35E2086A818B /* dyld_patch_platform.m */; };
+		58B95958C0A7DDB769DF52F4 /* ios_uikit_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 462E6CD9270BB7206418B1C2 /* ios_uikit_bridge.m */; };
+		A7661EACDAE7C547662186E6 /* non_darwin_utils.m in Sources */ = {isa = PBXBuildFile; fileRef = F35AD048D88A48AB95377581 /* non_darwin_utils.m */; };
 		B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */ = {isa = PBXBuildFile; fileRef = 872075DCD0F565557A6554D2 /* A2BackgroundView.m */; };
 		BAF1CF7998AAC1E178EC66D0 /* A2CardPosition.m in Sources */ = {isa = PBXBuildFile; fileRef = C733462374B52500F6D83649 /* A2CardPosition.m */; };
 		D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */ = {isa = PBXBuildFile; fileRef = CA1D52969E0783051081B038 /* A2CardTitleBar.m */; };
@@ -196,6 +238,48 @@
 		C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RemoteVersions.m"; sourceTree = "<group>"; };
 		3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionInfo.m"; sourceTree = "<group>"; };
 		643B820206971C227F265607 /* A2VersionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionManager.m"; sourceTree = "<group>"; };
+		FFB0E2399504AE38B12CDCF6 /* AmeLaunchProgress.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "AmeLaunchProgress.m"; sourceTree = "<group>"; };
+		622E3DB2F220A0CD6E0943DF /* GameSurfaceView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "GameSurfaceView.m"; sourceTree = "<group>"; };
+		05531083602CC4CC9ADFF035 /* JavaLauncher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "JavaLauncher.m"; sourceTree = "<group>"; };
+		F4318F35FE1B821173E3D9FA /* LauncherPreferences.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "LauncherPreferences.m"; sourceTree = "<group>"; };
+		AC657CF7DD69342C4AC4CA18 /* PLPreferences.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "PLPreferences.m"; sourceTree = "<group>"; };
+		67CFEFE3CFBAF99FC4B99E28 /* PLProfiles.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "PLProfiles.m"; sourceTree = "<group>"; };
+		B4557A4B9E2DB6ABF426D792 /* PLTaskStage.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "PLTaskStage.m"; sourceTree = "<group>"; };
+		6CDC79F4F060961654E0BFBD /* SurfaceViewController+ExternalDisplay.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "SurfaceViewController+ExternalDisplay.m"; sourceTree = "<group>"; };
+		1D4C64F7E99D00A8C83F6461 /* SurfaceViewController+LogView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "SurfaceViewController+LogView.m"; sourceTree = "<group>"; };
+		CAEE71B0AFBCDAB3D6DE931F /* SurfaceViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "SurfaceViewController.m"; sourceTree = "<group>"; };
+		A3D0C5C637E9FA2B3F32F1BD /* main_hook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "main_hook.m"; sourceTree = "<group>"; };
+		6A5BAE11D028A2905E1791FC /* utils.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "utils.m"; sourceTree = "<group>"; };
+		16CD6637FF9A9120236C23FD /* ControllerInput.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "ControllerInput.m"; sourceTree = "<group>"; };
+		72E3D40518553547A372551D /* GyroInput.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "GyroInput.m"; sourceTree = "<group>"; };
+		E5C6EB5CE20391935ED13F45 /* KeyboardInput.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "KeyboardInput.m"; sourceTree = "<group>"; };
+		D7DD31F231F7C27A2387130B /* TrackedTextField.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "TrackedTextField.m"; sourceTree = "<group>"; };
+		29A644FD215BCBE0DED58CF5 /* input_bridge_v3.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "input_bridge_v3.m"; sourceTree = "<group>"; };
+		52EBA7667EECC1A31AFBCF47 /* ZinkConfig.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "ZinkConfig.m"; sourceTree = "<group>"; };
+		E368CBF075B0AB8032581171 /* egl_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "egl_bridge.m"; sourceTree = "<group>"; };
+		2056A2513B531351EF6F4613 /* gl4es_family_boot.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "gl4es_family_boot.m"; sourceTree = "<group>"; };
+		3D6BFFADE137E817AFABBEE7 /* gl_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "gl_bridge.m"; sourceTree = "<group>"; };
+		B430480194987DFD0DE5B92A /* osm_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "osm_bridge.m"; sourceTree = "<group>"; };
+		877D37201914962A265F7875 /* sdl3_hook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "sdl3_hook.m"; sourceTree = "<group>"; };
+		41167DA379475CE71BECC431 /* shader_cap_probe.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "shader_cap_probe.m"; sourceTree = "<group>"; };
+		05B22A1299F6F9FA174C3C57 /* shaderc_sandbox.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "shaderc_sandbox.m"; sourceTree = "<group>"; };
+		7DDE616B504E6BC2BD95893F /* virgl_server.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "virgl_server.m"; sourceTree = "<group>"; };
+		6A147B235573B1F4D128EC56 /* vk_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "vk_bridge.m"; sourceTree = "<group>"; };
+		E147FF8C8EEE4B039515EF61 /* LanPortDetector.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "LanPortDetector.m"; sourceTree = "<group>"; };
+		61F59F7BC6DF5C142349F29D /* McLanPortDetector.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "McLanPortDetector.m"; sourceTree = "<group>"; };
+		2BE3947518DFBB0E9F7EC65F /* PLCrashView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "PLCrashView.m"; sourceTree = "<group>"; };
+		52D8A04AFEDE1A805DC7E208 /* PLLogOutputView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "PLLogOutputView.m"; sourceTree = "<group>"; };
+		24356F0E9DF3A6AC7F0BBA17 /* PortForwarder.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "PortForwarder.m"; sourceTree = "<group>"; };
+		BF0A41C1E121405427C314A9 /* ScreenUtils.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "ScreenUtils.m"; sourceTree = "<group>"; };
+		869782D9D81E98D0AB7F435E /* UIKit+hook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "UIKit+hook.m"; sourceTree = "<group>"; };
+		D7399A9719C4F69C7AB042BF /* UpdateChecker.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "UpdateChecker.m"; sourceTree = "<group>"; };
+		C4BC6DEF9424FD337321E29D /* ZeroTierBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "ZeroTierBridge.m"; sourceTree = "<group>"; };
+		2E6F468284C1C07BB9061ABA /* empty.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "empty.m"; sourceTree = "<group>"; };
+		5486E1FF3753ECA76163F90D /* xawt_fake.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "xawt_fake.m"; sourceTree = "<group>"; };
+		7AC1534A173C53027749838F /* dyld_bypass_validation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "dyld_bypass_validation.m"; sourceTree = "<group>"; };
+		B1B815C20ECE35E2086A818B /* dyld_patch_platform.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "dyld_patch_platform.m"; sourceTree = "<group>"; };
+		462E6CD9270BB7206418B1C2 /* ios_uikit_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "ios_uikit_bridge.m"; sourceTree = "<group>"; };
+		F35AD048D88A48AB95377581 /* non_darwin_utils.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "non_darwin_utils.m"; sourceTree = "<group>"; };
 		872075DCD0F565557A6554D2 /* A2BackgroundView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BackgroundView.m"; sourceTree = "<group>"; };
 		C733462374B52500F6D83649 /* A2CardPosition.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CardPosition.m"; sourceTree = "<group>"; };
 		CA1D52969E0783051081B038 /* A2CardTitleBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CardTitleBar.m"; sourceTree = "<group>"; };
@@ -326,6 +410,46 @@
 		797843066906C8A344CE1344 /* A2RemoteVersions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RemoteVersions.h"; sourceTree = "<group>"; };
 		CE5120FF6E52910A07272F53 /* A2VersionInfo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionInfo.h"; sourceTree = "<group>"; };
 		8566CA5C1C5F50A603ACC370 /* A2VersionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionManager.h"; sourceTree = "<group>"; };
+		51994BE7CF4A796D8B8D6AF2 /* AmeLaunchProgress.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "AmeLaunchProgress.h"; sourceTree = "<group>"; };
+		709C4E0074FDBB9EC85649C8 /* GameSurfaceView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "GameSurfaceView.h"; sourceTree = "<group>"; };
+		8DAD8D49D4E965AEB8763685 /* JavaLauncher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "JavaLauncher.h"; sourceTree = "<group>"; };
+		02E3BB0B714A305BD4BE007D /* LauncherPreferences.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "LauncherPreferences.h"; sourceTree = "<group>"; };
+		D1BF8E283D489D37DC5C942C /* PLPreferences.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PLPreferences.h"; sourceTree = "<group>"; };
+		7EDAFDA309890C6736A5408A /* PLProfiles.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PLProfiles.h"; sourceTree = "<group>"; };
+		E8261C827E7878BDC2048E92 /* PLTaskStage.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PLTaskStage.h"; sourceTree = "<group>"; };
+		8834A7FBD3EE02CF2ACBFE5A /* PLTaskStages.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PLTaskStages.h"; sourceTree = "<group>"; };
+		31EB54C762722EDE895BBE30 /* SurfaceViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "SurfaceViewController.h"; sourceTree = "<group>"; };
+		C186822A4D93C6ED1D4F4D90 /* environ.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "environ.h"; sourceTree = "<group>"; };
+		F95E35A558207B66D283C093 /* jni.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "jni.h"; sourceTree = "<group>"; };
+		D90D6323014B3918ACC20743 /* utils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "utils.h"; sourceTree = "<group>"; };
+		ED376B63C03CB43B77351AEA /* ControllerInput.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ControllerInput.h"; sourceTree = "<group>"; };
+		C15C4D975D09A64629826AF8 /* GyroInput.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "GyroInput.h"; sourceTree = "<group>"; };
+		B7FB9EC370E3F461902C355F /* KeyboardInput.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "KeyboardInput.h"; sourceTree = "<group>"; };
+		8D653B4548AAD6FC6C153718 /* TrackedTextField.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "TrackedTextField.h"; sourceTree = "<group>"; };
+		A76CB9C5A1988D38B536AD70 /* glfw_keycodes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "glfw_keycodes.h"; sourceTree = "<group>"; };
+		DC70190DBE9B404EF1531E30 /* AMEGlassStyle.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "AMEGlassStyle.h"; sourceTree = "<group>"; };
+		72D6508DC3DC26E413BB38F1 /* UIKit+GlassSurface.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UIKit+GlassSurface.h"; sourceTree = "<group>"; };
+		37D90EFF4CCA9E85DE0E3517 /* ZinkConfig.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ZinkConfig.h"; sourceTree = "<group>"; };
+		2A34A5014577B772CD72D225 /* bridge_tbl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "bridge_tbl.h"; sourceTree = "<group>"; };
+		7CF262046D4DF51E7ABA0970 /* gl4es_family_boot.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "gl4es_family_boot.h"; sourceTree = "<group>"; };
+		F34306F84E8465F465521F7F /* gl_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "gl_bridge.h"; sourceTree = "<group>"; };
+		B02010A240899112AEFCE3D0 /* osm_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "osm_bridge.h"; sourceTree = "<group>"; };
+		F99A9074E35208D9A630174A /* osmesa_internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "osmesa_internal.h"; sourceTree = "<group>"; };
+		AC840D7699090BF44B30F98F /* shader_cap_probe.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "shader_cap_probe.h"; sourceTree = "<group>"; };
+		399CED11E88508EFCFA245AD /* shaderc_sandbox.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "shaderc_sandbox.h"; sourceTree = "<group>"; };
+		AADA24A1BD4D76CBC13563DF /* virgl_server.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "virgl_server.h"; sourceTree = "<group>"; };
+		CD3B92E3823A44A4356AFA4B /* vk_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "vk_bridge.h"; sourceTree = "<group>"; };
+		2A93C02860DA18062D7AC389 /* LanPortDetector.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "LanPortDetector.h"; sourceTree = "<group>"; };
+		F5CCE8DB3512E656EC82EAC3 /* McLanPortDetector.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "McLanPortDetector.h"; sourceTree = "<group>"; };
+		E1893125C84095DEF8FD1357 /* PLCrashView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PLCrashView.h"; sourceTree = "<group>"; };
+		5A9E0C9370F3194F7E76A18B /* PLLogOutputView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PLLogOutputView.h"; sourceTree = "<group>"; };
+		0C541A61C8907F0DA288C7DC /* PortForwarder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PortForwarder.h"; sourceTree = "<group>"; };
+		45227C4C23E6FBB066F8B7A8 /* ScreenUtils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ScreenUtils.h"; sourceTree = "<group>"; };
+		ECD0D2D76994ED9F68466613 /* UIKit+hook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UIKit+hook.h"; sourceTree = "<group>"; };
+		47AE80A94AE81F737A013BA1 /* UpdateChecker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UpdateChecker.h"; sourceTree = "<group>"; };
+		A5BCB4E2C7BCE3A6A2BB25D4 /* ZeroTierBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ZeroTierBridge.h"; sourceTree = "<group>"; };
+		AC0E7BE260EA184B5A8919E6 /* ZipArchive.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ZipArchive.h"; sourceTree = "<group>"; };
+		B198712AC6D520C821FCDD33 /* ios_uikit_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ios_uikit_bridge.h"; sourceTree = "<group>"; };
 		930418C55810BF7B65B85AE9 /* A2BackgroundView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundView.h"; sourceTree = "<group>"; };
 		EB440E13AD4A8BB54186F381 /* A2CardPosition.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CardPosition.h"; sourceTree = "<group>"; };
 		1F985FAD5DEB8D4699A8B5AE /* A2CardTitleBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CardTitleBar.h"; sourceTree = "<group>"; };
@@ -433,6 +557,7 @@
 				18FD4D9FAB9B1E1C27AFB511 /* Info.plist */,
 				7B4F16DD90D9362E0A2BDBD1 /* App */,
 				E5BA60354B4EC37E480783EA /* Core */,
+				BB2DECA4B69E986999FF31DD /* Player */,
 				B33E61FAD84ACA6142548585 /* UI */,
 				07456E46BBC30DF8EE54F44C /* Utils */,
 			);
@@ -473,6 +598,18 @@
 				1A5C09A9A5278A534417CCF0 /* Version */,
 			);
 			path = Core;
+			sourceTree = "<group>";
+		};
+
+		BB2DECA4B69E986999FF31DD /* Player */ = {
+			isa = PBXGroup;
+			children = (
+				86E5F88D8B0C6AD482705BD3 /* Context */,
+				A58394A92A24973E7D4C0754 /* Input */,
+				CB139AD7F6209DC35B5EAAD9 /* Renderer */,
+				251D338764DFB1EA53AE6E38 /* Support */,
+			);
+			path = Player;
 			sourceTree = "<group>";
 		};
 
@@ -665,6 +802,119 @@
 			sourceTree = "<group>";
 		};
 
+		86E5F88D8B0C6AD482705BD3 /* Context */ = {
+			isa = PBXGroup;
+			children = (
+				FFB0E2399504AE38B12CDCF6 /* AmeLaunchProgress.m */,
+				622E3DB2F220A0CD6E0943DF /* GameSurfaceView.m */,
+				05531083602CC4CC9ADFF035 /* JavaLauncher.m */,
+				F4318F35FE1B821173E3D9FA /* LauncherPreferences.m */,
+				AC657CF7DD69342C4AC4CA18 /* PLPreferences.m */,
+				67CFEFE3CFBAF99FC4B99E28 /* PLProfiles.m */,
+				B4557A4B9E2DB6ABF426D792 /* PLTaskStage.m */,
+				6CDC79F4F060961654E0BFBD /* SurfaceViewController+ExternalDisplay.m */,
+				1D4C64F7E99D00A8C83F6461 /* SurfaceViewController+LogView.m */,
+				CAEE71B0AFBCDAB3D6DE931F /* SurfaceViewController.m */,
+				A3D0C5C637E9FA2B3F32F1BD /* main_hook.m */,
+				6A5BAE11D028A2905E1791FC /* utils.m */,
+				51994BE7CF4A796D8B8D6AF2 /* AmeLaunchProgress.h */,
+				709C4E0074FDBB9EC85649C8 /* GameSurfaceView.h */,
+				8DAD8D49D4E965AEB8763685 /* JavaLauncher.h */,
+				02E3BB0B714A305BD4BE007D /* LauncherPreferences.h */,
+				D1BF8E283D489D37DC5C942C /* PLPreferences.h */,
+				7EDAFDA309890C6736A5408A /* PLProfiles.h */,
+				E8261C827E7878BDC2048E92 /* PLTaskStage.h */,
+				8834A7FBD3EE02CF2ACBFE5A /* PLTaskStages.h */,
+				31EB54C762722EDE895BBE30 /* SurfaceViewController.h */,
+				C186822A4D93C6ED1D4F4D90 /* environ.h */,
+				F95E35A558207B66D283C093 /* jni.h */,
+				D90D6323014B3918ACC20743 /* utils.h */,
+			);
+			path = Context;
+			sourceTree = "<group>";
+		};
+
+		A58394A92A24973E7D4C0754 /* Input */ = {
+			isa = PBXGroup;
+			children = (
+				16CD6637FF9A9120236C23FD /* ControllerInput.m */,
+				72E3D40518553547A372551D /* GyroInput.m */,
+				E5C6EB5CE20391935ED13F45 /* KeyboardInput.m */,
+				D7DD31F231F7C27A2387130B /* TrackedTextField.m */,
+				29A644FD215BCBE0DED58CF5 /* input_bridge_v3.m */,
+				ED376B63C03CB43B77351AEA /* ControllerInput.h */,
+				C15C4D975D09A64629826AF8 /* GyroInput.h */,
+				B7FB9EC370E3F461902C355F /* KeyboardInput.h */,
+				8D653B4548AAD6FC6C153718 /* TrackedTextField.h */,
+				A76CB9C5A1988D38B536AD70 /* glfw_keycodes.h */,
+			);
+			path = Input;
+			sourceTree = "<group>";
+		};
+
+		CB139AD7F6209DC35B5EAAD9 /* Renderer */ = {
+			isa = PBXGroup;
+			children = (
+				52EBA7667EECC1A31AFBCF47 /* ZinkConfig.m */,
+				E368CBF075B0AB8032581171 /* egl_bridge.m */,
+				2056A2513B531351EF6F4613 /* gl4es_family_boot.m */,
+				3D6BFFADE137E817AFABBEE7 /* gl_bridge.m */,
+				B430480194987DFD0DE5B92A /* osm_bridge.m */,
+				877D37201914962A265F7875 /* sdl3_hook.m */,
+				41167DA379475CE71BECC431 /* shader_cap_probe.m */,
+				05B22A1299F6F9FA174C3C57 /* shaderc_sandbox.m */,
+				7DDE616B504E6BC2BD95893F /* virgl_server.m */,
+				6A147B235573B1F4D128EC56 /* vk_bridge.m */,
+				DC70190DBE9B404EF1531E30 /* AMEGlassStyle.h */,
+				72D6508DC3DC26E413BB38F1 /* UIKit+GlassSurface.h */,
+				37D90EFF4CCA9E85DE0E3517 /* ZinkConfig.h */,
+				2A34A5014577B772CD72D225 /* bridge_tbl.h */,
+				7CF262046D4DF51E7ABA0970 /* gl4es_family_boot.h */,
+				F34306F84E8465F465521F7F /* gl_bridge.h */,
+				B02010A240899112AEFCE3D0 /* osm_bridge.h */,
+				F99A9074E35208D9A630174A /* osmesa_internal.h */,
+				AC840D7699090BF44B30F98F /* shader_cap_probe.h */,
+				399CED11E88508EFCFA245AD /* shaderc_sandbox.h */,
+				AADA24A1BD4D76CBC13563DF /* virgl_server.h */,
+				CD3B92E3823A44A4356AFA4B /* vk_bridge.h */,
+			);
+			path = Renderer;
+			sourceTree = "<group>";
+		};
+
+		251D338764DFB1EA53AE6E38 /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				E147FF8C8EEE4B039515EF61 /* LanPortDetector.m */,
+				61F59F7BC6DF5C142349F29D /* McLanPortDetector.m */,
+				2BE3947518DFBB0E9F7EC65F /* PLCrashView.m */,
+				52D8A04AFEDE1A805DC7E208 /* PLLogOutputView.m */,
+				24356F0E9DF3A6AC7F0BBA17 /* PortForwarder.m */,
+				BF0A41C1E121405427C314A9 /* ScreenUtils.m */,
+				869782D9D81E98D0AB7F435E /* UIKit+hook.m */,
+				D7399A9719C4F69C7AB042BF /* UpdateChecker.m */,
+				C4BC6DEF9424FD337321E29D /* ZeroTierBridge.m */,
+				7AC1534A173C53027749838F /* dyld_bypass_validation.m */,
+				B1B815C20ECE35E2086A818B /* dyld_patch_platform.m */,
+				462E6CD9270BB7206418B1C2 /* ios_uikit_bridge.m */,
+				F35AD048D88A48AB95377581 /* non_darwin_utils.m */,
+				2A93C02860DA18062D7AC389 /* LanPortDetector.h */,
+				F5CCE8DB3512E656EC82EAC3 /* McLanPortDetector.h */,
+				E1893125C84095DEF8FD1357 /* PLCrashView.h */,
+				5A9E0C9370F3194F7E76A18B /* PLLogOutputView.h */,
+				0C541A61C8907F0DA288C7DC /* PortForwarder.h */,
+				45227C4C23E6FBB066F8B7A8 /* ScreenUtils.h */,
+				ECD0D2D76994ED9F68466613 /* UIKit+hook.h */,
+				47AE80A94AE81F737A013BA1 /* UpdateChecker.h */,
+				A5BCB4E2C7BCE3A6A2BB25D4 /* ZeroTierBridge.h */,
+				B198712AC6D520C821FCDD33 /* ios_uikit_bridge.h */,
+				9C8E9F6CAB6C863C2FF0B16C /* awt_xawt */,
+				BF81E81C64A753445B7A37C3 /* include */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+
 		8B89578D010E17535991475E /* Components */ = {
 			isa = PBXGroup;
 			children = (
@@ -779,6 +1029,25 @@
 				2146F61DDD3A2234BEDF108A /* A2Typography.h */,
 			);
 			path = Theme;
+			sourceTree = "<group>";
+		};
+
+		9C8E9F6CAB6C863C2FF0B16C /* awt_xawt */ = {
+			isa = PBXGroup;
+			children = (
+				2E6F468284C1C07BB9061ABA /* empty.m */,
+				5486E1FF3753ECA76163F90D /* xawt_fake.m */,
+			);
+			path = awt_xawt;
+			sourceTree = "<group>";
+		};
+
+		BF81E81C64A753445B7A37C3 /* include */ = {
+			isa = PBXGroup;
+			children = (
+				AC0E7BE260EA184B5A8919E6 /* ZipArchive.h */,
+			);
+			path = include;
 			sourceTree = "<group>";
 		};
 
@@ -1042,6 +1311,48 @@
 				42E2F81428F01FB2F3F912BC /* A2RemoteVersions.m in Sources */,
 				2BC4E80EA8F83E9426E4BA2E /* A2VersionInfo.m in Sources */,
 				7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */,
+				1EAA4088A23E5288FE47CD4B /* AmeLaunchProgress.m in Sources */,
+				33F561A7EA802A8ACA46A4C8 /* GameSurfaceView.m in Sources */,
+				AF347EF95CBD682B91081DB5 /* JavaLauncher.m in Sources */,
+				DC948E735D38C071A0BF693F /* LauncherPreferences.m in Sources */,
+				21D0529E1DCA37C36D4AF376 /* PLPreferences.m in Sources */,
+				B10922116CB4B6E341F1E08C /* PLProfiles.m in Sources */,
+				B17DDB99AE2E0EB4B6DA03A5 /* PLTaskStage.m in Sources */,
+				560326BE071A52289753CB07 /* SurfaceViewController+ExternalDisplay.m in Sources */,
+				8D60447771F0B763C06B2F81 /* SurfaceViewController+LogView.m in Sources */,
+				8C992AF31FA8A22AC3526C37 /* SurfaceViewController.m in Sources */,
+				FC2EEB144AE1D45D9D71C15C /* main_hook.m in Sources */,
+				32E98F4EECA61E102374FDE3 /* utils.m in Sources */,
+				8C279AEDAE884403944CA9B5 /* ControllerInput.m in Sources */,
+				63B99E24B6EFA7080D43B69C /* GyroInput.m in Sources */,
+				8AF2C614A2C3F3AAA6BB9FB7 /* KeyboardInput.m in Sources */,
+				2C4993FFDDB94E65C157CF63 /* TrackedTextField.m in Sources */,
+				E11B0E2509F9D5A48EA9D8E3 /* input_bridge_v3.m in Sources */,
+				DD464082336DE87E5FB314F4 /* ZinkConfig.m in Sources */,
+				2313D67563988A809D80ABBC /* egl_bridge.m in Sources */,
+				F399FA9A45B20F687631E9C8 /* gl4es_family_boot.m in Sources */,
+				CA5FB58293C7CE4B1660D42D /* gl_bridge.m in Sources */,
+				D963E662806828468DA83EB7 /* osm_bridge.m in Sources */,
+				256656C1B3B9BB729BD49F20 /* sdl3_hook.m in Sources */,
+				A66C61E1FD25ECFA681BD47E /* shader_cap_probe.m in Sources */,
+				F997B7FAC2D0C9449D7B34B9 /* shaderc_sandbox.m in Sources */,
+				B9BB52B9AB6950D8832318B5 /* virgl_server.m in Sources */,
+				AFB451E7DE6E2EF951660264 /* vk_bridge.m in Sources */,
+				775874999E7CA10F74D67F52 /* LanPortDetector.m in Sources */,
+				09C2D11C05593159E6AFB14E /* McLanPortDetector.m in Sources */,
+				F557065DCB94B26935C0C6EB /* PLCrashView.m in Sources */,
+				F7943E2D531B0044ECFEA76E /* PLLogOutputView.m in Sources */,
+				0D22FCAB5A339930E7BCFED5 /* PortForwarder.m in Sources */,
+				ABC7EC799C91BF1A5C50EDE2 /* ScreenUtils.m in Sources */,
+				3F05A2797AFFCA010B7F9D59 /* UIKit+hook.m in Sources */,
+				07FB28CDA0698A31D2A16F24 /* UpdateChecker.m in Sources */,
+				01A704B4C9929100B679BB63 /* ZeroTierBridge.m in Sources */,
+				5F6D34E5A9CA09F3E7F4AF19 /* empty.m in Sources */,
+				0C00E5953847471FCD43814F /* xawt_fake.m in Sources */,
+				02C6CDDF3160D8779F0546C7 /* dyld_bypass_validation.m in Sources */,
+				350233B9D218FD8C460EB615 /* dyld_patch_platform.m in Sources */,
+				58B95958C0A7DDB769DF52F4 /* ios_uikit_bridge.m in Sources */,
+				A7661EACDAE7C547662186E6 /* non_darwin_utils.m in Sources */,
 				B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */,
 				BAF1CF7998AAC1E178EC66D0 /* A2CardPosition.m in Sources */,
 				D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */,

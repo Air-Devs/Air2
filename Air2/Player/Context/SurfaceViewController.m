@@ -1,11 +1,6 @@
 #import <AVFoundation/AVFoundation.h>
 #import <GameController/GameController.h>
 #import <objc/runtime.h>
-#import "authenticator/BaseAuthenticator.h"
-#import "customcontrols/ControlButton.h"
-#import "customcontrols/ControlDrawer.h"
-#import "customcontrols/ControlSubButton.h"
-#import "customcontrols/CustomControlsUtils.h"
 
 #import "input/ControllerInput.h"
 #import "input/GyroInput.h"
@@ -13,19 +8,14 @@
 
 #import "JavaLauncher.h"
 #import "LauncherPreferences.h"
-#import "MinecraftResourceUtils.h"
 #import "PLProfiles.h"
 #import "SurfaceViewController.h"
 #import "utils.h"
-#import "GameMenuOverlayView.h"
 #import "TrackedTextField.h"
-#import "TouchControllerBridge.h"
 #import "UIKit+hook.h"
 #import "ios_uikit_bridge.h"
 #import "LanPortDetector.h"
-#import "BackgroundManager.h"
 // ★ [LAUNCH-PROGRESS] 启动阶段上报 API(遮罩订阅 AmeLaunchProgressChangedNotification)
-#import "AmeLaunchProgress.h"
 
 // 由 Natives/ctxbridges/gl_bridge.m 提供：SDL3（MC 26.3+）路径下 GL 拥有呈现层
 // 且 MC 以「点」回报窗口尺寸，需要把 CAMetalLayer 对齐 1x。GLFW 与 Vulkan 路径恒 NO。
@@ -37,7 +27,6 @@ extern bool ame_gl_surface_transposed(void);
 //   供取证日志判断“下游通道是否就绪”。
 extern void *CallbackBridge_sdlWindowPtr(void);
 // ★ [MP-RESTORE] 联机恢复
-#import "MultiplayerManager.h"
 
 #include "glfw_keycodes.h"
 #include "utils.h"
@@ -1535,10 +1524,15 @@ static UIView *findSDL_uikitview(UIView *root);
         BOOL hidden = hide || !(
             (isGrabbing && [button.properties[@"displayInGame"] boolValue]) ||
             (!isGrabbing && [button.properties[@"displayInMenu"] boolValue]));
-        if (!hidden && ![button isKindOfClass:ControlSubButton.class]) {
+        if (!hidden && ![NSStringFromClass(button.class) isEqualToString:@"ControlSubButton"]) {
             button.hidden = hidden;
-            if ([button isKindOfClass:ControlDrawer.class]) {
-                [(ControlDrawer *)button restoreButtonVisibility];
+            // 控件系统重新设计后，这里改用协议调用（见 A2ControlLayoutProtocol）
+            if ([NSStringFromClass(button.class) isEqualToString:@"ControlDrawer"]) {
+                SEL sel = NSSelectorFromString(@"restoreButtonVisibility");
+                if ([button respondsToSelector:sel]) {
+                    IMP imp = [button methodForSelector:sel];
+                    ((void (*)(id, SEL))imp)(button, sel);
+                }
             }
         } else if (hidden) {
             button.hidden = hidden;

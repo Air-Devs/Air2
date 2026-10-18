@@ -77,30 +77,30 @@ def scan_sources():
 
     **两个来源**：
       · Air2/     —— 我们的应用层（UI、Core、App）
-      · Natives/  —— 移植自 Air1 的 pojav 启动核心与原生层
+      · Air2/Player/  —— 移植自 Air1 的 pojav 启动核心与原生层
 
-    之前只扫 Air2/，导致 Natives 下 549 个源文件根本没进工程 ——
+    之前只扫 Air2/，导致 Air2/Player 下 549 个源文件根本没进工程 ——
     这也是为什么打出来的 IPA 只有 711KB（只有 UI 代码）。
 
     **排除规则**：
-      · Natives/external/   —— 第三方库，由 CMake 单独编译
+      · Libraries/external/   —— 第三方库，由 CMake 单独编译
                                或作为 submodule 引入
-      · Natives/shader_glslang/ —— 着色器资源，不是编译单元
-      · Natives/resources/  —— 资源，走 Resources 阶段
+      · Air2/Player/shader_glslang/ —— 着色器资源，不是编译单元
+      · Assets/runtime/  —— 资源，走 Resources 阶段
     """
     impl, headers = [], []
 
-    # Natives 只编译 pojav 启动核心的 4 个目录。
+    # Air2/Player 只编译 pojav 启动核心的 4 个目录。
     # 其余（external 是第三方、resources/shader_glslang 是资源）
     # 不参与编译，resources 由打包阶段的 Resources 处理。
     NATIVES_CORE_DIRS = (
-        "Natives/Context/",
-        "Natives/Renderer/",
-        "Natives/Input/",
-        "Natives/Support/",
+        "Air2/Player/Context/",
+        "Air2/Player/Renderer/",
+        "Air2/Player/Input/",
+        "Air2/Player/Support/",
     )
 
-    for base_name in ("Air2", "Natives"):
+    for base_name in ("Air2", "Air2/Player"):
         base = os.path.join(ROOT, base_name)
         if not os.path.isdir(base):
             continue
@@ -108,8 +108,8 @@ def scan_sources():
         for dirpath, dirnames, files in os.walk(base):
             rel_dir = os.path.relpath(dirpath, ROOT).replace(os.sep, "/")
 
-            # Natives 只保留核心的 4 个目录
-            if base_name == "Natives":
+            # Air2/Player 只保留核心的 4 个目录
+            if base_name == "Air2/Player":
                 keep = any(rel_dir == d.rstrip("/") or rel_dir.startswith(d)
                            for d in NATIVES_CORE_DIRS)
                 if not keep:
@@ -123,8 +123,8 @@ def scan_sources():
                 elif f.endswith(".h"):
                     headers.append(rel)
                 elif f.endswith(".c"):
-                    # Natives 里有 .c（shim、sandbox 等），要编进来
-                    if base_name == "Natives":
+                    # Air2/Player 里有 .c（shim、sandbox 等），要编进来
+                    if base_name == "Air2/Player":
                         impl.append(rel)
 
     return sorted(impl), sorted(headers)
@@ -237,7 +237,7 @@ def build():
     app_group = uid("group", "Air2")
 
     # 根组在 PBXGroup 段的【最后】输出 —— 它的 children 需要
-    # 先算出所有顶层目录（Air2 / Natives / ...），不能写死。
+    # 先算出所有顶层目录（Air2 / Air2/Player / ...），不能写死。
     # 这里只留下 id 定义，实际输出见下方 main_group_placeholder
     # 的说明。
 
@@ -256,14 +256,14 @@ def build():
     # 关键：PBXGroup 的 path 是相对父组的。
     #
     # 之前把【所有顶层目录】都当成 Air2 的子组 ——
-    # 于是 Natives 变成了 Air2/Natives，而它实际在根目录下。
-    # Xcode 拼出来的路径是 /repo/Air2/vk_bridge.m（少了一层 Natives），
+    # 于是 Air2/Player 变成了 Air2/Air2/Player，而它实际在根目录下。
+    # Xcode 拼出来的路径是 /repo/Air2/vk_bridge.m（少了一层 Air2/Player），
     # 报 "Build input file cannot be found"。
     #
     # 正确结构：
     #   根组
     #     ├── Air2     (path=Air2)      ← 应用层
-    #     ├── Natives  (path=Natives)   ← 原生层
+    #     ├── Air2/Player  (path=Air2/Player)   ← 原生层
     #     └── Products
     groups = group_tree(all_files)
 
@@ -320,7 +320,7 @@ def build():
 
     # ---- 根组 ----
     # children = 所有顶层目录 + Products。
-    # 顶层目录是动态的（Air2、Natives，将来可能还有别的），
+    # 顶层目录是动态的（Air2、Air2/Player，将来可能还有别的），
     # 写死会导致新增目录时文件路径解析错。
     add(f"\t\t{main_group} = {{")
     add("\t\t\tisa = PBXGroup;")

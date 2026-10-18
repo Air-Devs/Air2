@@ -119,7 +119,7 @@ jobs:
           cp -R java_runtimes "$APP/java_runtimes"
 
           # ---- 启动器资源 ----
-          for f in Natives/resources/*; do
+          for f in Assets/runtime/*; do
             b=$(basename "$f")
             case "$b" in Frameworks|*.lproj) continue ;; esac
             cp -R "$f" "$APP/" 2>/dev/null || true

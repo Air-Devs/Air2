@@ -3,7 +3,7 @@
 #import "SurfaceViewController.h"
 #import "ios_uikit_bridge.h"
 #import "utils.h"
-#import "mach_excServer.h"
+#import "Libraries/external/mach/mach_excServer.h"
 
 #include <dlfcn.h>
 #include <execinfo.h>
