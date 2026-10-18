@@ -576,8 +576,11 @@ A2_GLFW_ENTRY void pojavMakeCurrent(jlong window) {
     pthread_mutex_lock(&gLock);
     gCurrentContext = (long) window;
     pthread_mutex_unlock(&gLock);
-    a2_log_f(@"[A2-GLFW-PEER] pojavMakeCurrent window=%ld（本层只记当前上下文；"
-             "上下文绑定/呈现属渲染器）", (long) window);
+    // ★2026-10-18★ 不只是记录：必须在本线程把 EGL 上下文设为 current，
+    //   否则 MC 的 GL.createCapabilities 会抛 "no OpenGL context current"。
+    extern int a2_gl_bridge_make_current(void);
+    int mrc = a2_gl_bridge_make_current();
+    a2_log_f(@"[A2-GLFW-PEER] pojavMakeCurrent window=%ld rc=%d", (long) window, mrc);
 }
 
 // ★渲染器交接点★：呈现属渲染器；每帧都会调 ⇒ 只在首次打一行判据，不刷屏。

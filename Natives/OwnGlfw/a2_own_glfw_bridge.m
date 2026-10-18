@@ -180,8 +180,12 @@ JNIEXPORT void JNICALL Java_org_lwjgl_glfw_GLFW_nMakeContextCurrent
     (void) env;
     (void) cls;
     (void) window;
-    // ★刻意空实现★：GL 上下文属渲染器（Natives/Renderer）；本事件/输入层不持有它。
-    // 保留本符号只为满足 GLFW.java 的 native 声明（否则 UnsatisfiedLinkError）。
+    // ★2026-10-18★ 不再空实现：MC 在渲染线程上调用它后立刻要 GL.createCapabilities，
+    //   必须在这一线程把 EGL 上下文设为 current（真机否则报
+    //   "There is no OpenGL context current in the current thread"）。
+    extern int a2_gl_bridge_make_current(void);
+    int rc = a2_gl_bridge_make_current();
+    a2_log_f(@"[A2-GLFW] nMakeContextCurrent window=%lld rc=%d", (long long) window, rc);
 }
 
 JNIEXPORT void JNICALL Java_org_lwjgl_glfw_GLFW_nSwapBuffers

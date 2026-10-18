@@ -267,6 +267,21 @@ static void a2_gl_bridge_frame_work(void) {
 //  公开 API
 // ============================================================================
 
+// ★2026-10-18 真机证据★ MC 报 "There is no OpenGL context current in the current thread"
+//   （GL.createCapabilities ← GlDevice.<init> ← Minecraft.<init>）。
+//   原因：EGL 上下文只在建窗口的线程里创建过，Java 渲染线程从未 eglMakeCurrent。
+//   本函数把已有上下文设为【调用线程】的当前上下文 —— 由 GLFW 桥的 MakeContextCurrent 调用。
+int a2_gl_bridge_make_current(void) {
+    if (gEglMakeCurrent == NULL || gDpy == A2_EGL_NO_DISPLAY || gCtx == A2_EGL_NO_CONTEXT) {
+        a2_gl_log("[A2-GLBRIDGE] makeCurrent 跳过：display/context 未就绪");
+        return -1;
+    }
+    A2EGLBoolean ok = gEglMakeCurrent(gDpy, gSurf, gSurf, gCtx);
+    a2_gl_log("[A2-GLBRIDGE] makeCurrent -> %s（线程=%s）",
+              ok ? "OK" : "FAILED", pthread_main_np() ? "main" : "worker");
+    return ok ? 0 : -2;
+}
+
 void a2_gl_bridge_present_frame(void) {
     // 未附着（例如所选后端不是 EGL/GL 系 ⇒ attach 返回 Skipped）⇒ 无操作：
     // 不产帧、不记数（帧性能判据会如实报 frames=0）。

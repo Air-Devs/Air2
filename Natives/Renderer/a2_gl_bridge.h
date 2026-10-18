@@ -121,4 +121,7 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath);
 /// ★调用点唯一★：`Air2/Bridge/A2LaunchRunner.m` 的 `+launchWithPlanPath:…`（基线帧循环）。
 void a2_gl_bridge_present_frame(void);
 
+/// 把已有 EGL 上下文设为调用线程的 current（GLFW 的 MakeContextCurrent 用）。
+int a2_gl_bridge_make_current(void);
+
 #endif /* A2_GL_BRIDGE_H */
