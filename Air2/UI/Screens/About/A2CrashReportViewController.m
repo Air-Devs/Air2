@@ -70,12 +70,18 @@
         [text.trailingAnchor constraintEqualToAnchor:safe.trailingAnchor constant:-16],
         [text.bottomAnchor constraintEqualToAnchor:export.topAnchor constant:-12],
 
+        // ★按钮间距（2026-10-18 用户反馈：两个按钮靠太近）★
+        //   主按钮「导出日志」在上、次按钮「返回启动器」在下，中间留 24pt；
+        //   两者都做成 44pt 高（iOS 最小可点区域），底部再留 20pt 安全距离。
         [export.centerXAnchor constraintEqualToAnchor:safe.centerXAnchor],
-        [export.topAnchor constraintEqualToAnchor:close.topAnchor constant:-8],
+        [export.heightAnchor constraintEqualToConstant:44],
+        [export.widthAnchor constraintGreaterThanOrEqualToConstant:200],
+        [export.bottomAnchor constraintEqualToAnchor:close.topAnchor constant:-24],
 
         [close.centerXAnchor constraintEqualToAnchor:safe.centerXAnchor],
-        [close.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor constant:-16],
-        [close.heightAnchor constraintEqualToConstant:36],
+        [close.bottomAnchor constraintEqualToAnchor:safe.bottomAnchor constant:-20],
+        [close.heightAnchor constraintEqualToConstant:44],
+        [close.widthAnchor constraintGreaterThanOrEqualToConstant:200],
     ]];
 }
 
