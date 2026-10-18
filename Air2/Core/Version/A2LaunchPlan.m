@@ -521,6 +521,9 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     [options addObject:@"-Dorg.lwjgl.opengl.libname=gl4es_114"];
     [options addObject:@"-Dorg.lwjgl.system.allocator=system"];
     [options addObject:@"-Dorg.lwjgl.glfw.checkThread0=false"];
+    // Vulkan 后端：iOS 上没有系统 Vulkan，MC 26 走 MoltenVK（包内 Frameworks/libMoltenVK.dylib）。
+    //   真机证据：不加这条会报 UnsatisfiedLinkError: Failed to locate library: libvulkan.1.dylib。
+    [options addObject:@"-Dorg.lwjgl.vulkan.libname=MoltenVK"];
 
     // ---- ★运行时事实 ⇒ VM 级 -D★（Bridge 的 A2LaunchRunner 会把本数组原样注入 argv）----
     // 为什么是 `-D` 而不是 plan.properties：
