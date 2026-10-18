@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "256x256-Transparent.png",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

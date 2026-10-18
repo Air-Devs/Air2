@@ -21,6 +21,7 @@
 # 整个 Frameworks 约 237MB。提交进 git 会让 clone 极慢。
 # ---------- JRE（约 440MB，用 scripts/fetch_jre.py 下载）----------
 /depends/
+/java_runtimes/
 Libraries/Frameworks/*.dylib
 Libraries/Frameworks/*.framework/
 Libraries/Jars/**/*.jar
@@ -107,3 +108,9 @@ config.local.h
 # ---------- CI 临时文件 ----------
 /ci-logs/
 *.xcresult
+
+# ---------- 移植的二进制 ----------
+/ThirdParty/NG-GL4ES/**/*.o
+Natives/resources/Assets.car
+JavaApp/libs/**/*.jar
+JavaApp/libs/**/*.class
