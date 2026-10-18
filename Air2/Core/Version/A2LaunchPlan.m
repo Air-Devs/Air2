@@ -513,6 +513,15 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
         }
     }
 
+    // ---- ★LWJGL 平台库选择（照老 Air 的已验证参数）★ ----
+    //   真机证据：不加这些，MC 的 GL.create() 会去拿 macOS 的 com.apple.opengl
+    //   ⇒ UnsatisfiedLinkError: Failed to retrieve bundle with identifier: com.apple.opengl。
+    //   老 Air 的做法是把 GL 实现指到自带的库（它用 mobileglues；我们包内是 libgl4es_114.dylib，
+    //   实测导出 glGetString/glGetError/eglGetDisplay）。
+    [options addObject:@"-Dorg.lwjgl.opengl.libname=gl4es_114"];
+    [options addObject:@"-Dorg.lwjgl.system.allocator=system"];
+    [options addObject:@"-Dorg.lwjgl.glfw.checkThread0=false"];
+
     // ---- ★运行时事实 ⇒ VM 级 -D★（Bridge 的 A2LaunchRunner 会把本数组原样注入 argv）----
     // 为什么是 `-D` 而不是 plan.properties：
     //   复用线覆盖层 `GLFW.java:538/557` 读这两个属性的地方是**静态块** —— 装载 GLFW 类
