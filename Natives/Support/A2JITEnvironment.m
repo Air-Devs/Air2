@@ -679,13 +679,20 @@ static int gA2JITEnsureKickInflight = 0;
         a2_jit_log("[A2JIT] ★排查模式★ A2SkipJITMachinery=YES ⇒ 跳过 brk #0x69 / exec-probe / 区域自证，直接放行建 VM");
         // ★2026-10-18★ 排查模式下同样要准备「已祝福的可执行区」：
         //   自编 libjvm 通过 dlsym("A2GetJITExecRegion") 拿它当 code cache。
-        {
+        // ★2026-10-18★ 默认★关★（真机实测：cmd4 不被服务时会在点启动瞬间崩，连日志都拿不到）。
+        //   要试新路径：偏好键 A2PreblessRegion = YES。
+        id preVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2PreblessRegion"];
+        BOOL prebless = (preVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2PreblessRegion"];
+        if (!prebless) {
+            a2_jit_log(@"[A2JIT] 自研宿主区=关（A2PreblessRegion 未设 ⇒ 不碰 cmd4，避免秒退）");
+        } else {
             extern void *a2_jit_alloc_preblessed_region(size_t bytes);
             NSInteger mb = [NSUserDefaults.standardUserDefaults integerForKey:@"A2JITRegionMB"];
             size_t want = (mb > 0) ? (size_t)MIN(mb, (NSInteger)256) * 1024u * 1024u
                                    : (size_t)64 * 1024u * 1024u;
             void *r = a2_jit_alloc_preblessed_region(want);
             a2_jit_log(@"[A2JIT] ★自研 JIT 宿主区★ addr=%p size=%zu（排查模式：cmd4 祝福 + mprotect RX）", r, want);
+            }
         }
         return YES;
     }
