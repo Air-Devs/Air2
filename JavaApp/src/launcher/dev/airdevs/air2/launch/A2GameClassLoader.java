@@ -62,6 +62,18 @@ public final class A2GameClassLoader extends URLClassLoader {
     }
 
     /**
+     * 追加单个 URL。★必须重写★：{@link A2Entry} 走反射调用 {@code URLClassLoader.addURL}
+     * 追加 MC 库（Java 8 兼容路径），若不在这一层登记，{@code findClass} 就找不到 jar，
+     * 于是既走不到「无签名定义」也走不到「ACC_PUBLIC 提升」——
+     * 真机表现就是 IllegalAccessError 原样出现（2026-10-18 lastlog-47）。
+     */
+    @Override
+    protected void addURL(URL url) {
+        registerIfJar(url);
+        super.addURL(url);
+    }
+
+    /**
      * {@code -javaagent} 的落地约定：JVM 用系统类加载器把 agent jar 挂上类路径时，
      * 反射调用本方法（签名固定为 {@code (String)}）。
      *
