@@ -1582,6 +1582,8 @@
 				GENERATE_INFOPLIST_FILE = "NO";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
+					"$(SRCROOT)",
+					"$(SRCROOT)/Libraries",
 					"$(SRCROOT)/Libraries/external/mesa",
 				);
 				INFOPLIST_FILE = "Air2/Info.plist";
@@ -1616,6 +1618,8 @@
 				GENERATE_INFOPLIST_FILE = "NO";
 				HEADER_SEARCH_PATHS = (
 					"$(inherited)",
+					"$(SRCROOT)",
+					"$(SRCROOT)/Libraries",
 					"$(SRCROOT)/Libraries/external/mesa",
 				);
 				INFOPLIST_FILE = "Air2/Info.plist";
