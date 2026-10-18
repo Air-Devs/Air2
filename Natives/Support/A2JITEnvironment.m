@@ -95,6 +95,33 @@ static BOOL a2_jit_brk_f00d_cmd4_prepare_safe(void *addr, size_t len) {
     return ok;
 }
 
+// ★逐页取 rx 实验(2026-10-18)★
+//   背景：mmap(PROT_EXEC) 在 iOS 26+ TXM 下只给地址不给执行权（执行即 SIGBUS），
+//   而调试器 `_M<size>,rx` 返回的页实测 cur=0x5（可执行）。
+//   本函数连续向调试器要 N 个页，记录是否连续：
+//     连续 ⇒ 可以把首地址当一整块交给 JVM；
+//     不连续 ⇒ 只能拿到若干 16KB 碎片（那就得改 libjvm 支持分片）。
+static void *a2_jit_collect_pages(size_t pageSize, size_t pageCount) {
+    void *first = NULL, *prev = NULL;
+    size_t got = 0, contiguous = 0;
+    for (size_t i = 0; i < pageCount; i++) {
+        void *pg = a2_jit_brk69_create_region_safe(pageSize);
+        if (pg == NULL) break;
+        got++;
+        if (first == NULL) { first = pg; prev = pg; contiguous = 1; continue; }
+        if ((char *)pg == (char *)prev + pageSize) contiguous++;
+        prev = pg;
+    }
+    a2_jit_log("[A2JIT] 逐页取 rx：要求 %zu 页，拿到 %zu 页，连续 %zu 页；first=%p last=%p",
+               pageCount, got, contiguous, first, prev);
+    if (got == pageCount && contiguous == pageCount) {
+        a2_jit_log("[A2JIT] ★连续★ 可用作整块 code cache：base=%p size=%zu", first, pageSize * pageCount);
+        return first;
+    }
+    a2_jit_log("[A2JIT] ★不连续★（碎片 %zu 页）⇒ 需要 libjvm 侧支持分片映射", got);
+    return NULL;
+}
+
 static void *gA2JITExecRegion = NULL;
 static size_t gA2JITExecRegionSize = 0;
 
@@ -684,7 +711,15 @@ static int gA2JITEnsureKickInflight = 0;
         id preVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2PreblessRegion"];
         BOOL prebless = (preVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2PreblessRegion"];
         if (!prebless) {
-            a2_jit_log(@"[A2JIT] 自研宿主区=关（A2PreblessRegion 未设 ⇒ 不碰 cmd4，避免秒退）");
+            // ★默认走这里★：逐页向调试器要 rx（实测可执行），并报告连续性。
+            //   App 不再自己 mmap RX（那条路在 TXM 下执行必 SIGBUS）。
+            size_t pageSize = (size_t)getpagesize();
+            size_t pageCount = (size_t)(16 * 1024 * 1024 / pageSize);
+            void *base = a2_jit_collect_pages(pageSize, pageCount);
+            if (base) {
+                gA2JITExecRegion = base;
+                gA2JITExecRegionSize = pageSize * pageCount;
+            }
         } else {
             extern void *a2_jit_alloc_preblessed_region(size_t bytes);
             NSInteger mb = [NSUserDefaults.standardUserDefaults integerForKey:@"A2JITRegionMB"];
