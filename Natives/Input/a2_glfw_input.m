@@ -144,11 +144,25 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 - (void)didMoveToWindow {
     [super didMoveToWindow];
     if (self.window == nil || _a2ScrollGestureInstalled) return;
+    // ★再延后一个 runloop★：didMoveToWindow 发生时 UIKit 还在做布局/上屏，
+    //   此时 addGestureRecognizer 仍可能踩到未稳定的容器（真机崩溃点 objc_retain）。
+    //   下一个主队列轮次再装，那时视图层级已经稳定。
     if (!NSThread.isMainThread) {
         __weak typeof(self) ws = self;
         dispatch_async(dispatch_get_main_queue(), ^{ [ws didMoveToWindow]; });
         return;
     }
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        A2GlfwView *v = weakSelf;
+        if (v == nil || v.window == nil || v->_a2ScrollGestureInstalled) return;
+        [v a2_installScrollGestureIfNeeded];
+    });
+}
+
+/// 真正的安装动作（延后一个 runloop 后调用）。
+- (void)a2_installScrollGestureIfNeeded {
+    if (_a2ScrollGestureInstalled || self.window == nil) return;
     id a2sg = [NSUserDefaults.standardUserDefaults objectForKey:@"A2EnableScrollGesture"];
     BOOL enable = (a2sg == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2EnableScrollGesture"];
     if (!enable) return;
