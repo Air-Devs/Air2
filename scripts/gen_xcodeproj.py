@@ -230,15 +230,10 @@ def build():
     products_group = uid("group", "Products")
     app_group = uid("group", "Air2")
 
-    add(f"\t\t{main_group} = {{")
-    add("\t\t\tisa = PBXGroup;")
-    add("\t\t\tchildren = (")
-    add(f"\t\t\t\t{app_group} /* {PROJECT_NAME} */,")
-    add(f"\t\t\t\t{products_group} /* Products */,")
-    add("\t\t\t);")
-    add("\t\t\tsourceTree = \"<group>\";")
-    add("\t\t};")
-    add("")
+    # 根组在 PBXGroup 段的【最后】输出 —— 它的 children 需要
+    # 先算出所有顶层目录（Air2 / Natives / ...），不能写死。
+    # 这里只留下 id 定义，实际输出见下方 main_group_placeholder
+    # 的说明。
 
     add(f"\t\t{products_group} /* Products */ = {{")
     add("\t\t\tisa = PBXGroup;")
@@ -252,17 +247,29 @@ def build():
 
     # Air2 组：按真实目录层级嵌套。
     #
-    # 关键：PBXGroup 的 path 是相对父组的。之前我把所有目录都平铺挂在
-    # Air2 组下、path 只写目录名，Xcode 拼出来是 Air2/Version/，
-    # 而实际文件在 Air2/UI/Screens/Version/ —— 于是报
-    # "Build input file cannot be found"。
-    # 必须按真实层级逐层嵌套，每层 path 只写自己那一级。
+    # 关键：PBXGroup 的 path 是相对父组的。
+    #
+    # 之前把【所有顶层目录】都当成 Air2 的子组 ——
+    # 于是 Natives 变成了 Air2/Natives，而它实际在根目录下。
+    # Xcode 拼出来的路径是 /repo/Air2/vk_bridge.m（少了一层 Natives），
+    # 报 "Build input file cannot be found"。
+    #
+    # 正确结构：
+    #   根组
+    #     ├── Air2     (path=Air2)      ← 应用层
+    #     ├── Natives  (path=Natives)   ← 原生层
+    #     └── Products
     groups = group_tree(all_files)
 
-    # 计算每个目录组的父组
+    # 顶层目录（无 "/" 的组名）
+    TOP_LEVEL = sorted({g for g in groups if "/" not in g})
+    if not TOP_LEVEL:
+        TOP_LEVEL = ["Air2"]
+
     def parent_group(g):
-        if g == "Air2" or "/" not in g:
-            return "Air2"
+        """返回 g 的父组名；顶层目录返回 None（挂到根组）"""
+        if "/" not in g:
+            return None
         return g.rsplit("/", 1)[0]
 
     def child_groups(g):
@@ -274,13 +281,13 @@ def build():
                 out.append(g2)
         return out
 
-    # 所有目录组（含 Air2 自身）
-    all_dirs = sorted(set(list(groups.keys()) + ["Air2"]), key=lambda x: (x.count("/"), x))
+    all_dirs = sorted(groups.keys(), key=lambda x: (x.count("/"), x))
     dir_group_ids = {g: uid("group", g) for g in all_dirs}
 
+    # 逐目录输出组定义
     for g in all_dirs:
         gid = dir_group_ids[g]
-        name = "Air2" if g == "Air2" else os.path.basename(g)
+        name = os.path.basename(g)
 
         add(f"\t\t{gid} /* {name} */ = {{")
         add("\t\t\tisa = PBXGroup;")
@@ -305,9 +312,20 @@ def build():
         add("\t\t};")
         add("")
 
-    # Air2 根组额外挂 Products
-    # （上面已输出，这里改用它作为主组的孩子）
-    # 见下方 main_group 定义处
+    # ---- 根组 ----
+    # children = 所有顶层目录 + Products。
+    # 顶层目录是动态的（Air2、Natives，将来可能还有别的），
+    # 写死会导致新增目录时文件路径解析错。
+    add(f"\t\t{main_group} = {{")
+    add("\t\t\tisa = PBXGroup;")
+    add("\t\t\tchildren = (")
+    for top in TOP_LEVEL:
+        add(f"\t\t\t\t{dir_group_ids[top]} /* {top} */,")
+    add(f"\t\t\t\t{products_group} /* Products */,")
+    add("\t\t\t);")
+    add("\t\t\tsourceTree = \"<group>\";")
+    add("\t\t};")
+    add("")
 
     add("/* End PBXGroup section */")
     add("")

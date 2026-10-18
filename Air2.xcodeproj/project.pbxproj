@@ -1091,15 +1091,6 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
-		E2258AA71B17E0A3529C6C95 = {
-			isa = PBXGroup;
-			children = (
-				0D7DB83B69709B8B97AE4409 /* Air2 */,
-				31A5E41A9BD04E385DB196E5 /* Products */,
-			);
-			sourceTree = "<group>";
-		};
-
 		31A5E41A9BD04E385DB196E5 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -2299,6 +2290,16 @@
 				62C6728180F36BC92F7FA092 /* terracotta.h */,
 			);
 			path = Headers;
+			sourceTree = "<group>";
+		};
+
+		E2258AA71B17E0A3529C6C95 = {
+			isa = PBXGroup;
+			children = (
+				0D7DB83B69709B8B97AE4409 /* Air2 */,
+				5865F4B7DFEC041CCF43A836 /* Natives */,
+				31A5E41A9BD04E385DB196E5 /* Products */,
+			);
 			sourceTree = "<group>";
 		};
 

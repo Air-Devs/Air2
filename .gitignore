@@ -3,6 +3,13 @@
 # 原则：不提交任何构建产物、用户数据、密钥、IDE 状态
 # ============================================================
 
+# ---------- JRE（880MB，用 scripts/fetch_jre.py 下载）----------
+# 运行时依赖，体积太大不进 git。
+# 注意：Libraries/ 下的 dylib/jar 是【要】进 git 的（参照 ZL2），
+# 只有 JRE 例外。
+/depends/
+/java_runtimes/
+
 # ---------- 构建产物 ----------
 /build/
 /Natives/build/
@@ -11,23 +18,10 @@
 *.ipa
 *.dSYM/
 *.o
-*.a
-*.dylib
 *.so
 *.xcarchive
 
-# ---------- 预编译依赖（约 250MB，用 scripts/fetch_deps.sh 下载）----------
-# 不提交的理由：MobileGL 两个库就 85MB×2，Mesa 17MB，
-# 整个 Frameworks 约 237MB。提交进 git 会让 clone 极慢。
-# ---------- JRE（约 440MB，用 scripts/fetch_jre.py 下载）----------
-/depends/
-/java_runtimes/
-Libraries/Frameworks/*.dylib
-Libraries/Frameworks/*.framework/
-Libraries/Jars/**/*.jar
-Natives/terracotta/**/*.a
-!Libraries/Jars/.gitkeep
-!Libraries/Frameworks/.gitkeep
+
 
 # ---------- Xcode ----------
 xcuserdata/
@@ -57,9 +51,7 @@ Carthage/Build/
 
 # ---------- Java ----------
 *.class
-*.jar
-!.mvn/wrapper/*.jar
-target/
+!.mvn/wrapper/target/
 .gradle/
 hs_err_pid*
 
@@ -109,8 +101,3 @@ config.local.h
 /ci-logs/
 *.xcresult
 
-# ---------- 移植的二进制 ----------
-/ThirdParty/NG-GL4ES/**/*.o
-Natives/resources/Assets.car
-JavaApp/libs/**/*.jar
-JavaApp/libs/**/*.class
