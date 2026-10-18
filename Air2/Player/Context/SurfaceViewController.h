@@ -4,11 +4,14 @@
 #import "GameSurfaceView.h"
 #import "PLLogOutputView.h"
 
-BOOL canAppendToLog;
-dispatch_group_t fatalExitGroup;
-
-CGRect virtualMouseFrame;
-CGPoint lastVirtualMousePoint;
+// ★必须在 .m 里定义、头里只做 extern 声明★
+//   原来直接写定义 ⇒ 每个 import 此头的 .m 都生成一份
+//   （Clang 11 起默认 -fno-common）⇒ 链接期 54 个 duplicate symbol：
+//     _canAppendToLog / _fatalExitGroup / _virtualMouseFrame / _lastVirtualMousePoint …
+extern BOOL canAppendToLog;
+extern dispatch_group_t fatalExitGroup;
+extern CGRect virtualMouseFrame;
+extern CGPoint lastVirtualMousePoint;
 
 // 前置声明必须放在 @interface 外面 —— 放进里面会报
 // "missing '@end'"（Objective-C 的 @class 是文件级声明，不是成员）。

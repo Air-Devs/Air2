@@ -384,6 +384,12 @@ static GameSurfaceView* pojavWindow;
 // forward physical keyboard events to the embedded SDL_uikitview.
 static UIView *findSDL_uikitview(UIView *root);
 
+// 见 SurfaceViewController.h：这些全局量只能有一份定义
+BOOL canAppendToLog = NO;
+dispatch_group_t fatalExitGroup = NULL;
+CGRect virtualMouseFrame = {0};
+CGPoint lastVirtualMousePoint = {0, 0};
+
 @implementation SurfaceViewController
 
 #pragma mark - TouchController Static Library Support
