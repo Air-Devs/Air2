@@ -23,7 +23,7 @@
 #include <dlfcn.h>
 
 #include "utils.h"
-#include "ctxbridges/gl4es_family_boot.h"
+#include "gl4es_family_boot.h"
 #include "ctxbridges/virgl_server.h"
 
 // ---------------------------------------------------------------------------

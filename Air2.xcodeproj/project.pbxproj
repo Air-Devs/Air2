@@ -1586,6 +1586,7 @@
 					"$(SRCROOT)/Libraries/external/SimpleFPEWrapper/include",
 					"$(SRCROOT)",
 					"$(SRCROOT)/Libraries/external/mesa",
+					"$(SRCROOT)/Libraries",
 				);
 				INFOPLIST_FILE = "Air2/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1623,6 +1624,7 @@
 					"$(SRCROOT)/Libraries/external/SimpleFPEWrapper/include",
 					"$(SRCROOT)",
 					"$(SRCROOT)/Libraries/external/mesa",
+					"$(SRCROOT)/Libraries",
 				);
 				INFOPLIST_FILE = "Air2/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (

@@ -449,6 +449,7 @@ def build():
                         "$(SRCROOT)/Libraries/external/SimpleFPEWrapper/include",
                         "$(SRCROOT)",
                         "$(SRCROOT)/Libraries/external/mesa",
+                        "$(SRCROOT)/Libraries",
                     )
                 ) + chr(10) + chr(9) * 4 + ")",
                 "CODE_SIGN_STYLE": "Automatic",
