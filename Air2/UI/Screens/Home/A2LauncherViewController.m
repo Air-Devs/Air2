@@ -27,6 +27,9 @@
 //
 
 #import "A2LauncherViewController.h"
+#import "A2LaunchSplashView.h"
+#import "A2GameLaunchCoordinator.h"
+#import "A2Logger.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
@@ -52,6 +55,7 @@
 
 
 @interface A2LauncherViewController ()
+@property (nonatomic, strong, nullable) A2LaunchSplashView *launchSplash;
 @property (nonatomic, strong) A2BackgroundView *backgroundView;
 @property (nonatomic, strong) UIView *topBar;
 @property (nonatomic, strong) UILabel *appNameLabel;
@@ -698,12 +702,67 @@
 #pragma mark - 动作与导航
 
 - (void)launchGame {
+    // 当前选中的版本
+    A2Version *current = A2VersionManager.shared.currentVersion;
+    if (!current) {
+        [A2Toast show:@"还没有选择版本" inView:self.view];
+        return;
+    }
+    if (!current.isValid) {
+        [A2Toast show:@"该版本不完整，请重新安装" inView:self.view];
+        return;
+    }
+
     _launchButton.loading = YES;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
+
+    // 启动遮罩 —— 从点击那一刻起就显示，
+    // 让「检查文件 → 补下载 → 启动 JVM」的十几秒有明确反馈。
+    A2LaunchSplashView *splash = [[A2LaunchSplashView alloc] initWithFrame:self.view.bounds];
+    splash.versionName = current.name;
+    [splash setStage:A2LaunchStagePreparing message:@"正在检查游戏文件"];
+    [self.view addSubview:splash];
+
+    // 归一化坐标（首页内容在滚动容器里）
+    splash.translatesAutoresizingMaskIntoConstraints = NO;
+    [NSLayoutConstraint activateConstraints:@[
+        [splash.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [splash.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+        [splash.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [splash.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+    ]];
+    self.launchSplash = splash;
+
+    __weak typeof(self) weakSelf = self;
+    [[A2GameLaunchCoordinator shared] launchVersion:current.name
+                                         skipCheck:NO
+                                        completion:^(BOOL success, NSError *error) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+
         self.launchButton.loading = NO;
-        [A2Toast show:@"启动流程尚未接入" inView:self.view];
-    });
+
+        if (!success) {
+            // 失败：遮罩上显示原因 + 重试/退出，而不是一个 toast 就消失
+            [splash showFailure:(error.localizedDescription ?: @"启动失败")
+                        onRetry:^{
+                __strong typeof(weakSelf) self = weakSelf;
+                [splash removeFromSuperview];
+                self.launchSplash = nil;
+                [self launchGame];
+            }
+                         onQuit:^{
+                __strong typeof(weakSelf) self = weakSelf;
+                [splash removeFromSuperview];
+                self.launchSplash = nil;
+            }];
+            return;
+        }
+
+        // 成功：进入下一阶段（拉起 JVM + surface）。
+        // 那一步需要 SurfaceViewController，由 Player 层提供。
+        [splash setStage:A2LaunchStageStartingJVM message:@"正在启动游戏"];
+        [A2Logger info:@"Launch" message:@"前置检查全部通过，等待 JVM 启动"];
+    }];
 }
 
 - (void)pushScreen:(UIViewController *)vc style:(A2TransitionStyle)style {

@@ -57,6 +57,7 @@
 		2005F5B368FB32F5221D4DFB /* A2RendererRegistry.m in Sources */ = {isa = PBXBuildFile; fileRef = EF194CE5DE12660BE86A1C1E /* A2RendererRegistry.m */; };
 		E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */ = {isa = PBXBuildFile; fileRef = 035FB3CC4FE4018F44632AD5 /* A2Settings.m */; };
 		15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */; };
+		F6B0CF718AF1F4369DC848E8 /* A2GameLaunchCoordinator.m in Sources */ = {isa = PBXBuildFile; fileRef = 1F7F525D4A9EBB0B34986475 /* A2GameLaunchCoordinator.m */; };
 		20B189CC369DA2AC61DD52DF /* A2IntegrityChecker.m in Sources */ = {isa = PBXBuildFile; fileRef = FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */; };
 		42E2F81428F01FB2F3F912BC /* A2RemoteVersions.m in Sources */ = {isa = PBXBuildFile; fileRef = C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */; };
 		2BC4E80EA8F83E9426E4BA2E /* A2VersionInfo.m in Sources */ = {isa = PBXBuildFile; fileRef = 3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */; };
@@ -76,6 +77,7 @@
 		F2CB4E7B7F47FF18A957EFB5 /* A2ControlLayout.m in Sources */ = {isa = PBXBuildFile; fileRef = 1DD83AEE82FD5DB2400F3B8B /* A2ControlLayout.m */; };
 		FE909770F1329CB8E985AD5F /* A2ControlRenderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A1769FF5839C6F59DA3DB26 /* A2ControlRenderer.m */; };
 		7248BD00DBF94569DDA08C01 /* A2DefaultControls.m in Sources */ = {isa = PBXBuildFile; fileRef = 5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */; };
+		04FA0FC85CCBBA11454EF9AE /* A2LaunchSplashView.m in Sources */ = {isa = PBXBuildFile; fileRef = 96009B3F837E8AD9139F1044 /* A2LaunchSplashView.m */; };
 		999713CBCD519FC8B0C363BE /* A2ResolutionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */; };
 		F56BA6557B260E7C004C2CE4 /* A2ResolutionSettingsView.m in Sources */ = {isa = PBXBuildFile; fileRef = F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */; };
 		8C279AEDAE884403944CA9B5 /* ControllerInput.m in Sources */ = {isa = PBXBuildFile; fileRef = 16CD6637FF9A9120236C23FD /* ControllerInput.m */; };
@@ -242,6 +244,7 @@
 		EF194CE5DE12660BE86A1C1E /* A2RendererRegistry.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererRegistry.m"; sourceTree = "<group>"; };
 		035FB3CC4FE4018F44632AD5 /* A2Settings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Settings.m"; sourceTree = "<group>"; };
 		044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameInstaller.m"; sourceTree = "<group>"; };
+		1F7F525D4A9EBB0B34986475 /* A2GameLaunchCoordinator.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameLaunchCoordinator.m"; sourceTree = "<group>"; };
 		FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2IntegrityChecker.m"; sourceTree = "<group>"; };
 		C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RemoteVersions.m"; sourceTree = "<group>"; };
 		3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionInfo.m"; sourceTree = "<group>"; };
@@ -261,6 +264,7 @@
 		1DD83AEE82FD5DB2400F3B8B /* A2ControlLayout.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlLayout.m"; sourceTree = "<group>"; };
 		6A1769FF5839C6F59DA3DB26 /* A2ControlRenderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlRenderer.m"; sourceTree = "<group>"; };
 		5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DefaultControls.m"; sourceTree = "<group>"; };
+		96009B3F837E8AD9139F1044 /* A2LaunchSplashView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchSplashView.m"; sourceTree = "<group>"; };
 		000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResolutionManager.m"; sourceTree = "<group>"; };
 		F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResolutionSettingsView.m"; sourceTree = "<group>"; };
 		16CD6637FF9A9120236C23FD /* ControllerInput.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "ControllerInput.m"; sourceTree = "<group>"; };
@@ -420,6 +424,7 @@
 		B5290E0419DA2C9F2A8A3BA0 /* A2RendererRegistry.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererRegistry.h"; sourceTree = "<group>"; };
 		8D9149596220C9F4F49C460D /* A2Settings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Settings.h"; sourceTree = "<group>"; };
 		8407C36C2C93136130B9F07E /* A2GameInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameInstaller.h"; sourceTree = "<group>"; };
+		3EC032FE238142C71917EA1C /* A2GameLaunchCoordinator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameLaunchCoordinator.h"; sourceTree = "<group>"; };
 		89044710CFCCD81045E82677 /* A2IntegrityChecker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2IntegrityChecker.h"; sourceTree = "<group>"; };
 		797843066906C8A344CE1344 /* A2RemoteVersions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RemoteVersions.h"; sourceTree = "<group>"; };
 		CE5120FF6E52910A07272F53 /* A2VersionInfo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionInfo.h"; sourceTree = "<group>"; };
@@ -441,6 +446,7 @@
 		1C4E55239DDFE7C5F66C96EF /* A2ControlRenderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlRenderer.h"; sourceTree = "<group>"; };
 		17EFE083DFCD2B631A9B9195 /* A2DefaultControls.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DefaultControls.h"; sourceTree = "<group>"; };
 		8F8DC63CC90EE44095B0B442 /* A2GameMenuOverlay.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameMenuOverlay.h"; sourceTree = "<group>"; };
+		1C687E2D44BB19258F377A63 /* A2LaunchSplashView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchSplashView.h"; sourceTree = "<group>"; };
 		9A380B08F835A986A05EA196 /* A2ResolutionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResolutionManager.h"; sourceTree = "<group>"; };
 		947208B1A4FAF92FA8883A17 /* A2ResolutionSettingsView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResolutionSettingsView.h"; sourceTree = "<group>"; };
 		ED376B63C03CB43B77351AEA /* ControllerInput.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ControllerInput.h"; sourceTree = "<group>"; };
@@ -822,11 +828,13 @@
 			isa = PBXGroup;
 			children = (
 				044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */,
+				1F7F525D4A9EBB0B34986475 /* A2GameLaunchCoordinator.m */,
 				FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */,
 				C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */,
 				3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */,
 				643B820206971C227F265607 /* A2VersionManager.m */,
 				8407C36C2C93136130B9F07E /* A2GameInstaller.h */,
+				3EC032FE238142C71917EA1C /* A2GameLaunchCoordinator.h */,
 				89044710CFCCD81045E82677 /* A2IntegrityChecker.h */,
 				797843066906C8A344CE1344 /* A2RemoteVersions.h */,
 				CE5120FF6E52910A07272F53 /* A2VersionInfo.h */,
@@ -886,9 +894,11 @@
 		90A539DCE91F82FABE23328F /* GameUI */ = {
 			isa = PBXGroup;
 			children = (
+				96009B3F837E8AD9139F1044 /* A2LaunchSplashView.m */,
 				000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */,
 				F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */,
 				8F8DC63CC90EE44095B0B442 /* A2GameMenuOverlay.h */,
+				1C687E2D44BB19258F377A63 /* A2LaunchSplashView.h */,
 				9A380B08F835A986A05EA196 /* A2ResolutionManager.h */,
 				947208B1A4FAF92FA8883A17 /* A2ResolutionSettingsView.h */,
 			);
@@ -1359,6 +1369,7 @@
 				2005F5B368FB32F5221D4DFB /* A2RendererRegistry.m in Sources */,
 				E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */,
 				15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */,
+				F6B0CF718AF1F4369DC848E8 /* A2GameLaunchCoordinator.m in Sources */,
 				20B189CC369DA2AC61DD52DF /* A2IntegrityChecker.m in Sources */,
 				42E2F81428F01FB2F3F912BC /* A2RemoteVersions.m in Sources */,
 				2BC4E80EA8F83E9426E4BA2E /* A2VersionInfo.m in Sources */,
@@ -1378,6 +1389,7 @@
 				F2CB4E7B7F47FF18A957EFB5 /* A2ControlLayout.m in Sources */,
 				FE909770F1329CB8E985AD5F /* A2ControlRenderer.m in Sources */,
 				7248BD00DBF94569DDA08C01 /* A2DefaultControls.m in Sources */,
+				04FA0FC85CCBBA11454EF9AE /* A2LaunchSplashView.m in Sources */,
 				999713CBCD519FC8B0C363BE /* A2ResolutionManager.m in Sources */,
 				F56BA6557B260E7C004C2CE4 /* A2ResolutionSettingsView.m in Sources */,
 				8C279AEDAE884403944CA9B5 /* ControllerInput.m in Sources */,
