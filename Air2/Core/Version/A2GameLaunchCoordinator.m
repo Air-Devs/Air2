@@ -208,7 +208,7 @@ static double A2TaskWeight(A2LaunchTask task) {
 
     A2GamePath *path = [A2GamePath pathWithGameHome:A2VersionManager.shared.gameHome];
     NSString *modsDir = [[path gameDirectoryForVersion:self.version.name
-                                             isolation:[self.version effectiveIsolationMode]]
+                                                 mode:[self.version effectiveIsolationMode]]
                          stringByAppendingPathComponent:@"mods"];
 
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
@@ -270,7 +270,7 @@ static double A2TaskWeight(A2LaunchTask task) {
         [[A2IntegrityChecker new] repairReport:report];
 
         A2InstallRequest *req = [A2InstallRequest new];
-        req.mcVersion = self.version.mcVersion ?: versionName;
+        req.mcVersion = self.version.versionInfo.minecraftVersion ?: versionName;
         req.versionName = versionName;
         req.gameHome = gameHome;
 
@@ -299,7 +299,7 @@ static double A2TaskWeight(A2LaunchTask task) {
 /// ZL2 的 JRE 在 APK 里按版本打包好，运行时直接选；
 /// 我们打包了 4 个，需要按 MC 版本挑 —— 所以插一步。
 - (void)prepareJRE:(void (^)(void))then {
-    NSString *mc = self.version.mcVersion ?: self.version.name;
+    NSString *mc = self.version.versionInfo.minecraftVersion ?: self.version.name;
     A2JRE *jre = [A2JREManager.shared jreForVersionName:self.version.name mcVersion:mc];
 
     if (!jre || !jre.valid) {
