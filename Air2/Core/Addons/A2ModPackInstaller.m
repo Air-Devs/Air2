@@ -23,7 +23,7 @@ static NSString *const kMCBBSManifestName = @"mcbbs.packmeta";
 /// MultiMC 系的清单名
 static NSString *const kMultiMCManifestName = @"mmc-pack.json";
 
-NSString *const A2ModPackErrorDomain = @"A2ModPackErrorDomain";
+NSString *const A2ModPackInstallErrorDomain = @"A2ModPackInstallError";
 
 /// 阶段划分的进度切分点（与 installPackAtPath: 里 report 的值对应）
 static const double kPhaseBaseEnd = 0.5;      // 准备本体
@@ -423,7 +423,7 @@ static void A2Main(dispatch_block_t b) {
 }
 
 - (NSError *)cancelledError {
-    return [NSError errorWithDomain:A2ModPackErrorDomain
+    return [NSError errorWithDomain:A2ModPackInstallErrorDomain
                                code:A2ModPackErrorCancelled
                            userInfo:@{NSLocalizedDescriptionKey: @"用户已取消导入"}];
 }

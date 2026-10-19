@@ -52,7 +52,10 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// 安装器错误域与错误码
-FOUNDATION_EXPORT NSString *const A2ModPackErrorDomain;
+///
+/// 注意：与 A2ModPack.h 的 A2ModPackErrorDomain（整合包解析错误域）语义不同，
+/// 用独立符号名，避免与 A2ModPack.m 的定义在链接期重复符号。
+FOUNDATION_EXPORT NSString *const A2ModPackInstallErrorDomain;
 
 typedef NS_ENUM(NSInteger, A2ModPackErrorCode) {
     A2ModPackErrorCancelled = 1,   ///< 用户主动取消

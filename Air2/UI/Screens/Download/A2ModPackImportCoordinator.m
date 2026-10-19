@@ -351,7 +351,7 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     }
 
     BOOL cancelled = self.cancelling
-        || ([error.domain isEqualToString:A2ModPackErrorDomain] &&
+        || ([error.domain isEqualToString:A2ModPackInstallErrorDomain] &&
             error.code == A2ModPackErrorCancelled);
 
     [self.logOutput append:(cancelled ? @"导入已取消"
