@@ -60,6 +60,16 @@
 }
 
 - (void)commonInit {
+    // 必须在这里统一关掉自动掩码。
+    // 卡片永远是用约束摆放的（initWithFrame:CGRectZero 后 pin 四边），
+    // 如果保留 translatesAutoresizingMaskIntoConstraints，
+    // 系统会给它生成 minX/width/minY/height == 0 四条 required 约束：
+    // 一旦这几条在冲突中被保留下来，卡片宽度就锁死在 0，
+    // 只有不裁切的子视图（图标）会溢出到卡片外面 —— 表现就是
+    // 列表里每张卡片被压成一条窄缝、标题被截成一个字。
+    // 以前是每个调用点各自补一行，资源卡片组件漏了，于是搜索页整列被压扁。
+    self.translatesAutoresizingMaskIntoConstraints = NO;
+
     _cornerRadius = A2RadiusL;
     _contentInsets = UIEdgeInsetsMake(A2SpaceL, A2SpaceL, A2SpaceL, A2SpaceL);
     _elevation = A2CardElevationLow;
