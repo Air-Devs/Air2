@@ -93,6 +93,11 @@ static const CGFloat kIconSize = 72;
     [self setupConstraints];
 
     _tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap)];
+    // 这个手势只负责触感反馈。它默认会把触摸从宿主视图上「吃掉」
+    // （cancelsTouchesInView = YES），卡片放进表格 cell 后，
+    // tableView 的 didSelectRow 就再也不会触发 —— 表现为卡片能看见、
+    // 怎么点都进不去详情，只有滑动列表还有反应。放行触摸即可。
+    _tapGesture.cancelsTouchesInView = NO;
     [self addGestureRecognizer:_tapGesture];
 
     [self applyTheme];
