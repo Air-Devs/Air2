@@ -68,6 +68,9 @@ typedef NS_ENUM(NSInteger, A2ModrinthProjectType) {
 @property (nonatomic, copy, nullable) NSString *downloadURL;
 @property (nonatomic, copy, nullable) NSString *fileName;
 @property (nonatomic, assign) long long fileSize;
+/// 该版本声明的依赖（Modrinth 原样数组：{project_id, version_id, dependency_type}）
+/// 用途：装模组前自动解析并先装前置（依赖自动解析）。
+@property (nonatomic, copy) NSArray<NSDictionary *> *dependencies;
 + (instancetype)fromJSON:(NSDictionary *)json;
 @end
 

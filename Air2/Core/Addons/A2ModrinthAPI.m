@@ -94,6 +94,10 @@ static NSString *const kUserAgent = @"Air-Devs/Air2/0.1.0 (github.com/Air-Devs/A
         v.fileSize = [f[@"size"] longLongValue];
         (void)hashes;
     }
+    NSArray *deps = json[@"dependencies"];
+    if ([deps isKindOfClass:NSArray.class]) {
+        v.dependencies = deps;
+    }
     return v;
 }
 
