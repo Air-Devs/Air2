@@ -235,6 +235,12 @@ def collect_resources():
         full = os.path.join(assets_dir, entry)
         # 资源目录（.xcassets 资产目录 / .lproj 本地化）或散落的资源文件。
         # 后者用于 Air2JIT69.js（自包含 JIT 脚本，必须随包下发）。
+        # ★临时开关 A2_SKIP_ASSETS=1★ 跳过资产目录（actool 在没有模拟器 runtime 的机器上
+        #   会报 "No available simulator runtimes" 并让整包编不过）。跳过 ⇒ app 用系统默认图标，
+        #   其它功能不受影响；等装好 runtime 或换机器后去掉该环境变量即可恢复。
+        if entry.endswith(".xcassets") and os.environ.get("A2_SKIP_ASSETS") == "1":
+            print("[gen] 跳过资产目录:", entry)
+            continue
         if entry.endswith(".xcassets") or entry.endswith(".lproj") or os.path.isfile(full):
             # 归一化为 POSIX 分隔符：Windows 下 os.path.join 会产出反斜杠，
             # 后续 group_tree() 按 "/" 切分，反斜杠会让所有路径落进空路径孤儿组

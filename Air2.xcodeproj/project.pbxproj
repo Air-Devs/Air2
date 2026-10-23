@@ -221,7 +221,6 @@
 		E3CF259BD6AAF19109CDA83D /* a2_tlspsk_tunnel.m in Sources */ = {isa = PBXBuildFile; fileRef = 407ECB99D6941017E615F9DA /* a2_tlspsk_tunnel.m */; };
 		A3C3C2B92C1CA71DC14A22CA /* Air2JIT69.js in Resources */ = {isa = PBXBuildFile; fileRef = 01747E5D28ABCC003A3BB764 /* Air2JIT69.js */; };
 		10F53072F43F29F29959EB83 /* Air2JIT69Ext.js in Resources */ = {isa = PBXBuildFile; fileRef = 25A5657A047421168D9B0E49 /* Air2JIT69Ext.js */; };
-		FC6E8A547C179CC55A247D57 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F6B4BAFE39547DFF98D20300 /* Images.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -650,7 +649,6 @@
 		FE8E7FD5EC13EBBEDE03587C /* jni.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "jni.h"; sourceTree = "<group>"; };
 		01747E5D28ABCC003A3BB764 /* Air2JIT69.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "Assets/Air2JIT69.js"; sourceTree = "<group>"; };
 		25A5657A047421168D9B0E49 /* Air2JIT69Ext.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "Assets/Air2JIT69Ext.js"; sourceTree = "<group>"; };
-		F6B4BAFE39547DFF98D20300 /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets/Images.xcassets"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -1462,7 +1460,6 @@
 			files = (
 				A3C3C2B92C1CA71DC14A22CA /* Air2JIT69.js in Resources */,
 				10F53072F43F29F29959EB83 /* Air2JIT69Ext.js in Resources */,
-				FC6E8A547C179CC55A247D57 /* Images.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
