@@ -35,6 +35,7 @@
 //
 
 #import "A2AggregateSearchService.h"
+#import "A2SearchKeywords.h"
 
 #import "A2CurseForgeAPI.h"
 #import "A2Log.h"
@@ -101,6 +102,20 @@
               completion:(void (^)(A2AggregateSearchOutcome *outcome))completion {
     if (completion == nil) return;
 
+    // ★中文检索词 → 英文关键词★ 两家源都只认英文，直接搜「小地图」必然 0 结果。
+    //   只影响下发给源的 query，UI 上仍显示用户原话。
+    A2ContentFilter *effective = [self copyOfFilter:filter];
+    NSString *rawQuery = filter.query ?: @"";
+    if ([A2SearchKeywords containsCJK:rawQuery]) {
+        NSString *translated = [A2SearchKeywords translateQuery:rawQuery];
+        if (translated.length && ![translated isEqualToString:rawQuery]) {
+            effective.query = translated;
+            [A2Log log:@"[AGG] 中文检索词翻译：\"%@\" → \"%@\"（命中：%@）",
+             rawQuery, translated,
+             [[A2SearchKeywords matchedTermsInQuery:rawQuery] componentsJoinedByString:@", "]];
+        }
+    }
+
     A2ContentSource *modrinth = [A2ContentSource sourceForPlatform:A2ContentPlatformModrinth];
     A2ContentSource *curseForge = [A2ContentSource sourceForPlatform:A2ContentPlatformCurseForge];
 
@@ -147,7 +162,7 @@
     dispatch_group_t group = dispatch_group_create();
 
     if (wantsModrinth) {
-        A2ContentFilter *modrinthFilter = [self copyOfFilter:filter];
+        A2ContentFilter *modrinthFilter = [self copyOfFilter:effective];
         dispatch_group_enter(group);
         [modrinth searchWithFilter:modrinthFilter
                       contentClass:contentClass
@@ -158,7 +173,7 @@
         }];
     }
     if (wantsCurseForge) {
-        A2ContentFilter *curseForgeFilter = [self copyOfFilter:filter];
+        A2ContentFilter *curseForgeFilter = [self copyOfFilter:effective];
         dispatch_group_enter(group);
         [curseForge searchWithFilter:curseForgeFilter
                         contentClass:contentClass
