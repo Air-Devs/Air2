@@ -583,6 +583,11 @@ def build():
     # ---------------- XCBuildConfiguration ----------------
     def common_settings(is_target):
         s = {}
+        # ★只编真机★ 不写这条时 actool 会同时编 iphonesimulator 变体；
+        #   Mac 没装模拟器 runtime 就报 "No available simulator runtimes"（真机 IPA 不受影响）。
+        s.update({
+            "SUPPORTED_PLATFORMS": "iphoneos",
+        })
         if is_target:
             s.update({
                 # AppIcon 尚未设计 —— 当前 Assets 里没有图标集。
