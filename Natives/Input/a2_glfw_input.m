@@ -143,6 +143,20 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
     return [super layerClass];
 }
 
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    // ★iPhone Duo★ 折叠展开 / Split View 改变尺寸时不会走旋转通知，只能靠这里。
+    static CGSize a2LastSize = {0, 0};
+    CGSize s = self.bounds.size;
+    if (fabs(s.width - a2LastSize.width) > 0.5 || fabs(s.height - a2LastSize.height) > 0.5) {
+        a2LastSize = s;
+        extern void a2_glfw_window_handle_host_resize(long handle);
+        if (self.glfwWindow != 0) {
+            a2_glfw_window_handle_host_resize(self.glfwWindow);
+        }
+    }
+}
+
 - (instancetype)initWithWindowHandle:(long)window {
     self = [super initWithFrame:CGRectZero];
     if (self != nil) {

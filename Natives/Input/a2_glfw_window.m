@@ -235,6 +235,28 @@ static void a2_glfw_emit_size(long handle, int wp, int hp, int wpx, int hpx) {
     a2_glfw_event_post(&ev);
 }
 
+/// ★iPhone Duo / 分屏 / 折叠展开★ 宿主视图尺寸变了（不只是旋转）时重算并上报。
+/// 调用点：A2GlfwView 的 layoutSubviews（bounds 变化即触发）。
+/// 为什么不用旋转通知：Duo 展开/折叠、Split View 拖动都不会发 UIDeviceOrientationDidChange。
+void a2_glfw_window_handle_host_resize(long handle) {
+    pthread_mutex_lock(&gWindowLock);
+    A2GlfwHost *h = a2_glfw_host_locked(handle);
+    UIView *view = h.hostView;
+    pthread_mutex_unlock(&gWindowLock);
+    if (view == nil) return;
+
+    CGFloat scale = view.window.screen.scale > 0 ? view.window.screen.scale : 1.0;
+    CGRect b = view.bounds;
+    int wp = (int) lround(b.size.width);
+    int hp = (int) lround(b.size.height);
+    int wpx = (int) lround(b.size.width  * scale);
+    int hpx = (int) lround(b.size.height * scale);
+    if (wp <= 0 || hp <= 0) return;
+    a2_glfw_emit_size(handle, wp, hp, wpx, hpx);
+    a2_log_f(@"[A2-GLFW] 宿主尺寸变化 → %dx%d pt（%dx%d px，scale=%.2f）",
+             wp, hp, wpx, hpx, scale);
+}
+
 static void a2_glfw_emit_scale(long handle, float sx, float sy) {
     A2GlfwEvent ev;
     memset(&ev, 0, sizeof(ev));
