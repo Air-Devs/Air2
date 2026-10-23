@@ -22,7 +22,7 @@
 //
 //  MD3 填充式文本输入框（filled text field）。
 //
-//  形态：surfaceContainerHighest 填充 + 上两角小圆角 + 底部 1dp 下划线。
+//  形态：surfaceContainerHighest 填充 + 四角统一大圆角 + 底部 1dp 下划线。
 //  标签在空且未聚焦时位于输入行内，聚焦或有内容时上浮到顶部 —— 即 MD3
 //  的 floating label。错误态下整条下划线与标签转为 error 色，并在下方
 //  显示一行支持文本（supporting text）。
