@@ -97,8 +97,11 @@
                                                    constant:-A2SpaceXXL],
         [_detailStack.leadingAnchor constraintEqualToAnchor:_detailScroll.leadingAnchor
                                                     constant:A2SpaceM],
-        [_detailStack.trailingAnchor constraintEqualToAnchor:_detailScroll.trailingAnchor
-                                                     constant:-A2SpaceXL],
+        // ★关键★ 宽度必须钉在「可视区」(frameLayoutGuide)，不能钉 contentLayoutGuide：
+        //   钉 content 时内容宽 = 最宽子视图的固有宽度 ⇒ 每个 section 各按自己内容宽
+        //   （真机现象：主题卡片短、资源下载卡片长出屏幕，长短不齐）。
+        [_detailStack.widthAnchor constraintEqualToAnchor:_detailScroll.frameLayoutGuide.widthAnchor
+                                                 constant:-(A2SpaceM + A2SpaceXL)],
     ]];
 
     [_nav selectIndex:0 animated:NO];
