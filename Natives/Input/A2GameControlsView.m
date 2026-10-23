@@ -647,9 +647,10 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     a2_glfw_input_post_mouse_button(_window, kMouseLeft, 1);
     _attackButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.30];
     [_attackWatchdog invalidate];
-    __weak typeof(self) weakSelf = self;
+    // 捕获值而不是在 block 里解引用 weakSelf（clang: dereferencing a __weak pointer is not allowed）
+    const long win = _window;
     _attackWatchdog = [NSTimer scheduledTimerWithTimeInterval:2.0 repeats:NO block:^(NSTimer * _Nonnull timer) {
-        a2_glfw_input_post_mouse_button(weakSelf != nil ? weakSelf->_window : 0, kMouseLeft, 0);
+        a2_glfw_input_post_mouse_button(win, kMouseLeft, 0);
     }];
 }
 - (void)a2_attackUp {
