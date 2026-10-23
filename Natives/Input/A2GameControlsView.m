@@ -313,7 +313,11 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     [_jumpButton addTarget:self action:@selector(a2_jumpUp) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
     [self addSubview:_jumpButton];
     _movable[@"jump"] = _jumpButton;
-    [_jumpButton addGestureRecognizer:[[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)]];
+    {
+        UIPanGestureRecognizer *jp = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)];
+        jp.cancelsTouchesInView = NO;
+        [_jumpButton addGestureRecognizer:jp];
+    }
     [_jumpButton addGestureRecognizer:[[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(a2_pinchItem:)]];
 }
 
@@ -516,9 +520,19 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         UIView *v = _movable[cid];
         v.translatesAutoresizingMaskIntoConstraints = YES;
         v.bounds = CGRectMake(0, 0, 60, 60);
-        [v addGestureRecognizer:[[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)]];
-        [v addGestureRecognizer:[[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(a2_pinchItem:)]];
+        // ★手势绝不能吞掉按钮自身的触摸★
+        //   默认 cancelsTouchesInView=YES ⇒ 轻点一旦被手势识别，UIButton 的
+        //   touch-up 就被取消 ⇒ 只有高亮、动作永不执行（真机现象："右上四键有高亮没作用"）。
+        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)];
+        pan.cancelsTouchesInView = NO;
+        [v addGestureRecognizer:pan];
+
+        UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(a2_pinchItem:)];
+        pinch.cancelsTouchesInView = NO;
+        [v addGestureRecognizer:pinch];
+
         UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(a2_tapControl:)];
+        tap.cancelsTouchesInView = NO;
         [v addGestureRecognizer:tap];
     }
     _attackButton.bounds    = CGRectMake(0, 0, 76, 76);
@@ -560,7 +574,11 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         [self addSubview:b];
         [_hotbar addObject:b];
         _movable[[NSString stringWithFormat:@"hot%d", i]] = b;
-        [b addGestureRecognizer:[[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)]];
+        {
+            UIPanGestureRecognizer *hp = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)];
+            hp.cancelsTouchesInView = NO;
+            [b addGestureRecognizer:hp];
+        }
     }
     [self a2_layoutHotbar];
 }
