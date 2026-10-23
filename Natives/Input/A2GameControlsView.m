@@ -318,7 +318,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     _movable[@"jump"] = _jumpButton;
     {
         UIPanGestureRecognizer *jp = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)];
-        jp.cancelsTouchesInView = NO;
+        jp.cancelsTouchesInView = YES;
         [_jumpButton addGestureRecognizer:jp];
     }
     [_jumpButton addGestureRecognizer:[[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(a2_pinchItem:)]];
@@ -526,7 +526,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         //   默认 cancelsTouchesInView=YES ⇒ 轻点一旦被手势识别，UIButton 的
         //   touch-up 就被取消 ⇒ 只有高亮、动作永不执行（真机现象："右上四键有高亮没作用"）。
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)];
-        pan.cancelsTouchesInView = NO;
+        pan.cancelsTouchesInView = YES;   // ★滑动=取消按钮点击(区分滑动与轻点)
         [v addGestureRecognizer:pan];
 
         UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(a2_pinchItem:)];
@@ -576,7 +576,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         _movable[[NSString stringWithFormat:@"hot%d", i]] = b;
         {
             UIPanGestureRecognizer *hp = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)];
-            hp.cancelsTouchesInView = NO;
+            hp.cancelsTouchesInView = YES;
             [b addGestureRecognizer:hp];
         }
     }
