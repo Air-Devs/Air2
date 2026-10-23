@@ -52,8 +52,9 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     self = [super initWithFrame:frame];
     if (self) {
         self.backgroundColor = [UIColor clearColor];
-        self.multipleTouchEnabled = NO;
-        self.exclusiveTouch = YES;
+        // ★摇杆不独占触摸★ 否则拖动摇杆时其它按钮收不到触摸（真机：摇杆移动中点不了别的键）
+        self.multipleTouchEnabled = YES;
+        self.exclusiveTouch = NO;
     }
     return self;
 }
@@ -178,6 +179,8 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     UITextField *_kbField;
     BOOL _kbVisible;
     BOOL _editing;
+    NSTimer *_useWatchdog;
+    NSTimer *_attackWatchdog;
     NSMutableDictionary<NSString *, NSNumber *> *_bindings;   // 控件id -> GLFW 键码
     NSMutableDictionary<NSString *, NSValue *> *_restFrames;  // 编辑前位置（取消用）
 
@@ -468,6 +471,10 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 - (void)willMoveToWindow:(UIWindow *)newWindow {
     [super willMoveToWindow:newWindow];
     if (newWindow == nil) {
+        [_useWatchdog invalidate]; _useWatchdog = nil;
+        [_attackWatchdog invalidate]; _attackWatchdog = nil;
+        a2_glfw_input_post_mouse_button(_window, kMouseLeft, 0);
+        a2_glfw_input_post_mouse_button(_window, kMouseRight, 0);
         [self a2_releaseAll];
         if (_sneaking) {
             _sneaking = NO;
@@ -636,10 +643,42 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
 #pragma mark - 动作
 
-- (void)a2_attackDown { a2_glfw_input_post_mouse_button(_window, kMouseLeft, 1);  _attackButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.30]; }
-- (void)a2_attackUp   { a2_glfw_input_post_mouse_button(_window, kMouseLeft, 0);  _attackButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.14]; }
-- (void)a2_useDown    { a2_glfw_input_post_mouse_button(_window, kMouseRight, 1); _useButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.30]; }
-- (void)a2_useUp      { a2_glfw_input_post_mouse_button(_window, kMouseRight, 0); _useButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.14]; }
+- (void)a2_attackDown {
+    a2_glfw_input_post_mouse_button(_window, kMouseLeft, 1);
+    _attackButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.30];
+    [_attackWatchdog invalidate];
+    __weak typeof(self) weakSelf = self;
+    _attackWatchdog = [NSTimer scheduledTimerWithTimeInterval:2.0 repeats:NO block:^(NSTimer * _Nonnull timer) {
+        a2_glfw_input_post_mouse_button(weakSelf != nil ? weakSelf->_window : 0, kMouseLeft, 0);
+    }];
+}
+- (void)a2_attackUp {
+    [_attackWatchdog invalidate]; _attackWatchdog = nil;
+    a2_glfw_input_post_mouse_button(_window, kMouseLeft, 0);
+    _attackButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.14];
+}
+- (void)a2_useDown {
+    a2_glfw_input_post_mouse_button(_window, kMouseRight, 1);
+    _useButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.30];
+    // ★看门狗★ 若 touch-up 丢了（手势/系统取消），2 秒后强制松开右键，
+    //   否则“点一下就一直放方块、再点一下才停”（用户实测）。
+    [_useWatchdog invalidate];
+    __weak typeof(self) weakSelf = self;
+    _useWatchdog = [NSTimer scheduledTimerWithTimeInterval:2.0 repeats:NO block:^(NSTimer * _Nonnull timer) {
+        [weakSelf a2_forceReleaseUse];
+    }];
+}
+- (void)a2_useUp {
+    [_useWatchdog invalidate]; _useWatchdog = nil;
+    a2_glfw_input_post_mouse_button(_window, kMouseRight, 0);
+    _useButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.14];
+}
+- (void)a2_forceReleaseUse {
+    _useWatchdog = nil;
+    a2_glfw_input_post_mouse_button(_window, kMouseRight, 0);
+    _useButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.14];
+    a2_log_f(@"[A2-CONTROLS] 「用」键看门狗：强制松开右键");
+}
 - (void)a2_tapE       { [self a2_pressBound:@"inventory" fallback:kKeyE]; }
 - (void)a2_tapF3      { [self a2_pressBound:@"f3" fallback:kKeyF3]; }
 - (void)a2_tapEsc     { [self a2_pressBound:@"esc" fallback:256]; }
