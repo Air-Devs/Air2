@@ -121,6 +121,7 @@
     } else if (index == 1) {
         [_detailStack addArrangedSubview:[A2AppearanceSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2AppearanceSettings buildSourceSectionWithHost:self]];
+        [_detailStack addArrangedSubview:[A2AppearanceSettings buildControlsSectionWithHost:self]];
     } else if (index == 2) {
         [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildDuoSimSectionWithHost:self]];

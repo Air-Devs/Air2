@@ -511,11 +511,6 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     [self addSubview:_escButton];
     _movable[@"esc"] = _escButton;
 
-    _editButton = [self a2_makeButton:@"⚙"];
-    [_editButton addTarget:self action:@selector(a2_toggleEdit) forControlEvents:UIControlEventTouchUpInside];
-    [self addSubview:_editButton];
-    _movable[@"edit"] = _editButton;
-
     for (NSString *cid in _movable) {
         UIView *v = _movable[cid];
         v.translatesAutoresizingMaskIntoConstraints = YES;
@@ -540,7 +535,6 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     _inventoryButton.bounds = CGRectMake(0, 0, 56, 56);
     _f3Button.bounds        = CGRectMake(0, 0, 56, 56);
     _keyboardButton.bounds  = CGRectMake(0, 0, 56, 56);
-    _editButton.bounds      = CGRectMake(0, 0, 44, 44);
     _escButton.bounds       = CGRectMake(0, 0, 56, 56);
     [self a2_layoutDefaultButtons];
 }
@@ -558,7 +552,6 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     _inventoryButton.center = CGPointMake(W - 46,  96);
     _f3Button.center        = CGPointMake(W - 110, 96);
     _keyboardButton.center  = CGPointMake(W - 174, 96);
-    _editButton.center      = CGPointMake(W - 238, 96);
     _escButton.center       = CGPointMake(W - 302, 96);
 }
 
@@ -655,9 +648,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
 - (void)a2_toggleEdit {
     _editing = !_editing;
-    _editButton.backgroundColor = _editing
-        ? [UIColor colorWithRed:0.42 green:0.65 blue:1.0 alpha:0.45]
-        : [UIColor colorWithWhite:1.0 alpha:0.14];
+    // 游戏内已无 ⚙（编辑移到设置里），这里只维护状态位
     if (!_editing) return;
 
     UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"控件编辑"
@@ -693,7 +684,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
     if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
         sheet.popoverPresentationController.sourceView = self;
-        sheet.popoverPresentationController.sourceRect = _editButton.frame;
+        sheet.popoverPresentationController.sourceRect = self.bounds;
     }
     [self.a2_topViewController presentViewController:sheet animated:YES completion:nil];
 }
@@ -975,5 +966,29 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     [self a2_layoutHotbar];
     [self a2_applySavedLayout];
 }
+
+#pragma mark - 编辑器 API（设置里的控件布局编辑器调用）
+
+- (void)a2_setEditing:(BOOL)editing {
+    _editing = editing;
+    // 编辑时允许拖动/捏合；非编辑态手势仍挂着但不吞触摸（cancelsTouchesInView=NO）
+}
+
+- (void)a2_saveLayoutNow {
+    [self a2_saveLayout];
+}
+
+- (NSArray<NSDictionary *> *)a2_exportControls {
+    return [self a2_currentControlsNormalized];
+}
+
+- (void)a2_importControls:(NSArray<NSDictionary *> *)controls {
+    if (controls.count) [self a2_applyControlsNormalized:controls];
+}
+
+- (void)a2_applyMoveMode:(NSInteger)mode {
+    [self setMoveMode:(mode == A2MoveModeStick ? A2MoveModeStick : A2MoveModeDPad)];
+}
+
 
 @end

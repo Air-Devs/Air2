@@ -41,6 +41,9 @@ NS_ASSUME_NONNULL_BEGIN
 + (A2SettingsSection *)buildWithHost:(UIViewController *)host;
 /// 资源下载来源（CurseForge API Key 配置）
 + (A2SettingsSection *)buildSourceSectionWithHost:(UIViewController *)host;
+
+/// 控件（移动模式 + 布局编辑器入口）
++ (A2SettingsSection *)buildControlsSectionWithHost:(UIViewController *)host;
 @end
 
 /// 游戏 —— 版本隔离档位

@@ -27,6 +27,7 @@
 //
 
 #import "A2SettingsSections.h"
+#import "A2ControlsEditorViewController.h"
 #import "A2SettingsSection.h"
 #import "A2SettingsRow.h"
 #import "A2ThemeManager.h"
@@ -204,5 +205,45 @@
 
     return section;
 }
+
+#pragma mark - 控件（移动模式 + 布局编辑器）
+
++ (A2SettingsSection *)buildControlsSectionWithHost:(UIViewController *)host {
+    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"控件"];
+
+    NSUserDefaults *d = NSUserDefaults.standardUserDefaults;
+    NSInteger mode = [d integerForKey:@"A2MoveMode"];
+
+    A2SettingsRow *modeRow = [[A2SettingsRow alloc] init];
+    modeRow.symbolName = @"gamecontroller";
+    modeRow.title = @"移动方式";
+    modeRow.subtitle = @"分键（十字）或圆形摇杆";
+    modeRow.valueText = (mode == 1) ? @"摇杆" : @"分键";
+    modeRow.accessory = A2SettingsRowAccessoryDisclosure;
+    modeRow.onTap = ^{
+        NSInteger next = ([d integerForKey:@"A2MoveMode"] == 1) ? 0 : 1;
+        [d setInteger:next forKey:@"A2MoveMode"];
+        [A2Log log:@"[A2-CONTROLS] 移动方式 → %@", (next == 1 ? @"摇杆" : @"分键")];
+        [A2Toast show:(next == 1 ? @"已切换为摇杆" : @"已切换为分键") inView:host.view];
+    };
+    [section addRow:modeRow];
+
+    A2SettingsRow *editRow = [[A2SettingsRow alloc] init];
+    editRow.symbolName = @"slider.horizontal.3";
+    editRow.title = @"编辑控件布局";
+    editRow.subtitle = @"拖动位置、双指缩放、导入导出、多套方案";
+    editRow.accessory = A2SettingsRowAccessoryDisclosure;
+    editRow.onTap = ^{
+        A2ControlsEditorViewController *vc = [A2ControlsEditorViewController editor];
+        UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
+        nav.modalPresentationStyle = UIModalPresentationFullScreen;
+        [host presentViewController:nav animated:YES completion:nil];
+    };
+    [section addRow:editRow];
+
+    section.footerText = @"编辑在设置里完成；游戏内不再有编辑按钮，避免误触进入编辑态。";
+    return section;
+}
+
 
 @end

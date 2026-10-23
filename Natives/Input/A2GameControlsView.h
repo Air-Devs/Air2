@@ -37,6 +37,22 @@ typedef NS_ENUM(NSInteger, A2MoveMode) {
 /// 当前模式。
 @property (nonatomic, assign, readonly) A2MoveMode moveMode;
 
+
+/// 编辑模式（★只给设置里的编辑器用★ 游戏内不再进入编辑）
+- (void)a2_setEditing:(BOOL)editing;
+
+/// 保存当前布局到「当前方案」并落盘。
+- (void)a2_saveLayoutNow;
+
+/// 导出当前控件（归一化模型：id/x/y/w/h/a/key/label）。
+- (NSArray<NSDictionary *> *)a2_exportControls;
+
+/// 应用外部布局（同 a2_exportControls 的结构）。
+- (void)a2_importControls:(NSArray<NSDictionary *> *)controls;
+
+/// 切换移动模式（分键/摇杆）。
+- (void)a2_applyMoveMode:(NSInteger)mode;
+
 @end
 
 NS_ASSUME_NONNULL_END
