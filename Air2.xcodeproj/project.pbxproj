@@ -139,8 +139,8 @@
 		C5F3C56FAA94C667A202A766 /* A2InputDialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 1AAD1DB8B8E6685A93FA2940 /* A2InputDialog.m */; };
 		F2FCFBB9F41306188BD49BA1 /* A2InstallProgressDialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 27AAF421DE71B27F23A7EF32 /* A2InstallProgressDialog.m */; };
 		2C9CD0FA185D54ECBE085D43 /* A2LoaderCard.m in Sources */ = {isa = PBXBuildFile; fileRef = 139430B14A933139D8C20D5C /* A2LoaderCard.m */; };
-			7C4E1A90B2D34F56E8A01B22 /* A2RelatedResourceCard.m in Sources */ = {isa = PBXBuildFile; fileRef = 7C4E1A90B2D34F56E8A01B26 /* A2RelatedResourceCard.m */; };
-			7C4E1A90B2D34F56E8A01B25 /* A2ResourceVersionCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 7C4E1A90B2D34F56E8A01B23 /* A2ResourceVersionCell.m */; };
+		7C4E1A90B2D34F56E8A01B22 /* A2RelatedResourceCard.m in Sources */ = {isa = PBXBuildFile; fileRef = 7C4E1A90B2D34F56E8A01B26 /* A2RelatedResourceCard.m */; };
+		7C4E1A90B2D34F56E8A01B25 /* A2ResourceVersionCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 7C4E1A90B2D34F56E8A01B23 /* A2ResourceVersionCell.m */; };
 		C01154913A58826D1288C208 /* A2PaginationBar.m in Sources */ = {isa = PBXBuildFile; fileRef = 94C422B51FBF07CB2AAA7C12 /* A2PaginationBar.m */; };
 		552EA36099808FC6CF1AF68C /* A2PrimaryButton.m in Sources */ = {isa = PBXBuildFile; fileRef = EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */; };
 		8ABD4DA07F7A241239D71053 /* A2ProgressBar.m in Sources */ = {isa = PBXBuildFile; fileRef = EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */; };
