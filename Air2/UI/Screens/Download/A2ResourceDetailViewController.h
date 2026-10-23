@@ -20,7 +20,8 @@
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
 //  共用资源详情页 —— 模组 / 资源包 / 光影 / 存档 / 数据包 共用。
-//  头卡（图标 + 元信息 + 主按钮）+ 简介卡 + 版本列表，版本下载统一走下载任务中心。
+//  头卡（图标 + 元信息 + 主按钮）+ 简介卡 + 适配当前版本的社区资源 + 版本列表。
+//  版本下载统一走下载任务中心。
 //
 
 #import "A2BaseViewController.h"
@@ -31,8 +32,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// 共用资源详情页。模组 / 资源包 / 光影 / 存档 / 数据包 共用。
 @interface A2ResourceDetailViewController : A2BaseViewController
 
+/// gameVersion 是列表页当前选中的游戏版本，用于在简介下方列出适配资源；
+/// 没有选择（收藏页 / ID 搜索）时传 nil，相关资源区自动隐藏。
 - (instancetype)initWithProject:(A2ContentItem *)project
-                   contentClass:(A2ContentClass)contentClass;
+                   contentClass:(A2ContentClass)contentClass
+                    gameVersion:(nullable NSString *)gameVersion;
 
 @end
 

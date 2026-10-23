@@ -102,6 +102,7 @@
     [_backButton setImage:[UIImage systemImageNamed:@"chevron.left" withConfiguration:cfg]
                  forState:UIControlStateNormal];
     [_backButton addTarget:self action:@selector(handleBack) forControlEvents:UIControlEventTouchUpInside];
+    _backButton.hidden = _hidesBackButton;
     [_topBar addSubview:_backButton];
 
     _titleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
@@ -125,7 +126,6 @@
 - (void)setHidesTopBar:(BOOL)hidesTopBar {
     _hidesTopBar = hidesTopBar;
     _topBar.hidden = hidesTopBar;
-
     // 关键：hidden 只是不显示，【高度约束还在】——
     // 结果就是页面顶部留出一块空白（用户截图里圈出的那片）。
     // 必须把高度约束清零，内容才能真正顶到安全区。
@@ -133,6 +133,11 @@
         _topBarHeightConstraint.constant = hidesTopBar ? 0 : A2TopBarHeight;
     }
     [self.view setNeedsLayout];
+}
+
+- (void)setHidesBackButton:(BOOL)hidesBackButton {
+    _hidesBackButton = hidesBackButton;
+    _backButton.hidden = hidesBackButton;
 }
 
 - (void)setLeadingCustomView:(UIView *)leadingCustomView {

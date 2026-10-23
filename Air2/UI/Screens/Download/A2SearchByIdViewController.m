@@ -140,7 +140,8 @@
             [A2Log log:@"download: 按 ID 命中 %@（%@）", item.projectID, item.title];
             A2ResourceDetailViewController *vc = [[A2ResourceDetailViewController alloc]
                                                  initWithProject:item
-                                                 contentClass:[self contentClassForItem:item]];
+                                                 contentClass:[self contentClassForItem:item]
+                                                 gameVersion:nil];
             [self.navigationController pushViewController:vc animated:YES];
         });
     }];

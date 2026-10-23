@@ -1104,8 +1104,11 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
     [tableView deselectRowAtIndexPath:indexPath animated:YES];
     A2ContentItem *item = _items[indexPath.row];
+    // 把当前选中的游戏版本带进详情页，供「适配当前版本」区块使用。
     A2ResourceDetailViewController *vc =
-        [[A2ResourceDetailViewController alloc] initWithProject:item contentClass:self.contentClass];
+        [[A2ResourceDetailViewController alloc] initWithProject:item
+                                                   contentClass:self.contentClass
+                                                    gameVersion:self.selectedGameVersion];
     [self.navigationController pushViewController:vc animated:YES];
 }
 
