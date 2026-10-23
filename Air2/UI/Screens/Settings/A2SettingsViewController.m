@@ -108,13 +108,17 @@
 
     // 关键：内容栈宽度锁死等于可视区宽度 ——
     // 这样 contentSize.width 恒等于 frame.width，横向无处可滚
-    [_detailScroll addSubview:_detailStack];
-    [self.plainContentView addSubview:_detailScroll];
-
+    //
+    // 顺序不能反：必须先把 _detailStack 建出来再 addSubview。
+    // 之前这里先 addSubview 后创建，addSubview:nil 会直接抛
+    // NSInvalidArgumentException —— 表现就是「一点设置就闪退」。
     _detailStack = [[UIStackView alloc] initWithFrame:CGRectZero];
     _detailStack.translatesAutoresizingMaskIntoConstraints = NO;
     _detailStack.axis = UILayoutConstraintAxisVertical;
     _detailStack.spacing = A2SpaceXL;
+
+    [_detailScroll addSubview:_detailStack];
+    [self.plainContentView addSubview:_detailScroll];
 
     [NSLayoutConstraint activateConstraints:@[
         [_nav.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],

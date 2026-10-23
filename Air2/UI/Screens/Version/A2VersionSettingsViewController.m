@@ -20,18 +20,22 @@
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
 //
-//  单版本设置 —— 隔离档位是全局的，这里只做展示。
+//  单版本设置 —— 左侧分类导航 + 右侧内容，和设置页同一个骨架。
 //
-//  隔离档位在「设置 → 游戏」里选（关闭 / 仅 Mod / 全部）。
-//  本页显示的是「本版本的生效档位」：全局选「仅 Mod」时，只有能装模组的版本
+//  导航结构（对照 ZL2 的版本设置）：
+//    信息 / 启动配置
+//    ────────────
+//    mod / 材质 / 存档 / 光影
+//
+//  隔离档位是全局的，这里只展示：全局选「仅 Mod」时，只有能装模组的版本
 //  才会隔离，原版与仅装 OptiFine 的版本按「关闭」处理。
-//  只展示、不提供修改入口，避免两处设置互相打架。
-//
 //  版本的启动配置仍存在 {版本目录}/.air_version/config.json。
 //
 
 #import "A2VersionSettingsViewController.h"
 #import "A2VersionIsolation.h"
+#import "A2CategoryNavView.h"
+#import "A2FilesViewController.h"
 #import "A2SettingsSection.h"
 #import "A2SettingsRow.h"
 #import "A2GlassCard.h"
@@ -47,10 +51,16 @@
 /// 版本名（在 init 里赋值，后续只读）
 @property (nonatomic, copy) NSString *versionName;
 @property (nonatomic, strong) A2Version *version;
+
+// 左侧分类导航
+@property (nonatomic, strong) A2CategoryNavView *nav;
+@property (nonatomic, strong) UIScrollView *detailScroll;
+@property (nonatomic, strong) UIStackView *detailStack;
+
+// 信息页里需要实时刷新的几行
 @property (nonatomic, strong) A2SettingsRow *modeRow;
 @property (nonatomic, strong) A2SettingsRow *pathRow;
-@property (nonatomic, strong) A2SettingsSection *folderSection;
-@property (nonatomic, strong) NSMutableArray<A2SettingsRow *> *folderRows;
+@property (nonatomic, strong) UILabel *headerNameLabel;
 @end
 
 @implementation A2VersionSettingsViewController
@@ -59,7 +69,6 @@
     self = [super init];
     if (!self) return nil;
     _versionName = [versionName copy];
-    _folderRows = [NSMutableArray array];
 
     // 从管理器里找到对应版本（拿到真实的隔离配置）
     for (A2Version *v in A2VersionManager.shared.versions) {
@@ -76,21 +85,115 @@
 }
 
 - (void)viewDidLoad {
+    // 自己搭「左导航 + 右滚动内容」，不用基类的单栏滚动
+    self.usesScrollContent = NO;
     [super viewDidLoad];
     self.pageTitle = _version.name;
 
-    [self setupHeaderCard];
-    [self setupIsolationSection];
-    [self setupFolderSection];
-    [self setupLaunchSection];
-    [self setupDangerSection];
-
+    [self setupSidebar];
     [self refreshIsolationUI];
 }
 
-#pragma mark - 顶部信息
+#pragma mark - 左侧导航
 
-- (void)setupHeaderCard {
+- (void)setupSidebar {
+    // 只列有真实内容的分类：信息 / 启动配置，以及四个版本内容目录
+    NSArray<A2NavCategory *> *cats = @[
+        [A2NavCategory title:@"信息"     symbol:@"info.circle.fill"],
+        [A2NavCategory title:@"启动配置" symbol:@"gearshape.fill"],
+
+        [A2NavCategory title:@"mod"  symbol:@"puzzlepiece.extension.fill" division:YES],
+        [A2NavCategory title:@"材质" symbol:@"photo.stack.fill"],
+        [A2NavCategory title:@"存档" symbol:@"map.fill"],
+        [A2NavCategory title:@"光影" symbol:@"sun.max.fill"],
+    ];
+
+    __weak typeof(self) weakSelf = self;
+    _nav = [[A2CategoryNavView alloc] initWithCategories:cats];
+    _nav.onSelect = ^(NSInteger index) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self rebuildContentForIndex:index];
+    };
+    [self.plainContentView addSubview:_nav];
+
+    _detailScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    _detailScroll.translatesAutoresizingMaskIntoConstraints = NO;
+    _detailScroll.showsVerticalScrollIndicator = NO;
+    _detailScroll.showsHorizontalScrollIndicator = NO;
+    _detailScroll.alwaysBounceHorizontal = NO;
+    _detailScroll.directionalLockEnabled = YES;
+    _detailScroll.alwaysBounceVertical = YES;
+    _detailScroll.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+
+    _detailStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _detailStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _detailStack.axis = UILayoutConstraintAxisVertical;
+    _detailStack.spacing = A2SpaceXL;
+
+    [_detailScroll addSubview:_detailStack];
+    [self.plainContentView addSubview:_detailScroll];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [_nav.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_nav.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
+        [_nav.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
+                                           constant:A2SpaceS],
+
+        [_detailScroll.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_detailScroll.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
+        [_detailScroll.leadingAnchor constraintEqualToAnchor:_nav.trailingAnchor
+                                                    constant:A2SpaceM],
+        [_detailScroll.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
+
+        [_detailStack.topAnchor constraintEqualToAnchor:_detailScroll.contentLayoutGuide.topAnchor
+                                               constant:A2SpaceS],
+        [_detailStack.bottomAnchor constraintEqualToAnchor:_detailScroll.contentLayoutGuide.bottomAnchor
+                                                 constant:-A2SpaceXXL],
+        [_detailStack.centerXAnchor constraintEqualToAnchor:_detailScroll.frameLayoutGuide.centerXAnchor],
+        [_detailStack.widthAnchor constraintEqualToAnchor:_detailScroll.frameLayoutGuide.widthAnchor
+                                                constant:-(A2SpaceM + A2SpaceXL)],
+        [_detailScroll.contentLayoutGuide.widthAnchor
+            constraintEqualToAnchor:_detailScroll.frameLayoutGuide.widthAnchor],
+    ]];
+
+    [_nav selectIndex:0 animated:NO];
+}
+
+/// 按导航索引重建右侧内容。
+/// 0 信息 / 1 启动配置 / 2 mod / 3 材质 / 4 存档 / 5 光影
+- (void)rebuildContentForIndex:(NSInteger)index {
+    [self clearDetailStack];
+
+    switch (index) {
+        case 0: {
+            [_detailStack addArrangedSubview:[self buildHeaderCard]];
+            [_detailStack addArrangedSubview:[self buildIsolationSection]];
+            [_detailStack addArrangedSubview:[self buildDangerSection]];
+            [self refreshIsolationUI];
+            break;
+        }
+        case 1: {
+            [_detailStack addArrangedSubview:[self buildLaunchSection]];
+            break;
+        }
+        default: {
+            A2VersionFolder folder = (A2VersionFolder)(index - 2);
+            [_detailStack addArrangedSubview:[self buildFolderPaneForFolder:folder]];
+            break;
+        }
+    }
+}
+
+- (void)clearDetailStack {
+    for (UIView *v in _detailStack.arrangedSubviews.copy) {
+        [_detailStack removeArrangedSubview:v];
+        [v removeFromSuperview];
+    }
+}
+
+#pragma mark - 信息：版本概况
+
+- (A2GlassCard *)buildHeaderCard {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
 
     A2GlassCard *card = [[A2GlassCard alloc] initWithFrame:CGRectZero];
@@ -101,6 +204,7 @@
     name.font = [UIFont systemFontOfSize:19 weight:UIFontWeightBold];
     name.textColor = t.cOnSurface;
     name.text = _version.name;
+    _headerNameLabel = name;
 
     UILabel *status = [[UILabel alloc] initWithFrame:CGRectZero];
     status.font = [A2Typography caption];
@@ -127,13 +231,12 @@
         [stack.leadingAnchor constraintEqualToAnchor:card.contentView.leadingAnchor],
         [stack.trailingAnchor constraintEqualToAnchor:card.contentView.trailingAnchor],
     ]];
-
-    [self addSection:card];
+    return card;
 }
 
-#pragma mark - 版本隔离
+#pragma mark - 信息：版本隔离
 
-- (void)setupIsolationSection {
+- (A2SettingsSection *)buildIsolationSection {
     A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"版本隔离"];
     section.footerText = @"隔离档位是全局设置，在「设置 → 游戏」里修改。"
                           "依赖库与资源文件始终共用，不会重复占用空间。";
@@ -150,7 +253,7 @@
     _pathRow.accessory = A2SettingsRowAccessoryNone;
     [section addRow:_pathRow];
 
-    [self addSection:section];
+    return section;
 }
 
 /// 实时刷新隔离相关文案 —— 档位或版本变化都要重算路径
@@ -170,25 +273,6 @@
     }
 
     _pathRow.subtitle = [_version gameDirectory];
-
-    // 各可隔离目录的实际路径
-    for (NSUInteger i = 0; i < _folderRows.count && i < A2VersionFolderCount; i++) {
-        NSString *dir = [_version directoryForFolder:(A2VersionFolder)i];
-        _folderRows[i].valueText = [self shortenPath:dir];
-    }
-
-    switch (mode) {
-        case A2IsolationModeFull:
-            _folderSection.footerText = [NSString stringWithFormat:
-                @"这些目录当前位于 versions/%@/ 下。", _version.name];
-            break;
-        case A2IsolationModeMod:
-            _folderSection.footerText = @"只有模组位于版本目录下，其余目录在游戏根目录共用。";
-            break;
-        default:
-            _folderSection.footerText = @"这些目录当前位于游戏根目录下，与其他版本共用。";
-            break;
-    }
 }
 
 /// 路径太长，只显示最后两段
@@ -199,50 +283,77 @@
             parts[parts.count - 2], parts[parts.count - 1]];
 }
 
-#pragma mark - 可隔离目录
+#pragma mark - 版本内容：mod / 材质 / 存档 / 光影
 
-- (void)setupFolderSection {
-    _folderSection = [[A2SettingsSection alloc] initWithTitle:@"版本内容"];
+- (A2SettingsSection *)buildFolderPaneForFolder:(A2VersionFolder)folder {
+    NSString *displayName = A2VersionFolderDisplayName(folder);
+    NSString *dir = [_version directoryForFolder:folder];
 
-    NSArray<NSString *> *symbols = @[@"puzzlepiece.extension.fill", @"photo.stack.fill",
-                                     @"map.fill", @"sun.max.fill", @"photo.fill"];
+    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:displayName];
+    section.footerText = [self folderFooterForFolder:folder];
 
-    for (NSUInteger i = 0; i < A2VersionFolderCount; i++) {
-        A2SettingsRow *row = [[A2SettingsRow alloc] init];
-        row.symbolName = symbols[i];
-        row.title = A2VersionFolderDisplayName((A2VersionFolder)i);
-        row.accessory = A2SettingsRowAccessoryDisclosure;
+    A2SettingsRow *dirRow = [[A2SettingsRow alloc] init];
+    dirRow.symbolName = @"folder.fill";
+    dirRow.title = @"目录";
+    dirRow.subtitle = [self shortenPath:dir];
+    dirRow.accessory = A2SettingsRowAccessoryNone;
+    [section addRow:dirRow];
 
-        // 模组行进专用管理页，其余目录维持通用浏览（各管各的，不混）。
-        if ((A2VersionFolder)i == A2VersionFolderMods) {
-            __weak typeof(self) weakSelf = self;
-            row.onTap = ^{
-                __strong typeof(weakSelf) self = weakSelf;
-                A2ModListViewController *vc =
-                    [[A2ModListViewController alloc] initWithVersion:self.version];
-                [self.navigationController pushViewController:vc animated:YES];
-            };
-        } else {
-            NSString *folderName = A2VersionFolderDisplayName((A2VersionFolder)i);
-            NSString *dir = [_version directoryForFolder:(A2VersionFolder)i];
-            row.onTap = ^{
-                NSURL *url = [NSURL fileURLWithPath:dir];
-                (void)url;
-                [A2Toast show:[NSString stringWithFormat:@"%@：%@", folderName, dir]
-                       inView:self.view];
-            };
-        }
+    __weak typeof(self) weakSelf = self;
+    A2SettingsRow *openRow = [[A2SettingsRow alloc] init];
+    openRow.accessory = A2SettingsRowAccessoryDisclosure;
 
-        [_folderRows addObject:row];
-        [_folderSection addRow:row];
+    if (folder == A2VersionFolderMods) {
+        // 模组走专用管理页（启用/停用、删除），其它目录走通用文件浏览
+        openRow.symbolName = @"puzzlepiece.extension.fill";
+        openRow.title = @"管理 mod";
+        openRow.subtitle = @"启用 / 停用、删除已安装的模组";
+        openRow.onTap = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            if (!self) return;
+            A2ModListViewController *vc =
+                [[A2ModListViewController alloc] initWithVersion:self.version];
+            [self.navigationController pushViewController:vc animated:YES];
+        };
+    } else {
+        openRow.symbolName = @"folder";
+        openRow.title = @"浏览文件";
+        openRow.subtitle = @"打开文件夹查看 / 导入内容";
+        openRow.onTap = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            if (!self) return;
+            A2FilesViewController *vc =
+                [[A2FilesViewController alloc] initWithRootPath:dir
+                                                   displayName:displayName];
+            [self.navigationController pushViewController:vc animated:YES];
+        };
     }
+    [section addRow:openRow];
 
-    [self addSection:_folderSection];
+    return section;
+}
+
+/// 目录位置的说明随隔离档位变化
+- (NSString *)folderFooterForFolder:(A2VersionFolder)folder {
+    NSString *folderName = A2VersionFolderName(folder);
+    switch (_version.effectiveIsolationMode) {
+        case A2IsolationModeFull:
+            return [NSString stringWithFormat:@"该目录位于 versions/%@/%@ 下。",
+                    _version.name, folderName];
+        case A2IsolationModeMod:
+            if (folder == A2VersionFolderMods) {
+                return [NSString stringWithFormat:@"该目录位于 versions/%@/mods 下。",
+                        _version.name];
+            }
+            return @"该目录在游戏根目录，与其他版本共用。";
+        default:
+            return @"该目录在游戏根目录，与其他版本共用。";
+    }
 }
 
 #pragma mark - 启动配置
 
-- (void)setupLaunchSection {
+- (A2SettingsSection *)buildLaunchSection {
     A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"启动配置"];
     section.footerText = @"留空则使用全局设置。这些配置存在版本的 .air_version/config.json 里。";
 
@@ -314,12 +425,12 @@
     };
     [section addRow:integrityRow];
 
-    [self addSection:section];
+    return section;
 }
 
-#pragma mark - 危险操作
+#pragma mark - 信息：管理
 
-- (void)setupDangerSection {
+- (A2SettingsSection *)buildDangerSection {
     A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"管理"];
 
     A2SettingsRow *renameRow = [[A2SettingsRow alloc] init];
@@ -343,6 +454,7 @@
             NSError *err = nil;
             if ([A2VersionManager.shared renameVersion:self.version to:newName error:&err]) {
                 self.pageTitle = newName;
+                self.headerNameLabel.text = newName;
                 done(YES, nil);
             } else {
                 done(NO, err.localizedDescription ?: @"重命名失败");
@@ -383,7 +495,7 @@
     };
     [section addRow:deleteRow];
 
-    [self addSection:section];
+    return section;
 }
 
 @end

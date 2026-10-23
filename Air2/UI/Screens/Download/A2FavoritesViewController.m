@@ -131,7 +131,9 @@ static NSString *A2FavoriteFormatCount(long long count) {
     _tableView.delegate = self;
     _tableView.backgroundColor = UIColor.clearColor;
     _tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
-    _tableView.rowHeight = 92;
+    // 与搜索结果页一致：卡片里是 72pt 图标 + 三行文字，
+    // 92 的行高装不下，内容会被纵向压扁。统一给 120。
+    _tableView.rowHeight = 120;
     _tableView.contentInset = UIEdgeInsetsMake(A2SpaceS, 0, A2SpaceXXL, 0);
     [_tableView registerClass:A2FavoriteCell.class forCellReuseIdentifier:kFavoriteCellID];
     [self.plainContentView addSubview:_tableView];

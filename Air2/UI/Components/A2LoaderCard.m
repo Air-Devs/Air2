@@ -23,6 +23,7 @@
 //
 
 #import "A2LoaderCard.h"
+#import "A2Icon.h"
 #import "A2ModLoaderAPI.h"
 #import "A2GlassCard.h"
 #import "A2ThemeManager.h"
@@ -617,22 +618,31 @@ static void A2LoaderAccent(A2ModLoaderType type, A2ColorScheme *t,
 - (void)refreshTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
 
-    UIColor *box = t.cPrimaryContainer;
-    UIColor *symbol = t.cPrimary;
-    if (_isVanilla) {
-        box = t.cPrimaryContainer;
-        symbol = t.cPrimary;
-    } else {
-        A2LoaderAccent(_loaderType, t, &box, &symbol);
-    }
-    _iconBox.backgroundColor = box;
+    // 图标直接用官方的品牌标志位图（Assets 里的 ModLoader*）。
+    // 自己画的系统符号只作为兜底，避免位图缺失时卡头开天窗。
+    UIImage *official = _isVanilla
+        ? [A2Icon vanillaIcon]
+        : [A2Icon loaderIconForIdentifier:[A2ModLoaderAPI identifierForType:_loaderType]];
 
-    UIImageSymbolConfiguration *iconCfg =
-        [UIImageSymbolConfiguration configurationWithPointSize:kA2LoaderIconPoint
-                                                        weight:UIImageSymbolWeightMedium];
-    NSString *symbolName = _isVanilla ? @"cube.fill" : A2LoaderSymbol(_loaderType);
-    _iconView.image = [UIImage systemImageNamed:symbolName withConfiguration:iconCfg];
-    _iconView.tintColor = symbol;
+    if (official) {
+        _iconView.contentMode = UIViewContentModeScaleAspectFit;
+        _iconView.image = official;
+        _iconView.tintColor = nil;
+        _iconBox.backgroundColor = UIColor.clearColor;
+    } else {
+        UIColor *box = t.cPrimaryContainer;
+        UIColor *symbol = t.cPrimary;
+        if (!_isVanilla) A2LoaderAccent(_loaderType, t, &box, &symbol);
+        _iconBox.backgroundColor = box;
+
+        UIImageSymbolConfiguration *iconCfg =
+            [UIImageSymbolConfiguration configurationWithPointSize:kA2LoaderIconPoint
+                                                            weight:UIImageSymbolWeightMedium];
+        NSString *symbolName = _isVanilla ? @"cube.fill" : A2LoaderSymbol(_loaderType);
+        _iconView.contentMode = UIViewContentModeCenter;
+        _iconView.image = [UIImage systemImageNamed:symbolName withConfiguration:iconCfg];
+        _iconView.tintColor = symbol;
+    }
 
     _loadingLabel.textColor = t.cOnSurfaceVariant;
     _messageLabel.textColor = t.cOnSurfaceVariant;
