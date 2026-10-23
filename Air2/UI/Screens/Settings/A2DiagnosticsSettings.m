@@ -113,4 +113,68 @@
     return [fmt stringFromDate:date];
 }
 
+#pragma mark - iPhone Duo 形态模拟
+
++ (NSString *)duoModeText:(NSInteger)mode {
+    switch (mode) {
+        case 1: return @"内屏 · 整屏";
+        case 2: return @"内屏 · 分屏(占一半)";
+        case 3: return @"折叠 · 外屏";
+        default: return @"关闭";
+    }
+}
+
++ (NSString *)duoOrientationText:(NSInteger)o {
+    switch (o) {
+        case 1: return @"竖屏";
+        case 2: return @"横屏";
+        default: return @"跟随设备";
+    }
+}
+
+/// 诊断页的「Duo 形态模拟」区：点一下循环切换，下次进游戏即生效；
+/// 已在游戏内则发通知让窗口立刻重排（原生侧监听 A2DuoSimChanged）。
++ (A2SettingsSection *)buildDuoSimSectionWithHost:(UIViewController *)host {
+    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"iPhone Duo 形态模拟"];
+
+    NSUserDefaults *d = NSUserDefaults.standardUserDefaults;
+    NSInteger mode = [d integerForKey:@"A2DuoSimMode"];
+    NSInteger orient = [d integerForKey:@"A2DuoSimOrientation"];
+
+    A2SettingsRow *modeRow = [[A2SettingsRow alloc] init];
+    modeRow.symbolName = @"rectangle.split.2x1";
+    modeRow.title = @"屏幕形态";
+    modeRow.subtitle = @"模拟内屏整屏 / 分屏占一半 / 折叠外屏";
+    modeRow.valueText = [self duoModeText:mode];
+    modeRow.accessory = A2SettingsRowAccessoryDisclosure;
+    modeRow.onTap = ^{
+        NSInteger next = ([d integerForKey:@"A2DuoSimMode"] + 1) % 4;
+        [d setInteger:next forKey:@"A2DuoSimMode"];
+        [A2Log log:@"[A2-DUO] 形态模拟 → %@（%ld）", [self duoModeText:next], (long) next];
+        [NSNotificationCenter.defaultCenter postNotificationName:@"A2DuoSimChanged" object:nil];
+        [host.view setNeedsLayout];
+        [A2Toast show:[NSString stringWithFormat:@"形态：%@", [self duoModeText:next]]];
+    };
+    [section addRow:modeRow];
+
+    A2SettingsRow *orientRow = [[A2SettingsRow alloc] init];
+    orientRow.symbolName = @"rectangle.portrait.rotate";
+    orientRow.title = @"方向";
+    orientRow.subtitle = @"模拟竖屏 / 横屏（折叠与分屏都会遇到）";
+    orientRow.valueText = [self duoOrientationText:orient];
+    orientRow.accessory = A2SettingsRowAccessoryDisclosure;
+    orientRow.onTap = ^{
+        NSInteger next = ([d integerForKey:@"A2DuoSimOrientation"] + 1) % 3;
+        [d setInteger:next forKey:@"A2DuoSimOrientation"];
+        [A2Log log:@"[A2-DUO] 形态方向 → %@（%ld）", [self duoOrientationText:next], (long) next];
+        [NSNotificationCenter.defaultCenter postNotificationName:@"A2DuoSimChanged" object:nil];
+        [A2Toast show:[NSString stringWithFormat:@"方向：%@", [self duoOrientationText:next]]];
+    };
+    [section addRow:orientRow];
+
+    section.footerText = @"改完直接进游戏即可看到效果；游戏内切换会立即重排。用来在没有 Duo 真机的条件下验证布局。";
+    return section;
+}
+
+
 @end

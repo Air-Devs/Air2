@@ -238,6 +238,58 @@ static void a2_glfw_emit_size(long handle, int wp, int hp, int wpx, int hpx) {
 /// ★iPhone Duo / 分屏 / 折叠展开★ 宿主视图尺寸变了（不只是旋转）时重算并上报。
 /// 调用点：A2GlfwView 的 layoutSubviews（bounds 变化即触发）。
 /// 为什么不用旋转通知：Duo 展开/折叠、Split View 拖动都不会发 UIDeviceOrientationDidChange。
+
+#pragma mark - iPhone Duo 形态模拟
+
+/// 模拟配置（NSUserDefaults，UI 在 设置→诊断 里改）：
+///   A2DuoSimMode        0=关闭 1=内屏整屏 2=内屏分屏(我们占一半) 3=折叠外屏
+///   A2DuoSimOrientation 0=跟随 1=竖屏 2=横屏
+static CGRect a2_duo_sim_target_rect(CGSize available) {
+    NSInteger mode = [NSUserDefaults.standardUserDefaults integerForKey:@"A2DuoSimMode"];
+    if (mode <= 0) return CGRectZero;
+    NSInteger orient = [NSUserDefaults.standardUserDefaults integerForKey:@"A2DuoSimOrientation"];
+
+    // 目标纵横比（宽/高）。Duo 内屏≈4:3；分屏占一半⇒2:3；折叠外屏≈9:19.5
+    CGFloat aspect = 4.0 / 3.0;
+    if (mode == 2) aspect = 2.0 / 3.0;
+    if (mode == 3) aspect = 9.0 / 19.5;
+
+    BOOL wantPortrait = (orient == 1);
+    if (orient == 0) wantPortrait = (available.height > available.width);
+    if (wantPortrait) aspect = 1.0 / aspect;      // 竖屏时取倒数
+
+    CGFloat w = available.width;
+    CGFloat h = w / aspect;
+    if (h > available.height) {                   // 高度放不下 ⇒ 按高反推
+        h = available.height;
+        w = h * aspect;
+    }
+    return CGRectMake((available.width - w) * 0.5, (available.height - h) * 0.5, w, h);
+}
+
+/// 把宿主视图框成模拟形态（mode=0 时不动）。
+static void a2_duo_sim_apply(long window) {
+    pthread_mutex_lock(&gWindowLock);
+    A2GlfwHost *h = a2_glfw_host_locked(window);
+    UIView *view = h.hostView;
+    UIView *root = view.superview;
+    pthread_mutex_unlock(&gWindowLock);
+    if (view == nil || root == nil) return;
+
+    CGRect target = a2_duo_sim_target_rect(root.bounds.size);
+    if (CGRectIsEmpty(target)) {
+        view.frame = root.bounds;                 // 关闭模拟 ⇒ 还原整屏
+        a2_log_f(@"[A2-DUO] 形态模拟=关（整屏）");
+        return;
+    }
+    view.frame = target;
+    a2_log_f(@"[A2-DUO] 形态模拟：mode=%ld orient=%ld ⇒ %.0f×%.0f（可用 %.0f×%.0f）",
+             (long) [NSUserDefaults.standardUserDefaults integerForKey:@"A2DuoSimMode"],
+             (long) [NSUserDefaults.standardUserDefaults integerForKey:@"A2DuoSimOrientation"],
+             target.size.width, target.size.height,
+             root.bounds.size.width, root.bounds.size.height);
+}
+
 void a2_glfw_window_handle_host_resize(long handle) {
     pthread_mutex_lock(&gWindowLock);
     A2GlfwHost *h = a2_glfw_host_locked(handle);
@@ -620,6 +672,15 @@ int a2_glfw_window_create(long window, int width, int height, const char *title)
                 [view addSubview:controls];
             });
             a2_publish_ios_view_pointer((__bridge void *) view, scale);
+            a2_duo_sim_apply(window);
+
+            [[NSNotificationCenter defaultCenter] addObserverForName:@"A2DuoSimChanged"
+                                                              object:nil
+                                                               queue:[NSOperationQueue mainQueue]
+                                                          usingBlock:^(NSNotification *n) {
+                a2_duo_sim_apply(window);
+                a2_glfw_window_handle_host_resize(window);
+            }];
             cur.gameViewController = gameVC;
             cur.widthPoints = wp;  cur.heightPoints = hp;
             cur.widthPixels = wpx; cur.heightPixels = hpx;
