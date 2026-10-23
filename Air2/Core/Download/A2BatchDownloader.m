@@ -40,6 +40,9 @@ static const NSInteger kSystemicFailureLimit = 12;
 @property (nonatomic, strong) NSTimer *progressTimer;
 @property (nonatomic, assign, getter=isCancelled) BOOL cancelled;
 @property (nonatomic, assign) BOOL started;
+/// 本批已发起的引擎请求句柄 —— 取消时只掐自己这一批。
+@property (nonatomic, strong) NSMutableArray<A2DownloadOperation *> *operations;
+@property (nonatomic, strong) NSLock *operationsLock;
 @end
 
 @implementation A2BatchDownloader
@@ -54,6 +57,8 @@ static const NSInteger kSystemicFailureLimit = 12;
     _retryRounds = MAX(0, retryRounds);
     _lock = [[NSLock alloc] init];
     _failures = [NSMutableDictionary dictionary];
+    _operations = [NSMutableArray array];
+    _operationsLock = [[NSLock alloc] init];
     _scheduleQueue = dispatch_queue_create("dev.airdevs.air2.batch", DISPATCH_QUEUE_SERIAL);
     _semaphore = dispatch_semaphore_create(_maxConnections);
     return self;
@@ -135,13 +140,15 @@ static const NSInteger kSystemicFailureLimit = 12;
                 return;
             }
 
-            [[A2DownloadEngine sharedClient] startRequest:req
+            __block A2DownloadOperation *operation = nil;
+            operation = [[A2DownloadEngine sharedClient] startRequest:req
                 progress:^(int64_t delta, int64_t totalIgnore) {
                     (void)totalIgnore;
                     [self addDownloadedBytes:delta];
                 }
                 speed:nil
                 completion:^(BOOL success, NSError *error) {
+                [self forgetOperation:operation];
                 if (success) {
                     [self markFileDone];
                 } else {
@@ -161,6 +168,7 @@ static const NSInteger kSystemicFailureLimit = 12;
                 dispatch_semaphore_signal(self.semaphore);
                 dispatch_group_leave(group);
             }];
+            [self rememberOperation:operation];
         });
     }
 
@@ -274,10 +282,41 @@ static const NSInteger kSystemicFailureLimit = 12;
 }
 
 - (void)cancel {
+    [_operationsLock lock];
     _cancelled = YES;
+    NSArray<A2DownloadOperation *> *operations = [_operations copy];
+    [_operations removeAllObjects];
+    [_operationsLock unlock];
+
     [_progressTimer invalidate];
     _progressTimer = nil;
-    [[A2DownloadEngine sharedClient] cancelAll];
+
+    // 只取消本批自己发起的请求。
+    //
+    // 原先这里调 cancelAll：一次「取消安装」会把用户在任务页里跑的
+    // 其它下载（资源 / 整合包）一起掐断，属于跨任务误伤。
+    for (A2DownloadOperation *operation in operations) {
+        [[A2DownloadEngine sharedClient] cancelOperation:operation];
+    }
+}
+
+#pragma mark - 请求句柄
+
+- (void)rememberOperation:(A2DownloadOperation *)operation {
+    if (!operation) return;
+    [_operationsLock lock];
+    [_operations addObject:operation];
+    BOOL cancelled = _cancelled;
+    [_operationsLock unlock];
+    // 登记与取消之间的竞态：已取消就补一刀，避免漏网的在途请求。
+    if (cancelled) [[A2DownloadEngine sharedClient] cancelOperation:operation];
+}
+
+- (void)forgetOperation:(A2DownloadOperation *)operation {
+    if (!operation) return;
+    [_operationsLock lock];
+    [_operations removeObjectIdenticalTo:operation];
+    [_operationsLock unlock];
 }
 
 @end

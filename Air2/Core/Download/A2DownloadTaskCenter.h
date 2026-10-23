@@ -67,6 +67,28 @@ extern NSNotificationName const A2DownloadTasksDidChangeNotification;
 /// 清空已结束任务
 - (void)clearFinishedTasks;
 
+#pragma mark - 外部任务（游戏安装 / 整合包安装）
+
+/// 登记一个由外部推进入度的任务，返回任务 ID（永不为 nil）。
+///
+/// 这类任务没有 A2DownloadRequest / 引擎句柄，进度由调用方主动推送，
+/// 但和下载任务共用同一份列表 —— 任务页、底部抽屉都能看到，也能取消。
+/// @param cancelHandler 用户点「取消」时调用（主线程），中心不清空调用方的状态。
+- (NSString *)registerExternalTaskWithTitle:(NSString *)title
+                                   subtitle:(nullable NSString *)subtitle
+                              cancelHandler:(nullable void (^)(void))cancelHandler;
+
+/// 推送外部任务进度。progress 为总进度 0~1，detailText 为阶段说明。
+- (void)updateExternalTaskWithID:(NSString *)taskID
+                        progress:(double)progress
+                      detailText:(nullable NSString *)detailText
+                       speedText:(nullable NSString *)speedText;
+
+/// 外部任务结束：成功置完成，失败置失败并记录错误。
+- (void)finishExternalTaskWithID:(NSString *)taskID
+                        success:(BOOL)success
+                          error:(nullable NSError *)error;
+
 @end
 
 NS_ASSUME_NONNULL_END

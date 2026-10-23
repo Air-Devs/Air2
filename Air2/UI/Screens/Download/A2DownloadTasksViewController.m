@@ -289,8 +289,10 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
     self.errorLabel.text = task.errorMessage;
     self.errorLabel.hidden = !showsError;
 
-    // 进度：总大小已知时展示「已下 / 总量」，否则只留进度条本体。
-    if (task.totalBytes > 0) {
+    // 进度：外部任务（安装）展示推送的阶段说明；下载任务展示「已下 / 总量」。
+    if (task.externallyDriven) {
+        self.bar.detailText = task.detailText;
+    } else if (task.totalBytes > 0) {
         self.bar.detailText = [NSString stringWithFormat:@"%@ / %@",
                                A2DownloadFormatBytes(task.downloadedBytes),
                                A2DownloadFormatBytes(task.totalBytes)];
@@ -301,12 +303,14 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
     [self.bar setProgress:self.rowProgress animated:NO];
 
     // 按钮矩阵：Running/Paused → 暂停或继续 + 取消；Failed/Cancelled → 重试；Completed → 无。
+    // 外部任务（游戏安装）既不能暂停、也没有原始请求可重试，只保留「取消」。
     BOOL active = (task.state == A2DownloadStateRunning || task.state == A2DownloadStatePaused);
-    self.toggleButton.hidden = !active;
+    BOOL canPause = active && !task.externallyDriven;
+    self.toggleButton.hidden = !canPause;
     [self.toggleButton setTitle:(task.state == A2DownloadStateRunning ? @"暂停" : @"继续")
                        forState:UIControlStateNormal];
-    self.retryButton.hidden = !(task.state == A2DownloadStateFailed ||
-                                task.state == A2DownloadStateCancelled);
+    self.retryButton.hidden = task.externallyDriven ||
+        !(task.state == A2DownloadStateFailed || task.state == A2DownloadStateCancelled);
     self.cancelButton.hidden = !active;
     self.actionRow.hidden = (self.toggleButton.hidden && self.retryButton.hidden &&
                              self.cancelButton.hidden);

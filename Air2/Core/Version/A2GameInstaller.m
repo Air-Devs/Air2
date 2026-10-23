@@ -54,6 +54,11 @@ static void A2Main(dispatch_block_t block) {
 @property (nonatomic, assign) BOOL reuseVanilla;
 @property (nonatomic, assign) BOOL cancelled;
 @property (nonatomic, strong) NSURLSession *session;
+/// 本次安装自己发起的引擎请求 —— 取消时只掐这些，不动别人的下载。
+@property (nonatomic, strong) NSMutableArray<A2DownloadOperation *> *operations;
+@property (nonatomic, strong) NSLock *operationsLock;
+/// 当前这一批并发下载。取消时交给它按自己的请求句柄收尾。
+@property (nonatomic, strong, nullable) A2BatchDownloader *batchDownloader;
 @property (nonatomic, copy, nullable) void (^progressBlock)(A2InstallStage, double, NSString *);
 @property (nonatomic, copy, nullable) void (^completionBlock)(BOOL, NSError *);
 @end
@@ -68,16 +73,42 @@ static void A2Main(dispatch_block_t block) {
     if (!self) return nil;
     _session = [NSURLSession sessionWithConfiguration:
                 NSURLSessionConfiguration.defaultSessionConfiguration];
+    _operations = [NSMutableArray array];
+    _operationsLock = [[NSLock alloc] init];
     return self;
 }
 
 - (void)cancel {
+    [_operationsLock lock];
     _cancelled = YES;
+    NSArray<A2DownloadOperation *> *operations = [_operations copy];
+    [_operations removeAllObjects];
+    A2BatchDownloader *batch = _batchDownloader;
+    _batchDownloader = nil;
+    [_operationsLock unlock];
+
     [A2Log log:@"installer: 取消安装 %@", self.request.versionName ?: @"(未知)"];
-    // cancelOperation: 的参数标了 nonnull，传 nil 会警告。
-    // 这里改调 cancelAll —— 语义也更对：取消安装就该停掉所有下载。
-    [[A2DownloadEngine sharedClient] cancelAll];
+
+    // 只取消本次安装发起的请求。
+    //
+    // 原先这里调 cancelAll —— 取消一次安装会把用户在「任务」页里
+    // 跑的其它下载（资源 / 整合包）一起掐断，跨任务误伤。
+    for (A2DownloadOperation *operation in operations) {
+        [[A2DownloadEngine sharedClient] cancelOperation:operation];
+    }
+    [batch cancel];
     [_session invalidateAndCancel];
+}
+
+/// 登记引擎请求句柄，取消时逐个掐掉。
+- (void)trackOperation:(A2DownloadOperation *)operation {
+    if (!operation) return;
+    [_operationsLock lock];
+    [_operations addObject:operation];
+    BOOL cancelled = _cancelled;
+    [_operationsLock unlock];
+    // 登记与取消之间的竞态：已取消就补一刀，避免漏网的在途请求。
+    if (cancelled) [[A2DownloadEngine sharedClient] cancelOperation:operation];
 }
 
 #pragma mark - 主流程
@@ -645,15 +676,16 @@ static void A2Main(dispatch_block_t block) {
     if (size) req.expectedSize = size.longLongValue;
 
     __weak typeof(self) weakSelf = self;
-    [[A2DownloadEngine sharedClient] startRequest:req
+    // 累计值必须每次请求各自持有：之前是 static，跨文件、跨安装一直累加，
+    // 第二个文件起进度会直接冲到 100% 或卡住。
+    __block int64_t receivedBytes = 0;
+    A2DownloadOperation *operation = [[A2DownloadEngine sharedClient] startRequest:req
         progress:^(int64_t delta, int64_t total) {
         __strong typeof(weakSelf) self = weakSelf;
+        receivedBytes += delta;
+        if (receivedBytes < 0) receivedBytes = 0;
         if (!self || self.cancelled || total <= 0) return;
-        // 用累计值算阶段进度
-        static int64_t acc = 0;
-        acc += delta;
-        if (acc < 0) acc = 0;
-        double p = MIN(1.0, (double)acc / (double)total);
+        double p = MIN(1.0, (double)receivedBytes / (double)total);
         [self report:stage progress:p message:message];
     }
         speed:nil
@@ -662,6 +694,7 @@ static void A2Main(dispatch_block_t block) {
         if (!self || self.cancelled) return;
         if (then) then(success ? nil : error);
     }];
+    [self trackOperation:operation];
 }
 
 /// 批量下载（逐个串行，避免并发过高被限流）
@@ -760,7 +793,9 @@ static void A2Main(dispatch_block_t block) {
 
     downloader.onCompletion = ^(BOOL success, NSDictionary<NSString *, NSError *> *failures) {
         __strong typeof(weakSelf) self = weakSelf;
-        if (!self || self.cancelled) return;
+        if (!self) return;
+        self.batchDownloader = nil;
+        if (self.cancelled) return;
 
         if (failures.count > 0) {
             [A2Log log:@"installer: %@ 完成，%lu 个文件失败",
@@ -770,6 +805,8 @@ static void A2Main(dispatch_block_t block) {
         if (then) then(nil);
     };
 
+    // 持有这一批：页面退出后安装要继续，取消时也要有句柄可掐。
+    self.batchDownloader = downloader;
     [downloader start];
 }
 
