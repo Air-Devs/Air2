@@ -27,6 +27,7 @@
 //
 
 #import "A2SettingsSections.h"
+#import "A2Log.h"
 #import "A2ControlsEditorViewController.h"
 #import "A2SettingsSection.h"
 #import "A2SettingsRow.h"
