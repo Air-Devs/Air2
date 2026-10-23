@@ -64,7 +64,8 @@
 /// 两个类型是否互斥 —— 对照 ZL2 的 areMutuallyExclusive。
 ///
 /// 规则：
-///   1. 两个主加载器 → 互斥（Forge 与 Fabric 都要接管启动流程）
+///   1. 两个主加载器 → 互斥（Forge 与 Fabric 都要接管启动流程），
+///      例外是 OptiFine 与 Forge/NeoForge 可以共存（OptiFine 当模组用）
 ///   2. 主加载器 vs API → 只有配对的才不互斥
 ///   3. API vs API → 同属一个主加载器才不互斥
 ///   4. 其余（如 API 与不相关的主加载器）→ 不互斥
@@ -76,8 +77,16 @@
     BOOL aIsAPI = A2ModLoaderIsAPIMod(a);
     BOOL bIsAPI = A2ModLoaderIsAPIMod(b);
 
-    // 两个主加载器
-    if (aIsLoader && bIsLoader) return YES;
+    // 两个主加载器：正常互斥（选了新的就顶掉旧的），
+    // 但 OptiFine 是叠加项 —— 它可以作为 Forge / NeoForge 的模组共存。
+    if (aIsLoader && bIsLoader) {
+        BOOL optifineWithForgeFamily =
+            (a == A2ModLoaderTypeOptiFine &&
+                (b == A2ModLoaderTypeForge || b == A2ModLoaderTypeNeoForge)) ||
+            (b == A2ModLoaderTypeOptiFine &&
+                (a == A2ModLoaderTypeForge || a == A2ModLoaderTypeNeoForge));
+        return !optifineWithForgeFamily;
+    }
 
     // 主加载器 vs API
     if (aIsLoader && bIsAPI) {

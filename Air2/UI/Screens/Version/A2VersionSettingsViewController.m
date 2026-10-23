@@ -33,12 +33,14 @@
 //
 
 #import "A2VersionSettingsViewController.h"
+#import "A2BaseViewController.h"
 #import "A2VersionIsolation.h"
 #import "A2CategoryNavView.h"
 #import "A2FilesViewController.h"
 #import "A2SettingsSection.h"
 #import "A2SettingsRow.h"
 #import "A2GlassCard.h"
+#import "A2Log.h"
 #import "A2Toast.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
@@ -56,6 +58,9 @@
 @property (nonatomic, strong) A2CategoryNavView *nav;
 @property (nonatomic, strong) UIScrollView *detailScroll;
 @property (nonatomic, strong) UIStackView *detailStack;
+/// 右侧内嵌的管理页容器（mod / 材质 / 存档 / 光影）
+@property (nonatomic, strong) UIView *embedContainer;
+@property (nonatomic, strong, nullable) UIViewController *embeddedVC;
 
 // 信息页里需要实时刷新的几行
 @property (nonatomic, strong) A2SettingsRow *modeRow;
@@ -133,6 +138,11 @@
     [_detailScroll addSubview:_detailStack];
     [self.plainContentView addSubview:_detailScroll];
 
+    _embedContainer = [[UIView alloc] initWithFrame:CGRectZero];
+    _embedContainer.translatesAutoresizingMaskIntoConstraints = NO;
+    _embedContainer.hidden = YES;
+    [self.plainContentView addSubview:_embedContainer];
+
     [NSLayoutConstraint activateConstraints:@[
         [_nav.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
         [_nav.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
@@ -144,6 +154,12 @@
         [_detailScroll.leadingAnchor constraintEqualToAnchor:_nav.trailingAnchor
                                                     constant:A2SpaceM],
         [_detailScroll.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
+
+        [_embedContainer.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_embedContainer.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
+        [_embedContainer.leadingAnchor constraintEqualToAnchor:_nav.trailingAnchor
+                                                     constant:A2SpaceS],
+        [_embedContainer.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
 
         [_detailStack.topAnchor constraintEqualToAnchor:_detailScroll.contentLayoutGuide.topAnchor
                                                constant:A2SpaceS],
@@ -162,6 +178,15 @@
 /// 按导航索引重建右侧内容。
 /// 0 信息 / 1 启动配置 / 2 mod / 3 材质 / 4 存档 / 5 光影
 - (void)rebuildContentForIndex:(NSInteger)index {
+    // 四个目录页直接把管理页内嵌进来，不再跳一层
+    if (index >= 2) {
+        [self showFolderPane:(A2VersionFolder)(index - 2)];
+        return;
+    }
+
+    [self removeEmbeddedViewController];
+    _embedContainer.hidden = YES;
+    _detailScroll.hidden = NO;
     [self clearDetailStack];
 
     switch (index) {
@@ -172,13 +197,8 @@
             [self refreshIsolationUI];
             break;
         }
-        case 1: {
-            [_detailStack addArrangedSubview:[self buildLaunchSection]];
-            break;
-        }
         default: {
-            A2VersionFolder folder = (A2VersionFolder)(index - 2);
-            [_detailStack addArrangedSubview:[self buildFolderPaneForFolder:folder]];
+            [_detailStack addArrangedSubview:[self buildLaunchSection]];
             break;
         }
     }
@@ -189,6 +209,64 @@
         [_detailStack removeArrangedSubview:v];
         [v removeFromSuperview];
     }
+}
+
+#pragma mark - 版本内容：mod / 材质 / 存档 / 光影
+
+/// 直接内嵌管理页。目录还没建就先建出来 —— 建完是空目录，
+/// 管理页自己会显示空态，不会报错。
+- (void)showFolderPane:(A2VersionFolder)folder {
+    NSString *dir = [_version directoryForFolder:folder];
+
+    NSError *error = nil;
+    [NSFileManager.defaultManager createDirectoryAtPath:dir
+                            withIntermediateDirectories:YES
+                                             attributes:nil
+                                                  error:&error];
+    if (error) {
+        [A2Log log:@"version-settings: 创建目录失败 %@：%@", dir, error.localizedDescription];
+    }
+
+    UIViewController *vc = nil;
+    if (folder == A2VersionFolderMods) {
+        vc = [[A2ModListViewController alloc] initWithVersion:_version];
+    } else {
+        vc = [[A2FilesViewController alloc] initWithRootPath:dir
+                                                 displayName:A2VersionFolderDisplayName(folder)];
+    }
+    [self embedViewController:vc];
+}
+
+- (void)embedViewController:(UIViewController *)vc {
+    [self removeEmbeddedViewController];
+
+    // 内嵌页不是 push 进来的，返回箭头会误 pop 外层页面 —— 直接隐藏。
+    if ([vc isKindOfClass:A2BaseViewController.class]) {
+        ((A2BaseViewController *)vc).hidesBackButton = YES;
+    }
+
+    [self addChildViewController:vc];
+    vc.view.translatesAutoresizingMaskIntoConstraints = NO;
+    [_embedContainer addSubview:vc.view];
+    [NSLayoutConstraint activateConstraints:@[
+        [vc.view.topAnchor constraintEqualToAnchor:_embedContainer.topAnchor],
+        [vc.view.bottomAnchor constraintEqualToAnchor:_embedContainer.bottomAnchor],
+        [vc.view.leadingAnchor constraintEqualToAnchor:_embedContainer.leadingAnchor],
+        [vc.view.trailingAnchor constraintEqualToAnchor:_embedContainer.trailingAnchor],
+    ]];
+    [vc didMoveToParentViewController:self];
+    _embeddedVC = vc;
+
+    _detailScroll.hidden = YES;
+    _embedContainer.hidden = NO;
+}
+
+- (void)removeEmbeddedViewController {
+    if (!_embeddedVC) return;
+    [_embeddedVC willMoveToParentViewController:nil];
+    [_embeddedVC.view removeFromSuperview];
+    [_embeddedVC removeFromParentViewController];
+    _embeddedVC = nil;
 }
 
 #pragma mark - 信息：版本概况
@@ -273,82 +351,6 @@
     }
 
     _pathRow.subtitle = [_version gameDirectory];
-}
-
-/// 路径太长，只显示最后两段
-- (NSString *)shortenPath:(NSString *)path {
-    NSArray<NSString *> *parts = [path componentsSeparatedByString:@"/"];
-    if (parts.count <= 2) return path;
-    return [NSString stringWithFormat:@"…/%@/%@",
-            parts[parts.count - 2], parts[parts.count - 1]];
-}
-
-#pragma mark - 版本内容：mod / 材质 / 存档 / 光影
-
-- (A2SettingsSection *)buildFolderPaneForFolder:(A2VersionFolder)folder {
-    NSString *displayName = A2VersionFolderDisplayName(folder);
-    NSString *dir = [_version directoryForFolder:folder];
-
-    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:displayName];
-    section.footerText = [self folderFooterForFolder:folder];
-
-    A2SettingsRow *dirRow = [[A2SettingsRow alloc] init];
-    dirRow.symbolName = @"folder.fill";
-    dirRow.title = @"目录";
-    dirRow.subtitle = [self shortenPath:dir];
-    dirRow.accessory = A2SettingsRowAccessoryNone;
-    [section addRow:dirRow];
-
-    __weak typeof(self) weakSelf = self;
-    A2SettingsRow *openRow = [[A2SettingsRow alloc] init];
-    openRow.accessory = A2SettingsRowAccessoryDisclosure;
-
-    if (folder == A2VersionFolderMods) {
-        // 模组走专用管理页（启用/停用、删除），其它目录走通用文件浏览
-        openRow.symbolName = @"puzzlepiece.extension.fill";
-        openRow.title = @"管理 mod";
-        openRow.subtitle = @"启用 / 停用、删除已安装的模组";
-        openRow.onTap = ^{
-            __strong typeof(weakSelf) self = weakSelf;
-            if (!self) return;
-            A2ModListViewController *vc =
-                [[A2ModListViewController alloc] initWithVersion:self.version];
-            [self.navigationController pushViewController:vc animated:YES];
-        };
-    } else {
-        openRow.symbolName = @"folder";
-        openRow.title = @"浏览文件";
-        openRow.subtitle = @"打开文件夹查看 / 导入内容";
-        openRow.onTap = ^{
-            __strong typeof(weakSelf) self = weakSelf;
-            if (!self) return;
-            A2FilesViewController *vc =
-                [[A2FilesViewController alloc] initWithRootPath:dir
-                                                   displayName:displayName];
-            [self.navigationController pushViewController:vc animated:YES];
-        };
-    }
-    [section addRow:openRow];
-
-    return section;
-}
-
-/// 目录位置的说明随隔离档位变化
-- (NSString *)folderFooterForFolder:(A2VersionFolder)folder {
-    NSString *folderName = A2VersionFolderName(folder);
-    switch (_version.effectiveIsolationMode) {
-        case A2IsolationModeFull:
-            return [NSString stringWithFormat:@"该目录位于 versions/%@/%@ 下。",
-                    _version.name, folderName];
-        case A2IsolationModeMod:
-            if (folder == A2VersionFolderMods) {
-                return [NSString stringWithFormat:@"该目录位于 versions/%@/mods 下。",
-                        _version.name];
-            }
-            return @"该目录在游戏根目录，与其他版本共用。";
-        default:
-            return @"该目录在游戏根目录，与其他版本共用。";
-    }
 }
 
 #pragma mark - 启动配置

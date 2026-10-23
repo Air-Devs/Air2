@@ -46,6 +46,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// 是否隐藏顶栏（如主页、游戏内界面）
 @property (nonatomic, assign) BOOL hidesTopBar;
 
+/// 是否隐藏顶栏返回按钮（内嵌成子页面时用，避免误把外层页面 pop 掉）
+@property (nonatomic, assign) BOOL hidesBackButton;
+
 /// 是否使用滚动容器（默认 YES）。设为 NO 则用 plainContentView。
 @property (nonatomic, assign) BOOL usesScrollContent;
 

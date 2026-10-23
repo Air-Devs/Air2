@@ -196,7 +196,8 @@ static NSString *A2FavoriteFormatCount(long long count) {
     A2ContentItem *item = [self contentItemFromFavorite:fav];
     A2ResourceDetailViewController *vc = [[A2ResourceDetailViewController alloc]
                                          initWithProject:item
-                                         contentClass:[self contentClassForFavorite:fav]];
+                                         contentClass:[self contentClassForFavorite:fav]
+                                         gameVersion:nil];
     [self.navigationController pushViewController:vc animated:YES];
 }
 

@@ -206,8 +206,11 @@
 
     A2ModLoaderType type = card.loaderType;
 
-    // 互斥检查：与已选冲突就不允许
-    if (![_selection canSelectType:type] && _selection.versions[@(type)] == nil) {
+    // 主加载器之间是【切换】而不是“冲突”：选了 Forge 再点 Fabric，
+    // 直接把旧加载器顶掉即可 —— selectType:version: 内部会清掉互斥项。
+    // 只有 API 模组（Fabric API 之类）依附主加载器，配错了才提示冲突。
+    if (A2ModLoaderIsAPIMod(type) && ![_selection canSelectType:type] &&
+        _selection.versions[@(type)] == nil) {
         [A2Toast show:@"与已选的加载器冲突" inView:self.view];
         card.chosen = NO;
         return;
@@ -219,11 +222,23 @@
     // 同步 UI：被互斥清掉的卡片要复位
     [self syncCardsWithSelection];
 
-    // 只有主加载器影响版本命名；API 模组不参与
-    if (A2ModLoaderIsLoader(type)) {
+    // 只有主加载器影响版本命名；API 模组不参与。
+    // OptiFine 叠加在 Forge/NeoForge 上时也不改名 —— 它不是主加载器。
+    BOOL optifineOnTop = (type == A2ModLoaderTypeOptiFine &&
+                          [self hasNonOptiFineLoaderSelected]);
+    if (A2ModLoaderIsLoader(type) && !optifineOnTop) {
         _chosenLoaderCard = card;
         [self syncNameForLoaderType:version.length ? @(type) : nil];
     }
+}
+
+/// 当前是否已经选了 OptiFine 以外的主加载器。
+- (BOOL)hasNonOptiFineLoaderSelected {
+    for (NSNumber *key in _selection.versions) {
+        A2ModLoaderType t = (A2ModLoaderType)key.integerValue;
+        if (A2ModLoaderIsLoader(t) && t != A2ModLoaderTypeOptiFine) return YES;
+    }
+    return NO;
 }
 
 /// 让所有卡片的状态与选择模型一致。
