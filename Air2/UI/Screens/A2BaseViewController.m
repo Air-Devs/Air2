@@ -46,13 +46,22 @@
 
 #pragma mark - 生命周期
 
-- (instancetype)init {
-    self = [super init];
+/// 公共初始化必须挂在【指定初始化器】上。
+///
+/// 之前只写了 -init：用 initWithNibName:bundle: 创建的子类（整合包安装页、
+/// 导出整合包页）不会走 -init，于是 usesScrollContent 保持 NO、_buttonActions
+/// 为 nil —— 表现为 addSection: 静默落空（整页内容空白）、顶栏按钮点了没反应。
+- (instancetype)initWithNibName:(NSString *)nibNameOrNil bundle:(NSBundle *)nibBundleOrNil {
+    self = [super initWithNibName:nibNameOrNil bundle:nibBundleOrNil];
     if (!self) return nil;
     _trailingButtons = [NSMutableArray array];
     _buttonActions = [NSMapTable strongToStrongObjectsMapTable];
     _usesScrollContent = YES;
     return self;
+}
+
+- (instancetype)init {
+    return [self initWithNibName:nil bundle:nil];
 }
 
 - (void)viewDidLoad {

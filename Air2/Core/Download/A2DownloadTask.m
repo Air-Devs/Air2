@@ -50,12 +50,15 @@
 }
 
 - (double)progress {
+    // 外部任务（安装）的进度是调用方直接给的总进度，没有字节数可换算。
+    if (self.externallyDriven) return MAX(0.0, MIN(1.0, self.progressOverride));
     if (self.totalBytes <= 0) return 0;
     double value = (double)self.downloadedBytes / (double)self.totalBytes;
     return MAX(0.0, MIN(1.0, value));
 }
 
 - (NSString *)speedText {
+    if (self.externallyDriven) return self.speedTextOverride.length ? self.speedTextOverride : nil;
     if (self.speed <= 0) return nil;
     // 不用手写 MB 换算：NSByteCountFormatter 自带单位与有效位处理（Foundation，跨层安全）。
     NSByteCountFormatter *formatter = [[NSByteCountFormatter alloc] init];

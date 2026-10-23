@@ -55,6 +55,9 @@ static void A2Main(dispatch_block_t block) {
 @property (nonatomic, assign) BOOL reuseVanilla;
 @property (nonatomic, assign) BOOL cancelled;
 @property (nonatomic, strong) NSURLSession *session;
+/// 本次安装自己发起的单文件请求 —— 取消时只掐这些，不动别人的下载。
+@property (nonatomic, strong) NSMutableArray<A2DownloadOperation *> *operations;
+@property (nonatomic, strong) NSLock *operationsLock;
 @property (nonatomic, copy, nullable) void (^progressBlock)(A2InstallStage, double, NSString *);
 @property (nonatomic, copy, nullable) void (^completionBlock)(BOOL, NSError *);
 @end
@@ -69,16 +72,42 @@ static void A2Main(dispatch_block_t block) {
     if (!self) return nil;
     _session = [NSURLSession sessionWithConfiguration:
                 NSURLSessionConfiguration.defaultSessionConfiguration];
+    _operations = [NSMutableArray array];
+    _operationsLock = [[NSLock alloc] init];
     return self;
 }
 
 - (void)cancel {
+    [self.operationsLock lock];
     _cancelled = YES;
+    NSArray<A2DownloadOperation *> *operations = [self.operations copy];
+    [self.operations removeAllObjects];
+    A2BatchDownloader *downloader = self.activeDownloader;
+    self.activeDownloader = nil;
+    [self.operationsLock unlock];
+
     [A2Log log:@"installer: 取消安装 %@", self.request.versionName ?: @"(未知)"];
-    // cancelOperation: 的参数标了 nonnull，传 nil 会警告。
-    // 这里改调 cancelAll —— 语义也更对：取消安装就该停掉所有下载。
-    [[A2DownloadEngine sharedClient] cancelAll];
+    // 只掐本次安装自己发起的请求。
+    // 之前这里调 engine 的 cancelAll，会把别的安装、独立下载的进度页一起清掉。
+    for (A2DownloadOperation *operation in operations) {
+        [[A2DownloadEngine sharedClient] cancelOperation:operation];
+    }
+    [downloader cancel];
     [_session invalidateAndCancel];
+}
+
+/// 登记本次安装发起的单文件请求；若此刻已取消，立刻掐掉它，
+/// 避免「取消之后才发起」的请求漏网。
+- (void)trackOperation:(nullable A2DownloadOperation *)operation {
+    if (!operation) return;
+    [self.operationsLock lock];
+    if (self.cancelled) {
+        [self.operationsLock unlock];
+        [[A2DownloadEngine sharedClient] cancelOperation:operation];
+        return;
+    }
+    [self.operations addObject:operation];
+    [self.operationsLock unlock];
 }
 
 #pragma mark - 主流程
@@ -646,15 +675,16 @@ static void A2Main(dispatch_block_t block) {
     if (size) req.expectedSize = size.longLongValue;
 
     __weak typeof(self) weakSelf = self;
-    [[A2DownloadEngine sharedClient] startRequest:req
+    // 本次请求自己的累计字节。之前用 static，导致不同文件、不同安装会话
+    // 互相叠加，进度条直接冲过 100%。
+    __block int64_t receivedBytes = 0;
+    A2DownloadOperation *operation = [[A2DownloadEngine sharedClient] startRequest:req
         progress:^(int64_t delta, int64_t total) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self || self.cancelled || total <= 0) return;
-        // 用累计值算阶段进度
-        static int64_t acc = 0;
-        acc += delta;
-        if (acc < 0) acc = 0;
-        double p = MIN(1.0, (double)acc / (double)total);
+        receivedBytes += delta;
+        if (receivedBytes < 0) receivedBytes = 0;
+        double p = MIN(1.0, (double)receivedBytes / (double)total);
         [self report:stage progress:p message:message];
     }
         speed:nil
@@ -663,6 +693,7 @@ static void A2Main(dispatch_block_t block) {
         if (!self || self.cancelled) return;
         if (then) then(success ? nil : error);
     }];
+    [self trackOperation:operation];
 }
 
 /// 批量下载（逐个串行，避免并发过高被限流）

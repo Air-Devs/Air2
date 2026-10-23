@@ -55,6 +55,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// 速度展示文本，形如 "1.2 MB/s"；速度为 0 时返回 nil。
 - (nullable NSString *)speedText;
 
+/// 是否由外部推进（游戏安装 / 整合包安装）。
+///
+/// 这类任务没有 A2DownloadRequest 与引擎句柄，进度由调用方通过任务中心
+/// 推送（updateExternalTask…），因此不支持暂停；取消走外部取消回调。
+@property (nonatomic, assign, readonly) BOOL externallyDriven;
+/// 外部推送的进度说明（如「正在下载依赖库 (3/10)」）；下载任务为 nil。
+@property (nonatomic, copy, readonly, nullable) NSString *detailText;
+
 /// 是否处于活跃态（Running / Paused）—— 用于任务分组与排序。
 - (BOOL)isActive;
 
@@ -89,6 +97,15 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, nullable) NSString *subdir;
 /// 完成回调；中心取出后立即置空，避免中心与调用方互相持有。
 @property (nonatomic, copy, nullable) void (^completion)(BOOL success, NSError * _Nullable error);
+
+@property (nonatomic, assign) BOOL externallyDriven;
+@property (nonatomic, copy, nullable) NSString *detailText;
+/// 外部任务直接给出的总进度（0~1），优先于按字节数换算。
+@property (nonatomic, assign) double progressOverride;
+/// 外部任务直接给出的速度文本（安装阶段通常给 nil）。
+@property (nonatomic, copy, nullable) NSString *speedTextOverride;
+/// 用户点「取消」时调用；任务结束/取消后由中心置空。
+@property (nonatomic, copy, nullable) void (^externalCancelHandler)(void);
 
 + (instancetype)taskWithTitle:(NSString *)title
                      subtitle:(nullable NSString *)subtitle

@@ -39,6 +39,7 @@
 #import "A2InstallProgressDialog.h"
 #import "A2VersionManager.h"
 #import "A2ModLoaderAPI.h"
+#import "A2DownloadTaskCenter.h"
 #import "A2Log.h"
 
 #pragma mark - 步骤行
@@ -168,6 +169,8 @@ typedef NS_ENUM(NSInteger, A2InstallStepState) {
 @property (nonatomic, copy, nullable) NSString *modPackPath;
 @property (nonatomic, strong, nullable) A2ModPackInstaller *packInstaller;
 @property (nonatomic, assign) BOOL finished;
+/// 任务中心里的外部任务 ID —— 页面退出后进度靠它继续更新。
+@property (nonatomic, copy, nullable) NSString *taskID;
 
 @property (nonatomic, strong) A2RingProgress *ring;
 @property (nonatomic, strong) UILabel *stageLabel;
@@ -203,6 +206,21 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
         @"安装模组加载器",
         @"完成安装",
     ];
+}
+
+/// 总进度换算：以「实际会执行的阶段数」为分母。
+///
+/// directProgress 为 YES（整合包安装）时回调给的本来就是整包进度，直接使用；
+/// 整合包没有「清单 / 客户端 / 依赖库」这些阶段，硬套阶段公式会把上限卡在 5/7。
+static double A2InstallOverallProgress(A2InstallStage stage, double progress,
+                                       BOOL hasLoader, BOOL directProgress) {
+    if (directProgress) return MAX(0.0, MIN(1.0, progress));
+    NSInteger effectiveStages = A2InstallStageCount - (hasLoader ? 0 : 1);
+    if (effectiveStages <= 0) effectiveStages = 1;
+    // stage 可能超过 effectiveStages（跳过加载器时），钳一下
+    NSInteger effectiveStage = MIN((NSInteger)stage, effectiveStages - 1);
+    double total = ((double)effectiveStage + progress) / (double)effectiveStages;
+    return MAX(0.0, MIN(1.0, total));
 }
 
 - (instancetype)initWithMCVersion:(NSString *)mcVersion
@@ -246,11 +264,13 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     self.onBack = ^{
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
-        if (self.finished) {
-            [self backToDownloadCenter];
-        } else {
-            [self confirmCancel];
+        // 退出页面不中止安装：任务交给任务中心继续跑，
+        // 用户可以在「任务」页看进度、也能在那里取消。
+        if (!self.finished && self.taskID.length > 0) {
+            UIView *host = self.navigationController.view ?: self.view;
+            [A2Toast show:@"安装已转入后台，可在「任务」页查看" inView:host];
         }
+        [self backToDownloadCenter];
     };
 
     _logOutput = [[A2TaskLogOutput alloc] initWithTitle:[NSString stringWithFormat:@"安装 %@", _versionName]];
@@ -268,7 +288,8 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
 }
 
 - (void)dealloc {
-    [_installer cancel];
+    // 不能在这里取消安装 —— 退出页面就等于中止任务，
+    // 用户看不到进度、也回不到任务页继续。安装器由任务中心的取消回调持有。
     [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
@@ -475,9 +496,30 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
 #pragma mark - 安装
 
 - (void)startInstall {
+    [self registerTaskIfNeeded];
+
+    // 任务中心那条记录要在页面退出后仍能更新，所以回调里不依赖 self。
+    NSString *taskID = self.taskID;
+    __weak typeof(self) weakSelf = self;
+
     // 整合包模式走另一条流程 —— 它的阶段划分与「装原版+加载器」不同。
     if (_modPackPath.length) {
-        [self startModPackInstall];
+        [_packInstaller installPackAtPath:_modPackPath
+                              versionName:_versionName
+                                 gameHome:A2VersionManager.shared.gameHome
+                                 progress:^(double progress, NSString *message) {
+            [[A2DownloadTaskCenter shared] updateExternalTaskWithID:taskID
+                                                           progress:progress
+                                                         detailText:message
+                                                          speedText:nil];
+            [weakSelf applyStage:A2InstallStageDownloadAssets progress:progress message:message];
+        }
+                               completion:^(BOOL success, NSError *error) {
+            [[A2DownloadTaskCenter shared] finishExternalTaskWithID:taskID
+                                                           success:success
+                                                             error:error];
+            [weakSelf applyCompletion:success error:error];
+        }];
         return;
     }
 
@@ -490,36 +532,51 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     req.apiModVersion = _apiVersion;
     req.gameHome = A2VersionManager.shared.gameHome;
 
-    __weak typeof(self) weakSelf = self;
+    BOOL hasLoader = (_loaderType != nil);
     [_installer install:req
         progress:^(A2InstallStage stage, double progress, NSString *message) {
+        [[A2DownloadTaskCenter shared]
+            updateExternalTaskWithID:taskID
+                           progress:A2InstallOverallProgress(stage, progress, hasLoader, NO)
+                         detailText:message
+                          speedText:nil];
         [weakSelf applyStage:stage progress:progress message:message];
     }
         completion:^(BOOL success, NSError *error) {
+        [[A2DownloadTaskCenter shared] finishExternalTaskWithID:taskID
+                                                       success:success
+                                                         error:error];
         [weakSelf applyCompletion:success error:error];
     }];
 }
 
-/// 整合包安装。
+/// 把本次安装登记进任务中心。
 ///
-/// 阶段与普通安装不同（解析清单 / 装加载器 / 下载文件 / 解压覆盖），
-/// 但复用同一套进度 UI —— 把安装器的回调映射到 A2InstallStage 的语义位置。
-- (void)startModPackInstall {
-    __weak typeof(self) weakSelf = self;
-    [_packInstaller installPackAtPath:_modPackPath
-                          versionName:_versionName
-                             gameHome:A2VersionManager.shared.gameHome
-                             progress:^(double progress, NSString *message) {
-        __strong typeof(weakSelf) self = weakSelf;
-        if (!self) return;
-        // 整合包进度总体映射到「下载资源」阶段 —— 它是耗时最长的一段
-        [self applyStage:A2InstallStageDownloadAssets progress:progress message:message];
-    }
-                           completion:^(BOOL success, NSError *error) {
-        __strong typeof(weakSelf) self = weakSelf;
-        if (!self) return;
-        [self applyCompletion:success error:error];
+/// 登记后：退出本页安装继续跑，进度写进「任务」页与底部抽屉，
+/// 用户也可以在那里取消 —— 取消回调直接持有安装器，不依赖本页存活。
+- (void)registerTaskIfNeeded {
+    if (self.taskID.length > 0) return;
+
+    NSString *title = _modPackPath.length
+        ? [NSString stringWithFormat:@"安装整合包「%@」", _versionName]
+        : [NSString stringWithFormat:@"安装游戏「%@」", _versionName];
+    NSString *subtitle = _modPackPath.length ? @"整合包安装" : @"游戏安装";
+
+    A2GameInstaller *installer = _installer;
+    A2ModPackInstaller *packInstaller = _packInstaller;
+    self.taskID = [[A2DownloadTaskCenter shared]
+        registerExternalTaskWithTitle:title
+                             subtitle:subtitle
+                        cancelHandler:^{
+        [installer cancel];
+        [packInstaller cancel];
     }];
+}
+
+/// 直接中止两条安装链路（任务中心取消时也会走到这里）。
+- (void)cancelInstallers {
+    [_installer cancel];
+    [_packInstaller cancel];
 }
 
 /// progress 回调来自安装器；保险起见统一切主线程再动 UI。
@@ -581,18 +638,9 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     // 之前用 (stage + progress) / A2InstallStageCount 有两个问题：
     //   1. 未选加载器时「安装模组加载器」被跳过，但分母仍算它 → 永远到不了 100%
     //   2. 步骤列表显示「下载依赖库 100%」时环形还停在 42%
-    //      （stage 索引与实际进度脱节）
-    //
-    // 改成按【实际会执行的步骤数】算分母，并且以步骤列表的真实状态为准，
-    // 不是直接信任 stage 索引。
+    // 换算规则统一收在 A2InstallOverallProgress()，和任务中心推送的数值一致。
     BOOL hasLoader = (_loaderType != nil);
-    NSInteger effectiveStages = A2InstallStageCount - (hasLoader ? 0 : 1);
-    if (effectiveStages <= 0) effectiveStages = 1;
-
-    // stage 可能超过 effectiveStages（跳过加载器时），钳一下
-    NSInteger effectiveStage = MIN((NSInteger)stage, effectiveStages - 1);
-    double total = ((double)effectiveStage + progress) / (double)effectiveStages;
-    total = MAX(0, MIN(1.0, total));
+    double total = A2InstallOverallProgress(stage, progress, hasLoader, _modPackPath.length > 0);
 
     [_ring setProgress:total animated:YES];
     _ring.centerText = [NSString stringWithFormat:@"%.0f%%", total * 100];
@@ -620,6 +668,10 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
 }
 
 - (void)handleCompletion:(BOOL)success error:(NSError *)error {
+    // 任务中心那条记录已由安装回调收尾；清掉本地 ID，
+    // 让「重试」能登记成一条新任务。
+    self.taskID = nil;
+
     if (success) {
         _finished = YES;
         self.pageTitle = @"安装完成";
@@ -710,9 +762,20 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
                                               style:UIAlertActionStyleDestructive
                                             handler:^(UIAlertAction *a) {
         __weak typeof(self) weakSelf = self;
-        [A2Log log:@"download: 取消安装 %@", weakSelf.versionName];
-        [weakSelf.installer cancel];
-        [weakSelf.navigationController popViewControllerAnimated:YES];
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        [A2Log log:@"download: 取消安装 %@", self.versionName];
+
+        NSString *taskID = self.taskID;
+        self.taskID = nil;
+        if (taskID.length > 0) {
+            // 由任务中心把状态置为「已取消」并回调登记时的 cancelHandler，
+            // 这样任务页和本页看到的是同一份状态。
+            [[A2DownloadTaskCenter shared] cancelTaskWithID:taskID];
+        } else {
+            [self cancelInstallers];
+        }
+        [self.navigationController popViewControllerAnimated:YES];
     }]];
     [self presentViewController:alert animated:YES completion:nil];
 }

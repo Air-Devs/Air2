@@ -250,7 +250,8 @@ static const NSTimeInterval kTaskNotifyThrottle = 0.1;
 - (void)retryTaskWithID:(NSString *)taskID {
     dispatch_async(self.queue, ^{
         A2DownloadTask *task = [self taskForID:taskID];
-        if (!task || !task.request) return;
+        // 外部任务没有原始请求，无法由中心重试。
+        if (!task || task.externallyDriven || !task.request) return;
         if (task.state != A2DownloadStateFailed && task.state != A2DownloadStateCancelled) return;
 
         task.errorMessage = nil;
@@ -268,6 +269,19 @@ static const NSTimeInterval kTaskNotifyThrottle = 0.1;
         A2DownloadTask *task = [self taskForID:taskID];
         if (!task) return;
         if (task.state != A2DownloadStateRunning && task.state != A2DownloadStatePaused) return;
+
+        // 外部任务（安装）没有引擎句柄，状态先落 Cancelled，
+        // 再回调调用方登记的取消逻辑，避免随后到来的完成回调把它改成失败。
+        if (task.externallyDriven) {
+            void (^handler)(void) = task.externalCancelHandler;
+            task.externalCancelHandler = nil;
+            task.state = A2DownloadStateCancelled;
+            task.speedTextOverride = nil;
+            [A2Log log:@"download-task: 取消 %@ \"%@\"", taskID, task.title];
+            [self notifyChange];
+            if (handler) dispatch_async(dispatch_get_main_queue(), handler);
+            return;
+        }
 
         A2DownloadOperation *operation = task.operation;
         // 先落 Cancelled 再通知引擎：引擎取消会回调 completion，
@@ -290,6 +304,72 @@ static const NSTimeInterval kTaskNotifyThrottle = 0.1;
             if (task.isActive) [kept addObject:task];
         }
         [self.tasks setArray:kept];
+        [self notifyChange];
+    });
+}
+
+#pragma mark - 外部任务（安装）
+
+- (NSString *)registerExternalTaskWithTitle:(NSString *)title
+                                   subtitle:(NSString *)subtitle
+                              cancelHandler:(void (^)(void))cancelHandler {
+    A2DownloadTask *task = [A2DownloadTask taskWithTitle:title subtitle:subtitle createdAt:[NSDate date]];
+    task.externallyDriven = YES;
+    task.externalCancelHandler = cancelHandler;
+
+    dispatch_sync(self.queue, ^{
+        self.sequence += 1;
+        task.taskID = [NSString stringWithFormat:@"%.0f-%lu",
+                       [NSDate date].timeIntervalSince1970 * 1000, (unsigned long)self.sequence];
+        [self.tasks addObject:task];
+    });
+
+    [A2Log log:@"download-task: 外部任务入队 %@ \"%@\"", task.taskID, title];
+    [self notifyChange];
+    return task.taskID;
+}
+
+- (void)updateExternalTaskWithID:(NSString *)taskID
+                        progress:(double)progress
+                      detailText:(NSString *)detailText
+                       speedText:(NSString *)speedText {
+    if (taskID.length == 0) return;
+    dispatch_async(self.queue, ^{
+        A2DownloadTask *task = [self taskForID:taskID];
+        if (!task || !task.externallyDriven || !task.isActive) return;
+        task.progressOverride = MAX(0.0, MIN(1.0, progress));
+        task.detailText = detailText;
+        task.speedTextOverride = speedText;
+        [self notifyChangeThrottled];
+    });
+}
+
+- (void)finishExternalTaskWithID:(NSString *)taskID
+                        success:(BOOL)success
+                          error:(NSError *)error {
+    if (taskID.length == 0) return;
+    dispatch_async(self.queue, ^{
+        A2DownloadTask *task = [self taskForID:taskID];
+        if (!task || !task.externallyDriven) return;
+
+        // 先清回调：之后无论成败都不该再取消一个已经结束的任务。
+        task.externalCancelHandler = nil;
+        // 用户主动取消时引擎/安装器也会回调一次完成，不能覆盖 Cancelled。
+        if (task.state == A2DownloadStateCancelled) return;
+
+        task.speedTextOverride = nil;
+        task.speed = 0;
+        if (success) {
+            task.state = A2DownloadStateCompleted;
+            task.progressOverride = 1.0;
+            task.detailText = @"已完成";
+            [A2Log log:@"download-task: 完成 %@ \"%@\"", taskID, task.title];
+        } else {
+            task.state = A2DownloadStateFailed;
+            task.errorMessage = error.localizedDescription ?: @"任务失败";
+            [A2Log log:@"download-task: 失败 %@ \"%@\" - %@",
+                  taskID, task.title, task.errorMessage];
+        }
         [self notifyChange];
     });
 }
