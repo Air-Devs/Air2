@@ -75,8 +75,8 @@
     bar.distribution = UIStackViewDistributionFillEqually;
     bar.spacing = 10;
 
-    NSArray *titles = @[ @"导入", @"导出", @"恢复默认" ];
-    NSArray *sels = @[ @"importFromClipboard", @"exportToClipboard", @"resetDefault" ];
+    NSArray *titles = @[ @"导入", @"导出" ];
+    NSArray *sels = @[ @"importFromClipboard", @"exportToClipboard" ];
     for (NSUInteger i = 0; i < titles.count; i++) {
         UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
         [b setTitle:titles[i] forState:UIControlStateNormal];
@@ -141,10 +141,5 @@
     [A2Toast show:[NSString stringWithFormat:@"已导出 %lu 项到剪贴板", (unsigned long) controls.count] inView:self.view];
 }
 
-- (void)resetDefault {
-    NSArray *empty = @[];
-    [self.controls a2_importControls:empty];
-    [A2Toast show:@"已清空自定义位置（重新进入存档布局）" inView:self.view];
-}
 
 @end
