@@ -78,7 +78,16 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
 
 // 筛选栏内容（对照 ZL2 的 SearchFilter）
 @property (nonatomic, strong) A2TextField *searchField;
-@property (nonatomic, strong) A2TextField *gameVersionField;
+
+// 游戏版本：MD3 的可展开下拉 —— 点一下在下面列出全部可选版本
+@property (nonatomic, strong) UIButton *gameVersionSelector;
+@property (nonatomic, strong) UILabel *gameVersionValueLabel;
+@property (nonatomic, strong) UIImageView *gameVersionChevron;
+@property (nonatomic, strong) UIView *gameVersionMenu;
+@property (nonatomic, strong) UIStackView *gameVersionMenuStack;
+@property (nonatomic, strong) NSLayoutConstraint *gameVersionMenuHeight;
+/// 下拉行对应的真实筛选值（下标即行按钮的 tag，@"" 表示「全部版本」）
+@property (nonatomic, copy) NSArray<NSString *> *gameVersionMenuValues;
 @property (nonatomic, strong) UIView *loaderSection;
 
 // 可展开筛选卡
@@ -94,7 +103,6 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
 
 @property (nonatomic, strong) UIStackView *categoryChipsStack;
 @property (nonatomic, strong) UIStackView *loaderChipsStack;
-@property (nonatomic, strong) UIStackView *versionChipsStack;
 @property (nonatomic, strong) UIStackView *sortChipsStack;
 @property (nonatomic, strong) UIButton *resetButton;
 
@@ -282,7 +290,7 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
 /// 右侧筛选栏的内容。
 ///
 /// 对照 ZL2 的 SearchFilter：从上到下依次为
-///   搜索名称输入框 / 游戏版本输入框 / 平台切换 /
+///   搜索名称输入框 / 游戏版本下拉 / 平台切换 /
 ///   排序 / 加载器 / 分类 / 重置
 - (void)buildSidePanel {
     UIStackView *stack = [[UIStackView alloc] initWithFrame:CGRectZero];
@@ -300,27 +308,24 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
                                              constant:-A2PageMargin],
     ]];
 
+    __weak typeof(self) weakSelf = self;
+
     // ---- 搜索名称 ----
     _searchField = [[A2TextField alloc] initWithLabel:@"搜索资源"];
     _searchField.translatesAutoresizingMaskIntoConstraints = NO;
-    _searchField.onTextChange = ^(NSString *text) {
-        (void)text;
+    _searchField.textField.returnKeyType = UIReturnKeySearch;
+    // 回车即搜。之前只设了 returnKeyType、没接 onReturn，
+    // 敲回车没有任何反应，只能等别的筛选变化顺带刷新。
+    _searchField.onReturn = ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        [self.view endEditing:YES];
+        [self reload];
     };
     [stack addArrangedSubview:[self labeledBlock:@"名称" content:_searchField]];
-    // 回车即搜
-    _searchField.textField.returnKeyType = UIReturnKeySearch;
 
-    // ---- 游戏版本 ----
-    _gameVersionField = [[A2TextField alloc] initWithLabel:@"游戏版本"];
-    _gameVersionField.translatesAutoresizingMaskIntoConstraints = NO;
-    _gameVersionField.text = _selectedGameVersion ?: @"";
-    __weak typeof(self) weakSelf = self;
-    _gameVersionField.onTextChange = ^(NSString *text) {
-        __strong typeof(weakSelf) self = weakSelf;
-        self.selectedGameVersion = text.length ? text : nil;
-    };
-    _gameVersionField.textField.returnKeyType = UIReturnKeySearch;
-    [stack addArrangedSubview:[self labeledBlock:@"游戏版本" content:_gameVersionField]];
+    // ---- 游戏版本（点击展开的版本列表）----
+    [stack addArrangedSubview:[self labeledBlock:@"游戏版本"
+                                         content:[self makeGameVersionSelectorGroup]]];
 
     // ---- 平台切换 ----
     _platformControl = [self makePlatformControl];
@@ -375,6 +380,165 @@ typedef NS_ENUM(NSInteger, A2ResourceSearchState) {
     v.spacing = A2SpaceS;
     v.alignment = UIStackViewAlignmentFill;
     return v;
+}
+
+#pragma mark - 游戏版本：点击展开的选择列表
+
+/// MD3 的「点开再选」下拉。
+/// 收起时是一枚填充式选择框（当前版本 + 箭头），点击后在下面展开
+/// 可滚动的版本列表；选中某行后自动收起并重新查询。
+/// 相比原来的手输框：版本号不必背，也不会输错导致查不到结果。
+- (UIView *)makeGameVersionSelectorGroup {
+    _gameVersionSelector = [UIButton buttonWithType:UIButtonTypeCustom];
+    _gameVersionSelector.translatesAutoresizingMaskIntoConstraints = NO;
+    _gameVersionSelector.layer.cornerRadius = A2RadiusL;
+    _gameVersionSelector.layer.cornerCurve = kCACornerCurveContinuous;
+    _gameVersionSelector.clipsToBounds = YES;
+    [_gameVersionSelector addTarget:self
+                             action:@selector(toggleGameVersionMenu)
+                   forControlEvents:UIControlEventTouchUpInside];
+    [_gameVersionSelector.heightAnchor constraintEqualToConstant:48].active = YES;
+
+    _gameVersionValueLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    _gameVersionValueLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _gameVersionValueLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightRegular];
+    _gameVersionValueLabel.text = @"全部版本";
+    _gameVersionValueLabel.userInteractionEnabled = NO;
+    [_gameVersionSelector addSubview:_gameVersionValueLabel];
+
+    _gameVersionChevron = [[UIImageView alloc] initWithImage:
+        [[UIImage systemImageNamed:@"chevron.down"]
+            imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate]];
+    _gameVersionChevron.translatesAutoresizingMaskIntoConstraints = NO;
+    _gameVersionChevron.contentMode = UIViewContentModeScaleAspectFit;
+    _gameVersionChevron.userInteractionEnabled = NO;
+    [_gameVersionSelector addSubview:_gameVersionChevron];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [_gameVersionValueLabel.leadingAnchor constraintEqualToAnchor:_gameVersionSelector.leadingAnchor
+                                                             constant:A2SpaceM],
+        [_gameVersionValueLabel.trailingAnchor constraintLessThanOrEqualToAnchor:_gameVersionChevron.leadingAnchor
+                                                                       constant:-A2SpaceS],
+        [_gameVersionValueLabel.centerYAnchor constraintEqualToAnchor:_gameVersionSelector.centerYAnchor],
+
+        [_gameVersionChevron.trailingAnchor constraintEqualToAnchor:_gameVersionSelector.trailingAnchor
+                                                            constant:-A2SpaceM],
+        [_gameVersionChevron.centerYAnchor constraintEqualToAnchor:_gameVersionSelector.centerYAnchor],
+        [_gameVersionChevron.widthAnchor constraintEqualToConstant:16],
+        [_gameVersionChevron.heightAnchor constraintEqualToConstant:16],
+    ]];
+
+    _gameVersionMenu = [[UIView alloc] initWithFrame:CGRectZero];
+    _gameVersionMenu.translatesAutoresizingMaskIntoConstraints = NO;
+    _gameVersionMenu.layer.cornerRadius = A2RadiusM;
+    _gameVersionMenu.layer.cornerCurve = kCACornerCurveContinuous;
+    _gameVersionMenu.clipsToBounds = YES;
+    _gameVersionMenu.hidden = YES;
+
+    UIScrollView *scroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    scroll.showsVerticalScrollIndicator = YES;
+    [_gameVersionMenu addSubview:scroll];
+
+    _gameVersionMenuStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _gameVersionMenuStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _gameVersionMenuStack.axis = UILayoutConstraintAxisVertical;
+    _gameVersionMenuStack.spacing = 0;
+    _gameVersionMenuStack.alignment = UIStackViewAlignmentFill;
+    [scroll addSubview:_gameVersionMenuStack];
+
+    // 高度由 rebuildGameVersionMenu 按行数算，超过上限就滚动
+    _gameVersionMenuHeight = [_gameVersionMenu.heightAnchor constraintEqualToConstant:0];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [scroll.topAnchor constraintEqualToAnchor:_gameVersionMenu.topAnchor],
+        [scroll.bottomAnchor constraintEqualToAnchor:_gameVersionMenu.bottomAnchor],
+        [scroll.leadingAnchor constraintEqualToAnchor:_gameVersionMenu.leadingAnchor],
+        [scroll.trailingAnchor constraintEqualToAnchor:_gameVersionMenu.trailingAnchor],
+
+        [_gameVersionMenuStack.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor],
+        [_gameVersionMenuStack.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor],
+        [_gameVersionMenuStack.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor],
+        [_gameVersionMenuStack.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor],
+        [_gameVersionMenuStack.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor],
+
+        _gameVersionMenuHeight,
+    ]];
+
+    UIStackView *group =
+        [[UIStackView alloc] initWithArrangedSubviews:@[_gameVersionSelector, _gameVersionMenu]];
+    group.translatesAutoresizingMaskIntoConstraints = NO;
+    group.axis = UILayoutConstraintAxisVertical;
+    group.spacing = A2SpaceS;
+    return group;
+}
+
+- (void)toggleGameVersionMenu {
+    [self setGameVersionMenuExpanded:_gameVersionMenu.isHidden];
+}
+
+- (void)setGameVersionMenuExpanded:(BOOL)expanded {
+    if (expanded == !_gameVersionMenu.hidden) return;
+    _gameVersionMenu.hidden = !expanded;
+
+    CGAffineTransform target = expanded
+        ? CGAffineTransformMakeRotation((CGFloat)M_PI)
+        : CGAffineTransformIdentity;
+    [UIView animateWithDuration:A2AnimDurationFast animations:^{
+        self.gameVersionChevron.transform = target;
+    }];
+}
+
+/// 重建下拉列表：第一行固定是「全部版本」，后面跟接口返回的正式版本。
+- (void)rebuildGameVersionMenu {
+    [self clearStack:_gameVersionMenuStack];
+
+    NSMutableArray<NSString *> *values = [NSMutableArray arrayWithObject:@""];
+    [values addObjectsFromArray:self.gameVersionOptions];
+    self.gameVersionMenuValues = values;
+
+    for (NSInteger i = 0; i < (NSInteger)values.count; i++) {
+        UIButton *row = [self makeGameVersionRowWithValue:values[i] index:i];
+        [_gameVersionMenuStack addArrangedSubview:row];
+    }
+
+    // 每行 44pt；超过 220pt 就滚动，避免把侧栏顶出屏幕
+    _gameVersionMenuHeight.constant = MIN(values.count * 44.0, 220);
+    [self updateGameVersionSelectorTitle];
+}
+
+- (UIButton *)makeGameVersionRowWithValue:(NSString *)value index:(NSInteger)index {
+    UIButton *row = [UIButton buttonWithType:UIButtonTypeCustom];
+    row.translatesAutoresizingMaskIntoConstraints = NO;
+    row.tag = index;
+    row.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+    row.contentEdgeInsets = UIEdgeInsetsMake(0, A2SpaceM, 0, A2SpaceM);
+    row.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightRegular];
+    [row setTitle:(value.length > 0 ? value : @"全部版本") forState:UIControlStateNormal];
+    [row.heightAnchor constraintEqualToConstant:44].active = YES;
+    [row addTarget:self
+            action:@selector(gameVersionRowTapped:)
+  forControlEvents:UIControlEventTouchUpInside];
+    return row;
+}
+
+- (void)gameVersionRowTapped:(UIButton *)row {
+    if (row.tag >= 0 && row.tag < (NSInteger)_gameVersionMenuValues.count) {
+        NSString *value = _gameVersionMenuValues[row.tag];
+        self.selectedGameVersion = value.length > 0 ? value : nil;
+        [A2Log log:@"resource-search: 游戏版本筛选 = %@",
+              value.length > 0 ? value : @"全部"];
+    }
+    [self setGameVersionMenuExpanded:NO];
+    [self updateGameVersionSelectorTitle];
+    [self reload];
+}
+
+- (void)updateGameVersionSelectorTitle {
+    _gameVersionValueLabel.text = self.selectedGameVersion.length > 0
+        ? self.selectedGameVersion
+        : @"全部版本";
+    [self applyTheme];
 }
 
 #pragma mark - 筛选：平台 / 加载器 / 游戏版本 / 分类 / 排序
@@ -550,9 +714,11 @@ static NSString *A2PlatformDisplayName(A2ContentPlatform platform) {
     [_selectedCategories removeAllObjects];
     _selectedLoader = nil;
     _selectedGameVersion = nil;
-    _gameVersionField.text = @"";
+    _searchField.text = @"";
     [self clearCategoryChipSelection];
     [self styleSingleSelectStack:_loaderChipsStack value:nil];
+    [self setGameVersionMenuExpanded:NO];
+    [self updateGameVersionSelectorTitle];
     [self reload];
 }
 
@@ -596,33 +762,20 @@ static NSString *A2PlatformDisplayName(A2ContentPlatform platform) {
         if (!self) return;
         if (error) {
             [A2Log log:@"resource-search: 游戏版本拉取失败：%@", error.localizedDescription];
-            [self renderPlaceholderInStack:self.versionChipsStack text:@"版本加载失败"];
+            self.gameVersionOptions = @[];
+            [self rebuildGameVersionMenu];
             return;
         }
         NSMutableArray<NSString *> *out = [NSMutableArray array];
         for (A2RemoteVersion *version in versions) {
             if (![version.type isEqualToString:@"release"]) continue;
             [out addObject:version.versionID];
-            if (out.count >= 8) break;
+            // 下拉本身可滚动，只留一个兜底上限防止行数失控
+            if (out.count >= 100) break;
         }
         self.gameVersionOptions = out;
-        [self rebuildVersionChips];
+        [self rebuildGameVersionMenu];
     }];
-}
-
-- (void)rebuildVersionChips {
-    [self clearStack:_versionChipsStack];
-    [_versionChipsStack addArrangedSubview:[self makeSingleChip:@"全部"
-                                                          value:@""
-                                                       selected:(self.selectedGameVersion == nil)
-                                                         action:@selector(versionChipTapped:)]];
-    for (NSString *version in self.gameVersionOptions) {
-        A2FilterChip *chip = [self makeSingleChip:version
-                                            value:version
-                                         selected:[version isEqualToString:self.selectedGameVersion ?: @""]
-                                           action:@selector(versionChipTapped:)];
-        [_versionChipsStack addArrangedSubview:chip];
-    }
 }
 
 - (void)loadCategories {
@@ -678,14 +831,6 @@ static NSString *A2PlatformDisplayName(A2ContentPlatform platform) {
     [self reload];
 }
 
-- (void)versionChipTapped:(A2FilterChip *)chip {
-    NSString *value = chip.filterValue ?: @"";
-    self.selectedGameVersion = value.length ? value : nil;
-    [self styleSingleSelectStack:_versionChipsStack value:value];
-    [A2Log log:@"resource-search: 游戏版本筛选 = %@", value.length ? value : @"全部"];
-    [self reload];
-}
-
 - (void)sortChipTapped:(A2FilterChip *)chip {
     A2ContentSortField field = (A2ContentSortField)chip.tag;
     self.sortField = field;
@@ -693,22 +838,6 @@ static NSString *A2PlatformDisplayName(A2ContentPlatform platform) {
     [A2Log log:@"resource-search: 排序 = %@", A2SortDisplayName(field)];
     [self reload];
 }
-
-- (void)resetTapped {
-    [self.selectedCategories removeAllObjects];
-    self.selectedLoader = nil;
-    self.selectedGameVersion = nil;
-    self.sortField = A2ContentSortFieldRelevance;
-    [self clearCategoryChipSelection];
-    [self styleSingleSelectStack:_loaderChipsStack value:@""];
-    [self styleSingleSelectStack:_versionChipsStack value:@""];
-    [self styleSingleSelectStack:_sortChipsStack
-                           value:[NSString stringWithFormat:@"%ld", (long)self.sortField]];
-    [A2Log log:@"resource-search: 重置全部筛选"];
-    [self reload];
-}
-
-
 
 #pragma mark - UI：结果列表
 
@@ -1013,6 +1142,24 @@ forRowAtIndexPath:(NSIndexPath *)indexPath {
 
     [_resetButton setTitleColor:t.cPrimary forState:UIControlStateNormal];
     _resetButton.layer.borderColor = t.cOutlineVariant.CGColor;
+
+    // 游戏版本下拉：选择框 / 展开列表 / 每行选中态
+    _gameVersionSelector.backgroundColor = t.cSurfaceContainerHighest;
+    _gameVersionValueLabel.textColor = _selectedGameVersion.length > 0
+        ? t.cOnSurface
+        : t.cOnSurfaceVariant;
+    _gameVersionChevron.tintColor = t.cOnSurfaceVariant;
+    _gameVersionMenu.backgroundColor = t.cSurfaceContainerHigh;
+    for (UIView *v in _gameVersionMenuStack.arrangedSubviews) {
+        if (![v isKindOfClass:UIButton.class]) continue;
+        UIButton *row = (UIButton *)v;
+        BOOL rowIsAll = (row.tag == 0);
+        BOOL selected = rowIsAll ? (_selectedGameVersion.length == 0)
+                                 : [row.titleLabel.text isEqualToString:_selectedGameVersion ?: @""];
+        row.backgroundColor = selected ? t.cSecondaryContainer : UIColor.clearColor;
+        [row setTitleColor:(selected ? t.cOnSecondaryContainer : t.cOnSurface)
+                  forState:UIControlStateNormal];
+    }
 
     _countLabel.textColor = t.cOnSurfaceVariant;
     _stateLabel.textColor = t.cOnSurfaceVariant;
