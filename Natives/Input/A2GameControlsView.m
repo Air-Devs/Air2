@@ -933,4 +933,29 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     return vc;
 }
 
+/// ★iPhone Duo★ 折叠/展开、Split View 都会改 bounds ⇒ 不能只在构建时排一次。
+/// 尺寸变化 >1pt 就按新宽度重排（自定义布局按比例缩放）。
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    static CGSize a2Last = {0, 0};
+    CGSize s = self.bounds.size;
+    if (s.width <= 0 || s.height <= 0) return;
+    BOOL changed = (a2Last.width <= 0 ||
+                    fabs(s.width - a2Last.width) > 1.0 ||
+                    fabs(s.height - a2Last.height) > 1.0);
+    if (!changed) return;
+
+    CGFloat kx = (a2Last.width  > 1.0) ? s.width  / a2Last.width  : 1.0;
+    CGFloat ky = (a2Last.height > 1.0) ? s.height / a2Last.height : 1.0;
+    if (a2Last.width > 1.0) {
+        for (UIView *v in [self a2_movableViews]) {
+            v.center = CGPointMake(v.center.x * kx, v.center.y * ky);
+        }
+    }
+    a2Last = s;
+    [self a2_layoutDefaultButtons];
+    [self a2_layoutHotbar];
+    [self a2_applySavedLayout];
+}
+
 @end
