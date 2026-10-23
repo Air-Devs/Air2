@@ -31,6 +31,9 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface A2DiagnosticsSettings : NSObject
 + (A2SettingsSection *)buildWithHost:(UIViewController *)host;
+
+/// iPhone Duo 形态模拟（内屏整屏/分屏/折叠外屏 × 竖横屏）—— 没有真机时验证布局用。
++ (A2SettingsSection *)buildDuoSimSectionWithHost:(UIViewController *)host;
 @end
 
 NS_ASSUME_NONNULL_END

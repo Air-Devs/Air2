@@ -153,7 +153,7 @@
         [A2Log log:@"[A2-DUO] 形态模拟 → %@（%ld）", [self duoModeText:next], (long) next];
         [NSNotificationCenter.defaultCenter postNotificationName:@"A2DuoSimChanged" object:nil];
         [host.view setNeedsLayout];
-        [A2Toast show:[NSString stringWithFormat:@"形态：%@", [self duoModeText:next]]];
+        [A2Toast show:[NSString stringWithFormat:@"形态：%@", [self duoModeText:next]] inView:host.view];
     };
     [section addRow:modeRow];
 
@@ -168,7 +168,7 @@
         [d setInteger:next forKey:@"A2DuoSimOrientation"];
         [A2Log log:@"[A2-DUO] 形态方向 → %@（%ld）", [self duoOrientationText:next], (long) next];
         [NSNotificationCenter.defaultCenter postNotificationName:@"A2DuoSimChanged" object:nil];
-        [A2Toast show:[NSString stringWithFormat:@"方向：%@", [self duoOrientationText:next]]];
+        [A2Toast show:[NSString stringWithFormat:@"方向：%@", [self duoOrientationText:next]] inView:host.view];
     };
     [section addRow:orientRow];
 
