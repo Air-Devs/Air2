@@ -94,7 +94,10 @@
 
 - (void)setupCategoryNav {
     NSArray<A2NavCategory *> *cats = @[
-        [A2NavCategory title:@"游戏"   symbol:@"sports.esports"],
+        // 「游戏」用的必须是系统里真实存在的符号。
+        // 之前写的 sports.esports 不是 SF Symbols 名称，systemImageNamed:
+        // 返回 nil，于是这一项只剩文字、图标整块没了。
+        [A2NavCategory title:@"游戏"   symbol:@"gamecontroller.fill"],
         [A2NavCategory title:@"整合包" symbol:@"shippingbox.fill"],
         [A2NavCategory title:@"模组"   symbol:@"puzzlepiece.extension.fill" division:YES],
         [A2NavCategory title:@"资源包" symbol:@"photo.stack.fill"],
