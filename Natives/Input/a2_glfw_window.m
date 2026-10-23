@@ -672,7 +672,12 @@ int a2_glfw_window_create(long window, int width, int height, const char *title)
                 [view addSubview:controls];
             });
             a2_publish_ios_view_pointer((__bridge void *) view, scale);
-            a2_duo_sim_apply(window);
+            // ⚠️ 必须主线程：改 view.frame = 改 Auto Layout 引擎，建窗线程上做会崩
+            //   （真机：Modifications to the layout engine must not be performed from a background thread）
+            dispatch_async(dispatch_get_main_queue(), ^{
+                a2_duo_sim_apply(window);
+                a2_glfw_window_handle_host_resize(window);
+            });
 
             [[NSNotificationCenter defaultCenter] addObserverForName:@"A2DuoSimChanged"
                                                               object:nil
