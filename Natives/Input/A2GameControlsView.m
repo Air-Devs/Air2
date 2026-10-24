@@ -189,6 +189,8 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     NSMutableSet<NSString *> *_removedIds;                        // 被删除的内置键 id
     NSString *_pendingCid;                                        // 正在等待选键的控件 id
     NSMutableArray<NSNumber *> *_comboBuffer;                     // 组合键选择缓冲
+    NSString *_latchedCid;                                        // 已锁存(按住)修饰键的控件
+    int _latchedModifier;                                         // 锁存中的 F 键码
     NSMutableDictionary<NSString *, NSNumber *> *_bindings;   // 控件id -> GLFW 键码
     NSMutableDictionary<NSString *, NSValue *> *_restFrames;  // 编辑前位置（取消用）
 
@@ -481,6 +483,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 - (void)willMoveToWindow:(UIWindow *)newWindow {
     [super willMoveToWindow:newWindow];
     if (newWindow == nil) {
+        [self a2_releaseLatchedIfAny];
         [_useWatchdog invalidate]; _useWatchdog = nil;
         [_attackWatchdog invalidate]; _attackWatchdog = nil;
         a2_glfw_input_post_mouse_button(_window, kMouseLeft, 0);
@@ -546,6 +549,11 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(a2_tapControl:)];
         tap.cancelsTouchesInView = NO;
         [v addGestureRecognizer:tap];
+
+        UILongPressGestureRecognizer *hold = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(a2_longPressControl:)];
+        hold.minimumPressDuration = 0.6;
+        hold.cancelsTouchesInView = NO;
+        [v addGestureRecognizer:hold];
     }
     _attackButton.bounds    = CGRectMake(0, 0, 76, 76);
     _useButton.bounds       = CGRectMake(0, 0, 76, 76);
@@ -902,6 +910,14 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 }
 
 /// 编辑模式下点控件 = 改键位（拖动/捏合仍用于位置与大小）。
+- (void)a2_longPressControl:(UILongPressGestureRecognizer *)g {
+    if (g.state != UIGestureRecognizerStateBegan) return;
+    UIView *v = g.view;
+    for (NSString *cid in _movable) {
+        if (_movable[cid] == v) { [self a2_releaseLatchedIfAny]; break; }
+    }
+}
+
 - (void)a2_tapControl:(UITapGestureRecognizer *)tap {
     if (!_editing) return;
     UIView *v = tap.view;
@@ -1231,6 +1247,25 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     _pendingCid = nil;
 }
 
+/// 松开锁存的修饰键（长按组合键控件、退出游戏、切布局时都会调）
+- (BOOL)a2_releaseLatchedIfAny {
+    if (_latchedCid.length == 0) return NO;
+    a2_glfw_input_post_key(_window, _latchedModifier, 0);
+    a2_log_f(@"[A2-CONTROLS] 组合键释放：key=%d", _latchedModifier);
+    [self a2_markLatched:NO forCid:_latchedCid];
+    _latchedCid = nil;
+    _latchedModifier = 0;
+    return YES;
+}
+
+/// 锁存时给控件加个高亮，让用户知道 F3 还按着
+- (void)a2_markLatched:(BOOL)on forCid:(NSString *)cid {
+    UIView *v = _movable[cid];
+    v.layer.borderWidth = on ? 2.0 : 1.0;
+    v.layer.borderColor = (on ? [UIColor colorWithRed:1.0 green:0.72 blue:0.25 alpha:1.0]
+                              : [UIColor colorWithWhite:1 alpha:0.22]).CGColor;
+}
+
 /// 按绑定发一次「按下+抬起」（-1/-2 走鼠标左右键）。
 - (void)a2_pressBound:(NSString *)cid fallback:(int)def {
     NSArray<NSNumber *> *codes = [self a2_codesForControl:cid fallback:def];
@@ -1239,13 +1274,12 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     if (first == -2) { a2_glfw_input_post_mouse_button(_window, 1, 1); a2_glfw_input_post_mouse_button(_window, 1, 0); return; }
 
     a2_log_f(@"[A2-CONTROLS] 按键合成 cid=%@ keys=%@ window=%ld", cid, codes, _window);
-    // ★组合键语义★ Minecraft 的 F3+ 组合是"按住 F3 再点另一个键，松开 F3 生效"，
-    //   不能同时按下同时松开（否则等于连点两下，菜单开了立刻关）。
-    //   这里：F 键按下 → 180ms 后目标键按下 → 再 120ms 目标键抬起 → 再 120ms F 键抬起。
+    // ★组合键 = 锁存式★ 对应 Minecraft「按住 F3 + 单点 F4」的用法：
+    //   第 1 次点 → F3 按下并保持；之后每点一次 → 只点一下 F4；长按 → 松开 F3。
     NSNumber *modifier = codes.firstObject;
-    a2_glfw_input_post_key(_window, modifier.intValue, 1);
 
     if (codes.count == 1) {
+        a2_glfw_input_post_key(_window, modifier.intValue, 1);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.18 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
             a2_glfw_input_post_key(self->_window, modifier.intValue, 0);
         });
@@ -1253,15 +1287,32 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     }
 
     NSNumber *target = codes[1];
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.18 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        a2_glfw_input_post_key(self->_window, target.intValue, 1);
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.30 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        a2_glfw_input_post_key(self->_window, target.intValue, 0);
-    });
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.42 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-        a2_glfw_input_post_key(self->_window, modifier.intValue, 0);
-    });
+
+    if (_latchedCid.length == 0) {
+        // 开始按住修饰键
+        if ([self a2_releaseLatchedIfAny]) return;
+        _latchedCid = cid;
+        _latchedModifier = modifier.intValue;
+        a2_glfw_input_post_key(_window, modifier.intValue, 1);
+        [self a2_markLatched:YES forCid:cid];
+        a2_log_f(@"[A2-CONTROLS] 组合键锁存：按住 key=%d（%@）", _latchedModifier, cid);
+        return;
+    }
+
+    if ([_latchedCid isEqualToString:cid]) {
+        // 已按住 → 单点目标键
+        a2_glfw_input_post_key(_window, target.intValue, 1);
+        a2_glfw_input_post_key(_window, target.intValue, 0);
+        a2_log_f(@"[A2-CONTROLS] 组合键单点：key=%d（修饰键保持 %d）", target.intValue, _latchedModifier);
+        return;
+    }
+
+    // 点的是另一个组合键 ⇒ 先松开旧的，再锁存新的
+    [self a2_releaseLatchedIfAny];
+    _latchedCid = cid;
+    _latchedModifier = modifier.intValue;
+    a2_glfw_input_post_key(_window, modifier.intValue, 1);
+    [self a2_markLatched:YES forCid:cid];
 }
 
 
