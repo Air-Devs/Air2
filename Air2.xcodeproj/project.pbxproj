@@ -76,6 +76,7 @@
 		7FC10269A162141315B017EF /* environ_globals.m in Sources */ = {isa = PBXBuildFile; fileRef = 3379819526378EE72414030C /* environ_globals.m */; };
 		FC2EEB144AE1D45D9D71C15C /* main_hook.m in Sources */ = {isa = PBXBuildFile; fileRef = A3D0C5C637E9FA2B3F32F1BD /* main_hook.m */; };
 		32E98F4EECA61E102374FDE3 /* utils.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A5BAE11D028A2905E1791FC /* utils.m */; };
+		3F6BB9E75376EE54E35ADC74 /* A2ControlEditorViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3CABD20366E8E9C4350F53B8 /* A2ControlEditorViewController.m */; };
 		F2CB4E7B7F47FF18A957EFB5 /* A2ControlLayout.m in Sources */ = {isa = PBXBuildFile; fileRef = 1DD83AEE82FD5DB2400F3B8B /* A2ControlLayout.m */; };
 		FE909770F1329CB8E985AD5F /* A2ControlRenderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A1769FF5839C6F59DA3DB26 /* A2ControlRenderer.m */; };
 		7248BD00DBF94569DDA08C01 /* A2DefaultControls.m in Sources */ = {isa = PBXBuildFile; fileRef = 5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */; };
@@ -270,6 +271,7 @@
 		3379819526378EE72414030C /* environ_globals.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "environ_globals.m"; sourceTree = "<group>"; };
 		A3D0C5C637E9FA2B3F32F1BD /* main_hook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "main_hook.m"; sourceTree = "<group>"; };
 		6A5BAE11D028A2905E1791FC /* utils.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "utils.m"; sourceTree = "<group>"; };
+		3CABD20366E8E9C4350F53B8 /* A2ControlEditorViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlEditorViewController.m"; sourceTree = "<group>"; };
 		1DD83AEE82FD5DB2400F3B8B /* A2ControlLayout.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlLayout.m"; sourceTree = "<group>"; };
 		6A1769FF5839C6F59DA3DB26 /* A2ControlRenderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlRenderer.m"; sourceTree = "<group>"; };
 		5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DefaultControls.m"; sourceTree = "<group>"; };
@@ -457,6 +459,7 @@
 		C186822A4D93C6ED1D4F4D90 /* environ.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "environ.h"; sourceTree = "<group>"; };
 		F95E35A558207B66D283C093 /* jni.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "jni.h"; sourceTree = "<group>"; };
 		D90D6323014B3918ACC20743 /* utils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "utils.h"; sourceTree = "<group>"; };
+		8301CDE4BB2DAFB8B4BE53E1 /* A2ControlEditorViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlEditorViewController.h"; sourceTree = "<group>"; };
 		9A480B77A9493A4A99FCF1E2 /* A2ControlLayout.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlLayout.h"; sourceTree = "<group>"; };
 		1C4E55239DDFE7C5F66C96EF /* A2ControlRenderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlRenderer.h"; sourceTree = "<group>"; };
 		17EFE083DFCD2B631A9B9195 /* A2DefaultControls.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DefaultControls.h"; sourceTree = "<group>"; };
@@ -919,10 +922,12 @@
 		0BAD074392BFBB7D37D258C7 /* Controls */ = {
 			isa = PBXGroup;
 			children = (
+				3CABD20366E8E9C4350F53B8 /* A2ControlEditorViewController.m */,
 				1DD83AEE82FD5DB2400F3B8B /* A2ControlLayout.m */,
 				6A1769FF5839C6F59DA3DB26 /* A2ControlRenderer.m */,
 				5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */,
 				BC32DEDE020A2112CC01EF75 /* A2TouchTransport.m */,
+				8301CDE4BB2DAFB8B4BE53E1 /* A2ControlEditorViewController.h */,
 				9A480B77A9493A4A99FCF1E2 /* A2ControlLayout.h */,
 				1C4E55239DDFE7C5F66C96EF /* A2ControlRenderer.h */,
 				17EFE083DFCD2B631A9B9195 /* A2DefaultControls.h */,
@@ -1444,6 +1449,7 @@
 				7FC10269A162141315B017EF /* environ_globals.m in Sources */,
 				FC2EEB144AE1D45D9D71C15C /* main_hook.m in Sources */,
 				32E98F4EECA61E102374FDE3 /* utils.m in Sources */,
+				3F6BB9E75376EE54E35ADC74 /* A2ControlEditorViewController.m in Sources */,
 				F2CB4E7B7F47FF18A957EFB5 /* A2ControlLayout.m in Sources */,
 				FE909770F1329CB8E985AD5F /* A2ControlRenderer.m in Sources */,
 				7248BD00DBF94569DDA08C01 /* A2DefaultControls.m in Sources */,

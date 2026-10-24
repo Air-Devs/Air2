@@ -37,6 +37,8 @@ static const CGFloat kEdgeInset = 10;
 @property (nonatomic, strong) UILabel *statsLabel;
 @property (nonatomic, assign, readwrite, getter=isExpanded) BOOL expanded;
 @property (nonatomic, assign) CGPoint ballCenter;
+/// 点「控件设置」时回调（由 SurfaceViewController 提供编辑器）
+@property (nonatomic, copy, nullable) void (^onOpenEditor)(void);
 /// 浮球旋转（展开时 45°，收起时回正）
 - (void)rotateBallToAngle:(CGFloat)angle;
 @end
@@ -81,6 +83,11 @@ static const CGFloat kEdgeInset = 10;
         [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handlePan:)];
     [_ball addGestureRecognizer:pan];
 
+    UILongPressGestureRecognizer *lp =
+        [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
+    lp.minimumPressDuration = 0.6;
+    [_ball addGestureRecognizer:lp];
+
     // ---- FPS / 内存显示 ----
     _statsLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _statsLabel.font = [UIFont monospacedDigitSystemFontOfSize:11 weight:UIFontWeightMedium];
@@ -111,7 +118,14 @@ static const CGFloat kEdgeInset = 10;
 #pragma mark - 交互
 
 - (void)handleTap {
+    // 长按 = 打开控件编辑器（对照 ZL2 的 GameBall 长按行为）
     [self toggle];
+}
+
+/// 长按浮球 → 打开控件编辑器
+- (void)handleLongPress:(UILongPressGestureRecognizer *)g {
+    if (g.state != UIGestureRecognizerStateBegan) return;
+    if (self.onOpenEditor) self.onOpenEditor();
 }
 
 - (void)handlePan:(UIPanGestureRecognizer *)g {

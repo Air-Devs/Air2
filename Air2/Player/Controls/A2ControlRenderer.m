@@ -251,7 +251,7 @@
     for (UIView *v in self.subviews) [v removeFromSuperview];
     [_buttonViews removeAllObjects];
 
-    for (A2ControlWidget *w in self.layout.widgets) {
+    for (A2ControlWidget *w in self.layout.allWidgets) {
         A2ControlButtonView *v = [[A2ControlButtonView alloc] initWithWidget:w];
         v.inputDelegate = self.inputDelegate;
         v.editing = self.editing;

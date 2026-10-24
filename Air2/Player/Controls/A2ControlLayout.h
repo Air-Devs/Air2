@@ -2,174 +2,173 @@
 //  A2ControlLayout.h
 //  Air2
 //
-//  Copyright (C) 2026 Air-Devs and contributors.
-//
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with this program. If not, see <https://www.gnu.org/licenses/gpl-3.0.txt>.
-//
-//  SPDX-License-Identifier: GPL-3.0-or-later
-//
-//
-//
-//  A2ControlLayout.h
-//  Air2
-//
 //  控件系统的数据模型 —— **直接兼容 FCL / ZL2 / Air1 三家的原生格式**。
 //
-//  ## 为什么不做格式转换
+//  ## 三家的格式（实证自源码）
 //
-//  FCL 官方做过一个 control-converter（FCL↔ZL2 双向），
-//  但那是给「用户从别的启动器迁移」用的。
-//  用户的要求是：**同一份布局文件在三个启动器里都能直接用**，不做转换。
+//    ZL2   { editorVersion, layers: [{ normalButtons, joystickButtons, textBoxes }] }
+//    FCL   { controllerVersion, viewGroups: [{ ... }] }
+//    Air1  与 Android 同构（ControlButton.h 注释里写明）
 //
-//  三家格式实际上高度重合（都是从同一个 Android 方案演化来的）：
+//  ## ZL2 的完整数据规格（LayerController 模块）
 //
-//    ZL2:  { "editorVersion": 12, "layers": [ ... ] }
-//    FCL:  { "controllerVersion": 3, "viewGroups": [ ... ] }
-//    Air1: 同 Android 结构（ControlButton.h 注释里写明）
+//    ClickEvent.Type（6 种）：
+//      "key"             按键
+//      "launcher_event"  启动器事件（切菜单/切鼠标等）
+//      "switch_layer"    切换控件层可见性
+//      "show_layer"      强制显示层
+//      "hide_layer"      强制隐藏层
+//      "send_text"       发送聊天消息
 //
-//  按钮字段的取名差异很小：
+//    VisibilityType：  "always" / "in_game" / "in_menu"
+//    ButtonShape：     topStart / topEnd / bottomEnd / bottomStart（四角独立圆角 0~100）
+//    ButtonSize.Type： "dp" / "percentage"
 //
-//    共有：uuid, text, position, size/buttonSize, clickEvents,
-//          isSwipple, isPenetrable, isToggleable
-//    差异：ZL2 用 buttonSize，FCL 用 size + sizeType
-//          ZL2 用 visibilityType，FCL 用 visibilityType
-//          ZL2 的坐标是 {x, y} 百分比，FCL 是 {percentageX, percentageY}
+//  ## 兼容策略（不做格式转换）
 //
-//  所以做法是：**解析时容忍两种字段名**，写入时保留原有格式。
-//  这样加载任意一家的文件都不会失败，保存时也不破坏原格式。
+//  按优先级依次尝试多个键名 —— 三家字段名重合度很高：
+//    position: {x,y} / {percentageX,percentageY}
+//    size:     buttonSize / size
+//  写回时【沿用原始 JSON 的键名】，且保留 rawJSON，
+//  不认识的新字段原样带回。
 //
 
-#import <UIKit/UIKit.h>
+#import <Foundation/Foundation.h>
+#import <CoreGraphics/CoreGraphics.h>
 
 NS_ASSUME_NONNULL_BEGIN
 
-#pragma mark - 控件类型
+#pragma mark - 事件
 
-typedef NS_ENUM(NSInteger, A2ControlWidgetType) {
-    A2ControlWidgetTypeButton = 0,   ///< 普通按钮（normalButtons）
-    A2ControlWidgetTypeJoystick,     ///< 摇杆（joystickButtons）
-    A2ControlWidgetTypeTextBox,      ///< 文本输入（textBoxes）
-};
-
-#pragma mark - 点击事件
-
+/// 点击事件的类型（对齐 ZL2 的 ClickEvent.Type）
 typedef NS_ENUM(NSInteger, A2ControlEventType) {
-    A2ControlEventTypeSendKey = 0,     ///< 发送按键
-    A2ControlEventTypeSendText,        ///< 发送文本
-    A2ControlEventTypeMouseWheel,      ///< 鼠标滚轮
-    A2ControlEventTypeMouseMove,       ///< 鼠标移动
-    A2ControlEventTypeToggleGui,       ///< 切换 GUI
-    A2ControlEventTypeToggleKeyboard,  ///< 切换键盘
-    A2ControlEventTypeSwitchMouse,     ///< 切换鼠标模式
+    A2ControlEventTypeKey = 0,          ///< "key"            按键
+    A2ControlEventTypeLauncherEvent,    ///< "launcher_event" 启动器事件
+    A2ControlEventTypeSwitchLayer,      ///< "switch_layer"   切换层
+    A2ControlEventTypeShowLayer,        ///< "show_layer"     显示层
+    A2ControlEventTypeHideLayer,        ///< "hide_layer"     隐藏层
+    A2ControlEventTypeSendText,         ///< "send_text"      发送文本
     A2ControlEventTypeUnknown,
 };
 
-/// 一条点击事件
 @interface A2ControlEvent : NSObject
 @property (nonatomic, assign) A2ControlEventType type;
-/// 按键码（SendKey）或文本（SendText）
+/// 按键码（Key）或事件名（LauncherEvent）/ 层 ID（Layer 类）/ 文本（SendText）
 @property (nonatomic, copy, nullable) NSString *key;
-/// 原始类型名（保留未知类型，写回时原样输出）
+/// 原始类型字符串 —— 未知类型原样写回
 @property (nonatomic, copy, nullable) NSString *rawType;
-+ (instancetype)eventFromJSON:(NSDictionary *)json;
++ (nullable instancetype)eventFromJSON:(NSDictionary *)json;
 - (NSDictionary *)toJSON;
+/// Air1/FCL 风格：{"type": "SendKey", "key": "87"}
++ (instancetype)keyEventWithCode:(NSString *)code;
++ (instancetype)launcherEvent:(NSString *)name;
 @end
+
+#pragma mark - 可见性
+
+typedef NS_ENUM(NSInteger, A2ControlVisibility) {
+    A2ControlVisibilityAlways = 0,   ///< "always"
+    A2ControlVisibilityInGame,       ///< "in_game"  仅游戏内（未打开菜单）
+    A2ControlVisibilityInMenu,       ///< "in_menu"  仅菜单内
+};
 
 #pragma mark - 控件
 
-/// 一个控件（按钮 / 摇杆 / 文本框）
+typedef NS_ENUM(NSInteger, A2ControlWidgetType) {
+    A2ControlWidgetTypeButton = 0,   ///< normalButtons
+    A2ControlWidgetTypeJoystick,     ///< joystickButtons
+    A2ControlWidgetTypeTextBox,      ///< textBoxes
+};
+
 @interface A2ControlWidget : NSObject
 
 @property (nonatomic, assign) A2ControlWidgetType type;
 @property (nonatomic, copy) NSString *identifier;
 
-/// 显示文字。三家格式可能给字符串或 {"zh": "…"} 字典
+/// 显示文字（三家可能给字符串或 {"zh": "…"} 字典）
 @property (nonatomic, copy, nullable) NSString *text;
 
-/// 位置与尺寸（百分比，0~100）。
-/// 这是三家唯一需要兼容的关键差异：
-///   ZL2 / FCL 新版：position {x, y}  + buttonSize {width, height}
-///   FCL 老版：     position {percentageX, percentageY}
+// ---- 位置与尺寸（百分比 0~100）----
+// ZL2:      position {x,y} + buttonSize {width,height}
+// FCL 新版:  position {x,y} + size {width,height}
+// FCL 老版:  position {percentageX,percentageY}
 @property (nonatomic, assign) CGFloat xPercent;
 @property (nonatomic, assign) CGFloat yPercent;
 @property (nonatomic, assign) CGFloat widthPercent;
 @property (nonatomic, assign) CGFloat heightPercent;
 
-/// 尺寸模式：百分比 / 固定点值
+/// ZL2 的 ButtonSize.Type："dp" 或 "percentage"
 @property (nonatomic, copy, nullable) NSString *sizeType;
 
-/// 样式 ID（引用 buttonStyles 里的条目）
+// ---- 外观 ----
+/// 四角独立圆角（0~100，对应 ZL2 的 ButtonShape）
+@property (nonatomic, assign) CGFloat cornerTopStart;
+@property (nonatomic, assign) CGFloat cornerTopEnd;
+@property (nonatomic, assign) CGFloat cornerBottomEnd;
+@property (nonatomic, assign) CGFloat cornerBottomStart;
 @property (nonatomic, copy, nullable) NSString *buttonStyle;
 
-/// 行为标志
+// ---- 行为 ----
 @property (nonatomic, assign) BOOL isSwipple;      ///< 可与周围按钮联动
-@property (nonatomic, assign) BOOL isPenetrable;   ///< 允许触摸穿透
-@property (nonatomic, assign) BOOL isToggleable;   ///< 开关式切换
+@property (nonatomic, assign) BOOL isPenetrable;   ///< 触摸穿透
+@property (nonatomic, assign) BOOL isToggleable;   ///< 开关式
+@property (nonatomic, assign) A2ControlVisibility visibility;
 
-/// 可见性：always / hide-when-gamepad / ...
-@property (nonatomic, copy) NSString *visibilityType;
+/// 所属层 ID（ZL2 的 layers[].id）
+@property (nonatomic, copy, nullable) NSString *layerID;
 
-/// 点击事件
 @property (nonatomic, copy) NSArray<A2ControlEvent *> *clickEvents;
 
-/// **保留原始 JSON**，保存时以它为基础只改有变动的字段 ——
-/// 这样不会丢掉我们还不认识的字段（三家天天在加新字段）。
+/// **保留原始 JSON**，保存时以它为基础只改有变动的字段
 @property (nonatomic, copy, nullable) NSDictionary *rawJSON;
 
-/// 从任意一家的 JSON 解析。返回 nil 表示这条记录不是有效控件。
 + (nullable instancetype)widgetFromJSON:(NSDictionary *)json
-                                   type:(A2ControlWidgetType)type;
-
-/// 写回 JSON（以 rawJSON 为底，覆盖已知字段）
+                                   type:(A2ControlWidgetType)type
+                                layerID:(nullable NSString *)layerID;
 - (NSDictionary *)toJSON;
 
+/// 新建一个空白控件（编辑器用）
++ (instancetype)newButtonAtX:(CGFloat)x y:(CGFloat)y;
+
+@end
+
+#pragma mark - 层
+
+/// 一个控件层（ZL2 的 layer）
+@interface A2ControlLayer : NSObject
+@property (nonatomic, copy) NSString *identifier;
+@property (nonatomic, copy) NSString *name;
+@property (nonatomic, assign) BOOL visibleByDefault;
+@property (nonatomic, copy) NSMutableArray<A2ControlWidget *> *widgets;
+@property (nonatomic, copy, nullable) NSDictionary *rawJSON;
+- (NSDictionary *)toJSON;
 @end
 
 #pragma mark - 布局
 
-/// 一份控件布局
 @interface A2ControlLayout : NSObject
 
-/// 来源格式，仅用于诊断
-@property (nonatomic, copy, readonly) NSString *sourceFormat;   // "zl2" / "fcl" / "air1"
-
-/// ZL2 的 editorVersion 或 FCL 的 controllerVersion
+@property (nonatomic, copy, readonly) NSString *sourceFormat;   // zl2 / fcl / air1
 @property (nonatomic, assign) NSInteger version;
-
 @property (nonatomic, copy) NSString *name;
 @property (nonatomic, copy, nullable) NSString *author;
 
-/// 全部控件（扁平化，忽略层级 —— 渲染时再说）
-@property (nonatomic, copy) NSMutableArray<A2ControlWidget *> *widgets;
+/// 所有层（ZL2 的 layers）
+@property (nonatomic, copy) NSMutableArray<A2ControlLayer *> *layers;
 
-/// 样式表：ID → 原始 JSON
+/// 扁平化后的全部控件（渲染与编辑器用）
+@property (nonatomic, readonly) NSArray<A2ControlWidget *> *allWidgets;
+
 @property (nonatomic, copy) NSMutableDictionary<NSString *, NSDictionary *> *buttonStyles;
-
-/// 摇杆样式
 @property (nonatomic, copy) NSMutableDictionary<NSString *, NSDictionary *> *joystickStyles;
-
-/// **原始根 JSON** —— 保存时以此为基础
 @property (nonatomic, copy, nullable) NSDictionary *rawRoot;
 
 + (nullable instancetype)layoutFromJSON:(NSDictionary *)json error:(NSError **)error;
 + (nullable instancetype)layoutFromFile:(NSString *)path error:(NSError **)error;
-
-/// 写回文件（保留原格式）
 - (BOOL)writeToFile:(NSString *)path error:(NSError **)error;
 
-/// 新建一份默认布局（我们的默认控件）
-+ (instancetype)defaultLayoutForScreen:(CGSize)screenSize;
+/// 新建一份空白布局（编辑器用，只有一层）
++ (instancetype)emptyLayout;
 
 @end
 

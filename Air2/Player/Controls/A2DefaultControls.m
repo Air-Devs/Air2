@@ -59,19 +59,16 @@ static A2ControlWidget *Btn(NSString *ident, NSString *text,
     w.isSwipple = YES;
     w.isPenetrable = NO;
     w.isToggleable = NO;
-    w.visibilityType = @"always";
+    w.visibility = A2ControlVisibilityAlways;
 
     if (keyCode.length) {
-        A2ControlEvent *e = [A2ControlEvent new];
-        e.type = A2ControlEventTypeSendKey;
-        e.key = keyCode;
-        w.clickEvents = @[e];
+        w.clickEvents = @[[A2ControlEvent keyEventWithCode:keyCode]];
     }
     return w;
 }
 
 + (A2ControlLayout *)makeLayout {
-    A2ControlLayout *layout = [A2ControlLayout defaultLayoutForScreen:CGSizeZero];
+    A2ControlLayout *layout = [A2ControlLayout emptyLayout];
     layout.name = @"默认布局";
     layout.author = @"Air2";
 
@@ -86,7 +83,7 @@ static A2ControlWidget *Btn(NSString *ident, NSString *text,
     joystick.yPercent = 58;
     joystick.widthPercent = 22;
     joystick.heightPercent = 30;
-    joystick.visibilityType = @"always";
+    joystick.visibility = A2ControlVisibilityAlways;
     [ws addObject:joystick];
 
     // 摇杆外圈的四个方向键（三家默认都有，方便精确移动）
@@ -144,7 +141,15 @@ static A2ControlWidget *Btn(NSString *ident, NSString *text,
     [ws addObject:Btn(@"air2.mouseL", @"左键", 88, 62, 12, @"0")];
     [ws addObject:Btn(@"air2.mouseR", @"右键", 88, 74, 12, @"1")];
 
-    layout.widgets = ws;
+    // 新模型用 layers[]，控件挂在层里（对照 ZL2 的 layers 结构）
+    A2ControlLayer *mainLayer = layout.layers.firstObject;
+    if (!mainLayer) {
+        mainLayer = [A2ControlLayer new];
+        mainLayer.identifier = @"default";
+        mainLayer.name = @"默认层";
+        [layout.layers addObject:mainLayer];
+    }
+    [mainLayer.widgets addObjectsFromArray:ws];
 
     // 默认样式
     layout.buttonStyles[@"default"] = @{
