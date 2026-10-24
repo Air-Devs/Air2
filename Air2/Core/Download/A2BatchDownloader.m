@@ -27,6 +27,7 @@
 
 #import "A2BatchDownloader.h"
 #import "A2Logger.h"
+#import "A2RateLimiter.h"
 
 /// 进度回调间隔
 static const NSTimeInterval kProgressInterval = 0.5;
@@ -209,6 +210,21 @@ static const NSInteger kSystemicFailureLimit = 12;
         A2DownloadRequest *req = nextRequest();
         if (!req) { maybeFinish(); return; }
 
+        // 发起前先查限流闸门：这个 host 还在限流窗口里就等，
+        // 不要把请求发出去拿 429（那会延长服务端的限流窗口）。
+        NSString *host = req.candidateURLs.firstObject.host;
+        NSTimeInterval wait = [A2RateLimiter remainingWaitForHost:host];
+        if (wait > 0.5) {
+            [qLock lock];
+            [queue insertObject:req atIndex:0];   // 放回队首
+            [qLock unlock];
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(wait * NSEC_PER_SEC)),
+                           dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+                startNext();
+            });
+            return;
+        }
+
         [qLock lock];
         inFlight += 1;
         [qLock unlock];
@@ -286,10 +302,18 @@ static const NSInteger kSystemicFailureLimit = 12;
 
 #pragma mark - 计数
 
+/// 累加已下载字节。
+///
+/// 这是**热路径**：64 个并发下载时每秒可能调用上千次
+/// （每个分片回调一次），用 NSLock 会在锁上排队，
+/// 拖慢整条下载链路。
+///
+/// 改成原子自增 —— 单个 long long 的读改写本来就该用原子操作，
+/// 不需要锁。读的时候用 atomic load 即可（64 位对齐在 arm64 上
+/// 本身就是原子的，但用 stdatomic 语义更明确）。
 - (void)addDownloadedBytes:(long long)delta {
-    [_lock lock];
-    _counterDownloadedBytes += delta;
-    [_lock unlock];
+    if (delta <= 0) return;
+    __atomic_fetch_add(&_counterDownloadedBytes, delta, __ATOMIC_RELAXED);
 }
 
 - (void)markFileDone {
@@ -329,7 +353,7 @@ static const NSInteger kSystemicFailureLimit = 12;
 - (void)publishProgress {
     A2BatchProgress *p = [A2BatchProgress new];
     [_lock lock];
-    p.downloadedBytes = _counterDownloadedBytes;
+    p.downloadedBytes = __atomic_load_n(&_counterDownloadedBytes, __ATOMIC_RELAXED);
     p.totalBytes = _counterTotalBytes;
     p.downloadedFiles = _counterDownloadedFiles;
     p.totalFiles = (NSInteger)_requests.count;
@@ -339,8 +363,9 @@ static const NSInteger kSystemicFailureLimit = 12;
     // 不做平滑 —— 与 ZL2 的 DownloadStats 一致：
     // 「每个报表值就是刚刚完整过去的那一秒里真实落盘的字节数」。
     // 平滑会让数字好看但不真实。
-    long long delta = _counterDownloadedBytes - _bytesAtLastTick;
-    _bytesAtLastTick = _counterDownloadedBytes;
+    long long now = __atomic_load_n(&_counterDownloadedBytes, __ATOMIC_RELAXED);
+    long long delta = now - _bytesAtLastTick;
+    _bytesAtLastTick = now;
     p.speedBytesPerSec = (double)MAX(0LL, delta) / kProgressInterval;
     [_lock unlock];
 

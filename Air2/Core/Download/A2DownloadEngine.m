@@ -196,10 +196,23 @@ static NSString *const kPartSuffix = @".part";
         [req setValue:range forHTTPHeaderField:@"Range"];
     }
 
+    // 每次尝试候选 URL 都新建 session —— 这是必须的，因为每个
+    // A2FileFetcher 要用自己当 delegate 接收流式数据（didReceiveData）。
+    //
+    // 但配置要一致，否则每个 session 的连接池上限不同，系统无法统一调度。
+    // 关键：HTTPMaximumConnectionsPerHost 是按 session 算的，
+    // 64 个 fetcher × 8 = 理论上限 512 条 —— 实际会被系统硬限制，
+    // 结果是大量请求静默排队（表现就是「卡住」）。
+    //
+    // 治理方式：把【调度并发】降到与连接池匹配的水平（见
+    // A2BatchDownloader 的车道数），而不是盲目提高每 host 上限
+    // —— 提高上限只会让系统更早触顶，然后所有请求一起变慢。
     NSURLSessionConfiguration *cfg = NSURLSessionConfiguration.defaultSessionConfiguration;
-    cfg.timeoutIntervalForRequest = 60;
-    cfg.timeoutIntervalForResource = 3600;
-    cfg.HTTPMaximumConnectionsPerHost = 8;
+    cfg.timeoutIntervalForRequest = 30;      // 30s 无数据就换源（原来 60s 太长）
+    cfg.timeoutIntervalForResource = 1800;
+    cfg.HTTPMaximumConnectionsPerHost = 16;  // HTTP/1.1 下 8 太保守，16 是折中
+    cfg.URLCache = nil;
+    cfg.requestCachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
     self.session = [NSURLSession sessionWithConfiguration:cfg delegate:self delegateQueue:nil];
 
     self.currentTask = [self.session dataTaskWithRequest:req];
@@ -225,6 +238,32 @@ didReceiveResponse:(NSURLResponse *)response
 
     if (code < 200 || code >= 300) {
         completionHandler(NSURLSessionResponseCancel);
+
+        // ---- 429 / 503：服务端限流 ----
+        //
+        // 之前这两种也走普通失败路径（1s/2s/4s 固定退避），
+        // 但服务端明确说了「什么时候再来」—— 忽略 Retry-After 的结果
+        // 就是我们一直在被拒绝的窗口里反复重试，表现就是「卡住不动」。
+        //
+        // 正确做法：读 Retry-After（秒数或 HTTP 日期），
+        // 按它退避；没有该头时用指数退避（2 的幂，封顶 60s）。
+        if (code == 429 || code == 503) {
+            NSTimeInterval wait = [self retryAfterSecondsFromResponse:http];
+
+            // 记到全局闸门里 —— 同 host 的其他请求也要跟着等，
+            // 否则我们会用别的请求继续撞同一个限流窗口。
+            [A2RateLimiter noteRateLimited:http.URL.host until:wait];
+
+            NSError *err = [self errorWithCode:A2DownloadErrorNetworkFailure
+                                       message:[NSString stringWithFormat:
+                                                @"HTTP %ld（限流，等待 %.0fs）",
+                                                (long)code, wait]];
+            dispatch_async(self.queue, ^{
+                [self handleCandidateFailureWithDelay:err delay:wait];
+            });
+            return;
+        }
+
         NSError *err = [self errorWithCode:A2DownloadErrorNetworkFailure
                                    message:[NSString stringWithFormat:@"HTTP %ld", (long)code]];
         dispatch_async(self.queue, ^{ [self handleCandidateFailure:err]; });
@@ -263,6 +302,41 @@ didReceiveResponse:(NSURLResponse *)response
     });
 
     completionHandler(NSURLSessionResponseAllow);
+}
+
+/// 从 Retry-After 头解析等待秒数。
+/// 支持两种格式（RFC 7231）：
+///   "120"                         → 120 秒
+///   "Wed, 21 Oct 2015 07:28:00 GMT" → 绝对时间，换算成差值
+- (NSTimeInterval)retryAfterSecondsFromResponse:(NSHTTPURLResponse *)http {
+    NSString *value = http.allHeaderFields[@"Retry-After"];
+    if (![value isKindOfClass:NSString.class] || value.length == 0) {
+        return 5.0;   // 没给就默认 5 秒
+    }
+
+    // 纯数字 → 秒数
+    NSScanner *scanner = [NSScanner scannerWithString:value];
+    NSInteger seconds = 0;
+    if ([scanner scanInteger:&seconds] && scanner.isAtEnd) {
+        return MAX(1.0, MIN(300.0, (double)seconds));
+    }
+
+    // HTTP 日期 → 差值
+    static NSDateFormatter *fmt = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        fmt = [NSDateFormatter new];
+        fmt.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+        fmt.dateFormat = @"EEE, dd MMM yyyy HH:mm:ss zzz";
+        fmt.timeZone = [NSTimeZone timeZoneWithAbbreviation:@"GMT"];
+    });
+    NSDate *date = [fmt dateFromString:value];
+    if (date) {
+        NSTimeInterval diff = [date timeIntervalSinceNow];
+        return MAX(1.0, MIN(300.0, diff));
+    }
+
+    return 5.0;
 }
 
 /// 校验 206 响应是否真的对得上我们的断点
@@ -477,6 +551,27 @@ didCompleteWithError:(NSError *)error {
 #pragma mark 失败与换源
 
 /// 当前候选失败 —— 先退避重试，重试耗尽再换下一个候选
+/// 带自定义延迟的失败处理（429/503 用）。
+///
+/// 与 handleCandidateFailure: 的区别：
+///   普通失败用固定退避序列（kBackoffSeconds）
+///   限流则完全听服务端的 Retry-After —— 它比我们猜得准
+- (void)handleCandidateFailureWithDelay:(NSError *)error delay:(NSTimeInterval)delay {
+    if (self.finished) return;
+    [self closeFileHandle];
+    [self.session invalidateAndCancel];
+    self.session = nil;
+
+    // 限流不算「重试次数」—— 它不是因为请求本身有问题，
+    // 而是服务端让我们等。等完再试仍算第一次。
+    delay = MAX(1.0, MIN(300.0, delay));
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
+                   self.queue, ^{
+        if (!self.finished) [self startCurrentCandidate];
+    });
+}
+
 - (void)handleCandidateFailure:(NSError *)error {
     if (self.finished) return;
     [self closeFileHandle];

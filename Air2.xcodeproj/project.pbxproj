@@ -42,6 +42,8 @@
 		E6679E2C4F527A9777EA6CEC /* A2DownloadManifest.m in Sources */ = {isa = PBXBuildFile; fileRef = 2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */; };
 		9B094A240FBA6A3C1821F88C /* A2DownloadTask.m in Sources */ = {isa = PBXBuildFile; fileRef = AE757274F8E1E206F093F68A /* A2DownloadTask.m */; };
 		7EA9A208AAFD076980572984 /* A2DownloadTaskCenter.m in Sources */ = {isa = PBXBuildFile; fileRef = 49E73CAF4B5DFDDC5E9F20AF /* A2DownloadTaskCenter.m */; };
+		BFB076DFBEF6F65B6AD45739 /* A2RateLimiter.m in Sources */ = {isa = PBXBuildFile; fileRef = 76A2AB6AE303BDE44A532F48 /* A2RateLimiter.m */; };
+		C88631DC63FBCAA4DA8514EA /* A2SharedSession.m in Sources */ = {isa = PBXBuildFile; fileRef = E38E026AC18486465C710415 /* A2SharedSession.m */; };
 		181BCAA1916DE4DBFD2E08F9 /* A2JREManager.m in Sources */ = {isa = PBXBuildFile; fileRef = AD4D1573AAD6B66A99BF1719 /* A2JREManager.m */; };
 		0FB8591245DA858CF4BAF88B /* A2Logger.m in Sources */ = {isa = PBXBuildFile; fileRef = EA103E9122B1B77443B27069 /* A2Logger.m */; };
 		2C4A505B192563D676DFDD2E /* A2Multiplayer.m in Sources */ = {isa = PBXBuildFile; fileRef = 76E2F83DD8568E1BB073643E /* A2Multiplayer.m */; };
@@ -240,6 +242,8 @@
 		2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadManifest.m"; sourceTree = "<group>"; };
 		AE757274F8E1E206F093F68A /* A2DownloadTask.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadTask.m"; sourceTree = "<group>"; };
 		49E73CAF4B5DFDDC5E9F20AF /* A2DownloadTaskCenter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadTaskCenter.m"; sourceTree = "<group>"; };
+		76A2AB6AE303BDE44A532F48 /* A2RateLimiter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RateLimiter.m"; sourceTree = "<group>"; };
+		E38E026AC18486465C710415 /* A2SharedSession.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SharedSession.m"; sourceTree = "<group>"; };
 		AD4D1573AAD6B66A99BF1719 /* A2JREManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JREManager.m"; sourceTree = "<group>"; };
 		EA103E9122B1B77443B27069 /* A2Logger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Logger.m"; sourceTree = "<group>"; };
 		76E2F83DD8568E1BB073643E /* A2Multiplayer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Multiplayer.m"; sourceTree = "<group>"; };
@@ -431,6 +435,8 @@
 		D3ABD890B860FD03E77A2B0C /* A2DownloadManifest.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadManifest.h"; sourceTree = "<group>"; };
 		0F59C20AA19682790BF7251E /* A2DownloadTask.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTask.h"; sourceTree = "<group>"; };
 		A9FC62B0E895E90CEEE39D8E /* A2DownloadTaskCenter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTaskCenter.h"; sourceTree = "<group>"; };
+		78F13DED76CD9439168C53CC /* A2RateLimiter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RateLimiter.h"; sourceTree = "<group>"; };
+		9C29FEEF28CA87C324C5FA98 /* A2SharedSession.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SharedSession.h"; sourceTree = "<group>"; };
 		8F9742BF2853E93D86927BFF /* A2JREManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JREManager.h"; sourceTree = "<group>"; };
 		867390ED8965A503C3C46C99 /* A2Logger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Logger.h"; sourceTree = "<group>"; };
 		1942FF65DA97FDD7897CC10B /* A2Multiplayer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Multiplayer.h"; sourceTree = "<group>"; };
@@ -785,12 +791,16 @@
 				2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */,
 				AE757274F8E1E206F093F68A /* A2DownloadTask.m */,
 				49E73CAF4B5DFDDC5E9F20AF /* A2DownloadTaskCenter.m */,
+				76A2AB6AE303BDE44A532F48 /* A2RateLimiter.m */,
+				E38E026AC18486465C710415 /* A2SharedSession.m */,
 				BD5AE965BB08676C6D4D0512 /* A2BatchDownloader.h */,
 				DE956596465BDFF25E578448 /* A2DownloadEngine.h */,
 				1EDE5D2DBCB81396D185C97D /* A2DownloadFavorites.h */,
 				D3ABD890B860FD03E77A2B0C /* A2DownloadManifest.h */,
 				0F59C20AA19682790BF7251E /* A2DownloadTask.h */,
 				A9FC62B0E895E90CEEE39D8E /* A2DownloadTaskCenter.h */,
+				78F13DED76CD9439168C53CC /* A2RateLimiter.h */,
+				9C29FEEF28CA87C324C5FA98 /* A2SharedSession.h */,
 			);
 			path = Download;
 			sourceTree = "<group>";
@@ -1430,6 +1440,8 @@
 				E6679E2C4F527A9777EA6CEC /* A2DownloadManifest.m in Sources */,
 				9B094A240FBA6A3C1821F88C /* A2DownloadTask.m in Sources */,
 				7EA9A208AAFD076980572984 /* A2DownloadTaskCenter.m in Sources */,
+				BFB076DFBEF6F65B6AD45739 /* A2RateLimiter.m in Sources */,
+				C88631DC63FBCAA4DA8514EA /* A2SharedSession.m in Sources */,
 				181BCAA1916DE4DBFD2E08F9 /* A2JREManager.m in Sources */,
 				0FB8591245DA858CF4BAF88B /* A2Logger.m in Sources */,
 				2C4A505B192563D676DFDD2E /* A2Multiplayer.m in Sources */,

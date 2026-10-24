@@ -728,13 +728,19 @@ static void A2Main(dispatch_block_t block) {
         return;
     }
 
-    // 并发数可配置 —— 默认 64（与 ZL2 的 DEFAULT_MAX_CONNECTIONS 一致）。
+    // 并发数可配置 —— **默认 16**，不是 64。
     //
-    // 上限不是越高越好：每个连接都要占内存与文件句柄，
-    // iOS 上超过 128 容易触发系统限制或服务端限流。
+    // 为什么从 64 降到 16：
+    //   每个 A2FileFetcher 自带一个 NSURLSession（要用自己当 delegate
+    //   接收流式数据），而 HTTPMaximumConnectionsPerHost 是按 session 算的，
+    //   系统对单 host 的总连接数有硬限制。64 个 session 会直接触顶，
+    //   表现为「所有请求一起变慢 / 卡住不动」。
+    //
+    //   16 是实测较稳的值：既能让 HTTP/2 多路复用生效，
+    //   又不会把系统连接池打爆。
     NSInteger configured = [NSUserDefaults.standardUserDefaults
                             integerForKey:@"A2MaxConnections"];
-    NSInteger kMaxConnections = (configured > 0) ? MIN(configured, 128) : 64;
+    NSInteger kMaxConnections = (configured > 0) ? MIN(configured, 32) : 16;
 
     A2BatchDownloader *downloader =
         [[A2BatchDownloader alloc] initWithRequests:requests
