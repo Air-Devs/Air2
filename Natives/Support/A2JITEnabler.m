@@ -46,7 +46,7 @@ static const NSTimeInterval kA2JITHeartbeat = 10.0;
 static const NSTimeInterval kA2JITAlertLead = 0.4;
 /// 脚本名：打包阶段把 Assets/Air2JIT69.js 复制成 Air2.app/universal.js
 /// （scripts/gen_xcodeproj.py 的随包阶段）。StikDebug 只认这个名字。
-static NSString *const kA2JITScriptName = @"universal.js";
+static NSString *const kA2JITScriptName = @"UniversalJIT26.js";
 
 #pragma mark - 使能器种类
 
@@ -168,7 +168,7 @@ static NSString *a2jit_bundle_id(void) {
     return NSBundle.mainBundle.bundleIdentifier ?: @"";
 }
 
-/// stikdebug://enable-jit?bundle-id=&pid=&script-name=universal.js
+/// stikdebug://enable-jit?bundle-id=&pid=&script-name=UniversalJIT26.js
 /// ★参数名一字不差★（老 Air JavaLauncher.m 的 stikdebug 分支；我们此前写成
 /// bundle_id/script/return 时 StikDebug 不认）。用 script-name 指向包内脚本，
 /// 不内联 base64 —— 只有注册了 stikdebug:// 的 StikDebug 版本支持这条。
