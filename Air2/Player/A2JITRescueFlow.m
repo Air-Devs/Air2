@@ -154,21 +154,11 @@ static id gObserver = nil;
         poll();
     }];
 
-    // ★SideStore/Stik 优先(用户实际环境)★
-    //   ① stikjit://     —— 带 JIT 重新拉起本 App（SideStore 的 JIT 就是这么给的）
-    //   ② stikdebug://enable-jit?...&pid=...  —— 直接让 StikDebug 给本进程开 JIT
-    //   ③ apple-magnifier://enable-jit  —— 只有 TrollStore 装的环境才有意义
-    NSString *bid0 = NSBundle.mainBundle.bundleIdentifier ?: @"dev.airdevs.air2";
-    NSString *stikjit = [NSString stringWithFormat:@"stikjit://enableJIT?bundleId=%@", bid0];
-    if ([UIApplication.sharedApplication canOpenURL:[NSURL URLWithString:stikjit]]) {
-        [A2Log criterion:@"[A2-JIT-RESCUE] 拉起 StikDebug(stikjit): %@", stikjit];
-        // 记号：重挂回来后自动继续启动（否则要用户再点一次）
-        [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"A2AutoLaunchAfterJIT"];
-        [NSUserDefaults.standardUserDefaults synchronize];
-        [UIApplication.sharedApplication openURL:[NSURL URLWithString:stikjit] options:@{} completionHandler:nil];
-        return;
-    }
-
+    // ★StikDebug 优先(用户环境: SideStore/Stik)★
+    //   老 Air 的做法：stikdebug://enable-jit?bundle-id=<id>&pid=<pid>&script-name=universal.js
+    //   参数名一字不差；脚本名用 universal.js（我们打包时把 Air2JIT69.js 复制成这个名字）
+    //   注意：不要先试 stikjit —— 它会重新拉起 App，而我们判据在“被拉起的新进程里”还没稳，
+    //   会再次跳转 ⇒ 死循环（真机已复现）。
     NSString *magnifier = [NSString stringWithFormat:@"apple-magnifier://enable-jit?bundle-id=%@",
                            [bid0 stringByAddingPercentEncodingWithAllowedCharacters:
                             NSCharacterSet.URLQueryAllowedCharacterSet]];
