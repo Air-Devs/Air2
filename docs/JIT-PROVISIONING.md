@@ -445,6 +445,79 @@ USB 前提根本不存在 ⇒ `A2RPPairSetupUSBPathAvailable()` 如实回 `NO` �
 
 ---
 
+### 3.8 启动链的 JIT 闸门：`Natives/Support/A2JITEnabler.[hm]`
+
+点「启动游戏」时进程往往还没有 JIT（SideStore + StikDebug 是常态）；无 JIT 建 VM
+⇒ HotSpot 首帧取指 SIGBUS（闪退且无失败页）。本节把这套「判据 → 申请 → 等待」
+收敛成**一个模块**（移植自老 Air 的 `invokeAfterJITEnabled:` + 使能器 URL 选择 +
+`AMEJIT*` 判据），启动链只调它，不再各自拼 URL / 各自轮询。
+
+| 文件 | 层 | 变更 |
+|---|---|---|
+| `Natives/Support/A2JITEnabler.[hm]` | **Natives** | **新增**：`+isJITReadyNow`（判据）/ `+ensureJITThen:`（申请 + 有界等待 + 异步回调）/ `+lastFailureReason` |
+| `Natives/Support/A2JITEnvironment.[hm]` | **Natives** | `+needsDebuggerMapping`：把「本机是否必须由调试器代映射（iOS 26+）」这一条判断暴露给闸门（OS 规则仍只在本文件算） |
+| `Air2/Player/A2LaunchSession.m` | Player | JIT 闸门改为调本模块（已就绪 ⇒ 原样继续；未就绪 ⇒ **无条件 return** + 申请，失败出可读失败页）+ 建 VM 前的兜底就绪校验 |
+| `Air2/Player/A2LaunchChain.[hm]` | Player | 新增 `A2LaunchChainJITGateErrorDomain`：区分「建 VM 前自检拦下」与「建 VM 失败 rc≠0」 |
+| `Air2/App/A2AppDelegate.m` | App | 「重挂后自动继续」的判据改为 `+isJITReadyNow`（原来自己拼一套）；标记 `A2AutoLaunchAfterJIT` 的写点在本模块（只在拉起会重拉进程的 `stikjit://` 前写） |
+| `Air2/Player/A2JITRescueFlow.[hm]` | Player | **删除**（被本模块整段替代，无其它调用点） |
+
+**判据（唯一，仍由 `A2JITEnvironment` 实现）**
+1. 被调试器 / 使能器拉起（`getppid() != 1`）⇒ 直接认（JIT 正由外部注入）；
+2. 本进程已拿到可写 JIT 区 ⇒ 认；
+3. 否则先看**能力声明**（`dynamic-codesigning` / `cs.debugger` entitlement 或 `CS_DEBUGGED`）；
+   没有 ⇒ 未就绪；
+4. 调试器**已 attach**（`CS_DEBUGGED`）⇒ 认（例外端口在岗，`brk #0x69` 一定有人应答）；
+5. 只剩 entitlement 声明 ⇒ 必须**验证到真能用**：非镜像设备走执行式自证；★镜像设备（iOS 26+）
+   光有声明不算就绪★，必须真的拿到一块已验证的可执行区（`verifiedRegion != NULL`）。
+
+★ 第 5 条为什么这么写（真机踩过）★：`ensureVerifiedWithinBudget` 对「内核级声明」是直接放行的
+（那是给 TrollStore / 越狱留的口径）⇒ `dynamic-codesigning` 声明在 iOS 26 上会被当成「现在能用」，
+闸门放行、建 VM、首帧 SIGBUS。这正是 `[JIT-FLOW]` 的老假阳性，故把「声明」与「已证明」在闸门
+这一处显式分开（判定用的仍是 `A2JITEnvironment` 的同一份数据，不另算一套）。
+
+**启动闸门（`A2LaunchSession` 的 `+startCurrentVersionWithCompletion:`）**
+- 未就绪 ⇒ ★无条件 `return`★：不写计划、不建 VM，本次启动到此为止；
+- 等待期间再点「启动」⇒ 直接终止本次（`sWaitingForJIT` 在途护栏），不叠第二条启动请求；
+- 回调称「已就绪」也要**现场再问一次判据**，两者不一致时以判据为准；
+- ★最后一道保险★：`createJVM` block 在调 `A2LaunchRunner`（唯一建 VM 入口）**之前**再查一次
+  判据，不通过就以 `A2LaunchChainJITGateErrorDomain` 失败返回 —— 即使上面漏了，也只是一张
+  可读失败页，不会 SIGBUS 闪退。
+
+**使能器回退顺序（写死在 `a2jit_pick_enabler`，按「本机是否可拉起」探测）**
+
+| 序 | scheme | 为什么在这个位置 |
+|---|---|---|
+| 1 | `stikdebug://enable-jit?bundle-id=&pid=&script-name=universal.js` | 主力路径；**不重拉进程**，参数最完整（脚本名指向包内 `universal.js`） |
+| 2 | `apple-magnifier://enable-jit?bundle-id=` | TrollStore 装机自带 JIT；不重拉 |
+| 3 | `sidestore://sidejit-enable?pid=` | SideJIT 老形式（iOS 17.0–17.3 唯一可用）；不重拉 |
+| 4 | `stikjit://enable-jit?bundle-id=&pid=&script-data=` | ★会重拉 App★，用户被踢出启动流程 ⇒ 放最后（重拉后 `ppid≠1` ⇒ 判据直接认，不会二次跳转） |
+| — | 手动引导 | 一个都打不开 ⇒ **不白等 120s**，立刻回调失败并给可读原因 |
+
+**顺序（照老 Air 的 `invokeAfterJITEnabled`，一步都不能换）**
+1. 先弹「正在等待 JIT」（`animated:NO` ⇒ 同一帧落屏）；
+2. 本次启动到此为止（调用方已在闸门处 `return`，不建 VM）；
+3. 0.4s 后（`kA2JITAlertLead`）才 `openURL` 拉起使能器 —— `openURL` 会把本进程送后台，
+   先跳后弹等于弹窗永远看不见；one-shot（`enablerLaunched`）保证只拉起一次；
+4. 之后才进入 0.5s 轮询。
+
+**等待与防死循环**
+- 弹「正在等待 JIT」（可取消）+ `beginBackgroundTask` 保活；切回前台立刻补发一次判据。
+- 0.5s 一轮、上限 **120s**；★挂起间隙不计入预算★（用户进 StikDebug 一趟回来不该已经超时）。
+- ★同一进程只跳一次★：第二轮起不再跳转，只做 8s 短等待 ⇒「跳转 ↔ 重拉」的无限循环被断开。
+- 失败 / 超时 / 取消 / 工具打不开 ⇒ 回调 `NO` + `lastFailureReason`，由调用方出失败页；
+  **绝不带着无 JIT 的进程继续建 VM**。
+
+**真机判据行**：`[A2-JIT-ENABLER] 判据 ready=…`、`未就绪 ⇒ 中止启动（不建 VM）`、
+`已弹出「正在等待 JIT」⇒ 本次启动停在这里（不建 VM）`、`弹窗已就位 ⇒ 现在拉起使能器 …`、
+`仍在等待 JIT（剩余 …s）`、`挂起间隙 …s 不计入等待预算`、`仍等待中，本次启动已终止`、
+`已拿到 JIT ⇒ 交回启动链` / `没拿到 JIT ⇒ 回调失败，不建 VM`。
+
+★ 与设置页的关系★：设置页的「开启 JIT」仍走 `A2JITCoordinator` + `A2JITExternalToolProvider`
+（四路 Provider、状态机）。本模块只管**启动链这一个入口**，不复制 Provider 层；两者的使能器
+URL 形态以本节表格为口径。
+
+---
+
 ## 4. 第二阶段工作拆分与工作量估算（★本单不实现★）
 
 > 估算单位＝**人日**（含真机调试，不含外部等待/审核）。★每项标注许可红线★。

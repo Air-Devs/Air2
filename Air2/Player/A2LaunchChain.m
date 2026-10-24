@@ -8,6 +8,7 @@
 #import "A2LaunchChain.h"
 
 static NSString *const A2LaunchChainErrorDomain = @"A2LaunchChainError";
+NSString *const A2LaunchChainJITGateErrorDomain = @"A2LaunchChainJITGate";
 
 @interface A2LaunchChain ()
 @property (nonatomic, copy) A2LaunchChainDeliverScriptBlock deliverBlock;

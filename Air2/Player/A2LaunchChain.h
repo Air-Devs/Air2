@@ -44,6 +44,13 @@ typedef NS_ENUM(NSInteger, A2LaunchChainStage) {
     A2LaunchChainStageDone     = 4,  ///< 完成
 };
 
+/// ★③ 步自检失败的错误域★「建 VM 前又查了一次 JIT 就绪，不通过 ⇒ 根本没建」。
+///
+/// 为什么要有它：③ 的 block 若因「闸门漏了」而中止，stage 仍是 CreateVM，调用方按
+/// stage 分类会判成「建 VM 失败 rc=0」——那是误导（VM 一次都没创建）。带这个域回来的
+/// 错误表示「停在 ③ 之前」，调用方据域给出 JIT 阻断文案。
+extern NSString *const A2LaunchChainJITGateErrorDomain;
+
 /// 启动链顺序编排器。
 @interface A2LaunchChain : NSObject
 

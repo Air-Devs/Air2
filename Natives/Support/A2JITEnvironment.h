@@ -98,11 +98,33 @@ typedef NS_ENUM(NSInteger, A2JITExecProbeResult) {
 /// 等待就绪谓词：非镜像路径用匿名页执行式自证；镜像 / Universal 路径用 brk 区域验证。
 + (BOOL)waitReadyVerified;
 
+/// ★非镜像路径（iOS < 26）的真凭据★：匿名页执行式探针**真的跑过**
+/// （mmap → 写一条真指令 → mprotect(RX) → 真的 call 并核对返回值）。
+/// 它与 `verifiedRegion` 是同一性质的东西 ——「本进程现在**真的能执行**自产代码」——
+/// 而不是 entitlement / CS_DEBUGGED 那种「能力声明」。镜像设备（iOS 26+）恒返回 NO：
+/// 那种口径只认 brk #0x69 交付的区（没有区的声明/attach 一律不算）。
++ (BOOL)execProofObtained;
+
 /// 已通过验证的 JIT 区指针（未验证过返回 NULL）。供诊断 / 复用。
 + (void *_Nullable)verifiedRegion;
 
+/// 调试器实际交付的 region 字节数（`vm_region_64` 读到的 size；未验证过返回 0）。
+/// 与 `verifiedRegion` 配对使用 —— 真机验收要能一眼看出「拿到的是 64MB 还是一页」。
++ (size_t)verifiedRegionBytes;
+
+/// 期望的 JIT 区字节数（偏好键 `A2JITRegionMB` 覆盖，未设 ⇒ 64MB）。
++ (size_t)expectedRegionBytes;
+
 /// 最近一次区域取证摘要（可读；无探测记录返回 nil）。
 + (NSString *_Nullable)regionEvidence;
+
+/// ★镜像路径判据★ 本机是否**必须由调试器代映射** code cache（iOS 26+：TXM / 硬化运行时）。
+///
+/// 为什么把它暴露出来：本机上「能力声明」（`dynamic-codesigning` entitlement）**不等于**
+/// 「现在能用」——iOS 26+ 的自产代码必须有调试器经 `brk #0x69` 交付的可执行区，否则首帧
+/// 取指就 SIGBUS。启动闸门需要一个地方问「这台机器是不是这种口径」，答案只在本文件
+/// (`a2_jit_device_needs_debug_mapping`) 一处计算，不要在上层照抄 OS 版本判断。
++ (BOOL)needsDebuggerMapping;
 
 /// 最近一次区域判定分类（供失败分流）。
 + (A2JITRegionVerdict)lastRegionVerdict;
@@ -146,8 +168,10 @@ A2JITRegionProof a2_jit_prove_region_rwx(void *addr, size_t len,
 /// 真 mmap → 写一条真指令 → RX → 真的执行。★这是「原生 JIT 真能力」的可信判据★。
 A2JITExecProbeResult a2_jit_exec_probe_anonymous(void);
 
-/// 本进程是否具备「内核级 JIT」(TrollStore/越狱 entitlement)
+/// 本进程是否具备「内核级 JIT」：**只认 entitlement**（TrollStore / 越狱装机带来的
+/// `dynamic-codesigning` / `com.apple.private.cs.debugger`）。
+/// ★CS_DEBUGGED 不算★——它只说明有位调试器 attach 着、能应答 brk，
+/// 不说明本进程已经拿到可执行区；把它当内核级 JIT 会绕过 brk 取证（历史缺陷）。
 BOOL a2_jit_has_kernel_level(void);
-BOOL a2_jit_device_needs_debug_mapping_public(void);
 
 NS_ASSUME_NONNULL_END

@@ -220,6 +220,7 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 | `Natives/Support/a2_log.[hm]` | Natives/Support | R7：结构化日志 `[RT]` / `[LAUNCH-PROGRESS 阶段 n/8]` / `[RT-STRICT]`（★无状态★） |
 | `Natives/Support/a2_failbanner.[hm]` | Natives/Support | 失败提示条（JIT / 启动阶段分流文案） |
 | `Natives/Support/A2JITEnvironment.[hm]` | Natives/Support | JIT 环境与判据（`brk #0x69` 区域取证、真写+真执行自证、诊断日志） |
+| `Natives/Support/A2JITEnabler.[hm]` | Natives/Support | ★启动前的 JIT 使能★（判据 → 拉起使能器 → 有界等待 ≤120s → 异步回调；防死循环：被调试器拉起即认 / 同一进程只跳一次）。判据仍只由 `A2JITEnvironment` 一处给出，本模块只决定「何时问、怎么申请」|
 | `Air2/Player/A2LaunchChain.[hm]` | Player | 启动链顺序编排（发脚本 → 探测 JIT → 建 VM）；步骤由注入 block 提供 |
 | `Natives/Context/a2_launch.[hm]` | Natives/Context | runtime 链 facade 编排：R3→R4→R2→R7，并 dispatch 主类 main；**全链唯一回退点** `a2_fallback_gate` |
 | `Air2/Player/A2JIT*`（Provider/Facts/StrategySelector/StateMachine/Coordinator/LocalFactsSource + 四路 Provider） | Player | JIT 供给编排（纯逻辑，可单测；见 ADR-009 / `docs/JIT-PROVISIONING.md`） |

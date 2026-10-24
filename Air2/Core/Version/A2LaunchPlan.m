@@ -451,10 +451,13 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     [options addObject:@"-XX:+DisablePrimordialThreadGuardPages"];
     // ★真机请求洪水(2026-10-17)★：MirrorMappedCodeCache 是★按 16KB 页★向调试器要
     //   “祝福”(cmd 4：读+m 写+M 两条命令/页)的 —— 64MB 代码缓存 = 4096 页 ≈ 8000 条请求，
-    //   这就是 StikDebug 里 6300+ 请求的来源。默认降到 16MB(1024 页)并把扩容量压到 1MB，
-    //   请求数降到 1/4；要大代码缓存再用偏好键 A2CodeCacheMB 覆盖。
+    //   这就是 StikDebug 里 6300+ 请求的来源。
+    // ★回到 64MB(2026-10-24)★：真机证据(lastlog-63) 里 libjvm 打的是
+    //   「[JIT26] Requesting 16 MB for JIT mapping」—— 它讨的 JIT 区大小★跟随 code cache★。
+    //   16m 的钳制就来自这里 ⇒ 与老 Air(64MB) 不符，JIT 代码放不下。
+    //   ⇒ 默认恢复 64m（与老 Air 同档）；请求洪水用 A2CodeCacheMB 键手工调小（下限仍允许 8m）。
     NSInteger a2ccMB = [NSUserDefaults.standardUserDefaults integerForKey:@"A2CodeCacheMB"];
-    if (a2ccMB <= 0) a2ccMB = 16;
+    if (a2ccMB <= 0) a2ccMB = 64;
     if (a2ccMB > 64) a2ccMB = 64;
     [options addObject:[NSString stringWithFormat:@"-XX:ReservedCodeCacheSize=%ldm", (long)a2ccMB]];
     [options addObject:[NSString stringWithFormat:@"-XX:InitialCodeCacheSize=%ldm", (long)MIN(a2ccMB, (NSInteger)2)]];
@@ -474,7 +477,7 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     //   要恢复镜射：偏好键 A2UseMirrorCodeCache = YES。
     id a2mirrorVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2UseMirrorCodeCache"];
     BOOL a2useMirror = (a2mirrorVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2UseMirrorCodeCache"];
-    [A2Log criterion:@"[A2JIT] MirrorMappedCodeCache=%d（键 A2UseMirrorCodeCache 未设 ⇒ 默认关：真机证据是镜射进 16KB 区导致卡死）",
+    [A2Log criterion:@"[A2JIT] MirrorMappedCodeCache=%d（键 A2UseMirrorCodeCache 未设 ⇒ 默认开；设 NO 可关）",
           (int)a2useMirror];
     if (javaMajorVersion >= 17 && a2useMirror) {
         [options addObject:@"-XX:+MirrorMappedCodeCache"];
