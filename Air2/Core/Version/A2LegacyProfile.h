@@ -88,6 +88,11 @@ typedef NS_ENUM(NSInteger, A2LegacyGeneration) {
 /// gl4es 家族（含 NG-GL4ES）可以；Metal 直通后端 / MobileGL / ANGLE / MoltenVK 不行。
 + (BOOL)rendererSupportsFixedPipeline:(NSString *)rendererIdentifier;
 
+/// 从版本 id 解析 (major, minor)（"1.12.2" / "1.20.1-forge-..." / "26.3"）
++ (BOOL)parseNumericVersionID:(NSString *)versionID
+                        major:(NSInteger *)outMajor
+                        minor:(NSInteger *)outMinor;
+
 /// 远古轨道要追加的 VM 参数（Xms / CodeCache 预算）。非 classic 返回空数组。
 - (NSArray<NSString *> *)jvmCompatOptions;
 

@@ -73,6 +73,58 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
     return nil;
 }
 
+/// 从目录名取 LWJGL 版本号：lwjgl-341 → 341，lwjgl-2 → 200（便于比较大小）
+static NSInteger A2LwjglVersionNumber(NSString *dirName) {
+    NSString *s = [dirName stringByReplacingOccurrencesOfString:@"lwjgl-" withString:@""];
+    NSMutableString *digits = [NSMutableString string];
+    for (NSUInteger i = 0; i < s.length; i++) {
+        unichar c = [s characterAtIndex:i];
+        if (c >= '0' && c <= '9') [digits appendFormat:@"%C", c];
+        else break;
+    }
+    if (digits.length == 0) return 0;
+    NSInteger v = digits.integerValue;
+    return (digits.length <= 2) ? v * 100 : v;   // "2"/"29" → 200/2900 量级修正
+}
+
+/// ★按 MC 版本挑 LWJGL★ 1.12.2 及更早用 LWJGL 2.x，1.13+ 用 3.x 里最高的那套。
+/// 只有一套时直接用它（现状），将来多套并pack 时不会错配。
+static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSInteger mcMinor) {
+    NSArray<NSString *> *entries = [NSFileManager.defaultManager contentsOfDirectoryAtPath:libsRoot error:nil];
+    NSMutableArray<NSString *> *dirs = [NSMutableArray array];
+    for (NSString *name in entries) {
+        if (![name hasPrefix:@"lwjgl-"]) continue;
+        BOOL isDir = NO;
+        NSString *full = [libsRoot stringByAppendingPathComponent:name];
+        if ([NSFileManager.defaultManager fileExistsAtPath:full isDirectory:&isDir] && isDir) {
+            [dirs addObject:name];
+        }
+    }
+    if (dirs.count == 0) return nil;
+
+    BOOL wantsLWJGL2 = (mcMajor == 1 && mcMinor > 0 && mcMinor <= 12);
+    NSMutableArray<NSString *> *preferred = [NSMutableArray array];
+    for (NSString *name in dirs) {
+        NSInteger v = A2LwjglVersionNumber(name);
+        BOOL is2 = (v < 300);
+        if (is2 == wantsLWJGL2) [preferred addObject:name];
+    }
+    if (preferred.count == 0) preferred = dirs;   // 没有对口档位 ⇒ 用现有的（并如实提示）
+
+    [preferred sortUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+        return [@(A2LwjglVersionNumber(a)) compare:@(A2LwjglVersionNumber(b))];
+    }];
+    NSString *chosen = preferred.lastObject;
+
+    [A2Log criterion:@"[A2-LWJGL] 选择 %@（MC %ld.%ld ⇒ 需要 LWJGL %@；可选：%@）",
+     chosen, (long)mcMajor, (long)mcMinor, wantsLWJGL2 ? @"2.x" : @"3.x",
+     [dirs componentsJoinedByString:@","]];
+    if (preferred.count != dirs.count && preferred.count > 0) {
+        // 有对口档位就行；下面的兜底提示只在完全没对上时出现
+    }
+    return [libsRoot stringByAppendingPathComponent:chosen];
+}
+
 @interface A2LaunchSession ()
 /// 启动失败页（finish() 在定义之前调用 ⇒ 需要前置声明）
 + (void)a2_presentLaunchFailureWithMessage:(NSString *)message returnCode:(NSInteger)rc;
@@ -140,8 +192,14 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
     NSString *entryJar = [javaJarDir stringByAppendingPathComponent:A2LaunchJavaEntryJarName];
     NSString *patchJar = [javaJarDir stringByAppendingPathComponent:A2LaunchJavaPatchJarName];
     NSString *frameworks = [bundle stringByAppendingPathComponent:@"Frameworks"];
-    NSString *lwjglDir = A2LaunchFirstSubdirectory([bundle stringByAppendingPathComponent:@"libs"],
-                                                   @"lwjgl-");
+    // ★按版本挑 LWJGL 目录★（原来恒定取第一个，多套并pack 时会错配）
+    NSInteger a2McMajor = 0, a2McMinor = 0;
+    [A2LegacyProfile parseNumericVersionID:version.name major:&a2McMajor minor:&a2McMinor];
+    NSString *libsRoot = [bundle stringByAppendingPathComponent:@"libs"];
+    NSString *lwjglDir = A2LaunchPickLWJGLDir(libsRoot, a2McMajor, a2McMinor);
+    if (lwjglDir.length == 0) {
+        lwjglDir = A2LaunchFirstSubdirectory(libsRoot, @"lwjgl-");
+    }
 
     // ========================================================================
     // ★[RENDER-SEL] 渲染后端：用户选择 → 已解析的 dylib 名★
@@ -406,6 +464,20 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
             return;
         }
     }
+    // ★渲染器 × 版本兼容矩阵(只告警)★
+    //   metallum 的类集只覆盖 1.21.5+ / 26.x；其它版本选它不拦，但如实提示“未验证”，
+    //   用户仍可尝试（这就是「扩大可启动面」的口径：不静默选，也不硬堵）。
+    {
+        NSString *rid = renderer.identifier.lowercaseString ?: @"";
+        if ([rid containsString:@"metallum"]) {
+            BOOL agentSupports = (a2McMajor >= 26) || (a2McMajor == 1 && a2McMinor >= 21);
+            if (!agentSupports) {
+                [A2Log criterion:@"[A2-COMPAT] 提示：metallum 官方类集覆盖 1.21.5+/26.x，"
+                 @"本版本 %@ 属未验证组合（仍会尝试注入）", version.name];
+            }
+        }
+    }
+
     if (legacyProfile != nil && legacyProfile.isClassicGeneration &&
         ![A2LegacyProfile rendererSupportsFixedPipeline:renderer.identifier]) {
         [A2Log criterion:@"[A2-LEGACY] ★阻断启动★：渲染器 %@ 不支持 GL 1.x 固定管线", renderer.identifier];
