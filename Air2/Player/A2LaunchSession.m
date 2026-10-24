@@ -189,7 +189,13 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
     {
         static BOOL sJITRescueTried = NO;
         BOOL kernelJIT = a2_jit_has_kernel_level();
-        BOOL ready = kernelJIT || [A2JITRescueFlow jitReadyNow];
+        // ★防死循环★ 如果本进程是被调试器/使能器拉起的（ppid≠launchd），
+        //   说明 JIT 正在由外部注入 ⇒ 绝不能再跳一次（跳了就会无限重启）。
+        BOOL launchedByDebugger = (getppid() != 1);
+        if (launchedByDebugger) {
+            [A2Log criterion:@"[A2-JIT-RESCUE] 本进程由调试器拉起(ppid=%d) ⇒ 不跳转，直接启动", getppid()];
+        }
+        BOOL ready = launchedByDebugger || kernelJIT || [A2JITRescueFlow jitReadyNow];
         // ★只对 Stik 环境生效★ 没有 StikDebug 就不走这套（别拿 TrollStore/越狱机去跳）
         BOOL hasStik = [UIApplication.sharedApplication canOpenURL:
                         [NSURL URLWithString:@"stikdebug://enable-jit"]];
