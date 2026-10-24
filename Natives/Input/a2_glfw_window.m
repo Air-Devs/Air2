@@ -670,6 +670,19 @@ int a2_glfw_window_create(long window, int width, int height, const char *title)
                 controls.frame = view.bounds;
                 controls.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
                 [view addSubview:controls];
+
+                // ★26.3 控件可见性★ MC 26.3 用 SDL3 会再建一层 UIWindow，把我们的宿主窗口
+                //   压在下面 ⇒ 控件直接没了。这里把宿主窗口抬到状态栏之上；
+                //   并在 1.5s/4s 再抬两次（SDL 窗口往往是稍后才建出来的）。
+                void (^raiseHost)(void) = ^{
+                    UIWindow *w = view.window;
+                    if (w != nil) w.windowLevel = UIWindowLevelStatusBar + 1.0;
+                };
+                raiseHost();
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
+                               dispatch_get_main_queue(), raiseHost);
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4.0 * NSEC_PER_SEC)),
+                               dispatch_get_main_queue(), raiseHost);
             });
             a2_publish_ios_view_pointer((__bridge void *) view, scale);
             // ⚠️ 必须主线程：改 view.frame = 改 Auto Layout 引擎，建窗线程上做会崩
