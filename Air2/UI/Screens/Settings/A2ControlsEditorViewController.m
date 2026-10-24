@@ -9,7 +9,7 @@
 #import "A2Log.h"
 #import "A2Toast.h"
 
-@interface A2ControlsEditorViewController ()
+@interface A2ControlsEditorViewController () <UIDocumentPickerDelegate>
 @property (nonatomic, strong) A2GameControlsView *controls;
 @property (nonatomic, strong) UIView *canvas;
 @property (nonatomic, strong) UIStackView *toolbar;
@@ -17,6 +17,66 @@
 @end
 
 @implementation A2ControlsEditorViewController
+
+#pragma mark - 导入（剪贴板 / 文件）
+
+- (void)a2_importTapped {
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"导入控件"
+                                                                  message:nil
+                                                           preferredStyle:UIAlertControllerStyleActionSheet];
+    __weak typeof(self) weakSelf = self;
+    [sheet addAction:[UIAlertAction actionWithTitle:@"从剪贴板" style:UIAlertActionStyleDefault
+                                            handler:^(UIAlertAction *a) { [weakSelf importFromClipboard]; }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"从文件（.json / .txt）" style:UIAlertActionStyleDefault
+                                            handler:^(UIAlertAction *a) { [weakSelf a2_pickImportFile]; }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    sheet.popoverPresentationController.sourceView = self.view;
+    sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds),
+                                                               CGRectGetMaxY(self.view.bounds) - 60, 1, 1);
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (void)a2_pickImportFile {
+    NSArray<NSString *> *types = @[ @"public.json", @"public.plain-text", @"public.data" ];
+    UIDocumentPickerViewController *picker =
+        [[UIDocumentPickerViewController alloc] initWithDocumentTypes:types inMode:UIDocumentPickerModeImport];
+    picker.delegate = self;
+    picker.allowsMultipleSelection = NO;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    NSURL *url = urls.firstObject;
+    if (url == nil) return;
+    [self a2_importFromURL:url];
+}
+
+- (void)a2_importFromURL:(NSURL *)url {
+    NSData *data = [NSData dataWithContentsOfURL:url];
+    if (data.length == 0) {
+        [A2Toast show:@"文件读不出来" inView:self.view];
+        return;
+    }
+    id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:NULL];
+    if (json == nil) {
+        NSString *text = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+        json = text.length ? [NSJSONSerialization JSONObjectWithData:[text dataUsingEncoding:NSUTF8StringEncoding]
+                                                            options:0 error:NULL] : nil;
+    }
+    if (json == nil) {
+        [A2Toast show:@"不是合法 JSON" inView:self.view];
+        return;
+    }
+    A2ControlLayoutFormat fmt = [A2ControlLayoutIO detectFormat:json];
+    NSArray *controls = [A2ControlLayoutIO parseJSON:json format:fmt];
+    if (controls.count == 0) {
+        [A2Toast show:@"没有解析出控件" inView:self.view];
+        return;
+    }
+    [self.controls a2_importControls:controls];
+    [A2Toast show:[NSString stringWithFormat:@"已从文件导入 %lu 项", (unsigned long)controls.count] inView:self.view];
+}
+
 
 - (void)a2_addKeyTapped {
     UIAlertController *a = [UIAlertController alertControllerWithTitle:@"新建按键"
@@ -123,7 +183,7 @@
     bar.spacing = 10;
 
     NSArray *titles = @[ @"导入", @"导出", @"＋按键", @"删除" ];
-    NSArray *sels = @[ @"importFromClipboard", @"exportToClipboard", @"a2_addKeyTapped", @"a2_deleteTapped" ];
+    NSArray *sels = @[ @"a2_importTapped", @"exportToClipboard", @"a2_addKeyTapped", @"a2_deleteTapped" ];
     for (NSUInteger i = 0; i < titles.count; i++) {
         UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
         [b setTitle:titles[i] forState:UIControlStateNormal];
