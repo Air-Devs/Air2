@@ -119,52 +119,74 @@ static NSString *const kSelectedRendererKey = @"A2SelectedRendererID";
                     (unsigned long)plugins.count]];
 }
 
-/// 内置渲染器 —— **按 bundle 里实际存在的 dylib 列出**。
+/// 内置渲染器 —— 按 bundle 里【实际存在】的 dylib 列出。
 ///
-/// ⚠️ 之前这里硬编码了 4 个（NG-GL4ES / Zink / MobileGlues / VirGL），
-/// 但工程里一个 dylib 都没有 —— 用户在列表里看到 4 个选项，
-/// 点了全部失败。这是自欺欺人的做法。
+/// ## 之前的两个错误
 ///
-/// 现在改成扫描：只有真的存在对应 .dylib 才登记。
-/// 库没编进来时列表是空的，用户看到的是「还没有可用的渲染器」，
-/// 而不是 4 个假的选项。
+/// **1. 文件名对不上**
+///   注册表找的是 libnggl4es.dylib / libzink.dylib / libMobileGlues.dylib，
+///   而仓库里实际是 libgl4es_114.dylib / libMobileGL.dylib /
+///   libOSMesa.8.dylib / libvirgl_test_server.dylib。
+///   → 一个都匹配不上 → 列表永远是空的。
 ///
-/// 已知渲染器与库文件名的映射（CMake 产物名）：
-///   NG-GL4ES   → libnggl4es.dylib
-///   Zink       → libzink.dylib
-///   MobileGlues→ libMobileGlues.dylib
-///   VirGL      → libvirgl.dylib
+/// **2. 路径查找方式不对**
+///   pathForAuxiliaryExecutable: 在 iOS 上按 macOS 的 bundle 布局找
+///   （Contents/Frameworks、Frameworks.framework），
+///   而 CI 是把 dylib 直接放进 Air2.app/Frameworks/ 的。
+///   改成显式拼 bundlePath/Frameworks/。
+///
+/// ## 渲染器与库的对应关系（按实际产物）
+///
+///   MobileGL   → libMobileGL.dylib          GL+EGL 同一库（combined）
+///   MobileGL   → libMobileGL-gles.dylib     同上，GLES 变体
+///   OSMesa     → libOSMesa.8.dylib          离屏渲染（配 libSDL3）
+///   GL4ES      → libgl4es_114.dylib         老版本兼容
+///   VirGL      → libvirgl_test_server.dylib 虚拟化 GL
+///   Zink       → libvulkan.1.dylib + libMoltenVK.dylib
+///                                            Vulkan 后端，需要 Metal-Vulkan 层
 - (NSArray<A2RendererEntry *> *)builtinRenderers {
     NSMutableArray<A2RendererEntry *> *list = [NSMutableArray array];
 
     struct {
         const char *ident;
         const char *name;
-        const char *libName;
+        const char *libName;      ///< 关键库（决定是否存在）
+        const char *extraLib;     ///< 可选：第二个必需库
         const char *summary;
         const char *minMC;
     } builtins[] = {
-        { "builtin.nggl4es",  "NG-GL4ES",   "libnggl4es.dylib",
-          "GL4ES 增强版，兼容性最好，适合大多数设备", "1.16.5" },
-        { "builtin.zink",     "Zink",       "libzink.dylib",
-          "Vulkan 后端，通过 MoltenVK 转 Metal", "1.17" },
-        { "builtin.mobilegl", "MobileGlues", "libMobileGlues.dylib",
+        { "builtin.mobilegl", "MobileGL", "libMobileGL.dylib", NULL,
           "Metal 原生 GL 转译，性能最优", "1.17" },
-        { "builtin.virgl",    "VirGL",      "libvirgl.dylib",
-          "虚拟化 GL，兼容老版本", "1.7" },
+        { "builtin.zink",     "Zink",     "libvulkan.1.dylib", "libMoltenVK.dylib",
+          "Vulkan 后端，经 MoltenVK 转 Metal", "1.17" },
+        { "builtin.gl4es",    "GL4ES",    "libgl4es_114.dylib", NULL,
+          "GL4ES 增强版，兼容性最好，适合老版本", "1.7" },
+        { "builtin.osmesa",   "OSMesa",   "libOSMesa.8.dylib", "libSDL3.dylib",
+          "离屏渲染 + SDL3 呈现，兼容性兜底", "1.7" },
+        { "builtin.virgl",    "VirGL",    "libvirgl_test_server.dylib", NULL,
+          "虚拟化 GL，适合调试", "1.7" },
     };
 
     for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); i++) {
         NSString *libName = [NSString stringWithUTF8String:builtins[i].libName];
+        NSString *path = [self bundleFrameworkPath:libName];
 
-        // 只在库真的存在时登记
-        NSString *path = [NSBundle.mainBundle pathForAuxiliaryExecutable:libName];
         if (!path) {
             [A2Logger debug:@"A2RendererRegistry"
-                    message:[NSString stringWithFormat:
-                             @"跳过 %@：bundle 里没有 %@",
+                    message:[NSString stringWithFormat:@"跳过 %@：bundle 里没有 %@",
                              [NSString stringWithUTF8String:builtins[i].name], libName]];
             continue;
+        }
+
+        // 有第二个必需库时也要检查（例如 Zink 需要 MoltenVK）
+        if (builtins[i].extraLib) {
+            NSString *extra = [NSString stringWithUTF8String:builtins[i].extraLib];
+            if (![self bundleFrameworkPath:extra]) {
+                [A2Logger debug:@"A2RendererRegistry"
+                        message:[NSString stringWithFormat:@"跳过 %@：缺 %@",
+                                 [NSString stringWithUTF8String:builtins[i].name], extra]];
+                continue;
+            }
         }
 
         A2RendererEntry *e = [A2RendererEntry new];
@@ -174,11 +196,37 @@ static NSString *const kSelectedRendererKey = @"A2SelectedRendererID";
         e.builtin = YES;
         e.minMCVer = [NSString stringWithUTF8String:builtins[i].minMC];
         [list addObject:e];
+
+        [A2Logger info:@"A2RendererRegistry"
+               message:[NSString stringWithFormat:@"发现渲染器 %@（%@）",
+                        e.displayName, path.lastPathComponent]];
     }
 
     return list;
 }
 
+/// 在 bundle 里找一个 dylib。
+///
+/// 不用 pathForAuxiliaryExecutable: —— 它在 iOS 上按 macOS 布局找，
+/// 而我们是把 dylib 直接放在 Air2.app/Frameworks/。
+- (NSString *)bundleFrameworkPath:(NSString *)name {
+    NSBundle *b = NSBundle.mainBundle;
+
+    // 1. Air2.app/Frameworks/xxx.dylib（CI 的注入位置）
+    NSString *p = [[b.bundlePath stringByAppendingPathComponent:@"Frameworks"]
+                   stringByAppendingPathComponent:name];
+    if ([NSFileManager.defaultManager fileExistsAtPath:p]) return p;
+
+    // 2. Air2.app/xxx.dylib（如果打包时平铺了）
+    p = [b.bundlePath stringByAppendingPathComponent:name];
+    if ([NSFileManager.defaultManager fileExistsAtPath:p]) return p;
+
+    // 3. 兜底：bundle 资源目录
+    p = [b.resourcePath stringByAppendingPathComponent:name];
+    if ([NSFileManager.defaultManager fileExistsAtPath:p]) return p;
+
+    return nil;
+}
 
 #pragma mark - 查询
 

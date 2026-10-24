@@ -59,6 +59,7 @@
 		15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */; };
 		F6B0CF718AF1F4369DC848E8 /* A2GameLaunchCoordinator.m in Sources */ = {isa = PBXBuildFile; fileRef = 1F7F525D4A9EBB0B34986475 /* A2GameLaunchCoordinator.m */; };
 		20B189CC369DA2AC61DD52DF /* A2IntegrityChecker.m in Sources */ = {isa = PBXBuildFile; fileRef = FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */; };
+		9FEF068C216458DA33AFF63E /* A2MemorySettings.m in Sources */ = {isa = PBXBuildFile; fileRef = FD148FA4B48FF8B75C314632 /* A2MemorySettings.m */; };
 		42E2F81428F01FB2F3F912BC /* A2RemoteVersions.m in Sources */ = {isa = PBXBuildFile; fileRef = C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */; };
 		2BC4E80EA8F83E9426E4BA2E /* A2VersionInfo.m in Sources */ = {isa = PBXBuildFile; fileRef = 3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */; };
 		7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 643B820206971C227F265607 /* A2VersionManager.m */; };
@@ -116,6 +117,7 @@
 		D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */ = {isa = PBXBuildFile; fileRef = CA1D52969E0783051081B038 /* A2CardTitleBar.m */; };
 		0769485BDAD9E62F52C32A8C /* A2CategoryNavView.m in Sources */ = {isa = PBXBuildFile; fileRef = A283C0C24413C706B449C36A /* A2CategoryNavView.m */; };
 		0964A8EE7FBEE0DA072679D2 /* A2ColorWheel.m in Sources */ = {isa = PBXBuildFile; fileRef = 75554051E6AED37FAF518AAF /* A2ColorWheel.m */; };
+		EC9125D409E5D09498AB2DE4 /* A2Dialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 54836FA8732F32DC7C9B8499 /* A2Dialog.m */; };
 		2BF445C4575E8B37E4ED01C4 /* A2FilterChip.m in Sources */ = {isa = PBXBuildFile; fileRef = 86E9A8E1F1CBFB462AEE7811 /* A2FilterChip.m */; };
 		CB87022628B4EEDE9D911585 /* A2FilterPanel.m in Sources */ = {isa = PBXBuildFile; fileRef = 0D6F12D8CC6D2D0C761EECC2 /* A2FilterPanel.m */; };
 		350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */ = {isa = PBXBuildFile; fileRef = A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */; };
@@ -249,6 +251,7 @@
 		044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameInstaller.m"; sourceTree = "<group>"; };
 		1F7F525D4A9EBB0B34986475 /* A2GameLaunchCoordinator.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameLaunchCoordinator.m"; sourceTree = "<group>"; };
 		FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2IntegrityChecker.m"; sourceTree = "<group>"; };
+		FD148FA4B48FF8B75C314632 /* A2MemorySettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MemorySettings.m"; sourceTree = "<group>"; };
 		C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RemoteVersions.m"; sourceTree = "<group>"; };
 		3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionInfo.m"; sourceTree = "<group>"; };
 		643B820206971C227F265607 /* A2VersionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionManager.m"; sourceTree = "<group>"; };
@@ -306,6 +309,7 @@
 		CA1D52969E0783051081B038 /* A2CardTitleBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CardTitleBar.m"; sourceTree = "<group>"; };
 		A283C0C24413C706B449C36A /* A2CategoryNavView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CategoryNavView.m"; sourceTree = "<group>"; };
 		75554051E6AED37FAF518AAF /* A2ColorWheel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorWheel.m"; sourceTree = "<group>"; };
+		54836FA8732F32DC7C9B8499 /* A2Dialog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Dialog.m"; sourceTree = "<group>"; };
 		86E9A8E1F1CBFB462AEE7811 /* A2FilterChip.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2FilterChip.m"; sourceTree = "<group>"; };
 		0D6F12D8CC6D2D0C761EECC2 /* A2FilterPanel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2FilterPanel.m"; sourceTree = "<group>"; };
 		A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GlassCard.m"; sourceTree = "<group>"; };
@@ -432,6 +436,7 @@
 		8407C36C2C93136130B9F07E /* A2GameInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameInstaller.h"; sourceTree = "<group>"; };
 		3EC032FE238142C71917EA1C /* A2GameLaunchCoordinator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameLaunchCoordinator.h"; sourceTree = "<group>"; };
 		89044710CFCCD81045E82677 /* A2IntegrityChecker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2IntegrityChecker.h"; sourceTree = "<group>"; };
+		85617EB6EC5C08FC92AEB19F /* A2MemorySettings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MemorySettings.h"; sourceTree = "<group>"; };
 		797843066906C8A344CE1344 /* A2RemoteVersions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RemoteVersions.h"; sourceTree = "<group>"; };
 		CE5120FF6E52910A07272F53 /* A2VersionInfo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionInfo.h"; sourceTree = "<group>"; };
 		8566CA5C1C5F50A603ACC370 /* A2VersionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionManager.h"; sourceTree = "<group>"; };
@@ -486,6 +491,7 @@
 		1F985FAD5DEB8D4699A8B5AE /* A2CardTitleBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CardTitleBar.h"; sourceTree = "<group>"; };
 		853858C5BCCD6563D696BCE9 /* A2CategoryNavView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CategoryNavView.h"; sourceTree = "<group>"; };
 		D0D70559C6A4486D1060EC44 /* A2ColorWheel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorWheel.h"; sourceTree = "<group>"; };
+		73E98A7463CD170A0A7D9009 /* A2Dialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Dialog.h"; sourceTree = "<group>"; };
 		51821EE36006651D51525519 /* A2FilterChip.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2FilterChip.h"; sourceTree = "<group>"; };
 		7F65D6CE6087B25615A6099F /* A2FilterPanel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2FilterPanel.h"; sourceTree = "<group>"; };
 		011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GlassCard.h"; sourceTree = "<group>"; };
@@ -837,12 +843,14 @@
 				044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */,
 				1F7F525D4A9EBB0B34986475 /* A2GameLaunchCoordinator.m */,
 				FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */,
+				FD148FA4B48FF8B75C314632 /* A2MemorySettings.m */,
 				C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */,
 				3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */,
 				643B820206971C227F265607 /* A2VersionManager.m */,
 				8407C36C2C93136130B9F07E /* A2GameInstaller.h */,
 				3EC032FE238142C71917EA1C /* A2GameLaunchCoordinator.h */,
 				89044710CFCCD81045E82677 /* A2IntegrityChecker.h */,
+				85617EB6EC5C08FC92AEB19F /* A2MemorySettings.h */,
 				797843066906C8A344CE1344 /* A2RemoteVersions.h */,
 				CE5120FF6E52910A07272F53 /* A2VersionInfo.h */,
 				8566CA5C1C5F50A603ACC370 /* A2VersionManager.h */,
@@ -1001,6 +1009,7 @@
 				CA1D52969E0783051081B038 /* A2CardTitleBar.m */,
 				A283C0C24413C706B449C36A /* A2CategoryNavView.m */,
 				75554051E6AED37FAF518AAF /* A2ColorWheel.m */,
+				54836FA8732F32DC7C9B8499 /* A2Dialog.m */,
 				86E9A8E1F1CBFB462AEE7811 /* A2FilterChip.m */,
 				0D6F12D8CC6D2D0C761EECC2 /* A2FilterPanel.m */,
 				A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */,
@@ -1034,6 +1043,7 @@
 				1F985FAD5DEB8D4699A8B5AE /* A2CardTitleBar.h */,
 				853858C5BCCD6563D696BCE9 /* A2CategoryNavView.h */,
 				D0D70559C6A4486D1060EC44 /* A2ColorWheel.h */,
+				73E98A7463CD170A0A7D9009 /* A2Dialog.h */,
 				51821EE36006651D51525519 /* A2FilterChip.h */,
 				7F65D6CE6087B25615A6099F /* A2FilterPanel.h */,
 				011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */,
@@ -1382,6 +1392,7 @@
 				15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */,
 				F6B0CF718AF1F4369DC848E8 /* A2GameLaunchCoordinator.m in Sources */,
 				20B189CC369DA2AC61DD52DF /* A2IntegrityChecker.m in Sources */,
+				9FEF068C216458DA33AFF63E /* A2MemorySettings.m in Sources */,
 				42E2F81428F01FB2F3F912BC /* A2RemoteVersions.m in Sources */,
 				2BC4E80EA8F83E9426E4BA2E /* A2VersionInfo.m in Sources */,
 				7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */,
@@ -1439,6 +1450,7 @@
 				D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */,
 				0769485BDAD9E62F52C32A8C /* A2CategoryNavView.m in Sources */,
 				0964A8EE7FBEE0DA072679D2 /* A2ColorWheel.m in Sources */,
+				EC9125D409E5D09498AB2DE4 /* A2Dialog.m in Sources */,
 				2BF445C4575E8B37E4ED01C4 /* A2FilterChip.m in Sources */,
 				CB87022628B4EEDE9D911585 /* A2FilterPanel.m in Sources */,
 				350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */,

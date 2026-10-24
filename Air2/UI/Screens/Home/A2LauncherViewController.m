@@ -29,6 +29,8 @@
 #import "A2LauncherViewController.h"
 #import "A2LaunchSplashView.h"
 #import "A2GameLaunchCoordinator.h"
+#import "ios_uikit_bridge.h"
+#import "A2JREManager.h"
 #import "A2Logger.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
@@ -761,10 +763,49 @@
             return;
         }
 
-        // 成功：进入下一阶段（拉起 JVM + surface）。
-        // 那一步需要 SurfaceViewController，由 Player 层提供。
-        [splash setStage:A2LaunchStageStartingJVM message:@"正在启动游戏"];
-        [A2Logger info:@"Launch" message:@"前置检查全部通过，等待 JVM 启动"];
+        // 前置检查全部通过 → 真正拉起 JVM。
+        //
+        // 之前这里只打了句日志就结束了 —— 用户看到的是遮罩停在
+        // 「正在启动游戏」，游戏永远不起来。这是核心缺陷。
+        //
+        // 启动方式与 Air1 一致：把 metadata 交给 UIKit bridge，
+        // 它会把根 VC 换成 SurfaceViewController（游戏画面宿主），
+        // 那个类的 viewDidLoad 里才真正 launchJVM。
+        [splash setStage:A2LaunchStageStartingJVM message:@"正在启动游戏…"];
+
+        A2Account *account = A2AccountManager.shared.currentAccount;
+        NSMutableDictionary *metadata = [NSMutableDictionary dictionary];
+        metadata[@"accountId"] = account.profileID.length ? account.profileID
+                                                          : (account.username ?: @"Player");
+        metadata[@"versionName"] = current.name;
+        metadata[@"gameHome"] = A2VersionManager.shared.gameHome;
+
+        // JRE：协调器已经选好了，这里再取一次用于 metadata
+        NSString *mc = current.versionInfo.minecraftVersion ?: current.name;
+        A2JRE *jre = [A2JREManager.shared jreForVersionName:current.name mcVersion:mc];
+        if (jre.path.length) metadata[@"javaHome"] = jre.path;
+
+        [A2Logger info:@"Launch"
+               message:[NSString stringWithFormat:
+                        @"前置检查通过 → 拉起 JVM（版本=%@ Java=%@ 账号=%@）",
+                        current.name, jre.displayName ?: @"?", metadata[@"accountId"]]];
+
+        // 交给 Air1 的 UIKit bridge（它会替换根 VC 并锁横屏）
+        UIWindow *window = self.view.window;
+        if (!window) { window = UIApplication.sharedApplication.keyWindow; }
+        if (!window) {
+            [splash showFailure:@"找不到主窗口" onRetry:nil onQuit:nil];
+            return;
+        }
+
+        // 遮罩不立即移除 —— SurfaceViewController 起来后由它自己接管画面。
+        // 这里先延迟淡出，避免闪一下黑屏。
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            [splash finishAndDismissWithCompletion:nil];
+        });
+
+        UIKit_launchMinecraftSurfaceVC(window, metadata);
     }];
 }
 

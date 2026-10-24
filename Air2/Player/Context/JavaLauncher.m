@@ -53,6 +53,7 @@
 
 #import "ios_uikit_bridge.h"
 #import "JavaLauncher.h"
+#import "A2MemorySettings.h"
 #import "LauncherPreferences.h"
 #import "PLLogOutputView.h"
 #import "PLProfiles.h"
@@ -1779,8 +1780,23 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
     NSLog(@"[JavaLauncher] JAVA_HOME has been set to %@", javaHome);
 
     // Task141：启动内存单一事实源（见 ame141_currentLaunchAllocMem）。
-    int allocmem = ame141_currentLaunchAllocMem();
-    NSLog(@"[JavaLauncher] Max RAM allocation is set to %d MB", allocmem);
+    // 内存分配优先走 A2MemorySettings（用户可在设置里调）。
+    // 之前的 ame141_currentLaunchAllocMem 是 Air1 的实现，
+    // 按「设备内存 / 4」自动算 —— iOS 上这个值常常撞 jetsam，
+    // 表现为「进游戏几秒后无日志闪退」。
+    //
+    // A2MemorySettings 的做法（对照 ZL2）：
+    //   自动 = min(设备内存 × 比率, 进程上限 × 0.8)
+    //   手动 = 用户填的 MB，钳到进程上限 × 0.9
+    NSInteger settingMB = A2MemorySettings.shared.effectiveHeapMB;
+    int allocmem = (int)MAX(256, settingMB);
+
+    NSLog(@"[JavaLauncher] Max RAM = %d MB"
+          @"（设备 %ldMB，进程上限 %ldMB，%@模式）",
+          allocmem,
+          (long)A2MemorySettings.shared.deviceMemoryMB,
+          (long)A2MemorySettings.shared.processLimitMB,
+          A2MemorySettings.shared.mode == A2MemoryModeAuto ? @"自动" : @"手动");
     // ★ [LAUNCH-PROGRESS] 阶段4/8：运行环境(Java 已定位 + JAVA_HOME 已设 + 内存已定)
     AmeLaunchProgressSetStage(AmeLaunchStageRuntime);
     if (!validateVirtualMemorySpace(allocmem)) {
