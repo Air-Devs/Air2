@@ -2,152 +2,281 @@
 //  A2TaskLogCard.m
 //  Air2
 //
-//  Copyright (C) 2026 Air-Devs and contributors.
-//
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with this program. If not, see <https://www.gnu.org/licenses/gpl-3.0.txt>.
-//
-//  SPDX-License-Identifier: GPL-3.0-or-later
-//
-//
-//
-//  A2TaskLogCard.m
-//  Air2
-//
 
 #import "A2TaskLogCard.h"
-#import "A2TaskLogOutput.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
-#import "A2Typography.h"
 
 @interface A2TaskLogCard ()
+@property (nonatomic, strong) UIView *card;
 @property (nonatomic, strong) UILabel *titleLabel;
+@property (nonatomic, strong) UIImageView *stateIcon;
+@property (nonatomic, strong) UILabel *taskLabel;
+@property (nonatomic, strong) UILabel *rateLabel;
+@property (nonatomic, strong) UILabel *percentLabel;
+@property (nonatomic, strong) UIView *progressTrack;
+@property (nonatomic, strong) UIView *progressFill;
+@property (nonatomic, strong) NSLayoutConstraint *fillWidth;
 @property (nonatomic, strong) UITextView *logView;
-@property (nonatomic, strong) UIView *logBackground;
+@property (nonatomic, strong) NSMutableArray<NSString *> *logLines;
+@property (nonatomic, assign) BOOL expanded;
+@property (nonatomic, assign) double progressValue;
+@property (nonatomic, copy, readwrite) NSString *title;
 @end
 
 @implementation A2TaskLogCard
 
-- (instancetype)initWithFrame:(CGRect)frame {
-    self = [super initWithFrame:frame];
-    if (!self) return nil;
-    [self setup];
-    return self;
++ (instancetype)presentInView:(UIView *)host title:(NSString *)title {
+    A2TaskLogCard *c = [[A2TaskLogCard alloc] initWithFrame:CGRectZero];
+    c.title = title;
+    c.translatesAutoresizingMaskIntoConstraints = NO;
+    [host addSubview:c];
+
+    // 右上角挂载，宽度固定 260（与 ZL2 的卡片宽度接近）
+    [NSLayoutConstraint activateConstraints:@[
+        [c.topAnchor constraintEqualToAnchor:host.safeAreaLayoutGuide.topAnchor constant:12],
+        [c.trailingAnchor constraintEqualToAnchor:host.trailingAnchor constant:-12],
+        [c.widthAnchor constraintEqualToConstant:260],
+    ]];
+
+    [c build];
+    [c animateIn];
+    return c;
 }
 
-- (void)setup {
-    self.translatesAutoresizingMaskIntoConstraints = NO;
-    _followScroll = YES;
+#pragma mark - 构建
 
-    // ---- 标题 ----
+- (void)build {
+    _logLines = [NSMutableArray array];
+
+    _card = [[UIView alloc] initWithFrame:CGRectZero];
+    _card.translatesAutoresizingMaskIntoConstraints = NO;
+    _card.layer.cornerRadius = A2RadiusL;
+    _card.layer.cornerCurve = kCACornerCurveContinuous;
+    _card.layer.shadowColor = UIColor.blackColor.CGColor;
+    _card.layer.shadowOpacity = 0.2;
+    _card.layer.shadowRadius = 8;
+    _card.layer.shadowOffset = CGSizeMake(0, 3);
+    [self addSubview:_card];
+
+    // 标题行：状态图标 + 标题 + 展开箭头
+    _stateIcon = [[UIImageView alloc] initWithFrame:CGRectZero];
+    _stateIcon.translatesAutoresizingMaskIntoConstraints = NO;
+    _stateIcon.contentMode = UIViewContentModeScaleAspectFit;
+    _stateIcon.image = [UIImage systemImageNamed:@"arrow.triangle.2.circlepath"
+                              withConfiguration:[UIImageSymbolConfiguration
+                                                 configurationWithPointSize:13
+                                                                     weight:UIImageSymbolWeightSemibold]];
+
     _titleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _titleLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightMedium];
-    _titleLabel.numberOfLines = 1;
+    _titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
+    _titleLabel.text = self.title;
 
-    // ---- 日志区 ----
-    // 用 UITextView 而不是 UITableView：
-    //   · 日志是只读的纯文本，不需要 cell 复用
-    //   · 自带滚动 + 可滚到最后一行
-    //   · selectable 让用户能复制报错信息
-    _logBackground = [[UIView alloc] initWithFrame:CGRectZero];
-    _logBackground.translatesAutoresizingMaskIntoConstraints = NO;
-    _logBackground.layer.cornerRadius = 8;   // ZL2 用 8dp
-    _logBackground.layer.cornerCurve = kCACornerCurveContinuous;
-    _logBackground.clipsToBounds = YES;
-    [self addSubview:_logBackground];
+    UIStackView *header = [[UIStackView alloc] initWithArrangedSubviews:@[_stateIcon, _titleLabel]];
+    header.translatesAutoresizingMaskIntoConstraints = NO;
+    header.axis = UILayoutConstraintAxisHorizontal;
+    header.spacing = 6;
+    header.alignment = UIStackViewAlignmentCenter;
 
+    // 任务名
+    _taskLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    _taskLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _taskLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightRegular];
+    _taskLabel.numberOfLines = 2;
+    _taskLabel.text = @"准备中…";
+
+    // 进度条 + 速率 + 百分比（同一行 —— 与 ZL2 的 InstallingTaskItem 一致）
+    _progressTrack = [[UIView alloc] initWithFrame:CGRectZero];
+    _progressTrack.translatesAutoresizingMaskIntoConstraints = NO;
+    _progressTrack.layer.cornerRadius = 1.5;
+    _progressTrack.clipsToBounds = YES;
+    [self setContentHuggingPriority:UILayoutPriorityDefaultLow forAxis:UILayoutConstraintAxisHorizontal];
+
+    _progressFill = [[UIView alloc] initWithFrame:CGRectZero];
+    _progressFill.translatesAutoresizingMaskIntoConstraints = NO;
+    [_progressTrack addSubview:_progressFill];
+
+    _rateLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    _rateLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _rateLabel.font = [UIFont monospacedDigitSystemFontOfSize:10 weight:UIFontWeightRegular];
+    _rateLabel.hidden = YES;
+
+    _percentLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    _percentLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _percentLabel.font = [UIFont monospacedDigitSystemFontOfSize:10 weight:UIFontWeightRegular];
+
+    UIStackView *progressRow = [[UIStackView alloc] initWithArrangedSubviews:
+                                @[_progressTrack, _rateLabel, _percentLabel]];
+    progressRow.translatesAutoresizingMaskIntoConstraints = NO;
+    progressRow.axis = UILayoutConstraintAxisHorizontal;
+    progressRow.spacing = 6;
+    progressRow.alignment = UIStackViewAlignmentCenter;
+
+    // 日志区（默认隐藏）
     _logView = [[UITextView alloc] initWithFrame:CGRectZero];
     _logView.translatesAutoresizingMaskIntoConstraints = NO;
     _logView.editable = NO;
-    _logView.selectable = YES;
-    _logView.backgroundColor = UIColor.clearColor;
-    _logView.font = [UIFont monospacedSystemFontOfSize:11 weight:UIFontWeightRegular];
-    _logView.textContainerInset = UIEdgeInsetsMake(6, 8, 6, 8);
-    _logView.textContainer.lineFragmentPadding = 0;
-    [_logBackground addSubview:_logView];
+    _logView.font = [UIFont monospacedSystemFontOfSize:9 weight:UIFontWeightRegular];
+    _logView.textContainerInset = UIEdgeInsetsMake(6, 6, 6, 6);
+    _logView.layer.cornerRadius = A2RadiusS;
+    _logView.hidden = YES;
+    [_logView.heightAnchor constraintEqualToConstant:90].active = YES;
 
-    [self addSubview:_titleLabel];
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:
+                          @[header, _taskLabel, progressRow, _logView]];
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = 6;
+    [_card addSubview:stack];
 
     [NSLayoutConstraint activateConstraints:@[
-        [_titleLabel.topAnchor constraintEqualToAnchor:self.topAnchor],
-        [_titleLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-        [_titleLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
+        [_card.topAnchor constraintEqualToAnchor:self.topAnchor],
+        [_card.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
+        [_card.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
+        [_card.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
 
-        [_logBackground.topAnchor constraintEqualToAnchor:_titleLabel.bottomAnchor
-                                                 constant:A2SpaceS],
-        [_logBackground.leadingAnchor constraintEqualToAnchor:self.leadingAnchor],
-        [_logBackground.trailingAnchor constraintEqualToAnchor:self.trailingAnchor],
-        [_logBackground.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
-        // 日志区至少留 3 行高度，否则内容少时卡片会塌成一条
-        // 至少 3 行高；最多 8 行 —— 再高就把下面的按钮挤出屏幕。
-        // 之前是「固定 88pt 最小」，但没上限时日志少了会显得空，
-        // 日志多了又会把整页撑长、需要滚动才能看到「取消」按钮。
-        [_logBackground.heightAnchor constraintGreaterThanOrEqualToConstant:88],
-        [_logBackground.heightAnchor constraintLessThanOrEqualToConstant:180],
+        [stack.topAnchor constraintEqualToAnchor:_card.topAnchor constant:10],
+        [stack.bottomAnchor constraintEqualToAnchor:_card.bottomAnchor constant:-10],
+        [stack.leadingAnchor constraintEqualToAnchor:_card.leadingAnchor constant:12],
+        [stack.trailingAnchor constraintEqualToAnchor:_card.trailingAnchor constant:-12],
 
-        [_logView.topAnchor constraintEqualToAnchor:_logBackground.topAnchor],
-        [_logView.bottomAnchor constraintEqualToAnchor:_logBackground.bottomAnchor],
-        [_logView.leadingAnchor constraintEqualToAnchor:_logBackground.leadingAnchor],
-        [_logView.trailingAnchor constraintEqualToAnchor:_logBackground.trailingAnchor],
+        [_stateIcon.widthAnchor constraintEqualToConstant:13],
+        [_stateIcon.heightAnchor constraintEqualToConstant:13],
+
+        [_progressTrack.heightAnchor constraintEqualToConstant:3],
+        [_percentLabel.widthAnchor constraintGreaterThanOrEqualToConstant:30],
+
+        [_progressFill.topAnchor constraintEqualToAnchor:_progressTrack.topAnchor],
+        [_progressFill.bottomAnchor constraintEqualToAnchor:_progressTrack.bottomAnchor],
+        [_progressFill.leadingAnchor constraintEqualToAnchor:_progressTrack.leadingAnchor],
     ]];
 
+    _fillWidth = [_progressFill.widthAnchor constraintEqualToConstant:0];
+    _fillWidth.active = YES;
+
+    // 点标题展开/收起
+    UITapGestureRecognizer *tap =
+        [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(headerTapped)];
+    [_card addGestureRecognizer:tap];
+
     [self applyTheme];
-
-    [NSNotificationCenter.defaultCenter addObserver:self
-                                          selector:@selector(applyTheme)
-                                              name:A2ThemeDidChangeNotification
-                                            object:nil];
 }
 
-- (void)dealloc {
-    [NSNotificationCenter.defaultCenter removeObserver:self];
+- (void)headerTapped {
+    [self toggleExpanded];
 }
 
-#pragma mark - 绑定
+#pragma mark - 更新
 
-- (void)setLogOutput:(A2TaskLogOutput *)logOutput {
-    _logOutput = logOutput;
-    _titleLabel.text = logOutput.title;
+- (void)updateTaskName:(NSString *)name progress:(double)progress rate:(NSString *)rate {
+    _taskLabel.text = name;
+    _progressValue = progress;
 
-    __weak typeof(self) weakSelf = self;
-    logOutput.onLinesChanged = ^(NSArray<NSString *> *lines) {
-        __strong typeof(weakSelf) self = weakSelf;
-        if (!self) return;
-        [self renderLines:lines];
-    };
+    _rateLabel.hidden = (rate.length == 0);
+    _rateLabel.text = rate;
 
-    [self renderLines:logOutput.lines];
-}
-
-- (void)renderLines:(NSArray<NSString *> *)lines {
-    _logView.text = [lines componentsJoinedByString:@"\n"];
-
-    // 自动滚到最新 —— 但用户手动上翻看历史时不打断
-    if (_followScroll && lines.count > 0) {
-        NSRange end = NSMakeRange(_logView.text.length, 0);
-        [_logView scrollRangeToVisible:end];
+    if (progress < 0) {
+        // 不确定进度：只显示速率，不显示百分比
+        _percentLabel.text = @"";
+        _fillWidth.constant = 0;
+    } else {
+        _percentLabel.text = [NSString stringWithFormat:@"%.0f%%", progress * 100];
+        [self setNeedsLayout];
+        [self layoutIfNeeded];
+        CGFloat w = _progressTrack.bounds.size.width;
+        if (w > 0) _fillWidth.constant = w * MAX(0, MIN(1, progress));
     }
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    if (_progressValue >= 0) {
+        CGFloat w = _progressTrack.bounds.size.width;
+        if (w > 0) _fillWidth.constant = w * MAX(0, MIN(1, _progressValue));
+    }
+}
+
+- (void)finishWithState:(A2TaskCardState)state message:(NSString *)message {
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+
+    switch (state) {
+        case A2TaskCardStateSuccess:
+            _stateIcon.image = [UIImage systemImageNamed:@"checkmark.circle.fill"];
+            _stateIcon.tintColor = t.cSuccess;
+            _taskLabel.text = message ?: @"完成";
+            _percentLabel.text = @"100%";
+            _fillWidth.constant = _progressTrack.bounds.size.width;
+            break;
+        case A2TaskCardStateFailed:
+            _stateIcon.image = [UIImage systemImageNamed:@"xmark.circle.fill"];
+            _stateIcon.tintColor = t.cError;
+            _taskLabel.text = message ?: @"失败";
+            break;
+        default:
+            break;
+    }
+    _rateLabel.hidden = YES;
+}
+
+- (void)appendLog:(NSString *)line {
+    if (line.length == 0) return;
+    [_logLines addObject:line];
+    if (_logLines.count > 200) {
+        [_logLines removeObjectsInRange:NSMakeRange(0, _logLines.count - 200)];
+    }
+    _logView.text = [_logLines componentsJoinedByString:@"\n"];
+}
+
+- (void)toggleExpanded {
+    _expanded = !_expanded;
+    _logView.hidden = !_expanded;
+    if (_expanded && _logView.text.length == 0) {
+        _logView.text = _logLines.count ? [_logLines componentsJoinedByString:@"\n"] : @"（暂无日志）";
+    }
+}
+
+#pragma mark - 动画
+
+- (void)animateIn {
+    self.alpha = 0;
+    self.transform = CGAffineTransformMakeTranslation(20, 0);
+    [UIView animateWithDuration:0.24
+                          delay:0
+         usingSpringWithDamping:0.8
+          initialSpringVelocity:0.4
+                        options:0
+                     animations:^{
+        self.alpha = 1;
+        self.transform = CGAffineTransformIdentity;
+    } completion:nil];
+}
+
+- (void)dismissAfterDelay:(NSTimeInterval)delay {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [UIView animateWithDuration:0.25 animations:^{
+            self.alpha = 0;
+            self.transform = CGAffineTransformMakeTranslation(20, 0);
+        } completion:^(BOOL finished) {
+            [self removeFromSuperview];
+        }];
+    });
 }
 
 #pragma mark - 主题
 
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
+    _card.backgroundColor = t.cSurfaceContainerHigh;
     _titleLabel.textColor = t.cOnSurface;
-    // 日志区用 surfaceContainer —— 与卡片本身区分层级
-    _logBackground.backgroundColor = t.cSurfaceContainer;
+    _taskLabel.textColor = t.cOnSurfaceVariant;
+    _rateLabel.textColor = t.cOnSurfaceVariant;
+    _percentLabel.textColor = t.cOnSurfaceVariant;
+    _progressTrack.backgroundColor = [t.cPrimary colorWithAlphaComponent:0.15];
+    _progressFill.backgroundColor = t.cPrimary;
+    _stateIcon.tintColor = t.cPrimary;
+    _logView.backgroundColor = t.cSurfaceContainer;
     _logView.textColor = t.cOnSurfaceVariant;
 }
 

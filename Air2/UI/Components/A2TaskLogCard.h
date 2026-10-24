@@ -2,53 +2,66 @@
 //  A2TaskLogCard.h
 //  Air2
 //
-//  Copyright (C) 2026 Air-Devs and contributors.
+//  侧边任务进度卡片 —— 对照 ZL2 的 TaskLogCard。
 //
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
+//  ## 它出现在哪
 //
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-//  GNU General Public License for more details.
+//  不是弹窗、不是全屏遮罩，而是**挂在主界面旁边的一张小卡片**：
 //
-//  You should have received a copy of the GNU General Public License
-//  along with this program. If not, see <https://www.gnu.org/licenses/gpl-3.0.txt>.
+//    ┌──────────────────┐
+//    │  任务菜单         │
+//    │  ✗ 统计验证任务   │
+//    │    ▓▓▓░░░        │
+//    │                  │
+//    │  （可展开日志）   │
+//    └──────────────────┘
 //
-//  SPDX-License-Identifier: GPL-3.0-or-later
+//  ## 为什么不用弹窗
 //
+//  启动前的检查（账号/版本/渲染器/插件）通常几秒就完成。
+//  弹窗要遮挡整个界面、要点「取消」才能回退。
+//  卡片只是「在旁边显示进展」，检查完自动消失，
+//  用户全程可以继续操作界面。
 //
+//  ## 两种形态
 //
-//  A2TaskLogCard.h
-//  Air2
-//
-//  任务日志卡片 —— 对照 ZL2 的 ui/components/TaskLogCard.kt。
-//
-//  视觉（照搬 ZL2 的规格）：
-//    ┌─────────────────────────────┐
-//    │ 安装 1.20.1-fabric           │  标题（titleMedium 16pt）
-//    ├─────────────────────────────┤
-//    │ [12:34:56] 开始下载客户端      │  日志区
-//    │ [12:34:58] 下载中 45%         │  surfaceContainer 底
-//    │ [12:35:02] 解压依赖库…         │  8dp 圆角
-//    │                             │  等宽字体 11pt
-//    └─────────────────────────────┘  自动滚到最新
+//    收起：只有标题 + 一行任务 + 细进度条（约 80pt 高）
+//    展开：多行任务 + 日志区（点标题展开）
 //
 
 #import <UIKit/UIKit.h>
-#import "A2TaskLogOutput.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
+typedef NS_ENUM(NSInteger, A2TaskCardState) {
+    A2TaskCardStateRunning = 0,
+    A2TaskCardStateSuccess,
+    A2TaskCardStateFailed,
+};
+
 @interface A2TaskLogCard : UIView
 
-/// 绑定一个日志输出对象 —— 自动订阅其变化
-@property (nonatomic, strong, nullable) A2TaskLogOutput *logOutput;
+/// 挂到宿主视图的右上角（自动布局）
++ (instancetype)presentInView:(UIView *)host title:(NSString *)title;
 
-/// 是否自动跟随滚动到底部（用户手动上翻时应暂停跟随）
-@property (nonatomic, assign) BOOL followScroll;
+@property (nonatomic, copy, readonly) NSString *title;
+
+/// 更新当前任务
+- (void)updateTaskName:(NSString *)name
+              progress:(double)progress   // 0~1，负数=不确定
+                  rate:(nullable NSString *)rate;
+
+/// 完成 / 失败
+- (void)finishWithState:(A2TaskCardState)state message:(nullable NSString *)message;
+
+/// 追加日志
+- (void)appendLog:(NSString *)line;
+
+/// 展开 / 收起日志区
+- (void)toggleExpanded;
+
+/// 淡出并移除
+- (void)dismissAfterDelay:(NSTimeInterval)delay;
 
 - (void)applyTheme;
 

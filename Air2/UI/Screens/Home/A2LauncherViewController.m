@@ -30,6 +30,7 @@
 #import "A2LaunchSplashView.h"
 #import "A2JVMRunningViewController.h"
 #import "A2Dialog.h"
+#import "A2TaskLogCard.h"
 #import "A2TaskLogOutput.h"
 #import "A2InstallProgressDialog.h"
 #import "A2GameLaunchCoordinator.h"
@@ -63,7 +64,7 @@
 @interface A2LauncherViewController ()
 @property (nonatomic, strong, nullable) A2LaunchSplashView *launchSplash;
 /// 启动进度弹窗（ZL2 的 TitleTaskFlowDialog 形式）
-@property (nonatomic, strong, nullable) A2InstallProgressDialog *launchDialog;
+@property (nonatomic, strong, nullable) A2TaskLogCard *launchCard;
 @property (nonatomic, strong, nullable) A2TaskLogOutput *launchLog;
 @property (nonatomic, strong, nullable) id launchProgressObserver;
 @property (nonatomic, copy, nullable) NSString *lastSpeedText;
@@ -728,75 +729,39 @@
 
     _launchButton.loading = YES;
 
-    // 启动进度 —— 用 ZL2 的 TitleTaskFlowDialog 形式：
-    // 居中弹窗 + 步骤列表 + 进度条/速率/百分比同行 + 底部取消。
+    // 启动进度 —— 用**侧边小卡片**，不是弹窗、不是全屏遮罩。
     //
-    // 之前这里用的是我自己设计的全屏 A2LaunchSplashView ——
-    // 那不是 ZL2 的做法。ZL2 的启动进度【就是弹窗】，
-    // 与「安装游戏中」是同一个组件（CommonElements.kt 的
-    // TitleTaskFlowDialog）。
-    A2TaskLogOutput *log = [[A2TaskLogOutput alloc]
-                            initWithTitle:[NSString stringWithFormat:@"启动 %@", current.name]];
-    A2InstallProgressDialog *dlg = [[A2InstallProgressDialog alloc] initWithLogOutput:log];
-    dlg.dialogTitle = [NSString stringWithFormat:@"启动游戏「%@」", current.name];
-
-    // 步骤与 GameLaunchCoordinator 的四个 Task 对应
-    [dlg setSteps:@[@"校验账号", @"扫描模组", @"校验游戏文件", @"准备 Java 运行时", @"启动游戏"]];
+    // 对照 ZL2：检查阶段（账号/版本/渲染器）在右上角挂一张
+    // TaskLogCard，显示当前任务 + 细进度条，检查完自动消失。
+    // 用户可以全程继续操作界面，不用点「取消」才能回退。
+    //
+    // 我前两版做错了两回：
+    //   ① 做成全屏 A2LaunchSplashView（自己设计的，不是 ZL2）
+    //   ② 改成居中弹窗（那是「安装游戏」用的，不是启动）
+    A2TaskLogCard *card = [A2TaskLogCard presentInView:self.view
+                                                 title:@"启动检查"];
+    [card updateTaskName:@"准备中…" progress:-1 rate:nil];
+    self.launchCard = card;
 
     __weak typeof(self) weakSelf = self;
-    dlg.onCancel = ^{
-        __strong typeof(weakSelf) self = weakSelf;
-        [[A2GameLaunchCoordinator shared] cancel];
-        self.launchButton.loading = NO;
-    };
-
-    [self presentViewController:dlg animated:YES completion:nil];
-    self.launchDialog = dlg;
-    self.launchLog = log;
-
-    // 订阅编排器进度 → 更新弹窗里的步骤
+    // 订阅编排器进度 → 更新卡片
     self.launchProgressObserver =
         [NSNotificationCenter.defaultCenter addObserverForName:A2LaunchProgressDidChangeNotification
                                                         object:nil
                                                          queue:NSOperationQueue.mainQueue
                                                     usingBlock:^(NSNotification *note) {
         __strong typeof(weakSelf) self = weakSelf;
-        if (!self || !self.launchDialog) return;
+        if (!self || !self.launchCard) return;
 
         A2LaunchProgress *pr = note.userInfo[@"progress"];
         if (![pr isKindOfClass:A2LaunchProgress.class]) return;
 
-        // Task → 步骤索引
-        NSInteger idx = 2;   // 默认落在「校验游戏文件」
-        switch (pr.task) {
-            case A2LaunchTaskCheckAccount: idx = 0; break;
-            case A2LaunchTaskScanMods:     idx = 1; break;
-            case A2LaunchTaskVerifyFiles:  idx = 2; break;
-            case A2LaunchTaskStartGame:    idx = 3; break;
+        NSString *rate = nil;
+        if (pr.task == A2LaunchTaskVerifyFiles && self.lastSpeedText.length) {
+            rate = self.lastSpeedText;
         }
-
-        // 之前所有步骤标完成
-        for (NSInteger i = 0; i < idx; i++) {
-            [self.launchDialog updateStepAtIndex:i
-                                           stage:A2ProgressStepStageCompleted
-                                         message:nil
-                                        progress:1.0
-                                            rate:nil];
-        }
-
-        // 当前步骤：进行中，带速率与百分比（同一行 —— 与 ZL2 一致）
-        NSString *rateText = nil;
-        if (pr.task == A2LaunchTaskVerifyFiles && pr.taskFraction > 0) {
-            // 校验/下载阶段有速率就显示
-            if (self.lastSpeedText.length) rateText = self.lastSpeedText;
-        }
-        [self.launchDialog updateStepAtIndex:idx
-                                       stage:A2ProgressStepStageRunning
-                                     message:pr.message
-                                    progress:pr.taskFraction
-                                        rate:rateText];
-
-        [self.launchLog appendProgress:pr.message];
+        [self.launchCard updateTaskName:pr.message progress:pr.taskFraction rate:rate];
+        [self.launchCard appendLog:pr.message];
     }];
 
     __weak typeof(self) weakSelf = self;
@@ -813,20 +778,21 @@
 
         if (!success) {
             // 失败：弹窗里显示原因（ZL2 也是「弹窗 + 错误信息」）
-            [self.launchDialog dismissWithCompletion:^{
-                __strong typeof(weakSelf) self = weakSelf;
-                self.launchDialog = nil;
-                [A2Dialog showInView:self.view
-                               title:@"启动失败"
-                             message:(error.localizedDescription ?: @"未知错误")
-                             actions:@[
-                    [A2DialogAction actionWithTitle:@"取消" style:A2DialogActionStyleText handler:nil],
-                    [A2DialogAction actionWithTitle:@"重试" style:A2DialogActionStyleFilled handler:^{
-                        __strong typeof(weakSelf) self2 = weakSelf;
-                        [self2 launchGame];
-                    }],
-                ]];
-            }];
+            [self.launchCard finishWithState:A2TaskCardStateFailed
+                                     message:(error.localizedDescription ?: @"启动失败")];
+            [self.launchCard dismissAfterDelay:3.0];
+            self.launchCard = nil;
+
+            [A2Dialog showInView:self.view
+                           title:@"启动失败"
+                         message:(error.localizedDescription ?: @"未知错误")
+                         actions:@[
+                [A2DialogAction actionWithTitle:@"取消" style:A2DialogActionStyleText handler:nil],
+                [A2DialogAction actionWithTitle:@"重试" style:A2DialogActionStyleFilled handler:^{
+                    __strong typeof(weakSelf) self2 = weakSelf;
+                    [self2 launchGame];
+                }],
+            ]];
             return;
         }
 
@@ -854,8 +820,8 @@
         UIWindow *window = self.view.window;
         if (!window) { window = UIApplication.sharedApplication.keyWindow; }
         if (!window) {
-            [self.launchDialog dismissWithCompletion:nil];
-            self.launchDialog = nil;
+            [self.launchCard dismissAfterDelay:0];
+            self.launchCard = nil;
             return;
         }
 
@@ -863,10 +829,14 @@
         //   1. 启动进度弹窗   ← 现在这个，检查完就关
         //   2. JVMScreen      ← 键盘工具条 + 等待气泡
         //   3. GameScreen     ← 控件 + 悬浮球
-        [self.launchDialog dismissWithCompletion:^{
+        [self.launchCard finishWithState:A2TaskCardStateSuccess message:@"检查通过"];
+        [self.launchCard dismissAfterDelay:1.0];
+        self.launchCard = nil;
+
+        // 检查通过 → 直接切到 JVMScreen（ZL2 也是这样，没有额外过渡）
+        {
             __strong typeof(weakSelf) self = weakSelf;
             if (!self) return;
-            self.launchDialog = nil;
 
             A2JVMRunningViewController *jvm = [[A2JVMRunningViewController alloc] init];
             jvm.view.frame = self.view.bounds;
@@ -876,7 +846,7 @@
             [self addChildViewController:jvm];
             [jvm didMoveToParentViewController:self];
             self.jvmScreen = jvm;
-        }];
+        }
 
         UIKit_launchMinecraftSurfaceVC(window, metadata);
     }];

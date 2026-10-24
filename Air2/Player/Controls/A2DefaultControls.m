@@ -115,6 +115,35 @@ static A2ControlWidget *Btn(NSString *ident, NSString *text,
                           24 + i * 5.8, 4, 6, key)];
     }
 
+    // ============ 功能键区（对照 ZL2 的默认布局）============
+    //
+    // ZL2 的默认控件里有 Esc / Tab / Alt / Shift / 左右键 / F1~F12。
+    // 这些都是「PC 游戏必需的键」，触屏上必须有对应的按钮，
+    // 否则玩家连背包合成、切视角、开聊天都做不到。
+    //
+    // 布局：顶部一行 12 个 F 键（缩小），左侧竖排 Esc/Tab/Alt/Shift，
+    // 右侧两个大键（鼠标左右键）。
+
+    static NSString *const kKeyTab  = @"258";
+    static NSString *const kKeyAlt  = @"342";
+
+    // F1 ~ F12 横向排布，屏幕中部偏上
+    for (int i = 0; i < 12; i++) {
+        NSString *key = [NSString stringWithFormat:@"%d", 290 + i];
+        CGFloat x = 12.0 + i * 6.2;
+        [ws addObject:Btn([NSString stringWithFormat:@"air2.f%d", i + 1],
+                          [NSString stringWithFormat:@"F%d", i + 1],
+                          x, 44, 5.5, key)];
+    }
+
+    // 左侧竖排：Esc / Tab / Alt
+    [ws addObject:Btn(@"air2.tab", @"Tab", 6, 12, 8, kKeyTab)];
+    [ws addObject:Btn(@"air2.alt", @"Alt", 6, 20, 8, kKeyAlt)];
+
+    // 右侧：鼠标左右键（比「攻/用」大，因为要常按）
+    [ws addObject:Btn(@"air2.mouseL", @"左键", 88, 62, 12, @"0")];
+    [ws addObject:Btn(@"air2.mouseR", @"右键", 88, 74, 12, @"1")];
+
     layout.widgets = ws;
 
     // 默认样式
