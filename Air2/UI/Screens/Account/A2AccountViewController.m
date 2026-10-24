@@ -48,6 +48,8 @@
 #import "A2Metrics.h"
 #import "A2Typography.h"
 #import "A2SettingsSection.h"
+#import "A2Dialog.h"
+#import "A2AccountLeftPanel.h"
 #import "A2SettingsRow.h"
 #import "A2AccountManager.h"
 #import "A2Wardrobe.h"
@@ -65,6 +67,8 @@
 @property (nonatomic, strong) UIStackView *accountStack;
 @property (nonatomic, strong) NSMutableArray<A2AccountRowView *> *rows;
 @property (nonatomic, strong) UIStackView *emptyView;
+/// 左栏（对照 ZL2 的 ActionsLayout：当前账号 + 添加按钮）
+@property (nonatomic, strong) A2AccountLeftPanel *leftPanel;
 @end
 
 @implementation A2AccountViewController
@@ -74,9 +78,11 @@
     self.pageTitle = @"账号管理";
     _rows = [NSMutableArray array];
 
-    [self setupListCard];
+    // 左右 3:7 布局（对照 ZL2 的 AccountManageScreen）
+    //   左：当前账号 + 添加按钮
+    //   右：账号列表
+    [self setupSplitLayout];
     [self buildAccounts];
-    [self setupAddSection];
     [self setupManageSection];
 
     [NSNotificationCenter.defaultCenter addObserver:self
@@ -87,18 +93,34 @@
 
 #pragma mark - 账号列表（一张大卡）
 
-- (void)setupListCard {
+- (void)setupSplitLayout {
+    // 左右 3:7（对照 ZL2 的 AccountManageScreen）
+    self.usesScrollContent = NO;
+
+    UIView *host = self.plainContentView;
+
+    // ---- 左栏 ----
+    _leftPanel = [[A2AccountLeftPanel alloc] initWithFrame:CGRectZero];
+    __weak typeof(self) weakSelf = self;
+    _leftPanel.onAddAccount = ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        [self presentLoginChooser];
+    };
+    [host addSubview:_leftPanel];
+
+    // ---- 右栏：账号列表卡 ----
     _listCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
+    _listCard.translatesAutoresizingMaskIntoConstraints = NO;
     _listCard.cornerRadius = A2RadiusXL;
     _listCard.elevation = A2CardElevationLow;
-    _listCard.contentInsets = UIEdgeInsetsMake(6, 12, 6, 12);   // ZL2: 上下 6、左右 12
+    _listCard.contentInsets = UIEdgeInsetsMake(6, 12, 6, 12);
 
     _accountStack = [[UIStackView alloc] initWithFrame:CGRectZero];
     _accountStack.translatesAutoresizingMaskIntoConstraints = NO;
     _accountStack.axis = UILayoutConstraintAxisVertical;
-    _accountStack.spacing = A2SpaceM;   // 每项垂直间距 12
-
+    _accountStack.spacing = A2SpaceM;
     [_listCard.contentView addSubview:_accountStack];
+
     [NSLayoutConstraint activateConstraints:@[
         [_accountStack.topAnchor constraintEqualToAnchor:_listCard.contentView.topAnchor],
         [_accountStack.bottomAnchor constraintEqualToAnchor:_listCard.contentView.bottomAnchor],
@@ -106,11 +128,72 @@
         [_accountStack.trailingAnchor constraintEqualToAnchor:_listCard.contentView.trailingAnchor],
     ]];
 
-    [self addSection:_listCard];
+    // 右栏要能滚动（账号多时）
+    UIScrollView *listScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    listScroll.translatesAutoresizingMaskIntoConstraints = NO;
+    listScroll.showsVerticalScrollIndicator = NO;
+    [listScroll addSubview:_listCard];
+    [host addSubview:listScroll];
+
+    [NSLayoutConstraint activateConstraints:@[
+        // 左栏：宽占 30%
+        [_leftPanel.topAnchor constraintEqualToAnchor:host.topAnchor constant:A2SpaceM],
+        [_leftPanel.bottomAnchor constraintEqualToAnchor:host.bottomAnchor constant:-A2SpaceM],
+        [_leftPanel.leadingAnchor constraintEqualToAnchor:host.leadingAnchor constant:A2SpaceL],
+        [_leftPanel.widthAnchor constraintEqualToAnchor:host.widthAnchor multiplier:0.28],
+
+        // 右栏：占剩余
+        [listScroll.topAnchor constraintEqualToAnchor:host.topAnchor constant:A2SpaceM],
+        [listScroll.bottomAnchor constraintEqualToAnchor:host.bottomAnchor constant:-A2SpaceM],
+        [listScroll.leadingAnchor constraintEqualToAnchor:_leftPanel.trailingAnchor
+                                                 constant:A2SpaceL],
+        [listScroll.trailingAnchor constraintEqualToAnchor:host.trailingAnchor
+                                                  constant:-A2SpaceL],
+
+        [_listCard.topAnchor constraintEqualToAnchor:listScroll.contentLayoutGuide.topAnchor],
+        [_listCard.bottomAnchor constraintEqualToAnchor:listScroll.contentLayoutGuide.bottomAnchor],
+        [_listCard.leadingAnchor constraintEqualToAnchor:listScroll.frameLayoutGuide.leadingAnchor],
+        [_listCard.trailingAnchor constraintEqualToAnchor:listScroll.frameLayoutGuide.trailingAnchor],
+    ]];
+}
+
+/// 点「添加账号」→ 选登录方式
+- (void)presentLoginChooser {
+    __weak typeof(self) weakSelf = self;
+    [A2Dialog showInView:self.view
+                   title:@"添加账号"
+                 message:@"选择登录方式"
+                 actions:@[
+        [A2DialogAction actionWithTitle:@"微软账号" style:A2DialogActionStyleText handler:^{
+            __strong typeof(weakSelf) self = weakSelf;
+            [self presentLoginWithMode:A2LoginModeMicrosoft];
+        }],
+        [A2DialogAction actionWithTitle:@"离线账号" style:A2DialogActionStyleText handler:^{
+            __strong typeof(weakSelf) self = weakSelf;
+            [self presentLoginWithMode:A2LoginModeOffline];
+        }],
+        [A2DialogAction actionWithTitle:@"外置账号" style:A2DialogActionStyleText handler:^{
+            __strong typeof(weakSelf) self = weakSelf;
+            [self presentLoginWithMode:A2LoginModeThirdParty];
+        }],
+    ]];
+}
+
+- (void)presentLoginWithMode:(A2LoginMode)mode {
+    A2LoginViewController *vc = [[A2LoginViewController alloc] initWithMode:mode];
+    __weak typeof(self) weakSelf = self;
+    vc.onSuccess = ^(A2Account *account) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self buildAccounts];
+    };
+    [self.navigationController pushViewController:vc animated:YES];
 }
 
 /// 从 A2AccountManager 读真实账号
 - (void)buildAccounts {
+    // 左栏跟随当前账号
+    [_leftPanel updateWithAccount:A2AccountManager.shared.currentAccount];
+
     for (UIView *v in _accountStack.arrangedSubviews) {
         [_accountStack removeArrangedSubview:v];
         [v removeFromSuperview];
@@ -155,6 +238,7 @@
             if ([A2AccountManager.shared selectCurrentAccount:acc]) {
                 [A2Log log:@"AccountVC: 切换到账号 %@", acc.username];
                 for (A2AccountRowView *r in self.rows) r.current = (r == weakRow);
+                [self.leftPanel updateWithAccount:acc];
                 [A2Toast show:[NSString stringWithFormat:@"已切换到 %@", acc.username]
                        inView:self.view];
             }
@@ -273,42 +357,42 @@ didFinishPickingMediaWithInfo:(NSDictionary<UIImagePickerControllerInfoKey, id> 
 }
 
 - (void)showMoreMenuForAccount:(A2Account *)acc fromView:(UIView *)source {
-    UIAlertController *sheet =
-        [UIAlertController alertControllerWithTitle:acc.username
-                                            message:acc.typeDisplayName
-                                     preferredStyle:UIAlertControllerStyleActionSheet];
+    // MD3 弹窗 —— 之前是系统 UIAlertController，与整体视觉不搭。
+    // ZL2 / FCL 也都用自己的弹窗，不用系统样式。
+    NSMutableArray<A2DialogAction *> *actions = [NSMutableArray array];
 
     // 设置皮肤 —— 离线账号也能用（拉不到远端材质，改用本地图）
-    [sheet addAction:[UIAlertAction actionWithTitle:@"设置皮肤"
-                                             style:UIAlertActionStyleDefault
-                                           handler:^(UIAlertAction *a) {
+    __weak typeof(self) weakSelf = self;
+    [actions addObject:[A2DialogAction actionWithTitle:@"设置皮肤"
+                                                 style:A2DialogActionStyleText
+                                               handler:^{
+        __strong typeof(weakSelf) self = weakSelf;
         [self presentSkinPickerForAccount:acc];
     }]];
 
     if (acc.type != A2AccountTypeOffline) {
-        [sheet addAction:[UIAlertAction actionWithTitle:@"复制 UUID"
-                                                 style:UIAlertActionStyleDefault
-                                               handler:^(UIAlertAction *a) {
+        [actions addObject:[A2DialogAction actionWithTitle:@"复制 UUID"
+                                                     style:A2DialogActionStyleText
+                                                   handler:^{
             UIPasteboard.generalPasteboard.string = acc.profileID ?: @"";
-            [A2Toast show:@"UUID 已复制" inView:self.view];
+            [A2Toast show:@"UUID 已复制" inView:UIApplication.sharedApplication.keyWindow];
         }]];
     }
 
-    [sheet addAction:[UIAlertAction actionWithTitle:@"移除账号"
-                                             style:UIAlertActionStyleDestructive
-                                           handler:^(UIAlertAction *a) {
+    [actions addObject:[A2DialogAction actionWithTitle:@"移除账号"
+                                                 style:A2DialogActionStyleDestructive
+                                               handler:^{
+        __strong typeof(weakSelf) self = weakSelf;
         [A2Log log:@"AccountVC: 移除账号 %@", acc.username];
         [A2AccountManager.shared removeAccount:acc];
         [self buildAccounts];
         [A2Toast show:@"已移除" inView:self.view];
     }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
-                                             style:UIAlertActionStyleCancel
-                                           handler:nil]];
 
-    sheet.popoverPresentationController.sourceView = source;
-    sheet.popoverPresentationController.sourceRect = source.bounds;
-    [self presentViewController:sheet animated:YES completion:nil];
+    [A2Dialog showInView:self.view
+                   title:acc.username
+                 message:acc.typeDisplayName
+                 actions:actions];
 }
 
 #pragma mark - 添加账号

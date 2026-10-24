@@ -125,6 +125,7 @@
 		0769485BDAD9E62F52C32A8C /* A2CategoryNavView.m in Sources */ = {isa = PBXBuildFile; fileRef = A283C0C24413C706B449C36A /* A2CategoryNavView.m */; };
 		0964A8EE7FBEE0DA072679D2 /* A2ColorWheel.m in Sources */ = {isa = PBXBuildFile; fileRef = 75554051E6AED37FAF518AAF /* A2ColorWheel.m */; };
 		EC9125D409E5D09498AB2DE4 /* A2Dialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 54836FA8732F32DC7C9B8499 /* A2Dialog.m */; };
+		14508C4B0A06618691BDCEE5 /* A2DownloadPanel.m in Sources */ = {isa = PBXBuildFile; fileRef = 640BA41815669C390C8CF122 /* A2DownloadPanel.m */; };
 		2BF445C4575E8B37E4ED01C4 /* A2FilterChip.m in Sources */ = {isa = PBXBuildFile; fileRef = 86E9A8E1F1CBFB462AEE7811 /* A2FilterChip.m */; };
 		CB87022628B4EEDE9D911585 /* A2FilterPanel.m in Sources */ = {isa = PBXBuildFile; fileRef = 0D6F12D8CC6D2D0C761EECC2 /* A2FilterPanel.m */; };
 		350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */ = {isa = PBXBuildFile; fileRef = A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */; };
@@ -156,6 +157,7 @@
 		5440FDEA95986768641FF753 /* A2BaseViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */; };
 		DB69EBBFE2FB627A405DED59 /* A2LicenseViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6068960D14B3D649188A52E4 /* A2LicenseViewController.m */; };
 		4C2284D92DC7DE09B59CDBCF /* A2LogViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 86AF40E277EDF77B1E20CBC1 /* A2LogViewController.m */; };
+		8A4F4B97FC42F663BCC0D4CE /* A2AccountLeftPanel.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB3373063BF809FA78DEE3C /* A2AccountLeftPanel.m */; };
 		912C3DEC9D63AE689DA1F2DE /* A2AccountRowView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */; };
 		AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */; };
 		FB68423E2789A6F0A08E6E54 /* A2LoginViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */; };
@@ -325,6 +327,7 @@
 		A283C0C24413C706B449C36A /* A2CategoryNavView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CategoryNavView.m"; sourceTree = "<group>"; };
 		75554051E6AED37FAF518AAF /* A2ColorWheel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorWheel.m"; sourceTree = "<group>"; };
 		54836FA8732F32DC7C9B8499 /* A2Dialog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Dialog.m"; sourceTree = "<group>"; };
+		640BA41815669C390C8CF122 /* A2DownloadPanel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadPanel.m"; sourceTree = "<group>"; };
 		86E9A8E1F1CBFB462AEE7811 /* A2FilterChip.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2FilterChip.m"; sourceTree = "<group>"; };
 		0D6F12D8CC6D2D0C761EECC2 /* A2FilterPanel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2FilterPanel.m"; sourceTree = "<group>"; };
 		A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GlassCard.m"; sourceTree = "<group>"; };
@@ -356,6 +359,7 @@
 		BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BaseViewController.m"; sourceTree = "<group>"; };
 		6068960D14B3D649188A52E4 /* A2LicenseViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LicenseViewController.m"; sourceTree = "<group>"; };
 		86AF40E277EDF77B1E20CBC1 /* A2LogViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LogViewController.m"; sourceTree = "<group>"; };
+		FBB3373063BF809FA78DEE3C /* A2AccountLeftPanel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountLeftPanel.m"; sourceTree = "<group>"; };
 		2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountRowView.m"; sourceTree = "<group>"; };
 		CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountViewController.m"; sourceTree = "<group>"; };
 		1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoginViewController.m"; sourceTree = "<group>"; };
@@ -515,6 +519,7 @@
 		853858C5BCCD6563D696BCE9 /* A2CategoryNavView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CategoryNavView.h"; sourceTree = "<group>"; };
 		D0D70559C6A4486D1060EC44 /* A2ColorWheel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorWheel.h"; sourceTree = "<group>"; };
 		73E98A7463CD170A0A7D9009 /* A2Dialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Dialog.h"; sourceTree = "<group>"; };
+		FF7F03AE8917004211768207 /* A2DownloadPanel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadPanel.h"; sourceTree = "<group>"; };
 		51821EE36006651D51525519 /* A2FilterChip.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2FilterChip.h"; sourceTree = "<group>"; };
 		7F65D6CE6087B25615A6099F /* A2FilterPanel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2FilterPanel.h"; sourceTree = "<group>"; };
 		011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GlassCard.h"; sourceTree = "<group>"; };
@@ -547,6 +552,7 @@
 		346D941B767D969728343CD3 /* A2BaseViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BaseViewController.h"; sourceTree = "<group>"; };
 		95928851A19F7FC341B8F44F /* A2LicenseViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LicenseViewController.h"; sourceTree = "<group>"; };
 		884EEE8EC370C704A2B76DD9 /* A2LogViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LogViewController.h"; sourceTree = "<group>"; };
+		A52B4C019723DDFBE9488111 /* A2AccountLeftPanel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountLeftPanel.h"; sourceTree = "<group>"; };
 		0D773FDDDB48AA7436E8FAA5 /* A2AccountRowView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountRowView.h"; sourceTree = "<group>"; };
 		6D2B976BBD0701B19B6533DD /* A2AccountViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountViewController.h"; sourceTree = "<group>"; };
 		52F4C13395826CC0FD71F073 /* A2LoginViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoginViewController.h"; sourceTree = "<group>"; };
@@ -1065,6 +1071,7 @@
 				A283C0C24413C706B449C36A /* A2CategoryNavView.m */,
 				75554051E6AED37FAF518AAF /* A2ColorWheel.m */,
 				54836FA8732F32DC7C9B8499 /* A2Dialog.m */,
+				640BA41815669C390C8CF122 /* A2DownloadPanel.m */,
 				86E9A8E1F1CBFB462AEE7811 /* A2FilterChip.m */,
 				0D6F12D8CC6D2D0C761EECC2 /* A2FilterPanel.m */,
 				A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */,
@@ -1099,6 +1106,7 @@
 				853858C5BCCD6563D696BCE9 /* A2CategoryNavView.h */,
 				D0D70559C6A4486D1060EC44 /* A2ColorWheel.h */,
 				73E98A7463CD170A0A7D9009 /* A2Dialog.h */,
+				FF7F03AE8917004211768207 /* A2DownloadPanel.h */,
 				51821EE36006651D51525519 /* A2FilterChip.h */,
 				7F65D6CE6087B25615A6099F /* A2FilterPanel.h */,
 				011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */,
@@ -1209,9 +1217,11 @@
 		8957500F4C1E2FA1D18DFCD1 /* Account */ = {
 			isa = PBXGroup;
 			children = (
+				FBB3373063BF809FA78DEE3C /* A2AccountLeftPanel.m */,
 				2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */,
 				CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */,
 				1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */,
+				A52B4C019723DDFBE9488111 /* A2AccountLeftPanel.h */,
 				0D773FDDDB48AA7436E8FAA5 /* A2AccountRowView.h */,
 				6D2B976BBD0701B19B6533DD /* A2AccountViewController.h */,
 				52F4C13395826CC0FD71F073 /* A2LoginViewController.h */,
@@ -1523,6 +1533,7 @@
 				0769485BDAD9E62F52C32A8C /* A2CategoryNavView.m in Sources */,
 				0964A8EE7FBEE0DA072679D2 /* A2ColorWheel.m in Sources */,
 				EC9125D409E5D09498AB2DE4 /* A2Dialog.m in Sources */,
+				14508C4B0A06618691BDCEE5 /* A2DownloadPanel.m in Sources */,
 				2BF445C4575E8B37E4ED01C4 /* A2FilterChip.m in Sources */,
 				CB87022628B4EEDE9D911585 /* A2FilterPanel.m in Sources */,
 				350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */,
@@ -1554,6 +1565,7 @@
 				5440FDEA95986768641FF753 /* A2BaseViewController.m in Sources */,
 				DB69EBBFE2FB627A405DED59 /* A2LicenseViewController.m in Sources */,
 				4C2284D92DC7DE09B59CDBCF /* A2LogViewController.m in Sources */,
+				8A4F4B97FC42F663BCC0D4CE /* A2AccountLeftPanel.m in Sources */,
 				912C3DEC9D63AE689DA1F2DE /* A2AccountRowView.m in Sources */,
 				AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */,
 				FB68423E2789A6F0A08E6E54 /* A2LoginViewController.m in Sources */,

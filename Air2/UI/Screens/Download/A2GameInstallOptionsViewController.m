@@ -340,14 +340,20 @@
         apiType ? [A2ModLoaderAPI displayNameForType:(A2ModLoaderType)apiType.integerValue]
                 : @"无"];
 
-    A2InstallingViewController *vc =
-        [[A2InstallingViewController alloc] initWithMCVersion:_versionID
-                                                  versionName:_nameField.text
-                                                   loaderType:loaderType
-                                                loaderVersion:loaderVersion
-                                                     apiType:apiType
-                                                  apiVersion:apiVersion];
-    [self.navigationController pushViewController:vc animated:YES];
+    // 用弹窗形态（ZL2 的 TitleTaskFlowDialog），而不是整页推进去的圆环页。
+    //
+    // 两套界面并存是我之前的问题：A2InstallingViewController 是早期做的
+    // 圆环 + 大进度条版本，而 A2InstallProgressDialog 是按 ZL2 的
+    // 任务清单做的。用户看到的是前者，所以「感觉没变」。
+    //
+    // 现在统一走弹窗：任务清单 + 进度条/速率/百分比同行 + 底部取消。
+    [A2InstallingViewController presentAsDialogFrom:self
+                                          mcVersion:_versionID
+                                        versionName:_nameField.text
+                                         loaderType:loaderType
+                                      loaderVersion:loaderVersion
+                                            apiType:apiType
+                                         apiVersion:apiVersion];
 }
 
 @end
