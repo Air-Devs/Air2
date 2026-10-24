@@ -1470,6 +1470,30 @@ static int a2_touchSeen = 0;
     return vc;
 }
 
+/// ★边界判断★ 默认布局是按手机比例写的，iPad/分屏下会跑到屏幕外。
+///   这里逐项把控件夹回可见区（留半个边长余量），并打一行判据。
+- (void)a2_clampControlsIntoBounds {
+    CGSize s = self.bounds.size;
+    if (s.width <= 1 || s.height <= 1) return;
+    int moved = 0;
+    for (NSString *cid in _movable) {
+        UIView *v = _movable[cid];
+        if (v == nil || v.hidden) continue;
+        CGFloat hw = CGRectGetWidth(v.bounds) * 0.5;
+        CGFloat hh = CGRectGetHeight(v.bounds) * 0.5;
+        CGFloat x = MIN(MAX(v.center.x, hw), s.width - hw);
+        CGFloat y = MIN(MAX(v.center.y, hh), s.height - hh);
+        if (fabs(x - v.center.x) > 0.5 || fabs(y - v.center.y) > 0.5) {
+            v.center = CGPointMake(x, y);
+            moved++;
+        }
+    }
+    if (moved > 0) {
+        a2_log_f(@"[A2-CONTROLS] 边界修正：%d 个控件被夹回可见区（bounds=%.0fx%.0f）",
+                 moved, s.width, s.height);
+    }
+}
+
 /// ★按机型定制★ 设备键 = 硬件型号 + 屏幕点数（长边x短边）
 - (NSString *)a2_deviceKey {
     // hw.machine 才是具体机型（iPhone15,2 / iPad13,4 …）；UIDevice.model 只有 "iPhone"
@@ -1512,6 +1536,7 @@ static int a2_touchSeen = 0;
     [self a2_layoutDefaultButtons];
     [self a2_layoutHotbar];
     [self a2_applySavedLayout];
+    [self a2_clampControlsIntoBounds];   // ★边界判断★ 防止默认布局在 iPad 上跑出屏幕
 }
 
 #pragma mark - 编辑器 API（设置里的控件布局编辑器调用）
