@@ -192,6 +192,11 @@
 @property (nonatomic, strong) A2TextField *searchField;
 @property (nonatomic, strong) NSArray<NSDictionary<NSString *, id> *> *versions;
 @property (nonatomic, copy) NSString *filterText;
+/// 版本分类筛选（对照 ZL2 的 VersionCategory：全部 / 原版 / 可安装模组）
+///   0 = 全部   1 = 原版   2 = 带模组加载器
+@property (nonatomic, assign) NSInteger selectedCategory;
+@property (nonatomic, strong, nullable) NSMutableArray<UIButton *> *categoryButtons;
+@property (nonatomic, strong) UIStackView *categoryBar;
 @property (nonatomic, strong) NSMutableArray<A2VersionRowView *> *rowViews;
 @property (nonatomic, strong) UIButton *addPathButton;
 /// 文件选择器回调要区分是「选目录」还是「选整合包」，用标记区分
@@ -292,6 +297,31 @@
     [_listScroll addSubview:_listStack];
 
     [self.plainContentView addSubview:_pathScroll];
+    // ---- 版本分类条（对照 ZL2 的 [全部] [原版] [可安装模组]）----
+    _categoryBar = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _categoryBar.translatesAutoresizingMaskIntoConstraints = NO;
+    _categoryBar.axis = UILayoutConstraintAxisHorizontal;
+    _categoryBar.spacing = A2SpaceS;
+    _categoryBar.alignment = UIStackViewAlignmentCenter;
+
+    _categoryButtons = [NSMutableArray array];
+    NSArray<NSString *> *titles = @[@"全部", @"原版", @"模组版"];
+    for (NSInteger i = 0; i < titles.count; i++) {
+        UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
+        b.translatesAutoresizingMaskIntoConstraints = NO;
+        b.tag = i;
+        b.contentEdgeInsets = UIEdgeInsetsMake(0, 12, 0, 12);
+        b.titleLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightMedium];
+        b.layer.cornerRadius = 14;
+        b.layer.cornerCurve = kCACornerCurveContinuous;
+        [b.heightAnchor constraintEqualToConstant:28].active = YES;
+        [b addTarget:self action:@selector(categoryTapped:)
+    forControlEvents:UIControlEventTouchUpInside];
+        [_categoryBar addArrangedSubview:b];
+        [_categoryButtons addObject:b];
+    }
+
+    [self.plainContentView addSubview:_categoryBar];
     [self.plainContentView addSubview:_searchField];
     [self.plainContentView addSubview:_listScroll];
 
@@ -308,6 +338,13 @@
         [_pathStack.leadingAnchor constraintEqualToAnchor:_pathScroll.leadingAnchor],
         [_pathStack.trailingAnchor constraintEqualToAnchor:_pathScroll.trailingAnchor],
         [_pathStack.widthAnchor constraintEqualToAnchor:_pathScroll.widthAnchor],
+
+        // 分类条（固定右上左侧，不随列表滚动）
+        [_categoryBar.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_categoryBar.leadingAnchor constraintEqualToAnchor:_pathScroll.trailingAnchor
+                                                   constant:A2SpaceM],
+        [_categoryBar.trailingAnchor constraintLessThanOrEqualToAnchor:_searchField.leadingAnchor
+                                                              constant:-A2SpaceM],
 
         // 搜索框（固定右上，不随列表滚动）
         [_searchField.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
@@ -520,6 +557,9 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
 }
 
 - (void)buildVersionList {
+    // 每次重建列表都同步分类条的数量（版本增删后角标要跟着变）
+    [self updateCategoryBar];
+
     if (_versions.count == 0) {
         [self buildEmptyState];
         return;
@@ -636,15 +676,71 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
 }
 /// 关键字过滤（大小写不敏感，空关键字即全部）。行与选中共用同一份可见集。
 - (NSArray<NSDictionary<NSString *, id> *> *)filteredVersions {
-    if (_filterText.length == 0) return _versions;
     NSMutableArray<NSDictionary<NSString *, id> *> *out = [NSMutableArray array];
+
     for (NSDictionary<NSString *, id> *v in _versions) {
-        NSString *name = v[@"name"];
-        if ([name rangeOfString:_filterText options:NSCaseInsensitiveSearch].location != NSNotFound) {
-            [out addObject:v];
+        // 分类筛选（对照 ZL2 的 VersionCategory）
+        //   原版 = 没有 loaderInfo
+        //   模组版 = 有 loaderInfo
+        if (_selectedCategory == 1) {
+            A2Version *model = v[@"model"];
+            if (model.loaderInfo.length > 0) continue;
+        } else if (_selectedCategory == 2) {
+            A2Version *model = v[@"model"];
+            if (model.loaderInfo.length == 0) continue;
         }
+
+        // 关键字筛选
+        if (_filterText.length > 0) {
+            NSString *name = v[@"name"];
+            if ([name rangeOfString:_filterText options:NSCaseInsensitiveSearch].location == NSNotFound) {
+                continue;
+            }
+        }
+
+        [out addObject:v];
     }
     return out;
+}
+
+/// 点击分类（全部 / 原版 / 模组版）
+- (void)categoryTapped:(UIButton *)sender {
+    self.selectedCategory = sender.tag;
+    [self updateCategoryBar];
+    [self buildVersionList];
+}
+
+/// 刷新分类条的外观（选中态 + 数量角标）
+- (void)updateCategoryBar {
+    if (!self.categoryButtons.count) return;
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+
+    NSArray<NSString *> *titles = @[@"全部", @"原版", @"模组版"];
+    for (UIButton *b in self.categoryButtons) {
+        NSInteger cat = b.tag;
+        BOOL selected = (cat == self.selectedCategory);
+        NSUInteger n = [self countForCategory:cat];
+
+        [b setTitle:[NSString stringWithFormat:@"%@ (%lu)", titles[cat], (unsigned long)n]
+           forState:UIControlStateNormal];
+        b.backgroundColor = selected ? t.cPrimary : t.cSurfaceContainerHigh;
+        [b setTitleColor:(selected ? t.cOnPrimary : t.cOnSurfaceVariant)
+                 forState:UIControlStateNormal];
+    }
+}
+
+/// 各分类的数量（用于筛选条上的角标，对照 ZL2 的版本分类计数）
+- (NSUInteger)countForCategory:(NSInteger)category {
+    if (category == 0) return _versions.count;
+
+    NSUInteger n = 0;
+    for (NSDictionary<NSString *, id> *v in _versions) {
+        A2Version *model = v[@"model"];
+        BOOL isVanilla = (model.loaderInfo.length == 0);
+        if (category == 1 && isVanilla) n++;
+        if (category == 2 && !isVanilla) n++;
+    }
+    return n;
 }
 
 /// 有版本但关键字无命中：纯提示行，不复用空态卡（那张卡带安装按钮，语义不对）。
