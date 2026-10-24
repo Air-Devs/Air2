@@ -20,6 +20,11 @@
 #include <dlfcn.h>
 #include <string.h>
 
+// dlvsym 在 Darwin 的 <dlfcn.h> 里默认不暴露（需要 _DARWIN_C_SOURCE），
+// 这里显式声明：它是 libSystem 的公开符号，用来拿"真正的 dlsym"避免自递归。
+extern void *dlvsym(void *handle, const char *symbol_name, const char *version);
+
+
 extern int gA2GlErrorShimEnabled;
 
 static unsigned int a2_glGetError_stub(void) {
