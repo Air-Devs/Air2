@@ -81,6 +81,7 @@
 		7248BD00DBF94569DDA08C01 /* A2DefaultControls.m in Sources */ = {isa = PBXBuildFile; fileRef = 5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */; };
 		062C9510C87BE5CE71B8FCA7 /* A2TouchTransport.m in Sources */ = {isa = PBXBuildFile; fileRef = BC32DEDE020A2112CC01EF75 /* A2TouchTransport.m */; };
 		FC9219FD2D0892A86120A148 /* A2GameMenuOverlay.m in Sources */ = {isa = PBXBuildFile; fileRef = BA1CDFB3C78F08B828B7EEDC /* A2GameMenuOverlay.m */; };
+		A72D7475032C8A6614F6864D /* A2JVMRunningViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = F0EACB38F79192127D03C3C4 /* A2JVMRunningViewController.m */; };
 		04FA0FC85CCBBA11454EF9AE /* A2LaunchSplashView.m in Sources */ = {isa = PBXBuildFile; fileRef = 96009B3F837E8AD9139F1044 /* A2LaunchSplashView.m */; };
 		999713CBCD519FC8B0C363BE /* A2ResolutionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */; };
 		F56BA6557B260E7C004C2CE4 /* A2ResolutionSettingsView.m in Sources */ = {isa = PBXBuildFile; fileRef = F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */; };
@@ -193,6 +194,7 @@
 		C754280DF19913731620CE6A /* A2Log.m in Sources */ = {isa = PBXBuildFile; fileRef = CE8E02818B37C0AFFABF71D5 /* A2Log.m */; };
 		6B1CD1AC96CD93B7EE0847A4 /* A2MurmurHash2.m in Sources */ = {isa = PBXBuildFile; fileRef = 70E537F57063CE783BE3A38B /* A2MurmurHash2.m */; };
 		173CB61901164D888C0739BA /* A2Strings.m in Sources */ = {isa = PBXBuildFile; fileRef = 7EC0262DD08DEE92A0AD385D /* A2Strings.m */; };
+		83A8D0C90A5CC34F616626B3 /* fishhook.c in Sources */ = {isa = PBXBuildFile; fileRef = F39BE4E60C67B8B8318A190E /* fishhook.c */; };
 		FC6E8A547C179CC55A247D57 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F6B4BAFE39547DFF98D20300 /* Images.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -273,6 +275,7 @@
 		5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DefaultControls.m"; sourceTree = "<group>"; };
 		BC32DEDE020A2112CC01EF75 /* A2TouchTransport.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TouchTransport.m"; sourceTree = "<group>"; };
 		BA1CDFB3C78F08B828B7EEDC /* A2GameMenuOverlay.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameMenuOverlay.m"; sourceTree = "<group>"; };
+		F0EACB38F79192127D03C3C4 /* A2JVMRunningViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JVMRunningViewController.m"; sourceTree = "<group>"; };
 		96009B3F837E8AD9139F1044 /* A2LaunchSplashView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchSplashView.m"; sourceTree = "<group>"; };
 		000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResolutionManager.m"; sourceTree = "<group>"; };
 		F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResolutionSettingsView.m"; sourceTree = "<group>"; };
@@ -385,6 +388,7 @@
 		CE8E02818B37C0AFFABF71D5 /* A2Log.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Log.m"; sourceTree = "<group>"; };
 		70E537F57063CE783BE3A38B /* A2MurmurHash2.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MurmurHash2.m"; sourceTree = "<group>"; };
 		7EC0262DD08DEE92A0AD385D /* A2Strings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Strings.m"; sourceTree = "<group>"; };
+		F39BE4E60C67B8B8318A190E /* fishhook.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "fishhook.c"; sourceTree = "<group>"; };
 		52E0A8862124FBDB57E8C690 /* A2AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AppDelegate.h"; sourceTree = "<group>"; };
 		6A39662C0840C98AB5D33038 /* A2CrashGuard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CrashGuard.h"; sourceTree = "<group>"; };
 		FFF83F1A982D07C7CBBF5C78 /* A2NavigationController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2NavigationController.h"; sourceTree = "<group>"; };
@@ -458,6 +462,7 @@
 		17EFE083DFCD2B631A9B9195 /* A2DefaultControls.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DefaultControls.h"; sourceTree = "<group>"; };
 		ABBA497DBC96475F112E489F /* A2TouchTransport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TouchTransport.h"; sourceTree = "<group>"; };
 		8F8DC63CC90EE44095B0B442 /* A2GameMenuOverlay.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameMenuOverlay.h"; sourceTree = "<group>"; };
+		21F797A74F81806352EACC05 /* A2JVMRunningViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JVMRunningViewController.h"; sourceTree = "<group>"; };
 		1C687E2D44BB19258F377A63 /* A2LaunchSplashView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchSplashView.h"; sourceTree = "<group>"; };
 		9A380B08F835A986A05EA196 /* A2ResolutionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResolutionManager.h"; sourceTree = "<group>"; };
 		947208B1A4FAF92FA8883A17 /* A2ResolutionSettingsView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResolutionSettingsView.h"; sourceTree = "<group>"; };
@@ -603,6 +608,15 @@
 			sourceTree = "<group>";
 		};
 
+		30F6BE50499D1A046A1A1B66 /* Libraries */ = {
+			isa = PBXGroup;
+			children = (
+				7200F62FB85B69CEBAA7AD93 /* external */,
+			);
+			path = Libraries;
+			sourceTree = "<group>";
+		};
+
 		7B4F16DD90D9362E0A2BDBD1 /* App */ = {
 			isa = PBXGroup;
 			children = (
@@ -676,6 +690,15 @@
 				A817F7F6D7CB98164433DEE3 /* A2Strings.h */,
 			);
 			path = Utils;
+			sourceTree = "<group>";
+		};
+
+		7200F62FB85B69CEBAA7AD93 /* external */ = {
+			isa = PBXGroup;
+			children = (
+				169F339BE994B582B05FBBF4 /* fishhook */,
+			);
+			path = external;
 			sourceTree = "<group>";
 		};
 
@@ -913,10 +936,12 @@
 			isa = PBXGroup;
 			children = (
 				BA1CDFB3C78F08B828B7EEDC /* A2GameMenuOverlay.m */,
+				F0EACB38F79192127D03C3C4 /* A2JVMRunningViewController.m */,
 				96009B3F837E8AD9139F1044 /* A2LaunchSplashView.m */,
 				000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */,
 				F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */,
 				8F8DC63CC90EE44095B0B442 /* A2GameMenuOverlay.h */,
+				21F797A74F81806352EACC05 /* A2JVMRunningViewController.h */,
 				1C687E2D44BB19258F377A63 /* A2LaunchSplashView.h */,
 				9A380B08F835A986A05EA196 /* A2ResolutionManager.h */,
 				947208B1A4FAF92FA8883A17 /* A2ResolutionSettingsView.h */,
@@ -1120,6 +1145,15 @@
 			sourceTree = "<group>";
 		};
 
+		169F339BE994B582B05FBBF4 /* fishhook */ = {
+			isa = PBXGroup;
+			children = (
+				F39BE4E60C67B8B8318A190E /* fishhook.c */,
+			);
+			path = fishhook;
+			sourceTree = "<group>";
+		};
+
 		9C8E9F6CAB6C863C2FF0B16C /* awt_xawt */ = {
 			isa = PBXGroup;
 			children = (
@@ -1266,6 +1300,7 @@
 			isa = PBXGroup;
 			children = (
 				0D7DB83B69709B8B97AE4409 /* Air2 */,
+				30F6BE50499D1A046A1A1B66 /* Libraries */,
 				31A5E41A9BD04E385DB196E5 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -1414,6 +1449,7 @@
 				7248BD00DBF94569DDA08C01 /* A2DefaultControls.m in Sources */,
 				062C9510C87BE5CE71B8FCA7 /* A2TouchTransport.m in Sources */,
 				FC9219FD2D0892A86120A148 /* A2GameMenuOverlay.m in Sources */,
+				A72D7475032C8A6614F6864D /* A2JVMRunningViewController.m in Sources */,
 				04FA0FC85CCBBA11454EF9AE /* A2LaunchSplashView.m in Sources */,
 				999713CBCD519FC8B0C363BE /* A2ResolutionManager.m in Sources */,
 				F56BA6557B260E7C004C2CE4 /* A2ResolutionSettingsView.m in Sources */,
@@ -1526,6 +1562,7 @@
 				C754280DF19913731620CE6A /* A2Log.m in Sources */,
 				6B1CD1AC96CD93B7EE0847A4 /* A2MurmurHash2.m in Sources */,
 				173CB61901164D888C0739BA /* A2Strings.m in Sources */,
+				83A8D0C90A5CC34F616626B3 /* fishhook.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

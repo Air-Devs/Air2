@@ -28,6 +28,7 @@
 
 #import "A2LauncherViewController.h"
 #import "A2LaunchSplashView.h"
+#import "A2JVMRunningViewController.h"
 #import "A2GameLaunchCoordinator.h"
 #import "ios_uikit_bridge.h"
 #import "A2JREManager.h"
@@ -58,6 +59,8 @@
 
 @interface A2LauncherViewController ()
 @property (nonatomic, strong, nullable) A2LaunchSplashView *launchSplash;
+/// JVM 运行中界面（对照 ZL2 的 JVMScreen）
+@property (nonatomic, strong, nullable) A2JVMRunningViewController *jvmScreen;
 @property (nonatomic, strong) A2BackgroundView *backgroundView;
 @property (nonatomic, strong) UIView *topBar;
 @property (nonatomic, strong) UILabel *appNameLabel;
@@ -798,12 +801,24 @@
             return;
         }
 
-        // 遮罩不立即移除 —— SurfaceViewController 起来后由它自己接管画面。
-        // 这里先延迟淡出，避免闪一下黑屏。
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            [splash finishAndDismissWithCompletion:nil];
-        });
+        // 三段式启动（对照 ZL2）：
+        //   1. 遮罩（进度 + 日志）      ← 现在这个
+        //   2. JVMScreen（黑屏 + 指针 + 三按钮）
+        //   3. GameScreen（控件 + 悬浮球）
+        //
+        // 遮罩先淡出，紧接着显示 JVMScreen —— 中间不能有空档，
+        // 否则用户会看到一闪而过的桌面。
+
+        [splash finishAndDismissWithCompletion:^{
+            A2JVMRunningViewController *jvm = [[A2JVMRunningViewController alloc] init];
+            jvm.view.frame = self.view.bounds;
+            jvm.view.autoresizingMask = UIViewAutoresizingFlexibleWidth
+                                      | UIViewAutoresizingFlexibleHeight;
+            [self.view addSubview:jvm.view];
+            [self addChildViewController:jvm];
+            [jvm didMoveToParentViewController:self];
+            self.jvmScreen = jvm;
+        }];
 
         UIKit_launchMinecraftSurfaceVC(window, metadata);
     }];
