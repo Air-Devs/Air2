@@ -113,6 +113,9 @@ static NSString *const kPartSuffix = @".part";
 
 // 断点续传校验信息（对应 ZL2 的 ResumeContext）
 @property (nonatomic, assign) int64_t contentLength;
+/// 落盘是否出过错。为真时既有内容不可信，重试【不得续传】
+/// （对照 ZL2 的 FileSink.broken）。
+@property (nonatomic, assign) BOOL writeBroken;
 @property (nonatomic, assign) int64_t receivedBytes;
 @property (nonatomic, copy, nullable) NSString *strongETag;
 @property (nonatomic, copy, nullable) NSString *lastModified;
@@ -212,6 +215,15 @@ static NSString *const kPartSuffix = @".part";
     req.timeoutInterval = 60;
     [req setValue:@"identity" forHTTPHeaderField:@"Accept-Encoding"];
 
+    // 落盘出过错 → 已有内容不可信，必须从头下（对照 ZL2 的 broken 标记）
+    if (self.writeBroken) {
+        [A2Logger warning:@"DownloadEngine"
+                  message:@"上次写盘失败，丢弃断点从头下载"];
+        [self discardPartialDownload];
+        self.ifRangeValidator = nil;
+        self.writeBroken = NO;
+    }
+
     // 有断点则带 If-Range，服务端不匹配会返回 200（我们就从 0 重下）
     if (self.receivedBytes > 0 && self.ifRangeValidator) {
         [req setValue:self.ifRangeValidator forHTTPHeaderField:@"If-Range"];
@@ -303,6 +315,24 @@ didReceiveResponse:(NSURLResponse *)response
                                                 (long)code, wait]];
             dispatch_async(self.queue, ^{
                 [self handleCandidateFailureWithDelay:err delay:wait];
+            });
+            return;
+        }
+
+        // ---- 4xx：立即放弃这个源，不重试 ----
+        //
+        // 对齐 ZL2 的 Fetcher：
+        //   if (e.code in 400..499) throw DownloadException(...)   // 直接跳出重试循环
+        //
+        // 404/403 是「这个 URL 就是错的」，重试 5 次毫无意义 ——
+        // 每次都要等满 10 秒超时，一个坏 URL 就浪费 50 秒。
+        // 这类错误应该立刻换下一个候选源。
+        if (code >= 400 && code < 500) {
+            NSError *err = [self errorWithCode:A2DownloadErrorNetworkFailure
+                                       message:[NSString stringWithFormat:
+                                                @"HTTP %ld（该源不可用，切换）", (long)code]];
+            dispatch_async(self.queue, ^{
+                [self handleCandidateFailureImmediately:err];
             });
             return;
         }
@@ -508,12 +538,29 @@ didReceiveResponse:(NSURLResponse *)response
 
 - (void)flushBuffer {
     if (self.writeBuffer.length == 0 || !self.fileHandle) return;
+
     @try {
         [self.fileHandle writeData:self.writeBuffer];
+        [self.writeBuffer setLength:0];
     } @catch (NSException *e) {
-        // 磁盘写失败
+        // ⚠️ 之前这里吞掉了异常，还照样清空 buffer ——
+        // 结果是【写入失败的数据凭空消失】，下载继续跑，
+        // 最后得到一个大小对不上、内容缺失的文件，且没有任何日志。
+        //
+        // 正确做法（对照 ZL2 的 FileSink.write）：
+        //   标记 broken + 抛错，让上层换源重试（且禁止续传）。
+        self.writeBroken = YES;
+        [A2Logger error:@"DownloadEngine"
+                message:[NSString stringWithFormat:
+                         @"写盘失败：%@", e.reason ?: @"unknown"]];
+
+        NSError *err = [self errorWithCode:A2DownloadErrorFileWriteFailure
+                                   message:[NSString stringWithFormat:
+                                            @"写入文件失败：%@", e.reason ?: @""]];
+        dispatch_async(self.queue, ^{
+            [self handleCandidateFailure:err];
+        });
     }
-    [self.writeBuffer setLength:0];
 }
 
 - (void)URLSession:(NSURLSession *)session
@@ -541,6 +588,32 @@ didCompleteWithError:(NSError *)error {
 - (void)verifyAndFinish {
     NSString *partPath = [self partFilePath];
     NSString *destPath = self.request.destinationPath;
+
+    // ---- 先做长度检测（比 SHA1 快几个数量级）----
+    //
+    // 对齐 ZL2 的 transfer()：
+    //   if (written != contentLength) throw IOException("Unexpected file size")
+    //
+    // 服务端断流时 URLSession 不一定报错，可能安静地少给数据。
+    // 只有先比长度才能快速发现截断 —— 否则要等整个文件 SHA1 算完
+    // 才知道有问题（大文件多花几秒到几十秒）。
+    NSDictionary *attrs = [NSFileManager.defaultManager attributesOfItemAtPath:partPath error:nil];
+    int64_t actualSize = [attrs[NSFileSize] longLongValue];
+
+    if (self.contentLength > 0 && actualSize != self.contentLength) {
+        [A2Logger warning:@"DownloadEngine"
+                  message:[NSString stringWithFormat:
+                           @"长度不符：实际 %lld / 期望 %lld（%lld 字节差）",
+                           actualSize, self.contentLength,
+                           self.contentLength - actualSize]];
+        [NSFileManager.defaultManager removeItemAtPath:partPath error:nil];
+        NSError *err = [self errorWithCode:A2DownloadErrorIncomplete
+                                   message:[NSString stringWithFormat:
+                                            @"文件不完整（%lld/%lld 字节）",
+                                            actualSize, self.contentLength]];
+        [self handleCandidateFailure:err];
+        return;
+    }
 
     // SHA1 校验
     if (self.request.expectedSHA1.length > 0) {
@@ -594,6 +667,22 @@ didCompleteWithError:(NSError *)error {
 #pragma mark 失败与换源
 
 /// 当前候选失败 —— 先退避重试，重试耗尽再换下一个候选
+/// 立即放弃当前候选源，不留重试机会（4xx 用）。
+///
+/// 与 handleCandidateFailure: 的区别：
+///   那个会先在本源上重试 kBackoffCount 次；
+///   这个直接 retryCount 拉满 → 立刻切下一个候选 URL。
+- (void)handleCandidateFailureImmediately:(NSError *)error {
+    if (self.finished) return;
+    [self closeFileHandle];
+    [self.currentTask cancel];
+    self.currentTask = nil;
+
+    // 把重试计数拉满，让 handleCandidateFailure 直接走换源分支
+    self.retryCount = kBackoffCount;
+    [self handleCandidateFailure:error];
+}
+
 /// 带自定义延迟的失败处理（429/503 用）。
 ///
 /// 与 handleCandidateFailure: 的区别：

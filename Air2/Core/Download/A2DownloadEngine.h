@@ -56,6 +56,7 @@ typedef NS_ENUM(NSInteger, A2DownloadErrorCode) {
     A2DownloadErrorAllCandidatesExhausted = 3,
     A2DownloadErrorInvalidParameter = 4,
     A2DownloadErrorFileWriteFailure = 5,
+    A2DownloadErrorIncomplete = 6,          ///< 长度不符（服务端断流）
 };
 
 FOUNDATION_EXPORT NSString *const A2DownloadErrorDomain;
