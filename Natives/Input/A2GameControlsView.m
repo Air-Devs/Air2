@@ -181,6 +181,8 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     BOOL _editing;
     NSTimer *_useWatchdog;
     NSTimer *_attackWatchdog;
+    UIView *_selectionHandle;      // 选中框右下角的缩放把手
+    __weak UIView *_selectedControl;
     NSMutableDictionary<NSString *, NSNumber *> *_bindings;   // 控件id -> GLFW 键码
     NSMutableDictionary<NSString *, NSValue *> *_restFrames;  // 编辑前位置（取消用）
 
@@ -846,10 +848,70 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 /// 编辑模式下点控件 = 改键位（拖动/捏合仍用于位置与大小）。
 - (void)a2_tapControl:(UITapGestureRecognizer *)tap {
     if (!_editing) return;
-    NSString *cid = nil;
-    for (NSString *k in _movable) { if (_movable[k] == tap.view) { cid = k; break; } }
-    if (cid == nil) return;
-    [self a2_presentKeyPickerFor:cid];
+    UIView *v = tap.view;
+    if (v == nil) return;
+
+    // ★第一次点=选中（高亮 + 右下角缩放把手）★ 再点同一个才弹键位选择
+    if (_selectedControl == v) {
+        NSString *cid = nil;
+        for (NSString *k in _movable) { if (_movable[k] == v) { cid = k; break; } }
+        if (cid != nil) [self a2_presentKeyPickerFor:cid];
+        return;
+    }
+    [self a2_selectControl:v];
+}
+
+/// 选中某控件：去掉上一个的高亮、给这个加边框和把手。
+- (void)a2_selectControl:(UIView *)v {
+    if (_selectedControl != nil) {
+        _selectedControl.layer.borderWidth = 1.0;
+        _selectedControl.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.22].CGColor;
+    }
+    _selectedControl = v;
+    v.layer.borderWidth = 2.0;
+    v.layer.borderColor = [UIColor colorWithRed:0.42 green:0.65 blue:1.0 alpha:1.0].CGColor;
+
+    if (_selectionHandle == nil) {
+        _selectionHandle = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 26, 26)];
+        _selectionHandle.backgroundColor = [UIColor colorWithRed:0.42 green:0.65 blue:1.0 alpha:0.95];
+        _selectionHandle.layer.cornerRadius = 13;
+        _selectionHandle.layer.borderWidth = 2;
+        _selectionHandle.layer.borderColor = [UIColor whiteColor].CGColor;
+        UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragHandle:)];
+        [_selectionHandle addGestureRecognizer:pan];
+        [self addSubview:_selectionHandle];
+    }
+    _selectionHandle.hidden = NO;
+    [self bringSubviewToFront:_selectionHandle];
+    [self a2_layoutHandleForSelected];
+}
+
+- (void)a2_layoutHandleForSelected {
+    UIView *v = _selectedControl;
+    if (v == nil || _selectionHandle == nil) return;
+    CGPoint c = [v.superview convertPoint:CGPointMake(CGRectGetMaxX(v.frame), CGRectGetMaxY(v.frame)) toView:self];
+    _selectionHandle.center = c;
+}
+
+/// 拖把手=等比放大/缩小（最小 28pt）
+- (void)a2_dragHandle:(UIPanGestureRecognizer *)pan {
+    UIView *v = _selectedControl;
+    if (v == nil) return;
+    CGPoint t = [pan translationInView:self];
+    CGSize s = v.bounds.size;
+    CGFloat side = MAX(28.0, s.width + t.x);
+    v.bounds = CGRectMake(0, 0, side, MAX(28.0, s.height + t.y));
+    [pan setTranslation:CGPointZero inView:self];
+    [self a2_layoutHandleForSelected];
+}
+
+- (void)a2_deselect {
+    if (_selectedControl != nil) {
+        _selectedControl.layer.borderWidth = 1.0;
+        _selectedControl.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.22].CGColor;
+    }
+    _selectedControl = nil;
+    _selectionHandle.hidden = YES;
 }
 
 - (void)a2_presentKeyPickerFor:(NSString *)cid {
@@ -1011,6 +1073,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
 - (void)a2_setEditing:(BOOL)editing {
     _editing = editing;
+    if (!editing) [self a2_deselect];
     // 编辑时允许拖动/捏合；非编辑态手势仍挂着但不吞触摸（cancelsTouchesInView=NO）
 }
 

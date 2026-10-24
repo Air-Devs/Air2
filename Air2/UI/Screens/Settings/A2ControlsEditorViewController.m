@@ -16,6 +16,10 @@
 
 @implementation A2ControlsEditorViewController
 
+- (void)a2_editorBackgroundTap:(UITapGestureRecognizer *)g {
+    [_controls a2_deselect];
+}
+
 + (instancetype)editor {
     return [[self alloc] init];
 }
@@ -34,7 +38,12 @@
     _canvas.clipsToBounds = YES;
     [self.view addSubview:_canvas];
 
-    NSLayoutConstraint *aspect = [_canvas.widthAnchor constraintEqualToAnchor:_canvas.heightAnchor multiplier:16.0 / 9.0];
+    // ★按本机真实比例★ 用当前屏幕尺寸算宽高比（原来是写死 16:9，
+    //   在 874×402 这类比例上控件会被摆到画布外、看起来"超出屏幕看不见"）。
+    CGSize screen = UIScreen.mainScreen.bounds.size;
+    CGFloat ratio = (screen.height > 0) ? (screen.width / screen.height) : (16.0 / 9.0);
+    if (ratio < 0.5 || ratio > 4.0) ratio = 16.0 / 9.0;   // 异常值兜底
+    NSLayoutConstraint *aspect = [_canvas.widthAnchor constraintEqualToAnchor:_canvas.heightAnchor multiplier:ratio];
     aspect.priority = 999;
 
     [NSLayoutConstraint activateConstraints:@[
@@ -55,6 +64,11 @@
         [_controls.bottomAnchor constraintEqualToAnchor:_canvas.bottomAnchor],
     ]];
     [_controls a2_setEditing:YES];
+
+    // 点画布空白 = 取消选中（控件本体的 tap 由 A2GameControlsView 自己处理）
+    UITapGestureRecognizer *bg = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(a2_editorBackgroundTap:)];
+    bg.cancelsTouchesInView = NO;
+    [_canvas addGestureRecognizer:bg];
 
     [self buildToolbar];
 

@@ -40,6 +40,8 @@ typedef NS_ENUM(NSInteger, A2MoveMode) {
 
 /// 编辑模式（★只给设置里的编辑器用★ 游戏内不再进入编辑）
 - (void)a2_setEditing:(BOOL)editing;
+/// 取消选中（编辑器点空白处调用）
+- (void)a2_deselect;
 
 /// 保存当前布局到「当前方案」并落盘。
 - (void)a2_saveLayoutNow;
