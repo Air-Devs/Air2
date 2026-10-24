@@ -220,6 +220,10 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         _movable = [NSMutableDictionary dictionary];
         _customTitles = [NSMutableDictionary dictionary];
         _removedIds = [NSMutableSet set];
+        [NSNotificationCenter.defaultCenter addObserver:self
+                                              selector:@selector(a2_layoutChanged:)
+                                                  name:@"A2ControlLayoutChanged"
+                                                object:nil];
         _bindings = [[NSUserDefaults.standardUserDefaults dictionaryForKey:kA2BindingsKey] mutableCopy]
                     ?: [NSMutableDictionary dictionary];
         _restFrames = [NSMutableDictionary dictionary];
@@ -852,7 +856,10 @@ static int a2_touchSeen = 0;
     entry[@"_h"] = @(CGRectGetHeight(self.bounds));
     store[name] = entry;
     [NSUserDefaults.standardUserDefaults setObject:store forKey:kA2LayoutsKey];
-    a2_log_f(@"[A2-CONTROLS] 方案已保存：%@（%lu 项）", name, (unsigned long) entry.count);
+    // ★立即生效★ 写盘 + 广播：已存在的控件层收到后立刻重载，不必重启 App
+    [NSUserDefaults.standardUserDefaults synchronize];
+    [NSNotificationCenter.defaultCenter postNotificationName:@"A2ControlLayoutChanged" object:nil];
+    a2_log_f(@"[A2-CONTROLS] 方案已保存：%@（%lu 项）并广播立即生效", name, (unsigned long) entry.count);
 }
 
 - (void)a2_applySavedLayout {
@@ -1085,6 +1092,10 @@ static int a2_touchSeen = 0;
     _selectionHandle.hidden = YES;
     [self a2_saveLayout];
     a2_log_f(@"[A2-CONTROLS] 删除控件：%@", cid);
+}
+
+- (void)a2_layoutChanged:(NSNotification *)n {
+    if (!_editing) [self a2_reloadSavedLayout];   // 编辑器里别抢用户的编辑态
 }
 
 - (void)a2_reloadSavedLayout {
