@@ -150,6 +150,19 @@ static id gObserver = nil;
         poll();
     }];
 
+    // ★TrollStore 优先★ apple-magnifier://enable-jit?bundle-id=<id>（老 Air 的做法）
+    NSString *bid = NSBundle.mainBundle.bundleIdentifier ?: @"dev.airdevs.air2";
+    NSString *magnifier = [NSString stringWithFormat:@"apple-magnifier://enable-jit?bundle-id=%@",
+                           [bid stringByAddingPercentEncodingWithAllowedCharacters:
+                            NSCharacterSet.URLQueryAllowedCharacterSet]];
+    if ([UIApplication.sharedApplication canOpenURL:[NSURL URLWithString:magnifier]]) {
+        [A2Log criterion:@"[A2-JIT-RESCUE] 拉起 TrollStore: %@", magnifier];
+        [UIApplication.sharedApplication openURL:[NSURL URLWithString:magnifier] options:@{} completionHandler:^(BOOL ok) {
+            if (!ok) [A2Log criterion:@"[A2-JIT-RESCUE] apple-magnifier 无响应 ⇒ 可再试 StikDebug"];
+        }];
+        return;
+    }
+
     NSURL *url = [self rescueURLWithScript:scriptPath];
     [A2Log criterion:@"[A2-JIT-RESCUE] 拉起外部工具：%@", url.absoluteString];
     [UIApplication.sharedApplication openURL:url
