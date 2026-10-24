@@ -17,6 +17,7 @@
 //    GLFW 官方 glfw3.h 的键码数值（公开事实数据）。
 // ============================================================================
 #import "a2_glfw_input.h"
+#import "a2_sdl_input.h"
 #import "a2_glfw_window.h"
 #import "a2_log.h"
 
@@ -228,6 +229,8 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
     ev.type = A2_GLFW_EVENT_CURSOR_POS;
     ev.d0 = (double) p.x;
     ev.d1 = (double) p.y;
+    // ★26.3★ 指针位置同步进 SDL（SdlInputBridge 用 lastX/lastY 给按键事件定位）
+    a2_sdl_input_cursor(p.x, p.y);
     a2_glfw_event_post(&ev);
 }
 
@@ -457,7 +460,10 @@ void a2_glfw_input_post_mouse_button(long window, int button, int action) {
     ev.i0 = button;
     ev.i1 = action;
     ev.i2 = 0;   // mods
-    a2_glfw_event_post(&ev);
+    a2_glfw_event_post(&ev);    // ★26.3★ MC 只监听 SDL 事件 ⇒ 同一份输入镜像一份给 SDL 队列
+    //   （26.2 及更早没有 SdlInputBridge，这里自动 no-op）
+    a2_sdl_input_button(button, action ? 1 : 0);
+
 }
 
 /// ★控件用★ 合成字符输入（系统键盘 → GLFW CHAR 事件）。
@@ -483,7 +489,9 @@ void a2_glfw_input_post_key(long window, int key, int action) {
     ev.i1 = 0;       // scancode：控件合成用不到
     ev.i2 = action;  // GLFW_PRESS=1 / GLFW_RELEASE=0
     ev.i3 = 0;       // mods
-    a2_glfw_event_post(&ev);
+    a2_glfw_event_post(&ev);    // ★26.3★ 键事件镜像到 SDL（26.2 自动 no-op）
+    a2_sdl_input_key(key, action ? 1 : 0);
+
 }
 
 UIView *a2_glfw_input_make_view(long window) {
