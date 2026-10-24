@@ -4,10 +4,12 @@
 //
 
 #import "A2LaunchOverlay.h"
+#import "A2Log.h"
 
 NSNotificationName const A2LaunchStageNotification = @"A2LaunchStageNotification";
 
 static UIView *gOverlayView = nil;
+static NSTimer *gFirstFrameWatchdog = nil;   // 阶段8之后仍无首帧 ⇒ 兜底提示
 static UILabel *gStageLabel = nil;
 static UIProgressView *gProgress = nil;
 
@@ -125,6 +127,8 @@ static UIProgressView *gProgress = nil;
     }
     [NSNotificationCenter.defaultCenter removeObserver:self name:A2LaunchStageNotification object:nil];
     [NSNotificationCenter.defaultCenter removeObserver:self name:@"A2GameFirstFrame" object:nil];
+    [gFirstFrameWatchdog invalidate];
+    gFirstFrameWatchdog = nil;
     if (gOverlayView != nil) {
         [gOverlayView removeFromSuperview];
     }
@@ -138,6 +142,9 @@ static UIProgressView *gProgress = nil;
         dispatch_async(dispatch_get_main_queue(), ^{ [self a2_gameFirstFrame:note]; });
         return;
     }
+    [gFirstFrameWatchdog invalidate];
+    gFirstFrameWatchdog = nil;
+    [A2Log log:@"[A2-LAUNCH] ✅ 收到首帧通知 ⇒ 撤遮罩"];
     // 稍等一下让第一帧真正上屏，再淡出
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.25 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{ [self hide]; });
@@ -169,6 +176,15 @@ static UIProgressView *gProgress = nil;
         //   真正撤遮罩由 native 的「首帧」通知驱动（A2GameFirstFrame）。
         gStageLabel.text = @"游戏启动中…";
         gProgress.progress = 0.95;
+        // ★首帧兜底★ 主类已派发但迟迟没有首帧 ⇒ 不假装成功，把真实状态告诉用户
+        if (gFirstFrameWatchdog == nil) {
+            gFirstFrameWatchdog = [NSTimer scheduledTimerWithTimeInterval:25.0 repeats:NO block:^(NSTimer *tm) {
+                if (gOverlayView == nil) return;           // 已经撤了就啥也不做
+                gStageLabel.text = @"画面仍未出现（可能在编译着色器/加载资源）";
+                gProgress.progress = 0.95;
+                [A2Log log:@"[A2-LAUNCH] ★首帧超时★ 阶段8已过 25s 仍未收到 A2GameFirstFrame（遮罩保持）"];
+            }];
+        }
         return;
     }
     gStageLabel.text = name;
