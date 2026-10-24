@@ -116,6 +116,12 @@ static NSString *const kPartSuffix = @".part";
 /// 落盘是否出过错。为真时既有内容不可信，重试【不得续传】
 /// （对照 ZL2 的 FileSink.broken）。
 @property (nonatomic, assign) BOOL writeBroken;
+
+// ---- 流式 SHA1（对照 ZL2 的 FileSink.digest）----
+// 边下载边算，避免下完再重读整个文件。
+// 续传时要先把已有部分喂进哈希 —— 见 prepareStreamSHA1。
+@property (nonatomic, assign) CC_SHA1_CTX streamSHA1;
+@property (nonatomic, assign) BOOL streamSHA1Valid;
 @property (nonatomic, assign) int64_t receivedBytes;
 @property (nonatomic, copy, nullable) NSString *strongETag;
 @property (nonatomic, copy, nullable) NSString *lastModified;
@@ -369,9 +375,10 @@ didReceiveResponse:(NSURLResponse *)response
         [self captureResumeInfoFromResponse:http];
     }
 
-    // 首次收到响应时开测速
+    // 首次收到响应时开测速 + 准备流式哈希
     dispatch_async(self.queue, ^{
         if (!self.speedTimer) [self startSpeedTimer];
+        [self prepareStreamSHA1];
     });
 
     completionHandler(NSURLSessionResponseAllow);
@@ -502,6 +509,11 @@ didReceiveResponse:(NSURLResponse *)response
 
     if (data.length == 0) return;
 
+    // 流式哈希：在数据到达时就算，不等下完重读磁盘
+    if (self.streamSHA1Valid) {
+        CC_SHA1_Update(&_streamSHA1, data.bytes, (CC_LONG)data.length);
+    }
+
     dispatch_async(self.queue, ^{
         if (self.finished) return;
 
@@ -585,6 +597,46 @@ didCompleteWithError:(NSError *)error {
 
 #pragma mark 完成校验
 
+/// 准备流式 SHA1。
+/// 如果是从断点续传（receivedBytes > 0），要先把已有部分喂进哈希，
+/// 否则算出来的只是后半段的摘要。
+- (void)prepareStreamSHA1 {
+    NSString *partPath = [self partFilePath];
+    int64_t existing = 0;
+    NSDictionary *attrs = [NSFileManager.defaultManager attributesOfItemAtPath:partPath error:nil];
+    if (attrs) existing = [attrs[NSFileSize] longLongValue];
+
+    CC_SHA1_Init(&_streamSHA1);
+
+    if (existing > 0 && self.request.expectedSHA1.length > 0) {
+        // 续传：先把磁盘上已有的字节读进哈希
+        NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath:partPath];
+        if (fh) {
+            @try {
+                const size_t chunk = 256 * 1024;
+                while (YES) {
+                    @autoreleasepool {
+                        NSData *d = [fh readDataOfLength:chunk];
+                        if (d.length == 0) break;
+                        CC_SHA1_Update(&_streamSHA1, d.bytes, (CC_LONG)d.length);
+                    }
+                }
+            } @catch (NSException *e) {
+                [A2Logger warning:@"DownloadEngine"
+                          message:@"续传补算哈希失败，退回整文件重算"];
+                self.streamSHA1Valid = NO;
+                [fh closeFile];
+                return;
+            }
+            [fh closeFile];
+        }
+        [A2Logger info:@"DownloadEngine"
+               message:[NSString stringWithFormat:@"续传：已补算 %lld 字节的哈希", existing]];
+    }
+
+    self.streamSHA1Valid = (self.request.expectedSHA1.length > 0);
+}
+
 - (void)verifyAndFinish {
     NSString *partPath = [self partFilePath];
     NSString *destPath = self.request.destinationPath;
@@ -615,9 +667,21 @@ didCompleteWithError:(NSError *)error {
         return;
     }
 
-    // SHA1 校验
+    // SHA1 校验 —— 优先用流式结果（省一次磁盘重读）
     if (self.request.expectedSHA1.length > 0) {
-        NSString *actual = [self sha1OfFile:partPath];
+        NSString *actual = nil;
+
+        if (self.streamSHA1Valid) {
+            unsigned char digest[20];
+            CC_SHA1_Final(digest, &_streamSHA1);
+            NSMutableString *hex = [NSMutableString stringWithCapacity:40];
+            for (int i = 0; i < 20; i++) [hex appendFormat:@"%02x", digest[i]];
+            actual = hex;
+            self.streamSHA1Valid = NO;   // 用过就失效，重试要重新初始化
+        } else {
+            // 兜底：流式哈希不可用时重读文件
+            actual = [self sha1OfFile:partPath];
+        }
         if (!actual || [actual caseInsensitiveCompare:self.request.expectedSHA1] != NSOrderedSame) {
             [[NSFileManager defaultManager] removeItemAtPath:partPath error:nil];
             NSError *err = [self errorWithCode:A2DownloadErrorChecksumMismatch
