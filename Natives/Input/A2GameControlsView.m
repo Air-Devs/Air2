@@ -114,7 +114,15 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     }
     CGFloat nx = dx / len, ny = dy / len;
     // 疾跑 = 拖出半径的 80%
-    BOOL sprint = (len > _radius * 0.80);
+    // ★疾跑阈值★ iPad 上摇杆半径大、手指位移也大，80% 容易误判成疾跑
+    //   ⇒ iPad 抬到 92%；另外允许用 A2StickSprintThreshold(0~1) 覆盖。
+    double th = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) ? 0.92 : 0.80;
+    id ov = [NSUserDefaults.standardUserDefaults objectForKey:@"A2StickSprintThreshold"];
+    if (ov != nil) {
+        double v = [NSUserDefaults.standardUserDefaults doubleForKey:@"A2StickSprintThreshold"];
+        if (v > 0.3 && v <= 1.0) th = v;
+    }
+    BOOL sprint = (len > _radius * th);
     [self.delegate a2Stick:self didChangeDirection:CGPointMake(nx, ny) sprint:sprint];
     [self setNeedsDisplay];
 }
