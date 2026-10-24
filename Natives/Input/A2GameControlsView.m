@@ -191,6 +191,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     NSMutableArray<NSNumber *> *_comboBuffer;                     // 组合键选择缓冲
     NSString *_latchedCid;                                        // 已锁存(按住)修饰键的控件
     int _latchedModifier;                                         // 锁存中的 F 键码
+    __weak UIView *_keypadMask;                                   // 键盘面板遮罩（供关闭用）
     NSMutableDictionary<NSString *, NSNumber *> *_bindings;   // 控件id -> GLFW 键码
     NSMutableDictionary<NSString *, NSValue *> *_restFrames;  // 编辑前位置（取消用）
 
@@ -253,7 +254,8 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
 - (void)a2_buildDPad {
     _dpadContainer = [[UIView alloc] initWithFrame:CGRectZero];
-    _dpadContainer.translatesAutoresizingMaskIntoConstraints = NO;
+    // ★改 frame 布局★ 原来用 Auto Layout 钉死 190x190 ⇒ 编辑器里选不中、也改不了大小
+    _dpadContainer.translatesAutoresizingMaskIntoConstraints = YES;
     _dpadContainer.backgroundColor = [UIColor clearColor];
     _dpadContainer.multipleTouchEnabled = YES;
     [self addSubview:_dpadContainer];
@@ -264,45 +266,49 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     for (int i = 0; i < 4; i++) {
         UIButton *b = [self a2_makeButton:titles[i]];
         b.tag = keys[i];
+        b.translatesAutoresizingMaskIntoConstraints = YES;
         [b addTarget:self action:@selector(a2_dirTouchDown:) forControlEvents:UIControlEventTouchDown];
-        [b addTarget:self action:@selector(a2_dirTouchUp:) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
+        [b addTarget:self action:@selector(a2_dirTouchUp:) forControlEvents:UIControlEventTouchUpInside |
+                                                               UIControlEventTouchUpOutside |
+                                                               UIControlEventTouchCancel];
         [_dpadContainer addSubview:b];
         _dirButtons[@(keys[i])] = b;
     }
 
     _sneakButton = [self a2_makeButton:@"潜"];
     _sneakButton.tag = kKeyLeftShift;
+    _sneakButton.translatesAutoresizingMaskIntoConstraints = YES;
     [_sneakButton addTarget:self action:@selector(a2_toggleSneak) forControlEvents:UIControlEventTouchUpInside];
     [_dpadContainer addSubview:_sneakButton];
 
-    // 十字布局（相对容器）
-    UIView *w = _dirButtons[@(kKeyW)], *a = _dirButtons[@(kKeyA)], *s = _dirButtons[@(kKeyS)], *d = _dirButtons[@(kKeyD)];
-    [NSLayoutConstraint activateConstraints:@[
-        [_dpadContainer.leadingAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.leadingAnchor constant:24],
-        [_dpadContainer.bottomAnchor constraintEqualToAnchor:self.safeAreaLayoutGuide.bottomAnchor constant:-24],
-        [_dpadContainer.widthAnchor constraintEqualToConstant:190],
-        [_dpadContainer.heightAnchor constraintEqualToConstant:190],
+    _dpadContainer.bounds = CGRectMake(0, 0, 190, 190);
+    [self a2_layoutDPad];
 
-        [w.topAnchor constraintEqualToAnchor:_dpadContainer.topAnchor],
-        [w.centerXAnchor constraintEqualToAnchor:_dpadContainer.centerXAnchor],
-        [w.widthAnchor constraintEqualToConstant:56], [w.heightAnchor constraintEqualToConstant:56],
+    // ★可编辑★ 编辑器里能选中/拖动/缩放
+    _movable[@"dpad"] = _dpadContainer;
+    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)];
+    pan.cancelsTouchesInView = NO;
+    [_dpadContainer addGestureRecognizer:pan];
+    UITapGestureRecognizer *t2 = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(a2_tapControl:)];
+    t2.cancelsTouchesInView = NO;
+    [_dpadContainer addGestureRecognizer:t2];
+    UIPinchGestureRecognizer *pz = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(a2_pinchItem:)];
+    pz.cancelsTouchesInView = NO;
+    [_dpadContainer addGestureRecognizer:pz];
+}
 
-        [a.leadingAnchor constraintEqualToAnchor:_dpadContainer.leadingAnchor],
-        [a.centerYAnchor constraintEqualToAnchor:_dpadContainer.centerYAnchor],
-        [a.widthAnchor constraintEqualToConstant:56], [a.heightAnchor constraintEqualToConstant:56],
-
-        [d.trailingAnchor constraintEqualToAnchor:_dpadContainer.trailingAnchor],
-        [d.centerYAnchor constraintEqualToAnchor:_dpadContainer.centerYAnchor],
-        [d.widthAnchor constraintEqualToConstant:56], [d.heightAnchor constraintEqualToConstant:56],
-
-        [s.bottomAnchor constraintEqualToAnchor:_dpadContainer.bottomAnchor],
-        [s.centerXAnchor constraintEqualToAnchor:_dpadContainer.centerXAnchor],
-        [s.widthAnchor constraintEqualToConstant:56], [s.heightAnchor constraintEqualToConstant:56],
-
-        [_sneakButton.centerXAnchor constraintEqualToAnchor:_dpadContainer.centerXAnchor],
-        [_sneakButton.centerYAnchor constraintEqualToAnchor:_dpadContainer.centerYAnchor],
-        [_sneakButton.widthAnchor constraintEqualToConstant:52], [_sneakButton.heightAnchor constraintEqualToConstant:52],
-    ]];
+/// 按容器当前大小重排十字键（等比例）
+- (void)a2_layoutDPad {
+    CGRect r = _dpadContainer.bounds;
+    if (r.size.width <= 1 || r.size.height <= 1) return;
+    CGFloat side = MIN(r.size.width, r.size.height);
+    CGFloat b = side * 0.30;
+    CGFloat cx = CGRectGetMidX(r), cy = CGRectGetMidY(r);
+    _dirButtons[@(kKeyW)].frame = CGRectMake(cx - b / 2, 0, b, b);
+    _dirButtons[@(kKeyS)].frame = CGRectMake(cx - b / 2, r.size.height - b, b, b);
+    _dirButtons[@(kKeyA)].frame = CGRectMake(0, cy - b / 2, b, b);
+    _dirButtons[@(kKeyD)].frame = CGRectMake(r.size.width - b, cy - b / 2, b, b);
+    _sneakButton.frame = CGRectMake(cx - b * 0.45, cy - b * 0.45, b * 0.9, b * 0.9);
 }
 
 - (void)a2_buildStick {
@@ -607,7 +613,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     CGFloat total = 9 * 36 + 8 * 6;
     CGFloat x = (W - total) * 0.5 + 18;
     for (UIButton *b in _hotbar) {
-        b.center = CGPointMake(x, H - 42);
+        b.center = CGPointMake(x, H - 30);   // ★贴底★ 原来 H-42 视觉上偏高
         x += 42;
     }
 }
@@ -761,6 +767,8 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     CGPoint t = [pan translationInView:self];
     v.center = CGPointMake(v.center.x + t.x, v.center.y + t.y);
     [pan setTranslation:CGPointZero inView:self];
+    [self a2_layoutHandleForSelected];
+    if (pan.view == _dpadContainer) [self a2_layoutDPad];
 }
 
 - (void)a2_pinchItem:(UIPinchGestureRecognizer *)pinch {
@@ -769,6 +777,8 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     CGFloat s = pinch.scale;
     v.bounds = CGRectMake(0, 0, MAX(28, v.bounds.size.width * s), MAX(28, v.bounds.size.height * s));
     pinch.scale = 1.0;
+    [self a2_layoutHandleForSelected];
+    if (pinch.view == _dpadContainer) [self a2_layoutDPad];
 }
 
 - (void)a2_askNewLayoutName {
@@ -832,6 +842,8 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         entry[cid] = e;
     }
     entry[@"_removed"] = _removedIds.allObjects ?: @[];
+    entry[@"_w"] = @(CGRectGetWidth(self.bounds));
+    entry[@"_h"] = @(CGRectGetHeight(self.bounds));
     store[name] = entry;
     [NSUserDefaults.standardUserDefaults setObject:store forKey:kA2LayoutsKey];
     a2_log_f(@"[A2-CONTROLS] 方案已保存：%@（%lu 项）", name, (unsigned long) entry.count);
@@ -865,8 +877,16 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         if (v != nil) { v.hidden = YES; v.userInteractionEnabled = NO; }
     }
 
+    // ★跨尺寸还原★ 保存时画布尺寸和现在不同 ⇒ 按比例缩放（否则换设备/换方向后跑到屏幕外）
+    CGFloat savedW = [entry[@"_w"] doubleValue];
+    CGFloat savedH = [entry[@"_h"] doubleValue];
+    CGFloat curW = CGRectGetWidth(self.bounds), curH = CGRectGetHeight(self.bounds);
+    BOOL scale = (savedW > 1 && savedH > 1 && curW > 1 && curH > 1);
+    CGFloat kx = scale ? curW / savedW : 1.0;
+    CGFloat ky = scale ? curH / savedH : 1.0;
+
     for (NSString *cid in entry) {
-        if ([cid isEqualToString:@"_removed"]) continue;
+        if ([cid isEqualToString:@"_removed"] || [cid hasPrefix:@"_"]) continue;
         UIView *v = _movable[cid];
         if (v == nil && [cid hasPrefix:@"hot"]) {
             NSInteger idx = [[cid substringFromIndex:3] integerValue];
@@ -874,8 +894,13 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         }
         if (v == nil) continue;
         NSDictionary *e = entry[cid];
-        v.bounds = CGRectMake(0, 0, [e[@"w"] doubleValue], [e[@"h"] doubleValue]);
-        v.center = CGPointMake([e[@"x"] doubleValue], [e[@"y"] doubleValue]);
+        v.bounds = CGRectMake(0, 0, [e[@"w"] doubleValue] * kx, [e[@"h"] doubleValue] * ky);
+        // 夹回可见区域（留 1/4 边长余量，保证仍然抓得到）
+        CGFloat halfW = CGRectGetWidth(v.bounds) * 0.5, halfH = CGRectGetHeight(v.bounds) * 0.5;
+        CGFloat x = [e[@"x"] doubleValue] * kx;
+        CGFloat y = [e[@"y"] doubleValue] * ky;
+        v.center = CGPointMake(MIN(MAX(x, halfW), curW - halfW),
+                               MIN(MAX(y, halfH), curH - halfH));
         v.alpha = [e[@"a"] doubleValue] > 0 ? [e[@"a"] doubleValue] : 1.0;
     }
 }
@@ -891,6 +916,34 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         return a.count ? [a.firstObject intValue] : def;
     }
     return [v isKindOfClass:NSNumber.class] ? [v intValue] : def;
+}
+
+/// 把绑定翻译成人话（键位面板标题用）
+- (NSString *)a2_describeBindingFor:(NSString *)cid {
+    NSArray *codes = [self a2_codesForControl:cid fallback:0];
+    NSMutableArray *names = [NSMutableArray array];
+    for (NSNumber *n in codes) {
+        int c = n.intValue;
+        if (c == 0) { [names addObject:@"未绑定"]; continue; }
+        if (c == -1) { [names addObject:@"鼠标左"]; continue; }
+        if (c == -2) { [names addObject:@"鼠标右"]; continue; }
+        if (c >= 290 && c <= 301) { [names addObject:[NSString stringWithFormat:@"F%d", c - 289]]; continue; }
+        if (c == 32) { [names addObject:@"空格"]; continue; }
+        if (c == 256) { [names addObject:@"Esc"]; continue; }
+        if (c == 257) { [names addObject:@"Enter"]; continue; }
+        if (c == 258) { [names addObject:@"Tab"]; continue; }
+        if (c == 259) { [names addObject:@"⌫"]; continue; }
+        if (c == 340) { [names addObject:@"Shift"]; continue; }
+        if (c == 341) { [names addObject:@"Ctrl"]; continue; }
+        if (c == 342) { [names addObject:@"Alt"]; continue; }
+        if (c >= 262 && c <= 265) {
+            NSArray *ar = @[@"→", @"←", @"↓", @"↑"];
+            [names addObject:ar[c - 262]];
+            continue;
+        }
+        [names addObject:[NSString stringWithFormat:@"%c", (char)c]];
+    }
+    return [names componentsJoinedByString:@" + "];
 }
 
 /// 取某控件要派的全部键码（组合键 = 多个；普通键 = 一个）
@@ -1046,6 +1099,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     // 遮罩
     UIView *mask = [[UIView alloc] initWithFrame:top.view.bounds];
     mask.tag = 0xA2C0;
+    _keypadMask = mask;
     mask.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     mask.backgroundColor = [UIColor colorWithWhite:0 alpha:0.62];
     [top.view addSubview:mask];
@@ -1075,7 +1129,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
     UILabel *tip = [[UILabel alloc] initWithFrame:CGRectZero];
     tip.translatesAutoresizingMaskIntoConstraints = NO;
-    tip.text = @"选择要绑定的按键";
+    tip.text = [NSString stringWithFormat:@"选择要绑定的按键   当前：%@", [self a2_describeBindingFor:cid]];
     tip.textColor = [UIColor colorWithWhite:1 alpha:0.92];
     tip.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
     tip.textAlignment = NSTextAlignmentCenter;
@@ -1244,9 +1298,10 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 }
 
 - (void)a2_closeKeyPad {
-    UIViewController *top = self.a2_topViewController;
-    UIView *mask = [top.view viewWithTag:0xA2C0];
+    UIView *mask = _keypadMask;
+    if (mask == nil) mask = [self.a2_topViewController.view viewWithTag:0xA2C0];
     [mask removeFromSuperview];
+    _keypadMask = nil;
     _pendingCid = nil;
 }
 
