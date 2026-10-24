@@ -20,6 +20,43 @@
 #import "A2Log.h"
 
 static void (^gPendingCompletion)(BOOL) = nil;
+static UIAlertController *gWaitAlert = nil;
+
+// ★“等待 JIT”弹窗★（老 Air 也有这个，不然用户不知道 App 在等什么）
+static void a2_jit_wait_alert_show(void) {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ a2_jit_wait_alert_show(); });
+        return;
+    }
+    UIViewController *top = UIApplication.sharedApplication.keyWindow.rootViewController;
+    while (top.presentedViewController != nil) top = top.presentedViewController;
+    if (top == nil || gWaitAlert != nil) return;
+
+    gWaitAlert = [UIAlertController alertControllerWithTitle:@"正在等待 JIT"
+                                                     message:@"已打开 JIT 使能器，正在等待授权…\n请保持在 Air2 内，授权完成后会自动开始启动游戏。"
+                                              preferredStyle:UIAlertControllerStyleAlert];
+    __weak typeof(gWaitAlert) weakAlert = gWaitAlert;
+    [gWaitAlert addAction:[UIAlertAction actionWithTitle:@"取消"
+                                                   style:UIAlertActionStyleCancel
+                                                 handler:^(UIAlertAction *a) {
+        void (^cb)(BOOL) = gPendingCompletion;
+        gPendingCompletion = nil;
+        if (cb) cb(NO);
+        (void)weakAlert;
+    }]];
+    [top presentViewController:gWaitAlert animated:YES completion:nil];
+}
+
+static void a2_jit_wait_alert_hide(void) {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ a2_jit_wait_alert_hide(); });
+        return;
+    }
+    if (gWaitAlert != nil) {
+        [gWaitAlert dismissViewControllerAnimated:YES completion:nil];
+        gWaitAlert = nil;
+    }
+}
 static id gObserver = nil;
 
 @implementation A2JITRescueFlow
@@ -71,6 +108,7 @@ static id gObserver = nil;
     // ★等待 JIT（老 Air 的 invokeAfterJITEnabled 口径）★
     //   回来后不能只查一次：StikDebug/TrollStore 给权限有延迟，且调试器可能稍后才 attach。
     //   每 0.5s 查一次，最多 25s；期间不建 VM（没 JIT 建 VM 会直接崩）。
+    a2_jit_wait_alert_show();
     __block NSInteger waited = 0;
     void (^poll)(void) = ^{
         if (gPendingCompletion == nil) return;
@@ -79,6 +117,7 @@ static id gObserver = nil;
             [A2Log criterion:@"[A2-JIT-RESCUE] 轮询 %ld 次后拿到 JIT ⇒ 继续启动", (long)waited];
             if (gObserver != nil) { [NSNotificationCenter.defaultCenter removeObserver:gObserver]; gObserver = nil; }
             void (^cb)(BOOL) = gPendingCompletion; gPendingCompletion = nil;
+            a2_jit_wait_alert_hide();
             if (cb) cb(YES);
             return;
         }
@@ -86,6 +125,7 @@ static id gObserver = nil;
             [A2Log criterion:@"[A2-JIT-RESCUE] 等待 25s 仍未拿到 JIT ⇒ 交给用户"];
             if (gObserver != nil) { [NSNotificationCenter.defaultCenter removeObserver:gObserver]; gObserver = nil; }
             void (^cb)(BOOL) = gPendingCompletion; gPendingCompletion = nil;
+            a2_jit_wait_alert_hide();
             if (cb) cb(NO);
             return;
         }
