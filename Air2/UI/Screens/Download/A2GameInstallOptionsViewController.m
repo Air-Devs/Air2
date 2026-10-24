@@ -73,6 +73,17 @@
     _versionID = [versionID copy];
     _loaderCards = [NSMutableArray array];
     _nameValid = YES;
+
+    // ⚠️ 必须创建选择模型！
+    //
+    // 之前这个属性声明了但从没初始化，而代码里到处用 _selection.xxx。
+    // 给 nil 发消息返回 0/NO —— 于是：
+    //   ![_selection canSelectType:type]  →  !NO  →  YES
+    //   _selection.versions[@(type)] == nil  →  YES
+    //   两个条件都成立 → 判定「与已选的加载器冲突」→ 点任何加载器都弹冲突。
+    //
+    // 这就是「默认选原版，点模组加载器就显示冲突」的真正原因。
+    _selection = [[A2ModLoaderSelection alloc] init];
     return self;
 }
 
