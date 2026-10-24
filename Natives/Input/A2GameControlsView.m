@@ -773,11 +773,15 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
 - (void)a2_presentLayoutPicker {
     NSDictionary *store = [NSUserDefaults.standardUserDefaults dictionaryForKey:kA2LayoutsKey] ?: @{};
+    NSString *prefix = [[self a2_deviceKey] stringByAppendingString:@"|"];
     UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"选择方案"
                                                                   message:nil
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
     __weak typeof(self) weakSelf = self;
-    for (NSString *name in store.allKeys) {
+    for (NSString *full in store.allKeys) {
+        // 只列本机型的方案；展示去掉「设备键|」前缀
+        if (![full hasPrefix:prefix]) continue;
+        NSString *name = [full substringFromIndex:prefix.length];
         [sheet addAction:[UIAlertAction actionWithTitle:name style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
             [NSUserDefaults.standardUserDefaults setObject:name forKey:kA2LayoutCurKey];
             [weakSelf a2_applySavedLayout];
@@ -788,7 +792,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 }
 
 - (void)a2_saveLayout {
-    NSString *name = [NSUserDefaults.standardUserDefaults stringForKey:kA2LayoutCurKey] ?: @"默认";
+    NSString *name = [self a2_layoutStoreKey];   // ★设备键|方案名★
     NSMutableDictionary *store = [[NSUserDefaults.standardUserDefaults dictionaryForKey:kA2LayoutsKey] mutableCopy]
                                  ?: [NSMutableDictionary dictionary];
     NSMutableDictionary *entry = [NSMutableDictionary dictionary];
@@ -812,9 +816,15 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
 - (void)a2_applySavedLayout {
     if (CGRectGetWidth(self.bounds) <= 0) return;
-    NSString *name = [NSUserDefaults.standardUserDefaults stringForKey:kA2LayoutCurKey] ?: @"默认";
+    NSString *name = [self a2_layoutStoreKey];   // ★设备键|方案名★
     NSDictionary *store = [NSUserDefaults.standardUserDefaults dictionaryForKey:kA2LayoutsKey];
     NSDictionary *entry = store[name];
+    if (entry == nil) {
+        // 这台机型还没有自己的方案 ⇒ 把当前默认布局存成它的初始方案
+        [self a2_saveLayout];
+        store = [NSUserDefaults.standardUserDefaults dictionaryForKey:kA2LayoutsKey];
+        entry = store[name];
+    }
     if (![entry isKindOfClass:NSDictionary.class]) return;
 
     for (NSString *cid in entry) {
@@ -1043,6 +1053,20 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     }
     while (vc.presentedViewController) vc = vc.presentedViewController;
     return vc;
+}
+
+/// ★按机型定制★ 设备键 = 硬件型号 + 屏幕点数（长边x短边）
+- (NSString *)a2_deviceKey {
+    CGSize s = UIScreen.mainScreen.bounds.size;
+    CGFloat l = MAX(s.width, s.height), sh = MIN(s.width, s.height);
+    return [NSString stringWithFormat:@"%@-%.0fx%.0f",
+            UIDevice.currentDevice.model ?: @"iOS", l, sh];
+}
+
+/// 本机当前的存储键 = 「设备键|方案名」⇒ 同一方案在不同机型各存一份，互不覆盖
+- (NSString *)a2_layoutStoreKey {
+    NSString *base = [NSUserDefaults.standardUserDefaults stringForKey:kA2LayoutCurKey] ?: @"默认";
+    return [NSString stringWithFormat:@"%@|%@", [self a2_deviceKey], base];
 }
 
 /// ★iPhone Duo★ 折叠/展开、Split View 都会改 bounds ⇒ 不能只在构建时排一次。
