@@ -44,6 +44,7 @@ static void A2Main(dispatch_block_t block) {
 }
 
 @interface A2GameInstaller ()
+@property (nonatomic, strong, nullable) A2BatchDownloader *activeDownloader;
 @property (nonatomic, strong, nullable) A2InstallRequest *request;
 /// 原版基底的版本名。
 ///   原版安装 → 与 versionName 相同；
@@ -737,10 +738,14 @@ static void A2Main(dispatch_block_t block) {
                             integerForKey:@"A2MaxConnections"];
     NSInteger kMaxConnections = (configured > 0) ? MIN(configured, 128) : 64;
 
-    A2BatchDownloader *downloader =
-        [[A2BatchDownloader alloc] initWithRequests:requests
-                                     maxConnections:kMaxConnections
-                                        retryRounds:1];
+    // ⚠️ 必须用属性持有：批量下载器是异步的，
+    // 用局部变量的话 downloadBatch: 一返回 ARC 就释放它，
+    // 下载会在启动瞬间静默死掉（表现就是「0/80」永远不动）。
+    // 这已经是我第二次踩同一个坑（上次是 A2GameInstaller 自己）。
+    self.activeDownloader = [[A2BatchDownloader alloc] initWithRequests:requests
+                                                        maxConnections:kMaxConnections
+                                                           retryRounds:1];
+    A2BatchDownloader *downloader = self.activeDownloader;
 
     __weak typeof(self) weakSelf = self;
 
@@ -761,7 +766,9 @@ static void A2Main(dispatch_block_t block) {
 
     downloader.onCompletion = ^(BOOL success, NSDictionary<NSString *, NSError *> *failures) {
         __strong typeof(weakSelf) self = weakSelf;
-        if (!self || self.cancelled) return;
+        if (!self) return;
+        self.activeDownloader = nil;   // 完成后释放
+        if (self.cancelled) return;
 
         if (failures.count > 0) {
             [A2Log log:@"installer: %@ 完成，%lu 个文件失败",
