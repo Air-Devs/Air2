@@ -764,7 +764,7 @@
         [self.launchCard appendLog:pr.message];
     }];
 
-    __weak typeof(self) weakSelf = self;
+    // 注意：weakSelf 已在上面订阅通知时定义，这里不要再定义一次
     // 签名对齐 ZL2 的 GameLaunchFlow：账号校验与文件校验分开跳过。
     // 这里都不跳过 —— 走完整流程（检查 → 补全 → 准备 JRE）。
     [[A2GameLaunchCoordinator shared] launchVersion:current.name
