@@ -25,6 +25,8 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+@class A2ControlLayer;
+
 typedef NS_ENUM(NSInteger, A2HideLayerWhen) {
     A2HideLayerWhenNever = 0,      ///< 始终显示
     A2HideLayerWhenGamepad,        ///< 接了手柄时隐藏

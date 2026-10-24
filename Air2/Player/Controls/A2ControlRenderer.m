@@ -33,7 +33,10 @@
 
 #pragma mark - 单个控件
 
+// 类扩展必须在 @implementation 之前，且不能写在 @interface 内
+@interface A2ControlButtonView ()
 @property (nonatomic, strong, nullable) A2ControlStyle *style;
+@end
 
 @implementation A2ControlButtonView {
     UILabel *_label;
@@ -160,7 +163,7 @@
     // 非开关式的按钮，松开时要释放按键
     if (!self.widget.isToggleable) {
         for (A2ControlEvent *e in self.widget.clickEvents) {
-            if (e.type == A2ControlEventTypeSendKey && e.key.length) {
+            if (e.type == A2ControlEventTypeKey && e.key.length) {
                 [self.inputDelegate controlReleaseKey:e.key];
             }
         }
@@ -175,23 +178,47 @@
 /// 把控件的事件翻译成输入意图
 - (void)fireEvents {
     for (A2ControlEvent *e in self.widget.clickEvents) {
+        // 事件类型对齐 ZL2 的 ClickEvent.Type（六种）：
+        //   key / launcher_event / switch_layer / show_layer / hide_layer / send_text
         switch (e.type) {
-            case A2ControlEventTypeSendKey:
+            case A2ControlEventTypeKey:
                 if (e.key.length) [self.inputDelegate controlPressKey:e.key];
                 break;
-            case A2ControlEventTypeToggleGui:
-                [self.inputDelegate controlToggleGui];
+
+            case A2ControlEventTypeLauncherEvent:
+                [self handleLauncherEvent:e.key];
                 break;
-            case A2ControlEventTypeToggleKeyboard:
-                [self.inputDelegate controlToggleKeyboard];
-                break;
+
             case A2ControlEventTypeSendText:
-                // 文本发送由上层处理（需要拉起输入法）
+                // 文本发送要拉起输入法，由上层接管
                 [self.inputDelegate controlToggleKeyboard];
                 break;
+
+            case A2ControlEventTypeSwitchLayer:
+            case A2ControlEventTypeShowLayer:
+            case A2ControlEventTypeHideLayer:
+                // 层操作需要遍历所有控件，交给渲染器
+                // （这里通过通知让 A2ControlRenderer 处理）
+                [NSNotificationCenter.defaultCenter
+                    postNotificationName:@"A2ControlLayerOperationNotification"
+                                  object:self
+                                userInfo:@{@"type": @(e.type), @"layer": e.key ?: @""}];
+                break;
+
             default:
                 break;
         }
+    }
+}
+
+/// 启动器事件（对照 ZL2 的 LauncherEvent 枚举）
+- (void)handleLauncherEvent:(NSString *)name {
+    if ([name isEqualToString:@"toggle_gui"] || [name isEqualToString:@"ToggleGui"]) {
+        [self.inputDelegate controlToggleGui];
+    } else if ([name isEqualToString:@"toggle_keyboard"] || [name isEqualToString:@"ToggleKeyboard"]) {
+        [self.inputDelegate controlToggleKeyboard];
+    } else if ([name hasPrefix:@"mouse"]) {
+        // 鼠标相关事件由 SurfaceViewController 处理
     }
 }
 

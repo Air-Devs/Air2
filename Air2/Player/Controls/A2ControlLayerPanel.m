@@ -8,6 +8,7 @@
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Toast.h"
+#import <objc/runtime.h>
 
 #pragma mark - Rule
 
