@@ -1013,7 +1013,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
     // 遮罩
     UIView *mask = [[UIView alloc] initWithFrame:top.view.bounds];
-    mask.tag = 0xA2KEYPAD;
+    mask.tag = 0xA2C0;
     mask.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     mask.backgroundColor = [UIColor colorWithWhite:0 alpha:0.62];
     [top.view addSubview:mask];
@@ -1138,7 +1138,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
 - (void)a2_closeKeyPad {
     UIViewController *top = self.a2_topViewController;
-    UIView *mask = [top.view viewWithTag:0xA2KEYPAD];
+    UIView *mask = [top.view viewWithTag:0xA2C0];
     [mask removeFromSuperview];
     _pendingCid = nil;
 }
