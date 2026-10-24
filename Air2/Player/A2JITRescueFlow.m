@@ -111,9 +111,9 @@ static id gObserver = nil;
     // ★后台任务★ 老 Air 用 beginBackgroundTask 保证切到使能器再回来时等待不被打断
     __block UIBackgroundTaskIdentifier bgTask =
         [UIApplication.sharedApplication beginBackgroundTaskWithName:@"a2-jit-wait" expirationHandler:^{
-        if (bgTask != UIBackgroundTaskIdentifierInvalid) {
+        if (bgTask != UIBackgroundTaskInvalid) {
             [UIApplication.sharedApplication endBackgroundTask:bgTask];
-            bgTask = UIBackgroundTaskIdentifierInvalid;
+            bgTask = UIBackgroundTaskInvalid;
         }
     }];
 
