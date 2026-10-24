@@ -134,6 +134,8 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
     NSTimer *_a2HoldTimer;
     BOOL     _a2LeftPressed;
     CGPoint  _a2DownPoint;
+    NSTimeInterval _a2DownTime;
+    BOOL     _a2Moved;
 }
 
 /// ★2026-10-18 真机证据★ metallum 的 iOS 路径直接假设
@@ -361,6 +363,8 @@ static const NSTimeInterval kA2HoldDelay = 0.25;
         // ★不立刻发左键★ 先起 0.25s 计时：原地不动才算"长按(=挖/交互)"，
         //   一动就取消 ⇒ 滑动屏幕只移动视角，不会按着左键。
         _a2DownPoint = p;
+        _a2DownTime = CACurrentMediaTime();
+        _a2Moved = NO;
         _a2LeftPressed = NO;
         [_a2HoldTimer invalidate];
         __weak typeof(self) weakSelf = self;
@@ -386,6 +390,7 @@ static const NSTimeInterval kA2HoldDelay = 0.25;
         if (sqrt(dx0 * dx0 + dy0 * dy0) > kA2TapSlop) {
             [_a2HoldTimer invalidate];
             _a2HoldTimer = nil;      // ★判为滑动视角★ 本次触摸不再发左键
+            _a2Moved = YES;
             a2_log_f(@"[A2-GLFW] 位移超过阈值 ⇒ 判为滑动，取消左键");
         }
     }
@@ -417,6 +422,18 @@ static const NSTimeInterval kA2HoldDelay = 0.25;
         self.activeTouches = 0;
         [_a2HoldTimer invalidate];
         _a2HoldTimer = nil;
+
+        // ★轻点 = 一次左键点击★（游戏菜单/按钮靠它）
+        //   没有这一段：快速点按既不是长按、也不发点击 ⇒ 界面里点不动（真机已复现）。
+        if (!_a2Moved && !_a2LeftPressed &&
+            (CACurrentMediaTime() - _a2DownTime) < kA2HoldDelay) {
+            CGPoint up = [t locationInView:self];
+            [self postCursor:up];
+            [self postButton:A2_GLFW_MOUSE_BUTTON_LEFT action:A2_GLFW_PRESS mods:0];
+            [self postButton:A2_GLFW_MOUSE_BUTTON_LEFT action:A2_GLFW_RELEASE mods:0];
+            a2_log_f(@"[A2-GLFW] 轻点 ⇒ 合成一次左键点击 (%.0f,%.0f)", up.x, up.y);
+        }
+
         if (_a2LeftPressed) {
             [self postButton:A2_GLFW_MOUSE_BUTTON_LEFT action:A2_GLFW_RELEASE mods:0];
             _a2LeftPressed = NO;
