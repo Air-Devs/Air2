@@ -106,15 +106,23 @@
     _detailScroll.alwaysBounceVertical = YES;
     _detailScroll.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
 
-    // 关键：内容栈宽度锁死等于可视区宽度 ——
-    // 这样 contentSize.width 恒等于 frame.width，横向无处可滚
-    [_detailScroll addSubview:_detailStack];
-    [self.plainContentView addSubview:_detailScroll];
-
+    // ⚠️ 顺序不能反：必须先创建 stack，再 addSubview。
+    //
+    // 原来是 [_detailScroll addSubview:_detailStack] 写在创建之前 ——
+    // 那一刻 _detailStack 还是 nil，addSubview:nil 是空操作，
+    // 于是 stack 从未真正加入 scrollView 的视图层级。
+    // 后面 activateConstraints 给 stack 加相对
+    // contentLayoutGuide 的约束时，两者没有共同祖先 →
+    // NSGenericException: "no common ancestor" → 点设置就闪退。
     _detailStack = [[UIStackView alloc] initWithFrame:CGRectZero];
     _detailStack.translatesAutoresizingMaskIntoConstraints = NO;
     _detailStack.axis = UILayoutConstraintAxisVertical;
     _detailStack.spacing = A2SpaceXL;
+
+    // 关键：内容栈宽度锁死等于可视区宽度 ——
+    // 这样 contentSize.width 恒等于 frame.width，横向无处可滚
+    [_detailScroll addSubview:_detailStack];
+    [self.plainContentView addSubview:_detailScroll];
 
     [NSLayoutConstraint activateConstraints:@[
         [_nav.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
