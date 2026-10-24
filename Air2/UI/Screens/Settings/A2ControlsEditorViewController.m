@@ -62,24 +62,10 @@
     _canvas.layer.cornerCurve = kCACornerCurveContinuous;
     _canvas.clipsToBounds = YES;
     [self.view addSubview:_canvas];
-    // ★画布 = 设计尺寸的等比小屏★ 这样控件 1:1 摆进去不会被裁
-    NSLayoutConstraint *canvasAspect = [_canvas.widthAnchor constraintEqualToAnchor:_canvas.heightAnchor
-                                                                      multiplier:_designSize.width / MAX(1.0, _designSize.height)];
-    canvasAspect.priority = 999;
-    NSLayoutConstraint *canvasMaxH = [_canvas.heightAnchor constraintLessThanOrEqualToAnchor:_toolbar.topAnchor
-                                                                                    constant:-10];
-    canvasMaxH.priority = 750;
-
-    [NSLayoutConstraint activateConstraints:@[
-        [_canvas.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor constant:10],
-        [_canvas.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor constant:-10],
-        [_canvas.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
-        [_canvas.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8],
-        // ★画布到底栏之上★ 否则控件和工具栏叠在一起
-        [_canvas.bottomAnchor constraintEqualToAnchor:_toolbar.topAnchor constant:-10],
-        canvasMaxH,
-        canvasAspect,
-    ]];
+    // ★画布用手动 frame★ 之前的 canvasMaxH 把「高度锚点」和「Y 轴锚点」比，
+    //   单位不兼容 ⇒ viewDidLoad 直接抛 NSInvalidArgumentException 崩溃。
+    //   现在完全在 viewDidLayoutSubviews 里按可用区域算尺寸。
+    _canvas.translatesAutoresizingMaskIntoConstraints = YES;
 
     // 控件层：按「设计尺寸」排布，再整体缩放塞进画布 ——
     // 这样控件之间的相对位置永远不变，也不需要因为画布大小而重排。
@@ -107,12 +93,26 @@
 /// 把设计尺寸的控件层等比缩放并居中到画布（旋转/分屏也会重算）
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
-    if (_controls == nil || _canvas.bounds.size.width <= 1) return;
-    CGFloat sx = CGRectGetWidth(_canvas.bounds)  / _designSize.width;
-    CGFloat sy = CGRectGetHeight(_canvas.bounds) / _designSize.height;
-    CGFloat k = MIN(MIN(sx, sy), 1.0);   // 画布比设计尺寸大就不放大，避免控件虚胖
+    if (_controls == nil || _designSize.width <= 1) return;
+
+    CGFloat top = self.view.safeAreaInsets.top + 8;
+    CGFloat bottom = CGRectGetMinY(_toolbar.frame) - 10;
+    CGFloat availW = CGRectGetWidth(self.view.bounds) - 20;
+    CGFloat availH = MAX(60, bottom - top);
+    if (availW <= 1) return;
+
+    // 画布 = 设计尺寸的等比缩放，取能放下的最大比例
+    CGFloat k = MIN(availW / _designSize.width, availH / _designSize.height);
+
+    CGSize cs = CGSizeMake(_designSize.width * k, _designSize.height * k);
+    _canvas.bounds = CGRectMake(0, 0, cs.width, cs.height);
+    _canvas.center = CGPointMake(CGRectGetMidX(self.view.bounds), top + availH * 0.5);
+
+    // 控件层按设计尺寸排布，整体缩放进画布
+    _controls.transform = CGAffineTransformIdentity;
+    _controls.frame = CGRectMake(0, 0, _designSize.width, _designSize.height);
     _controls.transform = CGAffineTransformMakeScale(k, k);
-    _controls.center = CGPointMake(CGRectGetMidX(_canvas.bounds), CGRectGetMidY(_canvas.bounds));
+    _controls.center = CGPointMake(cs.width * 0.5, cs.height * 0.5);
 }
 
 - (void)buildToolbar {
