@@ -561,6 +561,15 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
     // 建 VM 会阻塞 ⇒ 放后台队列；结果回主线程。
     // ★启动遮罩★ 从这里开始用户看不到任何进展 ⇒ 立刻盖上，阶段播报会驱动它。
     [A2LaunchOverlay show];
+    // ★26.3+（SDL 窗口栈）★ 我们自己那条「GLFW 建窗时顺带加控件」不会执行
+    //   ⇒ 这里主动建一层控件覆盖层；事件由 a2_sdl_input 镜像进 SDL。
+    //   26.2 及更早不受影响（它们走 GLFW 宿主视图那条老路）。
+    if ((a2McMajor == 26 && a2McMinor >= 3) || a2McMajor > 26) {
+        extern void a2_controls_overlay_start_for_sdl(void);
+        a2_controls_overlay_start_for_sdl();
+        [A2Log criterion:@"[A2-CONTROLS] 26.3+ 走 SDL 控件覆盖层（a2_controls_overlay）"];
+    }
+
     [A2Log log:@"[A2-LAUNCH] 进入后台链：plan=%@ renderer=%@ jre=%@",
                  planPath.lastPathComponent ?: @"(nil)", renderer.identifier, jreDir];
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
