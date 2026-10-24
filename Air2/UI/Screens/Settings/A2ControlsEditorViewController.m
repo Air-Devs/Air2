@@ -134,6 +134,8 @@
     _controls.frame = CGRectMake(0, 0, _designSize.width, _designSize.height);
     [_canvas addSubview:_controls];
     [_controls a2_setEditing:YES];
+    // ★编辑器显示的就是游戏在用的那份存档布局★（否则编辑一次保存后，再进来看到的是重置版）
+    [_controls a2_reloadSavedLayout];
 
     // 点画布空白 = 取消选中
     UITapGestureRecognizer *bg = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(a2_editorBackgroundTap:)];

@@ -1087,6 +1087,11 @@ static int a2_touchSeen = 0;
     a2_log_f(@"[A2-CONTROLS] 删除控件：%@", cid);
 }
 
+- (void)a2_reloadSavedLayout {
+    [self a2_applySavedLayout];
+    [self a2_clampControlsIntoBounds];
+}
+
 - (void)a2_deselect {
     if (_selectedControl != nil) {
         _selectedControl.layer.borderWidth = 1.0;
