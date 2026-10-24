@@ -188,6 +188,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     NSMutableDictionary<NSString *, NSString *> *_customTitles;  // 自定义键 id → 显示名
     NSMutableSet<NSString *> *_removedIds;                        // 被删除的内置键 id
     NSString *_pendingCid;                                        // 正在等待选键的控件 id
+    NSMutableArray<NSNumber *> *_comboBuffer;                     // 组合键选择缓冲
     NSMutableDictionary<NSString *, NSNumber *> *_bindings;   // 控件id -> GLFW 键码
     NSMutableDictionary<NSString *, NSValue *> *_restFrames;  // 编辑前位置（取消用）
 
@@ -874,10 +875,24 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
 #pragma mark - 任意键绑定
 
-/// 取某控件当前绑定的键码（没绑过就用默认）。
+/// 取某控件当前绑定的键码（没绑过就用默认）。组合键时返回第一个键。
 - (int)a2_keyForControl:(NSString *)cid fallback:(int)def {
-    NSNumber *n = _bindings[cid];
-    return n != nil ? n.intValue : def;
+    id v = _bindings[cid];
+    if ([v isKindOfClass:NSArray.class]) {
+        NSArray *a = v;
+        return a.count ? [a.firstObject intValue] : def;
+    }
+    return [v isKindOfClass:NSNumber.class] ? [v intValue] : def;
+}
+
+/// 取某控件要派的全部键码（组合键 = 多个；普通键 = 一个）
+- (NSArray<NSNumber *> *)a2_codesForControl:(NSString *)cid fallback:(int)def {
+    id v = _bindings[cid];
+    if ([v isKindOfClass:NSArray.class]) {
+        return [(NSArray *)v count] ? v : @[ @(def) ];
+    }
+    if ([v isKindOfClass:NSNumber.class]) return @[ v ];
+    return @[ @(def) ];
 }
 
 - (void)a2_setKey:(int)key forControl:(NSString *)cid {
@@ -1010,6 +1025,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     UIViewController *top = self.a2_topViewController;
     if (top == nil || cid == nil) return;
     _pendingCid = cid;
+    _comboBuffer = [NSMutableArray array];
 
     // 遮罩
     UIView *mask = [[UIView alloc] initWithFrame:top.view.bounds];
@@ -1049,6 +1065,32 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     tip.textAlignment = NSTextAlignmentCenter;
     [panel addSubview:tip];
 
+    UISwitch *comboSwitch = [[UISwitch alloc] initWithFrame:CGRectZero];
+    comboSwitch.translatesAutoresizingMaskIntoConstraints = NO;
+    comboSwitch.tag = 0xA2C1;
+    comboSwitch.onTintColor = [UIColor colorWithRed:0.42 green:0.65 blue:1 alpha:1];
+    [panel addSubview:comboSwitch];
+
+    UILabel *comboLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    comboLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    comboLabel.tag = 0xA2C3;
+    comboLabel.text = @"组合键";
+    comboLabel.textColor = [UIColor colorWithWhite:1 alpha:0.82];
+    comboLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightMedium];
+    [panel addSubview:comboLabel];
+
+    UIButton *confirm = [UIButton buttonWithType:UIButtonTypeSystem];
+    confirm.translatesAutoresizingMaskIntoConstraints = NO;
+    confirm.tag = 0xA2C2;
+    [confirm setTitle:@"确定" forState:UIControlStateNormal];
+    [confirm setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+    confirm.titleLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
+    confirm.backgroundColor = [UIColor colorWithRed:0.42 green:0.65 blue:1 alpha:1];
+    confirm.layer.cornerRadius = 10;
+    confirm.hidden = YES;
+    [confirm addTarget:self action:@selector(a2_comboConfirm) forControlEvents:UIControlEventTouchUpInside];
+    [panel addSubview:confirm];
+
     UIButton *close = [UIButton buttonWithType:UIButtonTypeSystem];
     close.translatesAutoresizingMaskIntoConstraints = NO;
     [close setTitle:@"完成" forState:UIControlStateNormal];
@@ -1073,7 +1115,15 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         [tip.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:16],
         [close.centerYAnchor constraintEqualToAnchor:tip.centerYAnchor],
         [close.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-16],
-        [scroll.topAnchor constraintEqualToAnchor:tip.bottomAnchor constant:12],
+        [comboSwitch.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:16],
+        [comboSwitch.centerYAnchor constraintEqualToAnchor:tip.bottomAnchor constant:22],
+        [comboLabel.leadingAnchor constraintEqualToAnchor:comboSwitch.trailingAnchor constant:8],
+        [comboLabel.centerYAnchor constraintEqualToAnchor:comboSwitch.centerYAnchor],
+        [confirm.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-16],
+        [confirm.centerYAnchor constraintEqualToAnchor:comboSwitch.centerYAnchor],
+        [confirm.widthAnchor constraintEqualToConstant:76],
+        [confirm.heightAnchor constraintEqualToConstant:34],
+        [scroll.topAnchor constraintEqualToAnchor:comboSwitch.bottomAnchor constant:12],
         [scroll.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:14],
         [scroll.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-14],
         [scroll.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-14],
@@ -1132,7 +1182,45 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
 - (void)a2_keyPadTapped:(UIButton *)b {
     if (_pendingCid.length == 0) return;
+
+    UIView *mask = [self.a2_topViewController.view viewWithTag:0xA2C0];
+    UISwitch *sw = (UISwitch *)[mask viewWithTag:0xA2C1];
+
+    if (sw.isOn) {
+        int code = (int)b.tag;
+        // ★只限 F 键打头★ 第一个必须是 F1–F12（290…301），第二个任意；也可以只按 F 键
+        if (_comboBuffer.count == 0 && !(code >= 290 && code <= 301)) {
+            UILabel *lb = (UILabel *)[mask viewWithTag:0xA2C3];
+            lb.text = @"请先按 F1–F12";
+            return;
+        }
+        if (_comboBuffer.count >= 2) return;
+        [_comboBuffer addObject:@(code)];
+
+        UILabel *lb = (UILabel *)[mask viewWithTag:0xA2C3];
+        NSMutableArray *names = [NSMutableArray array];
+        for (NSNumber *n in _comboBuffer) {
+            int c = n.intValue;
+            [names addObject:(c >= 290 && c <= 301) ? [NSString stringWithFormat:@"F%d", c - 289]
+                                                    : [NSString stringWithFormat:@"%c", c]];
+        }
+        lb.text = [names componentsJoinedByString:@" + "];
+
+        UIButton *ok = (UIButton *)[mask viewWithTag:0xA2C2];
+        ok.hidden = NO;
+        return;
+    }
+
     [self a2_setKey:(int)b.tag forControl:_pendingCid];
+    [self a2_closeKeyPad];
+}
+
+/// 组合键确定：写入绑定并自动关闭
+- (void)a2_comboConfirm {
+    if (_pendingCid.length == 0 || _comboBuffer.count == 0) return;
+    _bindings[_pendingCid] = [_comboBuffer copy];
+    [NSUserDefaults.standardUserDefaults setObject:_bindings forKey:kA2BindingsKey];
+    a2_log_f(@"[A2-CONTROLS] 控件 %@ 绑定组合键 %@", _pendingCid, _comboBuffer);
     [self a2_closeKeyPad];
 }
 
@@ -1145,12 +1233,15 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
 /// 按绑定发一次「按下+抬起」（-1/-2 走鼠标左右键）。
 - (void)a2_pressBound:(NSString *)cid fallback:(int)def {
-    int code = [self a2_keyForControl:cid fallback:def];
-    if (code == -1) { a2_glfw_input_post_mouse_button(_window, 0, 1); a2_glfw_input_post_mouse_button(_window, 0, 0); return; }
-    if (code == -2) { a2_glfw_input_post_mouse_button(_window, 1, 1); a2_glfw_input_post_mouse_button(_window, 1, 0); return; }
-    a2_log_f(@"[A2-CONTROLS] 按键合成 cid=%@ key=%d window=%ld", cid, code, _window);
-    a2_glfw_input_post_key(_window, code, 1);
-    a2_glfw_input_post_key(_window, code, 0);
+    NSArray<NSNumber *> *codes = [self a2_codesForControl:cid fallback:def];
+    int first = codes.firstObject.intValue;
+    if (first == -1) { a2_glfw_input_post_mouse_button(_window, 0, 1); a2_glfw_input_post_mouse_button(_window, 0, 0); return; }
+    if (first == -2) { a2_glfw_input_post_mouse_button(_window, 1, 1); a2_glfw_input_post_mouse_button(_window, 1, 0); return; }
+
+    a2_log_f(@"[A2-CONTROLS] 按键合成 cid=%@ keys=%@ window=%ld", cid, codes, _window);
+    // 组合键：F 键先按下 → 目标键按下/抬起 → F 键最后抬起
+    for (NSNumber *n in codes) a2_glfw_input_post_key(_window, n.intValue, 1);
+    for (NSNumber *n in codes.reverseObjectEnumerator) a2_glfw_input_post_key(_window, n.intValue, 0);
 }
 
 
