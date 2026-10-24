@@ -45,16 +45,18 @@ static id gObserver = nil;
 
 /// 组一个带参数的 StikDebug URL（scheme 用 stikdebug，失败再试 stikjit）
 + (NSURL *)rescueURLWithScript:(NSString *)scriptPath {
+    // ★参数名照老 Air 的真实格式★（我们之前写成 bundle_id/script/return，StikDebug 不认）
+    //   stikdebug://enable-jit?bundle-id=<id>&pid=<pid>&script-name=universal.js
     NSString *bundleID = NSBundle.mainBundle.bundleIdentifier ?: @"dev.airdevs.air2";
-    NSString *script = scriptPath ?: @"";
-    NSString *tmpl = [NSString stringWithFormat:
-                      @"stikdebug://enable-jit?bundle_id=%@&script=%@&return=%@",
-                      [bundleID stringByAddingPercentEncodingWithAllowedCharacters:
-                       NSCharacterSet.URLQueryAllowedCharacterSet],
-                      [script stringByAddingPercentEncodingWithAllowedCharacters:
-                       NSCharacterSet.URLQueryAllowedCharacterSet],
-                      @"air2"];
-    return [NSURL URLWithString:tmpl];
+    NSString *scriptName = scriptPath.lastPathComponent.length ? scriptPath.lastPathComponent : @"universal.js";
+    NSString *s = [NSString stringWithFormat:
+                   @"stikdebug://enable-jit?bundle-id=%@&pid=%d&script-name=%@",
+                   [bundleID stringByAddingPercentEncodingWithAllowedCharacters:
+                    NSCharacterSet.URLQueryAllowedCharacterSet],
+                   (int)getpid(),
+                   [scriptName stringByAddingPercentEncodingWithAllowedCharacters:
+                    NSCharacterSet.URLQueryAllowedCharacterSet]];
+    return [NSURL URLWithString:s];
 }
 
 + (void)beginRescueWithScript:(NSString *)scriptPath
