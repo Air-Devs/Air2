@@ -41,6 +41,9 @@ static const NSTimeInterval kA2JITPollInterval = 0.5;
 static const NSTimeInterval kA2JITVerifySlice = 2.5;
 /// 心跳日志间隔：让真机日志能看出「还在等」而不是「卡死了」。
 static const NSTimeInterval kA2JITHeartbeat = 10.0;
+/// 弹窗 → 拉起使能器之间的间隔：★顺序有用★ 弹窗先落屏，再 openURL（openURL 会把我们送去
+/// 后台；顺序反了弹窗根本没机会显示，用户就只看到「跳走了」）。
+static const NSTimeInterval kA2JITAlertLead = 0.4;
 /// 脚本名：打包阶段把 Assets/Air2JIT69.js 复制成 Air2.app/universal.js
 /// （scripts/gen_xcodeproj.py 的随包阶段）。StikDebug 只认这个名字。
 static NSString *const kA2JITScriptName = @"universal.js";
@@ -75,20 +78,41 @@ static BOOL a2jit_launched_by_debugger(void) {
     return getppid() != 1;
 }
 
+/// CS_DEBUGGED（内核 csops 状态位 0x00000100）——「调试器已 attach 到本进程」。
+/// ★这个是真的★：attach 之后例外端口在岗 ⇒ brk #0x69 会被人应答，JIT 真的能给
+/// （老 Air 的 JIT26IsLikelyDebuggerKeepAttached 就是这个语义）。
+static BOOL a2jit_cs_debugged(void) {
+    uint32_t flags = 0;
+    extern int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
+    if (csops(getpid(), 0 /* CS_OPS_STATUS */, &flags, sizeof(flags)) == 0) {
+        return (flags & 0x00000100u) != 0;
+    }
+    return NO;
+}
+
 /// 能力声明：entitlement（dynamic-codesigning / cs.debugger，老 Air 用
 /// getEntitlementValue 判定，Air2 收敛到 a2_jit_has_kernel_level）或 CS_DEBUGGED。
 /// ★只证明「有资格」，不证明「现在能用」★（老 Air 的 [JIT-FLOW] 假阳性链路就是这么来的）。
 static BOOL a2jit_has_capability(void) {
     if (a2_jit_has_kernel_level()) return YES;
-    uint32_t flags = 0;
-    extern int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
-    if (csops(getpid(), 0 /* CS_OPS_STATUS */, &flags, sizeof(flags)) == 0) {
-        return (flags & 0x00000100u) != 0;   // CS_DEBUGGED
-    }
-    return NO;
+    return a2jit_cs_debugged();
 }
 
 /// 唯一判据。why 只在「不就绪」时被写（可读原因，供日志与失败页）。
+///
+/// ★分支顺序即结论顺序，逐条说清为什么★
+///   ① 被调试器 / 使能器拉起（ppid≠1）⇒ 认：JIT 正由外部注入（防死循环铁律 ②）；
+///   ② 本进程已拿到可写 JIT 区 ⇒ 认：那是真证明过的（brk #0x69 被服务过）；
+///   ③ 没有任何能力声明 ⇒ 不认（连资格都没有，必须去申请）；
+///   ④ 调试器已 attach（CS_DEBUGGED）⇒ 认：例外端口在岗，brk 一定有人应答；
+///   ⑤ 只剩「能力声明」⇒ ★必须证明到真能用★：
+///        · 非镜像设备（< iOS 26）：走 A2JITEnvironment 的执行式/区域验证；
+///        · 镜像设备（iOS 26+）：★声明不算数★ —— 必须真的拿到一块已验证的区域。
+///          这一条是「没 JIT 却照样建 VM 闪退」的根因所在：`ensureVerifiedWithinBudget`
+///          对「内核级声明」是直接放行的（那是给 TrollStore/越狱留的口径），于是
+///          `dynamic-codesigning` 声明在 iOS 26 上被当成了「现在能用」⇒ 闸门放行 ⇒
+///          HotSpot 首帧 SIGBUS。⇒ 这里用 `verifiedRegion != NULL` 把「声明」与
+///          「已证明」分开（同一份判断仍只在 A2JITEnvironment 里算）。
 static BOOL a2jit_ready_now(NSString *_Nullable *_Nullable why) {
     if (a2jit_launched_by_debugger()) {
         if (why) *why = @"被调试器拉起(ppid≠1)：JIT 正由外部注入，直接认";
@@ -102,10 +126,21 @@ static BOOL a2jit_ready_now(NSString *_Nullable *_Nullable why) {
         if (why) *why = @"没有 JIT 能力声明（entitlement / CS_DEBUGGED 都没有）";
         return NO;
     }
+    if (a2jit_cs_debugged()) {
+        if (why) *why = @"调试器已 attach(CS_DEBUGGED)：例外端口在岗 ⇒ 认";
+        return YES;
+    }
     // 有声明 ⇒ 必须验证到「真能用」：iOS 26+ 要真拿到可写 JIT 区（brk #0x69 被服务），
     // 非镜像设备要真执行一段自产指令 / 或内核级直接放行 —— 全在 A2JITEnvironment 一处判定。
     NSString *envWhy = nil;
     BOOL ok = [A2JITEnvironment ensureVerifiedWithinBudget:kA2JITVerifySlice reason:&envWhy];
+    if (ok && [A2JITEnvironment needsDebuggerMapping] && [A2JITEnvironment verifiedRegion] == NULL) {
+        // ★假阳性拦截（iOS 26+）★ 只有声明、没有任何已验证区域 ⇒ 不是「能用」。
+        if (why) *why = [NSString stringWithFormat:
+            @"只有 JIT 能力声明、没有已验证的可执行区（iOS 26+ 声明≠能用；%@）",
+            envWhy.length > 0 ? envWhy : @"—"];
+        return NO;
+    }
     if (!ok && why) {
         *why = envWhy.length > 0
             ? [NSString stringWithFormat:@"有 JIT 声明但区域验证未通过（%@）", envWhy]
@@ -202,6 +237,7 @@ static A2JITEnablerTool a2jit_pick_enabler(NSURL *_Nullable *_Nullable urlOut) {
 @property (nonatomic, assign) NSTimeInterval lastHeartbeat;
 @property (nonatomic, assign) BOOL finished;
 @property (nonatomic, assign) BOOL probeInFlight;           // 上一发探针还没回来 ⇒ 本轮跳过
+@property (nonatomic, assign) BOOL enablerLaunched;          // ★one-shot★ 使能器只拉起一次
 @property (nonatomic, assign) BOOL armedAutoLaunch;          // 是否置过「重挂后自动继续」标记
 @property (nonatomic, assign) UIBackgroundTaskIdentifier bgTask;
 @property (nonatomic, strong) UIAlertController *alert;
@@ -210,7 +246,9 @@ static A2JITEnablerTool a2jit_pick_enabler(NSURL *_Nullable *_Nullable urlOut) {
 
 - (void)addCompletion:(void (^)(BOOL))block;
 - (void)finishWithOK:(BOOL)ok reason:(NSString *)reason;
-- (void)startWaitingWithBudget:(NSTimeInterval)budget tool:(A2JITEnablerTool)tool;
+- (void)startWaitingWithBudget:(NSTimeInterval)budget
+                          tool:(A2JITEnablerTool)tool
+                    enablerURL:(NSURL *_Nullable)url;
 - (void)openEnablerURL:(NSURL *)url tool:(A2JITEnablerTool)tool;
 - (void)scheduleNextTick;
 - (void)tick;
@@ -276,16 +314,28 @@ static NSString *gA2JITLastFailure = nil;
     for (void (^block)(BOOL) in blocks) block(ok);
 }
 
-/// 「正在等待 JIT」弹窗：老 Air 也有这一个，否则用户不知道 App 在等什么。
+/// 「正在等待 JIT」弹窗 + 保活 + 轮询起点。
+///
+/// ★顺序（照老 Air 的 invokeAfterJITEnabled，一步都不能换）★
+///   ① 先把弹窗放上屏幕（animated:NO ⇒ 同一帧可见，不等动画）；
+///   ② 本次启动到此为止 —— 调用方（启动闸门）在调用 `ensureJITThen:` 之后已 return，
+///      这里不做任何「继续启动」的事，也绝不建 VM；
+///   ③ 之后（kA2JITAlertLead 秒）才 openURL 拉起使能器；
+///   ④ 再进入 0.5s 轮询。
+/// 反过来做过（先 openURL 再弹窗）：openURL 立刻把本进程送后台，弹窗没机会显示，
+/// 用户只看到「App 跳走了又回来」，日志里也没有任何「在等什么」的证据。
+///
 /// ★失败页不在这里★：本弹窗只解释「正在等」，拿不到 JIT 之后由上层出失败页。
-- (void)startWaitingWithBudget:(NSTimeInterval)budget tool:(A2JITEnablerTool)tool {
+- (void)startWaitingWithBudget:(NSTimeInterval)budget
+                          tool:(A2JITEnablerTool)tool
+                    enablerURL:(NSURL *_Nullable)url {
     NSTimeInterval now = [NSDate date].timeIntervalSince1970;
     self.deadline = now + budget;
     self.lastTick = now;
     self.lastHeartbeat = now;
 
     NSString *message = nil;
-    if (tool == A2JITEnablerToolNone) {
+    if (tool == A2JITEnablerToolNone || url == nil) {
         // 已经跳过一次（防死循环）⇒ 不再拉起任何东西，只解释「在等什么」。
         message = [NSString stringWithFormat:
             @"本进程已经拉起过一次 JIT 使能器。\n请确认它已为 Air2 开启 JIT，然后回到 Air2 —— 拿到 JIT 会自动继续启动。\n（最多再等 %.0f 秒）",
@@ -309,10 +359,23 @@ static NSString *gA2JITLastFailure = nil;
             [weakSelf finishWithOK:NO reason:@"用户取消了等待"];
         }]];
         self.alert = alert;
-        [top presentViewController:alert animated:YES completion:nil];
+        // ★animated:NO★ 等的是「弹窗已落屏」这件事本身，不是动画。
+        [top presentViewController:alert animated:NO completion:nil];
+        a2_log_criterion(@"[A2-JIT-ENABLER] 已弹出「正在等待 JIT」⇒ 本次启动停在这里（不建 VM）");
     } else {
         // 没有窗口（例如从后台/headless 进入）⇒ 只落日志，等待照跑。
-        a2_log_criterion(@"[A2-JIT-ENABLER] 没有可展示的窗口 ⇒ 只等不提示");
+        a2_log_criterion(@"[A2-JIT-ENABLER] 没有可展示的窗口 ⇒ 只等不提示（本次启动同样不往下走）");
+    }
+
+    // ★② → ③ 的接缝★ 弹窗先上屏，再拉起使能器；one-shot（openEnablerURL 内再挡一次）。
+    if (url != nil) {
+        __weak typeof(self) weakSelf = self;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kA2JITAlertLead * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            A2JITEnablerRun *run = weakSelf;
+            if (run == nil || run.finished || run.enablerLaunched) return;
+            [run openEnablerURL:url tool:tool];
+        });
     }
 
     // 后台断言：切到使能器之后 iOS 会挂起本进程，等待循环必须尽量活到回来那一刻
@@ -402,7 +465,11 @@ static NSString *gA2JITLastFailure = nil;
 
 /// 拉起使能器（必须在主线程）。失败 ⇒ 立刻回调 NO（不白等 120s）。
 - (void)openEnablerURL:(NSURL *)url tool:(A2JITEnablerTool)tool {
-    a2_log_criterion(@"[A2-JIT-ENABLER] 拉起使能器 %@：%@", a2jit_tool_name(tool), url.absoluteString);
+    // ★one-shot★ 同一次等待里使能器只拉起一次（弹窗回调 / 重入 / 前台通知都不该再发一条）。
+    if (self.enablerLaunched) return;
+    self.enablerLaunched = YES;
+    a2_log_criterion(@"[A2-JIT-ENABLER] 弹窗已就位 ⇒ 现在拉起使能器 %@：%@",
+                     a2jit_tool_name(tool), url.absoluteString);
     // ★只有 stikjit 会重拉本进程★：新进程里没有这次等待的上下文，于是置「重挂后自动继续」
     //   标记，由读点（Air2/App/A2AppDelegate.m）在下次 didFinishLaunching 认出并自动起游戏。
     //   其余使能器（stikdebug / apple-magnifier / sidestore）都在本进程内 attach，
@@ -468,7 +535,7 @@ static NSString *gA2JITLastFailure = nil;
         [run finishWithOK:YES reason:(why ?: @"判据通过")];
         return;
     }
-    a2_log_criterion(@"[A2-JIT-ENABLER] 未就绪：%@（ppid=%d jumped=%d）",
+    a2_log_criterion(@"[A2-JIT-ENABLER] 未就绪 ⇒ 中止启动（不建 VM）：%@（ppid=%d jumped=%d）",
                      why ?: @"—", getppid(), (int)gA2JITJumpedThisProcess);
 
     // ② 申请：★同一进程只跳一次★（铁律 ②）。已跳过的第二轮只做短等待：
@@ -477,8 +544,9 @@ static NSString *gA2JITLastFailure = nil;
     NSTimeInterval budget = alreadyJumped ? kA2JITRepeatWaitBudget : kA2JITWaitBudget;
 
     if (alreadyJumped) {
-        a2_log_criterion(@"[A2-JIT-ENABLER] 本进程已跳转过一次 ⇒ 不再跳转，只短等待 %.0fs", budget);
-        [run startWaitingWithBudget:budget tool:A2JITEnablerToolNone];
+        a2_log_criterion(@"[A2-JIT-ENABLER] 本进程已跳转过一次 ⇒ 不再跳转，只短等待 %.0fs"
+                         @"（本次启动已终止，不建 VM）", budget);
+        [run startWaitingWithBudget:budget tool:A2JITEnablerToolNone enablerURL:nil];
         return;
     }
 
@@ -493,14 +561,10 @@ static NSString *gA2JITLastFailure = nil;
     }
 
     gA2JITJumpedThisProcess = YES;
-    [run startWaitingWithBudget:budget tool:tool];
-    // 弹窗先提交，再拉起（openURL 会把我们送去后台；顺序反了弹窗可能根本没显示）。
-    __weak typeof(run) weakRun = run;
-    dispatch_async(dispatch_get_main_queue(), ^{
-        A2JITEnablerRun *strongRun = weakRun;
-        if (strongRun == nil || strongRun.finished) return;
-        [strongRun openEnablerURL:url tool:tool];
-    });
+    // ★①→④ 全在 startWaitingWithBudget 里按顺序做完★：弹窗先上屏 → 再 openURL → 再轮询。
+    //   这里只把「要不要拉起哪一条」的决定传进去，不再自己 dispatch（上轮的写法是
+    //   startWaiting 里 present 动画还没走完就排队 openURL，弹窗可能根本看不到）。
+    [run startWaitingWithBudget:budget tool:tool enablerURL:url];
 }
 
 + (NSString *)lastFailureReason {

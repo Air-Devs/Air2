@@ -794,6 +794,10 @@ static int gA2JITEnsureKickInflight = 0;
     return gA2JITVerifiedRegion;
 }
 
++ (BOOL)needsDebuggerMapping {
+    return a2_jit_device_needs_debug_mapping();
+}
+
 + (NSString *)regionEvidence {
     return gA2JITRegionEvidence;
 }

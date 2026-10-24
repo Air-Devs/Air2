@@ -183,32 +183,67 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
         return;
     }
     // ★开关=开的判据行★
-    // ★JIT 闸门★：判据 → 申请 → 等待 → 回调，全部在 Natives/Support 的一处
-    //   （A2JITEnabler；移植自老 Air 的 invokeAfterJITEnabled: 机制）。
-    //   · 已就绪（被调试器拉起 / 已拿到可写 JIT 区 / 内核级 JIT / 区域验证通过）
-    //     ⇒ 照旧直接往下启动：26.2 上「JIT 已就绪」的行为与之前逐字一致，只多一行判据；
-    //   · 未就绪 ⇒ 交模块去拉起使能器并等 ≤120s；★失败一律回调 NO★，
-    //     由这里给可读失败页 —— 绝不带着无 JIT 的进程继续去建 VM（那会 SIGBUS 闪退）。
-    //   防死循环由模块负责（被调试器拉起即认 / 同一进程只跳一次），本层不再留 static 标记。
-    if ([A2JITEnabler isJITReadyNow]) {
-        [A2Log log:@"[A2-JIT] 已就绪 ⇒ 直接启动（判据明细见上一条 [A2-JIT-ENABLER] 行）"];
-    } else {
-        [A2Log criterion:@"[A2-JIT] 未就绪 ⇒ 交 A2JITEnabler 申请（拉起使能器 → 有界等待 120s）"];
+    // ========================================================================
+    // ★JIT 闸门（启动链的唯一入口）★
+    // ------------------------------------------------------------------------
+    // 判据 → 申请 → 等待 → 回调，全部在 Natives/Support 的一处（A2JITEnabler；
+    // 移植自老 Air 的 invokeAfterJITEnabled: 机制）。本层只做两件事：
+    //   · 已就绪 ⇒ 放行（26.2 上「JIT 已就绪」的行为与之前逐字一致，只多一行判据）；
+    //   · 未就绪 ⇒ ★本次启动到此为止★（不写计划、不建 VM、不往下走一步），
+    //     由模块先弹「正在等待 JIT」再拉起使能器；回调里成功才重新进入启动链。
+    // ★为什么必须是「无条件 return」★：无 JIT 建 VM = HotSpot 首帧取指 SIGBUS
+    //   （直接闪退，连失败页都没有）—— 这条分支里任何一个能继续往下的缝隙都不允许存在。
+    // ========================================================================
+    // ★在途护栏★ 等待期间再点一次「启动」不许叠第二条启动请求
+    //   （叠了会在回调里跑两次启动 ⇒ 两个 VM）。标记只在主线程读写：本方法的所有调用点
+    //   （首页启动按钮 / AppDelegate 的「重挂后自动继续」）都在主线程。
+    static BOOL sWaitingForJIT = NO;
+    if (sWaitingForJIT) {
+        [A2Log criterion:@"[A2-JIT-ENABLER] 仍等待中，本次启动已终止（上一条请求还在等 JIT，不叠第二次启动）"];
+        // 这不是失败（有别的启动请求在等）⇒ 不弹失败页，只把「本次没启动」如实带回去。
+        dispatch_async(dispatch_get_main_queue(), ^{
+            completion([A2LaunchSessionResult resultWithStarted:NO
+                                                     returnCode:0
+                                                        message:@"正在等待 JIT：本次启动已终止（请先处理「正在等待 JIT」窗口里的提示）"]);
+        });
+        return;
+    }
+
+    if (![A2JITEnabler isJITReadyNow]) {
+        [A2Log criterion:@"[A2-JIT-ENABLER] 未就绪 ⇒ 中止启动（不建 VM）（先弹等待窗 → 再拉起使能器 → 拿到 JIT 才重新启动）"];
+        sWaitingForJIT = YES;
+        __block BOOL resumed = NO;   // ★重入护栏★：同一次等待只认第一次回调
         [A2JITEnabler ensureJITThen:^(BOOL ok) {
-            if (ok) {
-                [A2Log criterion:@"[A2-JIT] 已拿到 JIT ⇒ 重新进入启动链（第二轮判据即就绪）"];
-                [A2LaunchSession startCurrentVersionWithCompletion:^(A2LaunchSessionResult *r) {
-                    (void)r;
-                }];
-            } else {
+            if (resumed) {
+                [A2Log criterion:@"[A2-JIT-ENABLER] 仍等待中，本次启动已终止（重复回调已忽略）"];
+                return;
+            }
+            resumed = YES;
+            sWaitingForJIT = NO;
+            if (!ok) {
                 NSString *why = [A2JITEnabler lastFailureReason] ?: @"原因未知";
                 [A2Log criterion:@"[A2-JIT] 没拿到 JIT ⇒ 出失败页（不建 VM）：%@", why];
                 finish(NO, 0, [NSString stringWithFormat:
                                @"没有拿到 JIT：%@。\n可在 StikDebug 里为 Air2 开启 JIT 后重试。", why]);
+                return;
             }
+            // ★回调说「已就绪」也要现场再问一次判据★：判据只在一处，回调只是信号；
+            //   两者不一致时以判据为准（宁可停，也不带着可疑状态进链）。
+            if (![A2JITEnabler isJITReadyNow]) {
+                NSString *why = [A2JITEnabler lastFailureReason] ?: @"现场判据仍未通过";
+                [A2Log criterion:@"[A2-JIT-ENABLER] 仍等待中，本次启动已终止（回调称已就绪，现场判据仍否：%@）", why];
+                finish(NO, 0, [NSString stringWithFormat:
+                               @"没有拿到 JIT：%@。\n可在 StikDebug 里为 Air2 开启 JIT 后重试。", why]);
+                return;
+            }
+            [A2Log criterion:@"[A2-JIT] 已拿到 JIT ⇒ 重新进入启动链（第二轮判据即就绪）"];
+            // ★把调用方的 completion 一路带下去★：否则外层调用者永远等不到结果
+            //   （首页的加载态会一直转，90s 看门狗再补一句「没返回」）。
+            [A2LaunchSession startCurrentVersionWithCompletion:completion];
         }];
-        return;   // ★回调不在本调用栈里发生★（模块保证异步）
+        return;   // ★回调不在本调用栈里发生★（模块保证异步）；本次启动到此为止
     }
+    [A2Log log:@"[A2-JIT] 已就绪 ⇒ 直接启动（判据明细见上一条 [A2-JIT-ENABLER] 行）"];
 
     [A2Log log:@"[A2-CHAIN] 开关=开 ⇒ 走自研链（① 下发 JIT 脚本 → ② 探测 JIT → ③ 建 VM）"];
 
@@ -689,6 +724,25 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                 return ok;
             }
             createJVM:^BOOL(NSError **vmError) {
+                // ============================================================
+                // ★★ 建 VM 前的最后一道就绪校验（兜底保险）★★
+                //   上面已经有两处判据（入口闸门 / 等待回调后现场复查）；这里再问一次，
+                //   是为了让「漏了就会 SIGBUS 闪退」这件事在结构上不可能发生：
+                //   无论前面的判断怎么错，只要此刻判据为否就**一次都不调**
+                //   A2LaunchRunner（→ a2_launch_jvm_with_argv），改为带可读原因的失败。
+                //   ★本块是全工程唯一建 VM 的地方★（launchWithPlanPath 的唯一调用点）。
+                // ============================================================
+                if (![A2JITEnabler isJITReadyNow]) {
+                    [A2Log criterion:@"[A2-JIT-ENABLER] 未就绪 ⇒ 中止启动（不建 VM）（建 VM 前最后校验拦下；判据明细见上一条）"];
+                    if (vmError) {
+                        *vmError = [NSError errorWithDomain:A2LaunchChainJITGateErrorDomain
+                                                       code:-1
+                                                   userInfo:@{ NSLocalizedDescriptionKey:
+                            @"建 VM 前的 JIT 就绪校验未通过 —— ★没有创建 VM★（不会闪退）。\n"
+                            @"请用 StikDebug 为 Air2 开启 JIT 后重试；判据明细见日志 [A2-JIT-ENABLER] 行。" }];
+                    }
+                    return NO;
+                }
                 // ③ Bridge 唯一调 a2_launch_jvm_with_argv 的地方（★只有 ② 放行才会走到这里★）。
                 [A2Log log:@"%@", [A2LaunchFailure jitvmLineWithStep:@"vm"
                                                              verdict:probe.lastVerdict
@@ -729,6 +783,14 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
         }
 
         // 如实分类（按【停在哪一步】），不把推测当结论。
+        // ★建 VM 前的 JIT 自检拦下★：VM 一次都没创建 ⇒ 不是「建 VM 失败 rc=…」，
+        //   按 JIT 阻断如实报（错误域由链原样带回，见 A2LaunchChainJITGateErrorDomain）。
+        if ([chainError.domain isEqualToString:A2LaunchChainJITGateErrorDomain]) {
+            [A2Log criterion:@"[A2-CHAIN] ③ 未进入：JIT 就绪校验在建 VM 前拦下 —— %@",
+             chainError.localizedDescription ?: @"(无详情)"];
+            finish(NO, 0, chainError.localizedDescription ?: @"JIT 未就绪：没有创建 VM");
+            return;
+        }
         A2LaunchFailureClass cls = [A2LaunchFailure classForChainStage:chain.stage];
         if (cls == A2LaunchFailureClassJITBlocked) {
             // ★JIT 不可用 ⇒ 如实阻断：打判据行 + 给「怎么开」（按 verdict 分流的四语文案）★

@@ -104,6 +104,14 @@ typedef NS_ENUM(NSInteger, A2JITExecProbeResult) {
 /// 最近一次区域取证摘要（可读；无探测记录返回 nil）。
 + (NSString *_Nullable)regionEvidence;
 
+/// ★镜像路径判据★ 本机是否**必须由调试器代映射** code cache（iOS 26+：TXM / 硬化运行时）。
+///
+/// 为什么把它暴露出来：本机上「能力声明」（`dynamic-codesigning` entitlement）**不等于**
+/// 「现在能用」——iOS 26+ 的自产代码必须有调试器经 `brk #0x69` 交付的可执行区，否则首帧
+/// 取指就 SIGBUS。启动闸门需要一个地方问「这台机器是不是这种口径」，答案只在本文件
+/// (`a2_jit_device_needs_debug_mapping`) 一处计算，不要在上层照抄 OS 版本判断。
++ (BOOL)needsDebuggerMapping;
+
 /// 最近一次区域判定分类（供失败分流）。
 + (A2JITRegionVerdict)lastRegionVerdict;
 
