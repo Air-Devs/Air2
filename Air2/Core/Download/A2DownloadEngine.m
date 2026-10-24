@@ -50,8 +50,18 @@ NSString *const A2DownloadErrorDomain = @"A2DownloadError";
 NSString *const A2DownloadUnderlyingErrorsKey = @"A2DownloadUnderlyingErrors";
 
 /// 单候选的重试退避（秒）
-static const NSTimeInterval kBackoffSeconds[] = {1.0, 2.0, 4.0};
-static const NSInteger kBackoffCount = 3;
+/// 单源内的重试退避 —— **对齐 ZL2 的 RETRY_BACKOFF_MILLIS = 200**。
+///
+/// ZL2 的 Fetcher：
+///   DEFAULT_RETRY = 5      单源重试 5 次
+///   间隔 200ms            不是 1s/2s/4s
+///
+/// 为什么间隔要短：
+///   超时已经是 10s（坏连接 10s 就被放弃），再等 1~4 秒
+///   只是让这个并发槽位白白空着。200ms 的间隔让「失败→重试→换源」
+///   这条路径非常快，槽位周转率高，整体速度才上得去。
+static const NSTimeInterval kBackoffSeconds[] = {0.2, 0.2, 0.2, 0.2, 0.2, 0.2};
+static const NSInteger kBackoffCount = 5;
 /// 缓冲写盘阈值：攒够这么多字节写一次，减少磁盘操作
 static const NSUInteger kWriteBufferSize = 256 * 1024;
 /// 半成品文件后缀
@@ -178,6 +188,18 @@ static NSString *const kPartSuffix = @".part";
     return NO;
 }
 
+/// session 配置（只创建一次，重试时复用同一份）
+- (NSURLSessionConfiguration *)sessionConfiguration {
+    NSURLSessionConfiguration *cfg = NSURLSessionConfiguration.defaultSessionConfiguration;
+    // 超时对齐 ZL2 的 Fetcher.TIMEOUT_MILLIS = 10_000
+    cfg.timeoutIntervalForRequest = 10;
+    cfg.timeoutIntervalForResource = 1800;
+    cfg.HTTPMaximumConnectionsPerHost = 64;
+    cfg.URLCache = nil;
+    cfg.requestCachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
+    return cfg;
+}
+
 - (void)startCurrentCandidate {
     if (self.finished) return;
     if (self.candidateIndex >= (NSInteger)self.request.candidateURLs.count) {
@@ -208,13 +230,33 @@ static NSString *const kPartSuffix = @".part";
     // 治理方式：把【调度并发】降到与连接池匹配的水平（见
     // A2BatchDownloader 的车道数），而不是盲目提高每 host 上限
     // —— 提高上限只会让系统更早触顶，然后所有请求一起变慢。
+    // ---- 超时对齐 ZL2 的 Fetcher.TIMEOUT_MILLIS = 10_000 ----
+    //
+    // 这是最关键的差异。ZL2 连接和读取都只给 10 秒：
+    // 卡住的连接 10 秒就被放弃，立刻重试或换源。
+    // 给 30/60 秒意味着坏连接要占满整个超时窗口才释放，
+    // 期间该并发槽位被白白占用 —— 表现就是「越下越卡」。
     NSURLSessionConfiguration *cfg = NSURLSessionConfiguration.defaultSessionConfiguration;
-    cfg.timeoutIntervalForRequest = 30;      // 30s 无数据就换源（原来 60s 太长）
+    cfg.timeoutIntervalForRequest = 10;      // ← 与 ZL2 一致
     cfg.timeoutIntervalForResource = 1800;
-    cfg.HTTPMaximumConnectionsPerHost = 16;  // HTTP/1.1 下 8 太保守，16 是折中
+    cfg.HTTPMaximumConnectionsPerHost = 64;  // ← 与 ZL2 的 maxConnections 一致
     cfg.URLCache = nil;
     cfg.requestCachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
-    self.session = [NSURLSession sessionWithConfiguration:cfg delegate:self delegateQueue:nil];
+    // ⚠️ session 只创建一次，重试时复用。
+    //
+    // 之前每次 startCurrentCandidate 都新建 session，
+    // 而 handleCandidateFailure 又会 invalidateAndCancel 掉旧的 ——
+    // 等于【每次重试都要重建 TCP 连接 + 重做 TLS 握手】。
+    //
+    // ZL2 用 HttpURLConnection，它内部有连接池，
+    // 所以重试是「同一个连接换个请求」；我们每次重建，
+    // 在弱网/高延迟下这部分开销能占掉一半时间。
+    if (!self.session) {
+        NSURLSessionConfiguration *cfg = [self sessionConfiguration];
+        self.session = [NSURLSession sessionWithConfiguration:cfg
+                                                     delegate:self
+                                                delegateQueue:nil];
+    }
 
     self.currentTask = [self.session dataTaskWithRequest:req];
     [self.currentTask resume];
@@ -560,8 +602,9 @@ didCompleteWithError:(NSError *)error {
 - (void)handleCandidateFailureWithDelay:(NSError *)error delay:(NSTimeInterval)delay {
     if (self.finished) return;
     [self closeFileHandle];
-    [self.session invalidateAndCancel];
-    self.session = nil;
+    // 只取消当前 task，不销毁 session —— 连接池要留着复用
+    [self.currentTask cancel];
+    self.currentTask = nil;
 
     // 限流不算「重试次数」—— 它不是因为请求本身有问题，
     // 而是服务端让我们等。等完再试仍算第一次。
@@ -576,8 +619,9 @@ didCompleteWithError:(NSError *)error {
 - (void)handleCandidateFailure:(NSError *)error {
     if (self.finished) return;
     [self closeFileHandle];
-    [self.session invalidateAndCancel];
-    self.session = nil;
+    // 只取消当前 task，不销毁 session —— 连接池要留着复用
+    [self.currentTask cancel];
+    self.currentTask = nil;
 
     if (self.retryCount < kBackoffCount) {
         NSTimeInterval delay = kBackoffSeconds[self.retryCount];
