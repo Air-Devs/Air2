@@ -21,6 +21,8 @@
 //
 //
 
+#import "A2JITEnvironment.h"
+#import "A2LaunchSession.h"
 #import "A2AppDelegate.h"
 #import "A2SceneDelegate.h"
 #import "A2ThemeManager.h"
@@ -114,6 +116,24 @@ didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *
     }
 
     [A2Log log:@"AppDelegate: didFinishLaunching 完成"];
+
+    // ★stikjit 重挂后自动继续★ 上次点启动时因没 JIT 跳去 StikDebug，
+    //   这里回到 App 后若标记还在且 JIT 已就绪 ⇒ 自动开始启动，用户不用再点一次。
+    if ([NSUserDefaults.standardUserDefaults boolForKey:@"A2AutoLaunchAfterJIT"]) {
+        [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"A2AutoLaunchAfterJIT"];
+        [NSUserDefaults.standardUserDefaults synchronize];
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.5 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            extern BOOL a2_jit_has_kernel_level(void);
+            NSString *why = nil;
+            BOOL ready = a2_jit_has_kernel_level() ||
+                         [A2JITEnvironment ensureVerifiedWithinBudget:2.0 reason:&why];
+            [A2Log criterion:@"[A2-JIT-RESCUE] 重挂回来自动继续：ready=%d", ready];
+            if (ready) {
+                [A2LaunchSession startCurrentVersionWithCompletion:^(A2LaunchSessionResult *r) {}];
+            }
+        });
+    }
     return YES;
 }
 

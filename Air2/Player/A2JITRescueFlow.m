@@ -153,6 +153,9 @@ static id gObserver = nil;
     NSString *stikjit = [NSString stringWithFormat:@"stikjit://enableJIT?bundleId=%@", bid0];
     if ([UIApplication.sharedApplication canOpenURL:[NSURL URLWithString:stikjit]]) {
         [A2Log criterion:@"[A2-JIT-RESCUE] 拉起 StikDebug(stikjit): %@", stikjit];
+        // 记号：重挂回来后自动继续启动（否则要用户再点一次）
+        [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"A2AutoLaunchAfterJIT"];
+        [NSUserDefaults.standardUserDefaults synchronize];
         [UIApplication.sharedApplication openURL:[NSURL URLWithString:stikjit] options:@{} completionHandler:nil];
         return;
     }
