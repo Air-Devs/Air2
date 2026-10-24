@@ -85,6 +85,24 @@ static id gObserver = nil;
         });
     }];
 
+    // ★TrollStore 优先★ 老 Air 的做法：apple-magnifier://enable-jit?bundle-id=<id>
+    //   （TrollStore 自己接管这个 scheme，给指定 bundle 开 JIT）
+    NSString *bid = NSBundle.mainBundle.bundleIdentifier ?: @"dev.airdevs.air2";
+    NSString *magnifier = [NSString stringWithFormat:@"apple-magnifier://enable-jit?bundle-id=%@",
+                           [bid stringByAddingPercentEncodingWithAllowedCharacters:
+                            NSCharacterSet.URLQueryAllowedCharacterSet]];
+    if ([UIApplication.sharedApplication canOpenURL:[NSURL URLWithString:magnifier]]) {
+        [A2Log criterion:@"[A2-JIT-RESCUE] 拉起 TrollStore: %@", magnifier];
+        [UIApplication.sharedApplication openURL:[NSURL URLWithString:magnifier]
+                                         options:@{}
+                               completionHandler:^(BOOL ok) {
+            if (!ok) {
+                [A2Log criterion:@"[A2-JIT-RESCUE] apple-magnifier 打不开 ⇒ 回退 StikDebug"];
+            }
+        }];
+        return;
+    }
+
     NSURL *url = [self rescueURLWithScript:scriptPath];
     [A2Log criterion:@"[A2-JIT-RESCUE] 拉起外部工具：%@", url.absoluteString];
     [UIApplication.sharedApplication openURL:url
