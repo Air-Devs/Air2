@@ -146,4 +146,7 @@ A2JITRegionProof a2_jit_prove_region_rwx(void *addr, size_t len,
 /// 真 mmap → 写一条真指令 → RX → 真的执行。★这是「原生 JIT 真能力」的可信判据★。
 A2JITExecProbeResult a2_jit_exec_probe_anonymous(void);
 
+/// 本进程是否具备「内核级 JIT」(TrollStore/越狱 entitlement)
+BOOL a2_jit_has_kernel_level(void);
+
 NS_ASSUME_NONNULL_END

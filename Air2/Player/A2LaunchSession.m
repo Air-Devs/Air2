@@ -28,7 +28,8 @@
 #import "A2VersionIsolation.h"      // Core/Path —— A2GamePath：实例路径的唯一计算处（[A2-INSTANCE]）
 #import "A2RuntimeStrings.h"        // Player 同层 —— 四语文案（阻断文案 + 判据行的「源」）
 #import "A2LegacyProfile.h"
-#import "A2IntegrityChecker.h"         // Core/Version —— 远古版本画像（[A2-LEGACY] 闸门与 VM 参数）
+#import "A2IntegrityChecker.h"
+#import "A2JITRescueFlow.h"         // Core/Version —— 远古版本画像（[A2-LEGACY] 闸门与 VM 参数）
 #import "A2LegacyAssetsMapper.h"    // Core/Version —— 远古资源映射（virtual / map_to_resources）
 #import "A2Log.h"
 
@@ -182,6 +183,30 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
         return;
     }
     // ★开关=开的判据行★
+    // ★没 JIT 就先跳 StikDebug★（用我们自己的脚本），回来后复查再继续启动。
+    //   同一个 tap 只救一次（static 标记），避免在 StikDebug 和本 App 之间来回跳。
+    {
+        static BOOL sJITRescueTried = NO;
+        BOOL kernelJIT = a2_jit_has_kernel_level();
+        BOOL ready = kernelJIT || [A2JITRescueFlow jitReadyNow];
+        if (!ready && !sJITRescueTried) {
+            sJITRescueTried = YES;
+            [A2Log criterion:@"[A2-JIT-RESCUE] 启动前未拿到 JIT ⇒ 带脚本跳 StikDebug"];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [A2JITRescueFlow beginRescueWithScript:nil completion:^(BOOL ok) {
+                    if (ok) {
+                        [A2Log criterion:@"[A2-JIT-RESCUE] 已拿到 JIT ⇒ 自动继续启动"];
+                        [A2LaunchSession startCurrentVersionWithCompletion:^(BOOL s, NSString *m) {}];
+                    } else {
+                        [A2Log criterion:@"[A2-JIT-RESCUE] 仍未拿到 JIT ⇒ 提示用户"];
+                        finish(NO, 0, @"没有拿到 JIT 权限：请安装 StikDebug 并在其中为 Air2 开启 JIT 后重试。");
+                    }
+                }];
+            });
+            return;
+        }
+    }
+
     [A2Log log:@"[A2-CHAIN] 开关=开 ⇒ 走自研链（① 下发 JIT 脚本 → ② 探测 JIT → ③ 建 VM）"];
 
     A2Version *version = A2VersionManager.shared.currentVersion;

@@ -365,6 +365,10 @@ static BOOL a2_process_has_kernel_jit(void) {
     return ok;
 }
 
+BOOL a2_jit_has_kernel_level(void) {
+    return a2_process_has_kernel_jit();
+}
+
 static BOOL a2_process_has_jit_permission(void) {
     // 只有调试器连通(CS_DEBUGGED)或显式开关时才允许做"执行"式自证。
     //   · 侧载/巨魔机没装调试器时，JIT 面本身由 brk/内核路径判定，不需要这一跳；
