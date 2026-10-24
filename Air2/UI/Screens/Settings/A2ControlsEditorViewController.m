@@ -12,6 +12,8 @@
 @interface A2ControlsEditorViewController ()
 @property (nonatomic, strong) A2GameControlsView *controls;
 @property (nonatomic, strong) UIView *canvas;
+@property (nonatomic, strong) UIStackView *toolbar;
+@property (nonatomic, assign) CGSize designSize;
 @end
 
 @implementation A2ControlsEditorViewController
@@ -47,7 +49,8 @@
     self.title = @"控件布局";
     self.view.backgroundColor = [UIColor colorWithWhite:0.05 alpha:1.0];
 
-    // 画布：保持 16:9，模拟游戏画面区域（不连真实窗口：window=0 ⇒ 按键不会送到任何地方）
+    [self buildToolbar];
+
     _canvas = [[UIView alloc] initWithFrame:CGRectZero];
     _canvas.translatesAutoresizingMaskIntoConstraints = NO;
     _canvas.backgroundColor = [UIColor colorWithWhite:0.10 alpha:1.0];
@@ -55,48 +58,29 @@
     _canvas.layer.cornerCurve = kCACornerCurveContinuous;
     _canvas.clipsToBounds = YES;
     [self.view addSubview:_canvas];
-
-    // ★按本机真实比例(横屏)★ 必须用 长边/短边：
-    //   UIScreen 在竖屏态返回 402×874，直接用 w/h 会得到 0.46 ⇒ 画布被压成竖条，
-    //   而控件仍按宽屏坐标摆 ⇒ 右侧一串跑到画布外("超出屏幕看不见")。
-    CGSize screen = UIScreen.mainScreen.bounds.size;
-    CGFloat longSide  = MAX(screen.width, screen.height);
-    CGFloat shortSide = MIN(screen.width, screen.height);
-    CGFloat ratio = (shortSide > 0) ? (longSide / shortSide) : (16.0 / 9.0);
-    if (ratio < 1.0 || ratio > 4.0) ratio = 16.0 / 9.0;   // 异常值兜底
-    NSLayoutConstraint *aspect = [_canvas.widthAnchor constraintEqualToAnchor:_canvas.heightAnchor multiplier:ratio];
-    aspect.priority = 999;
-
-
-    // 高度上限用 750 优先级：让 aspect(999) 决定形状，屏幕不够高时才让位
-    NSLayoutConstraint *maxH = [_canvas.heightAnchor constraintLessThanOrEqualToAnchor:self.view.heightAnchor multiplier:0.80];
-    maxH.priority = 750;
-
     [NSLayoutConstraint activateConstraints:@[
-        [_canvas.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
-        [_canvas.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor constant:-30],
-        [_canvas.widthAnchor constraintEqualToAnchor:self.view.widthAnchor multiplier:0.94],
-        maxH,
-        aspect,
+        [_canvas.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:10],
+        [_canvas.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-10],
+        [_canvas.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8],
+        // ★画布到底栏之上★ 否则控件和工具栏叠在一起（截图里 1..9 被"+按键/删除"盖住）
+        [_canvas.bottomAnchor constraintEqualToAnchor:_toolbar.topAnchor constant:-10],
     ]];
+
+    // 控件层：按「设计尺寸」排布，再整体缩放塞进画布 ——
+    // 这样控件之间的相对位置永远不变，也不需要因为画布大小而重排。
+    CGSize screen = UIScreen.mainScreen.bounds.size;
+    _designSize = CGSizeMake(MAX(screen.width, screen.height), MIN(screen.width, screen.height));
 
     _controls = [[A2GameControlsView alloc] initWithWindowHandle:0];
-    _controls.translatesAutoresizingMaskIntoConstraints = NO;
+    _controls.translatesAutoresizingMaskIntoConstraints = YES;
+    _controls.frame = CGRectMake(0, 0, _designSize.width, _designSize.height);
     [_canvas addSubview:_controls];
-    [NSLayoutConstraint activateConstraints:@[
-        [_controls.leadingAnchor constraintEqualToAnchor:_canvas.leadingAnchor],
-        [_controls.trailingAnchor constraintEqualToAnchor:_canvas.trailingAnchor],
-        [_controls.topAnchor constraintEqualToAnchor:_canvas.topAnchor],
-        [_controls.bottomAnchor constraintEqualToAnchor:_canvas.bottomAnchor],
-    ]];
     [_controls a2_setEditing:YES];
 
-    // 点画布空白 = 取消选中（控件本体的 tap 由 A2GameControlsView 自己处理）
+    // 点画布空白 = 取消选中
     UITapGestureRecognizer *bg = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(a2_editorBackgroundTap:)];
     bg.cancelsTouchesInView = NO;
     [_canvas addGestureRecognizer:bg];
-
-    [self buildToolbar];
 
     UIBarButtonItem *done = [[UIBarButtonItem alloc] initWithTitle:@"保存"
                                                             style:UIBarButtonItemStyleDone
@@ -106,6 +90,17 @@
     self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemCancel
                                                                                           target:self
                                                                                           action:@selector(cancel)];
+}
+
+/// 把设计尺寸的控件层等比缩放并居中到画布（旋转/分屏也会重算）
+- (void)viewDidLayoutSubviews {
+    [super viewDidLayoutSubviews];
+    if (_controls == nil || _canvas.bounds.size.width <= 1) return;
+    CGFloat sx = CGRectGetWidth(_canvas.bounds)  / _designSize.width;
+    CGFloat sy = CGRectGetHeight(_canvas.bounds) / _designSize.height;
+    CGFloat k = MIN(sx, sy);
+    _controls.transform = CGAffineTransformMakeScale(k, k);
+    _controls.center = CGPointMake(CGRectGetMidX(_canvas.bounds), CGRectGetMidY(_canvas.bounds));
 }
 
 - (void)buildToolbar {
@@ -130,6 +125,7 @@
 #pragma clang diagnostic pop
         [bar addArrangedSubview:b];
     }
+    _toolbar = bar;
     [self.view addSubview:bar];
     [NSLayoutConstraint activateConstraints:@[
         [bar.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:20],
