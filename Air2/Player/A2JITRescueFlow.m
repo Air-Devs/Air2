@@ -62,16 +62,26 @@ static id gObserver = nil;
 @implementation A2JITRescueFlow
 
 + (BOOL)jitReadyNow {
-    // ★判据（2026-10-24 两份真机日志定案）★
-    //   只认两件事：① 内核级 entitlement（TrollStore 给的真权限）
-    //              ② 真的发一次 brk 拿到可执行区（有调试器且真的交付了）
-    //   ★不再把 CS_DEBUGGED 单独当可用★ —— 日志 old-5 就是 debugged=1 但区没给，
-    //   放行后建 VM 直接崩。
-    if (a2_jit_has_kernel_level()) return YES;
+    // ★照老 Air 的顺序★（DownloadViewController.m 3891–4100）
+    //   ① 先看权限位：内核 entitlement（TrollStore/越狱）或 CS_DEBUGGED（调试器已连）
+    //   ② 只有「需要调试映射」时才要求真的拿到可写 JIT 区；拿不到才算没就绪
+    //   ③ 权限位都没有 ⇒ 没就绪（由上层去 TrollStore / stikjit 申请）
+    BOOL flags = a2_jit_has_kernel_level();
+    if (!flags) {
+        extern int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
+        uint32_t st = 0;
+        if (csops(getpid(), 0, &st, sizeof(st)) == 0 && (st & 0x00000100u) != 0) flags = YES;
+    }
+    if (!flags) {
+        NSLog(@"[A2-JIT-RESCUE] 权限位=false ⇒ 未就绪(去申请)");
+        return NO;
+    }
+    extern BOOL a2_jit_device_needs_debug_mapping(void);
+    if (!a2_jit_device_needs_debug_mapping()) return YES;
 
     NSString *why = nil;
     BOOL verified = [A2JITEnvironment ensureVerifiedWithinBudget:2.5 reason:&why];
-    NSLog(@"[A2-JIT-RESCUE] 区域验证: %d（%@）", verified, why ?: @"");
+    NSLog(@"[A2-JIT-RESCUE] 权限位=true，区域验证=%d（%@）", verified, why ?: @"");
     return verified;
 }
 
