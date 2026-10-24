@@ -4,62 +4,47 @@
 // ----------------------------------------------------------------------------
 //  真机证据（26.2 + MobileGlues）：
 //    # A fatal error has been detected by the Java Runtime Environment:
-//    10  libmobileglues.dylib  0x…  glGetError + 24      ← SIGSEGV
-//     4  libjvm.dylib  os::abort
-//  即 MG 的 glGetError 在它的跳转表就绪前被调用 ⇒ 直接崩（黑屏其实是被 abort）。
-//  我们自己的帧回调早就在 MG 下跳过它了（a2_gl_bridge.m），但 MC/LWJGL 自己调的
-//  那次不经过我们 ⇒ 这里在 dlsym 层拦一刀：MG 后备下把 "glGetError" 解析成
-//  返回 0 的桩（GL 错误码本来就只是诊断用途，跳过不影响渲染正确性）。
+//    10  libmobileglues.dylib  glGetError + 24   ← SIGSEGV
+//     4  libjvm.dylib  os::abort()
+//  ⇒ MG 的 glGetError 在它的跳转表就绪前被调用会直接崩（"黑屏"其实是被 abort）。
 //
-//  安全性：
-//    · 只有 gA2GlErrorShimEnabled=1（= 当前后端是 MobileGlues）时才替换；
-//    · 其它后端/其它符号一律原样交给系统 dlsym。
+//  做法（不拦 dlsym —— iOS 没有 dlvsym，拦了拿不回真正的 dlsym）：
+//    MG 加载后，直接把它 glGetError 的头两条指令改写成
+//        mov w0, #0     (0x52800000)   ← 返回 GL_NO_ERROR
+//        ret            (0xD65F03C0)
+//    glGetError 只用于诊断，恒返回 0 不影响渲染正确性；改完再调用绝不会崩。
+//
+//  安全阀：页保护改为 RWX 后写回 RX；任何一步失败就原样不动（宁可不修，不能写坏）。
 // ============================================================================
 
 #import <Foundation/Foundation.h>
 #include <dlfcn.h>
-#include <string.h>
+#include <errno.h>
+#include <stdint.h>
+#include <sys/mman.h>
+#include <libkern/OSCacheControl.h>
 
-// dlvsym 在 Darwin 的 <dlfcn.h> 里默认不暴露（需要 _DARWIN_C_SOURCE），
-// 这里显式声明：它是 libSystem 的公开符号，用来拿"真正的 dlsym"避免自递归。
-extern void *dlvsym(void *handle, const char *symbol_name, const char *version);
+void a2_gl_error_shim_install_for_handle(void *handle) {
+    if (handle == NULL) return;
 
-
-extern int gA2GlErrorShimEnabled;
-
-static unsigned int a2_glGetError_stub(void) {
-    return 0;   // GL_NO_ERROR
-}
-
-// 真正的 dlsym：用 dlvsym 取（dlvsym 不在我们的 interpose 列表里，不会递归）
-static void *(*a2_real_dlsym)(void *, const char *);
-static dispatch_once_t a2_once;
-
-static void a2_shim_init(void) {
-    a2_real_dlsym = (void *(*)(void *, const char *))dlvsym(RTLD_NEXT, "dlsym", NULL);
-    if (a2_real_dlsym == NULL) {
-        a2_real_dlsym = (void *(*)(void *, const char *))dlvsym(RTLD_DEFAULT, "dlsym", NULL);
+    void *sym = dlsym(handle, "glGetError");
+    if (sym == NULL) {
+        NSLog(@"[A2-MG-SHIM] 未找到 glGetError 符号，跳过");
+        return;
     }
-}
 
-__attribute__((used))
-static void *a2_dlsym_interposed(void *handle, const char *symbol) {
-    dispatch_once(&a2_once, ^{ a2_shim_init(); });
-    if (symbol != NULL && a2_real_dlsym != NULL) {
-        if (gA2GlErrorShimEnabled && strcmp(symbol, "glGetError") == 0) {
-            return (void *)a2_glGetError_stub;
-        }
-        return a2_real_dlsym(handle, symbol);
+    uintptr_t page = (uintptr_t)sym & ~(uintptr_t)(PAGE_SIZE - 1);
+    if (mprotect((void *)page, (size_t)PAGE_SIZE, PROT_READ | PROT_WRITE | PROT_EXEC) != 0) {
+        NSLog(@"[A2-MG-SHIM] mprotect(RWX) 失败 errno=%d ⇒ 不改写（保持原样）", errno);
+        return;
     }
-    return NULL;
-}
 
-// dyld 级 interpose（不需要 fishhook；对 dlopen 进来的镜像同样生效）
-__attribute__((used))
-static struct {
-    const void *replacement;
-    const void *replacee;
-} a2_dlsym_interpose __attribute__((section("__DATA,__interpose"))) = {
-    (const void *)&a2_dlsym_interposed,
-    (const void *)&dlsym
-};
+    uint32_t *code = (uint32_t *)sym;
+    code[0] = 0x52800000u;   // mov w0, #0
+    code[1] = 0xD65F03C0u;   // ret
+
+    sys_icache_invalidate(sym, 8);
+    mprotect((void *)page, (size_t)PAGE_SIZE, PROT_READ | PROT_EXEC);
+
+    NSLog(@"[A2-MG-SHIM] 已把 MobileGlues 的 glGetError 改写为 return 0（防 SIGSEGV 崩溃）");
+}
