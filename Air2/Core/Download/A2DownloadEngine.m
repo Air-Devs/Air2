@@ -226,7 +226,10 @@ static NSString *const kPartSuffix = @".part";
         [A2Logger warning:@"DownloadEngine"
                   message:@"上次写盘失败，丢弃断点从头下载"];
         [self discardPartialDownload];
-        self.ifRangeValidator = nil;
+        // ifRangeValidator 是根据 strongETag / lastModified 算出来的只读方法，
+        // 不能直接赋值 —— 清掉两个来源即可。
+        self.strongETag = nil;
+        self.lastModified = nil;
         self.writeBroken = NO;
     }
 
