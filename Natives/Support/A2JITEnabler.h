@@ -18,13 +18,17 @@
 //      「判据不认 JIT → 跳转 → 使能器重拉 App → 再判据 → 再跳转」的死循环。
 //
 //  四条铁律（顺序即实现顺序，改动必须保持）：
-//    ① **判据**只认「真能用」：entitlement(dynamic-codesigning / cs.debugger) 只是**能力声明**；
-//       本机需要调试映射（iOS 26+）时，光有声明**不算就绪**，必须真的拿到一块已验证的
-//       可写 JIT 区（brk #0x69 被调试器服务）。只有 CS_DEBUGGED（调试器已 attach，例外
-//       端口在岗）与 getppid()≠1 才可以直接认 —— 这两个是「外部注入正在进行」的事实，
-//       不是资格声明。
-//    ② **防死循环**：被调试器拉起（getppid() != 1）或已拿到 JIT 区 ⇒ 绝不再跳转；
-//       同一进程最多跳一次（第二次起只做短等待）。跳转↔重拉 的无限循环由此断开。
+//    ① **判据只认真凭据**：(a) 内核级 JIT entitlement（TrollStore / 越狱装机的
+//       dynamic-codesigning / com.apple.private.cs.debugger）—— 装机自带 JIT，直接放行；
+//       (b) 真凭据：镜像设备（iOS 26+）必须 verifiedRegion != NULL（真的发过 brk #0x69 且
+//       调试器真交付了一块已映射、max 含 EXECUTE 的区）；非镜像设备（< iOS 26）必须
+//       执行式探针真的跑过（真 mmap+写指令+exec，与前者同性质）。
+//       ★CS_DEBUGGED（调试器已 attach / 例外端口在岗）与 getppid()≠1 都**不再**是就绪
+//       依据★：它们是「别人的状态」，不证明本进程真能执行自产代码，曾据此放行 ⇒
+//       没拿到区也建 VM ⇒ HotSpot 首帧取指 SIGBUS（真机停在「③ 建 VM 开始」）。
+//       拿不到凭据 ⇒ 一律返回未就绪，走等待 / 申请流程。
+//    ② **防死循环**：同一进程最多跳一次；被使能器重拉起来的进程（getppid()≠1）也算
+//       「已跳过一次」⇒ 只做短等待、绝不再拉起使能器，跳转↔重拉 的无限循环由此断开。
 //    ③ **不许闪退**：拿不到就回调 NO，由调用方出可读失败页；绝不带着无 JIT 的
 //       进程继续去建 VM。
 //    ④ **顺序**：先弹「正在等待 JIT」→ 本次启动到此为止（调用方 return）→ 再 openURL
@@ -49,7 +53,7 @@ NS_ASSUME_NONNULL_BEGIN
  * 典型用法（启动链的 JIT 闸门；调用方在主线程）：
  * @code
  *   if ([A2JITEnabler isJITReadyNow]) {
- *       // 已就绪（含「被调试器拉起」）⇒ 照旧往下启动，零额外副作用
+ *       // 已就绪（内核级 entitlement / 已验证 JIT 区）⇒ 照旧往下启动，零额外副作用
  *   } else {
  *       [A2JITEnabler ensureJITThen:^(BOOL ok) {
  *           if (ok) { / * 重新进入启动链 * / } else { / * 出失败页，不建 VM * / }
@@ -61,7 +65,8 @@ NS_ASSUME_NONNULL_BEGIN
 @interface A2JITEnabler : NSObject
 
 /// 本进程**现在**能否安全建 VM（同步、有界：最坏一次区域验证 ≈2.5s）。
-/// 判据见头文件「四条铁律 ①」；被调试器拉起 / 调试器已 attach 时直接 YES（铁律 ②）。
+/// 判据见头文件「四条铁律 ①」：**只认**内核级 JIT entitlement 或已验证的 JIT 区
+/// （verifiedRegion != NULL）；CS_DEBUGGED / 被使能器拉起 一律**不**算就绪。
 + (BOOL)isJITReadyNow;
 
 /// 入口：判据 → 申请（拉起使能器）→ 等待（≤120s）→ 回调。

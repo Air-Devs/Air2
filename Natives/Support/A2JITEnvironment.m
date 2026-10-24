@@ -321,7 +321,12 @@ A2JITRegionProof a2_jit_prove_region_rwx(void *addr, size_t len,
 ///   TrollStore 安装时用 ldid 给 App 签了 com.apple.private.cs.debugger，
 ///   ⇒ 进程一启动就有 JIT，不需要调试器、也不需要"执行式自证"。
 ///   做法：用 csops 读本进程的 entitlement blob（私有接口，但只读、无副作用），
-///   在 blob 里找那两个关键 entitlement 字符串；找不到再退回 CS_DEBUGGED。
+///   在 blob 里找那两个关键 entitlement 字符串。
+/// ★★CS_DEBUGGED 不再计入★★（2026-10-24 真机证据）：debugged 只说明「有调试器 attach、
+///   有人能应答 brk」，**不说明我们手里已经有可执行区**。以前把它算成内核级 JIT ⇒
+///   ensureVerifiedWithinBudget 在这一行直接放行、连 brk #0x69 都不发 ⇒
+///   「没有区却判就绪 ⇒ 放行建 VM ⇒ HotSpot 首帧取指 SIGBUS」。debugged 的唯一用途是
+///   「允许做执行式探针」的资格（见 a2_process_has_jit_permission），不参与可用性判定。
 static BOOL a2_process_has_kernel_jit(void) {
     static int cached = -1;
     if (cached >= 0) return cached == 1;
@@ -358,9 +363,12 @@ static BOOL a2_process_has_kernel_jit(void) {
         }
     }
 
-    BOOL ok = (entitled || debugged);
+    // ★判据只有 entitlement★：CS_DEBUGGED（debugged）只写进日志，绝不参与判定 ——
+    //   「调试器 attach 着」≠「已经交付了可执行区」（真机：attach 着但没指派脚本时
+    //   brk #0x69 只回哨兵/无应答，此时建 VM 必 SIGBUS）。
+    BOOL ok = entitled;
     cached = ok ? 1 : 0;
-    a2_jit_log("[A2JIT] 内核级 JIT 检测: entitlement=%d debugged=%d ⇒ %s",
+    a2_jit_log("[A2JIT] 内核级 JIT 检测: entitlement=%d debugged=%d(仅日志,不参与判定) ⇒ %s",
                entitled ? 1 : 0, debugged ? 1 : 0, ok ? "可用" : "不可用");
     return ok;
 }
@@ -708,9 +716,9 @@ static int gA2JITEnsureKickInflight = 0;
     // ★TrollStore / 越狱★ 进程本身已有 JIT 权限 ⇒ 直接可用，不做任何探针
     //   （以前这里会 mmap+跳页自证，在无权限设备上被内核 SIGKILL-CODESIGNING）。
     if (a2_process_has_kernel_jit()) {
-        if (whyOut) *whyOut = @"内核级 JIT（TrollStore / 越狱 entitlement）";
+        if (whyOut) *whyOut = @"内核级 JIT entitlement（TrollStore / 越狱）";
         gA2JITRegionVerdict = A2JITRegionVerdictUsable;
-        gA2JITRegionEvidence = @"kernel-level JIT (entitlement/CS_DEBUGGED)";
+        gA2JITRegionEvidence = @"kernel-level JIT (TrollStore/越狱 entitlement；CS_DEBUGGED 不算)";
         return YES;
     }
 
@@ -788,6 +796,19 @@ static int gA2JITEnsureKickInflight = 0;
         return (a2_jit_exec_probe_anonymous() == A2JITExecProbeExecOK);
     }
     return [self verifyWritableRegion];
+}
+
++ (BOOL)execProofObtained {
+    static BOOL sProved = NO;   // 成功一次即缓存（探针不会再变成不可用）
+    if (sProved) return YES;
+    // ★只在非镜像设备上有意义★：iOS 26+ 的判据是「brk #0x69 交付的区」（见 verifiedRegion）。
+    if (a2_jit_device_needs_debug_mapping()) return NO;
+    if (a2_jit_exec_probe_anonymous() == A2JITExecProbeExecOK) {
+        sProved = YES;
+        a2_jit_log("[A2JIT] exec-proof obtained：匿名页真执行过 ⇒ 本机 JIT 现在可用（非镜像路径）");
+        return YES;
+    }
+    return NO;
 }
 
 + (void *)verifiedRegion {

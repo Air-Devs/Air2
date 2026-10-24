@@ -71,82 +71,88 @@ static NSString *a2jit_tool_name(A2JITEnablerTool tool) {
 
 #pragma mark - ① 判据
 
-/// 本进程是否「被调试器 / 使能器拉起」。
-/// ★这是防死循环的第一条铁律★：stikjit / StikDebug 把 App 重新拉起之后，新进程的父进程
-/// 不是 launchd(1)；此时若再跳一次，就会「跳转 → 重拉 → 再跳」无限循环（真机已复现）。
+/// 本进程是否「被调试器 / 使能器拉起」（getppid() ≠ 1）。
+/// ★★只用于防死循环，绝不用于判就绪★★：
+///   被重拉起来只说明「外部注入这件事正在发生」，**不证明我们手里已经有可执行 JIT 区**。
+///   以前把它当就绪 ⇒ stikjit 重拉后即使区没拿到也放行建 VM（首帧 SIGBUS）。
+///   现在它只影响一件事：★要不要再跳一次★（见 ensureJITThen: 的 alreadyJumped）。
 static BOOL a2jit_launched_by_debugger(void) {
     return getppid() != 1;
 }
 
-/// CS_DEBUGGED（内核 csops 状态位 0x00000100）——「调试器已 attach 到本进程」。
-/// ★这个是真的★：attach 之后例外端口在岗 ⇒ brk #0x69 会被人应答，JIT 真的能给
-/// （老 Air 的 JIT26IsLikelyDebuggerKeepAttached 就是这个语义）。
-static BOOL a2jit_cs_debugged(void) {
-    uint32_t flags = 0;
-    extern int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
-    if (csops(getpid(), 0 /* CS_OPS_STATUS */, &flags, sizeof(flags)) == 0) {
-        return (flags & 0x00000100u) != 0;
+/// 唯一判据。
+///
+/// ★★就绪只有两个来源，别的任何东西都不算★★（本模块的铁律 ①）：
+///   ① **内核级 JIT entitlement**（TrollStore / 越狱装机：`dynamic-codesigning` /
+///      `com.apple.private.cs.debugger`）⇒ 进程天生有 JIT，直接认（零探测，最快路径，
+///      保证内核级 JIT 的设备依然秒过）；
+///   ② **真凭据**，按本机口径分两种同性质的东西（都来自 A2JITEnvironment 一处）：
+///      · 镜像设备（iOS 26+，需要调试映射）：`verifiedRegion != NULL` —— 真的发过
+///        brk #0x69、调试器真交付了一块【已映射且 max_protection 含 EXECUTE】的区；
+///      · 非镜像设备（< iOS 26）：执行式探针**真的跑过**（mmap → 写指令 → RX → 真的
+///        call 并核对返回值）。这种机器没有「brk 交付区」这回事，不认它就会把
+///        StikDebug/SideJIT 的机器全锁死；而它同样是「真执行过」的实证，不是能力声明。
+///
+/// ★★已彻底删除的误判（2026-10-24 真机证据）★★
+///   旧实现有三条「不拿区也放行」的分支：ppid≠1、CS_DEBUGGED（「例外端口在岗」）、
+///   以及 ensureVerifiedWithinBudget 里把 debugged 当内核级 JIT。真机后果：
+///   ```
+///   [A2-JIT-ENABLER] 判据 ready=1：调试器已 attach(CS_DEBUGGED)：例外端口在岗 ⇒ 认
+///   [A2-JIT] 已就绪 ⇒ 直接启动
+///   [A2-LAUNCH] ③ 建 VM 开始        ← 没有「建 VM 返回」，崩在这里
+///   ```
+///   「例外端口在岗」是**别人的状态**，不是我们手里的内存 ⇒ 从此一句都不再作为就绪依据
+///   （连日志文案都删了，免得下次又被误读成判据）。拿不到区 ⇒ 返回未就绪，走
+///   「弹窗 → 拉起使能器 → 等待」的申请流程，绝不建 VM。
+static BOOL a2jit_ready_now(NSString *_Nullable *_Nullable why) {
+    // ① 内核级 entitlement：装机自带 JIT ⇒ 直接认（不看 brk，不引入任何延迟）。
+    if (a2_jit_has_kernel_level()) {
+        if (why) *why = @"内核级 JIT entitlement（TrollStore / 越狱）：直接认";
+        return YES;
+    }
+
+    // ② 已经真拿到过可写 JIT 区（此前 brk #0x69 被服务过）⇒ 认。
+    if ([A2JITEnvironment verifiedRegion] != NULL) {
+        if (why) *why = @"本进程已拿到可写 JIT 区（brk #0x69 已被服务）";
+        return YES;
+    }
+
+    // 两条都不成立 ⇒ 真去拿凭据（这是唯一能把「未就绪」变成「就绪」的动作）。
+    //   · iOS 26+（需要调试映射）：有界发一发 brk #0x69，被服务才会落 verifiedRegion；
+    //   · 非镜像设备：A2JITEnvironment 内部的执行式探针 / 区域验证；
+    //   · 内核级 entitlement 已在上面返回，这里不会再因「声明」被放行。
+    NSString *envWhy = nil;
+    BOOL ensured = [A2JITEnvironment ensureVerifiedWithinBudget:kA2JITVerifySlice reason:&envWhy];
+    void *region = [A2JITEnvironment verifiedRegion];
+    if (region != NULL) {
+        if (why) *why = [NSString stringWithFormat:
+            @"拿到可写 JIT 区 %p（brk #0x69 已被服务）", region];
+        return YES;
+    }
+
+    // 非镜像设备（< iOS 26）：凭据 = 执行式探针真跑过（不是声明、也不是「调试器在岗」）。
+    if (![A2JITEnvironment needsDebuggerMapping]) {
+        if ([A2JITEnvironment execProofObtained]) {
+            if (why) *why = @"执行式探针真跑过（非镜像路径：真 mmap + 写指令 + exec）";
+            return YES;
+        }
+        if (why) {
+            *why = [NSString stringWithFormat:
+                @"没有可执行的 JIT 凭据（非镜像路径：执行式探针未通过；%@）⇒ 不放行建 VM",
+                envWhy.length > 0 ? envWhy : @"无取证"];
+        }
+        return NO;
+    }
+
+    // ★拿不到区 ⇒ 明确未就绪★（调用方据此中止启动 / 进入申请流程，绝不建 VM）。
+    if (why) {
+        NSString *detail = envWhy.length > 0
+            ? envWhy
+            : (ensured ? @"ensure 报可用但没有区域指针（不认）" : @"无取证");
+        *why = [NSString stringWithFormat:
+            @"没有可写 JIT 区（brk #0x69 未拿到区；%@）⇒ 不放行建 VM", detail];
     }
     return NO;
-}
-
-/// 能力声明：entitlement（dynamic-codesigning / cs.debugger，老 Air 用
-/// getEntitlementValue 判定，Air2 收敛到 a2_jit_has_kernel_level）或 CS_DEBUGGED。
-/// ★只证明「有资格」，不证明「现在能用」★（老 Air 的 [JIT-FLOW] 假阳性链路就是这么来的）。
-static BOOL a2jit_has_capability(void) {
-    if (a2_jit_has_kernel_level()) return YES;
-    return a2jit_cs_debugged();
-}
-
-/// 唯一判据。why 只在「不就绪」时被写（可读原因，供日志与失败页）。
-///
-/// ★分支顺序即结论顺序，逐条说清为什么★
-///   ① 被调试器 / 使能器拉起（ppid≠1）⇒ 认：JIT 正由外部注入（防死循环铁律 ②）；
-///   ② 本进程已拿到可写 JIT 区 ⇒ 认：那是真证明过的（brk #0x69 被服务过）；
-///   ③ 没有任何能力声明 ⇒ 不认（连资格都没有，必须去申请）；
-///   ④ 调试器已 attach（CS_DEBUGGED）⇒ 认：例外端口在岗，brk 一定有人应答；
-///   ⑤ 只剩「能力声明」⇒ ★必须证明到真能用★：
-///        · 非镜像设备（< iOS 26）：走 A2JITEnvironment 的执行式/区域验证；
-///        · 镜像设备（iOS 26+）：★声明不算数★ —— 必须真的拿到一块已验证的区域。
-///          这一条是「没 JIT 却照样建 VM 闪退」的根因所在：`ensureVerifiedWithinBudget`
-///          对「内核级声明」是直接放行的（那是给 TrollStore/越狱留的口径），于是
-///          `dynamic-codesigning` 声明在 iOS 26 上被当成了「现在能用」⇒ 闸门放行 ⇒
-///          HotSpot 首帧 SIGBUS。⇒ 这里用 `verifiedRegion != NULL` 把「声明」与
-///          「已证明」分开（同一份判断仍只在 A2JITEnvironment 里算）。
-static BOOL a2jit_ready_now(NSString *_Nullable *_Nullable why) {
-    if (a2jit_launched_by_debugger()) {
-        if (why) *why = @"被调试器拉起(ppid≠1)：JIT 正由外部注入，直接认";
-        return YES;
-    }
-    if ([A2JITEnvironment verifiedRegion] != NULL) {
-        if (why) *why = @"本进程已拿到可写 JIT 区（此前验证通过）";
-        return YES;
-    }
-    if (!a2jit_has_capability()) {
-        if (why) *why = @"没有 JIT 能力声明（entitlement / CS_DEBUGGED 都没有）";
-        return NO;
-    }
-    if (a2jit_cs_debugged()) {
-        if (why) *why = @"调试器已 attach(CS_DEBUGGED)：例外端口在岗 ⇒ 认";
-        return YES;
-    }
-    // 有声明 ⇒ 必须验证到「真能用」：iOS 26+ 要真拿到可写 JIT 区（brk #0x69 被服务），
-    // 非镜像设备要真执行一段自产指令 / 或内核级直接放行 —— 全在 A2JITEnvironment 一处判定。
-    NSString *envWhy = nil;
-    BOOL ok = [A2JITEnvironment ensureVerifiedWithinBudget:kA2JITVerifySlice reason:&envWhy];
-    if (ok && [A2JITEnvironment needsDebuggerMapping] && [A2JITEnvironment verifiedRegion] == NULL) {
-        // ★假阳性拦截（iOS 26+）★ 只有声明、没有任何已验证区域 ⇒ 不是「能用」。
-        if (why) *why = [NSString stringWithFormat:
-            @"只有 JIT 能力声明、没有已验证的可执行区（iOS 26+ 声明≠能用；%@）",
-            envWhy.length > 0 ? envWhy : @"—"];
-        return NO;
-    }
-    if (!ok && why) {
-        *why = envWhy.length > 0
-            ? [NSString stringWithFormat:@"有 JIT 声明但区域验证未通过（%@）", envWhy]
-            : @"有 JIT 声明但区域验证未通过";
-    }
-    return ok;
 }
 
 #pragma mark - ② 使能器（URL 选择 + 回退顺序）
@@ -540,7 +546,11 @@ static NSString *gA2JITLastFailure = nil;
 
     // ② 申请：★同一进程只跳一次★（铁律 ②）。已跳过的第二轮只做短等待：
     //    调试器可能正在收尾，再跳一次就会「跳转 ↔ 重拉」无限循环。
-    BOOL alreadyJumped = gA2JITJumpedThisProcess;
+    //    ★ppid≠1 也算「已经跳过一次」★：这说明本进程是被使能器重拉起来的（stikjit 那条路），
+    //    再跳一次就是「重拉 → 再跳」的环路。旧实现靠把 ppid≠1 当成就绪来回避这个环，
+    //    现在它不再能当就绪（就绪只认 entitlement / verifiedRegion）⇒ 改在这里断环：
+    //    允许它把剩余预算用来等区，但绝不再拉起第二个使能器。
+    BOOL alreadyJumped = gA2JITJumpedThisProcess || a2jit_launched_by_debugger();
     NSTimeInterval budget = alreadyJumped ? kA2JITRepeatWaitBudget : kA2JITWaitBudget;
 
     if (alreadyJumped) {

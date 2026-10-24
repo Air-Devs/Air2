@@ -98,6 +98,13 @@ typedef NS_ENUM(NSInteger, A2JITExecProbeResult) {
 /// 等待就绪谓词：非镜像路径用匿名页执行式自证；镜像 / Universal 路径用 brk 区域验证。
 + (BOOL)waitReadyVerified;
 
+/// ★非镜像路径（iOS < 26）的真凭据★：匿名页执行式探针**真的跑过**
+/// （mmap → 写一条真指令 → mprotect(RX) → 真的 call 并核对返回值）。
+/// 它与 `verifiedRegion` 是同一性质的东西 ——「本进程现在**真的能执行**自产代码」——
+/// 而不是 entitlement / CS_DEBUGGED 那种「能力声明」。镜像设备（iOS 26+）恒返回 NO：
+/// 那种口径只认 brk #0x69 交付的区（没有区的声明/attach 一律不算）。
++ (BOOL)execProofObtained;
+
 /// 已通过验证的 JIT 区指针（未验证过返回 NULL）。供诊断 / 复用。
 + (void *_Nullable)verifiedRegion;
 
@@ -154,7 +161,10 @@ A2JITRegionProof a2_jit_prove_region_rwx(void *addr, size_t len,
 /// 真 mmap → 写一条真指令 → RX → 真的执行。★这是「原生 JIT 真能力」的可信判据★。
 A2JITExecProbeResult a2_jit_exec_probe_anonymous(void);
 
-/// 本进程是否具备「内核级 JIT」(TrollStore/越狱 entitlement)
+/// 本进程是否具备「内核级 JIT」：**只认 entitlement**（TrollStore / 越狱装机带来的
+/// `dynamic-codesigning` / `com.apple.private.cs.debugger`）。
+/// ★CS_DEBUGGED 不算★——它只说明有位调试器 attach 着、能应答 brk，
+/// 不说明本进程已经拿到可执行区；把它当内核级 JIT 会绕过 brk 取证（历史缺陷）。
 BOOL a2_jit_has_kernel_level(void);
 
 NS_ASSUME_NONNULL_END

@@ -12,13 +12,43 @@
 import os
 import sys
 import hashlib
+import subprocess
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROJECT_NAME = "Air2"
 BUNDLE_ID = "dev.airdevs.air2"
 DEPLOYMENT_TARGET = "14.0"
 MARKETING_VERSION = "0.1.0"
-BUILD_VERSION = "1"
+
+
+def _git_build_version():
+    """CFBundleVersion = 当前提交的短 hash（git rev-parse --short=7 HEAD）。
+
+    为什么不再写死 "1"：真机上版本串变成「0.1.0（1）」，包和提交对不上 ——
+    排查真机问题时只能靠日志时间猜是哪一次构建。而且 "1" 长得像一个合法版本号，
+    最难被发现（上一版就是这么漏出去的）。
+    ★唯一来源★：Air2/Info.plist 里 CFBundleVersion 必须写成 $(CURRENT_PROJECT_VERSION)，
+    这个常量随之写进 pbxproj 的 CURRENT_PROJECT_VERSION；plist 里若再写死一个字面量，
+    Xcode 会原样采用它 ⇒ 变量被盖掉（这就是「恒为 1」的根因）。
+    非 git 环境（导出 tarball / 没有 .git）⇒ 退回 "0" 并告警；绝不再退回 "1"
+    （1 会被当成真版本号，等于把问题藏起来）。
+    """
+    try:
+        out = subprocess.run(["git", "-C", ROOT, "rev-parse", "--short=7", "HEAD"],
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                             timeout=10, check=False)
+        if out.returncode == 0:
+            short = out.stdout.decode("utf-8", "replace").strip()
+            if short:
+                return short
+        sys.stderr.write("gen_xcodeproj: git rev-parse 不可用 ⇒ CFBundleVersion=0\n")
+    except Exception as exc:   # 缺 git / 权限问题都不该让工程生成失败
+        sys.stderr.write("gen_xcodeproj: git 调用失败（%s）⇒ CFBundleVersion=0\n" % exc)
+    return "0"
+
+
+# 构建号 = 提交短 hash（Air2/Info.plist 的 CFBundleVersion 引用它，见上）。
+BUILD_VERSION = _git_build_version()
 
 # 参与编译的源码根目录。原脚本只扫 Air2/，于是 Natives/ 下的自研启动链
 # （a2_launch / a2_argbuilder / A2JVMContext …）永远进不了 target ⇒ 编了也不进包。
