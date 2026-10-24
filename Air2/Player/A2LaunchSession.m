@@ -189,7 +189,10 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
         static BOOL sJITRescueTried = NO;
         BOOL kernelJIT = a2_jit_has_kernel_level();
         BOOL ready = kernelJIT || [A2JITRescueFlow jitReadyNow];
-        if (!ready && !sJITRescueTried) {
+        // ★只对 Stik 环境生效★ 没有 StikDebug 就不走这套（别拿 TrollStore/越狱机去跳）
+        BOOL hasStik = [UIApplication.sharedApplication canOpenURL:
+                        [NSURL URLWithString:@"stikdebug://enable-jit"]];
+        if (!ready && !sJITRescueTried && hasStik) {
             sJITRescueTried = YES;
             [A2Log criterion:@"[A2-JIT-RESCUE] 启动前未拿到 JIT ⇒ 带脚本跳 StikDebug"];
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -204,6 +207,9 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                 }];
             });
             return;
+        }
+        if (!ready && !hasStik) {
+            [A2Log criterion:@"[A2-JIT-RESCUE] 未安装 StikDebug ⇒ 不走跳转，继续按现有链尝试"];
         }
     }
 
