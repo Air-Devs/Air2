@@ -145,16 +145,25 @@ static id gObserver = nil;
         poll();
     }];
 
-    // ★TrollStore 优先★ apple-magnifier://enable-jit?bundle-id=<id>（老 Air 的做法）
-    NSString *bid = NSBundle.mainBundle.bundleIdentifier ?: @"dev.airdevs.air2";
+    // ★SideStore/Stik 优先(用户实际环境)★
+    //   ① stikjit://     —— 带 JIT 重新拉起本 App（SideStore 的 JIT 就是这么给的）
+    //   ② stikdebug://enable-jit?...&pid=...  —— 直接让 StikDebug 给本进程开 JIT
+    //   ③ apple-magnifier://enable-jit  —— 只有 TrollStore 装的环境才有意义
+    NSString *bid0 = NSBundle.mainBundle.bundleIdentifier ?: @"dev.airdevs.air2";
+    NSString *stikjit = [NSString stringWithFormat:@"stikjit://enableJIT?bundleId=%@", bid0];
+    if ([UIApplication.sharedApplication canOpenURL:[NSURL URLWithString:stikjit]]) {
+        [A2Log criterion:@"[A2-JIT-RESCUE] 拉起 StikDebug(stikjit): %@", stikjit];
+        [UIApplication.sharedApplication openURL:[NSURL URLWithString:stikjit] options:@{} completionHandler:nil];
+        return;
+    }
+
     NSString *magnifier = [NSString stringWithFormat:@"apple-magnifier://enable-jit?bundle-id=%@",
-                           [bid stringByAddingPercentEncodingWithAllowedCharacters:
+                           [bid0 stringByAddingPercentEncodingWithAllowedCharacters:
                             NSCharacterSet.URLQueryAllowedCharacterSet]];
-    if ([UIApplication.sharedApplication canOpenURL:[NSURL URLWithString:magnifier]]) {
+    if ([UIApplication.sharedApplication canOpenURL:[NSURL URLWithString:magnifier]]
+        && ![UIApplication.sharedApplication canOpenURL:[NSURL URLWithString:@"stikdebug://enable-jit"]]) {
         [A2Log criterion:@"[A2-JIT-RESCUE] 拉起 TrollStore: %@", magnifier];
-        [UIApplication.sharedApplication openURL:[NSURL URLWithString:magnifier] options:@{} completionHandler:^(BOOL ok) {
-            if (!ok) [A2Log criterion:@"[A2-JIT-RESCUE] apple-magnifier 无响应 ⇒ 可再试 StikDebug"];
-        }];
+        [UIApplication.sharedApplication openURL:[NSURL URLWithString:magnifier] options:@{} completionHandler:nil];
         return;
     }
 
