@@ -27,7 +27,8 @@
 #import "A2JavaRuntimeCatalog.h"    // Core/Version —— Java 运行时候选表 + 可用性（[JRE-SEL]）
 #import "A2VersionIsolation.h"      // Core/Path —— A2GamePath：实例路径的唯一计算处（[A2-INSTANCE]）
 #import "A2RuntimeStrings.h"        // Player 同层 —— 四语文案（阻断文案 + 判据行的「源」）
-#import "A2LegacyProfile.h"         // Core/Version —— 远古版本画像（[A2-LEGACY] 闸门与 VM 参数）
+#import "A2LegacyProfile.h"
+#import "A2IntegrityChecker.h"         // Core/Version —— 远古版本画像（[A2-LEGACY] 闸门与 VM 参数）
 #import "A2LegacyAssetsMapper.h"    // Core/Version —— 远古资源映射（virtual / map_to_resources）
 #import "A2Log.h"
 
@@ -568,6 +569,33 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
         extern void a2_controls_overlay_start_for_sdl(void);
         a2_controls_overlay_start_for_sdl();
         [A2Log criterion:@"[A2-CONTROLS] 26.3+ 走 SDL 控件覆盖层（a2_controls_overlay）"];
+    }
+
+    // ========================================================================
+    // ★启动前完整性核对★（口径对齐 PCL：对着版本清单逐项核，不是只看目录在不在）
+    //   目的：缺库/坏 jar 时立刻给可读结论，而不是白花 20 秒建 VM 再崩。
+    //   开关：设置→「跳过完整性检查」(A2GlobalSkipIntegrityCheck) 或版本级覆盖。
+    // ========================================================================
+    {
+        BOOL globalSkip = A2Settings.shared.skipIntegrityCheck;
+        BOOL skip = [version.isolation shouldSkipIntegrityCheckWithGlobal:globalSkip] || globalSkip;
+        if (skip) {
+            [A2Log criterion:@"[A2-INTEGRITY] 已按设置跳过完整性检查"];
+        } else {
+            A2IntegrityReport *rep = [A2IntegrityChecker checkVersionAtPath:version.versionPath
+                                                                  versionID:version.name
+                                                                   gameHome:gameHome];
+            [A2Log criterion:@"[A2-INTEGRITY] %@", rep.summary];
+            if (rep.level == A2IntegrityLevelFatal) {
+                [A2Log criterion:@"[A2-INTEGRITY] ★阻断启动★ %@", rep.fatalReason ?: @"完整性检查未通过"];
+                finish(NO, 0, [NSString stringWithFormat:@"版本不完整：%@",
+                               rep.fatalReason ?: @"请重新下载该版本"]);
+                return;
+            }
+            if (rep.level == A2IntegrityLevelWarning) {
+                [A2Log criterion:@"[A2-INTEGRITY] 告警（不拦路）：%@", rep.summary];
+            }
+        }
     }
 
     [A2Log log:@"[A2-LAUNCH] 进入后台链：plan=%@ renderer=%@ jre=%@",
