@@ -39,7 +39,12 @@ typedef NS_ENUM(NSInteger, A2TaskCardState) {
     A2TaskCardStateFailed,
 };
 
+@class A2TaskLogOutput;
+
 @interface A2TaskLogCard : UIView
+
+/// 外部日志源（安装页会传进来，卡片自动订阅它的输出）
+@property (nonatomic, strong, nullable) A2TaskLogOutput *logOutput;
 
 /// 挂到宿主视图的右上角（自动布局）
 + (instancetype)presentInView:(UIView *)host title:(NSString *)title;

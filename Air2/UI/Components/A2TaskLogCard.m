@@ -6,6 +6,7 @@
 #import "A2TaskLogCard.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
+#import "A2TaskLogOutput.h"
 
 @interface A2TaskLogCard ()
 @property (nonatomic, strong) UIView *card;
@@ -217,6 +218,30 @@
             break;
     }
     _rateLabel.hidden = YES;
+}
+
+/// 设置外部日志源时，把它的输出转发到本卡片的日志区。
+///
+/// A2TaskLogOutput 是「日志流」抽象：安装器、启动器都往里写，
+/// 订阅者各自决定怎么展示（这里是折叠的日志区）。
+- (void)setLogOutput:(A2TaskLogOutput *)logOutput {
+    _logOutput = logOutput;
+    if (!logOutput) return;
+
+    // A2TaskLogOutput 用 onLinesChanged 回调（不是逐行推送）——
+    // 每次变化给完整数组，这里只取最后一行作为新增内容。
+    __weak typeof(self) weakSelf = self;
+    __block NSUInteger lastCount = logOutput.lines.count;
+    logOutput.onLinesChanged = ^(NSArray<NSString *> *lines) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        if (lines.count > lastCount) {
+            for (NSUInteger i = lastCount; i < lines.count; i++) {
+                [self appendLog:lines[i]];
+            }
+        }
+        lastCount = lines.count;
+    };
 }
 
 - (void)appendLog:(NSString *)line {
