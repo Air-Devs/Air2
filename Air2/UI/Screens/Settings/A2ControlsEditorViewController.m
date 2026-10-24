@@ -38,19 +38,27 @@
     _canvas.clipsToBounds = YES;
     [self.view addSubview:_canvas];
 
-    // ★按本机真实比例★ 用当前屏幕尺寸算宽高比（原来是写死 16:9，
-    //   在 874×402 这类比例上控件会被摆到画布外、看起来"超出屏幕看不见"）。
+    // ★按本机真实比例(横屏)★ 必须用 长边/短边：
+    //   UIScreen 在竖屏态返回 402×874，直接用 w/h 会得到 0.46 ⇒ 画布被压成竖条，
+    //   而控件仍按宽屏坐标摆 ⇒ 右侧一串跑到画布外("超出屏幕看不见")。
     CGSize screen = UIScreen.mainScreen.bounds.size;
-    CGFloat ratio = (screen.height > 0) ? (screen.width / screen.height) : (16.0 / 9.0);
-    if (ratio < 0.5 || ratio > 4.0) ratio = 16.0 / 9.0;   // 异常值兜底
+    CGFloat longSide  = MAX(screen.width, screen.height);
+    CGFloat shortSide = MIN(screen.width, screen.height);
+    CGFloat ratio = (shortSide > 0) ? (longSide / shortSide) : (16.0 / 9.0);
+    if (ratio < 1.0 || ratio > 4.0) ratio = 16.0 / 9.0;   // 异常值兜底
     NSLayoutConstraint *aspect = [_canvas.widthAnchor constraintEqualToAnchor:_canvas.heightAnchor multiplier:ratio];
     aspect.priority = 999;
+
+
+    // 高度上限用 750 优先级：让 aspect(999) 决定形状，屏幕不够高时才让位
+    NSLayoutConstraint *maxH = [_canvas.heightAnchor constraintLessThanOrEqualToAnchor:self.view.heightAnchor multiplier:0.80];
+    maxH.priority = 750;
 
     [NSLayoutConstraint activateConstraints:@[
         [_canvas.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
         [_canvas.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor constant:-30],
         [_canvas.widthAnchor constraintEqualToAnchor:self.view.widthAnchor multiplier:0.94],
-        [_canvas.heightAnchor constraintLessThanOrEqualToAnchor:self.view.heightAnchor multiplier:0.72],
+        maxH,
         aspect,
     ]];
 

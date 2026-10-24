@@ -629,6 +629,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 }
 
 - (void)a2_toggleKeyboard {
+    if (_editing) return;   // 编辑模式下不呼出系统键盘（点 ⌨ 只用于选中/拖动）
     _kbVisible = !_kbVisible;
     if (_kbVisible) {
         _kbField.text = @" ";
