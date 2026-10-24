@@ -68,42 +68,38 @@ static id gObserver = nil;
         [NSNotificationCenter.defaultCenter removeObserver:gObserver];
         gObserver = nil;
     }
+    // ★等待 JIT（老 Air 的 invokeAfterJITEnabled 口径）★
+    //   回来后不能只查一次：StikDebug/TrollStore 给权限有延迟，且调试器可能稍后才 attach。
+    //   每 0.5s 查一次，最多 25s；期间不建 VM（没 JIT 建 VM 会直接崩）。
+    __block NSInteger waited = 0;
+    void (^poll)(void) = ^{
+        if (gPendingCompletion == nil) return;
+        waited++;
+        if ([A2JITRescueFlow jitReadyNow]) {
+            [A2Log criterion:@"[A2-JIT-RESCUE] 轮询 %ld 次后拿到 JIT ⇒ 继续启动", (long)waited];
+            if (gObserver != nil) { [NSNotificationCenter.defaultCenter removeObserver:gObserver]; gObserver = nil; }
+            void (^cb)(BOOL) = gPendingCompletion; gPendingCompletion = nil;
+            if (cb) cb(YES);
+            return;
+        }
+        if (waited >= 50) {   // 25s
+            [A2Log criterion:@"[A2-JIT-RESCUE] 等待 25s 仍未拿到 JIT ⇒ 交给用户"];
+            if (gObserver != nil) { [NSNotificationCenter.defaultCenter removeObserver:gObserver]; gObserver = nil; }
+            void (^cb)(BOOL) = gPendingCompletion; gPendingCompletion = nil;
+            if (cb) cb(NO);
+            return;
+        }
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), poll);
+    };
+
     gObserver = [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification
                                                                object:nil
                                                                 queue:[NSOperationQueue mainQueue]
                                                            usingBlock:^(NSNotification *n) {
-        [A2Log criterion:@"[A2-JIT-RESCUE] 已回到前台 ⇒ 2s 后复查 JIT"];
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            BOOL ok = [A2JITRescueFlow jitReadyNow];
-            [A2Log criterion:@"[A2-JIT-RESCUE] 复查结果：%@", ok ? @"JIT 可用" : @"仍不可用"];
-            if (gObserver != nil) {
-                [NSNotificationCenter.defaultCenter removeObserver:gObserver];
-                gObserver = nil;
-            }
-            void (^cb)(BOOL) = gPendingCompletion;
-            gPendingCompletion = nil;
-            if (cb) cb(ok);
-        });
+        [A2Log criterion:@"[A2-JIT-RESCUE] 已回到前台 ⇒ 开始轮询等待 JIT"];
+        poll();
     }];
-
-    // ★TrollStore 优先★ 老 Air 的做法：apple-magnifier://enable-jit?bundle-id=<id>
-    //   （TrollStore 自己接管这个 scheme，给指定 bundle 开 JIT）
-    NSString *bid = NSBundle.mainBundle.bundleIdentifier ?: @"dev.airdevs.air2";
-    NSString *magnifier = [NSString stringWithFormat:@"apple-magnifier://enable-jit?bundle-id=%@",
-                           [bid stringByAddingPercentEncodingWithAllowedCharacters:
-                            NSCharacterSet.URLQueryAllowedCharacterSet]];
-    if ([UIApplication.sharedApplication canOpenURL:[NSURL URLWithString:magnifier]]) {
-        [A2Log criterion:@"[A2-JIT-RESCUE] 拉起 TrollStore: %@", magnifier];
-        [UIApplication.sharedApplication openURL:[NSURL URLWithString:magnifier]
-                                         options:@{}
-                               completionHandler:^(BOOL ok) {
-            if (!ok) {
-                [A2Log criterion:@"[A2-JIT-RESCUE] apple-magnifier 打不开 ⇒ 回退 StikDebug"];
-            }
-        }];
-        return;
-    }
 
     NSURL *url = [self rescueURLWithScript:scriptPath];
     [A2Log criterion:@"[A2-JIT-RESCUE] 拉起外部工具：%@", url.absoluteString];
