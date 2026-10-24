@@ -317,6 +317,54 @@ A2JITRegionProof a2_jit_prove_region_rwx(void *addr, size_t len,
 ///   崩溃报告里是 VM_ALLOCATE r-x/rwx 16K + pc 落在该页）。
 ///   ⇒ 只有在「确实具备 JIT 权限」时才允许执行；否则一律返回"未执行"，
 ///     由调用方按 Unknown/不可用处理（不崩、不误判为可用）。
+/// ★TrollStore / 内核级 JIT 检测★
+///   TrollStore 安装时用 ldid 给 App 签了 com.apple.private.cs.debugger，
+///   ⇒ 进程一启动就有 JIT，不需要调试器、也不需要"执行式自证"。
+///   做法：用 csops 读本进程的 entitlement blob（私有接口，但只读、无副作用），
+///   在 blob 里找那两个关键 entitlement 字符串；找不到再退回 CS_DEBUGGED。
+static BOOL a2_process_has_kernel_jit(void) {
+    static int cached = -1;
+    if (cached >= 0) return cached == 1;
+
+    extern int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
+    const unsigned int kCSOpsEntitlementsBlob = 7;
+    const unsigned int kCSDebugged = 0x00000100u;
+
+    uint32_t flags = 0;
+    BOOL debugged = NO;
+    if (csops(getpid(), 0 /* CS_OPS_STATUS */, &flags, sizeof(flags)) == 0) {
+        debugged = (flags & kCSDebugged) != 0;
+    }
+
+    BOOL entitled = NO;
+    size_t need = 0;
+    csops(getpid(), kCSOpsEntitlementsBlob, NULL, 0);   // 取长度
+    if (need == 0) {
+        // 某些系统要求先给一个缓冲区；用 64KB 试一次
+        need = 64 * 1024;
+    }
+    if (need > 0 && need <= 1024 * 1024) {
+        void *buf = calloc(1, need);
+        if (buf != NULL) {
+            size_t got = need;
+            if (csops(getpid(), kCSOpsEntitlementsBlob, buf, got) == 0) {
+                const char *bytes = (const char *)buf;
+                if (memmem(bytes, got, "com.apple.private.cs.debugger", 28) != NULL ||
+                    memmem(bytes, got, "dynamic-codesigning", 18) != NULL) {
+                    entitled = YES;
+                }
+            }
+            free(buf);
+        }
+    }
+
+    BOOL ok = (entitled || debugged);
+    cached = ok ? 1 : 0;
+    a2_jit_log("[A2JIT] 内核级 JIT 检测: entitlement=%d debugged=%d ⇒ %s",
+               entitled ? 1 : 0, debugged ? 1 : 0, ok ? "可用" : "不可用");
+    return ok;
+}
+
 static BOOL a2_process_has_jit_permission(void) {
     // 只有调试器连通(CS_DEBUGGED)或显式开关时才允许做"执行"式自证。
     //   · 侧载/巨魔机没装调试器时，JIT 面本身由 brk/内核路径判定，不需要这一跳；
@@ -650,6 +698,15 @@ static int gA2JITEnsureKickInflight = 0;
 
     if (gA2JITVerified) {
         if (whyOut) *whyOut = gA2JITRegionEvidence ?: @"already verified (verifiedRegion non-null)";
+        return YES;
+    }
+
+    // ★TrollStore / 越狱★ 进程本身已有 JIT 权限 ⇒ 直接可用，不做任何探针
+    //   （以前这里会 mmap+跳页自证，在无权限设备上被内核 SIGKILL-CODESIGNING）。
+    if (a2_process_has_kernel_jit()) {
+        if (whyOut) *whyOut = @"内核级 JIT（TrollStore / 越狱 entitlement）";
+        gA2JITRegionVerdict = A2JITRegionVerdictUsable;
+        gA2JITRegionEvidence = @"kernel-level JIT (entitlement/CS_DEBUGGED)";
         return YES;
     }
 
