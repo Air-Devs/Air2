@@ -25,17 +25,22 @@ static id gObserver = nil;
 @implementation A2JITRescueFlow
 
 + (BOOL)jitReadyNow {
-    // ★严格口径★ 只有「内核级 entitlement」或「调试器已连(CS_DEBUGGED)」才算拿到 JIT。
-    //   不能用 ensureVerifiedWithinBudget —— 它在无 CS_DEBUGGED 时按“不拦路”返回 YES，
-    //   那样救援永远不会触发。
+    // ★判据对齐老 Air★ 三层任一成立即视为已有 JIT：
+    //   ① 内核级 entitlement(dynamic-codesigning / cs.debugger) —— TrollStore/越狱
+    //   ② CS_DEBUGGED（调试器此刻还连着）
+    //   ③ ★真的发一次 brk 拿到可执行区★
+    //      Stik 的流程是「给完区就 detach」，detach 后 CS_DEBUGGED 位会掉，
+    //      但 JIT 区依然可用 ⇒ 只看 ①② 会误判“没 JIT”而重复跳转（真机症状）。
     if (a2_jit_has_kernel_level()) return YES;
 
     extern int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
     uint32_t flags = 0;
-    if (csops(getpid(), 0 /* CS_OPS_STATUS */, &flags, sizeof(flags)) == 0) {
-        if ((flags & 0x00000100u) != 0) return YES;   // CS_DEBUGGED
-    }
-    return NO;
+    if (csops(getpid(), 0, &flags, sizeof(flags)) == 0 && (flags & 0x00000100u) != 0) return YES;
+
+    NSString *why = nil;
+    BOOL verified = [A2JITEnvironment ensureVerifiedWithinBudget:2.0 reason:&why];
+    NSLog(@"[A2-JIT-RESCUE] 区域验证: %d（%@）", verified, why ?: @"");
+    return verified;
 }
 
 /// 组一个带参数的 StikDebug URL（scheme 用 stikdebug，失败再试 stikjit）
