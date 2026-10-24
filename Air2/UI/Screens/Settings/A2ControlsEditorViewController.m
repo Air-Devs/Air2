@@ -51,6 +51,10 @@
 
     [self buildToolbar];
 
+    // 设计尺寸 = 本机真实横屏尺寸（控件就是按这个坐标摆的）
+    CGSize screen = UIScreen.mainScreen.bounds.size;
+    _designSize = CGSizeMake(MAX(screen.width, screen.height), MIN(screen.width, screen.height));
+
     _canvas = [[UIView alloc] initWithFrame:CGRectZero];
     _canvas.translatesAutoresizingMaskIntoConstraints = NO;
     _canvas.backgroundColor = [UIColor colorWithWhite:0.10 alpha:1.0];
@@ -58,19 +62,27 @@
     _canvas.layer.cornerCurve = kCACornerCurveContinuous;
     _canvas.clipsToBounds = YES;
     [self.view addSubview:_canvas];
+    // ★画布 = 设计尺寸的等比小屏★ 这样控件 1:1 摆进去不会被裁
+    NSLayoutConstraint *canvasAspect = [_canvas.widthAnchor constraintEqualToAnchor:_canvas.heightAnchor
+                                                                      multiplier:_designSize.width / MAX(1.0, _designSize.height)];
+    canvasAspect.priority = 999;
+    NSLayoutConstraint *canvasMaxH = [_canvas.heightAnchor constraintLessThanOrEqualToAnchor:_toolbar.topAnchor
+                                                                                    constant:-10];
+    canvasMaxH.priority = 750;
+
     [NSLayoutConstraint activateConstraints:@[
-        [_canvas.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:10],
-        [_canvas.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-10],
+        [_canvas.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.view.leadingAnchor constant:10],
+        [_canvas.trailingAnchor constraintLessThanOrEqualToAnchor:self.view.trailingAnchor constant:-10],
+        [_canvas.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
         [_canvas.topAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.topAnchor constant:8],
-        // ★画布到底栏之上★ 否则控件和工具栏叠在一起（截图里 1..9 被"+按键/删除"盖住）
+        // ★画布到底栏之上★ 否则控件和工具栏叠在一起
         [_canvas.bottomAnchor constraintEqualToAnchor:_toolbar.topAnchor constant:-10],
+        canvasMaxH,
+        canvasAspect,
     ]];
 
     // 控件层：按「设计尺寸」排布，再整体缩放塞进画布 ——
     // 这样控件之间的相对位置永远不变，也不需要因为画布大小而重排。
-    CGSize screen = UIScreen.mainScreen.bounds.size;
-    _designSize = CGSizeMake(MAX(screen.width, screen.height), MIN(screen.width, screen.height));
-
     _controls = [[A2GameControlsView alloc] initWithWindowHandle:0];
     _controls.translatesAutoresizingMaskIntoConstraints = YES;
     _controls.frame = CGRectMake(0, 0, _designSize.width, _designSize.height);
@@ -98,7 +110,7 @@
     if (_controls == nil || _canvas.bounds.size.width <= 1) return;
     CGFloat sx = CGRectGetWidth(_canvas.bounds)  / _designSize.width;
     CGFloat sy = CGRectGetHeight(_canvas.bounds) / _designSize.height;
-    CGFloat k = MIN(sx, sy);
+    CGFloat k = MIN(MIN(sx, sy), 1.0);   // 画布比设计尺寸大就不放大，避免控件虚胖
     _controls.transform = CGAffineTransformMakeScale(k, k);
     _controls.center = CGPointMake(CGRectGetMidX(_canvas.bounds), CGRectGetMidY(_canvas.bounds));
 }
