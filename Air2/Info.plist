@@ -2,158 +2,116 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-    <key>CFBundleDevelopmentRegion</key>
-    <string>zh-Hans</string>
-
-    <key>CFBundleDisplayName</key>
-    <string>Air2</string>
-
-    <key>CFBundleExecutable</key>
-    <string>$(EXECUTABLE_NAME)</string>
-
-    <key>CFBundleIdentifier</key>
-    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
-
-    <key>CFBundleInfoDictionaryVersion</key>
-    <string>6.0</string>
-
-    <key>CFBundleName</key>
-    <string>$(PRODUCT_NAME)</string>
-
-    <key>CFBundlePackageType</key>
-    <string>APPL</string>
-
-    <key>CFBundleShortVersionString</key>
-    <string>0.1.0</string>
-
-    <key>CFBundleVersion</key>
-    <string>1</string>
-
-    <key>LSRequiresIPhoneOS</key>
-    <true/>
-
-    <!-- ============================================================
-         方向：锁定横屏
-         Minecraft Java 版是横屏游戏，启动器横屏可避免启动瞬间
-         的方向切换黑屏。同时也只声明横屏，系统层面就不会允许旋转。
-         ============================================================ -->
-    <key>UISupportedInterfaceOrientations</key>
-    <array>
-        <string>UIInterfaceOrientationLandscapeLeft</string>
-        <string>UIInterfaceOrientationLandscapeRight</string>
-    </array>
-
-    <key>UISupportedInterfaceOrientations~ipad</key>
-    <array>
-        <string>UIInterfaceOrientationLandscapeLeft</string>
-        <string>UIInterfaceOrientationLandscapeRight</string>
-    </array>
-
-    <!-- 状态栏：横屏下隐藏，把空间还给内容 -->
-    <key>UIStatusBarHidden</key>
-    <true/>
-    <key>UIViewControllerBasedStatusBarAppearance</key>
-    <false/>
-
-    <!-- 启动画面：留空字典即可，系统会用窗口底色。
-         之前写 UIColorName = "" 是错的 —— 空字符串会指向一个
-         不存在的色板资源，反而可能出问题。 -->
-    <key>UILaunchScreen</key>
-    <dict/>
-
-    <!-- 外观：默认跟随系统 -->
-    <key>UIUserInterfaceStyle</key>
-    <string>Automatic</string>
-
-    <!-- 支持的设备能力 -->
-    <key>UIRequiredDeviceCapabilities</key>
-    <array>
-        <string>arm64</string>
-    </array>
-
-    <key>UIApplicationSupportsIndirectInputEvents</key>
-    <true/>
-
-    <!-- ============================================================
-         Scene 配置。
-         注意：delegate 类必须在这里声明。A2AppDelegate 里的
-         configurationForConnectingSceneSession: 只是用来「修改」配置，
-         不能用来「创建」—— 如果这里不写 UISceneConfigurations，
-         系统走 Scene 流程但找不到 delegate，会启动即崩。
-         ============================================================ -->
-    <key>UIApplicationSceneManifest</key>
-    <dict>
-        <key>UIApplicationSupportsMultipleScenes</key>
-        <false/>
-        <key>UISceneConfigurations</key>
-        <dict>
-            <key>UIWindowSceneSessionRoleApplication</key>
-            <array>
-                <dict>
-                    <key>UISceneConfigurationName</key>
-                    <string>Default Configuration</string>
-                    <key>UISceneDelegateClassName</key>
-                    <string>A2SceneDelegate</string>
-                </dict>
-            </array>
-        </dict>
-    </dict>
-
-    <!-- 文件共享：允许通过「文件」App 导入整合包与 mod -->
-    <key>UIFileSharingEnabled</key>
-    <true/>
-    <key>LSSupportsOpeningDocumentsInPlace</key>
-    <true/>
-
-    <!-- ============================================================
-         JIT 外部工具 URL scheme 白名单 [JIT-IMPL-2]
-         canOpenURL: 只对登记在此的 scheme 返回 YES（未登记会被系统静默拒绝）。
-         ★清单唯一真相源★ = A2JITExternalToolProvider.registeredToolSchemes
-         （tests/JIT 会读本文件逐项比对，防两处漂移）。
-         这些都是【外部 App】，本仓不 vendor、不派生其代码（见 docs/DEPENDENCIES.md）。
-         ============================================================ -->
-    <key>LSApplicationQueriesSchemes</key>
-    <array>
-        <string>stikdebug</string>
-        <string>stikjit</string>
-        <string>sidestore</string>
-        <string>stosdebug</string>
-    </array>
-
-    <!-- 相册访问：自定义背景选图 -->
-    <key>NSPhotoLibraryUsageDescription</key>
-    <string>Air2 需要访问相册，以便你选择一张图片作为启动器背景。</string>
-
-    <!-- 本地网络：联机 + [JIT-AUTOPAIR-2] 自动配对的 Bonjour 发现 -->
-    <key>NSLocalNetworkUsageDescription</key>
-    <string>Air2 需要访问本地网络，用于发现局域网内的 Minecraft 服务器，以及（iOS 27+）发现本机的开发者服务以完成自动配对。</string>
-
-    <!-- ============================================================
-         [JIT-AUTOPAIR-2] Bonjour 服务白名单
-         ★NWBrowser 只能浏览登记在此的服务类型★；未登记时系统【不返回任何结果】，
-         表现为「发现阶段一无所获」——这正是 DiscoveryFailed 的常见成因。
-         服务类型事实来源：公开协议描述 §2（三条连接路径），见 Natives/Support/a2_rppairing_rsd.h。
-         ★清单唯一真相源★ = A2RPRSDDefaultServiceTypes()（tests/JIT 会读本文件逐项比对，防漂移）。
-         ============================================================ -->
-    <key>NSBonjourServices</key>
-    <array>
-        <string>_remotepairing._tcp</string>
-        <string>_remoted._tcp</string>
-        <string>_remotepairing-pairable-host._tcp</string>
-        <!-- [PAIRWIRE-NETPROBE] 本地网络权限自检探针（自建服务，检完即撤） -->
-        <string>_a2lnprobe._tcp</string>
-    </array>
-
-    <!-- 后台模式：游戏运行时的音频播放 -->
-    <!-- [PAIRWIRE-KEEPALIVE] 后台继续任务：配对期间用户要离开 App 去系统设置输码 -->
-    <key>BGTaskSchedulerPermittedIdentifiers</key>
-    <array>
-        <string>dev.airdevs.air2.pairing</string>
-    </array>
-
-    <key>UIBackgroundModes</key>
-    <array>
-        <string>audio</string>
-    </array>
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>dev.airdevs.air2.pairing</string>
+	</array>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>zh-Hans</string>
+	<key>CFBundleDisplayName</key>
+	<string>Air2</string>
+	<key>CFBundleExecutable</key>
+	<string>$(EXECUTABLE_NAME)</string>
+	<key>CFBundleIconFiles</key>
+	<array>
+		<string>AppIcon60x60</string>
+		<string>AppIcon76x76</string>
+		<string>AppIcon83.5x83.5</string>
+		<string>AppIcon40x40</string>
+	</array>
+	<key>CFBundleIcons</key>
+	<dict>
+		<key>CFBundlePrimaryIcon</key>
+		<dict>
+			<key>CFBundleIconFiles</key>
+			<array>
+				<string>AppIcon60x60</string>
+				<string>AppIcon40x40</string>
+			</array>
+			<key>CFBundleIconName</key>
+			<string>AppIcon</string>
+		</dict>
+	</dict>
+	<key>CFBundleIdentifier</key>
+	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>$(PRODUCT_NAME)</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>0.1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>stikdebug</string>
+		<string>stikjit</string>
+		<string>sidestore</string>
+		<string>stosdebug</string>
+	</array>
+	<key>LSRequiresIPhoneOS</key>
+	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_remotepairing._tcp</string>
+		<string>_remoted._tcp</string>
+		<string>_remotepairing-pairable-host._tcp</string>
+		<string>_a2lnprobe._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>Air2 需要访问本地网络，用于发现局域网内的 Minecraft 服务器，以及（iOS 27+）发现本机的开发者服务以完成自动配对。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Air2 需要访问相册，以便你选择一张图片作为启动器背景。</string>
+	<key>UIApplicationSceneManifest</key>
+	<dict>
+		<key>UIApplicationSupportsMultipleScenes</key>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>A2SceneDelegate</string>
+				</dict>
+			</array>
+		</dict>
+	</dict>
+	<key>UIApplicationSupportsIndirectInputEvents</key>
+	<true/>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
+	<key>UIFileSharingEnabled</key>
+	<true/>
+	<key>UILaunchScreen</key>
+	<dict/>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<key>UIStatusBarHidden</key>
+	<true/>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~ipad</key>
+	<array>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIUserInterfaceStyle</key>
+	<string>Automatic</string>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
 </dict>
 </plist>
