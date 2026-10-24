@@ -1239,9 +1239,29 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     if (first == -2) { a2_glfw_input_post_mouse_button(_window, 1, 1); a2_glfw_input_post_mouse_button(_window, 1, 0); return; }
 
     a2_log_f(@"[A2-CONTROLS] 按键合成 cid=%@ keys=%@ window=%ld", cid, codes, _window);
-    // 组合键：F 键先按下 → 目标键按下/抬起 → F 键最后抬起
-    for (NSNumber *n in codes) a2_glfw_input_post_key(_window, n.intValue, 1);
-    for (NSNumber *n in codes.reverseObjectEnumerator) a2_glfw_input_post_key(_window, n.intValue, 0);
+    // ★组合键语义★ Minecraft 的 F3+ 组合是"按住 F3 再点另一个键，松开 F3 生效"，
+    //   不能同时按下同时松开（否则等于连点两下，菜单开了立刻关）。
+    //   这里：F 键按下 → 180ms 后目标键按下 → 再 120ms 目标键抬起 → 再 120ms F 键抬起。
+    NSNumber *modifier = codes.firstObject;
+    a2_glfw_input_post_key(_window, modifier.intValue, 1);
+
+    if (codes.count == 1) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.18 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            a2_glfw_input_post_key(self->_window, modifier.intValue, 0);
+        });
+        return;
+    }
+
+    NSNumber *target = codes[1];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.18 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        a2_glfw_input_post_key(self->_window, target.intValue, 1);
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.30 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        a2_glfw_input_post_key(self->_window, target.intValue, 0);
+    });
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.42 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        a2_glfw_input_post_key(self->_window, modifier.intValue, 0);
+    });
 }
 
 
