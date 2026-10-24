@@ -29,8 +29,7 @@
 #import "A2RuntimeStrings.h"        // Player 同层 —— 四语文案（阻断文案 + 判据行的「源」）
 #import "A2LegacyProfile.h"
 #import "A2IntegrityChecker.h"
-#import "A2JITRescueFlow.h"
-#import "A2JITEnvironment.h"         // Core/Version —— 远古版本画像（[A2-LEGACY] 闸门与 VM 参数）
+#import "A2JITEnabler.h"            // Natives/Support —— JIT 闸门的唯一实现（判据→申请→等待）
 #import "A2LegacyAssetsMapper.h"    // Core/Version —— 远古资源映射（virtual / map_to_resources）
 #import "A2Log.h"
 
@@ -184,40 +183,31 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
         return;
     }
     // ★开关=开的判据行★
-    // ★没 JIT 就先跳 StikDebug★（用我们自己的脚本），回来后复查再继续启动。
-    //   同一个 tap 只救一次（static 标记），避免在 StikDebug 和本 App 之间来回跳。
-    {
-        static BOOL sJITRescueTried = NO;
-        BOOL kernelJIT = a2_jit_has_kernel_level();
-        // ★防死循环★ 如果本进程是被调试器/使能器拉起的（ppid≠launchd），
-        //   说明 JIT 正在由外部注入 ⇒ 绝不能再跳一次（跳了就会无限重启）。
-        BOOL launchedByDebugger = (getppid() != 1);
-        if (launchedByDebugger) {
-            [A2Log criterion:@"[A2-JIT-RESCUE] 本进程由调试器拉起(ppid=%d) ⇒ 不跳转，直接启动", getppid()];
-        }
-        BOOL ready = launchedByDebugger || kernelJIT || [A2JITRescueFlow jitReadyNow];
-        // ★只对 Stik 环境生效★ 没有 StikDebug 就不走这套（别拿 TrollStore/越狱机去跳）
-        BOOL hasStik = [UIApplication.sharedApplication canOpenURL:
-                        [NSURL URLWithString:@"stikdebug://enable-jit"]];
-        if (!ready && !sJITRescueTried && hasStik) {
-            sJITRescueTried = YES;
-            [A2Log criterion:@"[A2-JIT-RESCUE] 启动前未拿到 JIT ⇒ 带脚本跳 StikDebug"];
-            dispatch_async(dispatch_get_main_queue(), ^{
-                [A2JITRescueFlow beginRescueWithScript:nil completion:^(BOOL ok) {
-                    if (ok) {
-                        [A2Log criterion:@"[A2-JIT-RESCUE] 已拿到 JIT ⇒ 自动继续启动"];
-                        [A2LaunchSession startCurrentVersionWithCompletion:^(A2LaunchSessionResult *r) {}];
-                    } else {
-                        [A2Log criterion:@"[A2-JIT-RESCUE] 仍未拿到 JIT ⇒ 提示用户"];
-                        finish(NO, 0, @"没有拿到 JIT 权限：请安装 StikDebug 并在其中为 Air2 开启 JIT 后重试。");
-                    }
+    // ★JIT 闸门★：判据 → 申请 → 等待 → 回调，全部在 Natives/Support 的一处
+    //   （A2JITEnabler；移植自老 Air 的 invokeAfterJITEnabled: 机制）。
+    //   · 已就绪（被调试器拉起 / 已拿到可写 JIT 区 / 内核级 JIT / 区域验证通过）
+    //     ⇒ 照旧直接往下启动：26.2 上「JIT 已就绪」的行为与之前逐字一致，只多一行判据；
+    //   · 未就绪 ⇒ 交模块去拉起使能器并等 ≤120s；★失败一律回调 NO★，
+    //     由这里给可读失败页 —— 绝不带着无 JIT 的进程继续去建 VM（那会 SIGBUS 闪退）。
+    //   防死循环由模块负责（被调试器拉起即认 / 同一进程只跳一次），本层不再留 static 标记。
+    if ([A2JITEnabler isJITReadyNow]) {
+        [A2Log log:@"[A2-JIT] 已就绪 ⇒ 直接启动（判据明细见上一条 [A2-JIT-ENABLER] 行）"];
+    } else {
+        [A2Log criterion:@"[A2-JIT] 未就绪 ⇒ 交 A2JITEnabler 申请（拉起使能器 → 有界等待 120s）"];
+        [A2JITEnabler ensureJITThen:^(BOOL ok) {
+            if (ok) {
+                [A2Log criterion:@"[A2-JIT] 已拿到 JIT ⇒ 重新进入启动链（第二轮判据即就绪）"];
+                [A2LaunchSession startCurrentVersionWithCompletion:^(A2LaunchSessionResult *r) {
+                    (void)r;
                 }];
-            });
-            return;
-        }
-        if (!ready && !hasStik) {
-            [A2Log criterion:@"[A2-JIT-RESCUE] 未安装 StikDebug ⇒ 不走跳转，继续按现有链尝试"];
-        }
+            } else {
+                NSString *why = [A2JITEnabler lastFailureReason] ?: @"原因未知";
+                [A2Log criterion:@"[A2-JIT] 没拿到 JIT ⇒ 出失败页（不建 VM）：%@", why];
+                finish(NO, 0, [NSString stringWithFormat:
+                               @"没有拿到 JIT：%@。\n可在 StikDebug 里为 Air2 开启 JIT 后重试。", why]);
+            }
+        }];
+        return;   // ★回调不在本调用栈里发生★（模块保证异步）
     }
 
     [A2Log log:@"[A2-CHAIN] 开关=开 ⇒ 走自研链（① 下发 JIT 脚本 → ② 探测 JIT → ③ 建 VM）"];

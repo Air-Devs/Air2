@@ -148,6 +148,5 @@ A2JITExecProbeResult a2_jit_exec_probe_anonymous(void);
 
 /// 本进程是否具备「内核级 JIT」(TrollStore/越狱 entitlement)
 BOOL a2_jit_has_kernel_level(void);
-BOOL a2_jit_device_needs_debug_mapping_public(void);
 
 NS_ASSUME_NONNULL_END

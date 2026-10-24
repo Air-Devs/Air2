@@ -1,0 +1,510 @@
+//
+//  A2JITEnabler.m
+//  Air2
+//  Copyright (C) 2026 Air-Devs and contributors.
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
+//  Natives/Support —— 启动前 JIT 使能（判据 → 申请 → 等待 → 回调）。
+//
+//  移植来源（老 Air，只搬机制、不搬无关代码）：
+//    · tree510/Natives/DownloadViewController.m  L3891–L4100  invokeAfterJITEnabled: 完整流程
+//    · tree510/Natives/JavaLauncher.m           L3000–L3050  使能器 URL 选择
+//    · tree510/Natives/utils.m                  isJITEnabled / AMEJIT* 判据与等待
+//
+//  ★与老 Air 的差异（为什么不同，写清）★
+//    1. 判据落到 A2JITEnvironment 一处（老 Air 是 utils.m 里的 AMEJITVerifyWritableJITRegion +
+//       JIT26IsLikelyDebuggerKeepAttached…）：本模块不重复实现 brk 语义，只决定「什么时候问」。
+//    2. 使能器不做「按偏好键选」，改按本机已安装能力探测（理由见头文件）。
+//    3. 等待期用 beginBackgroundTask + 切回前台的即时探测（老 Air 同形），
+//       但**挂起间隙不计入预算**（老 Air 的 ame169_waitForJITCondition 同款处理）——
+//       否则用户进 StikDebug 一趟回来，120s 预算已经被墙钟吃光了。
+//
+
+#import "A2JITEnabler.h"
+
+#import <UIKit/UIKit.h>
+#import <unistd.h>
+
+#import "A2JITEnvironment.h"   // 判据（brk #0x69 / 区域验证 / 执行式探针）——唯一真相源
+#import "UIKit+hook.h"         // UIWindow.mainWindow：key window 的唯一取法（不自造第二份）
+#import "a2_log.h"             // native 侧判据行出口（与 Air2 的 [A2Log criterion:] 同一落点）
+
+#pragma mark - 常量
+
+/// 等待上限：对齐老 Air 的 invokeAfterJITEnabled（120s）。
+static const NSTimeInterval kA2JITWaitBudget = 120.0;
+/// 已经跳过一次之后的等待上限：★防死循环★ 第二次起不再跳，只给调试器一点收尾时间。
+static const NSTimeInterval kA2JITRepeatWaitBudget = 8.0;
+/// 轮询间隔：0.5s（老 Air 同量级；再密只是白刷 brk #0x69）。
+static const NSTimeInterval kA2JITPollInterval = 0.5;
+/// 单次区域验证预算：2.5s（A2JITEnvironment 在后台线程允许的切片量级）。
+static const NSTimeInterval kA2JITVerifySlice = 2.5;
+/// 心跳日志间隔：让真机日志能看出「还在等」而不是「卡死了」。
+static const NSTimeInterval kA2JITHeartbeat = 10.0;
+/// 脚本名：打包阶段把 Assets/Air2JIT69.js 复制成 Air2.app/universal.js
+/// （scripts/gen_xcodeproj.py 的随包阶段）。StikDebug 只认这个名字。
+static NSString *const kA2JITScriptName = @"universal.js";
+
+#pragma mark - 使能器种类
+
+typedef NS_ENUM(NSInteger, A2JITEnablerTool) {
+    A2JITEnablerToolNone = 0,   ///< 本机没有任何可拉起的使能器（只能人工引导）
+    A2JITEnablerToolStikDebug,  ///< stikdebug://（SideStore + StikDebug 环境的常驻)
+    A2JITEnablerToolTrollStore, ///< apple-magnifier://（TrollStore 2.x 的 enable-jit）
+    A2JITEnablerToolSideStore,  ///< sidestore://sidejit-enable（SideJIT，<17.4 的既有形式）
+    A2JITEnablerToolStikJIT,    ///< stikjit://（★会重拉 App★，仅作最后手段）
+};
+
+static NSString *a2jit_tool_name(A2JITEnablerTool tool) {
+    switch (tool) {
+        case A2JITEnablerToolStikDebug:  return @"StikDebug";
+        case A2JITEnablerToolTrollStore: return @"TrollStore";
+        case A2JITEnablerToolSideStore:  return @"SideStore";
+        case A2JITEnablerToolStikJIT:    return @"stikjit";
+        case A2JITEnablerToolNone:       break;
+    }
+    return @"(无)";
+}
+
+#pragma mark - ① 判据
+
+/// 本进程是否「被调试器 / 使能器拉起」。
+/// ★这是防死循环的第一条铁律★：stikjit / StikDebug 把 App 重新拉起之后，新进程的父进程
+/// 不是 launchd(1)；此时若再跳一次，就会「跳转 → 重拉 → 再跳」无限循环（真机已复现）。
+static BOOL a2jit_launched_by_debugger(void) {
+    return getppid() != 1;
+}
+
+/// 能力声明：entitlement（dynamic-codesigning / cs.debugger，老 Air 用
+/// getEntitlementValue 判定，Air2 收敛到 a2_jit_has_kernel_level）或 CS_DEBUGGED。
+/// ★只证明「有资格」，不证明「现在能用」★（老 Air 的 [JIT-FLOW] 假阳性链路就是这么来的）。
+static BOOL a2jit_has_capability(void) {
+    if (a2_jit_has_kernel_level()) return YES;
+    uint32_t flags = 0;
+    extern int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
+    if (csops(getpid(), 0 /* CS_OPS_STATUS */, &flags, sizeof(flags)) == 0) {
+        return (flags & 0x00000100u) != 0;   // CS_DEBUGGED
+    }
+    return NO;
+}
+
+/// 唯一判据。why 只在「不就绪」时被写（可读原因，供日志与失败页）。
+static BOOL a2jit_ready_now(NSString *_Nullable *_Nullable why) {
+    if (a2jit_launched_by_debugger()) {
+        if (why) *why = @"被调试器拉起(ppid≠1)：JIT 正由外部注入，直接认";
+        return YES;
+    }
+    if ([A2JITEnvironment verifiedRegion] != NULL) {
+        if (why) *why = @"本进程已拿到可写 JIT 区（此前验证通过）";
+        return YES;
+    }
+    if (!a2jit_has_capability()) {
+        if (why) *why = @"没有 JIT 能力声明（entitlement / CS_DEBUGGED 都没有）";
+        return NO;
+    }
+    // 有声明 ⇒ 必须验证到「真能用」：iOS 26+ 要真拿到可写 JIT 区（brk #0x69 被服务），
+    // 非镜像设备要真执行一段自产指令 / 或内核级直接放行 —— 全在 A2JITEnvironment 一处判定。
+    NSString *envWhy = nil;
+    BOOL ok = [A2JITEnvironment ensureVerifiedWithinBudget:kA2JITVerifySlice reason:&envWhy];
+    if (!ok && why) {
+        *why = envWhy.length > 0
+            ? [NSString stringWithFormat:@"有 JIT 声明但区域验证未通过（%@）", envWhy]
+            : @"有 JIT 声明但区域验证未通过";
+    }
+    return ok;
+}
+
+#pragma mark - ② 使能器（URL 选择 + 回退顺序）
+
+/// 百分号转义：bundle-id 里可能有点与横线，Query 允许集已覆盖；这里统一走一遍，
+/// 避免以后出现奇怪字符时 URL 变成 nil（nil 会被 canOpenURL 当成「没装」）。
+static NSString *a2jit_pct(NSString *s) {
+    return [s stringByAddingPercentEncodingWithAllowedCharacters:
+            NSCharacterSet.URLQueryAllowedCharacterSet] ?: @"";
+}
+
+static NSString *a2jit_bundle_id(void) {
+    return NSBundle.mainBundle.bundleIdentifier ?: @"";
+}
+
+/// stikdebug://enable-jit?bundle-id=&pid=&script-name=universal.js
+/// ★参数名一字不差★（老 Air JavaLauncher.m 的 stikdebug 分支；我们此前写成
+/// bundle_id/script/return 时 StikDebug 不认）。用 script-name 指向包内脚本，
+/// 不内联 base64 —— 只有注册了 stikdebug:// 的 StikDebug 版本支持这条。
+static NSURL *a2jit_url_stikdebug(void) {
+    return [NSURL URLWithString:[NSString stringWithFormat:
+        @"stikdebug://enable-jit?bundle-id=%@&pid=%d&script-name=%@",
+        a2jit_pct(a2jit_bundle_id()), (int)getpid(), a2jit_pct(kA2JITScriptName)]];
+}
+
+/// apple-magnifier://enable-jit?bundle-id=（TrollStore 2.0.12+ 的 JIT 入口）
+static NSURL *a2jit_url_trollstore(void) {
+    return [NSURL URLWithString:[NSString stringWithFormat:
+        @"apple-magnifier://enable-jit?bundle-id=%@", a2jit_pct(a2jit_bundle_id())]];
+}
+
+/// sidestore://sidejit-enable?pid=（SideJIT；与老 Air <17.4 分支同形）
+static NSURL *a2jit_url_sidestore(void) {
+    return [NSURL URLWithString:[NSString stringWithFormat:
+        @"sidestore://sidejit-enable?pid=%d", (int)getpid()]];
+}
+
+/// stikjit://enable-jit?bundle-id=&pid=&script-data=<base64>
+/// ★最后手段★：这条会**重新拉起 App**（老 Air 的 @available(iOS 17.4) 分支）。
+/// 重拉后的新进程 ppid≠1 ⇒ 判据第一条直接认，不会二次跳转（死循环由此断开）。
+static NSURL *a2jit_url_stikjit(void) {
+    NSString *scriptData = @"";
+    NSData *script = [NSData dataWithContentsOfFile:
+        [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"Air2JIT69.js"]];
+    if (script.length > 0) {
+        scriptData = [@"&script-data=" stringByAppendingString:
+                      [script base64EncodedStringWithOptions:0]];
+    }
+    return [NSURL URLWithString:[NSString stringWithFormat:
+        @"stikjit://enable-jit?bundle-id=%@&pid=%d%@",
+        a2jit_pct(a2jit_bundle_id()), (int)getpid(), scriptData]];
+}
+
+/// ★回退顺序就是这里的数组顺序★（为什么是这个顺序，不是随便排的）：
+///   1. stikdebug —— SideStore+StikDebug 环境的主力，**不重拉进程**，参数最完整；
+///   2. apple-magnifier —— TrollStore 装机自带 JIT，同样不重拉；
+///   3. sidestore —— SideJIT 老形式，同样不重拉（iOS 17.0–17.3 唯一可用的一条）；
+///   4. stikjit —— **会重拉 App**，用户会被踢出启动流程，故放最后。
+/// 全部 canOpenURL=NO ⇒ None：不白等 120s，直接给可读原因（老 Air 的 MissingTool 同款处理）。
+static A2JITEnablerTool a2jit_pick_enabler(NSURL *_Nullable *_Nullable urlOut) {
+    NSURL *(*builders[])(void) = { a2jit_url_stikdebug, a2jit_url_trollstore,
+                                   a2jit_url_sidestore, a2jit_url_stikjit };
+    A2JITEnablerTool tools[] = { A2JITEnablerToolStikDebug, A2JITEnablerToolTrollStore,
+                                 A2JITEnablerToolSideStore, A2JITEnablerToolStikJIT };
+    for (size_t i = 0; i < sizeof(tools) / sizeof(tools[0]); i++) {
+        NSURL *url = builders[i]();
+        if (url == nil) continue;
+        // canOpenURL 必须带 Info.plist 的 LSApplicationQueriesSchemes 白名单
+        // （stikdebug / stikjit / sidestore / stosdebug / apple-magnifier 已登记）。
+        if ([UIApplication.sharedApplication canOpenURL:url]) {
+            if (urlOut) *urlOut = url;
+            return tools[i];
+        }
+    }
+    if (urlOut) *urlOut = nil;
+    return A2JITEnablerToolNone;
+}
+
+#pragma mark - ③ 等待（本进程单次在途）
+
+/// 一次「申请 + 等待」的状态。用对象承载（而不是散落的文件级变量），
+/// 生命周期 = 从 ensureJITThen: 到回调；收尾时一次性撤销 observer / 弹窗 / 后台断言。
+@interface A2JITEnablerRun : NSObject
+
+@property (nonatomic, strong) NSMutableArray<void (^)(BOOL)> *completions;
+@property (nonatomic, assign) NSTimeInterval deadline;      // 绝对时刻（timeIntervalSince1970）
+@property (nonatomic, assign) NSTimeInterval lastTick;
+@property (nonatomic, assign) NSTimeInterval lastHeartbeat;
+@property (nonatomic, assign) BOOL finished;
+@property (nonatomic, assign) BOOL probeInFlight;           // 上一发探针还没回来 ⇒ 本轮跳过
+@property (nonatomic, assign) BOOL armedAutoLaunch;          // 是否置过「重挂后自动继续」标记
+@property (nonatomic, assign) UIBackgroundTaskIdentifier bgTask;
+@property (nonatomic, strong) UIAlertController *alert;
+@property (nonatomic, strong) id activeObserver;
+@property (nonatomic, copy) NSString *lastWhy;              // 最近一次判据原因（失败页用）
+
+- (void)addCompletion:(void (^)(BOOL))block;
+- (void)finishWithOK:(BOOL)ok reason:(NSString *)reason;
+- (void)startWaitingWithBudget:(NSTimeInterval)budget tool:(A2JITEnablerTool)tool;
+- (void)openEnablerURL:(NSURL *)url tool:(A2JITEnablerTool)tool;
+- (void)scheduleNextTick;
+- (void)tick;
+
+@end
+
+/// ★在途的那一次★（同一时刻最多一个；并发调用挂到同一次等待上）。
+static A2JITEnablerRun *gA2JITRun = nil;
+/// ★防死循环的第二条铁律★：本进程是否已经**尝试过**一次跳转（拉起请求发出前置位；
+/// 有效失败不影响它 —— 「试过就不再试」才是断环的关键）。
+static BOOL gA2JITJumpedThisProcess = NO;
+/// 最近一次失败原因（给 lastFailureReason 读）。
+static NSString *gA2JITLastFailure = nil;
+
+@implementation A2JITEnablerRun
+
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _completions = [NSMutableArray array];
+        _bgTask = UIBackgroundTaskInvalid;
+    }
+    return self;
+}
+
+- (void)addCompletion:(void (^)(BOOL))block {
+    if (block) [self.completions addObject:[block copy]];
+}
+
+- (void)finishWithOK:(BOOL)ok reason:(NSString *)reason {
+    if (self.finished) return;   // 幂等：超时 / 取消 / 成功 只认第一次
+    self.finished = YES;
+    self.probeInFlight = NO;
+    gA2JITLastFailure = ok ? nil : (reason.length > 0 ? reason : @"未拿到 JIT");
+    // 本进程活着走到收尾 ⇒ 那次「重挂后自动继续」标记不再有用（重拉没发生 / 已经继续过了）。
+    // 不清会把「下次冷启动自动起游戏」留成一颗雷。
+    if (self.armedAutoLaunch) {
+        self.armedAutoLaunch = NO;
+        [NSUserDefaults.standardUserDefaults setBool:NO forKey:@"A2AutoLaunchAfterJIT"];
+        [NSUserDefaults.standardUserDefaults synchronize];
+    }
+
+    if (self.activeObserver != nil) {
+        [NSNotificationCenter.defaultCenter removeObserver:self.activeObserver];
+        self.activeObserver = nil;
+    }
+    if (self.alert != nil) {
+        UIAlertController *alert = self.alert;
+        self.alert = nil;
+        [alert dismissViewControllerAnimated:YES completion:nil];
+    }
+    if (self.bgTask != UIBackgroundTaskInvalid) {
+        [UIApplication.sharedApplication endBackgroundTask:self.bgTask];
+        self.bgTask = UIBackgroundTaskInvalid;
+    }
+
+    NSArray<void (^)(BOOL)> *blocks = [self.completions copy];
+    [self.completions removeAllObjects];
+    if (gA2JITRun == self) gA2JITRun = nil;
+
+    a2_log_criterion(@"[A2-JIT-ENABLER] %@（%@）",
+                     ok ? @"已拿到 JIT ⇒ 交回启动链" : @"没拿到 JIT ⇒ 回调失败，不建 VM", reason);
+    for (void (^block)(BOOL) in blocks) block(ok);
+}
+
+/// 「正在等待 JIT」弹窗：老 Air 也有这一个，否则用户不知道 App 在等什么。
+/// ★失败页不在这里★：本弹窗只解释「正在等」，拿不到 JIT 之后由上层出失败页。
+- (void)startWaitingWithBudget:(NSTimeInterval)budget tool:(A2JITEnablerTool)tool {
+    NSTimeInterval now = [NSDate date].timeIntervalSince1970;
+    self.deadline = now + budget;
+    self.lastTick = now;
+    self.lastHeartbeat = now;
+
+    NSString *message = nil;
+    if (tool == A2JITEnablerToolNone) {
+        // 已经跳过一次（防死循环）⇒ 不再拉起任何东西，只解释「在等什么」。
+        message = [NSString stringWithFormat:
+            @"本进程已经拉起过一次 JIT 使能器。\n请确认它已为 Air2 开启 JIT，然后回到 Air2 —— 拿到 JIT 会自动继续启动。\n（最多再等 %.0f 秒）",
+            budget];
+    } else {
+        message = [NSString stringWithFormat:
+            @"已让 %@ 为 Air2 开启 JIT。\n请按它的提示完成授权，然后回到 Air2 —— 拿到 JIT 会自动继续启动。\n（最多等 %.0f 秒）",
+            a2jit_tool_name(tool), budget];
+    }
+    UIViewController *top = UIWindow.mainWindow.rootViewController;
+    while (top.presentedViewController != nil) top = top.presentedViewController;
+    if (top != nil) {
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"正在等待 JIT"
+                                                                      message:message
+                                                               preferredStyle:UIAlertControllerStyleAlert];
+        __weak typeof(self) weakSelf = self;
+        [alert addAction:[UIAlertAction actionWithTitle:@"取消"
+                                                 style:UIAlertActionStyleCancel
+                                               handler:^(UIAlertAction *action) {
+            (void)action;
+            [weakSelf finishWithOK:NO reason:@"用户取消了等待"];
+        }]];
+        self.alert = alert;
+        [top presentViewController:alert animated:YES completion:nil];
+    } else {
+        // 没有窗口（例如从后台/headless 进入）⇒ 只落日志，等待照跑。
+        a2_log_criterion(@"[A2-JIT-ENABLER] 没有可展示的窗口 ⇒ 只等不提示");
+    }
+
+    // 后台断言：切到使能器之后 iOS 会挂起本进程，等待循环必须尽量活到回来那一刻
+    // （老 Air 同款 beginBackgroundTask；到点被回收也不算失败——回来时还有前台探测）。
+    __weak typeof(self) weakSelf = self;
+    self.bgTask = [UIApplication.sharedApplication
+        beginBackgroundTaskWithName:@"a2-jit-enable"
+                 expirationHandler:^{
+        A2JITEnablerRun *run = weakSelf;
+        if (run == nil) return;
+        a2_log_criterion(@"[A2-JIT-ENABLER] 后台断言到期（仍在等 JIT，回来后继续判据）");
+        if (run.bgTask != UIBackgroundTaskInvalid) {
+            [UIApplication.sharedApplication endBackgroundTask:run.bgTask];
+            run.bgTask = UIBackgroundTaskInvalid;
+        }
+    }];
+
+    // 回到前台 = 用户从使能器切换回来 ⇒ 立刻补一发判据（不必等下一个 0.5s 节拍）。
+    self.activeObserver = [NSNotificationCenter.defaultCenter
+        addObserverForName:UIApplicationDidBecomeActiveNotification
+                    object:nil
+                     queue:[NSOperationQueue mainQueue]
+                usingBlock:^(NSNotification *note) {
+        (void)note;
+        A2JITEnablerRun *run = weakSelf;
+        if (run == nil || run.finished) return;
+        a2_log_criterion(@"[A2-JIT-ENABLER] 已回到前台 ⇒ 立刻复查 JIT");
+        [run tick];
+    }];
+
+    [self scheduleNextTick];
+}
+
+- (void)scheduleNextTick {
+    __weak typeof(self) weakSelf = self;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kA2JITPollInterval * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        [weakSelf tick];
+    });
+}
+
+- (void)tick {
+    if (self.finished) return;
+
+    NSTimeInterval now = [NSDate date].timeIntervalSince1970;
+    // ★挂起间隙豁免★：用户进 StikDebug 一趟，进程可能被挂起几十秒；墙钟不能白吃预算。
+    NSTimeInterval gap = now - self.lastTick;
+    if (gap > 2.0) {
+        self.deadline += gap;
+        a2_log_criterion(@"[A2-JIT-ENABLER] 挂起间隙 %.0fs 不计入等待预算", gap);
+    }
+    self.lastTick = now;
+
+    if (now >= self.deadline) {
+        NSString *why = self.lastWhy.length > 0 ? self.lastWhy : @"判据始终未通过";
+        [self finishWithOK:NO reason:[NSString stringWithFormat:@"等待 JIT 超时；最后一次判据：%@", why]];
+        return;
+    }
+    if (now - self.lastHeartbeat >= kA2JITHeartbeat) {
+        self.lastHeartbeat = now;
+        a2_log_criterion(@"[A2-JIT-ENABLER] 仍在等待 JIT（剩余 %.0fs）", self.deadline - now);
+    }
+    if (self.probeInFlight) {   // 上一发还没回来（brk 最坏 2.5s）⇒ 不叠加
+        [self scheduleNextTick];
+        return;
+    }
+
+    self.probeInFlight = YES;
+    __weak typeof(self) weakSelf = self;
+    // 判据要发 brk #0x69（可能阻塞）⇒ 必须在后台队列；结果回主线程收尾。
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSString *why = nil;
+        BOOL ok = a2jit_ready_now(&why);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            A2JITEnablerRun *run = weakSelf;
+            if (run == nil || run.finished) return;
+            run.probeInFlight = NO;
+            if (ok) {
+                [run finishWithOK:YES reason:(why ?: @"判据通过")];
+                return;
+            }
+            run.lastWhy = why;
+            [run scheduleNextTick];
+        });
+    });
+}
+
+/// 拉起使能器（必须在主线程）。失败 ⇒ 立刻回调 NO（不白等 120s）。
+- (void)openEnablerURL:(NSURL *)url tool:(A2JITEnablerTool)tool {
+    a2_log_criterion(@"[A2-JIT-ENABLER] 拉起使能器 %@：%@", a2jit_tool_name(tool), url.absoluteString);
+    // ★只有 stikjit 会重拉本进程★：新进程里没有这次等待的上下文，于是置「重挂后自动继续」
+    //   标记，由读点（Air2/App/A2AppDelegate.m）在下次 didFinishLaunching 认出并自动起游戏。
+    //   其余使能器（stikdebug / apple-magnifier / sidestore）都在本进程内 attach，
+    //   不需要这个标记（也不需要用户再点一次——本模块的等待就活在本进程里）。
+    if (tool == A2JITEnablerToolStikJIT) {
+        self.armedAutoLaunch = YES;
+        [NSUserDefaults.standardUserDefaults setBool:YES forKey:@"A2AutoLaunchAfterJIT"];
+        [NSUserDefaults.standardUserDefaults synchronize];
+    }
+    __weak typeof(self) weakSelf = self;
+    [UIApplication.sharedApplication openURL:url
+                                     options:@{}
+                           completionHandler:^(BOOL success) {
+        if (success) return;
+        A2JITEnablerRun *run = weakSelf;
+        if (run == nil || run.finished) return;
+        a2_log_criterion(@"[A2-JIT-ENABLER] %@ 打不开（scheme 未处理 / 目标 App 未安装）",
+                         a2jit_tool_name(tool));
+        [run finishWithOK:NO
+                   reason:[NSString stringWithFormat:
+                           @"%@ 打不开（未安装，或它的 URL scheme 未被处理）", a2jit_tool_name(tool)]];
+    }];
+}
+
+@end
+
+#pragma mark - 对外接口
+
+@implementation A2JITEnabler
+
++ (BOOL)isJITReadyNow {
+    NSString *why = nil;
+    BOOL ok = a2jit_ready_now(&why);
+    a2_log_criterion(@"[A2-JIT-ENABLER] 判据 ready=%d：%@（ppid=%d）",
+                     (int)ok, why ?: @"—", getppid());
+    return ok;
+}
+
++ (void)ensureJITThen:(void (^)(BOOL))done {
+    if (done == nil) return;
+    // 要 canOpenURL / 弹窗 / beginBackgroundTask ⇒ 一律落主线程语义。
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self ensureJITThen:done];
+        });
+        return;
+    }
+
+    // 已在申请中 ⇒ 挂到同一次等待上（同一个 tap 重复触发、或 UI 重入都不会二次跳转）。
+    if (gA2JITRun != nil) {
+        a2_log_criterion(@"[A2-JIT-ENABLER] 已有申请在途 ⇒ 本次回调挂到同一次等待");
+        [gA2JITRun addCompletion:done];
+        return;
+    }
+
+    A2JITEnablerRun *run = [A2JITEnablerRun new];
+    [run addCompletion:done];
+    gA2JITRun = run;
+
+    // ① 判据再确认（调用方刚问过；这里防竞态：例如刚从使能器切回的瞬间判据已翻转）。
+    NSString *why = nil;
+    if (a2jit_ready_now(&why)) {
+        [run finishWithOK:YES reason:(why ?: @"判据通过")];
+        return;
+    }
+    a2_log_criterion(@"[A2-JIT-ENABLER] 未就绪：%@（ppid=%d jumped=%d）",
+                     why ?: @"—", getppid(), (int)gA2JITJumpedThisProcess);
+
+    // ② 申请：★同一进程只跳一次★（铁律 ②）。已跳过的第二轮只做短等待：
+    //    调试器可能正在收尾，再跳一次就会「跳转 ↔ 重拉」无限循环。
+    BOOL alreadyJumped = gA2JITJumpedThisProcess;
+    NSTimeInterval budget = alreadyJumped ? kA2JITRepeatWaitBudget : kA2JITWaitBudget;
+
+    if (alreadyJumped) {
+        a2_log_criterion(@"[A2-JIT-ENABLER] 本进程已跳转过一次 ⇒ 不再跳转，只短等待 %.0fs", budget);
+        [run startWaitingWithBudget:budget tool:A2JITEnablerToolNone];
+        return;
+    }
+
+    NSURL *url = nil;
+    A2JITEnablerTool tool = a2jit_pick_enabler(&url);
+    if (tool == A2JITEnablerToolNone) {
+        // 一个都打不开：不白等 120s（老 Air 的 MissingTool 分支同款），立刻给可读原因。
+        [run finishWithOK:NO
+                   reason:@"没有可用的 JIT 使能器（StikDebug / TrollStore / SideStore 都打不开）。"
+                           "请安装 StikDebug 并为 Air2 开启 JIT 后重试"];
+        return;
+    }
+
+    gA2JITJumpedThisProcess = YES;
+    [run startWaitingWithBudget:budget tool:tool];
+    // 弹窗先提交，再拉起（openURL 会把我们送去后台；顺序反了弹窗可能根本没显示）。
+    __weak typeof(run) weakRun = run;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        A2JITEnablerRun *strongRun = weakRun;
+        if (strongRun == nil || strongRun.finished) return;
+        [strongRun openEnablerURL:url tool:tool];
+    });
+}
+
++ (NSString *)lastFailureReason {
+    return gA2JITLastFailure;
+}
+
+@end
