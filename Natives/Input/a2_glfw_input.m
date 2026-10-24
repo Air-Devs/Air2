@@ -423,7 +423,11 @@ static const NSTimeInterval kA2HoldDelay = 0.25;
     (void) event;
     UITouch *t = self.a2PrimaryTouch;
     if (t != nil && [touches containsObject:t]) {
-        [self postCursor:[t locationInView:self]];
+        // ★松手不再发绝对坐标★ 抓取模式下绝对坐标会把视角瞬移回去（真机：松手回弹）
+        extern int a2_glfw_input_is_grabbing(void);
+        if (!a2_glfw_input_is_grabbing()) {
+            [self postCursor:[t locationInView:self]];
+        }
         self.a2PrimaryTouch = nil;
     }
     self.activeTouches -= (NSInteger) touches.count;
@@ -437,7 +441,8 @@ static const NSTimeInterval kA2HoldDelay = 0.25;
         if (!_a2Moved && !_a2LeftPressed &&
             (CACurrentMediaTime() - _a2DownTime) < kA2HoldDelay) {
             CGPoint up = [t locationInView:self];
-            [self postCursor:up];
+            extern int a2_glfw_input_is_grabbing(void);
+            if (!a2_glfw_input_is_grabbing()) [self postCursor:up];
             [self postButton:A2_GLFW_MOUSE_BUTTON_LEFT action:A2_GLFW_PRESS mods:0];
             [self postButton:A2_GLFW_MOUSE_BUTTON_LEFT action:A2_GLFW_RELEASE mods:0];
             a2_log_f(@"[A2-GLFW] 轻点 ⇒ 合成一次左键点击 (%.0f,%.0f)", up.x, up.y);
