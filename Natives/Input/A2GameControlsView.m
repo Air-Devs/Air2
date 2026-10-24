@@ -187,6 +187,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     __weak UIView *_selectedControl;
     NSMutableDictionary<NSString *, NSString *> *_customTitles;  // 自定义键 id → 显示名
     NSMutableSet<NSString *> *_removedIds;                        // 被删除的内置键 id
+    NSString *_pendingCid;                                        // 正在等待选键的控件 id
     NSMutableDictionary<NSString *, NSNumber *> *_bindings;   // 控件id -> GLFW 键码
     NSMutableDictionary<NSString *, NSValue *> *_restFrames;  // 编辑前位置（取消用）
 
@@ -1006,32 +1007,140 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 }
 
 - (void)a2_presentKeyPickerFor:(NSString *)cid {
-    NSArray<NSArray *> *groups = @[
-        @[ @"W", @87 ], @[ @"A", @65 ], @[ @"S", @83 ], @[ @"D", @68 ],
-        @[ @"空格", @32 ], @[ @"Shift", @340 ], @[ @"Ctrl", @341 ],
-        @[ @"E 背包", @69 ], @[ @"Q 丢弃", @81 ], @[ @"T 聊天", @84 ],
-        @[ @"Esc", @256 ], @[ @"Enter", @257 ], @[ @"F1", @290 ], @[ @"F3", @292 ], @[ @"F5", @294 ],
-        @[ @"鼠标左键", @(-1) ], @[ @"鼠标右键", @(-2) ],
+    UIViewController *top = self.a2_topViewController;
+    if (top == nil || cid == nil) return;
+    _pendingCid = cid;
+
+    // 遮罩
+    UIView *mask = [[UIView alloc] initWithFrame:top.view.bounds];
+    mask.tag = 0xA2KEYPAD;
+    mask.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    mask.backgroundColor = [UIColor colorWithWhite:0 alpha:0.62];
+    [top.view addSubview:mask];
+
+    UITapGestureRecognizer *outside = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(a2_closeKeyPad)];
+    [mask addGestureRecognizer:outside];
+
+    // 面板
+    UIView *panel = [[UIView alloc] initWithFrame:CGRectZero];
+    panel.translatesAutoresizingMaskIntoConstraints = NO;
+    panel.backgroundColor = [UIColor colorWithWhite:0.12 alpha:0.98];
+    panel.layer.cornerRadius = 20;
+    panel.layer.cornerCurve = kCACornerCurveContinuous;
+    panel.layer.borderWidth = 1;
+    panel.layer.borderColor = [UIColor colorWithWhite:1 alpha:0.14].CGColor;
+    [mask addSubview:panel];
+    // 面板内部的点击不要被"点遮罩关闭"吃掉（只点面板外的空白才关闭）
+    UITapGestureRecognizer *inner = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(a2_keyPadInnerTap:)];
+    inner.cancelsTouchesInView = NO;
+    [panel addGestureRecognizer:inner];
+    [NSLayoutConstraint activateConstraints:@[
+        [panel.centerXAnchor constraintEqualToAnchor:mask.centerXAnchor],
+        [panel.centerYAnchor constraintEqualToAnchor:mask.centerYAnchor],
+        [panel.widthAnchor constraintEqualToAnchor:mask.widthAnchor multiplier:0.92],
+        [panel.heightAnchor constraintLessThanOrEqualToAnchor:mask.heightAnchor multiplier:0.86],
+    ]];
+
+    UILabel *tip = [[UILabel alloc] initWithFrame:CGRectZero];
+    tip.translatesAutoresizingMaskIntoConstraints = NO;
+    tip.text = @"选择要绑定的按键";
+    tip.textColor = [UIColor colorWithWhite:1 alpha:0.92];
+    tip.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
+    tip.textAlignment = NSTextAlignmentCenter;
+    [panel addSubview:tip];
+
+    UIButton *close = [UIButton buttonWithType:UIButtonTypeSystem];
+    close.translatesAutoresizingMaskIntoConstraints = NO;
+    [close setTitle:@"完成" forState:UIControlStateNormal];
+    [close setTitleColor:[UIColor colorWithRed:0.42 green:0.65 blue:1 alpha:1] forState:UIControlStateNormal];
+    close.titleLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
+    [close addTarget:self action:@selector(a2_closeKeyPad) forControlEvents:UIControlEventTouchUpInside];
+    [panel addSubview:close];
+
+    UIScrollView *scroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    scroll.showsVerticalScrollIndicator = NO;
+    [panel addSubview:scroll];
+
+    UIStackView *col = [[UIStackView alloc] initWithFrame:CGRectZero];
+    col.translatesAutoresizingMaskIntoConstraints = NO;
+    col.axis = UILayoutConstraintAxisVertical;
+    col.spacing = 8;
+    [scroll addSubview:col];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [tip.topAnchor constraintEqualToAnchor:panel.topAnchor constant:16],
+        [tip.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:16],
+        [close.centerYAnchor constraintEqualToAnchor:tip.centerYAnchor],
+        [close.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-16],
+        [scroll.topAnchor constraintEqualToAnchor:tip.bottomAnchor constant:12],
+        [scroll.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:14],
+        [scroll.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-14],
+        [scroll.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-14],
+        [col.topAnchor constraintEqualToAnchor:scroll.topAnchor],
+        [col.leadingAnchor constraintEqualToAnchor:scroll.leadingAnchor],
+        [col.trailingAnchor constraintEqualToAnchor:scroll.trailingAnchor],
+        [col.bottomAnchor constraintEqualToAnchor:scroll.bottomAnchor],
+        [col.widthAnchor constraintEqualToAnchor:scroll.widthAnchor],
+    ]];
+
+    // ★全键位表★ 每行 (显示名, GLFW 键码)
+    NSArray<NSArray *> *rows = @[
+        @[ @[@"1",@49], @[@"2",@50], @[@"3",@51], @[@"4",@52], @[@"5",@53],
+           @[@"6",@54], @[@"7",@55], @[@"8",@56], @[@"9",@57], @[@"0",@48] ],
+        @[ @[@"Q",@81], @[@"W",@87], @[@"E",@69], @[@"R",@82], @[@"T",@84],
+           @[@"Y",@89], @[@"U",@85], @[@"I",@73], @[@"O",@79], @[@"P",@80] ],
+        @[ @[@"A",@65], @[@"S",@83], @[@"D",@68], @[@"F",@70], @[@"G",@71],
+           @[@"H",@72], @[@"J",@74], @[@"K",@75], @[@"L",@76] ],
+        @[ @[@"Z",@90], @[@"X",@88], @[@"C",@67], @[@"V",@86], @[@"B",@66],
+           @[@"N",@78], @[@"M",@77], @[@"⌫",@259] ],
+        @[ @[@"空格",@32], @[@"Esc",@256], @[@"Enter",@257], @[@"Tab",@258],
+           @[@"Shift",@340], @[@"Ctrl",@341], @[@"Alt",@342] ],
+        @[ @[@"↑",@265], @[@"↓",@264], @[@"←",@263], @[@"→",@262],
+           @[@"鼠标左",@(-1)], @[@"鼠标右",@(-2)] ],
+        @[ @[@"F1",@290], @[@"F2",@291], @[@"F3",@292], @[@"F4",@293],
+           @[@"F5",@294], @[@"F6",@295] ],
+        @[ @[@"F7",@296], @[@"F8",@297], @[@"F9",@298], @[@"F10",@299],
+           @[@"F11",@300], @[@"F12",@301] ],
     ];
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"绑定按键"
-                                                                  message:[NSString stringWithFormat:@"控件：%@", cid]
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
-    __weak typeof(self) weakSelf = self;
-    for (NSArray *g in groups) {
-        [sheet addAction:[UIAlertAction actionWithTitle:g[0] style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
-            int code = [g[1] intValue];
-            if (code == -1)      { [weakSelf a2_setKey:-1 forControl:cid]; }
-            else if (code == -2) { [weakSelf a2_setKey:-2 forControl:cid]; }
-            else                 { [weakSelf a2_setKey:code forControl:cid]; }
-        }]];
+
+    for (NSArray *row in rows) {
+        UIStackView *line = [[UIStackView alloc] initWithFrame:CGRectZero];
+        line.axis = UILayoutConstraintAxisHorizontal;
+        line.spacing = 6;
+        line.distribution = UIStackViewDistributionFillEqually;
+        for (NSArray *kv in row) {
+            UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
+            [b setTitle:kv[0] forState:UIControlStateNormal];
+            [b setTitleColor:[UIColor colorWithWhite:1 alpha:0.95] forState:UIControlStateNormal];
+            b.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightMedium];
+            b.backgroundColor = [UIColor colorWithWhite:1 alpha:0.12];
+            b.layer.cornerRadius = 9;
+            b.layer.cornerCurve = kCACornerCurveContinuous;
+            b.tag = [kv[1] integerValue];
+            [b addTarget:self action:@selector(a2_keyPadTapped:) forControlEvents:UIControlEventTouchUpInside];
+            [b.heightAnchor constraintEqualToConstant:42].active = YES;
+            [line addArrangedSubview:b];
+        }
+        [col addArrangedSubview:line];
     }
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
-        sheet.popoverPresentationController.sourceView = self;
-        sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.bounds),
-                                                                   CGRectGetMidY(self.bounds), 1, 1);
-    }
-    [self.a2_topViewController presentViewController:sheet animated:YES completion:nil];
+
+    a2_log_f(@"[A2-CONTROLS] 打开键盘面板：%@", cid);
+}
+
+- (void)a2_keyPadInnerTap:(UITapGestureRecognizer *)g { /* 吞掉，避免关面板 */ }
+
+- (void)a2_keyPadTapped:(UIButton *)b {
+    if (_pendingCid.length == 0) return;
+    [self a2_setKey:(int)b.tag forControl:_pendingCid];
+    [self a2_closeKeyPad];
+}
+
+- (void)a2_closeKeyPad {
+    UIViewController *top = self.a2_topViewController;
+    UIView *mask = [top.view viewWithTag:0xA2KEYPAD];
+    [mask removeFromSuperview];
+    _pendingCid = nil;
 }
 
 /// 按绑定发一次「按下+抬起」（-1/-2 走鼠标左右键）。
