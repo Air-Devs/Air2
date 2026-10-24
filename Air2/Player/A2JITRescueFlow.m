@@ -108,6 +108,15 @@ static id gObserver = nil;
     // ★等待 JIT（老 Air 的 invokeAfterJITEnabled 口径）★
     //   回来后不能只查一次：StikDebug/TrollStore 给权限有延迟，且调试器可能稍后才 attach。
     //   每 0.5s 查一次，最多 25s；期间不建 VM（没 JIT 建 VM 会直接崩）。
+    // ★后台任务★ 老 Air 用 beginBackgroundTask 保证切到使能器再回来时等待不被打断
+    __block UIBackgroundTaskIdentifier bgTask =
+        [UIApplication.sharedApplication beginBackgroundTaskWithName:@"a2-jit-wait" expirationHandler:^{
+        if (bgTask != UIBackgroundTaskIdentifierInvalid) {
+            [UIApplication.sharedApplication endBackgroundTask:bgTask];
+            bgTask = UIBackgroundTaskIdentifierInvalid;
+        }
+    }];
+
     a2_jit_wait_alert_show();
     __block NSInteger waited = 0;
     void (^poll)(void) = ^{
@@ -121,8 +130,8 @@ static id gObserver = nil;
             if (cb) cb(YES);
             return;
         }
-        if (waited >= 50) {   // 25s
-            [A2Log criterion:@"[A2-JIT-RESCUE] 等待 25s 仍未拿到 JIT ⇒ 交给用户"];
+        if (waited >= 240) {   // 120s（对齐老 Air）
+            [A2Log criterion:@"[A2-JIT-RESCUE] 等待 120s 仍未拿到 JIT ⇒ 交给用户"];
             if (gObserver != nil) { [NSNotificationCenter.defaultCenter removeObserver:gObserver]; gObserver = nil; }
             void (^cb)(BOOL) = gPendingCompletion; gPendingCompletion = nil;
             a2_jit_wait_alert_hide();
