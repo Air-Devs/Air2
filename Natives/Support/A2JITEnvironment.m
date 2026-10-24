@@ -454,12 +454,22 @@ A2JITExecProbeResult a2_jit_exec_probe_anonymous(void) {
 // ============================================================================
 
 static void *gA2JITVerifiedRegion = NULL;
+static size_t gA2JITDeliveredBytes = 0;   // 调试器实际交付的 region 字节数（vm_region_64 读到的 size）
 static int gA2JITBrkCount = 0;   // ★排查用★ 本进程发了几次 brk #0x69
 static BOOL   gA2JITVerified = NO;
 static NSTimeInterval gA2JITLastVerifyAttempt = 0;
 static int    gA2JITVerifyAttempts = 0;
 static A2JITRegionVerdict gA2JITRegionVerdict = A2JITRegionVerdictUnknown;
 static NSString *gA2JITRegionEvidence = nil;
+
+/// 期望的 JIT 区大小（与 brk #0x69 实际请求同口径）：偏好键 A2JITRegionMB 可覆盖（1~256），
+/// 未设 ⇒ 64MB（老 Air 的档位）。detach 判据、日志、实际请求三处共用这一个函数，避免口径漂移。
+static size_t a2_jit_expected_region_bytes(void) {
+    NSInteger mb = [NSUserDefaults.standardUserDefaults integerForKey:@"A2JITRegionMB"];
+    if (mb <= 0) mb = 64;
+    if (mb > 256) mb = 256;
+    return (size_t)mb * 1024u * 1024u;
+}
 
 // [JIT-HANG] 全局 in-flight 守卫：同一时刻只允许一发 brk 在途。
 static os_unfair_lock gA2JITBrkLock = OS_UNFAIR_LOCK_INIT;
@@ -516,12 +526,14 @@ static void *a2_jit_brk69_bounded(NSTimeInterval deadlineSec, const char *why) {
     //   prepare，讨大区就会变成几千条调试命令）。JVM 的大 code cache 由 libjvm 的
     //   MirrorMappedCodeCache 自己走映射路径。
     //   ⇒ 默认只讨一页；确需大区时才用 A2JITRegionMB（会慢，且仅供实验）。
+    //   ⇒ 现在回到★64MB★（与老 Air 一致）。真机证据(lastlog-63)：
+    //     libjvm 自己的 [JIT26] Requesting 16 MB for JIT mapping —— 它按 code cache 大小
+    //     去讨 JIT 区，而我们 A2LaunchPlan 把 ReservedCodeCacheSize 钳到了 16m ⇒ 它只讨 16MB。
+    //     code cache 默认恢复 64m 后，libjvm 才会讨 64MB。
+    //   ★降级保留★：调试器只交付一小块（例如一页 16KB）时仍然接受（判据见下方 ③ 的 rsz>0），
+    //     绝不再把「小」当失败 —— 那是 StikDebug 侧能力差异，不是我们请求写错。
     NSInteger a2jitMB = [NSUserDefaults.standardUserDefaults integerForKey:@"A2JITRegionMB"];
-    size_t a2jitWantBytes = (a2jitMB > 0)
-        ? (size_t)MIN(a2jitMB, (NSInteger)256) * 1024u * 1024u
-        : (size_t)64 * 1024u * 1024u;   // ★真机证据(lastlog-7)：只讨一页时交付区=16384，
-                                        // JVM 把 code cache 镜射进去后卡在 String.<clinit>；
-                                        // 改为默认讨 64MB（与 ReservedCodeCacheSize=16m 留足余量）
+    size_t a2jitWantBytes = a2_jit_expected_region_bytes();
     a2_jit_log("[A2JIT] 请求 JIT 区大小=%s：%zu 字节（键 A2JITRegionMB 未设 ⇒ 默认 64MB）",
                a2jitMB > 0 ? "自定义" : "默认", a2jitWantBytes);
     // 2026-10-18：不再自建「可执行区」（cmd4/prebless 实验已删除，真机会闪退）。
@@ -660,8 +672,15 @@ a2_verify_have_region:
     a2_jit_log("[A2JIT] verdict=usable(max=%s,mapped=%d,size=%llu,proof=%ld) -- 非哨兵+已映射+size>0+max含X",
                maxStr, mapped, rsz, (long)proof);
     gA2JITVerifiedRegion = r;   // 留驻（只一页），供后续复用/诊断
+    gA2JITDeliveredBytes = (size_t)rsz;
     gA2JITVerified = YES;
     gA2JITRegionVerdict = A2JITRegionVerdictUsable;
+    // ★验收用一行★ 实际拿到的 region 地址与大小（便于真机核对「是不是 64MB」）
+    a2_jit_log("[A2JIT] region=%p size=%zu (%.2f MB) expected=%zu (%.2f MB) enough=%d",
+               r, (size_t)rsz, (double)rsz / (1024.0 * 1024.0),
+               a2_jit_expected_region_bytes(),
+               (double)a2_jit_expected_region_bytes() / (1024.0 * 1024.0),
+               ((size_t)rsz >= a2_jit_expected_region_bytes()) ? 1 : 0);
     a2_jit_log("[A2JIT] verified: JIT region @%p (%zu bytes) usable as JVM code cache "
                "(cur=0x%x max=0x%x max含W=%d max含X=%d 自证proof=%ld 仅参考; why=%s)",
                r, len, cur, maxp, maxHasW, maxHasX, (long)proof, why);
@@ -765,8 +784,21 @@ static int gA2JITEnsureKickInflight = 0;
             if (whyOut) *whyOut = gA2JITRegionEvidence ?: @"verified JIT region (brk #0x69 serviced)";
             // ★照老 Air★ 首个 brk 后让调试器脱离（它日志里有 SetDetachAfterFirstBr(1) serviced）。
             //   真机观察：不这么做，进程会在 ~8 秒被外部 SIGKILL 且无崩溃报告。
-            BOOL detach = a2_jit_set_detach_after_first_br(YES);
-            a2_jit_log("[A2JIT] SetDetachAfterFirstBr(1) %s", detach ? "serviced" : "NOT serviced");
+            // ★时机修正(2026-10-24)★：只有★真拿到可用大区★才脱离 ——
+            //   region != NULL 且 交付 size >= 期望(A2JITRegionMB，默认 64MB)。
+            //   拿不到（NULL / 只交付一页）时★不发★ detach，让调试器保持 attach 继续服务
+            //   后续的 brk #0x69（否则一脱离就没人应答，后续 JIT 请求全落空、只等 8 秒后被杀）。
+            size_t want = a2_jit_expected_region_bytes();
+            size_t got  = gA2JITDeliveredBytes;
+            if (gA2JITVerifiedRegion != NULL && got >= want) {
+                BOOL detach = a2_jit_set_detach_after_first_br(YES);
+                a2_jit_log("[A2JIT] SetDetachAfterFirstBr(1) %s (region=%p size=%zu>=expected=%zu)",
+                           detach ? "serviced" : "NOT serviced", gA2JITVerifiedRegion, got, want);
+            } else {
+                a2_jit_log("[A2JIT] 不发 SetDetachAfterFirstBr：region=%p size=%zu < expected=%zu "
+                           "⇒ 让调试器保持 attach（拿到期望大小后才脱离）",
+                           gA2JITVerifiedRegion, got, want);
+            }
             return YES;
         }
         break;   // brk 明确未被服务 ⇒ 不再叠加（避免多个卡死的 brk 线程）
@@ -813,6 +845,14 @@ static int gA2JITEnsureKickInflight = 0;
 
 + (void *)verifiedRegion {
     return gA2JITVerifiedRegion;
+}
+
++ (size_t)verifiedRegionBytes {
+    return gA2JITDeliveredBytes;
+}
+
++ (size_t)expectedRegionBytes {
+    return a2_jit_expected_region_bytes();
 }
 
 + (BOOL)needsDebuggerMapping {

@@ -108,6 +108,13 @@ typedef NS_ENUM(NSInteger, A2JITExecProbeResult) {
 /// 已通过验证的 JIT 区指针（未验证过返回 NULL）。供诊断 / 复用。
 + (void *_Nullable)verifiedRegion;
 
+/// 调试器实际交付的 region 字节数（`vm_region_64` 读到的 size；未验证过返回 0）。
+/// 与 `verifiedRegion` 配对使用 —— 真机验收要能一眼看出「拿到的是 64MB 还是一页」。
++ (size_t)verifiedRegionBytes;
+
+/// 期望的 JIT 区字节数（偏好键 `A2JITRegionMB` 覆盖，未设 ⇒ 64MB）。
++ (size_t)expectedRegionBytes;
+
 /// 最近一次区域取证摘要（可读；无探测记录返回 nil）。
 + (NSString *_Nullable)regionEvidence;
 

@@ -171,7 +171,9 @@ int main(int argc, const char *argv[]) {
             //   且没有 MirrorMappedCodeCache（Java 8 的 libjvm 不认，老线 ISSUE-FIX #70）。
             @"-XX:+UnlockExperimentalVMOptions",
             @"-XX:+DisablePrimordialThreadGuardPages",
-            @"-XX:ReservedCodeCacheSize=16m",
+            // ★2026-10-24★ code cache 默认回到 64m：libjvm 的「[JIT26] Requesting N MB for JIT
+            //   mapping」跟随 code cache 大小 ⇒ 16m 会让它只讨 16MB JIT 区（与老 Air 的 64MB 不符）。
+            @"-XX:ReservedCodeCacheSize=64m",
             @"-XX:InitialCodeCacheSize=2m",
             @"-XX:CodeCacheExpansionSize=1m",
             @"-Xlog:init=debug:stderr",
@@ -196,7 +198,7 @@ int main(int argc, const char *argv[]) {
             @"-XX:MaxGCPauseMillis=50", @"-XX:+UseStringDeduplication",
             // ★JIT/代码缓存组★（Unlock 已在 G1 组里 ⇒ 这里不重复）+ Java≥17 的镜像映射
             @"-XX:+DisablePrimordialThreadGuardPages",
-            @"-XX:ReservedCodeCacheSize=16m",
+            @"-XX:ReservedCodeCacheSize=64m",
             @"-XX:InitialCodeCacheSize=2m",
             @"-XX:CodeCacheExpansionSize=1m",
             @"-XX:+MirrorMappedCodeCache",

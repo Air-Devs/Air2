@@ -124,9 +124,14 @@ static BOOL a2jit_ready_now(NSString *_Nullable *_Nullable why) {
     NSString *envWhy = nil;
     BOOL ensured = [A2JITEnvironment ensureVerifiedWithinBudget:kA2JITVerifySlice reason:&envWhy];
     void *region = [A2JITEnvironment verifiedRegion];
+    size_t got = [A2JITEnvironment verifiedRegionBytes];
+    size_t want = [A2JITEnvironment expectedRegionBytes];
     if (region != NULL) {
+        a2_jit_log("[A2JIT] region=%p size=%zu (%.2f MB) expected=%zu (%.2f MB) enough=%d",
+                   region, got, (double)got / (1024.0 * 1024.0),
+                   want, (double)want / (1024.0 * 1024.0), (got >= want) ? 1 : 0);
         if (why) *why = [NSString stringWithFormat:
-            @"拿到可写 JIT 区 %p（brk #0x69 已被服务）", region];
+            @"拿到可写 JIT 区 %p（size=%zu 字节，期望 %zu；brk #0x69 已被服务）", region, got, want];
         return YES;
     }
 
