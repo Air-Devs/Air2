@@ -398,8 +398,17 @@ static const NSTimeInterval kA2HoldDelay = 0.25;
     if (a2_glfw_input_is_grabbing()) {
         // ★抓取模式(游戏内)★ 只送【两次采样之差】，绝对坐标只用于判定"点了什么"。
         // 否则手指一落下光标瞬移到触点 ⇒ MC 收到巨大位移 ⇒ 视角锁死/乱飞。
-        CGFloat dx = p.x - self.a2LastTouch.x;
-        CGFloat dy = p.y - self.a2LastTouch.y;
+        // ★视角灵敏度★ 设置键 A2ViewSensitivity(0.3~3.0，默认 1.0；iPad 默认再放大 25%)
+        //   只作用于"抓取模式"的位移增量，不改动其它输入。
+        static double sSens = -1;
+        if (sSens < 0) {
+            id v = [NSUserDefaults.standardUserDefaults objectForKey:@"A2ViewSensitivity"];
+            double d = (v != nil) ? [NSUserDefaults.standardUserDefaults doubleForKey:@"A2ViewSensitivity"]
+                                  : ((UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) ? 1.25 : 1.0);
+            sSens = (d >= 0.3 && d <= 3.0) ? d : 1.0;
+        }
+        CGFloat dx = (p.x - self.a2LastTouch.x) * sSens;
+        CGFloat dy = (p.y - self.a2LastTouch.y) * sSens;
         self.a2VirtualCursor = CGPointMake(self.a2VirtualCursor.x + dx,
                                            self.a2VirtualCursor.y + dy);
         self.a2LastTouch = p;
