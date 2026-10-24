@@ -41,6 +41,7 @@
 //
 
 #import "A2DownloadEngine.h"
+#import "A2RateLimiter.h"
 #import "A2Logger.h"
 #import <CommonCrypto/CommonDigest.h>
 #import <zlib.h>
