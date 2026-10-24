@@ -311,7 +311,35 @@ A2JITRegionProof a2_jit_prove_region_rwx(void *addr, size_t len,
 //   ★这是「原生 JIT 真能力」的可信判据★：mprotect(PROT_EXEC) 成功 ≠ 该页真的可执行
 //   （mprotect 只过权限这层；真正的判定在【取指】时由内核 + PPL/code-signing 复核）。
 // ============================================================================
+/// ★执行式探针的准入门槛★（2026-10-24 真机证据）
+///   iPad7,11 / iOS 15.4.1（无 TrollStore JIT）：探针 mmap+mprotect 都成功，
+///   但一旦真的取指 ⇒ 内核以 SIGKILL - CODESIGNING 直接杀进程（连 SIGBUS 都抓不到，
+///   崩溃报告里是 VM_ALLOCATE r-x/rwx 16K + pc 落在该页）。
+///   ⇒ 只有在「确实具备 JIT 权限」时才允许执行；否则一律返回"未执行"，
+///     由调用方按 Unknown/不可用处理（不崩、不误判为可用）。
+static BOOL a2_process_has_jit_permission(void) {
+    // 只有调试器连通(CS_DEBUGGED)或显式开关时才允许做"执行"式自证。
+    //   · 侧载/巨魔机没装调试器时，JIT 面本身由 brk/内核路径判定，不需要这一跳；
+    //   · 需要人工复验时把 A2AllowJITExecProbe 置 1。
+    id v = [NSUserDefaults.standardUserDefaults objectForKey:@"A2AllowJITExecProbe"];
+    BOOL forced = (v != nil) && [NSUserDefaults.standardUserDefaults boolForKey:@"A2AllowJITExecProbe"];
+    if (forced) return YES;
+
+    // CS_DEBUGGED = 0x00000100（内核 csops 状态位）
+    uint32_t flags = 0;
+    extern int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
+    if (csops(getpid(), 0 /* CS_OPS_STATUS */, &flags, sizeof(flags)) == 0) {
+        if ((flags & 0x00000100u) != 0) return YES;
+    }
+    return NO;
+}
+
 A2JITExecProbeResult a2_jit_exec_probe_anonymous(void) {
+    if (!a2_process_has_jit_permission()) {
+        a2_jit_log("[A2JIT] exec-probe 跳过：本进程没有 JIT 权限（无 CS_DEBUGGED）"
+                   "——执行该页会被内核 SIGKILL - CODESIGNING（真机已见）");
+        return A2JITExecProbeMprotectFailed;   // 语义 = 拿不到可执行，且不冒险
+    }
     size_t pg = (size_t)getpagesize();
     // 与 HotSpot code cache 同型的映射：匿名 + 私有 + 先 RW。
     void *p = mmap(NULL, pg, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
