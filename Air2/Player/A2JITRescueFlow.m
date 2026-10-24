@@ -76,8 +76,7 @@ static id gObserver = nil;
         NSLog(@"[A2-JIT-RESCUE] 权限位=false ⇒ 未就绪(去申请)");
         return NO;
     }
-    extern BOOL a2_jit_device_needs_debug_mapping(void);
-    if (!a2_jit_device_needs_debug_mapping()) return YES;
+    if (!a2_jit_device_needs_debug_mapping_public()) return YES;
 
     NSString *why = nil;
     BOOL verified = [A2JITEnvironment ensureVerifiedWithinBudget:2.5 reason:&why];

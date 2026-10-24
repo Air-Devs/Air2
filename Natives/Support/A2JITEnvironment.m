@@ -815,3 +815,9 @@ static int gA2JITEnsureKickInflight = 0;
 // force-sync 20261018T0945
 
 // force-sync 20261018T1515
+
+
+// ★公开包装★ 供 A2JITRescueFlow 判断「本机是否需要调试器映射」
+BOOL a2_jit_device_needs_debug_mapping_public(void) {
+    return a2_jit_device_needs_debug_mapping();
+}
