@@ -481,8 +481,14 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
 /// ★关键★ 空白区域不能吃触摸：否则游戏/视角触摸全被这层挡住。
 /// 只在命中子控件（按钮/摇杆）时返回它，点空白返回 nil ⇒ 事件落到下面的游戏视图。
+static int a2_touchSeen = 0;
+
 - (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
     UIView *hit = [super hitTest:point withEvent:event];
+    if (hit != nil && hit != self && a2_touchSeen < 3) {
+        a2_touchSeen++;
+        NSLog(@"[A2-CONTROLS] 触摸命中控件层 #%d (hit=%@)", a2_touchSeen, NSStringFromClass(hit.class));
+    }
     return (hit == self) ? nil : hit;
 }
 
