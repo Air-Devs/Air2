@@ -62,20 +62,15 @@ static id gObserver = nil;
 @implementation A2JITRescueFlow
 
 + (BOOL)jitReadyNow {
-    // ★判据对齐老 Air★ 三层任一成立即视为已有 JIT：
-    //   ① 内核级 entitlement(dynamic-codesigning / cs.debugger) —— TrollStore/越狱
-    //   ② CS_DEBUGGED（调试器此刻还连着）
-    //   ③ ★真的发一次 brk 拿到可执行区★
-    //      Stik 的流程是「给完区就 detach」，detach 后 CS_DEBUGGED 位会掉，
-    //      但 JIT 区依然可用 ⇒ 只看 ①② 会误判“没 JIT”而重复跳转（真机症状）。
+    // ★判据（2026-10-24 两份真机日志定案）★
+    //   只认两件事：① 内核级 entitlement（TrollStore 给的真权限）
+    //              ② 真的发一次 brk 拿到可执行区（有调试器且真的交付了）
+    //   ★不再把 CS_DEBUGGED 单独当可用★ —— 日志 old-5 就是 debugged=1 但区没给，
+    //   放行后建 VM 直接崩。
     if (a2_jit_has_kernel_level()) return YES;
 
-    extern int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
-    uint32_t flags = 0;
-    if (csops(getpid(), 0, &flags, sizeof(flags)) == 0 && (flags & 0x00000100u) != 0) return YES;
-
     NSString *why = nil;
-    BOOL verified = [A2JITEnvironment ensureVerifiedWithinBudget:2.0 reason:&why];
+    BOOL verified = [A2JITEnvironment ensureVerifiedWithinBudget:2.5 reason:&why];
     NSLog(@"[A2-JIT-RESCUE] 区域验证: %d（%@）", verified, why ?: @"");
     return verified;
 }
