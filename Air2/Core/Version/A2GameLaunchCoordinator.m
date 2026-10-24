@@ -56,6 +56,9 @@ static NSError *A2LaunchError(A2LaunchErrorKind kind, NSString *msg) {
 @property (nonatomic, assign) BOOL cancelled;
 @property (nonatomic, strong, nullable) A2Version *version;
 @property (nonatomic, copy, nullable) void (^finalCompletion)(BOOL, NSError *);
+/// 必须强引用 —— 安装器是异步的，局部变量会在 install: 返回后
+/// 被 ARC 立即释放，下载还没跑完对象就没了。
+@property (nonatomic, strong, nullable) A2GameInstaller *activeInstaller;
 @end
 
 @implementation A2GameLaunchCoordinator
@@ -296,14 +299,18 @@ static double A2TaskWeight(A2LaunchTask task) {
         req.versionName = versionName;
         req.gameHome = gameHome;
 
-        A2GameInstaller *installer = [[A2GameInstaller alloc] init];
-        [installer install:req
+        // ⚠️ 必须用属性持有：install: 是异步的，
+        // 用局部变量的话方法一返回 ARC 就释放它，
+        // 下载会在中途静默死掉（表现为「3 秒就报安装完成」）。
+        self.activeInstaller = [[A2GameInstaller alloc] init];
+        [self.activeInstaller install:req
             progress:^(A2InstallStage stage, double progress, NSString *message) {
             [self reportTask:A2LaunchTaskVerifyFiles
                     fraction:0.3 + progress * 0.7
                      message:message];
         }
             completion:^(BOOL success, NSError *error) {
+            self.activeInstaller = nil;   // 完成后再释放
             if (self.cancelled) return;
             if (!success) {
                 [self failWith:A2LaunchError(A2LaunchErrorKindFileIntegrity,
