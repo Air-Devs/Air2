@@ -73,6 +73,19 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
     return nil;
 }
 
+/// ★默认渲染器按版本推导★（用户/实例显式选择永远优先）
+///   26.2 / 26.3 → metallum（当前唯一验证过的 Metal 面）
+///   26.1 及其它 1.13+ → MobileGlues（GL3.2+ 需要它）
+///   1.12 及更早 → gl4es（GL1.x/2.x 固定管线）
+static NSString *A2DefaultRendererForVersion(NSInteger major, NSInteger minor) {
+    if (major >= 26) {
+        if (major == 26 && (minor == 2 || minor == 3)) return @"libmetallum.dylib";
+        return @"libmobileglues.dylib";
+    }
+    if (major == 1 && minor >= 13) return @"libmobileglues.dylib";
+    return @"libgl4es_114.dylib";
+}
+
 /// 从目录名取 LWJGL 版本号：lwjgl-341 → 341，lwjgl-2 → 200（便于比较大小）
 static NSInteger A2LwjglVersionNumber(NSString *dirName) {
     NSString *s = [dirName stringByReplacingOccurrencesOfString:@"lwjgl-" withString:@""];
@@ -216,15 +229,21 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
     NSString *selRenderer = instanceRenderer.length
         ? instanceRenderer
         : [NSUserDefaults.standardUserDefaults stringForKey:A2SelectedRendererPrefKey];
-    A2Renderer *renderer = [A2RendererCatalog candidateForIdentifier:selRenderer ?: @""]
-        ?: [A2RendererCatalog defaultCandidate];
     BOOL rendererFromUser = (selRenderer.length > 0);
+    NSString *autoRendererID = A2DefaultRendererForVersion(a2McMajor, a2McMinor);
+    A2Renderer *renderer = [A2RendererCatalog candidateForIdentifier:selRenderer ?: @""]
+        ?: [A2RendererCatalog candidateForIdentifier:autoRendererID]
+        ?: [A2RendererCatalog defaultCandidate];
     NSString *rendererSource = instanceRenderer.length
         ? @"instance" : (rendererFromUser ? @"user" : @"default");
     NSString *rendererSourceWord = instanceRenderer.length
         ? @"实例设置"
         : [A2RuntimeStrings stringForKey:(rendererFromUser ? @"runtime.source.user"
                                                            : @"runtime.source.default")];
+    if (!rendererFromUser) {
+        [A2Log criterion:@"[A2-RENDERER] 默认按版本推导：MC %ld.%ld ⇒ %@",
+         (long)a2McMajor, (long)a2McMinor, renderer.identifier];
+    }
     [A2Log log:@"[A2-RENDERER] chosen=%@(源: %@; source=%@)",
                  renderer.identifier, rendererSourceWord, rendererSource];
 
@@ -470,7 +489,7 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
     {
         NSString *rid = renderer.identifier.lowercaseString ?: @"";
         if ([rid containsString:@"metallum"]) {
-            BOOL agentSupports = (a2McMajor >= 26) || (a2McMajor == 1 && a2McMinor >= 21);
+            BOOL agentSupports = (a2McMajor == 26 && (a2McMinor == 2 || a2McMinor == 3));
             if (!agentSupports) {
                 [A2Log criterion:@"[A2-COMPAT] 提示：metallum 官方类集覆盖 1.21.5+/26.x，"
                  @"本版本 %@ 属未验证组合（仍会尝试注入）", version.name];
