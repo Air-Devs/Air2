@@ -128,6 +128,11 @@ static A2PFN_eglQuerySurface      gEglQuerySurface = NULL;
 static A2PFN_glClear      gGLClear = NULL;
 static A2PFN_glClearColor gGLClearColor = NULL;
 static A2PFN_glGetError   gGLGetError = NULL;
+
+// ★MobileGlues glGetError 保护开关★（a2_gl_error_shim.m 读取）
+//   MG 的 glGetError 在跳转表就绪前被调用会 SIGSEGV（真机已见），
+//   MG 后备下把它换成返回 0 的桩；其它后端保持原样。
+int gA2GlErrorShimEnabled = 0;
 static A2PFN_glViewport    gGLViewport = NULL;
 static A2PFN_glScissor     gGLScissor = NULL;
 static A2PFN_glEnable      gGLEnable = NULL;
@@ -261,6 +266,7 @@ static void a2_gl_bridge_frame_work(void) {
     //   跳转表 ⇒ pc=0x0 SIGSEGV（libmobileglues.dylib+0x3e4f8 glGetError+0x14）。
     //   这句只为打判据行，不值得为它崩，所以该后端下跳过（其余后端照旧）。
     BOOL backendIsMG = (strstr(gBackendName, "mobileglues") != NULL);
+    gA2GlErrorShimEnabled = backendIsMG ? 1 : 0;   // 交给 dlsym 拦截层
     if (gGLGetError != NULL && !backendIsMG) glErr = gGLGetError();
 
     // ---- ③ 记进帧性能判据（中立数值；draw=1 = 本帧一次清屏；shaderNew=0 = 本层不建着色器/管线）----
