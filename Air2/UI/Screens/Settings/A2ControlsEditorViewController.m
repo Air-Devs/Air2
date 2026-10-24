@@ -18,6 +18,51 @@
 
 @implementation A2ControlsEditorViewController
 
+#pragma mark - 导出（剪贴板 / 文件）
+
+- (void)a2_exportTapped {
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"导出控件"
+                                                                  message:nil
+                                                           preferredStyle:UIAlertControllerStyleActionSheet];
+    __weak typeof(self) weakSelf = self;
+    [sheet addAction:[UIAlertAction actionWithTitle:@"复制到剪贴板" style:UIAlertActionStyleDefault
+                                            handler:^(UIAlertAction *a) { [weakSelf exportToClipboard]; }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"导出到文件（.json）" style:UIAlertActionStyleDefault
+                                            handler:^(UIAlertAction *a) { [weakSelf a2_exportToFile]; }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    sheet.popoverPresentationController.sourceView = self.view;
+    sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds),
+                                                               CGRectGetMaxY(self.view.bounds) - 60, 1, 1);
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (void)a2_exportToFile {
+    NSArray *controls = [self.controls a2_exportControls];
+    id json = [A2ControlLayoutIO exportControls:controls format:A2ControlLayoutFormatA2 name:@"默认"];
+    NSData *data = [NSJSONSerialization dataWithJSONObject:json
+                                                   options:NSJSONWritingPrettyPrinted
+                                                     error:NULL];
+    if (data.length == 0) {
+        [A2Toast show:@"导出失败" inView:self.view];
+        return;
+    }
+    NSString *name = [NSString stringWithFormat:@"air2-controls-%@.json",
+                      [NSDateFormatter localizedStringFromDate:NSDate.date
+                                                     dateStyle:NSDateFormatterShortStyle
+                                                     timeStyle:NSDateFormatterShortStyle]];
+    name = [name stringByReplacingOccurrencesOfString:@"/" withString:@"-"];
+    NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:name];
+    [data writeToFile:path atomically:YES];
+
+    UIActivityViewController *vc = [[UIActivityViewController alloc] initWithActivityItems:@[[NSURL fileURLWithPath:path]]
+                                                                     applicationActivities:nil];
+    vc.popoverPresentationController.sourceView = self.view;
+    vc.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds),
+                                                             CGRectGetMaxY(self.view.bounds) - 60, 1, 1);
+    [self presentViewController:vc animated:YES completion:nil];
+}
+
+
 #pragma mark - 导入（剪贴板 / 文件）
 
 - (void)a2_importTapped {
@@ -185,7 +230,7 @@
     bar.spacing = 10;
 
     NSArray *titles = @[ @"导入", @"导出", @"＋按键", @"删除" ];
-    NSArray *sels = @[ @"a2_importTapped", @"exportToClipboard", @"a2_addKeyTapped", @"a2_deleteTapped" ];
+    NSArray *sels = @[ @"a2_importTapped", @"a2_exportTapped", @"a2_addKeyTapped", @"a2_deleteTapped" ];
     for (NSUInteger i = 0; i < titles.count; i++) {
         UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
         [b setTitle:titles[i] forState:UIControlStateNormal];

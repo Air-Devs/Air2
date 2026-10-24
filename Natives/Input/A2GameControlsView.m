@@ -1280,13 +1280,8 @@ static int a2_touchSeen = 0;
 
     if (sw.isOn) {
         int code = (int)b.tag;
-        // ★只限 F 键打头★ 第一个必须是 F1–F12（290…301），第二个任意；也可以只按 F 键
-        if (_comboBuffer.count == 0 && !(code >= 290 && code <= 301)) {
-            UILabel *lb = (UILabel *)[mask viewWithTag:0xA2C3];
-            lb.text = @"请先按 F1–F12";
-            return;
-        }
-        if (_comboBuffer.count >= 2) return;
+        // ★任意键都能组合，最多 3 个★（不再限制必须以 F 键打头）
+        if (_comboBuffer.count >= 3) return;
         [_comboBuffer addObject:@(code)];
 
         UILabel *lb = (UILabel *)[mask viewWithTag:0xA2C3];
