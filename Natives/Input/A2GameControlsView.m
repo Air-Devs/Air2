@@ -4,6 +4,8 @@
 //
 
 #import "A2GameControlsView.h"
+#include <sys/sysctl.h>
+#include <string.h>
 #import "a2_log.h"
 #import "A2ControlLayoutIO.h"
 
@@ -1057,10 +1059,15 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
 /// ★按机型定制★ 设备键 = 硬件型号 + 屏幕点数（长边x短边）
 - (NSString *)a2_deviceKey {
+    // hw.machine 才是具体机型（iPhone15,2 / iPad13,4 …）；UIDevice.model 只有 "iPhone"
+    static char machine[64] = {0};
+    size_t len = sizeof(machine);
+    if (machine[0] == 0 && sysctlbyname("hw.machine", machine, &len, NULL, 0) != 0) {
+        strlcpy(machine, "iOS", sizeof(machine));
+    }
     CGSize s = UIScreen.mainScreen.bounds.size;
     CGFloat l = MAX(s.width, s.height), sh = MIN(s.width, s.height);
-    return [NSString stringWithFormat:@"%@-%.0fx%.0f",
-            UIDevice.currentDevice.model ?: @"iOS", l, sh];
+    return [NSString stringWithFormat:@"%s-%.0fx%.0f", machine, l, sh];
 }
 
 /// 本机当前的存储键 = 「设备键|方案名」⇒ 同一方案在不同机型各存一份，互不覆盖
