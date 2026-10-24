@@ -130,6 +130,11 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 @end
 
 @implementation A2GlfwView
+{
+    NSTimer *_a2HoldTimer;
+    BOOL     _a2LeftPressed;
+    CGPoint  _a2DownPoint;
+}
 
 /// ★2026-10-18 真机证据★ metallum 的 iOS 路径直接假设
 ///   `cocoaView.layer` 就是 CAMetalLayer（它注释里写明 GameSurfaceView 用
@@ -302,6 +307,13 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
     a2_glfw_event_post(&ev);
 }
 
+// ★滑动 / 左键 判定★
+//   手指落下时【不】立刻发左键（否则滑动视角 = 一直按着左键：挖矿/线框/无音效）。
+//   规则：落下后 0.25s 内移动超过 8pt ⇒ 判为「滑动视角」→ 永不发左键；
+//        原地不动满 0.25s ⇒ 判为「长按」→ 发左键按下（开始挖/交互），抬起时释放。
+static const CGFloat kA2TapSlop = 8.0;
+static const NSTimeInterval kA2HoldDelay = 0.25;
+
 - (void)noteFirstTouch:(CGPoint)p {
     if (!self.touchLogged) {
         self.touchLogged = YES;
@@ -346,7 +358,19 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
     }
     if (wasIdle) {
         [self postEnter:1];
-        [self postButton:A2_GLFW_MOUSE_BUTTON_LEFT action:A2_GLFW_PRESS mods:0];
+        // ★不立刻发左键★ 先起 0.25s 计时：原地不动才算"长按(=挖/交互)"，
+        //   一动就取消 ⇒ 滑动屏幕只移动视角，不会按着左键。
+        _a2DownPoint = p;
+        _a2LeftPressed = NO;
+        [_a2HoldTimer invalidate];
+        __weak typeof(self) weakSelf = self;
+        _a2HoldTimer = [NSTimer scheduledTimerWithTimeInterval:kA2HoldDelay repeats:NO block:^(NSTimer *tm) {
+            __strong typeof(weakSelf) self2 = weakSelf;
+            if (self2 == nil || self2.a2PrimaryTouch == nil) return;
+            self2->_a2LeftPressed = YES;
+            [self2 postButton:A2_GLFW_MOUSE_BUTTON_LEFT action:A2_GLFW_PRESS mods:0];
+            a2_log_f(@"[A2-GLFW] 长按 0.25s ⇒ 左键按下");
+        }];
     }
 }
 
@@ -357,6 +381,14 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
         return;   // 移动的是第二根手指 ⇒ 不影响光标
     }
     CGPoint p = [t locationInView:self];
+    if (!_a2LeftPressed && _a2HoldTimer != nil) {
+        CGFloat dx0 = p.x - _a2DownPoint.x, dy0 = p.y - _a2DownPoint.y;
+        if (sqrt(dx0 * dx0 + dy0 * dy0) > kA2TapSlop) {
+            [_a2HoldTimer invalidate];
+            _a2HoldTimer = nil;      // ★判为滑动视角★ 本次触摸不再发左键
+            a2_log_f(@"[A2-GLFW] 位移超过阈值 ⇒ 判为滑动，取消左键");
+        }
+    }
     extern int a2_glfw_input_is_grabbing(void);
     if (a2_glfw_input_is_grabbing()) {
         // ★抓取模式(游戏内)★ 只送【两次采样之差】，绝对坐标只用于判定"点了什么"。
@@ -383,7 +415,12 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
     self.activeTouches -= (NSInteger) touches.count;
     if (self.activeTouches <= 0) {
         self.activeTouches = 0;
-        [self postButton:A2_GLFW_MOUSE_BUTTON_LEFT action:A2_GLFW_RELEASE mods:0];
+        [_a2HoldTimer invalidate];
+        _a2HoldTimer = nil;
+        if (_a2LeftPressed) {
+            [self postButton:A2_GLFW_MOUSE_BUTTON_LEFT action:A2_GLFW_RELEASE mods:0];
+            _a2LeftPressed = NO;
+        }
         [self postEnter:0];
     }
 }
