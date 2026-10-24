@@ -64,7 +64,8 @@ typedef NS_ENUM(NSInteger, A2JITRegionProof) {
 typedef NS_ENUM(NSInteger, A2JITExecProbeResult) {
     A2JITExecProbeExecOK         = 1,  ///< 真执行成功
     A2JITExecProbeMprotectFailed = 2,  ///< mprotect(RX) 被拒（无 JIT 权限）
-    A2JITExecProbeExecFaulted    = 3,  ///< mprotect 过了但取指保护失败（假阳性，db76cfb）
+    A2JITExecProbeExecFaulted    = 3,
+    A2JITExecProbeSkipped        = 4,  ///< 无 JIT 权限/无 CS_DEBUGGED ⇒ 不做执行式自证（不崩，交 JVM 实测）  ///< mprotect 过了但取指保护失败（假阳性，db76cfb）
 };
 
 /**

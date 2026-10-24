@@ -338,7 +338,7 @@ A2JITExecProbeResult a2_jit_exec_probe_anonymous(void) {
     if (!a2_process_has_jit_permission()) {
         a2_jit_log("[A2JIT] exec-probe 跳过：本进程没有 JIT 权限（无 CS_DEBUGGED）"
                    "——执行该页会被内核 SIGKILL - CODESIGNING（真机已见）");
-        return A2JITExecProbeMprotectFailed;   // 语义 = 拿不到可执行，且不冒险
+        return A2JITExecProbeSkipped;   // 不冒险执行；由 JVM 实测给最终结论
     }
     size_t pg = (size_t)getpagesize();
     // 与 HotSpot code cache 同型的映射：匿名 + 私有 + 先 RW。
@@ -656,6 +656,14 @@ static int gA2JITEnsureKickInflight = 0;
     // 非镜像路径：JVM 直接执行自产代码 ⇒ 唯一可信判据 = 匿名页执行式探针真跑过。
     if (!a2_jit_device_needs_debug_mapping()) {
         A2JITExecProbeResult pr = a2_jit_exec_probe_anonymous();
+        if (pr == A2JITExecProbeSkipped) {
+            // ★不拦路★ 没有 CS_DEBUGGED 时我们不敢跳进匿名页（会被内核 SIGKILL-CODESIGNING）。
+            //   这不代表 JIT 一定不可用（TrollStore/内核级 JIT 就是这种情形）⇒
+            //   交给建 VM 实测：能跑就是能跑，不能跑会以 rc≠0 失败并给出可读失败页。
+            if (whyOut) *whyOut = @"exec-probe 跳过（无 CS_DEBUGGED，交由 JVM 实测）";
+            a2_jit_log("[A2JIT] exec-probe skipped -> 交由 JVM 实测（不拦路）");
+            return YES;
+        }
         BOOL ok = (pr == A2JITExecProbeExecOK);
         if (whyOut) *whyOut = ok ? @"exec-probe(map+write+exec+readback) OK"
                                  : @"exec-probe FAILED (declared capability is NOT usable right now)";
