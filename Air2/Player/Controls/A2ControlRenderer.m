@@ -26,10 +26,14 @@
 //
 
 #import "A2ControlRenderer.h"
+#import "A2ControlStyle.h"
+#import "A2JoystickView.h"
 #import "A2ThemeManager.h"
 #import "A2Logger.h"
 
 #pragma mark - 单个控件
+
+@property (nonatomic, strong, nullable) A2ControlStyle *style;
 
 @implementation A2ControlButtonView {
     UILabel *_label;
@@ -194,8 +198,16 @@
 #pragma mark 外观
 
 - (void)updatePressedAppearance {
-    [UIView animateWithDuration:0.08 animations:^{
-        self.alpha = self->_pressed ? 0.55 : (self.isOn ? 0.9 : 0.75);
+    // animateSwap 为真时用过渡动画，否则瞬变（对照 ZL2 的 animateSwap）
+    BOOL animate = self.style ? self.style.animateSwap : YES;
+    NSTimeInterval dur = animate ? 0.12 : 0;
+
+    [UIView animateWithDuration:dur animations:^{
+        if (self.style) {
+            [self applyTheme];   // 样式里含 pressed 态的颜色/圆角/字号
+        } else {
+            self.alpha = self->_pressed ? 0.55 : (self.isOn ? 0.9 : 0.75);
+        }
         self.transform = self->_pressed
             ? CGAffineTransformMakeScale(0.94, 0.94)
             : CGAffineTransformIdentity;
@@ -203,6 +215,18 @@
 }
 
 - (void)applyTheme {
+    // 有样式就按样式画（ZL2 的 ButtonStyle：亮暗两套 + 按下态）
+    if (self.style) {
+        BOOL dark = (UITraitCollection.currentTraitCollection.userInterfaceStyle
+                     == UIUserInterfaceStyleDark);
+        [self.style applyToView:self darkMode:dark pressed:_pressed];
+        _label.textColor = [self.style contentColorForDarkMode:dark pressed:_pressed];
+        _label.font = [UIFont systemFontOfSize:[self.style fontSizeForDarkMode:dark pressed:_pressed]
+                                        weight:UIFontWeightMedium];
+        return;
+    }
+
+    // 没样式 → 用主题色兜底
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
     self.backgroundColor = [t.cSurface colorWithAlphaComponent:0.55];
     self.layer.borderWidth = 1;
@@ -231,7 +255,7 @@
 
 @interface A2ControlRenderer ()
 @property (nonatomic, strong, readwrite) A2ControlLayout *layout;
-@property (nonatomic, strong) NSMutableArray<A2ControlButtonView *> *buttonViews;
+@property (nonatomic, strong) NSMutableArray<UIView *> *buttonViews;
 @end
 
 @implementation A2ControlRenderer
@@ -252,16 +276,29 @@
     [_buttonViews removeAllObjects];
 
     for (A2ControlWidget *w in self.layout.allWidgets) {
-        A2ControlButtonView *v = [[A2ControlButtonView alloc] initWithWidget:w];
-        v.inputDelegate = self.inputDelegate;
-        v.editing = self.editing;
+        UIView *v = nil;
+
+        if (w.type == A2ControlWidgetTypeJoystick) {
+            // 摇杆：独立的交互类（方向判定 + 死区）
+            A2JoystickView *j = [[A2JoystickView alloc] initWithWidget:w];
+            j.inputDelegate = self.inputDelegate;
+            v = j;
+        } else {
+            A2ControlButtonView *b = [[A2ControlButtonView alloc] initWithWidget:w];
+            // 样式：从 layout.buttonStyles 里按 buttonStyle 查
+            if (w.buttonStyle.length) {
+                NSDictionary *styleJSON = self.layout.buttonStyles[w.buttonStyle];
+                if (styleJSON) b.style = [A2ControlStyle styleFromJSON:styleJSON];
+            }
+            v = b;
+        }
         [self addSubview:v];
         [_buttonViews addObject:v];
     }
 
     // 编辑模式下加选中手势
     if (self.editing) {
-        for (A2ControlButtonView *v in _buttonViews) {
+        for (UIView *v in _buttonViews) {
             UITapGestureRecognizer *tap =
                 [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
             [v addGestureRecognizer:tap];
@@ -273,14 +310,20 @@
 }
 
 - (void)handleTap:(UITapGestureRecognizer *)g {
-    A2ControlButtonView *v = (A2ControlButtonView *)g.view;
-    if (![v isKindOfClass:A2ControlButtonView.class]) return;
+    UIView *v = g.view;
+    A2ControlWidget *w = nil;
+    if ([v isKindOfClass:A2ControlButtonView.class]) {
+        w = ((A2ControlButtonView *)v).widget;
+    } else if ([v isKindOfClass:A2JoystickView.class]) {
+        w = ((A2JoystickView *)v).widget;
+    }
+    if (!w) return;
 
-    self.selectedWidget = v.widget;
-    for (A2ControlButtonView *b in _buttonViews) {
+    self.selectedWidget = w;
+    for (UIView *b in _buttonViews) {
         b.layer.borderWidth = (b == v) ? 2 : 1;
     }
-    if (self.onSelectionChanged) self.onSelectionChanged(v.widget);
+    if (self.onSelectionChanged) self.onSelectionChanged(w);
 }
 
 - (void)layoutSubviews {
@@ -288,8 +331,12 @@
     CGSize s = self.bounds.size;
 
     // 百分比坐标 → 实际像素
-    for (A2ControlButtonView *v in _buttonViews) {
-        A2ControlWidget *w = v.widget;
+    for (UIView *v in _buttonViews) {
+        A2ControlWidget *w = nil;
+        if ([v isKindOfClass:A2ControlButtonView.class]) w = ((A2ControlButtonView *)v).widget;
+        else if ([v isKindOfClass:A2JoystickView.class]) w = ((A2JoystickView *)v).widget;
+        if (!w) continue;
+
         CGFloat x = s.width  * w.xPercent / 100.0;
         CGFloat y = s.height * w.yPercent / 100.0;
         CGFloat width  = s.width  * w.widthPercent / 100.0;
@@ -306,26 +353,32 @@
 
 - (void)setInputDelegate:(id<A2ControlInputDelegate>)inputDelegate {
     _inputDelegate = inputDelegate;
-    for (A2ControlButtonView *v in _buttonViews) {
-        v.inputDelegate = inputDelegate;
+    for (id v in _buttonViews) {
+        if ([v respondsToSelector:@selector(setInputDelegate:)]) {
+            [v setInputDelegate:inputDelegate];
+        }
     }
 }
 
 - (void)setEditing:(BOOL)editing {
     _editing = editing;
-    for (A2ControlButtonView *v in _buttonViews) v.editing = editing;
+    for (UIView *v in _buttonViews) {
+        if ([v respondsToSelector:@selector(setEditing:)]) [(id)v setEditing:editing];
+    }
     if (editing) [self reload];   // 重加手势
 }
 
 - (void)setControlsOpacity:(CGFloat)controlsOpacity {
     _controlsOpacity = MAX(0, MIN(1, controlsOpacity));
-    for (A2ControlButtonView *v in _buttonViews) {
-        v.alpha = _controlsOpacity * (v.isOn ? 0.9 : 0.75);
+    for (UIView *v in _buttonViews) {
+        v.alpha = _controlsOpacity;
     }
 }
 
 - (void)applyTheme {
-    for (A2ControlButtonView *v in _buttonViews) [v applyTheme];
+    for (id v in _buttonViews) {
+        if ([v respondsToSelector:@selector(applyTheme)]) [(id)v applyTheme];
+    }
 }
 
 @end

@@ -8,6 +8,7 @@
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Toast.h"
+#import "A2ControlLayerPanel.h"
 
 /// 撤销/重做的快照
 @interface A2LayoutSnapshot : NSObject
@@ -23,6 +24,7 @@
 @property (nonatomic, strong) UIView *propertyPanel;
 @property (nonatomic, strong) UITextField *textField;
 @property (nonatomic, strong) UILabel *sizeLabel;
+@property (nonatomic, strong, nullable) A2ControlLayerPanel *layerPanel;
 @property (nonatomic, strong) NSMutableArray<A2LayoutSnapshot *> *undoStack;
 @property (nonatomic, strong) NSMutableArray<A2LayoutSnapshot *> *redoStack;
 @property (nonatomic, assign) BOOL gridEnabled;
@@ -49,6 +51,7 @@
     [self buildRenderer];
     [self buildToolbar];
     [self buildPropertyPanel];
+    [self buildLayerPanel];
 
     self.navigationItem.rightBarButtonItem =
         [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonSystemItemDone
@@ -165,6 +168,24 @@
         [stack.topAnchor constraintEqualToAnchor:_propertyPanel.topAnchor],
         [stack.leadingAnchor constraintEqualToAnchor:_propertyPanel.leadingAnchor],
         [stack.trailingAnchor constraintEqualToAnchor:_propertyPanel.trailingAnchor],
+    ]];
+}
+
+- (void)buildLayerPanel {
+    _layerPanel = [[A2ControlLayerPanel alloc] initWithLayers:self.layout.layers];
+    [self.view addSubview:_layerPanel];
+
+    __weak typeof(self) weakSelf = self;
+    _layerPanel.onLayersChanged = ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        [self.renderer reload];
+    };
+
+    [NSLayoutConstraint activateConstraints:@[
+        [_layerPanel.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor constant:12],
+        [_layerPanel.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor constant:-12],
+        [_layerPanel.bottomAnchor constraintEqualToAnchor:self.view.safeAreaLayoutGuide.bottomAnchor
+                                                 constant:-64],
     ]];
 }
 
