@@ -671,41 +671,10 @@ int a2_glfw_window_create(long window, int width, int height, const char *title)
                 controls.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
                 [view addSubview:controls];
 
-                // ★26.3 覆盖层★ 画面渲染在我们的 view 里没问题，但 MC 26.3 会另外建
-                //   SDL 窗口，触摸落在那层 ⇒ 我们的控件既看不见也收不到触摸。
-                //   做法：过一会儿把控件搬到"当前最顶层可见窗口"的 root view 上。
-                static __weak UIView *sA2ControlsOverlay = nil;
-                sA2ControlsOverlay = controls;
-
-                void (^hoist)(void) = ^{
-                    UIView *cv = sA2ControlsOverlay;
-                    if (cv == nil) return;
-                    NSArray<UIWindow *> *wins = UIApplication.sharedApplication.windows;
-                    UIWindow *top = nil;
-                    for (UIWindow *w in wins) {
-                        if (!w.isHidden && w.alpha > 0.01 && w.bounds.size.width > 1) {
-                            if (top == nil || w.windowLevel >= top.windowLevel) top = w;
-                        }
-                    }
-                    UIView *hostView = top.rootViewController.view ?: cv.superview;
-                    if (hostView == nil || cv.superview == hostView) {
-                        NSLog(@"[A2-CONTROLS] overlay 已在最顶层 window=%@ level=%.1f key=%d",
-                              NSStringFromClass(top.class), top.windowLevel, top.isKeyWindow);
-                        return;
-                    }
-                    cv.frame = hostView.bounds;
-                    cv.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-                    [cv removeFromSuperview];
-                    [hostView addSubview:cv];
-                    [hostView bringSubviewToFront:cv];
-                    NSLog(@"[A2-CONTROLS] overlay 已搬到最顶层 window=%@ level=%.1f key=%d 控件数=%lu",
-                          NSStringFromClass(top.class), top.windowLevel, top.isKeyWindow,
-                          (unsigned long)cv.subviews.count);
-                };
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
-                               dispatch_get_main_queue(), hoist);
-                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5.0 * NSEC_PER_SEC)),
-                               dispatch_get_main_queue(), hoist);
+                // ★这里不做任何窗口搬运★
+                //   26.2 及更早走 GLFW 宿主视图，控件加在自己的 view 里本来就正常；
+                //   之前那段「搬到最顶层窗口」会把 26.2 的控件搬走（真机：控件出现后消失）。
+                //   26.3（SDL 窗口栈）由 Natives/Input/a2_controls_overlay.m 单独负责。
 
                 // ★26.3 控件可见性★ MC 26.3 用 SDL3 会再建一层 UIWindow，把我们的宿主窗口
                 //   压在下面 ⇒ 控件直接没了。这里把宿主窗口抬到状态栏之上；
