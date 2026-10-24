@@ -141,7 +141,8 @@ def runtime_stage_script():
         'done',
         # ② LWJGL jar → <App>/libs/lwjgl-<ver>/
         # 图标：直接放进 .app 根（actool 在无模拟器 runtime 的机器上不可用）
-        'if [ -d "$SRC/Assets/AppIcons" ]; then cp -f "$SRC"/Assets/AppIcons/*.png "$APP"/; fi',
+        # 图标：仓库根下的 Air2/Assets/AppIcons（不依赖 $SRC 变量；该脚本在仓库根执行）
+        'cp -f "Air2/Assets/AppIcons"/*.png "$APP"/ 2>/dev/null || true',
         'for d in "$LIB"/Jars/lwjgl-*; do',
         '  [ -d "$d" ] || continue',
         '  mkdir -p "$APP/libs/$(basename "$d")"',
