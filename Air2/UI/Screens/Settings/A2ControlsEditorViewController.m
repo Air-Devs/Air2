@@ -16,6 +16,24 @@
 
 @implementation A2ControlsEditorViewController
 
+- (void)a2_addKeyTapped {
+    UIAlertController *a = [UIAlertController alertControllerWithTitle:@"新建按键"
+                                                              message:@"给它起个名字（之后点它两次即可绑定功能键）"
+                                                       preferredStyle:UIAlertControllerStyleAlert];
+    [a addTextFieldWithConfigurationHandler:^(UITextField *tf) { tf.placeholder = @"例如：潜行 / 丢弃"; }];
+    __weak typeof(self) weakSelf = self;
+    [a addAction:[UIAlertAction actionWithTitle:@"创建" style:UIAlertActionStyleDefault handler:^(UIAlertAction *x) {
+        NSString *name = a.textFields.firstObject.text;
+        [weakSelf.controls a2_addCustomControlWithTitle:name];
+    }]];
+    [a addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [self presentViewController:a animated:YES completion:nil];
+}
+
+- (void)a2_deleteTapped {
+    [self.controls a2_removeSelectedControl];
+}
+
 - (void)a2_editorBackgroundTap:(UITapGestureRecognizer *)g {
     [_controls a2_deselect];
 }
@@ -97,8 +115,8 @@
     bar.distribution = UIStackViewDistributionFillEqually;
     bar.spacing = 10;
 
-    NSArray *titles = @[ @"导入", @"导出" ];
-    NSArray *sels = @[ @"importFromClipboard", @"exportToClipboard" ];
+    NSArray *titles = @[ @"导入", @"导出", @"＋按键", @"删除" ];
+    NSArray *sels = @[ @"importFromClipboard", @"exportToClipboard", @"a2_addKeyTapped", @"a2_deleteTapped" ];
     for (NSUInteger i = 0; i < titles.count; i++) {
         UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
         [b setTitle:titles[i] forState:UIControlStateNormal];

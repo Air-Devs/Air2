@@ -42,6 +42,10 @@ typedef NS_ENUM(NSInteger, A2MoveMode) {
 - (void)a2_setEditing:(BOOL)editing;
 /// 取消选中（编辑器点空白处调用）
 - (void)a2_deselect;
+/// 新增一个自定义按键（标题即显示名；绑定键在编辑器里点两次该键选择）
+- (void)a2_addCustomControlWithTitle:(NSString *)title;
+/// 删除当前选中的控件（内置/自定义均可）
+- (void)a2_removeSelectedControl;
 
 /// 保存当前布局到「当前方案」并落盘。
 - (void)a2_saveLayoutNow;

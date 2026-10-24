@@ -185,6 +185,8 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     NSTimer *_attackWatchdog;
     UIView *_selectionHandle;      // 选中框右下角的缩放把手
     __weak UIView *_selectedControl;
+    NSMutableDictionary<NSString *, NSString *> *_customTitles;  // 自定义键 id → 显示名
+    NSMutableSet<NSString *> *_removedIds;                        // 被删除的内置键 id
     NSMutableDictionary<NSString *, NSNumber *> *_bindings;   // 控件id -> GLFW 键码
     NSMutableDictionary<NSString *, NSValue *> *_restFrames;  // 编辑前位置（取消用）
 
@@ -211,6 +213,8 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         }
         _hotbar = [NSMutableArray array];
         _movable = [NSMutableDictionary dictionary];
+        _customTitles = [NSMutableDictionary dictionary];
+        _removedIds = [NSMutableSet set];
         _bindings = [[NSUserDefaults.standardUserDefaults dictionaryForKey:kA2BindingsKey] mutableCopy]
                     ?: [NSMutableDictionary dictionary];
         _restFrames = [NSMutableDictionary dictionary];
@@ -811,6 +815,13 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
                         @"w": @(v.bounds.size.width), @"h": @(v.bounds.size.height),
                         @"a": @(v.alpha) };
     }
+    for (NSString *cid in _customTitles) {
+        NSMutableDictionary *e = [entry[cid] mutableCopy];
+        if (e == nil) continue;
+        e[@"t"] = _customTitles[cid];
+        entry[cid] = e;
+    }
+    entry[@"_removed"] = _removedIds.allObjects ?: @[];
     store[name] = entry;
     [NSUserDefaults.standardUserDefaults setObject:store forKey:kA2LayoutsKey];
     a2_log_f(@"[A2-CONTROLS] 方案已保存：%@（%lu 项）", name, (unsigned long) entry.count);
@@ -829,7 +840,23 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     }
     if (![entry isKindOfClass:NSDictionary.class]) return;
 
+    // 先重建上次保存过的自定义键（布局里带 t 的）
     for (NSString *cid in entry) {
+        if (![cid hasPrefix:@"custom"]) continue;
+        if (_movable[cid] != nil) continue;
+        NSString *title = entry[cid][@"t"];
+        if (![title isKindOfClass:NSString.class]) continue;
+        [self a2_addCustomControlWithTitle:title];
+        _movable[cid].hidden = NO;
+    }
+    // 再恢复/隐藏
+    for (NSString *removed in entry[@"_removed"] ?: @[]) {
+        UIView *v = _movable[removed];
+        if (v != nil) { v.hidden = YES; v.userInteractionEnabled = NO; }
+    }
+
+    for (NSString *cid in entry) {
+        if ([cid isEqualToString:@"_removed"]) continue;
         UIView *v = _movable[cid];
         if (v == nil && [cid hasPrefix:@"hot"]) {
             NSInteger idx = [[cid substringFromIndex:3] integerValue];
@@ -916,6 +943,57 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     v.bounds = CGRectMake(0, 0, side, MAX(28.0, s.height + t.y));
     [pan setTranslation:CGPointZero inView:self];
     [self a2_layoutHandleForSelected];
+}
+
+/// ★自定义按键★ 新建一个按钮并绑定（具体绑什么键，由用户再点一次从键位表里选）
+- (void)a2_addCustomControlWithTitle:(NSString *)title {
+    if (!_editing) return;
+    NSString *name = title.length ? title : @"键";
+
+    // id 递增，且跳过历史已用的
+    NSInteger n = 1;
+    NSString *cid = nil;
+    do {
+        cid = [NSString stringWithFormat:@"custom%ld", (long)n++];
+    } while (_movable[cid] != nil || _customTitles[cid] != nil);
+
+    UIButton *b = [self a2_makeButton:name];
+    b.translatesAutoresizingMaskIntoConstraints = YES;
+    b.bounds = CGRectMake(0, 0, 64, 64);
+    b.center = CGPointMake(CGRectGetMidX(self.bounds), CGRectGetMidY(self.bounds));
+    [self addSubview:b];
+
+    _movable[cid] = b;
+    _customTitles[cid] = name;
+
+    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)];
+    pan.cancelsTouchesInView = YES;
+    [b addGestureRecognizer:pan];
+    UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(a2_tapControl:)];
+    tap.cancelsTouchesInView = NO;
+    [b addGestureRecognizer:tap];
+
+    [self a2_selectControl:b];
+    [self a2_saveLayout];
+    a2_log_f(@"[A2-CONTROLS] 新增自定义键：%@ (%@)", name, cid);
+}
+
+/// ★删除选中★ 内置键与自定义键都可删；删内置的记进 _removedIds，重进不复活
+- (void)a2_removeSelectedControl {
+    UIView *v = _selectedControl;
+    if (v == nil) return;
+    NSString *cid = nil;
+    for (NSString *k in _movable) { if (_movable[k] == v) { cid = k; break; } }
+    if (cid == nil) return;
+
+    [v removeFromSuperview];
+    [_movable removeObjectForKey:cid];
+    [_customTitles removeObjectForKey:cid];
+    [_removedIds addObject:cid];
+    _selectedControl = nil;
+    _selectionHandle.hidden = YES;
+    [self a2_saveLayout];
+    a2_log_f(@"[A2-CONTROLS] 删除控件：%@", cid);
 }
 
 - (void)a2_deselect {
