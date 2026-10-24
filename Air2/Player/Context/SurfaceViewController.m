@@ -1621,13 +1621,13 @@ CGPoint lastVirtualMousePoint = {0, 0};
         A2ControlButtonView *button = (A2ControlButtonView *)view;
         if (![button isKindOfClass:A2ControlButtonView.class]) continue;
 
-        // 可见性判断走 widget 的 visibilityType（三种格式里都有的字段）：
-        //   always / hide-when-gamepad / hide-when-mouse / hide-when-joystick
+        // 可见性走 A2ControlVisibility 枚举（对齐 ZL2 的 VisibilityType）：
+        //   always / in_game / in_menu
         A2ControlWidget *w = button.widget;
         BOOL visibleInContext = YES;
-        if ([w.visibilityType isEqualToString:@"in-game"]) {
+        if (w.visibility == A2ControlVisibilityInGame) {
             visibleInContext = isGrabbing;
-        } else if ([w.visibilityType isEqualToString:@"in-menu"]) {
+        } else if (w.visibility == A2ControlVisibilityInMenu) {
             visibleInContext = !isGrabbing;
         }
         BOOL hidden = hide || !visibleInContext;
