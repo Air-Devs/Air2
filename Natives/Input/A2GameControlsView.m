@@ -1143,11 +1143,14 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         [scroll.leadingAnchor constraintEqualToAnchor:panel.leadingAnchor constant:14],
         [scroll.trailingAnchor constraintEqualToAnchor:panel.trailingAnchor constant:-14],
         [scroll.bottomAnchor constraintEqualToAnchor:panel.bottomAnchor constant:-14],
-        [col.topAnchor constraintEqualToAnchor:scroll.topAnchor],
-        [col.leadingAnchor constraintEqualToAnchor:scroll.leadingAnchor],
-        [col.trailingAnchor constraintEqualToAnchor:scroll.trailingAnchor],
-        [col.bottomAnchor constraintEqualToAnchor:scroll.bottomAnchor],
-        [col.widthAnchor constraintEqualToAnchor:scroll.widthAnchor],
+        // ★UIScrollView 正确用法★ 内容钉 contentLayoutGuide，宽度跟 frameLayoutGuide，
+        //   并且给 scroll 一个明确高度 —— 否则高度算成 0，键盘整块不显示（只剩开关一行）。
+        [scroll.heightAnchor constraintEqualToConstant:250],
+        [col.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor],
+        [col.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor],
+        [col.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor],
+        [col.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor],
+        [col.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor],
     ]];
 
     // ★全键位表★ 每行 (显示名, GLFW 键码)
