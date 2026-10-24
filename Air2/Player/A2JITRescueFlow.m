@@ -159,6 +159,7 @@ static id gObserver = nil;
     //   参数名一字不差；脚本名用 universal.js（我们打包时把 Air2JIT69.js 复制成这个名字）
     //   注意：不要先试 stikjit —— 它会重新拉起 App，而我们判据在“被拉起的新进程里”还没稳，
     //   会再次跳转 ⇒ 死循环（真机已复现）。
+    NSString *bid0 = NSBundle.mainBundle.bundleIdentifier ?: @"dev.airdevs.air2";
     NSString *magnifier = [NSString stringWithFormat:@"apple-magnifier://enable-jit?bundle-id=%@",
                            [bid0 stringByAddingPercentEncodingWithAllowedCharacters:
                             NSCharacterSet.URLQueryAllowedCharacterSet]];
