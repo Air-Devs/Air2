@@ -29,7 +29,8 @@
 #import "A2RuntimeStrings.h"        // Player 同层 —— 四语文案（阻断文案 + 判据行的「源」）
 #import "A2LegacyProfile.h"
 #import "A2IntegrityChecker.h"
-#import "A2JITRescueFlow.h"         // Core/Version —— 远古版本画像（[A2-LEGACY] 闸门与 VM 参数）
+#import "A2JITRescueFlow.h"
+#import "A2JITEnvironment.h"         // Core/Version —— 远古版本画像（[A2-LEGACY] 闸门与 VM 参数）
 #import "A2LegacyAssetsMapper.h"    // Core/Version —— 远古资源映射（virtual / map_to_resources）
 #import "A2Log.h"
 
@@ -199,7 +200,7 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                 [A2JITRescueFlow beginRescueWithScript:nil completion:^(BOOL ok) {
                     if (ok) {
                         [A2Log criterion:@"[A2-JIT-RESCUE] 已拿到 JIT ⇒ 自动继续启动"];
-                        [A2LaunchSession startCurrentVersionWithCompletion:^(BOOL s, NSString *m) {}];
+                        [A2LaunchSession startCurrentVersionWithCompletion:^(A2LaunchSessionResult *r) {}];
                     } else {
                         [A2Log criterion:@"[A2-JIT-RESCUE] 仍未拿到 JIT ⇒ 提示用户"];
                         finish(NO, 0, @"没有拿到 JIT 权限：请安装 StikDebug 并在其中为 Air2 开启 JIT 后重试。");
