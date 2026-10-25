@@ -187,6 +187,9 @@ typedef NS_ENUM(NSInteger, A2InstallStepState) {
 @property (nonatomic, strong) A2TaskLogOutput *logOutput;
 @property (nonatomic, strong) A2TaskLogCard *logCard;
 
+/// 取消确认窗（reason 只用于 `[A2-INSTALL]` 日志：区分「点取消按钮」与「点返回」）。
+- (void)confirmCancelWithReason:(NSString *)reason;
+
 @end
 
 @implementation A2InstallingViewController
@@ -248,7 +251,7 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
         if (self.finished) {
             [self backToDownloadCenter];
         } else {
-            [self confirmCancel];
+            [self confirmCancelWithReason:@"page_back"];
         }
     };
 
@@ -671,14 +674,51 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
 }
 
 - (void)confirmCancel {
+    [self confirmCancelWithReason:@"cancel_button"];
+}
+
+/// 取消安装的确认窗。
+///
+/// ★不留空壳★（对照上游 b8ef87d 的思路，按本分支的页面结构实现）：
+///   本页没有独立的进度弹窗组件，用户看到的那一个「取消」大按钮只可能来自这里
+///   或启动链的等待窗，所以标题与正文都必须有实际内容：
+///     · 两个都空 ⇒ 不弹（直接按取消处理）——宁可无提示，也不给一个只有「取消」的空窗；
+///     · 只有一个空 ⇒ 补上另一项的默认文案；
+///     · 每一条弹出路径都落一行 `[A2-INSTALL]`，写明原因与 title/message 实际值。
+- (void)confirmCancelWithReason:(NSString *)reason {
     if (_finished) {
         [self backToDownloadCenter];
         return;
     }
 
+    NSString *title = @"取消安装";
+    NSString *message = @"已下载的文件会保留，下次可以继续。";
+    title = [title stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+    message = [message stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+
+    if (title.length == 0 && message.length == 0) {
+        [A2Log log:@"[A2-INSTALL] 取消确认窗不弹（标题与正文都为空，不留空壳）reason=%@ version=%@",
+                    reason ?: @"?", _versionName ?: @"?"];
+        [self.installer cancel];
+        [self.navigationController popViewControllerAnimated:YES];
+        return;
+    }
+    if (title.length == 0) title = @"取消安装";
+    if (message.length == 0) message = @"确定要取消本次安装吗？已下载的文件会保留。";
+
+    [A2Log log:@"[A2-INSTALL] 弹出取消确认窗 reason=%@ version=%@ title=%@ message=%@",
+                reason ?: @"?", _versionName ?: @"?", title, message];
+
+    // 已经有弹窗在上层时不再叠一个（叠出来的第二个常常首帧空白，看起来就是空壳）。
+    if (self.presentedViewController != nil) {
+        [A2Log log:@"[A2-INSTALL] 已有弹窗在上层（%@）⇒ 本次不再弹取消确认窗 reason=%@",
+                    NSStringFromClass(self.presentedViewController.class), reason ?: @"?"];
+        return;
+    }
+
     UIAlertController *alert =
-        [UIAlertController alertControllerWithTitle:@"取消安装"
-                                            message:@"已下载的文件会保留，下次可以继续。"
+        [UIAlertController alertControllerWithTitle:title
+                                            message:message
                                      preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"继续安装"
                                               style:UIAlertActionStyleCancel

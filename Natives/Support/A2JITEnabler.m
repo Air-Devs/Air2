@@ -547,9 +547,20 @@ static NSString *gA2JITLastFailure = nil;
     }
     UIViewController *top = UIWindow.mainWindow.rootViewController;
     while (top.presentedViewController != nil) top = top.presentedViewController;
-    if (top != nil) {
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"等待 JIT"
-                                                                      message:@""
+    // ★绝不弹空壳★：标题与正文都必须有内容。
+    //   此前这里是 `message:@""` —— 上面精心拼好的说明文字被整段丢掉，
+    //   用户在屏幕上只看到一个「取消」大按钮、正文全空的窗口，既不知道在等什么，
+    //   也不知道要做什么。本弹窗会盖在当前最上层页面（含安装/进度页）之上，
+    //   所以「安装页冒出空壳弹窗」的真身就是这里。
+    NSString *alertTitle = @"等待 JIT";
+    NSString *alertMessage = message.length ? message
+        : @"正在等待 JIT 生效。\n请按提示为 Air2 开启 JIT，拿到后会自动继续启动。\n（点「取消」可中止本次启动）";
+    if (alertTitle.length == 0 && alertMessage.length == 0) {
+        // 兜底：两个都空就不弹（宁可只落日志，也不给一个只有取消按钮的空窗）。
+        a2_log_criterion(@"[A2-JIT-ENABLER] 等待窗标题与正文都为空 ⇒ 不弹窗，只等（本次启动同样停在这里）");
+    } else if (top != nil) {
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:alertTitle
+                                                                      message:alertMessage
                                                                preferredStyle:UIAlertControllerStyleAlert];
         __weak typeof(self) weakSelf = self;
         [alert addAction:[UIAlertAction actionWithTitle:@"取消"
@@ -561,7 +572,9 @@ static NSString *gA2JITLastFailure = nil;
         self.alert = alert;
         // ★animated:NO★ 等的是「弹窗已落屏」这件事本身，不是动画。
         [top presentViewController:alert animated:NO completion:nil];
-        a2_log_criterion(@"[A2-JIT-ENABLER] 已弹出「正在等待 JIT」⇒ 本次启动停在这里（不建 VM）");
+        a2_log_criterion(@"[A2-JIT-ENABLER] 已弹出「等待 JIT」（title=%@；正文 %lu 字）"
+                         @"⇒ 本次启动停在这里（不建 VM）",
+                         alertTitle, (unsigned long)alertMessage.length);
     } else {
         // 没有窗口（例如从后台/headless 进入）⇒ 只落日志，等待照跑。
         a2_log_criterion(@"[A2-JIT-ENABLER] 没有可展示的窗口 ⇒ 只等不提示（本次启动同样不往下走）");

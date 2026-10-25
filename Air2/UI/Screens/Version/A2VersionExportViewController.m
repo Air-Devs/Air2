@@ -156,8 +156,11 @@
     else if ([field isEqualToString:@"版本"]) current = _packVersion;
     else if ([field isEqualToString:@"简介"]) current = _packSummary;
 
+    // ★标题不许为空★：field 为 nil/空串时不能弹一个没有标题的输入框（半壳）。
+    NSString *alertTitle = field.length ? field
+                                        : @"编辑信息";
     UIAlertController *alert =
-        [UIAlertController alertControllerWithTitle:field
+        [UIAlertController alertControllerWithTitle:alertTitle
                                             message:nil
                                      preferredStyle:UIAlertControllerStyleAlert];
     [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {

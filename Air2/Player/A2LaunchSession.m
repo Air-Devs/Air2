@@ -922,8 +922,10 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
     if (top == nil) return;
 
     NSString *title = [NSString stringWithFormat:@"启动失败（rc=%ld）", (long)rc];
+    // ★正文不许为空串★：`?:` 只挡 nil，传进来空串时这里会变成一个「只有标题、正文空白」的半壳。
+    NSString *detail = message.length ? message : @"启动链未完成（详见日志）";
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
-                                                                  message:message ?: @"启动链未完成"
+                                                                  message:detail
                                                            preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"日志在哪" style:UIAlertActionStyleDefault
                                             handler:^(UIAlertAction *a) {

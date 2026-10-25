@@ -32,6 +32,7 @@
 #import "A2PrimaryButton.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
+#import "A2Log.h"
 
 /// 卡片最大宽度。横屏下不铺满，保持可读行宽（与仓内其它自绘弹窗同口径）。
 static const CGFloat kA2OptionSheetMaxWidth = 460;
@@ -145,6 +146,16 @@ static const CGFloat kA2OptionSheetOptionsMaxHeightRatio = 0.5;
 #pragma mark - 视图搭建
 
 - (void)setupCard {
+    // ★不留空壳★：没有任何选项时，卡片里就只剩标题 + 正文 + 一个「取消」按钮；
+    //   标题与正文若也为空，用户看到的就是一个纯空壳（与安装页那个空壳弹窗同一类问题）。
+    //   对照上游 b8ef87d 的口径：要么补有意义的文案，要么不弹。这里是补文案。
+    if (_optionTitles.count == 0) {
+        if (self.messageText.length == 0) self.messageText = @"暂无可选项（可能还没加载出来，请稍后重试）";
+        if (self.titleText.length == 0) self.titleText = @"请选择";
+        [A2Log log:@"[A2-UI] 选项面板没有任何选项 ⇒ 补兜底文案 title=%@ message=%@",
+                    self.titleText, self.messageText];
+    }
+
     _card = [[UIView alloc] initWithFrame:CGRectZero];
     _card.translatesAutoresizingMaskIntoConstraints = NO;
     _card.layer.cornerRadius = A2RadiusXL;

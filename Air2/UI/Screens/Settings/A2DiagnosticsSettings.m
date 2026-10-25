@@ -89,7 +89,7 @@
     // 日志可能很长（堆栈），弹窗只看前 2000 字，全文走文件 App 取。
     NSString *preview = log.length > 2000
         ? [[log substringToIndex:2000] stringByAppendingString:@"\n…（已截断）"] : log;
-    UIAlertController *alert = [UIAlertController alertControllerWithTitle:title
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:(title.length ? title : @"日志")
                                                                    message:preview
                                                             preferredStyle:UIAlertControllerStyleAlert];
     [alert addAction:[UIAlertAction actionWithTitle:@"关闭"

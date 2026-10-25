@@ -956,8 +956,19 @@ static int a2_touchSeen = 0;
 - (void)a2_presentLayoutPicker {
     NSDictionary *store = [NSUserDefaults.standardUserDefaults dictionaryForKey:kA2LayoutsKey] ?: @{};
     NSString *prefix = [[self a2_deviceKey] stringByAppendingString:@"|"];
+    // ★先数一遍本机型已保存的方案★：一个都没有时不能弹 —— 那样的 ActionSheet 只有
+    //   一个「取消」按钮、正文空白，用户看到的就是一个空壳弹窗（与本单修的安装页空壳同源）。
+    NSUInteger savedCount = 0;
+    for (NSString *full in store.allKeys) {
+        if ([full hasPrefix:prefix]) savedCount++;
+    }
+    if (savedCount == 0) {
+        a2_log_f(@"[A2-CTRL-LAYOUT] 本机型还没有已保存的方案（store=%lu 条）⇒ 不弹选择框，避免只有一个「取消」的空壳",
+                 (unsigned long)store.count);
+        return;
+    }
     UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"选择方案"
-                                                                  message:nil
+                                                                  message:@"选一个已保存的控件方案，立即应用"
                                                            preferredStyle:UIAlertControllerStyleActionSheet];
     __weak typeof(self) weakSelf = self;
     for (NSString *full in store.allKeys) {
