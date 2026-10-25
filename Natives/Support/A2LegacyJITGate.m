@@ -185,7 +185,7 @@ BOOL A2JIT26IsLikelyDebuggerKeepAttached(void) {
 //  ★方案 A（真机 lastlog.old-6 之后的修正）★：
 //    Air2 曾在哨兵之后要求「本进程先拿到 size≥64MB 且可写的真区」才放行，真机表现是
 //    「Extension 已下发 ⇒ 立刻重试 brk #0x69（期望 size≥67108864）⇒ 重试 2 次后仍未拿到
-//    真区：最后一发=失败（size 小于期望）⇒ ★JIT 未就绪★ ⇒ 失败页」。根因是**判据错**，不是 JIT 没开：
+//    真区：最后一发=失败（size 小于期望）⇒ 判「JIT 未就绪」⇒ 失败页」。根因是**判据错**，不是 JIT 没开：
 //    闸门自己发的那发 brk 用固定小页长度（getpagesize），而 64MB 是 libjvm 建 VM 时按
 //    -XX:ReservedCodeCacheSize 自己发 brk 才要的 ⇒ 用「探测 brk 的返回值」去要求 64MB，
 //    逻辑上永远不成立。故按老 Air 的口径收敛判据：
@@ -383,9 +383,7 @@ static BOOL gA2GateHandshakeDone = NO;
 /// 本进程是否曾见过握手哨兵 / Extension 是否下发成功（「凭哪条放行」的取证）。
 static BOOL gA2GateSawSentinel = NO;
 static BOOL gA2GateExtDelivered = NO;
-/// 最近一次被服务的那发 brk 的地址与尺寸（★只用于日志★：不复用、不 munmap、不参与判定）。
-static void *gA2GateLastRegion = NULL;
-static size_t gA2GateLastRegionBytes = 0;
+/// 最近一次被服务的那发 brk 的取证（★只用于日志★：不复用、不 munmap、不参与判定）。
 static A2GateRegionInfo gA2GateLastInfo;
 static NSTimeInterval gA2GateLastAttempt = 0;
 static int gA2GateAttempts = 0;
@@ -468,8 +466,6 @@ static BOOL a2gate_handshake(size_t probeLen, size_t expect,
         // ★brk 被调试器服务了★：NULL 之外的任何应答都算（哨兵 / 一页 / 只读 / 大区）。
         //   数值（size / 期望 / 保护位）只进日志，★不参与判定★。
         hs->serviced = YES;
-        gA2GateLastRegion = r;
-        gA2GateLastRegionBytes = (size_t)hs->info.vmSize;
         gA2GateLastInfo = hs->info;
         if (hs->kind == A2GateRegionKindSentinel) {
             hs->sawSentinel = YES;
@@ -502,8 +498,11 @@ static BOOL a2gate_handshake(size_t probeLen, size_t expect,
 
         // ③ ★判定★：非哨兵（已服务）⇒ 握手完成；哨兵 ⇒ 必须 Extension 也下发成功。
         if (hs->serviced && (!hs->sawSentinel || hs->extDelivered)) {
-            // 哨兵刚被 Extension 换成真建区 ⇒ 再探一发只为取证 region 数值；其余直接收尾。
-            BOOL wantForensics = (hs->kind == A2GateRegionKindSentinel && (i + 1) < attempts);
+            // 哨兵刚被 Extension 换成真建区、且这次探测本身不等待（interval=0）⇒ 顺手再探一发只为
+            // 取证 region 数值（免费）；其余情况（尤其建 VM 前的闰门，interval=2s）直接收尾 ——
+            // 不为日志多等一个间隔。
+            BOOL wantForensics = (hs->kind == A2GateRegionKindSentinel &&
+                                  (i + 1) < attempts && interval <= 0.0);
             if (!wantForensics) break;
         }
     }
@@ -629,7 +628,7 @@ BOOL A2LegacyJITGateReadyNow(NSString *_Nullable *_Nullable whyOut) {
             *whyOut = [NSString stringWithFormat:
                 @"握手完成（哨兵+Extension）⇒ 放行（region=%p，size=%zu 仅供参考；isJITEnabled=%d "
                 @"keepAttached=%d traced=%d exn=%d）",
-                gA2AmeJITVerifiedRegion, gA2GateLastRegionBytes,
+                gA2AmeJITVerifiedRegion, (size_t)gA2GateLastInfo.vmSize,
                 (int)A2JITIsEnabled(NO), (int)A2JIT26IsLikelyDebuggerKeepAttached(),
                 (int)A2JIT26DebuggerAttachedViaPtrace(), (int)A2JIT26DebuggerViaExceptionPorts()];
         }

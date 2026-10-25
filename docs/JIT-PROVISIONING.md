@@ -475,6 +475,13 @@ USB 前提根本不存在 ⇒ `A2RPPairSetupUSBPathAvailable()` 如实回 `NO` �
 闸门放行、建 VM、首帧 SIGBUS。这正是 `[JIT-FLOW]` 的老假阳性，故把「声明」与「已证明」在闸门
 这一处显式分开（判定用的仍是 `A2JITEnvironment` 的同一份数据，不另算一套）。
 
+**★现行判据（ADR-013，方案 A）★**：上面那份「判据」只作历史背景；闸门（`A2LegacyJITGate`）
+现在的唯一判据是**握手完成**：entitlement（只进日志）→ 调试器在岗 → 哨兵已识别且
+`UniversalJIT26Extension.js` 下发成功 → 至少一发 `brk #0x69` 被调试器服务 ⇒ 放行。
+★不再要求本进程先拿到 `size ≥ 64MB` 的真区★（真机 `lastlog.old-6` 的假失败根因：闸门自己那发
+`brk` 只有一页，64MB 是 libjvm 建 VM 时按 `-XX:ReservedCodeCacheSize` 自己发的）；`region` 的
+size / 期望 / 保护位只打日志（`仅供参考，不参与判定`），拿不到区由 libjvm 自己报错。
+
 **启动闸门（`A2LaunchSession` 的 `+startCurrentVersionWithCompletion:`）**
 - 未就绪 ⇒ ★无条件 `return`★：不写计划、不建 VM，本次启动到此为止；
 - 等待期间再点「启动」⇒ 直接终止本次（`sWaitingForJIT` 在途护栏），不叠第二条启动请求；

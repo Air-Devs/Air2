@@ -306,3 +306,30 @@
   这是**有意接受**的取舍：失败点从「永远不启动」变成「libjvm 报可读错误」。
 - **落地**：`Natives/Support/A2JITEnabler.[hm]`、`Natives/Support/A2JITEnvironment.[hm]`
   （新增 `a2_jit_is_debugged()`）、`Air2/Player/A2LaunchSession.m`（建 VM 前后区域快照）。
+
+---
+
+## ADR-013：JIT 闸门判据定为【握手完成】（哨兵 + Extension + brk 被服务），不再要求本进程先有 64MB 真区
+
+- **状态**：已接受（修正 ADR-012 与本条之前的实现口径；ADR-007 的「区域取证」降为**日志**，不再是闸门判据）
+- **日期**：2026-10-25
+- **背景**：把闸门判据从「调试器应答了」收紧成「本进程先拿到 `size ≥ A2JITRegionMB(默认 64MB)` 且可写的真区」之后，
+  真机日志（`lastlog.old-6`）出现固定失败链：`Extension 已下发 ⇒ 立刻重试 brk #0x69（期望 size≥67108864）`
+  ⇒ `重试 2 次后仍未拿到真区：最后一发=失败（size 小于期望）⇒ JIT 未就绪 ⇒ 失败页`。
+  **根因是判据错，不是 JIT 没开**：闸门自己发的那发 `brk #0x69` 用固定小页长度（老 Air 的
+  `JIT26CreateRegionLegacySafe(getpagesize())`），而 64MB 的 code cache 是 libjvm 建 VM 时按
+  `-XX:ReservedCodeCacheSize` **自己**发 `brk #0x69` 才向调试器要的 ⇒ 用「探测 brk 的返回值」去要求 64MB，
+  逻辑上永远不成立。
+- **决策**：镜像设备（iOS 26+）上的闸门判据 = **握手完成**，条件按此顺序：
+  1. entitlement（`dynamic-codesigning`）—— 只进日志与原因文案，**不单独放行**；
+  2. 调试器在岗（`ppid≠1` / `P_TRACED` / 任务级 BREAKPOINT·SOFTWARE 异常端口 任一）；
+  3. 哨兵已识别（`0x690000E0` / `0xcccccccc690000e0` / 一页且不可写）⇒ 下发 `UniversalJIT26Extension.js` 且**下发成功**；
+  4. 至少一发 `brk #0x69` 被调试器服务（返回值非 NULL）⇒ 放行建 VM。
+  `region` 的 `size` / 期望值 / 保护位**只打日志**（「仅供参考，不参与判定」）；真正的建区与尺寸由
+  libjvm 建 VM 时自己发 brk 完成，拿不到时由 libjvm 自己报错，闸门不替它验收、也不拦。
+- **仍然保留**：`brk` 一律在 SIGTRAP 安全网内发出；`SetDetachAfterFirstBr` + 清 `EXC_MASK_BAD_ACCESS`
+  只在握手完成后做；非镜像设备（< iOS 26）整块闸门跳过（与老 Air 逐字一致）。
+- **不退回**「只看 `CS_DEBUGGED` 就放行」：那只会证明「有调试器 attach」，不证明脚本已指派、Extension 已生效。
+- **落地**：`Natives/Support/A2LegacyJITGate.[hm]`（`a2gate_handshake` 取代 `a2gate_obtain_real_region`；
+  `A2AMEJITVerifyWritableJITRegion` → `A2AMEJITVerifyJITHandshake`）、`Natives/Support/A2JITEnabler.m`（回前台复查判据行文案）。
+
