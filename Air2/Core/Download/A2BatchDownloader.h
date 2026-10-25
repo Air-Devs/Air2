@@ -54,9 +54,14 @@ NS_ASSUME_NONNULL_BEGIN
 /// 单个文件成功
 @property (nonatomic, copy, nullable) void (^onFileSuccess)(A2DownloadRequest *request);
 
-/// 全部完成
+/// 全部完成。
+/// @param success 是否整批成功
+/// @param failures 失败文件（key = 目标路径）
+/// @param abortError 熔断时给出的可读错误（整批零成功且连续失败超阈值）；
+///                   没有熔断时为 nil
 @property (nonatomic, copy, nullable) void (^onCompletion)(BOOL success,
-                                                           NSDictionary<NSString *, NSError *> *failures);
+                                                          NSDictionary<NSString *, NSError *> *failures,
+                                                          NSError * _Nullable abortError);
 
 /// 预先登记「已复用的本地文件」，让总进度一开始就反映真实情况。
 /// 必须在 start 之前调用。

@@ -728,11 +728,18 @@ static void A2Main(dispatch_block_t block) {
     for (NSArray<NSString *> *pair in items) {
         if (pair.count < 2) continue;
 
-        NSArray<NSString *> *candidates = [mirror candidateURLsForURL:pair[0]];
+        // 先按镜像优先级展开，再补上传兜底链（官方在前、BMCLAPI 在后）。
+        // 后者不受「镜像开关 / 国内检测」限制 —— 它只在前面都失败后才会用到。
+        NSMutableArray<NSString *> *candidates =
+            [[mirror candidateURLsForURL:pair[0]] mutableCopy] ?: [NSMutableArray array];
+        for (NSString *fallback in [A2MirrorResolver fallbackCandidateURLsForURL:pair[0]]) {
+            if (![candidates containsObject:fallback]) [candidates addObject:fallback];
+        }
+
         NSMutableArray<NSURL *> *urls = [NSMutableArray array];
         for (NSString *u in candidates) {
             NSURL *url = [NSURL URLWithString:u];
-            if (url) [urls addObject:url];
+            if (url && ![urls containsObject:url]) [urls addObject:url];
         }
         if (urls.count == 0) continue;
 
@@ -791,14 +798,21 @@ static void A2Main(dispatch_block_t block) {
         [self report:stage progress:progress.fraction message:msg];
     };
 
-    downloader.onCompletion = ^(BOOL success, NSDictionary<NSString *, NSError *> *failures) {
+    downloader.onCompletion = ^(BOOL success, NSDictionary<NSString *, NSError *> *failures,
+                                NSError *abortError) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
         self.batchDownloader = nil;
         if (self.cancelled) return;
 
+        if (abortError) {
+            // 熔断：整批零成功且连续失败 —— 这是确定性故障，报出来别装作在跑
+            [A2Log log:@"[A2-DL] installer: %@ 熔断 %@", base, abortError.localizedDescription];
+            [self failWithError:abortError];
+            return;
+        }
         if (failures.count > 0) {
-            [A2Log log:@"installer: %@ 完成，%lu 个文件失败",
+            [A2Log log:@"[A2-DL] installer: %@ 完成，%lu 个文件失败",
                   base, (unsigned long)failures.count];
         }
         // 单文件失败不阻断 —— 依赖库里有可选组件，缺几个不影响启动

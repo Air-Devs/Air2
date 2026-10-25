@@ -155,6 +155,20 @@ static BOOL A2IsMirrorable(NSString *url) {
     return A2IsMirrorable(url);
 }
 
+/// 兜底候选链：官方在前、镜像在后，不受设置开关影响。
+///
+/// 只在「前一个源已经失败」时才会被用到，所以对海外用户没有副作用；
+/// 反过来，国内用户在官方源 403/超时时能靠它把文件拿下来。
++ (NSArray<NSString *> *)fallbackCandidateURLsForURL:(NSString *)url {
+    if (url.length == 0) return @[];
+
+    NSString *mirrored = A2MirrorURLFor(url);
+    if (mirrored.length == 0 || [mirrored isEqualToString:url]) {
+        return @[url];
+    }
+    return @[url, mirrored];
+}
+
 /// 把 https://edge.forgecdn.net/xxx 替换成 https://mod.mcimirror.top/xxx
 + (nullable NSString *)mirroredURLFor:(NSString *)url {
     return A2MirrorURLFor(url);

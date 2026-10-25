@@ -32,6 +32,8 @@
 
 #import "A2ModLoaderInstaller.h"
 #import "A2DownloadEngine.h"
+#import "A2BatchDownloader.h"
+#import "A2MirrorResolver.h"
 #import "A2VersionIsolation.h"
 #import "A2ZipReader.h"
 #import "A2Logger.h"
@@ -51,6 +53,7 @@ static void A2Main(dispatch_block_t b) {
 @property (nonatomic, strong) NSURLSession *session;
 @property (nonatomic, copy, nullable) void (^progressBlock)(double, NSString *);
 @property (nonatomic, copy, nullable) void (^completionBlock)(BOOL, NSError *);
+@property (nonatomic, strong, nullable) A2BatchDownloader *batchDownloader;
 @property (nonatomic, copy) NSString *gameHome;
 @property (nonatomic, copy) NSString *versionName;
 @property (nonatomic, copy) NSString *mcVersion;
@@ -244,8 +247,16 @@ static void A2Main(dispatch_block_t b) {
                             withIntermediateDirectories:YES attributes:nil error:nil];
     NSString *installerPath = [tempDir stringByAppendingPathComponent:@"installer.jar"];
 
+    // 官方 maven + BMCLAPI 镜像兜底：国内直连 maven.minecraftforge.net 常常
+    // 403/超时，单源时只能干等退避重试，装加载器就停在「正在下载加载器安装包…」。
+    NSMutableArray<NSURL *> *installerCandidates = [NSMutableArray array];
+    for (NSString *candidate in [A2MirrorResolver fallbackCandidateURLsForURL:installerURL]) {
+        NSURL *u = [NSURL URLWithString:candidate];
+        if (u) [installerCandidates addObject:u];
+    }
+
     A2DownloadRequest *req = [A2DownloadRequest new];
-    req.candidateURLs = @[[NSURL URLWithString:installerURL]];
+    req.candidateURLs = installerCandidates;
     req.destinationPath = installerPath;
     req.allowZipFallbackCheck = YES;
 
@@ -587,46 +598,85 @@ static void A2Main(dispatch_block_t b) {
 }
 
 - (void)downloadBatch:(NSArray<NSArray<NSString *> *> *)items {
-    __block NSUInteger index = 0;
+    if (items.count == 0) { [self finish]; return; }
+
     NSUInteger total = items.count;
-    __block NSUInteger failed = 0;
+
+    // 早先这里是「一个下完再下一个、每个只有一个官方源」：
+    //   · 串行 ⇒ 每个文件都要走一遍 TCP+TLS 握手，几十个库就是几十秒；
+    //   · 单源 ⇒ 官方源 403/404 时只能干等退避重试（一个 404 白花 7 秒）；
+    //   · 没有字节级进度 ⇒ 界面只在「正在下载依赖 (i/N)」上跳，看着像卡死。
+    // 现在改用批量下载器：并发、文件级镜像兜底、字节级进度、熔断可读。
+    NSMutableArray<A2DownloadRequest *> *requests = [NSMutableArray array];
+    for (NSArray<NSString *> *pair in items) {
+        if (pair.count < 2) continue;
+        NSString *urlString = pair[0];
+        NSString *dest = pair[1];
+
+        NSMutableArray<NSURL *> *urls = [NSMutableArray array];
+        for (NSString *candidate in [A2MirrorResolver fallbackCandidateURLsForURL:urlString]) {
+            NSURL *u = [NSURL URLWithString:candidate];
+            if (u && ![urls containsObject:u]) [urls addObject:u];
+        }
+        if (urls.count == 0) continue;
+
+        A2DownloadRequest *req = [A2DownloadRequest new];
+        req.candidateURLs = urls;
+        req.destinationPath = dest;
+        req.allowZipFallbackCheck = YES;
+        [requests addObject:req];
+    }
+
+    if (requests.count == 0) { [self finish]; return; }
+
+    [A2Logger info:@"A2ModLoaderInstaller"
+           message:[NSString stringWithFormat:@"[A2-DL] 依赖下载开始：%lu 个文件（含镜像兜底）",
+                    (unsigned long)requests.count]];
+
+    A2BatchDownloader *downloader =
+        [[A2BatchDownloader alloc] initWithRequests:requests
+                                     maxConnections:4
+                                        retryRounds:1];
 
     __weak typeof(self) weakSelf = self;
-    __block void (^next)(void) = nil;
 
-    next = ^{
+    downloader.onProgress = ^(A2BatchProgress *progress) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
-        if (index >= total) {
-            // 单文件失败不阻断 —— 缺几个库游戏首次启动会自己补
-            [self report:0.95 message:[NSString stringWithFormat:@"依赖下载完成（%lu 个失败）",
-                                       (unsigned long)failed]];
-            [self finish];
-            next = nil;
+        NSUInteger done = (NSUInteger)MAX(0, progress.downloadedFiles);
+        NSString *msg = [NSString stringWithFormat:@"正在下载依赖 (%lu/%lu)",
+                         (unsigned long)done, (unsigned long)total];
+        // 0.6 → 0.95 是依赖阶段在整条安装流水线里的区间
+        [self report:0.6 + 0.35 * progress.fraction message:msg];
+    };
+
+    downloader.onCompletion = ^(BOOL success, NSDictionary<NSString *, NSError *> *failures,
+                                NSError *abortError) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        self.batchDownloader = nil;
+
+        [A2Logger info:@"A2ModLoaderInstaller"
+               message:[NSString stringWithFormat:
+                        @"[A2-DL] 依赖下载结束：成功=%d 失败=%lu 熔断=%@",
+                        success, (unsigned long)failures.count,
+                        abortError ? @"是" : @"否"]];
+
+        // 熔断是「确定性故障」（源全错/断网），必须报出来；
+        // 零散失败仍然不阻断 —— 缺几个库游戏首次启动会自己补。
+        if (abortError) {
+            [self failWithError:abortError];
             return;
         }
-
-        NSArray<NSString *> *pair = items[index];
-        A2DownloadRequest *req = [A2DownloadRequest new];
-        req.candidateURLs = @[[NSURL URLWithString:pair[0]]];
-        req.destinationPath = pair[1];
-        req.allowZipFallbackCheck = YES;
-
-        [[A2DownloadEngine sharedClient] startRequest:req
-            progress:nil speed:nil
-            completion:^(BOOL success, NSError *error) {
-            __strong typeof(weakSelf) self = weakSelf;
-            if (!self) return;
-            if (!success) failed++;
-
-            index++;
-            [self report:0.6 + 0.35 * ((double)index / (double)total)
-                 message:[NSString stringWithFormat:@"正在下载依赖 (%lu/%lu)",
-                          (unsigned long)index, (unsigned long)total]];
-            if (next) next();
-        }];
+        [self report:0.95 message:[NSString stringWithFormat:@"依赖下载完成（%lu 个失败）",
+                                   (unsigned long)failures.count]];
+        [self finish];
     };
-    next();
+
+    // 必须持有到结束 —— 批量下载器被释放后计时器与在途回调都会失效，
+    // 表现就是「进度停在某个百分比再也不动」。
+    self.batchDownloader = downloader;
+    [downloader start];
 }
 
 - (void)finish {

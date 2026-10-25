@@ -62,6 +62,16 @@ typedef NS_ENUM(NSInteger, A2MirrorPriority) {
 /// 批量展开
 - (NSArray<NSString *> *)candidateURLsForURLs:(NSArray<NSString *> *)urls;
 
+/// 下载兜底候选链：官方地址在前、BMCLAPI/MCIM 镜像在后。
+///
+/// 与 candidateURLsForURL: 的区别（重要）：
+///   · 不受 enabled 开关与「是否中国大陆」检测影响 —— 它只在**前面的源
+///     已经失败**之后才会被尝试，因此对海外用户没有副作用；
+///   · 永远官方优先，不存在「把海外用户推去镜像」的问题。
+/// 用于「文件级 fallback」：依赖库、加载器安装包这类地址在官方源上
+/// 经常 403/超时，靠这一条链换源继续，而不是把整批拖死在原地。
++ (NSArray<NSString *> *)fallbackCandidateURLsForURL:(NSString *)url;
+
 /// 该地址是否可被镜像
 + (BOOL)isMirrorableURL:(NSString *)url;
 

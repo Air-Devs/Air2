@@ -56,7 +56,10 @@ typedef NS_ENUM(NSInteger, A2DownloadErrorCode) {
     A2DownloadErrorAllCandidatesExhausted = 3,
     A2DownloadErrorInvalidParameter = 4,
     A2DownloadErrorFileWriteFailure = 5,
+    A2DownloadErrorStalled = 6,             ///< 停滞看门狗判定：N 秒无字节增长
+    A2DownloadErrorRateLimited = 7,         ///< 429/503 —— 服务端要求降速
 };
+
 
 FOUNDATION_EXPORT NSString *const A2DownloadErrorDomain;
 /// 全部候选耗尽时，各候选的错误数组放在这个 key 下
@@ -100,6 +103,41 @@ typedef void (^A2DownloadCompletion)(BOOL success, NSError * _Nullable error);
 @property (nonatomic, readonly, strong) A2DownloadRequest *request;
 - (instancetype)init NS_UNAVAILABLE;
 + (instancetype)new NS_UNAVAILABLE;
+@end
+
+#pragma mark - 全局限流闸
+
+/// 全局并发闸门 + 限流冷却。
+///
+/// 为什么需要：429/503 说明「我们打得太快」，逐个文件退避重试只会
+/// 继续按原并发打进去，服务端就一直是 429，界面上表现为进度不动。
+/// 这里做两件事：
+///   · 记录一次限流 → 全局冷却（按 Retry-After）并把并发上限减半
+///   · 连续成功若干次 → 上限缓慢涨回（有上限，不会抖动）
+///
+/// 批量下载器（A2BatchDownloader）在每轮开始时向它要生效并发数。
+@interface A2DownloadThrottle : NSObject
+
++ (instancetype)shared;
+
+/// requested 与当前全局上限取小。
+- (NSInteger)effectiveConnectionsFor:(NSInteger)requested;
+
+/// 记录一次 429/503：按 Retry-After（秒）冷却，并把上限减半（下限 1）。
+- (void)noteRateLimitedRetryAfter:(NSTimeInterval)seconds;
+
+/// 一次传输成功 —— 攒够次数后把上限涨回一档。
+- (void)noteTransferSucceeded;
+
+/// 距离冷却结束还剩几秒（0 = 不需要等）。
+- (NSTimeInterval)cooldownRemaining;
+
+/// 诊断串：cap=… cooldown=…s
+- (NSString *)diagnosticDescription;
+
+/// 测试用：恢复初始状态
+- (void)reset;
+
 @end
 
 #pragma mark - 客户端

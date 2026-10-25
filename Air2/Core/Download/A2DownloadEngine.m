@@ -55,6 +55,20 @@ static const NSInteger kBackoffCount = 3;
 static const NSUInteger kWriteBufferSize = 256 * 1024;
 /// 半成品文件后缀
 static NSString *const kPartSuffix = @".part";
+/// 单次请求的等待超时（拿到响应/下一包数据的间隔上限）
+static const NSTimeInterval kRequestTimeout = 30;
+/// 整份资源的下载上限（大文件留足，避免被资源超时误杀）
+static const NSTimeInterval kResourceTimeout = 1800;
+/// 停滞看门狗：连续这么多秒没有字节增长就判停滞
+static const NSTimeInterval kStallTimeout = 20;
+/// 看门狗采样间隔
+static const NSTimeInterval kStallTickInterval = 5;
+/// 全局并发上限的封顶值（限流后从它往下减）
+static const NSInteger kConcurrencyCapMax = 8;
+/// Retry-After 的取值上限，避免服务端给个离谱值把整批拖死
+static const NSTimeInterval kRetryAfterClamp = 30;
+/// 每成功这么多次，把限流压下去的并发上限涨回一档
+static const NSInteger kSuccessesPerCapStep = 16;
 
 #pragma mark - 请求
 
@@ -84,6 +98,95 @@ static NSString *const kPartSuffix = @".part";
 }
 @end
 
+#pragma mark - 全局限流闸
+
+@implementation A2DownloadThrottle {
+    NSLock *_lock;
+    NSInteger _cap;              ///< 当前并发上限（≤ kConcurrencyCapMax）
+    CFAbsoluteTime _cooldownUntil;
+    NSInteger _successStreak;
+}
+
++ (instancetype)shared {
+    static A2DownloadThrottle *shared = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        shared = [[A2DownloadThrottle alloc] init];
+    });
+    return shared;
+}
+
+- (instancetype)init {
+    self = [super init];
+    if (!self) return nil;
+    _lock = [[NSLock alloc] init];
+    _cap = kConcurrencyCapMax;
+    _cooldownUntil = 0;
+    _successStreak = 0;
+    return self;
+}
+
+- (NSInteger)effectiveConnectionsFor:(NSInteger)requested {
+    [_lock lock];
+    NSInteger cap = _cap;
+    [_lock unlock];
+    if (requested <= 0) return MAX(1, cap);
+    return MAX(1, MIN(requested, cap));
+}
+
+- (void)noteRateLimitedRetryAfter:(NSTimeInterval)seconds {
+    NSTimeInterval wait = MAX(1.0, MIN(seconds, kRetryAfterClamp));
+    CFAbsoluteTime now = CFAbsoluteTimeGetCurrent();
+
+    [_lock lock];
+    if (now + wait > _cooldownUntil) _cooldownUntil = now + wait;
+    NSInteger before = _cap;
+    _cap = MAX(1, _cap / 2);
+    _successStreak = 0;
+    NSInteger after = _cap;
+    [_lock unlock];
+
+    [A2Logger warning:@"Download"
+               message:[NSString stringWithFormat:
+                        @"[A2-DL] 触发限流：全局冷却 %.0fs，并发上限 %ld → %ld",
+                        wait, (long)before, (long)after]];
+}
+
+- (void)noteTransferSucceeded {
+    [_lock lock];
+    _successStreak += 1;
+    if (_successStreak >= kSuccessesPerCapStep && _cap < kConcurrencyCapMax) {
+        _cap += 1;
+        _successStreak = 0;
+    }
+    [_lock unlock];
+}
+
+- (NSTimeInterval)cooldownRemaining {
+    [_lock lock];
+    NSTimeInterval remain = _cooldownUntil - CFAbsoluteTimeGetCurrent();
+    [_lock unlock];
+    return MAX(0, remain);
+}
+
+- (NSString *)diagnosticDescription {
+    [_lock lock];
+    NSInteger cap = _cap;
+    NSTimeInterval remain = MAX(0, _cooldownUntil - CFAbsoluteTimeGetCurrent());
+    [_lock unlock];
+    return [NSString stringWithFormat:@"cap=%ld cooldown=%.0fs", (long)cap, remain];
+}
+
+- (void)reset {
+    [_lock lock];
+    _cap = kConcurrencyCapMax;
+    _cooldownUntil = 0;
+    _successStreak = 0;
+    [_lock unlock];
+}
+
+@end
+
 #pragma mark - 单个下载任务
 
 @interface A2FileFetcher : NSObject <NSURLSessionDataDelegate>
@@ -99,6 +202,13 @@ static NSString *const kPartSuffix = @".part";
 @property (nonatomic, assign) NSInteger retryCount;
 @property (nonatomic, assign) BOOL finished;
 @property (nonatomic, copy, nullable) NSMutableArray<NSError *> *candidateErrors;
+
+// 诊断：日志里要能说清「卡在哪个文件、哪个源、HTTP 多少」
+@property (nonatomic, assign) NSInteger attemptCount;        ///< 累计发起请求次数
+@property (nonatomic, assign) NSInteger lastHTTPStatus;      ///< 最近一次响应码（0=还没收到）
+@property (nonatomic, assign) CFAbsoluteTime lastByteAt;     ///< 最近一次收到字节的时刻
+@property (nonatomic, assign) BOOL cancelledByUser;          ///< 主动取消（不是传输错误）
+@property (nonatomic, strong, nullable) dispatch_source_t watchdog;
 
 // 断点续传校验信息（对应 ZL2 的 ResumeContext）
 @property (nonatomic, assign) int64_t contentLength;
@@ -186,7 +296,7 @@ static NSString *const kPartSuffix = @".part";
 
     NSURL *url = self.request.candidateURLs[self.candidateIndex];
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
-    req.timeoutInterval = 60;
+    req.timeoutInterval = kRequestTimeout;                 // 每次请求都有超时
     [req setValue:@"identity" forHTTPHeaderField:@"Accept-Encoding"];
 
     // 有断点则带 If-Range，服务端不匹配会返回 200（我们就从 0 重下）
@@ -197,13 +307,81 @@ static NSString *const kPartSuffix = @".part";
     }
 
     NSURLSessionConfiguration *cfg = NSURLSessionConfiguration.defaultSessionConfiguration;
-    cfg.timeoutIntervalForRequest = 60;
-    cfg.timeoutIntervalForResource = 3600;
-    cfg.HTTPMaximumConnectionsPerHost = 8;
+    cfg.timeoutIntervalForRequest = kRequestTimeout;
+    cfg.timeoutIntervalForResource = kResourceTimeout;
+    cfg.HTTPMaximumConnectionsPerHost = 4;
     self.session = [NSURLSession sessionWithConfiguration:cfg delegate:self delegateQueue:nil];
+
+    self.attemptCount += 1;
+    self.lastHTTPStatus = 0;
+    self.lastByteAt = CFAbsoluteTimeGetCurrent();
+
+    // 每次发起都把「文件 / 源 / 第几次」写清楚 ——
+    // 卡住时从日志就能判断是源的问题还是本地的问题。
+    [A2Logger info:@"Download"
+           message:[NSString stringWithFormat:
+                    @"[A2-DL] 请求 文件=%@ 源=%ld/%lu(%@) 尝试=%ld 重试=%ld 已收=%lld",
+                    self.request.destinationPath.lastPathComponent ?: @"(未知)",
+                    (long)(self.candidateIndex + 1),
+                    (unsigned long)self.request.candidateURLs.count,
+                    url.host ?: @"?",
+                    (long)self.attemptCount,
+                    (long)self.retryCount,
+                    self.receivedBytes]];
 
     self.currentTask = [self.session dataTaskWithRequest:req];
     [self.currentTask resume];
+    [self startWatchdog];
+}
+
+#pragma mark 停滞看门狗
+
+/// 每 kStallTickInterval 秒看一次：多久没字节增长了。
+/// 判停滞就主动掐掉这次请求（走失败路径换源），并打印当前文件/源/HTTP 状态。
+- (void)startWatchdog {
+    if (self.watchdog) return;
+
+    dispatch_source_t timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, self.queue);
+    uint64_t interval = (uint64_t)(kStallTickInterval * NSEC_PER_SEC);
+    dispatch_source_set_timer(timer, dispatch_time(DISPATCH_TIME_NOW, (int64_t)interval),
+                              interval, (uint64_t)(0.5 * NSEC_PER_SEC));
+    __weak typeof(self) weakSelf = self;
+    dispatch_source_set_event_handler(timer, ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self || self.finished) return;
+        if (self.lastByteAt <= 0) return;
+
+        NSTimeInterval idle = CFAbsoluteTimeGetCurrent() - self.lastByteAt;
+        if (idle < kStallTimeout) return;
+
+        NSURL *url = self.candidateIndex < (NSInteger)self.request.candidateURLs.count
+                   ? self.request.candidateURLs[self.candidateIndex] : nil;
+        NSString *detail = [NSString stringWithFormat:
+            @"[A2-DL] 停滞 %lds 文件=%@ 源=%@ HTTP=%ld 已收=%lld 尝试=%ld",
+            (long)idle,
+            self.request.destinationPath.lastPathComponent ?: @"(未知)",
+            url.host ?: @"(无源)",
+            (long)self.lastHTTPStatus,
+            self.receivedBytes,
+            (long)self.attemptCount];
+        [A2Logger warning:@"Download" message:detail];
+
+        // 掐掉这次请求，交给统一的失败处理（退避重试 / 换源 / 放弃）
+        [self.currentTask cancel];
+        [self.session invalidateAndCancel];
+        self.session = nil;
+        [self handleCandidateFailure:[self errorWithCode:A2DownloadErrorStalled
+                                                 message:detail]];
+        [self stopWatchdog];
+    });
+    dispatch_resume(timer);
+    self.watchdog = timer;
+}
+
+- (void)stopWatchdog {
+    if (!self.watchdog) return;
+    dispatch_source_cancel(self.watchdog);
+    self.watchdog = nil;
 }
 
 /// If-Range 的取值：优先 strong ETag，否则 Last-Modified
@@ -222,14 +400,52 @@ didReceiveResponse:(NSURLResponse *)response
 
     NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
     NSInteger code = http.statusCode;
+    // 诊断用的最近状态码（看门狗日志要打它；只做诊断，不做判据）
+    self.lastHTTPStatus = code;
+    self.lastByteAt = CFAbsoluteTimeGetCurrent();
 
     if (code < 200 || code >= 300) {
+        // 关键分类：4xx 里「文件不存在 / 没权限」不是网络抖动。
+        // 早先一视同仁当网络失败重试 3 次（1s+2s+4s），一个 404 要空转 7 秒；
+        // 依赖批量下载里这种地址成片出现时，界面上就是「进度不动」。
+        // 现在：永久失败立即换源，不重试。
+        BOOL permanent = (code == 401 || code == 403 || code == 404 ||
+                          code == 410 || code == 451);
+        BOOL rateLimited = (code == 429 || code == 503);
+
+        if (rateLimited) {
+            NSTimeInterval retryAfter = [self retryAfterSecondsFromResponse:http];
+            [[A2DownloadThrottle shared] noteRateLimitedRetryAfter:retryAfter];
+        }
+
+        [A2Logger warning:@"Download"
+                 message:[NSString stringWithFormat:
+                          @"[A2-DL] HTTP %ld %@ 文件=%@ 源=%@ 尝试=%ld",
+                          (long)code,
+                          permanent ? @"永久失败→换源" : (rateLimited ? @"限流→降并发退避" : @"临时失败→退避重试"),
+                          self.request.destinationPath.lastPathComponent ?: @"(未知)",
+                          http.URL.host ?: @"?",
+                          (long)self.attemptCount]];
+
         completionHandler(NSURLSessionResponseCancel);
-        NSError *err = [self errorWithCode:A2DownloadErrorNetworkFailure
-                                   message:[NSString stringWithFormat:@"HTTP %ld", (long)code]];
-        dispatch_async(self.queue, ^{ [self handleCandidateFailure:err]; });
+
+        NSString *msg = [NSString stringWithFormat:@"HTTP %ld", (long)code];
+        if (permanent) {
+            dispatch_async(self.queue, ^{
+                [self giveUpCurrentCandidate:[self errorWithCode:A2DownloadErrorNetworkFailure
+                                                         message:msg]];
+            });
+        } else {
+            NSError *err = [self errorWithCode:(rateLimited ? A2DownloadErrorRateLimited
+                                                           : A2DownloadErrorNetworkFailure)
+                                       message:msg];
+            dispatch_async(self.queue, ^{ [self handleCandidateFailure:err]; });
+        }
         return;
     }
+
+    // 拿到 2xx 就说明链路通了，让全局并发上限有涨回去的机会
+    [[A2DownloadThrottle shared] noteTransferSucceeded];
 
     // ---- 断点续传的严格校验（对应 ZL2 的 ResumeContext.canResume）----
     if (code == 206 && self.receivedBytes > 0) {
@@ -367,6 +583,7 @@ didReceiveResponse:(NSURLResponse *)response
 
         self.receivedBytes += (int64_t)data.length;
         self.bytesSinceLastTick += (int64_t)data.length;
+        self.lastByteAt = CFAbsoluteTimeGetCurrent();
 
         // 进度回调：正增量
         if (self.progressHandler) {
@@ -408,7 +625,13 @@ didCompleteWithError:(NSError *)error {
         [self flushBuffer];
 
         if (error) {
-            if (error.code == NSURLErrorCancelled) return;   // 主动取消，不处理
+            // NSURLErrorCancelled 有两种来源：
+            //   · 用户主动暂停/取消 —— 不回调，由 cancel/pause 自己收尾
+            //   · 我们自己掐的会话（看门狗、换源时 invalidateAndCancel）——
+            //     必须当作失败继续走流程
+            // 早先一律 return，后者会让 completion 永远不触发：
+            // 批量下载器的并发许可永远不还，整批卡死不再前进。
+            if (error.code == NSURLErrorCancelled && self.cancelledByUser) return;
             [self handleCandidateFailure:error];
             return;
         }
@@ -432,7 +655,7 @@ didCompleteWithError:(NSError *)error {
             [[NSFileManager defaultManager] removeItemAtPath:partPath error:nil];
             NSError *err = [self errorWithCode:A2DownloadErrorChecksumMismatch
                                        message:@"SHA1 校验失败"];
-            [self handleCandidateFailure:err];
+            [self giveUpCurrentCandidate:err];
             return;
         }
     }
@@ -445,7 +668,7 @@ didCompleteWithError:(NSError *)error {
             [[NSFileManager defaultManager] removeItemAtPath:partPath error:nil];
             NSError *err = [self errorWithCode:A2DownloadErrorChecksumMismatch
                                        message:@"压缩包结构损坏"];
-            [self handleCandidateFailure:err];
+            [self giveUpCurrentCandidate:err];
             return;
         }
     }
@@ -455,7 +678,7 @@ didCompleteWithError:(NSError *)error {
         NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:partPath error:nil];
         if ([attrs[NSFileSize] longLongValue] != self.request.expectedSize) {
             [[NSFileManager defaultManager] removeItemAtPath:partPath error:nil];
-            [self handleCandidateFailure:[self errorWithCode:A2DownloadErrorChecksumMismatch
+            [self giveUpCurrentCandidate:[self errorWithCode:A2DownloadErrorChecksumMismatch
                                                      message:@"文件大小不符"]];
             return;
         }
@@ -476,16 +699,48 @@ didCompleteWithError:(NSError *)error {
 
 #pragma mark 失败与换源
 
+/// Retry-After：优先按秒数解析，HTTP-date 形态退化为默认 5 秒。
+- (NSTimeInterval)retryAfterSecondsFromResponse:(NSHTTPURLResponse *)http {
+    NSString *raw = http.allHeaderFields[@"Retry-After"];
+    if (![raw isKindOfClass:NSString.class] || raw.length == 0) return 5.0;
+
+    NSScanner *scanner = [NSScanner scannerWithString:raw];
+    double seconds = 0;
+    if ([scanner scanDouble:&seconds] && seconds > 0) {
+        return MIN(seconds, kRetryAfterClamp);
+    }
+    return 5.0;   // HTTP-date 或畸形值：给一个保守的固定等待
+}
+
 /// 当前候选失败 —— 先退避重试，重试耗尽再换下一个候选
 - (void)handleCandidateFailure:(NSError *)error {
     if (self.finished) return;
     [self closeFileHandle];
     [self.session invalidateAndCancel];
     self.session = nil;
+    [self stopWatchdog];
+
+    // 同一候选重试也要把已收字节回退上报。
+    // 不回退的话，重下的那部分会被重复累计 ⇒ 总进度提前顶到 100% 后
+    // 一直停在满格，用户看到的就是「卡住」。
+    if (self.receivedBytes > 0 && self.progressHandler) {
+        self.progressHandler(-self.receivedBytes, -1);
+    }
 
     if (self.retryCount < kBackoffCount) {
         NSTimeInterval delay = kBackoffSeconds[self.retryCount];
+        // 429/503 的退避至少按 Retry-After 走，别比它更急
+        NSTimeInterval cooldown = [[A2DownloadThrottle shared] cooldownRemaining];
+        if (cooldown > delay) delay = cooldown;
+
         self.retryCount++;
+        [A2Logger info:@"Download"
+               message:[NSString stringWithFormat:
+                        @"[A2-DL] 重试 文件=%@ 第 %ld/%d 次 等 %.0fs 原因=%@",
+                        self.request.destinationPath.lastPathComponent ?: @"(未知)",
+                        (long)self.retryCount, kBackoffCount, delay,
+                        error.localizedDescription ?: @"(无)"]];
+
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
                        self.queue, ^{
             if (!self.finished) [self startCurrentCandidate];
@@ -493,10 +748,31 @@ didCompleteWithError:(NSError *)error {
         return;
     }
 
-    // 该候选耗尽，记下错误并换源
-    [self.candidateErrors addObject:error];
+    [self giveUpCurrentCandidate:error];
+}
+
+/// 放弃当前候选，换下一个（不重试）。
+/// 4xx 一律走这里 —— 文件不存在/没权限，重试一百次也是同一个结果。
+- (void)giveUpCurrentCandidate:(NSError *)error {
+    if (self.finished) return;
+    [self closeFileHandle];
+    [self.session invalidateAndCancel];
+    self.session = nil;
+    [self stopWatchdog];
+
+    [self.candidateErrors addObject:error ?: [self errorWithCode:A2DownloadErrorNetworkFailure
+                                                        message:@"候选失败"]];
     self.retryCount = 0;
-    self.candidateIndex++;
+    self.candidateIndex += 1;
+
+    [A2Logger warning:@"Download"
+             message:[NSString stringWithFormat:
+                      @"[A2-DL] 换源 文件=%@ 失败源序号=%ld 剩余=%lu 原因=%@",
+                      self.request.destinationPath.lastPathComponent ?: @"(未知)",
+                      (long)self.candidateIndex,
+                      (unsigned long)(self.request.candidateURLs.count > (NSUInteger)self.candidateIndex
+                                      ? self.request.candidateURLs.count - (NSUInteger)self.candidateIndex : 0),
+                      error.localizedDescription ?: @"(无)"]];
 
     // 换源时进度回退（新源从头下）
     if (self.receivedBytes > 0 && self.progressHandler) {
@@ -526,8 +802,10 @@ didCompleteWithError:(NSError *)error {
 }
 
 - (void)finishAllCandidatesExhausted {
-    NSString *msg = [NSString stringWithFormat:@"全部 %lu 个源均失败",
-                     (unsigned long)self.request.candidateURLs.count];
+    NSString *msg = [NSString stringWithFormat:@"全部 %lu 个源均失败：%@（%@）",
+                     (unsigned long)self.request.candidateURLs.count,
+                     self.request.destinationPath.lastPathComponent ?: @"(未知文件)",
+                     self.candidateErrors.lastObject.localizedDescription ?: @"无具体原因"];
     NSError *err = [NSError errorWithDomain:A2DownloadErrorDomain
                                        code:A2DownloadErrorAllCandidatesExhausted
                                    userInfo:@{
@@ -542,7 +820,14 @@ didCompleteWithError:(NSError *)error {
     self.finished = YES;
     self.operation.state = A2DownloadStateCompleted;
     [self stopSpeedTimer];
+    [self stopWatchdog];
     [self.session invalidateAndCancel];
+
+    [A2Logger info:@"Download"
+           message:[NSString stringWithFormat:@"[A2-DL] 完成 文件=%@ 字节=%lld 尝试=%ld",
+                    self.request.destinationPath.lastPathComponent ?: @"(未知)",
+                    self.receivedBytes ?: self.request.expectedSize,
+                    (long)self.attemptCount]];
 
     A2DownloadCompletion cb = self.completion;
     if (cb) cb(YES, nil);
@@ -553,8 +838,16 @@ didCompleteWithError:(NSError *)error {
     self.finished = YES;
     [self closeFileHandle];
     [self stopSpeedTimer];
+    [self stopWatchdog];
     [self.session invalidateAndCancel];
     self.operation.state = A2DownloadStateFailed;
+
+    [A2Logger error:@"Download"
+            message:[NSString stringWithFormat:@"[A2-DL] 失败 文件=%@ 已收=%lld 状态=%ld 尝试=%ld 原因=%@",
+                     self.request.destinationPath.lastPathComponent ?: @"(未知)",
+                     self.receivedBytes, (long)self.lastHTTPStatus,
+                     (long)self.attemptCount,
+                     error.localizedDescription ?: @"(无)"]];
 
     A2DownloadCompletion cb = self.completion;
     if (cb) cb(NO, error);
@@ -664,6 +957,7 @@ didCompleteWithError:(NSError *)error {
 - (void)pause {
     dispatch_async(self.queue, ^{
         if (self.finished) return;
+        self.cancelledByUser = YES;
 
         // 先落盘缓冲，保证已收数据都写进 .part 文件
         [self flushBuffer];
@@ -681,6 +975,7 @@ didCompleteWithError:(NSError *)error {
         [self.currentTask cancel];
         [self.session invalidateAndCancel];
         self.session = nil;
+        [self stopWatchdog];
 
         self.operation.state = A2DownloadStatePaused;
         [self stopSpeedTimer];
@@ -718,8 +1013,10 @@ didCompleteWithError:(NSError *)error {
     dispatch_async(self.queue, ^{
         if (self.finished) return;
         self.finished = YES;
+        self.cancelledByUser = YES;
         [self closeFileHandle];
         [self stopSpeedTimer];
+        [self stopWatchdog];
         [self.session invalidateAndCancel];
         [self discardPartialDownload];
     
@@ -795,10 +1092,28 @@ didCompleteWithError:(NSError *)error {
     fetcher.operation = op;
     fetcher.progressHandler = progress;
     fetcher.speedHandler = speed;
-    fetcher.completion = completion;
+
+    // 收尾时把句柄从 active 里摘掉 —— 早先从不摘，装几百个库就在
+    // 字典里留下几百个 fetcher（含各自 NSURLSession），越装越胖。
+    __weak typeof(self) weakSelf = self;
+    __weak A2FileFetcher *weakFetcher = fetcher;
+    fetcher.completion = ^(BOOL success, NSError *error) {
+        __strong typeof(weakSelf) strongSelf = weakSelf;
+        A2FileFetcher *f = weakFetcher;
+        if (strongSelf && f) {
+            @synchronized (strongSelf.active) {
+                if (strongSelf.active[key] == (id)f) {
+                    [strongSelf.active removeObjectForKey:key];
+                }
+            }
+        }
+        if (completion) completion(success, error);
+    };
     op.owner = fetcher;
 
-    self.active[key] = fetcher;
+    @synchronized (self.active) {
+        self.active[key] = fetcher;
+    }
     [fetcher start];
 
     return op;
