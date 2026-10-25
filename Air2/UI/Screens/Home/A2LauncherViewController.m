@@ -69,6 +69,8 @@
 /// 启动进度弹窗（ZL2 的 TitleTaskFlowDialog 形式）
 @property (nonatomic, strong, nullable) A2TaskLogCard *launchCard;
 @property (nonatomic, strong, nullable) A2TaskLogOutput *launchLog;
+/// 下载进度弹窗（ZL2 的 TaskFlowDialog 形式）
+@property (nonatomic, strong, nullable) A2InstallProgressDialog *launchDialog;
 @property (nonatomic, strong, nullable) id launchProgressObserver;
 @property (nonatomic, copy, nullable) NSString *lastSpeedText;
 
