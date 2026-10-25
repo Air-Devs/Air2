@@ -25,7 +25,8 @@
 #import <UIKit/UIKit.h>
 #import <unistd.h>
 
-#import "A2JITEnvironment.h"   // 判据（brk #0x69 / 区域验证 / 执行式探针）——唯一真相源
+#import "A2JITEnvironment.h"   // 区域验收快照（logRegionSnapshot，仅日志）
+#import "A2LegacyJITGate.h"    // ★唯一判据 = 老 Air（tree510）那套，原样移植★
 #import "UIKit+hook.h"         // UIWindow.mainWindow：key window 的唯一取法（不自造第二份）
 #import "a2_log.h"             // native 侧判据行出口（与 Air2 的 [A2Log criterion:] 同一落点）
 
@@ -94,101 +95,25 @@ static void a2jit_log_region(const char *tag) {
                (int)a2_jit_is_debugged(), tag);
 }
 
-/// 唯一判据：★放行优先★ —— 下面四条**任一成立**即认为「现在可以建 VM」。
+/// ★唯一判据：老 Air（tree510）那一套 —— Natives/Support/A2LegacyJITGate 原样移植★
 ///
-///   ① `entitlement`：内核级 JIT（TrollStore / 越狱装机：`dynamic-codesigning` /
-///      `com.apple.private.cs.debugger`）⇒ 进程天生有 JIT，直接认（零探测、零延迟）；
-///   ② `debugger-attached`：`CS_DEBUGGED`（有位调试器 attach 着本进程）⇒ 它会应答
-///      `brk #0x69`，**包括 libjvm 建 VM 时自己发的那一发**；
-///   ③ `verified-region`：`verifiedRegion != NULL`（本进程此前真拿到过调试器交付的、
-///      已映射且 max_protection 含 EXECUTE 的区）；
-///   ④ `exec-probe`：非镜像设备（< iOS 26）的匿名页执行式探针**真的跑过**
-///      （mmap → 写指令 → RX → 真 call 并核对返回值）。镜像设备这一条恒不成立。
+/// ★已删除 Air2 自己发明的「放行优先四条」★（entitlement / CS_DEBUGGED / verifiedRegion /
+/// exec-probe 任一即放行）。它们在真机上反复给出错误结论（先死后放、放行后仍闪退）：
+///   · entitlement 只说明「这种装机方式**有能力**提供 JIT」，不代表本进程现在能用；
+///   · Air2 那条 `CS_DEBUGGED` 读的是 `0x100`（内核里那是 `CS_HARD`），老 Air 读的是
+///     `0x10000000` ⇒ 这一条恒错（永远判不出「调试器在岗」）；
+///   · iOS 26+ 的 JIT 区是**建 VM 时 libjvm 自己发 `brk #0x69`** 才到手的 ⇒ 建 VM 之前
+///     `verifiedRegion` 几乎永远为空；把「能力声明」当「已验证」放行 ⇒ 首帧 SIGBUS。
 ///
-/// ★为什么改成「任一即放行」（2026-10-25 真机：StikDebug 里开完 JIT 后启动不再往下走）★
-///   上一版把 ③ 当成**唯一**就绪来源（要求 `verifiedRegion != NULL`），是**真死锁**：
-///   iOS 26+ 的 JIT 区是**建 VM 时 libjvm 自己发 `brk #0x69`** 才由调试器交付的
-///   ⇒ 建 VM **之前**本进程永远不会有 `verifiedRegion` ⇒ 判据永远否 ⇒ 永不放行。
-///   真机日志停在这两行之间（用户看到的「开完 JIT 也不继续」）：
-///   ```
-///   [A2-JIT-ENABLER] 判据 ready=0：没有可写 JIT 区（brk #0x69 未拿到区；…）⇒ 不放行建 VM
-///   [A2-JIT-ENABLER] 已拿到 JIT ⇔ 始终不出现
-///   ```
-///
-/// ★上一版的正确教训仍然保留★
-///   · `getppid()≠1`（被使能器重拉）**仍然不算就绪** —— 它只影响「要不要再跳一次」，
-///     见 ensureJITThen: 的 alreadyJumped；以前把它当就绪 ⇒ 没拿到区也建 VM（首帧 SIGBUS）。
-///   · 「凭 ② 放行」**不等于**「区域已验证」：日志必须写清放行依据
-///     （`ready=1(原因: debugger-attached)`），绝不把 ② 写成 ③。
-///   · ④ 也不能当成 ①：它不来自 entitlement，得真执行过才算。
+/// 现在的语义 = 老 Air 的 `AMEJITWaitReadyVerified()`（逐字搬运）：
+///   · 非镜像设备（< iOS 26）⇒ 直接放行（老 Air 的闰门整块被跳过，不闸）；
+///   · 镜像设备（iOS 26+）⇒ ① 调试器必须真的在岗
+///     （`ppid≠1` / `P_TRACED` / 任务级 BREAKPOINT·SOFTWARE 异常端口 三探针任一）；
+///     ② 且 `brk #0x69` 真的被服务过（Universal 基础脚本回的哨兵 `0x690000E0`
+///     也算应答 —— 它正是老 Air 要求的值）。
+/// why = 可读原因（凭哪一条放行 / 为什么不成），整段文案由 A2LegacyJITGate 给出。
 static BOOL a2jit_ready_now(NSString *_Nullable *_Nullable why) {
-    // ① 内核级 entitlement：装机自带 JIT ⇒ 直接认（不看 brk，不引入任何延迟）。
-    if (a2_jit_has_kernel_level()) {
-        if (why) *why = @"entitlement（TrollStore / 越狱内核级 JIT）";
-        return YES;
-    }
-
-    // ② 调试器已 attach（CS_DEBUGGED）⇒ 建 VM 的那发 brk 一定有人应答 ⇒ 放行。
-    //    ★实时查 csops、不缓存★：调试器是在本进程跑起来之后才 attach 的；
-    //    缓存一次「没 attach」就会把等待流程锁死（这正是本轮要修的死锁之一）。
-    if (a2_jit_is_debugged()) {
-        if (why) *why = @"debugger-attached（CS_DEBUGGED：调试器在岗 ⇒ brk #0x69 有人应答）";
-        return YES;
-    }
-
-    // ③ 此前已经真拿到过区（那发 brk 被服务过）⇒ 认，并打出验收行。
-    if ([A2JITEnvironment verifiedRegion] != NULL) {
-        a2jit_log_region("gate-cached-region");
-        if (why) {
-            *why = [NSString stringWithFormat:
-                @"verified-region（本进程已拿到可写 JIT 区 %p，size=%zu / 期望 %zu）",
-                [A2JITEnvironment verifiedRegion], [A2JITEnvironment verifiedRegionBytes],
-                [A2JITEnvironment expectedRegionBytes]];
-        }
-        return YES;
-    }
-
-    // ④ 非镜像设备（< iOS 26）：执行式探针真的跑过 ⇒ 同性质的真凭据。
-    if (![A2JITEnvironment needsDebuggerMapping] && [A2JITEnvironment execProofObtained]) {
-        if (why) *why = @"exec-probe（非镜像路径：真 mmap + 写指令 + 真执行通过）";
-        return YES;
-    }
-
-    // 四条都不成立 ⇒ 有界取一次（唯一能把「未就绪」变成「就绪」的动作）：
-    //   · 镜像设备：发一发有界 brk #0x69（拿到区 ⇒ ③ 成立；也能顺手完成 detach 时机判断）；
-    //   · 非镜像设备：A2JITEnvironment 内部走执行式探针。
-    NSString *envWhy = nil;
-    (void)[A2JITEnvironment ensureVerifiedWithinBudget:kA2JITVerifySlice reason:&envWhy];
-    a2jit_log_region("gate-probe");
-    if ([A2JITEnvironment verifiedRegion] != NULL) {
-        if (why) {
-            *why = [NSString stringWithFormat:
-                @"verified-region（刚发 brk #0x69 拿到可写 JIT 区 %p，size=%zu / 期望 %zu）",
-                [A2JITEnvironment verifiedRegion], [A2JITEnvironment verifiedRegionBytes],
-                [A2JITEnvironment expectedRegionBytes]];
-        }
-        return YES;
-    }
-    // 取区期间调试器可能刚好 attach 上（用户从 StikDebug 切回来的那一瞬间）⇒ 再判一次。
-    if (a2_jit_is_debugged()) {
-        if (why) *why = @"debugger-attached（CS_DEBUGGED：取区后复查，调试器在岗 ⇒ brk 有人应答）";
-        return YES;
-    }
-    if (![A2JITEnvironment needsDebuggerMapping] && [A2JITEnvironment execProofObtained]) {
-        if (why) *why = @"exec-probe（非镜像路径：取区后复查，真执行通过）";
-        return YES;
-    }
-
-    // ★四条都不成立 ⇒ 才拒绝★：给可读原因（不闪退；调用方据此出失败页 / 进入等待申请流程）。
-    if (why) {
-        BOOL mirror = [A2JITEnvironment needsDebuggerMapping];
-        *why = [NSString stringWithFormat:
-            @"四条判据都不成立：entitlement=0 / CS_DEBUGGED=0 / verifiedRegion=NULL / "
-            @"exec-probe=%@（%@）⇒ 不放行建 VM",
-            mirror ? @"不适用(镜像设备)" : @"未通过",
-            envWhy.length > 0 ? envWhy : @"无取证"];
-    }
-    return NO;
+    return A2LegacyJITGateReadyNow(why);
 }
 
 #pragma mark - ② 使能器（URL 选择 + 回退顺序）
@@ -543,12 +468,16 @@ static NSString *gA2JITLastFailure = nil;
 @implementation A2JITEnabler
 
 + (BOOL)isJITReadyNow {
+    return [self isJITReadyNowWithReason:NULL];
+}
+
++ (BOOL)isJITReadyNowWithReason:(NSString *_Nullable *_Nullable)whyOut {
     NSString *why = nil;
     BOOL ok = a2jit_ready_now(&why);
+    if (whyOut) *whyOut = why;
     // ★判据行的固定格式★：`判据 ready=0|1(原因: <放行依据>)（ppid=…）`。
-    //   `ready=1(原因: …)` 里的文案就是「凭哪一条放行」——四条判据各有自己的 tag
-    //   （entitlement / debugger-attached / verified-region / exec-probe），
-    //   ★绝不把 debugger-attached 写成「已验证」★（真机自证要能按这一行分辨）。
+    //   `ready=1(原因: …)` 里的文案就是「凭哪一条放行」—— 文案由 A2LegacyJITGate 给
+    //   （brk #0x69 已被服务 / 非镜像设备直接放行），★绝不把「调试器在岗」写成「已验证」★。
     a2_log_criterion(@"[A2-JIT-ENABLER] 判据 ready=%d(原因: %@)（ppid=%d）",
                      (int)ok, why ?: @"—", getppid());
     return ok;
@@ -559,6 +488,22 @@ static NSString *gA2JITLastFailure = nil;
     //   ★拿不到区不是错误★（iOS 26+ 的区是 libjvm 建 VM 时自己发 brk 取的）——
     //   这一行只是让真机能看清「我们这发 brk 拿到了什么」，如实打印，不拦路。
     a2jit_log_region(tag.length > 0 ? tag.UTF8String : "snapshot");
+}
+
++ (BOOL)openLegacyGateBeforeVMBuild:(NSString *_Nullable *_Nullable)whyOut {
+    // ★逐字转调老 Air 的闰门（Natives/Support/A2LegacyJITGate ⑤）★：
+    //   本层只负责把「结论 → BOOL + 可读原因」翻成上层能用的形状，
+    //   判定条件、顺序、日志全在 A2LegacyJITGate 里，一处都不在这里复制。
+    NSString *why = nil;
+    A2LegacyJITGateOutcome outcome = A2LegacyJITGateOpen(&why);
+    if (whyOut) *whyOut = why;
+    if (outcome == A2LegacyJITGateOutcomeOpen) {
+        return YES;
+    }
+    // ★未放行 ⇒ 绝不建 VM★：把老 Air 的 `return 1` 分支翻成可读原因交给上层失败页。
+    a2_log_criterion(@"[A2-JIT-GATE] 未放行（outcome=%ld）⇒ 中止启动、不建 VM：%@",
+                     (long)outcome, why ?: @"—");
+    return NO;
 }
 
 + (void)ensureJITThen:(void (^)(BOOL))done {
@@ -595,7 +540,7 @@ static NSString *gA2JITLastFailure = nil;
     //    调试器可能正在收尾，再跳一次就会「跳转 ↔ 重拉」无限循环。
     //    ★ppid≠1 也算「已经跳过一次」★：这说明本进程是被使能器重拉起来的（stikjit 那条路），
     //    再跳一次就是「重拉 → 再跳」的环路。旧实现靠把 ppid≠1 当成就绪来回避这个环，
-    //    现在它不再能当就绪（就绪只认 entitlement / verifiedRegion）⇒ 改在这里断环：
+    //    现在它不再能当就绪（就绪只认老 Air 的 AMEJITWaitReadyVerified）⇒ 改在这里断环：
     //    允许它把剩余预算用来等区，但绝不再拉起第二个使能器。
     BOOL alreadyJumped = gA2JITJumpedThisProcess || a2jit_launched_by_debugger();
     NSTimeInterval budget = alreadyJumped ? kA2JITRepeatWaitBudget : kA2JITWaitBudget;

@@ -333,7 +333,9 @@ static BOOL a2_process_has_kernel_jit(void) {
 
     extern int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
     const unsigned int kCSOpsEntitlementsBlob = 7;
-    const unsigned int kCSDebugged = 0x00000100u;
+    // ★0x10000000★（内核 cs_blobs.h：CS_HARD=0x100，CS_DEBUGGED=0x10000000）——
+    //   此前写成 0x00000100u 读的是 CS_HARD，判据因此恒错（老 Air utils.h 用的是 0x10000000）。
+    const unsigned int kCSDebugged = 0x10000000u;
 
     uint32_t flags = 0;
     BOOL debugged = NO;
@@ -386,7 +388,8 @@ BOOL a2_jit_has_kernel_level(void) {
 /// 也就是说「我们提前探一发有没有区」根本不是建 VM 的前置条件。
 BOOL a2_jit_is_debugged(void) {
     extern int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
-    const unsigned int kCSDebugged = 0x00000100u;
+    // ★CS_DEBUGGED = 0x10000000（此前误写 0x100 = CS_HARD，导致「调试器在岗」恒判不出来）★
+    const unsigned int kCSDebugged = 0x10000000u;
     uint32_t flags = 0;
     if (csops(getpid(), 0 /* CS_OPS_STATUS */, &flags, sizeof(flags)) != 0) return NO;
     return (flags & kCSDebugged) != 0;
@@ -400,11 +403,11 @@ static BOOL a2_process_has_jit_permission(void) {
     BOOL forced = (v != nil) && [NSUserDefaults.standardUserDefaults boolForKey:@"A2AllowJITExecProbe"];
     if (forced) return YES;
 
-    // CS_DEBUGGED = 0x00000100（内核 csops 状态位）
+    // CS_DEBUGGED = 0x10000000（内核 csops 状态位；0x100 是 CS_HARD，以前写错过）
     uint32_t flags = 0;
     extern int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
     if (csops(getpid(), 0 /* CS_OPS_STATUS */, &flags, sizeof(flags)) == 0) {
-        if ((flags & 0x00000100u) != 0) return YES;
+        if ((flags & 0x10000000u) != 0) return YES;
     }
     return NO;
 }

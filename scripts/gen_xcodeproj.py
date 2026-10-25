@@ -173,6 +173,11 @@ def runtime_stage_script():
         # 图标：直接放进 .app 根（actool 在无模拟器 runtime 的机器上不可用）
         # JIT 脚本：StikDebug 只认 script-name=universal.js ⇒ 把我们的脚本复制成这个名字
         'if [ -f "Assets/Air2JIT69.js" ]; then cp -f "Assets/Air2JIT69.js" "$APP"/UniversalJIT26.js; cp -f "Assets/Air2JIT69.js" "$APP"/universal.js; fi',
+        # ★Extension 脚本（= tree510 UniversalJIT26Extension.js，字节一致）★：
+        #   老 Air 的建 VM 前闰门拿到哨兵 0x690000E0 之后必须下发它（把 legacyCommands[0x69]
+        #   换成真建区）+ 设 detachAfterFirstBr，否则 libjvm 讨 JIT 区时无人建区 ⇒ 首帧 SIGBUS。
+        #   ★少拷这一份 = 闰门走「degraded mode」，包内自证必须查到这里★。
+        'if [ -f "Assets/Air2JIT69Ext.js" ]; then cp -f "Assets/Air2JIT69Ext.js" "$APP"/UniversalJIT26Extension.js; fi',
         # 图标：仓库根下的 Air2/Assets/AppIcons（不依赖 $SRC 变量；该脚本在仓库根执行）
         'cp -f "Air2/Assets/AppIcons"/*.png "$APP"/ 2>/dev/null || true',
         'for d in "$LIB"/Jars/lwjgl-*; do',

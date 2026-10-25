@@ -18,25 +18,20 @@
 //      「判据不认 JIT → 跳转 → 使能器重拉 App → 再判据 → 再跳转」的死循环。
 //
 //  四条铁律（顺序即实现顺序，改动必须保持）：
-//    ① **判据是「放行优先」：下面四条任一成立即放行**（2026-10-25 真机修正）：
-//       (a) 内核级 JIT entitlement（TrollStore / 越狱装机的 dynamic-codesigning /
-//           com.apple.private.cs.debugger）—— 装机自带 JIT，直接放行；
-//       (b) CS_DEBUGGED（有位调试器 attach 着本进程）—— 它会应答 brk #0x69，
-//           **包括 libjvm 建 VM 时自己发的那一发**；
-//       (c) verifiedRegion != NULL —— 本进程此前真拿到过调试器交付的、已映射且
-//           max 含 EXECUTE 的区；
-//       (d) 非镜像设备（< iOS 26）的匿名页执行式探针**真的跑过**（真 mmap + 写指令 + 执行）。
-//       ★为什么不再要求 (c)★：iOS 26+ 的 JIT 区是**建 VM 时 libjvm 自己发 brk #0x69**
-//       才由调试器交付的 ⇒ 建 VM 之前本进程永远不会有 region。把 (c) 当唯一判据 = 死锁
-//       （真机症状：在 StikDebug 里开完 JIT 后启动不再往下走）。
-//       ★但「凭 (b) 放行」≠「区域已验证」★：日志必须写清凭哪一条
-//       （`ready=1(原因: debugger-attached)`），不许把 (b) 写成 (c)。
-//       ★(getppid()≠1) 仍然不算就绪★：它只影响「要不要再跳一次」（见铁律 ②）。
-//       四条都不成立才返回未就绪，并给出可读原因（不闪退）。
+//    ① **判据只有一个：老 Air（tree510）那一套**，实现落在
+//       Natives/Support/A2LegacyJITGate（原样移植 isJITEnabled /
+//       AMEJITVerifyWritableJITRegion / JIT26IsLikelyDebuggerKeepAttached /
+//       JavaLauncher 的建 VM 前闰门）。本模块只负责「什么时候问、拿不到怎么申请」。
+//       ★Air2 曾自创「放行优先四条」（entitlement / CS_DEBUGGED / verifiedRegion /
+//       exec-probe 任一即放行）——真机证明它是错的（先死后放、放行后仍闪退）：
+//         · Air2 那条 CS_DEBUGGED 读的是 0x100（= CS_HARD），老 Air 读 0x10000000；
+//         · iOS 26+ 的 JIT 区是建 VM 时 libjvm 自己发 brk #0x69 才到手 ⇒ 建 VM 前
+//           verifiedRegion 几乎永远为空，把「能力声明」当「已验证」就会放行后 SIGBUS。
+//       这些判据已删除，不再有第二套判据参与启动决策。
 //    ② **防死循环**：同一进程最多跳一次；被使能器重拉起来的进程（getppid()≠1）也算
 //       「已跳过一次」⇒ 只做短等待、绝不再拉起使能器，跳转↔重拉 的无限循环由此断开。
-//    ③ **不许闪退**：拿不到就回调 NO，由调用方出可读失败页；绝不带着「四条都不成立」
-//       的状态去建 VM。
+//    ③ **不许闪退**：拿不到就回调 NO，由调用方出可读失败页；绝不带着「未就绪」
+//       的状态去建 VM（建 VM 前的最后校验由 A2LegacyJITGateOpen 承担）。
 //    ④ **顺序**：先弹「正在等待 JIT」→ 本次启动到此为止（调用方 return）→ 再 openURL
 //       拉起使能器 → 才轮询。调换任意两步都会让用户「点一下就被踢走」或「弹窗看不见」。
 //
@@ -70,16 +65,37 @@ NS_ASSUME_NONNULL_BEGIN
  */
 @interface A2JITEnabler : NSObject
 
-/// 本进程**现在**能否安全建 VM（同步、有界：最坏一次区域尝试 ≈2.5s）。
-/// 判据见头文件「四条铁律 ①」：**放行优先** —— entitlement / CS_DEBUGGED /
-/// verifiedRegion / 非镜像设备的执行式探针，**任一成立即 YES**；
-/// 四条都不成立才 NO，并给出可读原因（`lastFailureReason` / 日志里的 `ready=0(原因: …)`）。
+/// 本进程**现在**能否安全建 VM（同步）。
+/// ★判据只有一个来源★：老 Air（tree510）那套，见 Natives/Support/A2LegacyJITGate 的
+/// `A2LegacyJITGateReadyNow()`（= AMEJITWaitReadyVerified：非镜像设备直接放行；
+/// 镜像设备要求「调试器真在岗 + brk #0x69 真被服务」）。
+/// 不通过时 NO，并给出可读原因（`lastFailureReason` / 日志里的 `ready=0(原因: …)`）。
 + (BOOL)isJITReadyNow;
+
+/// 与 `isJITReadyNow` **同一判据**，另回传可读原因（供失败页 / 判据行 / 诊断）。
+/// ★不要另写一份判定★：两者都直接转调 A2LegacyJITGateReadyNow。
++ (BOOL)isJITReadyNowWithReason:(NSString *_Nullable *_Nullable)whyOut;
 
 /// 打一行区域验收快照（`[A2JIT] region=… size=… (X MB) expected=… enough=0|1 tag=…`）。
 /// 启动链在建 VM 前 / 建 VM 返回后各打一次 —— 拿不到区**不是错误**
 /// （iOS 26+ 的区由 libjvm 建 VM 时自己发 brk #0x69 取），本接口只如实报数、不拦路。
 + (void)logRegionSnapshot:(NSString *)tag;
+
+/// ★建 VM 之前的唯一闰门（老 Air `JavaLauncher.m` L1384–L1544 原样移植）★
+///
+/// 语义（逐条对齐老 Air，不许在此加任何新判据）：
+///   1. 非镜像设备（< iOS 26）⇒ 直接 YES（老 Air 的 `if (requiresDebugJITMapping)` 整块跳过）；
+///   2. 发一发 `brk #0x69`（安全网版本，无人服务返回 NULL 不致死）：
+///        · NULL                    ⇒ NO，`whyOut` 说明「JIT 调试器没有应答」；
+///        · 非哨兵（真指针）        ⇒ NO，`whyOut` 说明「设备上是 legacy 脚本」；
+///        · 哨兵 0x690000E0         ⇒ 继续；
+///   3. 下发 `UniversalJIT26Extension.js`（把 legacyCommands[0x69] 换成真建区）
+///      + `SetDetachAfterFirstBr(!A2JITAlwaysAttached)` + 清 EXC_MASK_BAD_ACCESS 异常端口；
+///   4. YES ⇒ 调用方**此刻才允许**调 `JNI_CreateJavaVM`。
+///
+/// ★调用点只有一个★：A2LaunchSession 的 createJVM 块（唯一建 VM 处），必须在
+/// `A2LaunchRunner launchWithPlanPath:` 之前。返回 NO 时**绝对不许建 VM**（否则首帧 SIGBUS）。
++ (BOOL)openLegacyGateBeforeVMBuild:(NSString *_Nullable *_Nullable)whyOut;
 
 /// 入口：判据 → 申请（拉起使能器）→ 等待（≤120s）→ 回调。
 ///

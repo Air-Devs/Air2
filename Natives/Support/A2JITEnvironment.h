@@ -149,6 +149,10 @@ void *_Nullable a2_jit_brk69_create_region_safe(size_t len);
 /// legacyCommands[0x69] 从「回哨兵」改成「真建区」（[JIT-ORDER]）。失败返回 NO，不致死。
 BOOL a2_jit_send_script_safe(const char *utf8, size_t len);
 
+/// 带安全网的「首个 brk 之后脱离」（brk #0xf00d cmd=3，= 老 Air JIT26SetDetachAfterFirstBr）。
+/// 无人应答时返回 NO（降级），不致死。
+BOOL a2_jit_set_detach_after_first_br(BOOL detach);
+
 /// 统一诊断日志（前缀 [A2JIT]；写 stderr，随 stdout/stderr 重定向进 latestlog.txt）。
 void a2_jit_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 
