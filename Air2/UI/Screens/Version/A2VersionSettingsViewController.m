@@ -54,6 +54,9 @@
 @property (nonatomic, strong) NSMutableArray<A2SettingsRow *> *folderRows;
 /// 左侧标签栏（对照 ZL2 的 TabMenu）
 @property (nonatomic, strong) A2VersionTabBar *tabBar;
+/// 右栏自己的滚动容器（不用基类那个，见 setupTabLayout 的说明）
+@property (nonatomic, strong) UIScrollView *contentScroll;
+@property (nonatomic, strong) UIStackView *contentStack;
 @end
 
 @implementation A2VersionSettingsViewController
@@ -89,9 +92,18 @@
 
 #pragma mark - 标签布局
 
-/// 左侧标签栏 + 右侧内容（对照 ZL2 的 TabMenu + NavigationUI）
+/// 左侧标签栏 + 右侧内容。
+///
+/// ⚠️ 不能用基类的 scrollView —— 它在 updateViewConstraints 里
+/// 被钉死成「贴满全屏」（leading/trailing 都到 self.view 边缘）。
+/// 我再加一条 leading 到标签栏右边，两者冲突，结果是
+/// 标签栏和内容重叠（截图里左边能看到被切掉一半的「总览」「启动」）。
+///
+/// 所以这里自建一套：self.view 上直接放 tabBar + 一个独立的 scrollView。
+/// 基类那个用不上了（它会自己加约束，但我们不往里放东西，
+/// 内容为零所以看不见）。
 - (void)setupTabLayout {
-    self.usesScrollContent = YES;
+    self.usesScrollContent = NO;
 
     UIView *host = self.view;
 
@@ -106,33 +118,50 @@
     };
     [host addSubview:_tabBar];
 
+    // ---- 右栏：自己的滚动容器 ----
+    _contentScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    _contentScroll.translatesAutoresizingMaskIntoConstraints = NO;
+    _contentScroll.showsVerticalScrollIndicator = NO;
+    _contentScroll.contentInsetAdjustmentBehavior =
+        UIScrollViewContentInsetAdjustmentNever;
+    [host addSubview:_contentScroll];
+
+    _contentStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _contentStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _contentStack.axis = UILayoutConstraintAxisVertical;
+    _contentStack.spacing = A2SpaceL;
+    [_contentScroll addSubview:_contentStack];
+
     [NSLayoutConstraint activateConstraints:@[
+        // 标签栏：固定宽 96（88 太窄，四字标题会被裁）
         [_tabBar.topAnchor constraintEqualToAnchor:host.safeAreaLayoutGuide.topAnchor
                                           constant:A2SpaceM],
         [_tabBar.leadingAnchor constraintEqualToAnchor:host.leadingAnchor
                                              constant:A2SpaceM],
-        [_tabBar.widthAnchor constraintEqualToConstant:88],
-        [_tabBar.bottomAnchor constraintLessThanOrEqualToAnchor:host.safeAreaLayoutGuide.bottomAnchor],
+        [_tabBar.widthAnchor constraintEqualToConstant:96],
+
+        // 内容区：从标签栏右侧到屏幕右边
+        [_contentScroll.topAnchor constraintEqualToAnchor:host.safeAreaLayoutGuide.topAnchor],
+        [_contentScroll.bottomAnchor constraintEqualToAnchor:host.bottomAnchor],
+        [_contentScroll.leadingAnchor constraintEqualToAnchor:_tabBar.trailingAnchor
+                                                    constant:A2SpaceM],
+        [_contentScroll.trailingAnchor constraintEqualToAnchor:host.trailingAnchor
+                                                     constant:-A2SpaceM],
+
+        // 内容栈
+        [_contentStack.topAnchor constraintEqualToAnchor:_contentScroll.contentLayoutGuide.topAnchor],
+        [_contentStack.bottomAnchor constraintEqualToAnchor:_contentScroll.contentLayoutGuide.bottomAnchor],
+        [_contentStack.leadingAnchor constraintEqualToAnchor:_contentScroll.frameLayoutGuide.leadingAnchor],
+        [_contentStack.trailingAnchor constraintEqualToAnchor:_contentScroll.frameLayoutGuide.trailingAnchor],
     ]];
 
-    // ---- 右栏：内容区（复用基类的 scrollView + contentStack）----
-    UIScrollView *scroll = self.scrollView;
-    UIStackView *stack = self.contentStack;
-
-    [NSLayoutConstraint activateConstraints:@[
-        [scroll.leadingAnchor constraintEqualToAnchor:_tabBar.trailingAnchor
-                                             constant:A2SpaceM],
-    ]];
-
-    (void)stack;
     [self showTab:A2VersionTabOverview];
 }
 
 /// 切换标签：清空右栏，重建对应内容
 - (void)showTab:(A2VersionTab)tab {
-    UIStackView *stack = self.contentStack;
-    for (UIView *v in [stack.arrangedSubviews copy]) {
-        [stack removeArrangedSubview:v];
+    for (UIView *v in [self.contentStack.arrangedSubviews copy]) {
+        [self.contentStack removeArrangedSubview:v];
         [v removeFromSuperview];
     }
 
@@ -155,6 +184,11 @@
     }
 
     [self refreshIsolationUI];
+}
+
+/// 子类自己的 addSection（基类的 addSection 加的是基类 contentStack）
+- (void)addSection:(UIView *)section {
+    [self.contentStack addArrangedSubview:section];
 }
 
 #pragma mark - 顶部信息

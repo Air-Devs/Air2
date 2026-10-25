@@ -384,6 +384,10 @@
         [_stepStack.trailingAnchor constraintEqualToAnchor:_stepScroll.contentLayoutGuide.trailingAnchor],
         [_stepStack.widthAnchor constraintEqualToAnchor:_stepScroll.frameLayoutGuide.widthAnchor],
 
+        // 步骤区最小高度 —— 否则内容为空时会被压成 0，
+        // 整个弹窗只剩一个取消按钮（这就是「只显示一个大大的取消按钮」的原因）。
+        [_stepScroll.heightAnchor constraintGreaterThanOrEqualToConstant:80],
+
         [_cancelButton.topAnchor constraintEqualToAnchor:_stepScroll.bottomAnchor constant:16],
         [_cancelButton.bottomAnchor constraintEqualToAnchor:content.bottomAnchor constant:-16],
         [_cancelButton.leadingAnchor constraintEqualToAnchor:content.leadingAnchor constant:16],
