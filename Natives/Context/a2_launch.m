@@ -162,18 +162,24 @@ static int a2_run_main(JNIEnv *env, NSString *mainClass, NSArray<NSString *> *ar
     NSUInteger gi = [args indexOfObject:@"--gameDir"];
     if (gi != NSNotFound && gi + 1 < args.count) a2gd = args[gi + 1];
     if (a2gd.length == 0 && args.count > 0) {
-        NSString *first = args.firstObject;
-        if ([first hasSuffix:@".json"]) {
-            NSData *jd = [NSData dataWithContentsOfFile:first];
-            if (jd.length) {
-                id obj = [NSJSONSerialization JSONObjectWithData:jd options:0 error:nil];
-                if ([obj isKindOfClass:NSDictionary.class]) {
-                    NSArray *inner = ((NSDictionary *)obj)[@"arguments"];
-                    if ([inner isKindOfClass:NSArray.class]) {
-                        NSUInteger k = [inner indexOfObject:@"--gameDir"];
-                        if (k != NSNotFound && k + 1 < inner.count) a2gd = inner[k + 1];
+        // A2Entry 这条路的参数形态不稳定：可能是 <plan.json>，也可能是 "--plan <plan.json>"。
+        // 逐个参数找 .json 与 /Documents/minecraft 形态的路径，任命中即可。
+        for (NSString *a in args) {
+            if (a2gd.length) break;
+            if ([a hasSuffix:@".json"]) {
+                NSData *jd = [NSData dataWithContentsOfFile:a];
+                if (jd.length) {
+                    id obj = [NSJSONSerialization JSONObjectWithData:jd options:0 error:nil];
+                    if ([obj isKindOfClass:NSDictionary.class]) {
+                        NSArray *inner = ((NSDictionary *)obj)[@"arguments"];
+                        if ([inner isKindOfClass:NSArray.class]) {
+                            NSUInteger k = [inner indexOfObject:@"--gameDir"];
+                            if (k != NSNotFound && k + 1 < inner.count) a2gd = inner[k + 1];
+                        }
                     }
                 }
+            } else if ([a containsString:@"/Documents/minecraft"]) {
+                a2gd = a;
             }
         }
     }
@@ -183,7 +189,7 @@ static int a2_run_main(JNIEnv *env, NSString *mainClass, NSArray<NSString *> *ar
         int cdrc = chdir(a2gd.UTF8String);
         a2_log_f(@"[RT-P1] chdir(gameDir) rc=%d path=%@", cdrc, a2gd);
     } else {
-        a2_log_f(@"[RT-P1] chdir 跳过：没能从参数/计划里取到 gameDir");
+        a2_log_f(@"[RT-P1] chdir 跳过：没能从参数/计划里取到 gameDir（args=%@）", args);
     }
 
     NSString *binary = [mainClass stringByReplacingOccurrencesOfString:@"." withString:@"/"];
