@@ -81,7 +81,10 @@
     // setupScrollContent 还是 setupPlainContent。
     // 我在子类 viewDidLoad 里设成 NO 时，plainContentView 已经是 nil 了，
     // 后面拿它当约束宿主就是「anchor 到 nil」，直接崩溃。
-    _usesScrollContent = NO;
+    //
+    // 用属性访问，不能用 _usesScrollContent —— 那是基类 .m 里的 ivar，
+    // 子类看不到。
+    self.usesScrollContent = NO;
     return self;
 }
 
