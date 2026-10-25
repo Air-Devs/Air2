@@ -121,7 +121,8 @@ static NSString *A2SHA1OfFile(NSString *path) {
             NSString *parentID = json[@"inheritsFrom"];
             if ([parentID isKindOfClass:NSString.class] && parentID.length > 0) {
                 NSString *parentJSON = [path versionJSONPath:parentID];
-                if (![fm fileExistsAtPath:parentJSON]) {
+                // fm 在 200 行之后才声明，这里直接用全限定名
+                if (![NSFileManager.defaultManager fileExistsAtPath:parentJSON]) {
                     A2IntegrityIssue *i = [A2IntegrityIssue new];
                     i.path = parentJSON;
                     i.kind = @"父版本";
