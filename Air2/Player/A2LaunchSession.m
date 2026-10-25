@@ -729,7 +729,11 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
             if ([bare hasSuffix:@".dylib"]) bare = [bare substringToIndex:bare.length - 6];
             if (bare.length > 0) {
                 [jvmOptions addObject:[NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%@", bare]];
-                [A2Log criterion:@"[A2-AGENT] GL 后端：opengl.libname=%@", bare];
+                // ★同时设 opengles.libname★（真机 hs_err 证据：MC 1.7.10 的 GL11.glLoadIdentity
+                //   经 lwjglx 落到 LWJGL 的 **GLES** 绑定，而 GLES 绑定读的是 opengles.libname，
+                //   默认值就是 libGLESv2 → 打到 ANGLE 的 GLES1 状态机 ⇒ SIGBUS）。
+                [jvmOptions addObject:[NSString stringWithFormat:@"-Dorg.lwjgl.opengles.libname=%@", bare]];
+                [A2Log criterion:@"[A2-AGENT] GL 后端：opengl.libname=%@ opengles.libname=%@", bare, bare];
             }
         }
     }
