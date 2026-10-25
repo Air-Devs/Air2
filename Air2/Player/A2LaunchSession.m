@@ -750,6 +750,9 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                                                           reasonText:@"JIT 已就绪 ⇒ 走带 JIT 的启动参数路径"
                                                             evidence:probe.lastEvidence]];
                 [A2Log log:@"[A2-LAUNCH] ③ 建 VM 开始（可能要 10~60 秒；若之后没有“建 VM 返回”行 ⇒ 卡在建 VM）"];
+                // ★区域验收快照（建 VM 前）★：拿到的是 64MB 还是一页/没有，一眼可见。
+                //   拿不到不是错误（iOS 26+ 的区由 libjvm 建 VM 时自己发 brk #0x69 取）。
+                [A2JITEnabler logRegionSnapshot:@"before-vm"];
                 vmRC = [A2LaunchRunner launchWithPlanPath:planPath
                                              entryJarPath:entryJar
                                            patchJarPath:patchJar
@@ -764,6 +767,9 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                                             rendererDylib:renderer.identifier
                                               renderScale:renderScale];
                 [A2Log log:@"[A2-LAUNCH] ③ 建 VM 返回 rc=%d", vmRC];
+                // ★区域验收快照（建 VM 之后）★：此刻 libjvm 已经发过它自己那发 brk #0x69，
+                //   这一行如实报本模块视角拿到的区（拿不到不追责：libjvm 的 rc 才是结论）。
+                [A2JITEnabler logRegionSnapshot:@"after-vm"];
                 if (vmRC == 0) {
                     return YES;
                 }

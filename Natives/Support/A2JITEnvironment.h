@@ -170,8 +170,19 @@ A2JITExecProbeResult a2_jit_exec_probe_anonymous(void);
 
 /// 本进程是否具备「内核级 JIT」：**只认 entitlement**（TrollStore / 越狱装机带来的
 /// `dynamic-codesigning` / `com.apple.private.cs.debugger`）。
-/// ★CS_DEBUGGED 不算★——它只说明有位调试器 attach 着、能应答 brk，
-/// 不说明本进程已经拿到可执行区；把它当内核级 JIT 会绕过 brk 取证（历史缺陷）。
+/// ★CS_DEBUGGED 不算内核级 JIT★——它只说明有位调试器 attach 着、能应答 brk，
+/// 不说明本进程已经拿到可执行区。要看 CS_DEBUGGED 请用 a2_jit_is_debugged()（独立的判据来源）。
 BOOL a2_jit_has_kernel_level(void);
+
+/// 本进程此刻是否处于 `CS_DEBUGGED`（有位调试器 attach 着本进程）。
+///
+/// 语义（2026-10-25 真机修正后的一等判据）：
+///   · 它是「放行优先」判据④条里的一条 —— 调试器在岗 ⇒ 它会应答 brk #0x69，
+///     包括 **libjvm 建 VM 时自己发出的那一发**。
+///   · 它**不是**「已验证 JIT 区」：调用方日志必须写清「凭哪一条放行」
+///     （例如 `ready=1(原因: debugger-attached)`），不得凭它声称「区域已验证」。
+///   · ★每次实时查 csops，不缓存★：调试器是在进程跑起来之后才 attach 的，
+///     缓存一次「没 attach」会把整个等待流程锁死（历史缺陷）。
+BOOL a2_jit_is_debugged(void);
 
 NS_ASSUME_NONNULL_END

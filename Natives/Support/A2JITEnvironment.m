@@ -377,6 +377,21 @@ BOOL a2_jit_has_kernel_level(void) {
     return a2_process_has_kernel_jit();
 }
 
+/// ★一等判据（2026-10-25 真机修正）★：CS_DEBUGGED 实时查询。
+///
+/// 为什么必须实时、不缓存：调试器（StikDebug 等）是在**本进程已经跑起来之后**才 attach 的。
+/// 只要缓存一次「没 attach」，用户开完 JIT 回来仍然读到旧值 ⇒ 永远不放行（死锁）。
+/// 为什么它足以放行：debugged 的真实含义是「有位调试器 attach 着，会应答本进程的 brk #0x69」，
+/// 而 iOS 26+ 的 JIT 区恰恰是**建 VM 时 libjvm 自己发的那一发 brk** 交付的 ——
+/// 也就是说「我们提前探一发有没有区」根本不是建 VM 的前置条件。
+BOOL a2_jit_is_debugged(void) {
+    extern int csops(pid_t pid, unsigned int ops, void *useraddr, size_t usersize);
+    const unsigned int kCSDebugged = 0x00000100u;
+    uint32_t flags = 0;
+    if (csops(getpid(), 0 /* CS_OPS_STATUS */, &flags, sizeof(flags)) != 0) return NO;
+    return (flags & kCSDebugged) != 0;
+}
+
 static BOOL a2_process_has_jit_permission(void) {
     // 只有调试器连通(CS_DEBUGGED)或显式开关时才允许做"执行"式自证。
     //   · 侧载/巨魔机没装调试器时，JIT 面本身由 brk/内核路径判定，不需要这一跳；
@@ -802,6 +817,30 @@ static int gA2JITEnsureKickInflight = 0;
             return YES;
         }
         break;   // brk 明确未被服务 ⇒ 不再叠加（避免多个卡死的 brk 线程）
+    }
+    // ★★放行优先（2026-10-25 真机修正：修「StikDebug 开完 JIT 后不继续」）★★
+    //   死锁式判据（`verifiedRegion != NULL` 才放行）在这里也是错的，原因和闸门里一样：
+    //   iOS 26+ 的 JIT 区是**建 VM 时 libjvm 自己发的那一发 brk #0x69** 交付的；
+    //   我们提前探的这一发拿不到区，恰恰是常态（脚本可能只对 JVM 的请求建区），
+    //   **不构成「接下来不能建 VM」的理由**。有调试器 attach（CS_DEBUGGED）就说明
+    //   libjvm 那一发 brk 一定有人应答 ⇒ 放行，让 libjvm 自己报错（比我们猜更可信）。
+    //   ★但绝不谎报「已验证」★：verdict 保持原档（不做假），evidence 写明凭哪一条放行；
+    //   ★detach 仍然只在「真拿到 >= 期望大小的区」后才发★（见上面那个分支，本轮没有区 ⇒ 不发）。
+    size_t wantBytes = a2_jit_expected_region_bytes();
+    a2_jit_log("[A2JIT] region=%p size=%zu (%.2f MB) expected=%zu (%.2f MB) enough=%d "
+               "(探针 %.2fs 内未拿到区；本区由 libjvm 建 VM 时自己发 brk 取)",
+               gA2JITVerifiedRegion, gA2JITDeliveredBytes,
+               (double)gA2JITDeliveredBytes / (1024.0 * 1024.0),
+               wantBytes, (double)wantBytes / (1024.0 * 1024.0),
+               (gA2JITVerifiedRegion != NULL && gA2JITDeliveredBytes >= wantBytes) ? 1 : 0,
+               -[t0 timeIntervalSinceNow]);
+    if (a2_jit_is_debugged()) {
+        if (whyOut) *whyOut = @"debugger-attached (CS_DEBUGGED)：本进程还没拿到区，放行由 libjvm 建 VM 时自己发 brk 取区";
+        a2_jit_log("[A2JIT] ensureVerifiedWithinBudget: 未取到区但调试器已 attach(CS_DEBUGGED) %.2fs ⇒ "
+                   "放行（mirror=%d）：建 VM 的那发 brk 会由 libjvm 发出，拿不到时由 libjvm 自己报错",
+                   -[t0 timeIntervalSinceNow], a2_jit_device_needs_debug_mapping());
+        gA2JITRegionEvidence = @"debugger-attached (CS_DEBUGGED)：本进程未取到区，JIT 区交由 libjvm 建 VM 时取";
+        return YES;
     }
     if (whyOut) *whyOut = gA2JITRegionEvidence ?: @"brk #0x69 NOT serviced within budget -- JIT not verified";
     a2_jit_log("[A2JIT] ensureVerifiedWithinBudget: NOT verified within %.2fs budget (mirror=%d) -- JVM creation will be blocked",

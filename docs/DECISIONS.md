@@ -272,3 +272,37 @@
 - **来源**：本仓 `Air2/Core/Addons/A2MirrorResolver.[hm]`、`Air2/Core/Version/A2GameInstaller.m`、
   `Air2/Core/Download/A2DownloadEngine.m`、`Air2/Core/Settings/A2Settings.[hm]`、
   `Air2/UI/Screens/Settings/A2AppearanceSettings.m`、`tests/Mirror/`、`tests/Core/test_install_concurrency.py`。
+
+---
+
+## ADR-012：JIT 就绪判据改为【放行优先】（entitlement / CS_DEBUGGED / verifiedRegion / exec-probe 任一即放行）
+
+- **状态**：已接受（取代 ADR-007 决策第 2 条「只认真实测一次」的**排他性**部分）
+- **日期**：2026-10-25
+- **背景**：ADR-007 把「拿到 `brk #0x69` 交付的区域」当成**唯一**就绪判据。真机（StikDebug
+  里开完 JIT 后启动不再往下走）证明这是**死锁**：iOS 26+ 的 JIT 区是**建 VM 时 libjvm
+  自己发的那一发 `brk #0x69`** 才由调试器交付的 ⇒ 建 VM 之前本进程**永远**没有
+  `verifiedRegion` ⇒ 判据永远否 ⇒ 永不放行。判据与它要保护的动作之间存在循环依赖。
+- **决策**：就绪判据改为**放行优先**，下面四条**任一成立**即放行建 VM：
+  1. 内核级 entitlement（`dynamic-codesigning` / `com.apple.private.cs.debugger`，TrollStore / 越狱）；
+  2. `CS_DEBUGGED`（有位调试器 attach 着本进程 ⇒ 它会应答 `brk #0x69`，含 libjvm 那一发）；
+  3. `verifiedRegion != NULL`（本进程此前真拿到过调试器交付的、`mapped=1 + size>0 + max` 含 X 的区）；
+  4. 非镜像设备（< iOS 26）的匿名页执行式探针**真的跑过**（mmap → 写指令 → RX → 真 call）。
+  **四条都不成立**才拒绝，并给可读原因（不闪退）。判据只落 `Natives/Support` 一处
+  （`A2JITEnabler` 的 `a2jit_ready_now`；`A2JITEnvironment ensureVerifiedWithinBudget:`
+  同一口径，供启动链 ② 使用）。
+- **保留的约束**：
+  - 「凭 CS_DEBUGGED 放行」**不等于**「区域已验证」：判据行必须写清依据
+    （`[A2-JIT-ENABLER] 判据 ready=1(原因: debugger-attached)（ppid=…）`），不许把 ② 写成 ③；
+  - `getppid()≠1`（被使能器重拉）**仍然不算就绪**，只用于防死循环（不再跳第二次）；
+  - `SetDetachAfterFirstBr(1)` **只在确实拿到 `size >= expected`（默认 64MB）的区**之后才发；
+  - 区域验收行 `[A2JIT] region=… size=… (X MB) expected=… enough=0|1` 保留，并在建 VM 前 /
+    建 VM 返回后各打一次（`tag=before-vm` / `tag=after-vm`）；拿不到区**不崩溃**，
+    由 libjvm 自己报错（它的 rc 才是结论）。
+- **理由**：把「我们提前能不能取到区」从判据降为**证据之一** —— 真正决定建 VM 成败的是
+  libjvm 那一发 `brk #0x69` 有没有人应答，而「有调试器 attach」正是这件事的现场证据；
+  提前探一发拿不到区是**常态**（脚本可能只对 JVM 的请求建区），不构成阻断理由。
+- **风险 / 边界**：调试器 attach 着而 JIT 实际不可用（例如脚本未指派）时，会走到建 VM 才失败 ——
+  这是**有意接受**的取舍：失败点从「永远不启动」变成「libjvm 报可读错误」。
+- **落地**：`Natives/Support/A2JITEnabler.[hm]`、`Natives/Support/A2JITEnvironment.[hm]`
+  （新增 `a2_jit_is_debugged()`）、`Air2/Player/A2LaunchSession.m`（建 VM 前后区域快照）。
