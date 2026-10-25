@@ -188,6 +188,39 @@ static int a2_run_main(JNIEnv *env, NSString *mainClass, NSArray<NSString *> *ar
                                withIntermediateDirectories:YES attributes:nil error:nil];
         int cdrc = chdir(a2gd.UTF8String);
         a2_log_f(@"[RT-P1] chdir(gameDir) rc=%d path=%@", cdrc, a2gd);
+
+        // ★一次性诊断(73b4dc7+)★：MC 用 gson 读某个 JSON 时拿到的是字符串 ⇒
+        //   扫 gameDir 下所有 *.json，把「以引号开头 / 解析失败」的文件指名道姓打出来。
+        NSMutableArray<NSString *> *dirs = [NSMutableArray arrayWithObject:a2gd];
+        [dirs addObject:[a2gd stringByAppendingPathComponent:@"assets/indexes"]];
+        NSString *vers = [a2gd stringByAppendingPathComponent:@"versions"];
+        for (NSString *v in [NSFileManager.defaultManager contentsOfDirectoryAtPath:vers error:nil]) {
+            [dirs addObject:[vers stringByAppendingPathComponent:v]];
+        }
+        NSUInteger scanned = 0, bad = 0;
+        for (NSString *dir in dirs) {
+            for (NSString *name in [NSFileManager.defaultManager contentsOfDirectoryAtPath:dir error:nil]) {
+                if (![name.pathExtension.lowercaseString isEqualToString:@"json"]) continue;
+                NSString *full = [dir stringByAppendingPathComponent:name];
+                NSData *d = [NSData dataWithContentsOfFile:full];
+                if (d.length == 0) continue;
+                scanned++;
+                const uint8_t *p = d.bytes;
+                BOOL startsQuote = (p[0] == '"');
+                id obj = [NSJSONSerialization JSONObjectWithData:d options:0 error:nil];
+                BOOL badShape = (obj == nil) || ![obj isKindOfClass:NSDictionary.class];
+                if (startsQuote || badShape) {
+                    bad++;
+                    NSString *head = [[[NSString alloc] initWithData:[d subdataWithRange:NSMakeRange(0, MIN((NSUInteger)80, d.length))]
+                                                            encoding:NSUTF8StringEncoding];
+                    a2_log_f(@"[RT-P1][JSON-BAD] %@ size=%lu startsQuote=%d dict=%d head=%@",
+                             full, (unsigned long)d.length, (int)startsQuote,
+                             (int)[obj isKindOfClass:NSDictionary.class],
+                             [head stringByReplacingOccurrencesOfString:@"\n" withString:@" "]);
+                }
+            }
+        }
+        a2_log_f(@"[RT-P1][JSON-BAD] 扫描完成：共 %lu 个 json，可疑 %lu 个", (unsigned long)scanned, (unsigned long)bad);
     } else {
         a2_log_f(@"[RT-P1] chdir 跳过：没能从参数/计划里取到 gameDir（args=%@）", args);
     }
