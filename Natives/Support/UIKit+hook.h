@@ -3,7 +3,7 @@
 // ★ Air2 最小兼容桩（COMPAT STUB）—— UIWindow(global) 声明 ★
 // ----------------------------------------------------------------------------
 // 来源：Amethyst 线 `Natives/UIKit+hook.h`（含大量私有 API 分类：UIDevice/UIImage/
-//       UITextField/UIContextMenuInteraction…）。Air2 当前仅 a2_failbanner.m
+//       UITextField/UIContextMenuInteraction…）。Air2 当前仅 A2JITEnabler.m
 //       需要 `UIWindow.mainWindow` 一处 ⇒ 本桩只声明该分类的这一条。
 //
 // ⇒ 待 Air2 引入完整 UIKit+hook 时，用真头文件/实现替换本桩。

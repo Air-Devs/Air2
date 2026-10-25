@@ -198,9 +198,7 @@
 		9C3F95924BF96FCEFE9A2D98 /* a2_gl_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 7122630510302DEFFCBDA6B8 /* a2_gl_bridge.m */; };
 		E60B81CEF174962114DA466F /* a2_renderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 76FB869ECFD07C22D9C0F43B /* a2_renderer.m */; };
 		E04C097645AD3CC6F4684CE5 /* A2JITEnvironment.m in Sources */ = {isa = PBXBuildFile; fileRef = A651CCF3099E12483ECACD39 /* A2JITEnvironment.m */; };
-		2E34D2754F22272BEF457FAD /* NMToast.m in Sources */ = {isa = PBXBuildFile; fileRef = BC813E12DC68A4D2CBCC0ECC /* NMToast.m */; };
 		64A34223B7AA99D70C1B8233 /* UIKit+hook.m in Sources */ = {isa = PBXBuildFile; fileRef = 1E8D565EEE899288910F94F0 /* UIKit+hook.m */; };
-		0EE14820F3619D81DD29FB1A /* a2_failbanner.m in Sources */ = {isa = PBXBuildFile; fileRef = 41F40768EE993D4FDD8EF834 /* a2_failbanner.m */; };
 		1D913BEEB8A68298A90F9D9A /* a2_local_network_probe.m in Sources */ = {isa = PBXBuildFile; fileRef = 71C614E0C47355171FDA6CD1 /* a2_local_network_probe.m */; };
 		6CF98CDCF8BDE70CD592CD7E /* a2_log.m in Sources */ = {isa = PBXBuildFile; fileRef = C8C11BDFE3957C1F2DD76E10 /* a2_log.m */; };
 		3815B18505F9F4B8D0D791A7 /* a2_remotexpc_framing.m in Sources */ = {isa = PBXBuildFile; fileRef = BF51D5FB2AFC9D3F65FF85CA /* a2_remotexpc_framing.m */; };
@@ -417,9 +415,7 @@
 		7122630510302DEFFCBDA6B8 /* a2_gl_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_gl_bridge.m"; sourceTree = "<group>"; };
 		76FB869ECFD07C22D9C0F43B /* a2_renderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_renderer.m"; sourceTree = "<group>"; };
 		A651CCF3099E12483ECACD39 /* A2JITEnvironment.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITEnvironment.m"; sourceTree = "<group>"; };
-		BC813E12DC68A4D2CBCC0ECC /* NMToast.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "NMToast.m"; sourceTree = "<group>"; };
 		1E8D565EEE899288910F94F0 /* UIKit+hook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "UIKit+hook.m"; sourceTree = "<group>"; };
-		41F40768EE993D4FDD8EF834 /* a2_failbanner.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_failbanner.m"; sourceTree = "<group>"; };
 		71C614E0C47355171FDA6CD1 /* a2_local_network_probe.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_local_network_probe.m"; sourceTree = "<group>"; };
 		C8C11BDFE3957C1F2DD76E10 /* a2_log.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_log.m"; sourceTree = "<group>"; };
 		BF51D5FB2AFC9D3F65FF85CA /* a2_remotexpc_framing.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_remotexpc_framing.m"; sourceTree = "<group>"; };
@@ -624,9 +620,7 @@
 		81BAC4932618C2728A52D6F9 /* a2_gl_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_gl_bridge.h"; sourceTree = "<group>"; };
 		17A733F4890B4DE82120E806 /* a2_renderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_renderer.h"; sourceTree = "<group>"; };
 		99A22A8A368208284945EF9E /* A2JITEnvironment.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITEnvironment.h"; sourceTree = "<group>"; };
-		B7EC742575BE40277C5918F0 /* NMToast.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "NMToast.h"; sourceTree = "<group>"; };
 		79E2BBD2EFDC35F97EB8D2C4 /* UIKit+hook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UIKit+hook.h"; sourceTree = "<group>"; };
-		C18D94535AB7474923C21B8E /* a2_failbanner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_failbanner.h"; sourceTree = "<group>"; };
 		CC91372A62D2A0C0A56B17C2 /* a2_local_network_probe.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_local_network_probe.h"; sourceTree = "<group>"; };
 		385B60A0F03909DA9353A26C /* a2_log.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_log.h"; sourceTree = "<group>"; };
 		AE33275B1332C1E9705E3BCD /* a2_remotexpc_framing.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_remotexpc_framing.h"; sourceTree = "<group>"; };
@@ -645,7 +639,6 @@
 		019E9238E2D1750A6A7D9686 /* a2_rppairing_verify.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_verify.h"; sourceTree = "<group>"; };
 		C52AE90AEBDB81EA09AD9E93 /* a2_tlspsk_mbedtls.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_tlspsk_mbedtls.h"; sourceTree = "<group>"; };
 		6979441440A7FA3BCE8069E0 /* a2_tlspsk_tunnel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_tlspsk_tunnel.h"; sourceTree = "<group>"; };
-		5FA56D644FC3CBFFA281A454 /* utils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "utils.h"; sourceTree = "<group>"; };
 		FE8E7FD5EC13EBBEDE03587C /* jni.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "jni.h"; sourceTree = "<group>"; };
 		01747E5D28ABCC003A3BB764 /* Air2JIT69.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "Assets/Air2JIT69.js"; sourceTree = "<group>"; };
 		25A5657A047421168D9B0E49 /* Air2JIT69Ext.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "Assets/Air2JIT69Ext.js"; sourceTree = "<group>"; };
@@ -925,9 +918,7 @@
 			isa = PBXGroup;
 			children = (
 				A651CCF3099E12483ECACD39 /* A2JITEnvironment.m */,
-				BC813E12DC68A4D2CBCC0ECC /* NMToast.m */,
 				1E8D565EEE899288910F94F0 /* UIKit+hook.m */,
-				41F40768EE993D4FDD8EF834 /* a2_failbanner.m */,
 				71C614E0C47355171FDA6CD1 /* a2_local_network_probe.m */,
 				C8C11BDFE3957C1F2DD76E10 /* a2_log.m */,
 				BF51D5FB2AFC9D3F65FF85CA /* a2_remotexpc_framing.m */,
@@ -947,9 +938,7 @@
 				497444A01DBBFD2FAACE0D50 /* a2_tlspsk_mbedtls.m */,
 				407ECB99D6941017E615F9DA /* a2_tlspsk_tunnel.m */,
 				99A22A8A368208284945EF9E /* A2JITEnvironment.h */,
-				B7EC742575BE40277C5918F0 /* NMToast.h */,
 				79E2BBD2EFDC35F97EB8D2C4 /* UIKit+hook.h */,
-				C18D94535AB7474923C21B8E /* a2_failbanner.h */,
 				CC91372A62D2A0C0A56B17C2 /* a2_local_network_probe.h */,
 				385B60A0F03909DA9353A26C /* a2_log.h */,
 				AE33275B1332C1E9705E3BCD /* a2_remotexpc_framing.h */,
@@ -968,7 +957,6 @@
 				019E9238E2D1750A6A7D9686 /* a2_rppairing_verify.h */,
 				C52AE90AEBDB81EA09AD9E93 /* a2_tlspsk_mbedtls.h */,
 				6979441440A7FA3BCE8069E0 /* a2_tlspsk_tunnel.h */,
-				5FA56D644FC3CBFFA281A454 /* utils.h */,
 			);
 			path = Support;
 			sourceTree = "<group>";
@@ -1695,9 +1683,7 @@
 				9C3F95924BF96FCEFE9A2D98 /* a2_gl_bridge.m in Sources */,
 				E60B81CEF174962114DA466F /* a2_renderer.m in Sources */,
 				E04C097645AD3CC6F4684CE5 /* A2JITEnvironment.m in Sources */,
-				2E34D2754F22272BEF457FAD /* NMToast.m in Sources */,
 				64A34223B7AA99D70C1B8233 /* UIKit+hook.m in Sources */,
-				0EE14820F3619D81DD29FB1A /* a2_failbanner.m in Sources */,
 				1D913BEEB8A68298A90F9D9A /* a2_local_network_probe.m in Sources */,
 				6CF98CDCF8BDE70CD592CD7E /* a2_log.m in Sources */,
 				3815B18505F9F4B8D0D791A7 /* a2_remotexpc_framing.m in Sources */,
