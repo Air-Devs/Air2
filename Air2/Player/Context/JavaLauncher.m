@@ -1738,7 +1738,7 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
         }
     } else {
         defaultJRETag = @"execute_jar";
-        gameDir = @(getenv("POJAV_GAME_DIR"));
+        gameDir = ([NSString stringWithUTF8String:(getenv("POJAV_GAME_DIR") ?: "")] ?: @"");
         launchJar = YES;
         // execute_jar 路径（如 OptiFine 安装器）的 caciocavallo 由三路切换自动处理：
         // 实际选中的 Java 运行时是哪个版本，就用对应目录的 caciocavallo jar。
@@ -1765,7 +1765,7 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
         showDialog(localize(@"Error", nil), [NSString stringWithFormat:localize(@"java.error.missing_runtime", nil),
             isExecuteJar ? [launchTarget lastPathComponent] : PLProfiles.current.selectedProfile[@"lastVersionId"], minVersion]);
         return 1;
-    } else if ([javaHome hasPrefix:@(getenv("POJAV_HOME"))]) {
+    } else if ([javaHome hasPrefix:([NSString stringWithUTF8String:(getenv("POJAV_HOME") ?: "")] ?: @"")]) {
         // Symlink libawt_xawt.dylib
         NSString *dest = [NSString stringWithFormat:@"%@/lib/libawt_xawt.dylib", javaHome];
         NSString *source = [NSString stringWithFormat:@"%@/Frameworks/libawt_xawt.dylib", NSBundle.mainBundle.bundlePath];
@@ -3123,7 +3123,7 @@ int launchHeadlessJVM(NSString *mainClass, NSArray<NSString *> *args, int minJav
     NSLog(@"[JavaLauncher] Headless JAVA_HOME set to %@", javaHome);
 
     // user.home 指向独立临时目录，避免 processor 向主目录写入缓存
-    NSString *gameDir = @(getenv("POJAV_GAME_DIR"));
+    NSString *gameDir = ([NSString stringWithUTF8String:(getenv("POJAV_GAME_DIR") ?: "")] ?: @"");
     NSString *procHome = [gameDir stringByAppendingPathComponent:@".temp/forge_processor_home"];
     [[NSFileManager defaultManager] createDirectoryAtPath:procHome
                               withIntermediateDirectories:YES

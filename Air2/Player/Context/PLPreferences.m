@@ -365,10 +365,10 @@ NSString *const PREF_MOD_MIRROR = @"general.mod_mirror";
 
 - (id)initWithAutomaticMigrator {
     self = [super init];
-    self.globalPath = [@(getenv("POJAV_HOME")) stringByAppendingPathComponent:@"launcher_preferences_v2.plist"];
+    self.globalPath = [([NSString stringWithUTF8String:(getenv("POJAV_HOME") ?: "")] ?: @"") stringByAppendingPathComponent:@"launcher_preferences_v2.plist"];
     NSMutableDictionary *pref = [NSMutableDictionary dictionaryWithContentsOfFile:self.globalPath];
 
-    NSString *oldPath = [@(getenv("POJAV_HOME")) stringByAppendingPathComponent:@"launcher_preferences.plist"];
+    NSString *oldPath = [([NSString stringWithUTF8String:(getenv("POJAV_HOME") ?: "")] ?: @"") stringByAppendingPathComponent:@"launcher_preferences.plist"];
     NSMutableDictionary *oldPref = [NSMutableDictionary dictionaryWithContentsOfFile:oldPath];
 
     if (pref || !oldPref[@"env_vars"]) {

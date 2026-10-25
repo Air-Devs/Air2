@@ -29,6 +29,7 @@
 
 #import "LauncherPreferences.h"
 #import "PLProfiles.h"
+#import "A2VersionManager.h"
 #import "utils.h"
 
 static PLProfiles* current;
@@ -103,7 +104,18 @@ static PLProfiles* current;
 
 - (id)initWithCurrentInstance {
     self = [super init];
-    self.profilePath = [@(getenv("POJAV_GAME_DIR")) stringByAppendingPathComponent:@"launcher_profiles.json"];
+
+    // ⚠️ getenv 可能返回 NULL —— @(NULL) 会变成
+    // +[NSString stringWithUTF8String:]: NULL cString，直接崩。
+    // Air1 靠 POJAV_GAME_DIR 环境变量拿游戏目录，我们的路径
+    // 走 A2VersionManager，这个变量不一定被设过。
+    const char *gameDirEnv = getenv("POJAV_GAME_DIR");
+    NSString *gameDir = gameDirEnv ? [NSString stringWithUTF8String:gameDirEnv] : nil;
+    if (gameDir.length == 0) {
+        // 兜底：用 A2 的游戏目录
+        gameDir = [A2VersionManager shared].gameHome ?: NSTemporaryDirectory();
+    }
+    self.profilePath = [gameDir stringByAppendingPathComponent:@"launcher_profiles.json"];
     self.profileDict = parseJSONFromFile(self.profilePath);
     if (self.profileDict[@"NSErrorObject"]) {
         self.profileDict = PLProfiles.defaultProfiles;
