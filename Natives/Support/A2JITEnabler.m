@@ -342,8 +342,8 @@ static NSString *gA2JITLastFailure = nil;
     UIViewController *top = UIWindow.mainWindow.rootViewController;
     while (top.presentedViewController != nil) top = top.presentedViewController;
     if (top != nil) {
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"正在等待 JIT"
-                                                                      message:message
+        UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"等待JIT！"
+                                                                      message:@""
                                                                preferredStyle:UIAlertControllerStyleAlert];
         __weak typeof(self) weakSelf = self;
         [alert addAction:[UIAlertAction actionWithTitle:@"取消"
