@@ -224,8 +224,4 @@ static const NSTimeInterval kA2JITExternalProbeSlice = 3.0;
     return NO;
 }
 
-- (NSString *)userActionHint {
-    return @"安装并使用外部工具（StikDebug / SideStore…）开启 JIT 后回到本 App 重试";
-}
-
 @end

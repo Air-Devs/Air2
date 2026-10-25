@@ -78,9 +78,6 @@ FOUNDATION_EXPORT NSError *A2JITProviderFailureError(NSString *reason);
 
 @optional
 
-/// 需要用户动作时的指引（如外部工具的 URL scheme 或「去设置导入」）；无则返回 nil。
-@property (nonatomic, readonly, copy, nullable) NSString *userActionHint;
-
 @end
 
 NS_ASSUME_NONNULL_END

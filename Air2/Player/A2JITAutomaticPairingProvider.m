@@ -448,10 +448,6 @@ static A2JITAutoPairingStep A2StepForBlocker(A2JITAutoPairingBlocker blocker) {
     return NO;
 }
 
-- (NSString *)userActionHint {
-    return @"iOS 27+：开启 Developer Mode 并授予本地网络权限后，点「开始自动配对」在本机生成配对文件";
-}
-
 #pragma mark - 文案
 
 /// blocker 的本地化原因 + 下一步动作（★按分类分流★，不写万能文案）。

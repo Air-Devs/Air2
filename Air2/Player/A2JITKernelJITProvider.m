@@ -130,8 +130,4 @@ static const NSTimeInterval kA2JITKernelVerifyBudget = 3.0;
     return NO;
 }
 
-- (NSString *)userActionHint {
-    return @"越狱环境需在越狱设置里为本 App 打开 JIT（Allow JIT）；TrollStore 需确认其 JIT 授予生效";
-}
-
 @end

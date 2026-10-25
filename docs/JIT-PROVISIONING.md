@@ -135,7 +135,7 @@ Provider 自报不可用 ⇒ 最终 `Unavailable`。这是**如实口径**，不
                  ┌──────────────────────────────────────────┐
                  │           <A2JITProvider>                 │
                  │  kind / displayName / isAvailable /       │
-                 │  isPairingReady / userActionHint?         │
+                 │  isPairingReady                           │
                  │  preparePairingWithError: / activateJIT…  │
                  └───────┬────────┬────────┬────────┬────────┘
         ┌────────────────┘        │        │        └────────────────┐

@@ -161,8 +161,4 @@ static const NSTimeInterval kA2JITImportedActivationBudget = 3.0;
     return NO;
 }
 
-- (NSString *)userActionHint {
-    return @"在「设置 → 运行环境 · JIT」导入由外部工具生成的配对文件，再点「开启 JIT」";
-}
-
 @end
