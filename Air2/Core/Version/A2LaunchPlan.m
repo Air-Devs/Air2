@@ -479,8 +479,13 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     BOOL a2useMirror = (a2mirrorVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2UseMirrorCodeCache"];
     [A2Log criterion:@"[A2JIT] MirrorMappedCodeCache=%d（键 A2UseMirrorCodeCache 未设 ⇒ 默认开；设 NO 可关）",
           (int)a2useMirror];
-    if (javaMajorVersion >= 17 && a2useMirror) {
+    //   ★java-8 也必须给★（真机：同包 26.2 能开、1.7.10/1.12.2 建 VM 崩，
+    //     因为 java-8 的 libjvm 同样需要走「调试器 JIT 映射」这条路；缺这个 flag 时
+    //     JNI_CreateJavaVM 直接 rc=-1、崩在 InstanceKlass::initialize）。
+    //     显式偏好键 A2UseMirrorCodeCache=NO 仍可关掉做对照。
+    if (a2useMirror && (javaMajorVersion >= 17 || javaMajorVersion == 8)) {
         [options addObject:@"-XX:+MirrorMappedCodeCache"];
+        [A2Log criterion:@"[A2-JIT] 下发 -XX:+MirrorMappedCodeCache（java-%ld）", (long)javaMajorVersion];
     }
 
     // ---- ③‴ 建 VM 卡死诊断（★临时★）----
