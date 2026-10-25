@@ -35,6 +35,9 @@ SOURCES = [
     os.path.join(ROOT, "Natives", "Renderer", "a2_gl_bridge.m"),   # ★被测主体★
     os.path.join(ROOT, "Natives", "Renderer", "a2_renderer.m"),    # 渲染器名常量（本桥复用它）
     os.path.join(ROOT, "Natives", "Renderer", "a2_frame_perf.m"),  # ★[FRAME-PERF] 帧性能判据（本桥的帧动作每帧记一次）★
+    # ★MobileGlues 的 glGetError 二进制改写器★：a2_gl_bridge.m 在 attach 里调它，
+    #   漏这行 ⇒ 本 runner 链接期 `_a2_gl_error_shim_install_for_handle` 未定义（实测）。
+    os.path.join(ROOT, "Natives", "Renderer", "a2_gl_error_shim.m"),
     os.path.join(ROOT, "Natives", "Support", "a2_log.m"),          # 日志实现（本桥记判据行）
     os.path.join(HERE, "gl_bridge_tests.m"),
 ]

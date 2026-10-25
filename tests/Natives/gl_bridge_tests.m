@@ -101,6 +101,8 @@ static void testConstants(void) {
 static void testBackendDecision(void) {
     printf("\n=== ② 后端判定（EGL/GL 系？）===\n");
     eqInt(a2_gl_bridge_backend_is_egl("libgl4es_114.dylib"), 1, @"GL4ES（兼容底）⇒ EGL/GL 系");
+    eqInt(a2_gl_bridge_backend_is_egl("libnggl4es_kw.dylib"), 1,
+          @"★NG-GL4ES / KW ⇒ EGL/GL 系（本桥要给它注册解析器 + 显式初始化）★");
     eqInt(a2_gl_bridge_backend_is_egl("libmetallum.dylib"), 0, @"★主推 Metal ⇒ 非 EGL/GL 系（不归本桥）★");
     eqInt(a2_gl_bridge_backend_is_egl("libmobileglues.dylib"), 0, @"未内置的实验后端 ⇒ 非 EGL/GL 系");
     eqInt(a2_gl_bridge_backend_is_egl(NULL), 0, @"NULL ⇒ 非 EGL/GL 系（不猜）");
@@ -224,11 +226,23 @@ static void testWiringAndDecoupling(void) {
     ok([win rangeOfString:@"a2_gl_bridge"].location == NSNotFound,
        @"★Input 窗口层不认识 GL 桥（解耦未被破坏）★");
 
-    // ★随仓件在不在（本桥运行期要从 Frameworks/ 加载的三件）★
+    // ★NG-GL4ES / KW 的宿主责任已在桥里落地（机器判据 = 三个锚点都在同一份源码里）★
+    //   为什么用源码锚点：这三条是「不崩但黑屏」的唯一防线，编译过不代表接线做了。
+    NSString *bridgeSrc = ReadRepo(@"Natives/Renderer/a2_gl_bridge.m") ?: @"";
+    ok([bridgeSrc containsString:@"set_getprocaddress"],
+       @"★桥注册了宿主 GLES 解析器（NOEGL 构建没有它就没有入口）★");
+    ok([bridgeSrc containsString:@"initialize_gl4es"],
+       @"★桥里有显式 initialize_gl4es 调用点（NO_INIT_CONSTRUCTOR）★");
+    ok([bridgeSrc containsString:@"[A2-RENDERER] NG-GL4ES 初始化 rc="],
+       @"★初始化判据行在（真机 grep 锚点）★");
+
+    // ★随仓件在不在（本桥运行期要从 Frameworks/ 加载的件）★
     NSArray<NSString *> *staged = @[
         @"Libraries/Renderers/libgl4es_114.dylib",
+        @"Libraries/Renderers/libnggl4es_kw.dylib",
         @"Libraries/Frameworks/libEGL.framework/libEGL",
         @"Libraries/Frameworks/libGLESv2.framework/libGLESv2",
+        @"Libraries/Frameworks/libspirv-cross-c-shared.0.impl.dylib",
     ];
     for (NSString *rel in staged) {
         NSDictionary *at = [[NSFileManager defaultManager] attributesOfItemAtPath:RepoPath(rel) error:NULL];

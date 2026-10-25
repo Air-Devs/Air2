@@ -537,10 +537,29 @@ action sheet 列全部候选，**未内置的项照列但标「未内置」**（
 [A2-JRE] chosen=java-25-openjdk(源: 默认; source=default)
 [A2-JRE] chosen=java-21-openjdk(源: 用户选择; source=user)
 [A2-RENDERER] ★阻断启动★：所选渲染器未内置（libnggl4es.dylib）—— 包内缺 Frameworks/…
+[A2-RENDERER] 回退 gl4es：默认项 libnggl4es_kw.dylib 不可用（包内缺 Frameworks/…）⇒ libgl4es_114.dylib
+[A2-RENDERER] NG-GL4ES 初始化 rc=0（backend=libnggl4es_kw.dylib；context=0x… 已 current）⇒ 已在宿主 context 上初始化
 [A2-JRE] ★阻断启动★：所选档未内置/不完整（java-21-openjdk）—— 期望 …/lib/server/libjvm.dylib
 ```
 
 中文与稳定 tag（`source=user` / `source=default`）并存：真机换语言也能机器判据。
+
+**★NG-GL4ES / KW（`libnggl4es_kw.dylib`）的宿主契约★**（≤1.12.2 的默认固定管线后端）
+
+它是 `-DNO_GBM -DDEFAULT_ES=3 -DNOX11 -DNOEGL -DNO_INIT_CONSTRUCTOR` 编出来的 gl4es 变体
+（Krypton Wrapper），与老线 `libgl4es_114.dylib` 是**两支二进制**（后者自带 constructor 自动初始化，
+因此不在这条契约里）。三个宏各自对应一处宿主责任，缺一个的表现都不是崩溃而是**黑屏**：
+
+| 宏 | 宿主必须做的事 | 落在哪 | 漏了的形态 |
+|---|---|---|---|
+| `NO_INIT_CONSTRUCTOR` | context **成为 current 之后**显式调 `initialize_gl4es()` | `a2_gl_bridge.m` ⑥a（make-current 成功、取 GL 指针之前） | 不崩但画面全黑（GL 入口全空） |
+| `NOEGL` | 用 `set_getprocaddress` 交一个 GLES 入口解析器（先 GLESv2/ANGLE，再 EGL，再 `eglGetProcAddress`） | `a2_gl_bridge.m` ④b（后端 dlopen 成功之后、建面之前） | `initialize_gl4es` 探测硬件扩展时全空 ⇒ 能力判据错乱 |
+| `DEFAULT_ES=3` | 建 **ES3** 上下文（被拒则退 ES2 并如实记一行） | `a2_gl_bridge.m` ⑥ | GLES3 转译路径不可用 |
+
+名称解析面 = 该 dylib 的 **1328 个 `gl*` 导出 + `glXGetProcAddress`**；★它**不**导出 `eglGetProcAddress`★
+（EGL 归 ANGLE），所以本桥的所有 EGL 入口仍从 `libEGL.framework` 取。
+默认策略：`A2DefaultRendererForVersion` 对 1.0–1.12.2 返回它；包内不可用时**在同一个选择
+逻辑里**回退 `libgl4es_114.dylib`（用户/实例**显式选择**不受影响 —— 那种情况照旧如实阻断）。
 
 **随包**：`scripts/gen_xcodeproj.py` 的「Stage Runtime Bundle」阶段 —— ①渲染器 dylib +
 ①b ★`.framework` 依赖目录★（GL4ES 需要 ANGLE 的 `libEGL.framework` / `libGLESv2.framework`，
