@@ -854,6 +854,21 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
             a2_gl_bridge_teardown();
             return A2GlBridgeErrLoadFailed;
         }
+
+        // ★函数指针取证★（真机 lastlog-83/84/86 同一个崩点：ANGLE 的 gl::GLES1State::loadMatrix）
+        //   已知：不是 KW 二进制、不是全局符号、不是 KW 通过解析器索取。
+        //   ⇒ 打印同一名字在「KW 本体 / ANGLE / 我们的解析器」三处的地址，判断 MC 实际拿到的是谁。
+        {
+            void *kwLM  = dlsym(gRendererHandle, "glLoadMatrixf");
+            void *angLM = (gGlesHandle != NULL) ? dlsym(gGlesHandle, "glLoadMatrixf") : NULL;
+            void *resLM = a2_gl_bridge_gles_getprocaddress("glLoadMatrixf");
+            a2_log_f(@"[A2-GL-PTR] glLoadMatrixf: KW=%p ANGLE=%p resolver=%p（若 resolver==ANGLE ⇒ 解析器仍在喂 ANGLE）",
+                     kwLM, angLM, resLM);
+            void *kwI = dlsym(gRendererHandle, "initialize_gl4es");
+            void *kwS = dlsym(gRendererHandle, "set_getprocaddress");
+            a2_log_f(@"[A2-GL-PTR] KW 本体 initialize_gl4es=%p set_getprocaddress=%p handle=%p",
+                     kwI, kwS, gRendererHandle);
+        }
     }
 
     // ---- ⑥b [FRAME-PERF] 回报实际 drawable 尺寸（可核对：与「请求的缩放后尺寸」是否一致）----
