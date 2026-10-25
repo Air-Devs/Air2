@@ -65,7 +65,7 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy) NSString *path;          ///< 绝对路径
 @property (nonatomic, copy, nullable) NSString *arch; ///< arm64 / x86_64
 @property (nonatomic, assign) BOOL builtin;          ///< 随 App 打包的（不可删）
-@property (nonatomic, assign, readonly) BOOL valid;  ///< libjvm.dylib 存在
+@property (nonatomic, assign, readonly, getter=isValid) BOOL valid;  ///< libjvm.dylib 存在
 /// 无效时的原因
 @property (nonatomic, copy, nullable, readonly) NSString *invalidReason;
 @end
