@@ -23,6 +23,7 @@
 #import "config.h"
 #import "utils.h"
 #import "LauncherPreferences.h"
+#import "A2JREManager.h"
 #import "PLPreferences.h"
 #import "UIKit+hook.h"
 #import <CoreFoundation/CoreFoundation.h>
@@ -343,45 +344,56 @@ static NSString *ameNormalizeJREHome(NSString *dir) {
 }
 
 NSString* getSelectedJavaHome(NSString* defaultJRETag, int minVersion) {
-    NSDictionary *pref = getPrefObject(@"java.java_homes");
-    NSDictionary<NSString *, NSString *> *selected = pref[@"0"];
-    NSString *selectedVer = selected[defaultJRETag];
-    if (minVersion > selectedVer.intValue) {
-        NSArray *sortedVersions = [pref.allKeys valueForKeyPath:@"self.integerValue"];
-        sortedVersions = [sortedVersions sortedArrayUsingSelector:@selector(compare:)];
-        BOOL found = NO;
-        for (NSNumber *version in sortedVersions) {
-            if (version.intValue >= minVersion) {
-                selectedVer = version.stringValue;
-                found = YES;
-                break;
+    // ---- 全面改为走 A2JREManager ----
+    //
+    // 原实现是 Air1 的：
+    //   1. 读偏好键 java.java_homes —— Air2 根本不用这套
+    //   2. 用 getenv("POJAV_HOME") 拼路径 —— 这个变量在 Air2 里常常是 NULL，
+    //      拼出来是 "(null)/java_runtimes/..." 必然找不到
+    //   3. 只认 .../java_runtimes/java-N-openjdk 这一种目录名
+    //
+    // Air2 的 JRE 打包在 Air2.app/java_runtimes/ 下（CI 注入），
+    // 由 A2JREManager 扫描和管理。这里直接问它。
+
+    A2JREManager *mgr = A2JREManager.shared;
+
+    // 1. 触发一次扫描（幂等）
+    [mgr reload];
+
+    // 2. 优先按版本指定的 JRE
+    NSString *mcVersion = defaultJRETag;
+    if ([mcVersion isEqualToString:@"execute_jar"] || mcVersion.length == 0) {
+        // execute_jar 模式没有具体版本，按 minVersion 挑
+        for (A2JRE *j in mgr.allJREs) {
+            if (j.majorVersion >= minVersion && j.isValid) {
+                NSLog(@"[JRE] execute_jar 模式：选中 %@（Java %ld）",
+                      j.displayName, (long)j.majorVersion);
+                return j.path;
             }
         }
-        // 修复：原代码在找不到满足 minVersion 的 runtime 时 selectedVer 仍为初始值（如 "17"），
-        // 导致 if (!selectedVer) 永远为假，静默降级到 Java 17 启动 26.x 等新版本时必然崩溃。
-        if (!found) {
-            NSLog(@"Error: requested Java >= %d was not installed! (available: %@)", minVersion, sortedVersions);
-            return nil;
+        NSLog(@"Error: 没有满足 Java >= %d 的运行时", minVersion);
+        return nil;
+    }
+
+    A2JRE *jre = [mgr jreForVersionName:mcVersion mcVersion:mcVersion];
+    if (jre.isValid && jre.majorVersion >= minVersion) {
+        NSLog(@"[JRE] %@ 选中 %@（Java %ld）：%@",
+              mcVersion, jre.displayName, (long)jre.majorVersion, jre.path);
+        return jre.path;
+    }
+
+    // 3. 兜底：按 minVersion 挑第一个可用的
+    for (A2JRE *j in mgr.allJREs) {
+        if (j.isValid && j.majorVersion >= minVersion) {
+            NSLog(@"[JRE] 兜底选中 %@（Java %ld）：%@",
+                  j.displayName, (long)j.majorVersion, j.path);
+            return j.path;
         }
     }
 
-    id selectedDir = pref[selectedVer];
-    if ([selectedDir isEqualToString:@"internal"]) {
-        selectedDir = [NSString stringWithFormat:@"%@/java_runtimes/java-%@-openjdk", NSBundle.mainBundle.bundlePath, selectedVer];
-    } else {
-        selectedDir = [NSString stringWithFormat:@"%s/java_runtimes/%@", getenv("POJAV_HOME"), selectedDir];
-    }
-
-    if ([NSFileManager.defaultManager fileExistsAtPath:selectedDir]) {
-        // ★ [JRE-NEST] 目录存在 ≠ 是可用的 JRE 根：探测真身(release+libjvm)并自动纠正一层嵌套。
-        NSString *normalized = ameNormalizeJREHome(selectedDir);
-        if (normalized) return normalized;
-        NSLog(@"★ [JRE-NEST] selected runtime invalid: %@", selectedDir);
-        return nil;
-    } else {
-        NSLog(@"Error: selected runtime for %@ does not exist: %@", defaultJRETag, selectedDir);
-        return nil;
-    }
+    NSLog(@"Error: 找不到 Java >= %d 的运行时（可用：%@）",
+          minVersion, [mgr.allJREs valueForKey:@"displayName"]);
+    return nil;
 }
 
 #pragma mark Renderer

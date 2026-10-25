@@ -76,6 +76,28 @@ BOOL validateVirtualMemorySpace(size_t size) {
     return YES;
 }
 
+
+#pragma mark - 安全 setenv
+
+/// 安全版 setenv。
+///
+/// NSString 的 UTF8String 对 nil 返回 NULL，setenv 遇到 NULL
+/// 会直接 SIGSEGV（之前崩在 launchJVM 里就是这个：
+/// metadata[@"javaHome"] 为空 → javaHome 是 nil）。
+static void A2SafeSetenv(const char *name, const char *value) {
+    if (!name) return;
+    if (!value) {
+        unsetenv(name);
+        return;
+    }
+    setenv(name, value, 1);
+}
+
+/// NSString 版本，自动处理 nil
+static void A2SetenvString(const char *name, NSString *value) {
+    A2SafeSetenv(name, value.length > 0 ? value.UTF8String : NULL);
+}
+
 #pragma mark - 独立 native 崩溃捕获
 
 // 为什么需要它：游戏闪退时，写 latestlog.txt 的线程随进程一起消失，日志必然
@@ -590,7 +612,7 @@ void init_loadCustomEnv() {
         NSRange range = [line rangeOfString:@"="];
         NSString *key = [line substringToIndex:range.location];
         NSString *value = [line substringFromIndex:range.location+range.length];
-        setenv(key.UTF8String, value.UTF8String, 1);
+        A2SafeSetenv(key.UTF8String, value.UTF8String);
         NSLog(@"[JavaLauncher] Added custom env variable: %@", line);
     }
 }
@@ -652,7 +674,7 @@ void init_loadMobileGluesConfig() {
     NSString *mgDirPath = viRoot.length > 0
         ? [viRoot stringByAppendingPathComponent:@"MG"]
         : [NSString stringWithFormat:@"%s/MG", getenv("POJAV_HOME")];
-    setenv("MG_DIR_PATH", mgDirPath.UTF8String, 1);
+    A2SetenvString("MG_DIR_PATH", mgDirPath);
 
     NSMutableDictionary *config = [NSMutableDictionary dictionary];
 
@@ -1511,7 +1533,7 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
         NSLog(@"[JavaLauncher] RENDERER is set to %@\n", renderer);
         // ★ [LAUNCH-PROGRESS] 阶段3/8：渲染器与图形 API(渲染器已解析，graphicsApi 紧随其后)
         AmeLaunchProgressSetStage(AmeLaunchStageRenderer);
-        setenv("AMETHYST_RENDERER", renderer.UTF8String, 1);
+        A2SetenvString("AMETHYST_RENDERER", renderer);
 
         // Apply Zink-specific environment variables if Zink renderer is selected
         // Mesa 25.0.7 zink 升级配套：根据设备 GPU 代际自动调优 MESA_GL_VERSION_OVERRIDE、
@@ -1525,7 +1547,7 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
             NSString *configSummary = [ZinkConfig activeConfigSummary];
             NSLog(@"[ZinkConfig] ========== Zink Renderer Active (Mesa 25) ==========");
             NSLog(@"[ZinkConfig] %@", configSummary);
-            setenv("ZINK_ACTIVE_CONFIG", configSummary.UTF8String, 1);
+            A2SetenvString("ZINK_ACTIVE_CONFIG", configSummary);
 
             // 安装 zink vertex stride 4 字节对齐 fix
             // 修复 Mesa 25.0.7 zink + MoltenVK 在启用光影时因 stride 未 4 字节对齐
@@ -1586,7 +1608,7 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
             const char *pojavHome = getenv("POJAV_HOME");
             if (pojavHome && *pojavHome) {
                 NSString *logPath = [NSString stringWithFormat:@"%s/mobilegl.log", pojavHome];
-                setenv("MOBILEGL_LOG_FILE_PATH", logPath.UTF8String, 1);
+                A2SetenvString("MOBILEGL_LOG_FILE_PATH", logPath);
             }
             NSLog(@"[JavaLauncher] MobileGL renderer active: backend=%s", backend);
         } else {
@@ -1640,7 +1662,7 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
             if (backend == NULL || backend[0] == '\0') backend = RENDERER_NAME_MOBILEGLUES;
             setenv("AMETHYST_SFPEW_BACKEND", backend, 1);
             NSString *bPathS = [NSString stringWithFormat:@"@rpath/%s", backend];
-            setenv("SFPEW_EGL", bPathS.UTF8String, 1);
+            A2SetenvString("SFPEW_EGL", bPathS);
             if (!sfpewVersionOK) {
                 NSLog(@"[JavaLauncher] SFPEW standalone: MC %@ is outside the fixed-function era -- "
                       @"expect no benefit (SFPEW serves <= 1.16.x only)", sfpewVersionId);
@@ -1651,9 +1673,9 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
             const char *backend = renderer.UTF8String;
             setenv("AMETHYST_SFPEW_BACKEND", backend, 1);
             NSString *bPath = [NSString stringWithFormat:@"@rpath/%s", backend];
-            setenv("SFPEW_EGL", bPath.UTF8String, 1);
+            A2SetenvString("SFPEW_EGL", bPath);
             renderer = @ RENDERER_NAME_SFPEW;
-            setenv("AMETHYST_RENDERER", renderer.UTF8String, 1);
+            A2SetenvString("AMETHYST_RENDERER", renderer);
             NSLog(@"[JavaLauncher] SFPEW overlay active: backend=%s -> AMETHYST_RENDERER=%@, SFPEW_EGL=%@",
                   backend, renderer, bPath);
         } else {
@@ -1691,7 +1713,7 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
         if (!graphicsApi || graphicsApi.length == 0) {
             graphicsApi = @"default";
         }
-        setenv("AMETHYST_GRAPHICS_API", graphicsApi.UTF8String, 1);
+        A2SetenvString("AMETHYST_GRAPHICS_API", graphicsApi);
         NSLog(@"[JavaLauncher] GRAPHICS_API is set to %@\n", graphicsApi);
 
         // Setup gameDir
@@ -1776,7 +1798,7 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
         }
     }
 
-    setenv("JAVA_HOME", javaHome.UTF8String, 1);
+    A2SetenvString("JAVA_HOME", javaHome);
     NSLog(@"[JavaLauncher] JAVA_HOME has been set to %@", javaHome);
 
     // Task141：启动内存单一事实源（见 ame141_currentLaunchAllocMem）。
@@ -1931,6 +1953,7 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
     // /data/user/<n>/net.kdt.pojavlaunch 的 Android 路径。本启动器设置的是
     // AMETHYST_RENDERER，library.path 指向 app 内的 Frameworks 目录，两者都不匹配。
     // 下方仍做一次防御性清理，防止"自定义环境变量"等途径把它带进来。
+    [A2Logger info:@"launchJVM" message:@"[1/6] JAVA_HOME 已设置，开始组装参数"];
     unsetenv("POJAV_RENDERER");
     PUSH_MARGV_LITERAL("-Dsodium.checks.issue2561=false");
 
@@ -2009,6 +2032,8 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
             NSLog(@"[JavaLauncher] AMETHYST_SOCKS5_PROXY invalid format (expected host:port): %@", proxyStr);
         }
     }
+
+    [A2Logger info:@"launchJVM" message:@"[2/6] 基础 -D 参数已组装"];
 
     // Preset OpenGL libname
     const char *glLibName = getenv("AMETHYST_RENDERER");
@@ -3119,7 +3144,7 @@ int launchHeadlessJVM(NSString *mainClass, NSArray<NSString *> *args, int minJav
             @"Forge/NeoForge installer", minJavaVersion]);
         return -3;
     }
-    setenv("JAVA_HOME", javaHome.UTF8String, 1);
+    A2SetenvString("JAVA_HOME", javaHome);
     NSLog(@"[JavaLauncher] Headless JAVA_HOME set to %@", javaHome);
 
     // user.home 指向独立临时目录，避免 processor 向主目录写入缓存

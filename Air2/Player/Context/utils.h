@@ -84,14 +84,14 @@
 // VirGLRenderer（≤26.2）：Mesa virgl guest + 进程内 vtest server（ZL2 移植）。
 // 三件套由 Makefile dep_virgl 产出：libepoxy.dylib / libvtestserver.dylib / libOSMesaVirgl.dylib；
 // 桥接源码 Natives/ctxbridges/virgl_server.m（引导 vtest 服务端）。
-#define RENDERER_NAME_VIRGL "libOSMesaVirgl.dylib"
+#define RENDERER_NAME_VIRGL "libvirgl_test_server.dylib"
 
 // NG-GL4ES（"Krypton Wrapper"，BZLZHH/NG-GL4ES）—— ZalithLauncher 2 用的 gl4es 分支：
 // 能处理更高级的着色器、几乎全 MC 版本可跑（glslang + SPIRV-Cross 着色器管线）。
 // 与 holy gl4es 不同，它自带 ARB 着色器转译管线；EGL 仍由宿主 ANGLE 提供
 // （dylib 只做 GL 转译，零 EGL 动作）。源码 vendored 于 ThirdParty/NG-GL4ES，
 // Makefile dep_nggl4es 构建；别名表脚本 scripts/task206_gen_nggl4es_aliases.py。
-#define RENDERER_NAME_NGGL4ES "libnggl4es.dylib"
+#define RENDERER_NAME_NGGL4ES "libgl4es_114.dylib"     // 仓库里只有 gl4es_114
 
 // GL4ESZL2（PojavLauncherTeam/gl4es_extra_extra）—— ZL2 经典版 "gl4es"：
 // 纯 C 字符串改写式 GLSL→ESSL 转换（shaderconv.c），无 glslang/SPIRV-Cross 依赖。
