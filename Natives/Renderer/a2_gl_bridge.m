@@ -269,6 +269,8 @@ static A2PFN_glGetStringi gRealGLGetStringi = NULL;
 static A2PFN_glGetIntegerv gRealGLGetIntegerv = NULL;
 static A2PFN_glGetError   gRealGLGetError   = NULL;
 static volatile int32_t   gGLTraceCalls     = 0;
+static volatile int32_t   gKryptonGLES1Rejected = 0;
+
 #define A2_GL_TRACE_MAX_CALLS 400   // 只在开头疯狂阶段打日志，避免刷爆
 
 static const unsigned char *a2_trace_glGetString(unsigned int name) {
@@ -317,6 +319,38 @@ static void *a2_gl_bridge_gles_getprocaddress(const char *name) {
     if (sym == NULL && gEglHandle != NULL) sym = dlsym(gEglHandle, name);
     if (sym == NULL && gEglGetProcAddress != NULL) sym = gEglGetProcAddress(name);
     if (sym == NULL) return NULL;
+
+    // ★拒绝把宿主 ANGLE 的 GLES1 固定管线入口交给 KW★
+    //   真机证据（lastlog-83，1.7.10）：KW 初始化正常、桥附着正常，到加载画面时崩在
+    //   `gl::GLES1State::loadMatrix(angle::Mat4 const&)+0x58`（ANGLE 的 libGLESv2）。
+    //   成因：KW 向宿主解析器索取 GL 1.x 固定管线入口，我们把它指向了 ANGLE 的 GLES1 实现，
+    //   而 ANGLE 的 GLES1 状态只在 ES1 上下文里才初始化 ⇒ 空指针 ⇒ SIGBUS。
+    //   KW 自带 FPE（fpe.c）能实现这些入口，拿不到宿主实现就会回落到自己那套 —— 这正是老 Air 的行为。
+    //   ⇒ 这里对这些名字一律返回 NULL，让 KW 走自己的 FPE。
+    static const char *const kGLES1OnlyPrefixes[] = {
+        "glMatrixMode", "glLoadIdentity", "glLoadMatrix", "glMultMatrix",
+        "glPushMatrix", "glPopMatrix", "glOrtho", "glFrustum",
+        "glBegin", "glEnd", "glVertex", "glTexCoord", "glColor", "glNormal",
+        "glRasterPos", "glEnableClientState", "glDisableClientState",
+        "glShadeModel", "glAlphaFunc", "glClipPlane", "glIndex",
+        NULL
+    };
+    for (int i = 0; kGLES1OnlyPrefixes[i] != NULL; i++) {
+        size_t n = strlen(kGLES1OnlyPrefixes[i]);
+        if (strncmp(name, kGLES1OnlyPrefixes[i], n) == 0) {
+            if (a2_gl_bridge_is_krypton()) {
+                static char logged[64][40]; static int loggedCount = 0;
+                int seen = 0;
+                for (int k = 0; k < loggedCount; k++) if (strncmp(logged[k], name, 39) == 0) { seen = 1; break; }
+                if (!seen && loggedCount < 64) {
+                    strncpy(logged[loggedCount], name, 39); logged[loggedCount][39] = '\0'; loggedCount++;
+                    ++gKryptonGLES1Rejected;
+                    a2_log_f(@"[A2-GL-BRIDGE] KW 拒绝宿主 GLES1 入口：%s", name);
+                }
+            }
+            return NULL;
+        }
+    }
 
     // ★GL 入口 trace（诊断用）★：1.7.10 + KW 真机表现是「过了 GL caps init 之后卡死」，
     //   而那一串调用正是 glGetString/glGetStringi/glGetIntegerv/glGetError。
