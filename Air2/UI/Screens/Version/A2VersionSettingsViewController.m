@@ -56,7 +56,10 @@
 @property (nonatomic, strong) A2VersionTabBar *tabBar;
 /// 右栏自己的滚动容器（不用基类那个，见 setupTabLayout 的说明）
 @property (nonatomic, strong) UIScrollView *contentScroll;
-@property (nonatomic, strong) UIStackView *contentStack;
+/// ⚠️ 不能叫 contentStack —— 基类 A2BaseViewController 已经有同名
+/// readonly 属性，子类重复声明会导致 ivar 冲突，编译器报
+/// "use of undeclared identifier '_rightStack'"。
+@property (nonatomic, strong) UIStackView *rightStack;
 @end
 
 @implementation A2VersionSettingsViewController
@@ -126,11 +129,11 @@
         UIScrollViewContentInsetAdjustmentNever;
     [host addSubview:_contentScroll];
 
-    _contentStack = [[UIStackView alloc] initWithFrame:CGRectZero];
-    _contentStack.translatesAutoresizingMaskIntoConstraints = NO;
-    _contentStack.axis = UILayoutConstraintAxisVertical;
-    _contentStack.spacing = A2SpaceL;
-    [_contentScroll addSubview:_contentStack];
+    _rightStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _rightStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _rightStack.axis = UILayoutConstraintAxisVertical;
+    _rightStack.spacing = A2SpaceL;
+    [_contentScroll addSubview:_rightStack];
 
     [NSLayoutConstraint activateConstraints:@[
         // 标签栏：固定宽 96（88 太窄，四字标题会被裁）
@@ -149,10 +152,10 @@
                                                      constant:-A2SpaceM],
 
         // 内容栈
-        [_contentStack.topAnchor constraintEqualToAnchor:_contentScroll.contentLayoutGuide.topAnchor],
-        [_contentStack.bottomAnchor constraintEqualToAnchor:_contentScroll.contentLayoutGuide.bottomAnchor],
-        [_contentStack.leadingAnchor constraintEqualToAnchor:_contentScroll.frameLayoutGuide.leadingAnchor],
-        [_contentStack.trailingAnchor constraintEqualToAnchor:_contentScroll.frameLayoutGuide.trailingAnchor],
+        [_rightStack.topAnchor constraintEqualToAnchor:_contentScroll.contentLayoutGuide.topAnchor],
+        [_rightStack.bottomAnchor constraintEqualToAnchor:_contentScroll.contentLayoutGuide.bottomAnchor],
+        [_rightStack.leadingAnchor constraintEqualToAnchor:_contentScroll.frameLayoutGuide.leadingAnchor],
+        [_rightStack.trailingAnchor constraintEqualToAnchor:_contentScroll.frameLayoutGuide.trailingAnchor],
     ]];
 
     [self showTab:A2VersionTabOverview];
@@ -160,8 +163,8 @@
 
 /// 切换标签：清空右栏，重建对应内容
 - (void)showTab:(A2VersionTab)tab {
-    for (UIView *v in [self.contentStack.arrangedSubviews copy]) {
-        [self.contentStack removeArrangedSubview:v];
+    for (UIView *v in [self.rightStack.arrangedSubviews copy]) {
+        [self.rightStack removeArrangedSubview:v];
         [v removeFromSuperview];
     }
 
@@ -188,7 +191,7 @@
 
 /// 子类自己的 addSection（基类的 addSection 加的是基类 contentStack）
 - (void)addSection:(UIView *)section {
-    [self.contentStack addArrangedSubview:section];
+    [self.rightStack addArrangedSubview:section];
 }
 
 #pragma mark - 顶部信息
