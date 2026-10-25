@@ -80,11 +80,6 @@ NS_ASSUME_NONNULL_BEGIN
 - (instancetype)initWithFacts:(A2JITFacts *)facts
                     providers:(NSArray<id<A2JITProvider>> *)providers;
 
-/// 装配便利：按默认四路 Provider 构造（App 装配处调用；★非单例★）。
-/// ★不注入判据内核 / 拉起器 / 存储★：等价于 providersWithFacts:probe:launcher:pairingFileStore:
-/// 全传 nil（四路仍可做【能力检测与就绪判定】，但开启会如实失败，不会假装成功）。
-+ (NSArray<id<A2JITProvider>> *)defaultProvidersWithFacts:(A2JITFacts *)facts;
-
 /// ★[JIT-IMPL-2] 装配用★：把判据内核（Bridge → Natives/A2JITEnvironment）、外部工具拉起器
 /// （UI → UIApplication）与配对文件存储（Player，容器约定位置）一并注入四路 Provider。
 /// ★本方法只依赖协议★：真机实现由 App / UI / Bridge 提供，单测传假实现。

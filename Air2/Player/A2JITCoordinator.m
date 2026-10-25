@@ -88,11 +88,6 @@ static NSString *const A2JITCoordinatorErrorDomain = @"A2JITCoordinatorError";
     return self;
 }
 
-+ (NSArray<id<A2JITProvider>> *)defaultProvidersWithFacts:(A2JITFacts *)facts {
-    // 不注入机制依赖：能力检测与就绪判定照常，开启会如实失败（不假装成功）。
-    return [self providersWithFacts:facts probe:nil launcher:nil pairingFileStore:nil];
-}
-
 + (NSArray<id<A2JITProvider>> *)providersWithFacts:(A2JITFacts *)facts
                                              probe:(nullable id<A2JITReadinessProbe>)probe
                                           launcher:(nullable id<A2JITExternalToolLauncher>)launcher

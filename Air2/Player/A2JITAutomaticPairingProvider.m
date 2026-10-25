@@ -72,14 +72,6 @@ static A2JITAutoPairingStep A2StepForBlocker(A2JITAutoPairingBlocker blocker) {
 
 @implementation A2JITAutomaticPairingProvider
 
-+ (NSTimeInterval)defaultGenerationBudget {
-    return kA2JITAutoPairingDefaultBudget;
-}
-
-+ (NSTimeInterval)defaultPairingFileMaxAge {
-    return kA2JITAutoPairingFileMaxAge;
-}
-
 #pragma mark - 装配
 
 - (instancetype)initWithFacts:(A2JITFacts *)facts {

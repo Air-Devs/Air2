@@ -41,9 +41,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// 稳定英文名（步骤）：Idle / Discovery / RSDConnect / pair-verify / Tunnel / WriteFile / Done。
 + (NSString *)displayNameForStep:(A2JITAutoPairingStep)step;
 
-/// 前置条件的稳定英文名（诊断用）：DeveloperMode / LocalNetwork / GetTaskAllow / DDI。
-+ (NSString *)displayNameForPrecondition:(A2JITAutoPairingPrecondition)precondition;
-
 /// 本地化 key：前置条件名（A2JITStrings 里的 key）。
 + (NSString *)nameKeyForPrecondition:(A2JITAutoPairingPrecondition)precondition;
 

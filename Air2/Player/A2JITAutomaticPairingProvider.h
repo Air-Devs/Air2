@@ -35,14 +35,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// ① 设备内自动配对（iOS 27+）。
 @interface A2JITAutomaticPairingProvider : NSObject <A2JITProvider>
 
-/// ★默认生成预算（秒）★：Bonjour 发现 + RSD 连接 + pair-verify + TLS-PSK 隧道 + 写文件。
-/// 有界（超时即失败），绝不无限等（见 ADR-007 的「有界」铁律）。
-+ (NSTimeInterval)defaultGenerationBudget;
-
-/// ★默认配对文件新鲜度窗口（秒）★：免费签名 7 天重签会让配对材料与 DDI 失效，
-/// 故默认 7 天；超过即判「过期」，需要重新生成。
-+ (NSTimeInterval)defaultPairingFileMaxAge;
-
 /// 兼容旧装配：只注入事实（前置条件未知、无引擎 ⇒ 如实报「未接入」，不假装成功）。
 - (instancetype)initWithFacts:(A2JITFacts *)facts;
 

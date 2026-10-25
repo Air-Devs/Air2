@@ -107,16 +107,6 @@ static NSString *A2BlockerKeyToken(A2JITAutoPairingBlocker blocker) {
     }
 }
 
-+ (NSString *)displayNameForPrecondition:(A2JITAutoPairingPrecondition)precondition {
-    switch (precondition) {
-        case A2JITAutoPairingPreconditionDeveloperMode: return @"DeveloperMode";
-        case A2JITAutoPairingPreconditionLocalNetwork:  return @"LocalNetwork";
-        case A2JITAutoPairingPreconditionGetTaskAllow:  return @"GetTaskAllow";
-        case A2JITAutoPairingPreconditionDDI:           return @"DDI";
-        default:                                        return @"Unknown";
-    }
-}
-
 /// 前置条件 → 本地化 key token（稳定；表在 A2JITStrings）。
 static NSString *A2PreconditionKeyToken(A2JITAutoPairingPrecondition precondition) {
     switch (precondition) {
