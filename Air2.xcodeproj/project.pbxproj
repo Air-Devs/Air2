@@ -181,7 +181,6 @@
 		C754280DF19913731620CE6A /* A2Log.m in Sources */ = {isa = PBXBuildFile; fileRef = CE8E02818B37C0AFFABF71D5 /* A2Log.m */; };
 		6B1CD1AC96CD93B7EE0847A4 /* A2MurmurHash2.m in Sources */ = {isa = PBXBuildFile; fileRef = 70E537F57063CE783BE3A38B /* A2MurmurHash2.m */; };
 		173CB61901164D888C0739BA /* A2Strings.m in Sources */ = {isa = PBXBuildFile; fileRef = 7EC0262DD08DEE92A0AD385D /* A2Strings.m */; };
-		A90046ED552A3A05A2C1C5D3 /* A2JVMContext.m in Sources */ = {isa = PBXBuildFile; fileRef = 33EB4C45186443C1EC091766 /* A2JVMContext.m */; };
 		79FE972092EBC879FEDBD986 /* a2_argbuilder.m in Sources */ = {isa = PBXBuildFile; fileRef = FEDD8DBEB0D84D0C25E8CD6A /* a2_argbuilder.m */; };
 		123294DE054811E6374B6171 /* a2_jli_entry.m in Sources */ = {isa = PBXBuildFile; fileRef = 2B3938AF2373D36AD029743E /* a2_jli_entry.m */; };
 		4A8C06FD89E2CB43EF9BE00F /* a2_jli_launch.m in Sources */ = {isa = PBXBuildFile; fileRef = E8622943D1F3B2138896E84C /* a2_jli_launch.m */; };
@@ -398,7 +397,6 @@
 		CE8E02818B37C0AFFABF71D5 /* A2Log.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Log.m"; sourceTree = "<group>"; };
 		70E537F57063CE783BE3A38B /* A2MurmurHash2.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MurmurHash2.m"; sourceTree = "<group>"; };
 		7EC0262DD08DEE92A0AD385D /* A2Strings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Strings.m"; sourceTree = "<group>"; };
-		33EB4C45186443C1EC091766 /* A2JVMContext.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JVMContext.m"; sourceTree = "<group>"; };
 		FEDD8DBEB0D84D0C25E8CD6A /* a2_argbuilder.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_argbuilder.m"; sourceTree = "<group>"; };
 		2B3938AF2373D36AD029743E /* a2_jli_entry.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_jli_entry.m"; sourceTree = "<group>"; };
 		E8622943D1F3B2138896E84C /* a2_jli_launch.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_jli_launch.m"; sourceTree = "<group>"; };
@@ -605,7 +603,6 @@
 		A0A4BD66A8E2E70961D106B2 /* A2Log.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Log.h"; sourceTree = "<group>"; };
 		089E9C0B1F10F5FF4BE351B0 /* A2MurmurHash2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MurmurHash2.h"; sourceTree = "<group>"; };
 		A817F7F6D7CB98164433DEE3 /* A2Strings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Strings.h"; sourceTree = "<group>"; };
-		84F294165E792593278052E6 /* A2JVMContext.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JVMContext.h"; sourceTree = "<group>"; };
 		DFA0EA31DC0BE86615F43D57 /* a2_argbuilder.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_argbuilder.h"; sourceTree = "<group>"; };
 		DE6FD7E677A4926B2A880211 /* a2_jli_entry.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_jli_entry.h"; sourceTree = "<group>"; };
 		E1EC80A41D1D59E9BE737C6B /* a2_jli_launch.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_jli_launch.h"; sourceTree = "<group>"; };
@@ -855,14 +852,12 @@
 		977F5E08DE4EA116D26BA99E /* Context */ = {
 			isa = PBXGroup;
 			children = (
-				33EB4C45186443C1EC091766 /* A2JVMContext.m */,
 				FEDD8DBEB0D84D0C25E8CD6A /* a2_argbuilder.m */,
 				2B3938AF2373D36AD029743E /* a2_jli_entry.m */,
 				E8622943D1F3B2138896E84C /* a2_jli_launch.m */,
 				94460CCD160BD31ED7EE6B1B /* a2_launch.m */,
 				E6299199A4AF6F972D50086C /* a2_resourcepaths.m */,
 				953C92615BB82B8F2A760D70 /* a2_vmloader.m */,
-				84F294165E792593278052E6 /* A2JVMContext.h */,
 				DFA0EA31DC0BE86615F43D57 /* a2_argbuilder.h */,
 				DE6FD7E677A4926B2A880211 /* a2_jli_entry.h */,
 				E1EC80A41D1D59E9BE737C6B /* a2_jli_launch.h */,
@@ -1666,7 +1661,6 @@
 				C754280DF19913731620CE6A /* A2Log.m in Sources */,
 				6B1CD1AC96CD93B7EE0847A4 /* A2MurmurHash2.m in Sources */,
 				173CB61901164D888C0739BA /* A2Strings.m in Sources */,
-				A90046ED552A3A05A2C1C5D3 /* A2JVMContext.m in Sources */,
 				79FE972092EBC879FEDBD986 /* a2_argbuilder.m in Sources */,
 				123294DE054811E6374B6171 /* a2_jli_entry.m in Sources */,
 				4A8C06FD89E2CB43EF9BE00F /* a2_jli_launch.m in Sources */,

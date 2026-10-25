@@ -418,7 +418,7 @@ static A2GlfwObserverHub *gObserverHub = nil;
 //   都没有才调 metallum_ios_find_surface_view()（找 +[SurfaceViewController surface]，
 //   我们类名不同 ⇒ 找不到）。不发布 ⇒ BackendCreationException ⇒ 黑屏。
 //   时机：MC 调 glfwCreateWindow 之后、它创建 MetalBackend 之前（本函数就是那一刻）。
-/// 由 JVM 创建方（A2JVMContext）回填的 JavaVM；窗口层只读。
+/// 由 JVM 创建方（a2_launch / a2_vmloader）回填的 JavaVM；窗口层只读。
 /// ★为什么必须回填★ dlsym(RTLD_DEFAULT, "JNI_GetCreatedJavaVMs") 在 libjvm
 ///   以局部作用域 dlopen 时取不到 ⇒ 发布 UIView 地址那段会静默 return，
 ///   真机表现为「没有 [A2-METAL] 日志 + 黑屏」。

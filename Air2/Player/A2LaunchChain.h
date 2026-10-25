@@ -7,7 +7,7 @@
 //  分层关系（见 docs/ARCHITECTURE.md 依赖方向 App → UI → Player → Core → Bridge → Natives）：
 //    · 本类只表达【顺序】：① 先下发 JIT 脚本 → ② 再探测 JIT 可用 → ③ 再创建 JVM。
 //    · 每一步「怎么做」由调用方以 block 注入；真机实现经 Bridge 落到
-//      Natives/Support（A2JITEnvironment）与 Natives/Context（A2JVMContext），
+//      Natives/Support（A2JITEnvironment）与 Natives/Context（a2_launch / a2_vmloader），
 //      Core/Version、Core/Path 提供已解析好的启动参数。
 //    · 本类不感知版本 / 账号 / 下载，也【不 import Natives 头】—— 保持 Player 只编排、
 //      不跨界（跨界只经 Bridge）。

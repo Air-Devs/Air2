@@ -11,12 +11,12 @@
 //      ① 计划的内容 = 版本 JSON 语义（mainClass / arguments / libraries / assetIndex /
 //         inheritsFrom 合并 / rules 求值）+ 账号取值 ⇒ 是**业务**；
 //      ② 分层规范写明 Natives「只接收已解析好的参数，不感知版本/账号」
-//         （docs/ARCHITECTURE.md §Natives 约束），a2_launch.h / A2JVMContext.h 也把
+//         （docs/ARCHITECTURE.md §Natives 约束），a2_launch.h 也把
 //         「javaHome 与启动选项由上层（Player → Core）解析后传入」写成契约；
 //      ③ Core/Version 的职责本就包含「启动参数拼装」（docs/ARCHITECTURE.md §Core）。
 //    ⇒ native 自研链保持「纯消费者」：只吃已拼好的 margv + A2LaunchInput。
 //
-//  ★与 A2LaunchInput / A2JVMContext 的对齐★：
+//  ★与 A2LaunchInput 的对齐★：
 //    · 本类产出的是 **Java 侧**要吃的计划（mainClass/arguments/properties/classpath/nativeLibrary）；
 //    · `jvmOptionsWithMemoryMB:` 产出的是 **VM 级** 选项（-X/-D），它们是 margv 里主类**之前**的 token，
 //      由 Bridge 与 classpath 一起组成 argv，再交给 `a2_launch_jvm_with_argv(argc, argv, input)`；

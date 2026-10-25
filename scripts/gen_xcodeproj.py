@@ -51,7 +51,7 @@ def _git_build_version():
 BUILD_VERSION = _git_build_version()
 
 # 参与编译的源码根目录。原脚本只扫 Air2/，于是 Natives/ 下的自研启动链
-# （a2_launch / a2_argbuilder / A2JVMContext …）永远进不了 target ⇒ 编了也不进包。
+# （a2_launch / a2_argbuilder / a2_vmloader …）永远进不了 target ⇒ 编了也不进包。
 # 现在两端都扫：Air2（应用主体）与 Natives（原生层）——同一 target、同一 Sources 阶段。
 SOURCE_ROOTS = ("Air2", "Natives")
 
@@ -643,7 +643,7 @@ def build():
                 # 并在这里加回这一行。
                 "CODE_SIGN_STYLE": "Automatic",
                 # ★ 保留原生层符号：Air2/Bridge 目前为空（启动链尚未接线），
-                #   a2_launch_* / A2JVMContext / A2ArgBuilder 等**暂时没有调用者**，
+                #   a2_launch_* / A2ArgBuilder 等**暂时没有调用者**，
                 #   而 Xcode Release 默认 DEAD_CODE_STRIPPING=YES ⇒ 链接期把这些
                 #   入口整段剥掉，产物包里扫不到（「编了也不进包」）。这里关闭
                 #   dead_strip，确保原生层真正随包；待 Bridge 接线后即可恢复默认。

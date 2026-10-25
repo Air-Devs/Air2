@@ -216,7 +216,6 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 | `Natives/Context/a2_vmloader.[hm]` | Natives/Context | R2：`dlopen(libjvm)` + `JNI_CreateJavaVM`（★同进程，不经 libjli★） |
 | `Natives/Context/a2_argbuilder.[hm]` | Natives/Context | R3：JVM 参数拼装（保序 / `-D` 按 key 去重 / classpath / 主类 / 程序参数） |
 | `Natives/Context/a2_resourcepaths.[hm]` | Natives/Context | R4：资源与类路径注入 + classpath 通配展开（只依赖 Foundation） |
-| `Natives/Context/A2JVMContext.[hm]` | Natives/Context | JVM 创建 / 销毁（ObjC 封装；`-Djava.home` 由上层给出） |
 | `Natives/Support/a2_log.[hm]` | Natives/Support | R7：结构化日志 `[RT]` / `[LAUNCH-PROGRESS 阶段 n/8]` / `[RT-STRICT]`（★无状态★） |
 | `Natives/Support/A2JITEnvironment.[hm]` | Natives/Support | JIT 环境与判据（`brk #0x69` 区域取证、真写+真执行自证、诊断日志） |
 | `Natives/Support/A2JITEnabler.[hm]` | Natives/Support | ★启动前的 JIT 使能★（判据 → 拉起使能器 → 有界等待 ≤120s → 异步回调；防死循环：被调试器拉起即认 / 同一进程只跳一次）。判据仍只由 `A2JITEnvironment` 一处给出，本模块只决定「何时问、怎么申请」|
@@ -360,7 +359,7 @@ JRE 缺失时该阶段**只告警不失败**（同树多任务并行时不让别
 1. ★**启动计划由 `Core` 产出**★，不由 native 自研链产出。理由：计划内容 = 版本 JSON 语义
    （`mainClass` / `arguments` / `libraries` / `assetIndex` / `inheritsFrom` 合并 / `rules` 求值）
    + 账号取值 ⇒ 是**业务**；而分层规范写明 `Natives`「只接收已解析好的参数，不感知版本/账号」，
-   `a2_launch.h` / `A2JVMContext.h` 也把「javaHome 与启动选项由上层（Player → Core）解析后传入」
+   `a2_launch.h` 也把「javaHome 与启动选项由上层（Player → Core）解析后传入」
    写成契约 ⇒ native 链保持**纯消费者**。
 2. ★**调用 `a2_launch_jvm_with_argv` 只能发生在 `Bridge`**★：Bridge 是唯一与 Natives 相邻的层
    （同 [JIT-IMPL-2] 的理由）。Player 与 UI 只见纯 ObjC 签名。
