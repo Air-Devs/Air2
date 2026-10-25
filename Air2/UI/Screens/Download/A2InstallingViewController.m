@@ -779,7 +779,9 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     ];
     [dialog setSteps:steps];
 
-    A2ModPackInstaller *installer = [[A2ModPackInstaller alloc] init];
+    // 同上 —— 必须挂在 dialog 上，否则 present 的 completion 返回后就被回收
+    dialog.retainedInstaller = [[A2ModPackInstaller alloc] init];
+    A2ModPackInstaller *installer = dialog.retainedInstaller;
 
     dialog.onCancel = ^{
         [installer cancel];
@@ -866,7 +868,13 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
         req.apiModVersion = apiVersion;
         req.gameHome = A2VersionManager.shared.gameHome;
 
-        A2GameInstaller *installer = [[A2GameInstaller alloc] init];
+        // ⚠️ 必须让 dialog 持有 installer —— 用局部变量的话，
+        // presentAsDialogFrom: 的 completion 一返回 ARC 就释放它，
+        // download 任务跑到一半对象没了 → SIGSEGV（信号 11）。
+        // 这已经是我第三次踩同一个坑（前两次在 A2GameLaunchCoordinator
+        // 和 A2BatchDownloader）。
+        dialog.retainedInstaller = [[A2GameInstaller alloc] init];
+        A2GameInstaller *installer = dialog.retainedInstaller;
 
         [installer install:req
             progress:^(A2InstallStage stage, double progress, NSString *message) {

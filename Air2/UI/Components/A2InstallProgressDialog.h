@@ -84,6 +84,11 @@ typedef NS_ENUM(NSInteger, A2ProgressStepStage) {
 
 @property (nonatomic, copy, nullable) void (^onCancel)(void);
 
+/// 安装器强引用 —— 调用方必须把异步安装器挂在这里。
+/// 用局部变量持有的话，present 的 completion 一返回就被 ARC 回收，
+/// 下载跑到一半对象没了（SIGSEGV）。这个坑已经踩过三次。
+@property (nonatomic, strong, nullable) id retainedInstaller;
+
 - (void)dismissWithCompletion:(nullable void (^)(void))completion;
 
 @end

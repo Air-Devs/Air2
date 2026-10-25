@@ -69,6 +69,8 @@ static void A2Main(dispatch_block_t b) {
 
 @implementation A2ModPackInstaller {
     BOOL _cancelled;
+    /// 装本体用的子安装器 —— 必须强引用，它是异步的
+    A2GameInstaller *_baseInstaller;
 }
 
 - (void)cancel {
@@ -370,7 +372,9 @@ static void A2Main(dispatch_block_t b) {
         : m.gameVersion;
 
     __weak typeof(self) weakSelf = self;
-    A2GameInstaller *installer = [[A2GameInstaller alloc] init];
+    // 必须是 ivar，不能是局部变量 —— 异步安装跑一半会被 ARC 回收（SIGSEGV）
+    _baseInstaller = [[A2GameInstaller alloc] init];
+    A2GameInstaller *installer = _baseInstaller;
     [installer install:req
         progress:^(A2InstallStage stage, double progress, NSString *message) {
         __strong typeof(weakSelf) self = weakSelf;
@@ -381,6 +385,7 @@ static void A2Main(dispatch_block_t b) {
         completion:^(BOOL success, NSError *error) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
+        self->_baseInstaller = nil;   // 完成后再放开
         if (!success) { [self failWithError:error]; return; }
         self.versionName = req.versionName;
         [self installFiles];
