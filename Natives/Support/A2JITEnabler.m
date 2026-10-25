@@ -282,7 +282,8 @@ static NSString *gA2JITLastFailure = nil;
     if (self.alert != nil) {
         UIAlertController *alert = self.alert;
         self.alert = nil;
-        [alert dismissViewControllerAnimated:YES completion:nil];
+        // ★照老 Air：先撤等待 UI，再启动游戏★（无动画，立即消失，避免动画期间已进链）
+        [alert dismissViewControllerAnimated:NO completion:nil];
     }
     if (self.bgTask != UIBackgroundTaskInvalid) {
         [UIApplication.sharedApplication endBackgroundTask:self.bgTask];
