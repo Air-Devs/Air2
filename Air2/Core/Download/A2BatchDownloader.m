@@ -43,6 +43,34 @@ static const NSInteger kSystemicFailureLimit = 12;
 
 @end
 
+/// 一轮下载的运行时状态。
+///
+/// 之前这些是 __block 局部变量，配合递归 block 用，有两个坑：
+///   1. `A2DownloadOperation *op = [startRequest:... completion:^{ ...op... }]`
+///      block 捕获 op 时它还没被赋值（startRequest 尚未返回）→ 垃圾值
+///   2. aborted / inFlight 在多线程里裸读裸写
+/// 最终表现是 malloc 报堆损坏（abort）。
+@interface A2BatchRunState : NSObject
+@property (nonatomic, strong) NSMutableArray<A2DownloadRequest *> *queue;
+@property (nonatomic, strong) NSMutableArray<A2DownloadRequest *> *stillFailing;
+@property (nonatomic, assign) NSInteger inFlight;
+@property (nonatomic, assign) NSInteger maxLanes;
+@property (nonatomic, assign) NSInteger round;
+@property (nonatomic, assign) BOOL aborted;
+@property (nonatomic, strong) NSLock *qLock;
+@property (nonatomic, weak, nullable) id weakOwner;
+@end
+
+@implementation A2BatchRunState
+- (instancetype)init {
+    self = [super init];
+    if (!self) return nil;
+    _queue = [NSMutableArray array];
+    _stillFailing = [NSMutableArray array];
+    return self;
+}
+@end
+
 @interface A2BatchDownloader ()
 @property (nonatomic, strong) NSArray<A2DownloadRequest *> *requests;
 @property (nonatomic, assign) NSInteger maxConnections;
@@ -146,157 +174,123 @@ static const NSInteger kSystemicFailureLimit = 12;
         return;
     }
 
-    __block NSMutableArray<A2DownloadRequest *> *queue = [pending mutableCopy];
-    __block NSMutableArray<A2DownloadRequest *> *stillFailing = [NSMutableArray array];
-    __block NSInteger inFlight = 0;
-    __block BOOL aborted = NO;
-    NSLock *qLock = [[NSLock alloc] init];
+    // ---- 状态全部包在一个类里，避免 block 捕获大量局部变量 ----
+    //
+    // 之前用 __block 局部变量（queue / inFlight / stillFailing / aborted）
+    // 配合递归 block，问题是：
+    //   1. `A2DownloadOperation *op = [startRequest:... completion:^{ ...op... }]`
+    //      —— block 捕获 op 时它还没被赋值（startRequest 尚未返回），是垃圾值
+    //   2. aborted 在多个线程里裸读裸写
+    //   结果就是 malloc 报堆损坏（abort）。
+    //
+    // 现在用一个独立对象持有状态，所有访问走它的锁。
+    A2BatchRunState *state = [A2BatchRunState new];
+    state.queue = [pending mutableCopy];
+    state.maxLanes = MIN(_maxConnections, (NSInteger)state.queue.count);
+    state.weakOwner = self;
+    state.round = round;
+    state.qLock = [[NSLock alloc] init];
 
+    [self pumpWithState:state];
+}
+
+/// 填满空闲车道。
+/// 每次只启动「当前空闲数」个，完成一个回调里再调一次 ——
+/// 线程数恒定，与文件总数无关。
+- (void)pumpWithState:(A2BatchRunState *)state {
     __weak typeof(self) weakSelf = self;
 
-    // 从队列取一个；取不到返回 nil
-    A2DownloadRequest * (^nextRequest)(void) = ^A2DownloadRequest * {
-        [qLock lock];
-        A2DownloadRequest *r = queue.firstObject;
-        if (r) [queue removeObjectAtIndex:0];
-        [qLock unlock];
-        return r;
-    };
+    while (YES) {
+        A2DownloadRequest *req = nil;
+        @synchronized (state) {
+            if (state.aborted || self.isCancelled) break;
+            if (state.inFlight >= state.maxLanes) break;
+            req = state.queue.firstObject;
+            if (!req) break;
+            [state.queue removeObjectAtIndex:0];
+            state.inFlight += 1;
+        }
 
-    // 检查是否该收尾
-    void (^maybeFinish)(void) = ^{
+        // 立刻外面开始下载
+        [self startOneRequest:req state:state];
+    }
+
+    // 没有在途任务也没有待办 → 本轮结束
+    BOOL done = NO;
+    @synchronized (state) {
+        done = (state.inFlight == 0 && state.queue.count == 0);
+    }
+    if (done) {
+        [self finishRound:state];
+    }
+    (void)weakSelf;
+}
+
+- (void)startOneRequest:(A2DownloadRequest *)req state:(A2BatchRunState *)state {
+    __weak typeof(self) weakSelf = self;
+
+    [[A2DownloadEngine sharedClient] startRequest:req
+        progress:^(int64_t delta, int64_t totalIgnore) {
+            (void)totalIgnore;
+            [weakSelf addDownloadedBytes:delta];
+        }
+        speed:nil
+        completion:^(BOOL success, NSError *error) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
-        [qLock lock];
-        BOOL done = (inFlight == 0 && queue.count == 0);
-        [qLock unlock];
-        if (!done) return;
 
-        if (self.isCancelled) return;
-        if (aborted) {
-            [A2Logger error:@"BatchDownloader"
-                     message:@"检测到系统性故障（整批零成功且连续多次失败），已中止剩余文件"];
-            [self finishWithSuccess:NO];
-            return;
-        }
-
-        NSArray<A2DownloadRequest *> *retryList = nil;
-        [qLock lock];
-        retryList = [stillFailing copy];
-        [qLock unlock];
-
-        if (round < self.retryRounds && retryList.count > 0) {
-            [A2Logger info:@"BatchDownloader"
-                   message:[NSString stringWithFormat:@"第 %ld 轮结束，%lu 个文件待重试",
-                            (long)(round + 1), (unsigned long)retryList.count]];
-            [self resetConsecutiveFailuresForRetry];
-            [self runRound:round + 1 pending:[retryList mutableCopy]];
+        BOOL systemic = NO;
+        if (success) {
+            [self markFileDone];
         } else {
-            [self finishWithSuccess:retryList.count == 0];
-        }
-    };
-
-    // 启动下一个下载。内部递归：完成一个立刻拉下一个。
-    __block void (^startNext)(void) = nil;
-    startNext = ^{
-        __strong typeof(weakSelf) self = weakSelf;
-        if (!self || self.isCancelled) return;
-
-        [qLock lock];
-        BOOL shouldStop = aborted;
-        [qLock unlock];
-        if (shouldStop) { maybeFinish(); return; }
-
-        A2DownloadRequest *req = nextRequest();
-        if (!req) { maybeFinish(); return; }
-
-        // 发起前先查限流闸门：这个 host 还在限流窗口里就等，
-        // 不要把请求发出去拿 429（那会延长服务端的限流窗口）。
-        NSString *host = req.candidateURLs.firstObject.host;
-        NSTimeInterval wait = [A2RateLimiter remainingWaitForHost:host];
-        if (wait > 0.5) {
-            [qLock lock];
-            [queue insertObject:req atIndex:0];   // 放回队首
-            [qLock unlock];
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(wait * NSEC_PER_SEC)),
-                           dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-                startNext();
-            });
-            return;
+            systemic = [self recordFailure:req error:error];
         }
 
-        [qLock lock];
-        inFlight += 1;
-        [qLock unlock];
-
-        A2DownloadOperation *op = [[A2DownloadEngine sharedClient] startRequest:req
-            progress:^(int64_t delta, int64_t totalIgnore) {
-                (void)totalIgnore;
-                [self addDownloadedBytes:delta];
+        @synchronized (state) {
+            state.inFlight -= 1;
+            if (systemic) {
+                state.aborted = YES;
+                [state.queue removeAllObjects];
+            } else if (!success) {
+                [state.stillFailing addObject:req];
             }
-            speed:nil
-            completion:^(BOOL success, NSError *error) {
-            __strong typeof(weakSelf) self = weakSelf;
-            if (!self) return;
+        }
 
-            [self.lock lock];
-            [self.activeOps removeObject:op];
-            [self.lock unlock];
-
-            if (success) {
-                [self markFileDone];
-            } else {
-                BOOL systemic = [self recordFailure:req error:error];
-                if (systemic) {
-                    [qLock lock];
-                    aborted = YES;
-                    [queue removeAllObjects];   // 熔断：不再发起新的
-                    [qLock unlock];
-                }
-                if (!aborted) {
-                    [qLock lock];
-                    [stillFailing addObject:req];
-                    [qLock unlock];
-                }
-            }
-
-            if (success && self.onFileSuccess) {
-                dispatch_async(dispatch_get_main_queue(), ^{
-                    if (self.onFileSuccess) self.onFileSuccess(req);
-                });
-            }
-
-            [qLock lock];
-            inFlight -= 1;
-            [qLock unlock];
-
-            // 立刻拉下一个 —— 线程数恒定，不因文件总数增长
-            startNext();
-        }];
-
-        if (op) {
-            [self.lock lock];
-            [self.activeOps addObject:op];
-            [self.lock unlock];
-        } else {
-            // 引擎没接（队列满等），稍后重试这个文件
-            [qLock lock];
-            inFlight -= 1;
-            [queue insertObject:req atIndex:0];
-            [qLock unlock];
-            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.05 * NSEC_PER_SEC)),
-                           dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-                startNext();
+        if (success && self.onFileSuccess) {
+            A2DownloadRequest *r = req;
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (self.onFileSuccess) self.onFileSuccess(r);
             });
         }
-    };
 
-    // 启动 maxConnections 条"车道"
-    NSInteger lanes = MIN(_maxConnections, (NSInteger)queue.count);
-    for (NSInteger i = 0; i < lanes; i++) {
-        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
-            startNext();
-        });
+        // 拉下一个，把车道填满
+        [self pumpWithState:state];
+    }];
+}
+
+- (void)finishRound:(A2BatchRunState *)state {
+    if (self.isCancelled) return;
+
+    if (state.aborted) {
+        [A2Logger error:@"BatchDownloader"
+                 message:@"检测到系统性故障（整批零成功且连续多次失败），已中止剩余文件"];
+        [self finishWithSuccess:NO];
+        return;
+    }
+
+    NSArray<A2DownloadRequest *> *retryList = nil;
+    @synchronized (state) {
+        retryList = [state.stillFailing copy];
+    }
+
+    if (state.round < self.retryRounds && retryList.count > 0) {
+        [A2Logger info:@"BatchDownloader"
+               message:[NSString stringWithFormat:@"第 %ld 轮结束，%lu 个文件待重试",
+                        (long)(state.round + 1), (unsigned long)retryList.count]];
+        [self resetConsecutiveFailuresForRetry];
+        [self runRound:state.round + 1 pending:[retryList mutableCopy]];
+    } else {
+        [self finishWithSuccess:retryList.count == 0];
     }
 }
 
