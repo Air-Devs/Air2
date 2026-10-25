@@ -33,9 +33,14 @@
 //    还没装 Extension」。老 Air 的闰门正是**要求**拿到这个值，然后再下发
 //    UniversalJIT26Extension.js（它把 legacyCommands[0x69] 换成真建区），
 //    最后设 detachAfterFirstBr。所以：
-//      · `(uint32_t)region == 0x690000E0` ⇒ **正确**（Universal 脚本在岗）⇒ 放行；
-//      · 其它非 NULL 值（真指针）        ⇒ legacy 脚本 ⇒ 中止并提示换 Universal。
+//      · `(uint32_t)region == 0x690000E0` ⇒ **Universal 基础脚本在岗**（可以下发 Extension）；
+//      · 其它非 NULL 值（真指针）        ⇒ 老 Air 判 legacy 脚本 ⇒ 中止并提示换 Universal。
 //    Air2 曾经把这两个判反（把哨兵当失败、把真指针当成功）——那是「先死后放」的根因。
+//
+//  ★本单补齐（4F 收尾）★：哨兵只是「握手」，**不是 JIT 区**。真机 lastlog-64 曾把
+//  `0xcccccccc690000e0 / 16384 bytes / writable=0` 当成功放行 ⇒ 没区却建 VM ⇒ 首帧 SIGBUS。
+//  现在的判据：哨兵 ⇒ 下发 Extension ⇒ 有界重试 brk #0x69（3 次 × 2s）⇒
+//  **只认「size ≥ A2JITRegionMB(默认 64MB) 且可写」的真区**才放行；只拿到哨兵 = 未就绪。
 
 #import <Foundation/Foundation.h>
 #import <stddef.h>
@@ -45,8 +50,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// 建 VM 之前闰门的结论（对齐老 Air launchJVM 里的 `return 1` 分支）。
 typedef NS_ENUM(NSInteger, A2LegacyJITGateOutcome) {
     A2LegacyJITGateOutcomeOpen         = 0,  ///< 放行：可以调 JNI_CreateJavaVM
-    A2LegacyJITGateOutcomeNoRegion     = 1,  ///< brk #0x69 无人服务（本进程没有可用的调试器/JIT）
-    A2LegacyJITGateOutcomeLegacyScript = 2,  ///< 回的是真指针 ⇒ 设备上装的是 legacy 脚本，需换 Universal
+    A2LegacyJITGateOutcomeNoRegion     = 1,  ///< brk #0x69 无人服务 / 没有交付真区（本进程没有 JIT）
+    A2LegacyJITGateOutcomeLegacyScript = 2,  ///< 直回真指针且 Extension 收不到 ⇒ 设备上装的是 legacy 脚本
+    A2LegacyJITGateOutcomeSentinelOnly = 3,  ///< ★只拿到握手哨兵 0x690000E0★：Extension 已下发但仍是哨兵
 };
 
 #pragma mark - ①② 老 Air 的就绪判据
@@ -72,9 +78,10 @@ BOOL A2JIT26IsLikelyDebuggerKeepAttached(void);
 
 #pragma mark - ④ 真能力判据（brk #0x69 被服务）
 
-/// 移植自 tree510 `AMEJITVerifyWritableJITRegion`：真的发一发 `brk #0x69`，
-/// **只要调试器应答了**（拿到区，含 Universal 脚本的哨兵 0x690000E0）就算真能力；
-/// 无人服务 ⇒ NO。成功一次即缓存（legacy 脚本只服务一次断点）。
+/// 移植自 tree510 `AMEJITVerifyWritableJITRegion`，★判据严格化为「真区」★：
+/// 真的发一发 `brk #0x69`；只有拿到 **非哨兵 + vm_region 有映射 + size ≥ 期望(64MB) + 可写**
+/// 的区才算真能力。握手哨兵 `0x690000E0` / `0xcccccccc690000e0` / 一页且不可写 ⇒ NO
+/// （先下发 Extension 再重试，见 `A2LegacyJITGateOpen`）。成功一次即缓存真区并复用。
 BOOL A2AMEJITVerifyWritableJITRegion(void);
 
 /// 移植自 tree510 `AMEJITWaitReadyVerified`：
@@ -94,14 +101,16 @@ BOOL A2LegacyJITGateReadyNow(NSString *_Nullable *_Nullable whyOut);
 
 #pragma mark - ⑤ 建 JVM 之前的闰门（老 Air JavaLauncher.m 原样）
 
-/// 移植自 tree510 `JavaLauncher.m` L1384–L1544（`if (requiresDebugJITMapping) { … }` 整块）：
-///   1. 发一发 `brk #0x69`（安全网版本，无人服务返回 NULL 不致死）；
-///   2. NULL ⇒ 判「本进程没有 JIT」，调用方必须**不建 VM**并给可读提示；
-///      回真指针（非 0x690000E0）⇒ 判「设备上是 legacy 脚本」，同样不建 VM；
-///   3. 正确（哨兵）⇒ 下发 `UniversalJIT26Extension.js`（把 legacyCommands[0x69]
-///      换成真建区）+ `JIT26SetDetachAfterFirstBr(!alwaysAttached)` +
-///      清 EXC_MASK_BAD_ACCESS 的任务异常端口；
-///   4. 返回 Open ⇒ 调用方才可以调 `JNI_CreateJavaVM`。
+/// 移植自 tree510 `JavaLauncher.m` L1384–L1544（`if (requiresDebugJITMapping) { … }` 整块），
+/// ★并把「真区验收」补进去★：
+///   1. 发 `brk #0x69`（安全网版本，无人服务返回 NULL 不致死），讨 size = A2JITRegionMB(默认 64MB)；
+///   2. 分类：哨兵 / 无映射 / 太小 / 只读 / 真区（判据见 .m ④' 段的 `a2gate_classify`）；
+///   3. 非真区（典型：握手哨兵 0x690000E0 / 0xcccccccc690000e0 / 一页不可写）
+///      ⇒ 下发 `UniversalJIT26Extension.js`（把 legacyCommands[0x69] 换成真建区），
+///      然后★有界重试★ brk #0x69（3 次 × 2s）；
+///   4. ★只认真区才放行★：size ≥ 期望 且 可写 ⇒ 再 `JIT26SetDetachAfterFirstBr(!alwaysAttached)`
+///      + 清 EXC_MASK_BAD_ACCESS ⇒ `Open`；只拿到哨兵/无应答 ⇒ **不建 VM**，
+///      返回 `SentinelOnly` / `NoRegion` 并给可读原因。
 ///
 /// ★调用方必须把它放在唯一建 VM 处（A2LaunchSession 的 createJVM 块）之前★：
 /// 老 Air 的顺序就是「闰门 → 之后才建 JVM」，中间不许插别的启动动作。
