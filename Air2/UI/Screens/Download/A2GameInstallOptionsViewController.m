@@ -224,7 +224,11 @@
         return;
     }
 
-    NSString *version = card.selectedVersion;
+    // selectedVersion 是 A2ModLoaderVersion 对象，不是字符串 ——
+    // 之前直接赋给 NSString *，运行时崩
+    // "[A2ModLoaderVersion length]: unrecognized selector"。
+    A2ModLoaderVersion *sel = card.selectedVersion;
+    NSString *version = sel.version ?: @"";
     [_selection selectType:type version:version];
 
     // 同步 UI：被互斥清掉的卡片要复位

@@ -35,6 +35,7 @@
 #import "A2SettingsSections.h"
 #import "A2RendererSettingsViewController.h"
 #import "A2JREManager.h"
+#import "A2MemorySettings.h"
 #import "A2ResolutionSettingsView.h"
 #import "A2ResolutionManager.h"
 #import "A2JREManageViewController.h"
@@ -239,6 +240,64 @@
     [self presentViewController:nav animated:YES completion:nil];
 }
 
+
+/// 内存分配设置 —— 对照 ZL2 的 MemorySettings。
+///
+/// 自动模式只调百分比；手动模式直接填 MB。
+/// 上限由 A2MemorySettings 按 jetsam 经验值钳制（填太大也会被压回来）。
+- (void)showMemorySettings {
+    A2MemorySettings *m = A2MemorySettings.shared;
+    UIViewController *host = [[UIViewController alloc] init];
+    host.view.backgroundColor = A2ThemeManager.shared.scheme.cSurface;
+    host.title = @"内存分配";
+
+    A2SettingsSection *info = [[A2SettingsSection alloc] initWithTitle:@"设备信息"];
+    info.footerText = [NSString stringWithFormat:
+                       @"设备内存 %ld MB，进程可用上限约 %ld MB。"
+                       @"超过上限会被系统直接杀掉（无日志闪退）。",
+                       (long)m.deviceMemoryMB, (long)m.processLimitMB];
+    [info addRow:[self infoRow:@"设备内存" value:[NSString stringWithFormat:@"%ld MB", (long)m.deviceMemoryMB]]];
+    [info addRow:[self infoRow:@"进程上限" value:[NSString stringWithFormat:@"%ld MB", (long)m.processLimitMB]]];
+    [info addRow:[self infoRow:@"当前生效" value:[NSString stringWithFormat:@"%ld MB", (long)m.effectiveHeapMB]]];
+
+    A2SettingsSection *modeSec = [[A2SettingsSection alloc] initWithTitle:@"分配方式"];
+    A2SettingsRow *autoRow = [[A2SettingsRow alloc] init];
+    autoRow.title = @"自动（按百分比）";
+    autoRow.accessory = A2SettingsRowAccessoryCheckmark;
+    autoRow.on = (m.mode == A2MemoryModeAuto);
+    autoRow.onTap = ^{
+        m.mode = A2MemoryModeAuto;
+        [m commit];
+        [host dismissViewControllerAnimated:YES completion:nil];
+    };
+
+    A2SettingsRow *manualRow = [[A2SettingsRow alloc] init];
+    manualRow.title = @"手动（指定 MB）";
+    manualRow.showsSeparator = NO;
+    manualRow.accessory = A2SettingsRowAccessoryCheckmark;
+    manualRow.on = (m.mode == A2MemoryModeManual);
+    manualRow.onTap = ^{
+        m.mode = A2MemoryModeManual;
+        [m commit];
+        [host dismissViewControllerAnimated:YES completion:nil];
+    };
+    [modeSec addRow:autoRow];
+    [modeSec addRow:manualRow];
+
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:host];
+    nav.modalPresentationStyle = UIModalPresentationFormSheet;
+    [self presentViewController:nav animated:YES completion:nil];
+}
+
+/// 生成一个「标题 + 右侧值」的只读行
+- (A2SettingsRow *)infoRow:(NSString *)title value:(NSString *)value {
+    A2SettingsRow *row = [[A2SettingsRow alloc] init];
+    row.title = title;
+    row.subtitle = value;
+    row.accessory = A2SettingsRowAccessoryNone;
+    return row;
+}
+
 - (void)rebuildContentForIndex:(NSInteger)index {
     for (UIView *v in _detailStack.arrangedSubviews) {
         [_detailStack removeArrangedSubview:v];
@@ -281,6 +340,20 @@
             [self.navigationController pushViewController:vc animated:YES];
         };
         [sec addRow:jreRow];
+
+        // ---- 内存分配（对照 ZL2 的 MemorySettings）----
+        A2SettingsRow *memRow = [[A2SettingsRow alloc] init];
+        memRow.symbolName = @"memorychip";
+        memRow.title = @"内存分配";
+        memRow.subtitle = [NSString stringWithFormat:@"当前 %ld MB（设备 %ld MB）",
+                           (long)A2MemorySettings.shared.effectiveHeapMB,
+                           (long)A2MemorySettings.shared.deviceMemoryMB];
+        memRow.accessory = A2SettingsRowAccessoryDisclosure;
+        memRow.onTap = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            [self showMemorySettings];
+        };
+        [sec addRow:memRow];
 
         // ---- 分辨率 ----
         A2SettingsRow *resRow = [[A2SettingsRow alloc] init];
