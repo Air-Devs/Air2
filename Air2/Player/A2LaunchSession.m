@@ -673,6 +673,29 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
         [jvmOptions addObjectsFromArray:[legacyProfile jvmCompatOptions]];
     }
 
+    // ★实例级自定义 JVM 参数★（`A2VersionIsolation.jvmArgs`：UI 有写、持久化有存，
+    //   但此前**启动链从来没读过** —— 死字段）。这里补「读」的一侧：
+    //   按空白切分后原样追加到 VM 选项末尾（位置在计划选项之后、主类之前）。
+    //   用途之一就是 P0 spike：`-javaagent:<libs>/spike1201_agent.jar=dir=<dir>`，
+    //   不必为每个实验再改一次启动器。
+    {
+        NSString *extra = version.isolation.jvmArgs;
+        if (extra.length > 0) {
+            NSMutableArray<NSString *> *tokens = [NSMutableArray array];
+            for (NSString *t in [extra componentsSeparatedByCharactersInSet:
+                                 [NSCharacterSet whitespaceAndNewlineCharacterSet]]) {
+                if (t.length > 0) {
+                    [tokens addObject:t];
+                }
+            }
+            if (tokens.count > 0) {
+                [jvmOptions addObjectsFromArray:tokens];
+                [A2Log criterion:@"[A2-AGENT] 实例 JVM 参数：%lu 个 token（首项 %@）",
+                 (unsigned long)tokens.count, tokens.firstObject];
+            }
+        }
+    }
+
     // ★2026-10-18 真机证据★ 两个决定性事实：
     //   ① 崩溃栈是 `Minecraft.<init> → new GlDevice() → GL.createCapabilities()` ⇒ MC 走的是
     //      ★原版 GL 设备★，说明 metallum 的 GpuBackend 根本没生效 —— 它没被注入。
