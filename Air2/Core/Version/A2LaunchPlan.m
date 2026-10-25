@@ -461,7 +461,13 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     //   16m 的钳制就来自这里 ⇒ 与老 Air(64MB) 不符，JIT 代码放不下。
     //   ⇒ 默认恢复 64m（与老 Air 同档）；请求洪水用 A2CodeCacheMB 键手工调小（下限仍允许 8m）。
     NSInteger a2ccMB = [NSUserDefaults.standardUserDefaults integerForKey:@"A2CodeCacheMB"];
-    if (a2ccMB <= 0) a2ccMB = 64;
+    if (a2ccMB <= 0) {
+        // ★默认值按 JRE 分档★（真机 2026-10-25）：java-8 在 iOS 上要一次拿
+        //   64MB 连续内存做代码缓存（MirrorMappedCodeCache 还要再镜像一份），
+        //   真机直接 "malloc failed to allocate 67108912 bytes for Chunk::new" ⇒ OOM。
+        //   java-8 降到 16MB；17/21/25 保持 64MB（它们是分块分配，不会一次要 64MB）。
+        a2ccMB = (javaMajorVersion == 8) ? 16 : 64;
+    }
     if (a2ccMB > 64) a2ccMB = 64;
     [options addObject:[NSString stringWithFormat:@"-XX:ReservedCodeCacheSize=%ldm", (long)a2ccMB]];
     [options addObject:[NSString stringWithFormat:@"-XX:InitialCodeCacheSize=%ldm", (long)MIN(a2ccMB, (NSInteger)2)]];
