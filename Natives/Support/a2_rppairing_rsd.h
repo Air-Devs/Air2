@@ -54,8 +54,6 @@ typedef NS_ENUM(NSInteger, A2RPRSDTransport) {
 
 /// 服务类型 → 传输路径。★未知服务类型回 Unknown（不猜）★。
 A2RPRSDTransport A2RPRSDTransportForServiceType(NSString *serviceType);
-/// 传输路径的诊断名（日志用；稳定字符串）。
-NSString *A2RPRSDTransportName(A2RPRSDTransport transport);
 
 /// 本仓支持的发现服务类型（顺序 = 尝试顺序）：先 2c（pair-verify 直连），再 2b。
 NSArray<NSString *> *A2RPRSDDefaultServiceTypes(void);
@@ -133,9 +131,6 @@ id _Nullable A2RPRSDTLSPSKParameters(NSData *psk, NSString *_Nullable *_Nullable
 
 /// 端点的可读描述（`ip:port` 或 Bonjour 名字；日志用）。
 + (NSString *)describeEndpoint:(id)endpoint;
-
-/// 已发现端点的可读列表（日志用）。
-@property (nonatomic, readonly, copy) NSArray<NSString *> *foundDescriptions;
 
 - (void)stop;
 

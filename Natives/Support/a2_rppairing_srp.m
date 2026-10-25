@@ -885,19 +885,3 @@ const uint8_t *A2RPSRPServerSessionKey(A2RPSRPServer *server, size_t *lenOut) {
     if (lenOut) { *lenOut = server->keyBytesLen; }
     return server->keyBytes;
 }
-
-BOOL A2RPSRPServerTrace(A2RPSRPServer *server, A2RPSRPTrace *out) {
-    if (server == NULL || out == NULL) { return NO; }
-    memset(out, 0, sizeof(*out));
-    if (server->kBytes) { memcpy(out->k, server->kBytes, server->kLen); out->kLen = server->kLen; }
-    if (server->xBytes) { memcpy(out->x, server->xBytes, server->xBytesLen); out->xLen = server->xBytesLen; }
-    if (server->uBytes) { memcpy(out->u, server->uBytes, server->uBytesLen); out->uLen = server->uBytesLen; }
-    if (server->vBytes) { memcpy(out->v, server->vBytes, server->vBytesLen); out->vLen = server->vBytesLen; }
-    if (server->aBytes) { memcpy(out->A, server->aBytes, server->aBytesLen); out->aLen = server->aBytesLen; }
-    if (server->bBytes) { memcpy(out->B, server->bBytes, server->bBytesLen); out->bLen = server->bBytesLen; }
-    if (server->sBytes) { memcpy(out->S, server->sBytes, server->sBytesLen); out->sLen = server->sBytesLen; }
-    if (server->keyBytes) { memcpy(out->K, server->keyBytes, server->keyBytesLen); out->keyLen = server->keyBytesLen; }
-    if (server->m1Bytes) { memcpy(out->M1, server->m1Bytes, server->m1BytesLen); out->m1Len = server->m1BytesLen; }
-    if (server->m2Bytes) { memcpy(out->M2, server->m2Bytes, server->m2BytesLen); out->m2Len = server->m2BytesLen; }
-    return YES;
-}

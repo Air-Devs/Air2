@@ -41,12 +41,7 @@ BOOL A2RPPairSetupUSBPathAvailable(NSString *_Nullable *_Nullable reason);
 /// 两种来源：① 从端点建连（§2b 的 `_remoted._tcp`）；② 包一条【已被接受】的连接（pairable-host 被连入）。
 @interface A2RPNetworkByteStream : NSObject <A2RPByteStream>
 
-/// ① 建连到 Bonjour/TCP 端点（端点对象来自 A2RPRSDDiscovery 的发现结果）。
-/// ★构造不自带连接★：真连接发生在 openStreamWithTimeout:（协议要求）。
-+ (nullable instancetype)streamToEndpoint:(id)endpoint
-                                   reason:(NSString *_Nullable *_Nullable)reason;
-
-/// ② 包一条已被接受的连接（pairable-host 通告后被系统连入）。
+/// 包一条已被接受的连接（pairable-host 通告后被系统连入）—— 本类唯一的构造路径。
 + (instancetype)streamOverAcceptedConnection:(id)connection;
 
 /// 对端的可读描述（`host:port`；日志/判据行用）。

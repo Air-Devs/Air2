@@ -176,9 +176,6 @@ const uint8_t *_Nullable A2RPSRPServerProofM2(A2RPSRPServer *server, size_t *len
 /// K = H(S)。未 ComputeKey 时返回 NULL。
 const uint8_t *_Nullable A2RPSRPServerSessionKey(A2RPSRPServer *server, size_t *lenOut);
 
-/// 回填诊断派生量。
-BOOL A2RPSRPServerTrace(A2RPSRPServer *server, A2RPSRPTrace *out);
-
 NS_ASSUME_NONNULL_END
 
 #endif /* A2_RPPAIRING_SRP_H */

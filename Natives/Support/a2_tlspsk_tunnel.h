@@ -104,8 +104,7 @@ typedef BOOL (^A2TLSPskHostPolicy)(NSString *host);
 /// 便利函数（供诊断日志一行调用）：返回「后端名 + 可用性 + 开关」的一句话。
 + (NSString *)statusLine;
 
-/// 主机准入策略（可替换）。默认见 A2TLSPskDefaultHostPolicy。
-+ (void)setHostPolicy:(nullable A2TLSPskHostPolicy)policy;
+/// 主机准入策略（恒为默认策略，见 A2TLSPskDefaultHostPolicy）。
 + (A2TLSPskHostPolicy)hostPolicy;
 
 /// 默认主机准入策略：本机/私有网段/链路本地/.local ⇒ YES；其余（公网）⇒ NO（★不上云★）。

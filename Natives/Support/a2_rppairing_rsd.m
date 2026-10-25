@@ -34,14 +34,6 @@ A2RPRSDTransport A2RPRSDTransportForServiceType(NSString *serviceType) {
     return A2RPRSDTransportUnknown;
 }
 
-NSString *A2RPRSDTransportName(A2RPRSDTransport transport) {
-    switch (transport) {
-        case A2RPRSDTransportRawSocket: return @"裸 RPPairing socket(JSON 帧)";
-        case A2RPRSDTransportRemoteXPC: return @"RemoteXPC(HTTP/2+XPC)";
-        default:                        return @"Unknown";
-    }
-}
-
 NSArray<NSString *> *A2RPRSDDefaultServiceTypes(void) {
     // 先 2c（裸 socket，只支持 pair-verify —— 正是本单要做的），再 2b。
     return @[ A2RPRSDServiceRemotePairing, A2RPRSDServiceRemoted ];

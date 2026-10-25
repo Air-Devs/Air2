@@ -121,10 +121,6 @@ static A2TLSPskHostPolicy gA2TLSPskHostPolicy = nil;
                                       (ok ? @"" : [NSString stringWithFormat:@"｜缺：%@", r ?: @"未知"])];
 }
 
-+ (void)setHostPolicy:(nullable A2TLSPskHostPolicy)policy {
-    gA2TLSPskHostPolicy = policy;
-}
-
 + (A2TLSPskHostPolicy)hostPolicy {
     return gA2TLSPskHostPolicy ?: ^BOOL(NSString *host) {
         return A2TLSPskDefaultHostPolicy(host);

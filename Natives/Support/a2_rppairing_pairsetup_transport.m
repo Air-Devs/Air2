@@ -55,19 +55,6 @@ BOOL A2RPPairSetupUSBPathAvailable(NSString **reason) {
 
 @implementation A2RPNetworkByteStream
 
-+ (instancetype)streamToEndpoint:(id)endpoint reason:(NSString **)reason {
-    if (endpoint == nil) {
-        if (reason) {
-            *reason = @"端点为 nil";
-        }
-        return nil;
-    }
-    A2RPNetworkByteStream *s = [[A2RPNetworkByteStream alloc] init];
-    s.endpoint = endpoint;
-    s.queue = dispatch_queue_create("a2.rxpc.stream", DISPATCH_QUEUE_SERIAL);
-    return s;
-}
-
 + (instancetype)streamOverAcceptedConnection:(id)connection {
     A2RPNetworkByteStream *s = [[A2RPNetworkByteStream alloc] init];
     s.connection = (nw_connection_t)connection;
