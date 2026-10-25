@@ -277,10 +277,17 @@ def check_component_dependencies():
                     continue
                 p = os.path.join(dirpath, f)
                 src = open(p).read()
-                imported = set(re.findall(r'#import\s+"(\w+\.h)"', src))
+
+                # 去掉注释再扫 —— 否则文档里提到的类名会被当成真实引用。
+                # 之前 A2GameInstallOptionsViewController 的注释里写了
+                # "A2InstallProgressDialog 是按 ZL2 做的"，就被误报成缺 import。
+                code_only = re.sub(r'/\*.*?\*/', '', src, flags=re.S)
+                code_only = re.sub(r'//[^\n]*', '', code_only)
+
+                imported = set(re.findall(r'#import\s+"(\w+\.h)"', code_only))
                 own = f[:-2] + ".h"
 
-                for t in set(re.findall(r'\b(A2[A-Z]\w+)\b', src)):
+                for t in set(re.findall(r'\b(A2[A-Z]\w+)\b', code_only)):
                     if t not in type_to_header:
                         continue
                     hdr = type_to_header[t]
