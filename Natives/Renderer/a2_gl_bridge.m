@@ -270,6 +270,7 @@ static A2PFN_glGetIntegerv gRealGLGetIntegerv = NULL;
 static A2PFN_glGetError   gRealGLGetError   = NULL;
 static volatile int32_t   gGLTraceCalls     = 0;
 static volatile int32_t   gKryptonGLES1Rejected = 0;
+static volatile int32_t   gKryptonResolveLogCount = 0;
 
 #define A2_GL_TRACE_MAX_CALLS 400   // 只在开头疯狂阶段打日志，避免刷爆
 
@@ -480,6 +481,15 @@ static void *a2_gl_bridge_gles_getprocaddress(const char *name) {
     if (sym == NULL && gEglHandle != NULL) sym = dlsym(gEglHandle, name);
     if (sym == NULL && gEglGetProcAddress != NULL) sym = gEglGetProcAddress(name);
     if (sym == NULL) return NULL;
+
+    // ★KW 后端：把解析器命中的每个名字都打出来（限前 200 条）★
+    //   目的：1.7.10 崩在 ANGLE 的 ContextPrivateLoadIdentity，而我们的 21 条 GLES1 前缀表没命中
+    //   （桩计数 0）⇒ 说明 KW 要的是表外的变体名字，落到了兜底 dlsym(GLESv2)。先看清名字再补表。
+    if (a2_gl_bridge_is_krypton() && gKryptonResolveLogCount < 200) {
+        gKryptonResolveLogCount++;
+        a2_log_f(@"[A2-GL-RESOLVE] KW 请求 %s -> %p（宿主=%s）", name, sym,
+                 (gGlesHandle != NULL && sym == dlsym(gGlesHandle, name)) ? "ANGLE" : "其它");
+    }
 
     // ★拒绝把宿主 ANGLE 的 GLES1 固定管线入口交给 KW★
     //   真机证据（lastlog-83，1.7.10）：KW 初始化正常、桥附着正常，到加载画面时崩在
