@@ -38,6 +38,7 @@ extern CGPoint lastVirtualMousePoint;
 // 前置声明必须放在 @interface 外面 —— 放进里面会报
 // "missing '@end'"（Objective-C 的 @class 是文件级声明，不是成员）。
 @class A2ControlRenderer;
+@class A2GameMenuOverlay;
 
 @interface SurfaceViewController : UIViewController
 
@@ -70,7 +71,10 @@ extern CGPoint lastVirtualMousePoint;
 @property(nonatomic) NSArray *menuArray;
 @property(nonatomic) UITableView *menuView;
 @property(nonatomic) UIScreenEdgePanGestureRecognizer* edgeGesture;
-@property(nonatomic) UIView *gameMenuOverlay; // FCL 风格悬浮按钮 + FPS/内存显示
+/// 悬浮球 + FPS/内存显示（对照 ZL2 的 GameBall + GameInfoBox）
+/// 类型必须是 A2GameMenuOverlay，不能是 UIView —— 否则
+/// self.gameMenuOverlay.onOpenEditor 编译器找不到。
+@property(nonatomic, strong) A2GameMenuOverlay *gameMenuOverlay;
 
 @end
 
