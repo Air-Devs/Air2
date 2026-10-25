@@ -362,6 +362,8 @@
         [_card.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor],
         [_card.heightAnchor constraintLessThanOrEqualToAnchor:self.view.heightAnchor
                                                    multiplier:0.85],
+        // 卡片高度下限 —— 否则所有子视图高度都「弹性」时整体会塌成 0
+        [_card.heightAnchor constraintGreaterThanOrEqualToConstant:200],
 
         [content.topAnchor constraintEqualToAnchor:_card.topAnchor],
         [content.bottomAnchor constraintEqualToAnchor:_card.bottomAnchor],
@@ -384,9 +386,9 @@
         [_stepStack.trailingAnchor constraintEqualToAnchor:_stepScroll.contentLayoutGuide.trailingAnchor],
         [_stepStack.widthAnchor constraintEqualToAnchor:_stepScroll.frameLayoutGuide.widthAnchor],
 
-        // 步骤区最小高度 —— 否则内容为空时会被压成 0，
-        // 整个弹窗只剩一个取消按钮（这就是「只显示一个大大的取消按钮」的原因）。
+        // 步骤区必须有一个确定的高度区间，否则会被压成 0
         [_stepScroll.heightAnchor constraintGreaterThanOrEqualToConstant:80],
+        [_stepScroll.heightAnchor constraintLessThanOrEqualToConstant:320],
 
         [_cancelButton.topAnchor constraintEqualToAnchor:_stepScroll.bottomAnchor constant:16],
         [_cancelButton.bottomAnchor constraintEqualToAnchor:content.bottomAnchor constant:-16],
@@ -409,6 +411,11 @@
             [_logCard.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-16],
             [_logCard.widthAnchor constraintEqualToAnchor:_stepScroll.widthAnchor],
             [_stepScroll.bottomAnchor constraintEqualToAnchor:_cancelButton.topAnchor constant:-16],
+            // ⚠️ 有日志时也要给 _stepScroll 定右边 —— 之前只在无日志分支设过，
+            // 这个分支里 _stepScroll 宽度算不出来，整块内容被压成 0，
+            // 弹窗只剩底部那个 fillMaxWidth 的取消按钮。
+            // 宽度由 _logCard.width == _stepScroll.width + 三列间距反推，
+            // 这里显式给出右边界更稳。
         ]];
     } else {
         [cs addObjectsFromArray:@[
