@@ -57,6 +57,14 @@ static const NSTimeInterval kA2JITAlertLead = 0.4;
 /// （scripts/gen_xcodeproj.py 的随包阶段）。StikDebug 只认这个名字。
 static NSString *const kA2JITScriptName = @"UniversalJIT26.js";
 
+/// TrollStore 分支的等待上限：巨魔机的 JIT 是**安装时**授予的，apple-magnifier:// 只负责
+/// 「让 TrollStore 再授予一次」，正常 1~3 秒内就有结论 ⇒ 不给 120s 的长窗口
+/// （否则不成的巨魔机会白等到超时，正是用户报的「卡在等待」）。
+static const NSTimeInterval kA2JITTrollStoreWaitBudget = 20.0;
+
+/// 定义在 ② 使能器；此处提前声明 —— ①' 的安装源探测要用它的 `apple-magnifier://` URL 问 scheme。
+static NSURL *a2jit_url_trollstore(void);
+
 #pragma mark - 使能器种类
 
 typedef NS_ENUM(NSInteger, A2JITEnablerTool) {
@@ -76,6 +84,182 @@ static NSString *a2jit_tool_name(A2JITEnablerTool tool) {
         case A2JITEnablerToolNone:       break;
     }
     return @"(无)";
+}
+
+#pragma mark - ①' 安装源（TrollStore / SideStore / other）
+
+//  ★为什么启动入口必须先分安装源（用户反馈 + 老 Air 的顺序）★
+//  QQ 群两位测试者用的是 **TrollStore**：TrollStore 安装时就用 ldid 把内核级 JIT 权限
+//  签进了 App（进程一启动就能拿到可执行页），**既不需要调试器 attach，也不需要
+//  stikdebug / sidestore / stikjit 那条链**。
+//  本模块原来的顺序是「stikdebug → apple-magnifier → sidestore → stikjit」，于是巨魔机：
+//    · 装了 StikDebug ⇒ 被送进 stikdebug（给一个本来就有 JIT 的进程再开一次；StikDebug 还要
+//      配对文件/目标 IP，多半失败，且会把用户踢到另一个 App 里）；
+//    · 没装 StikDebug ⇒ 落到 apple-magnifier，但紧接着仍用「老 Air 闰门」判就绪 ——
+//      那条要求「有活的调试器应答 brk #0x69」，巨魔机上根本没有调试器 ⇒ 永远不通过 ⇒
+//      卡在「等待 JIT」直到 120s 超时（用户报的「卡住」）。
+//  老 Air 的顺序（tree510/Natives/DownloadViewController.m L3891–L4100 `invokeAfterJITEnabled:`）
+//  是**先分安装源**：
+//      BOOL hasTrollStoreJIT = isTrollStoreInstall();
+//      …
+//      if (hasTrollStoreJIT) { apple-magnifier://… }    ← 巨魔只走自己这条（不拉 stikdebug）
+//      else if (…) { stikdebug / stikjit / sidestore }  ← 其余才走外部使能器
+//  本模块照这个顺序实现；判据行统一用 `[A2-JIT-SRC]` 前缀（装的是哪一版、走了哪条路，一眼可辨）。
+
+typedef NS_ENUM(NSInteger, A2JITInstallSource) {
+    A2JITInstallSourceOther      = 0,  ///< 普通侧载 / 没有可识别的工具
+    A2JITInstallSourceSideStore  = 1,  ///< SideStore / StikDebug 那套（走 stikdebug 链）
+    A2JITInstallSourceTrollStore = 2,  ///< TrollStore（自带内核级 JIT，不跳外部工具）
+};
+
+static NSString *a2jit_src_name(A2JITInstallSource src) {
+    switch (src) {
+        case A2JITInstallSourceTrollStore: return @"trollstore";
+        case A2JITInstallSourceSideStore:  return @"sidestore";
+        case A2JITInstallSourceOther:      break;
+    }
+    return @"other";
+}
+
+/// TrollStore 的磁盘标记：TrollStore 把 App 放在 `<…>/Application/<uuid>/App.app`，并在
+/// **同一层**（= bundle 的上一层）放 `_TrollStore`；TrollStore Lite 用 `_TrollStoreLite`。
+/// ★这是唯一权威判据★：`jb.pmap_cs.custom_trust` 这种 entitlement 普通侧载签名器也会写，
+/// 既会假阳（人人都是巨魔）也会假阴（真巨魔机上值未必是 true），只能当加强证据。
+static NSString *_Nullable a2jit_trollstore_marker_path(void) {
+    NSArray<NSString *> *names = @[@"_TrollStore", @"_TrollStoreLite"];
+    NSString *bundle = NSBundle.mainBundle.bundlePath;
+    NSString *parent = bundle.stringByDeletingLastPathComponent;
+    for (NSString *dir in @[parent, bundle]) {   // 上一层优先；bundle 内同放法也认
+        for (NSString *name in names) {
+            NSString *path = [dir stringByAppendingPathComponent:name];
+            if ([NSFileManager.defaultManager fileExistsAtPath:path]) return path;
+        }
+    }
+    return nil;
+}
+
+/// TrollStore 本体的安装位置。沙盒 App 常常读不到 /Applications（读不到**不算**否定证据），
+/// 所以这条只作辅助证据；一旦命中就足以认定为巨魔机。
+static NSString *_Nullable a2jit_trollstore_app_path(void) {
+    NSArray<NSString *> *paths = @[
+        @"/Applications/TrollStore.app",      @"/Applications/TrollStoreLite.app",
+        @"/var/jb/Applications/TrollStore.app", @"/var/jb/Applications/TrollStoreLite.app",
+    ];
+    for (NSString *path in paths) {
+        if ([NSFileManager.defaultManager fileExistsAtPath:path]) return path;
+    }
+    return nil;
+}
+
+/// 某 URL 能不能被处理。★UIKit 的 canOpenURL 只在主线程问★；
+/// 非主线程返回 -1（未知），绝不把「没问成」写成「没有」。
+static int a2jit_can_open(NSURL *_Nullable url) {
+    if (url == nil) return 0;
+    if (![NSThread isMainThread]) return -1;
+    return [UIApplication.sharedApplication canOpenURL:url] ? 1 : 0;
+}
+
+static NSURL *_Nullable a2jit_url_sidestore_probe(void) {
+    return [NSURL URLWithString:@"sidestore://sidejit-enable?pid=0"];
+}
+
+static NSURL *_Nullable a2jit_url_stikdebug_probe(void) {
+    return [NSURL URLWithString:@"stikdebug://enable-jit"];
+}
+
+/// 一次安装源探测的全部取证（★探测面要宽、判定要窄★：每条证据都进日志，判定只认可靠的）。
+typedef struct {
+    __unsafe_unretained NSString *_Nullable marker;   ///< `_TrollStore` 标记的实际路径（nil = 没找到）
+    __unsafe_unretained NSString *_Nullable appPath;  ///< TrollStore 本体路径（nil = 读不到，不构成否定）
+    BOOL custTrust;               ///< `jb.pmap_cs.custom_trust`（仅加强证据）
+    BOOL kernelJIT;               ///< 内核级 JIT entitlement（csops blob）
+    int schemeMagnifier;          ///< apple-magnifier://（1 是 / 0 否 / -1 未问）
+    int schemeSideStore;          ///< sidestore://
+    int schemeStikDebug;          ///< stikdebug://
+    A2JITInstallSource source;
+} A2JITSourceFacts;
+
+static A2JITSourceFacts a2jit_source_facts(void) {
+    A2JITSourceFacts f = (A2JITSourceFacts){0};
+    // 文件 / entitlement 在进程内不会变 ⇒ 只算一次（等待期 0.5s 一轮，别每轮都建 SecTask）。
+    static BOOL sDiskComputed = NO;
+    static NSString *sMarker = nil;
+    static NSString *sAppPath = nil;
+    static BOOL sCustTrust = NO;
+    static BOOL sKernelJIT = NO;
+    if (!sDiskComputed) {
+        sDiskComputed = YES;
+        sMarker = a2jit_trollstore_marker_path();
+        sAppPath = a2jit_trollstore_app_path();
+        sCustTrust = A2JITGetEntitlementValue(@"jb.pmap_cs.custom_trust");
+        sKernelJIT = a2_jit_has_kernel_level();
+    }
+    f.marker = sMarker;
+    f.appPath = sAppPath;
+    f.custTrust = sCustTrust;
+    f.kernelJIT = sKernelJIT;
+    f.schemeMagnifier = a2jit_can_open(a2jit_url_trollstore());
+    f.schemeSideStore = a2jit_can_open(a2jit_url_sidestore_probe());
+    f.schemeStikDebug = a2jit_can_open(a2jit_url_stikdebug_probe());
+
+    // 判定（★窄★）：磁盘标记 / TrollStore 本体 = 权威；光有 apple-magnifier:// 还要
+    // entitlement 加强（别的工具也可能注册同名 scheme）。
+    if (f.marker != nil || f.appPath != nil || (f.schemeMagnifier == 1 && f.custTrust)) {
+        f.source = A2JITInstallSourceTrollStore;
+    } else if (f.schemeSideStore == 1 || f.schemeStikDebug == 1) {
+        f.source = A2JITInstallSourceSideStore;
+    } else {
+        f.source = A2JITInstallSourceOther;
+    }
+    return f;
+}
+
+/// 安装源 + 一行带全部证据的判据（`[A2-JIT-SRC]`；进程内只打一次，免得等待期刷屏）。
+static A2JITInstallSource a2jit_source(void) {
+    A2JITSourceFacts f = a2jit_source_facts();
+    static BOOL sLogged = NO;
+    if (!sLogged) {
+        sLogged = YES;
+        a2_log_criterion(@"[A2-JIT-SRC] install-source=%@ marker=%@ trollstore-app=%@ cust_trust=%d "
+                         @"kernel-jit=%d apple-magnifier=%d sidestore-scheme=%d stikdebug-scheme=%d "
+                         @"reqDebugMapping=%d",
+                         a2jit_src_name(f.source),
+                         f.marker ?: @"(无)", f.appPath ?: @"(读不到/不否定)",
+                         (int)f.custTrust, (int)f.kernelJIT,
+                         f.schemeMagnifier, f.schemeSideStore, f.schemeStikDebug,
+                         (int)A2LegacyJITGateRequiresDebugMapping());
+    }
+    return f.source;
+}
+
+/// ★TrollStore 机的 JIT 就绪判定（不需要调试器）★
+/// 巨魔机的 JIT 来自**安装时**由 ldid 签进 App 的内核级权限 ⇒ 判据不能是「有没有活的调试器
+/// 应答 brk #0x69」（那条在巨魔机上恒假 ⇒ 能玩的环境被自己的闸门拦死）。
+/// 三条证据任一成立即就绪，按证据强度降序：
+///   ① 老 Air 闰门自己放行（非镜像机型直接放行；恰好有调试器在岗时的握手也算）；
+///   ② 内核级 JIT entitlement（csops blob 里的 com.apple.private.cs.debugger /
+///      dynamic-codesigning）—— 这正是 TrollStore 签名的产物，也是它 JIT 的来源；
+///   ③ 执行式探针真的跑通一页（★真执行★；没有权限时探针自己会跳过，不会赌）。
+static BOOL a2jit_trollstore_ready(NSString *_Nullable *_Nullable whyOut) {
+    NSString *gateWhy = nil;
+    if (A2LegacyJITGateReadyNow(&gateWhy)) {
+        if (whyOut) *whyOut = [NSString stringWithFormat:@"老 Air 闰门放行（%@）", gateWhy ?: @"—"];
+        return YES;
+    }
+    if (a2_jit_has_kernel_level()) {
+        if (whyOut) *whyOut = @"内核级 JIT entitlement（com.apple.private.cs.debugger / "
+                              @"dynamic-codesigning）已随 TrollStore 安装授予 ⇒ 无需调试器代映射";
+        return YES;
+    }
+    A2JITExecProbeResult probe = a2_jit_exec_probe_anonymous();
+    if (probe == A2JITExecProbeExecOK) {
+        if (whyOut) *whyOut = @"exec-probe 真执行一页通过（本进程确实能执行 JIT 页）";
+        return YES;
+    }
+    if (whyOut) *whyOut = [NSString stringWithFormat:
+        @"还没拿到 JIT（内核级 entitlement=%d；exec-probe=%ld；闰门：%@）",
+        (int)a2_jit_has_kernel_level(), (long)probe, gateWhy ?: @"—"];
+    return NO;
 }
 
 #pragma mark - ① 判据
@@ -121,6 +305,12 @@ static void a2jit_log_region(const char *tag) {
 ///     也算应答 —— 它正是老 Air 要求的值）。
 /// why = 可读原因（凭哪一条放行 / 为什么不成），整段文案由 A2LegacyJITGate 给出。
 static BOOL a2jit_ready_now(NSString *_Nullable *_Nullable why) {
+    // ★安装源分支（[A2-JIT-SRC]）★：TrollStore 机的 JIT 不是「调试器代映射」来的
+    //   ⇒ 不能用老 Air 闰门（那条要求有活的调试器应答 brk #0x69，巨魔机上恒假 ⇒
+    //   会一直卡在「等待 JIT」）。其余环境（SideStore / 无工具）判据一字不改。
+    if (a2jit_source() == A2JITInstallSourceTrollStore) {
+        return a2jit_trollstore_ready(why);
+    }
     return A2LegacyJITGateReadyNow(why);
 }
 
@@ -335,6 +525,14 @@ static NSString *gA2JITLastFailure = nil;
         message = [NSString stringWithFormat:
             @"本进程已经拉起过一次 JIT 使能器。\n请确认它已为 Air2 开启 JIT，然后回到 Air2 —— 拿到 JIT 会自动继续启动。\n（最多再等 %.0f 秒）",
             budget];
+    } else if (tool == A2JITEnablerToolTrollStore) {
+        // ★巨魔机专用文案★：不引导用户「去 StikDebug」（他们不需要，也不该被引向一个
+        //   多半用不了的工具）。TrollStore 若没把 URL Scheme 打开，apple-magnifier:// 打不开，
+        //   这里把「该去哪儿开」说清楚。
+        message = [NSString stringWithFormat:
+            @"已让 TrollStore 重新为 Air2 授予 JIT。\n若 TrollStore 弹出设置页，请确认已为本 App 启用 JIT"
+            @"（必要时在 TrollStore 设置里打开 URL Scheme），然后回到 Air2 —— 拿到 JIT 会自动继续启动。\n"
+            @"（最多等 %.0f 秒）", budget];
     } else {
         message = [NSString stringWithFormat:
             @"已让 %@ 为 Air2 开启 JIT。\n请按它的提示完成授权，然后回到 Air2 —— 拿到 JIT 会自动继续启动。\n（最多等 %.0f 秒）",
@@ -614,6 +812,23 @@ static NSString *gA2JITLastFailure = nil;
 }
 
 + (BOOL)openLegacyGateBeforeVMBuild:(NSString *_Nullable *_Nullable)whyOut {
+    // ★安装源分支（[A2-JIT-SRC]）★：TrollStore 机的 JIT 是安装时由 ldid 授予的内核级权限，
+    //   全程没有调试器参与 ⇒ 老 Air 的闰门（发 brk #0x69 要求**调试器**应答，还要
+    //   SetDetachAfterFirstBr / 清 BAD_ACCESS 异常端口）在巨魔机上必然失败。
+    //   照老 Air 的 invokeAfterJITEnabled: 口径（hasTrollStoreJIT 那条不经过闰门）：
+    //   巨魔机只要本进程「确实能用 JIT」就放行建 VM；判不出来时仍落回闰门（如实中止，
+    //   不带着可疑状态建 VM）。
+    if (a2jit_source() == A2JITInstallSourceTrollStore) {
+        NSString *tsWhy = nil;
+        if (a2jit_trollstore_ready(&tsWhy)) {
+            a2_log_criterion(@"[A2-JIT-SRC] gate=skip(trollstore-native-jit) ⇒ 不跑老 Air 闰门、"
+                             @"直接允许建 VM（%@）", tsWhy ?: @"—");
+            if (whyOut) *whyOut = tsWhy ?: @"TrollStore 内核级 JIT 已就绪";
+            return YES;
+        }
+        a2_log_criterion(@"[A2-JIT-SRC] gate=legacy（TrollStore 但本进程仍没拿到 JIT：%@）"
+                         @"⇒ 继续跑老 Air 闰门，失败即如实中止、不建 VM", tsWhy ?: @"—");
+    }
     // ★逐字转调老 Air 的闰门（Natives/Support/A2LegacyJITGate ⑤）★：
     //   本层只负责把「结论 → BOOL + 可读原因」翻成上层能用的形状，
     //   判定条件、顺序、日志全在 A2LegacyJITGate 里，一处都不在这里复制。
@@ -667,6 +882,57 @@ static NSString *gA2JITLastFailure = nil;
     //    允许它把剩余预算用来等区，但绝不再拉起第二个使能器。
     BOOL alreadyJumped = gA2JITJumpedThisProcess || a2jit_launched_by_debugger();
     NSTimeInterval budget = alreadyJumped ? kA2JITRepeatWaitBudget : kA2JITWaitBudget;
+
+    // ═════════════════════════════════════════════════════════════════════════
+    // ★安装源分支（[A2-JIT-SRC]）★ —— TrollStore 机只走 TrollStore 自己的 JIT
+    // -------------------------------------------------------------------------
+    //  顺序照老 Air 的 invokeAfterJITEnabled:（DownloadViewController.m L3891–L4100）：
+    //  先判安装源，巨魔机（hasTrollStoreJIT）就**只**用 apple-magnifier://，绝不拉
+    //  stikdebug / stikjit / sidestore —— 那三条是给「装不上 TrollStore」的环境用的。
+    //  为什么巨魔机不需要跳转：TrollStore 安装时已用 ldid 把内核级 JIT 签进 App，
+    //  进程一启动就有 JIT ⇒ 先判「本进程现在能不能真的执行 JIT 页」：
+    //    · 已就绪 ⇒ 直接继续启动（★不跳、不等待★，这就是「拿到就启动」）；
+    //    · 还没就绪 ⇒ 用 apple-magnifier:// 让 TrollStore 再授予一次，**短等** 20s
+    //      （巨魔是秒级动作，给 120s 只会变成用户眼里的「卡住」）。
+    // ═════════════════════════════════════════════════════════════════════════
+    if (a2jit_source() == A2JITInstallSourceTrollStore) {
+        NSString *tsWhy = nil;
+        if (a2jit_trollstore_ready(&tsWhy)) {
+            a2_log_criterion(@"[A2-JIT-SRC] source=trollstore path=trollstore-native "
+                             @"⇒ 巨魔机自带的 JIT 已可用（%@）★不跳 stikdebug、不弹等待窗★，直接继续启动",
+                             tsWhy ?: @"—");
+            [run finishWithOK:YES reason:(tsWhy ?: @"TrollStore 内核级 JIT 已就绪")];
+            return;
+        }
+        if (alreadyJumped) {
+            // 同一进程只请求一次（断「跳转 ↔ 重拉」的环）；这里只给调试器/巨魔一点收尾时间。
+            a2_log_criterion(@"[A2-JIT-SRC] source=trollstore path=trollstore-wait-only "
+                             @"⇒ 本进程已请求过一次（ppid=%d）⇒ 不再拉起，只短等 %.0fs；%@",
+                             getppid(), kA2JITRepeatWaitBudget, tsWhy ?: @"—");
+            [run startWaitingWithBudget:kA2JITRepeatWaitBudget
+                                   tool:A2JITEnablerToolNone enablerURL:nil];
+            return;
+        }
+        NSURL *tsURL = a2jit_url_trollstore();
+        int tsCanOpen = a2jit_can_open(tsURL);
+        a2_log_criterion(@"[A2-JIT-SRC] source=trollstore path=trollstore-request "
+                         @"⇒ 还没就绪（%@）⇒ 只拉起 apple-magnifier://（canOpen=%d），"
+                         @"★不拉 stikdebug/stikjit/sidestore★，短等 %.0fs",
+                         tsWhy ?: @"—", tsCanOpen, kA2JITTrollStoreWaitBudget);
+        if (tsURL == nil || tsCanOpen == 0) {
+            [run finishWithOK:NO
+                       reason:@"TrollStore 的 JIT 入口（apple-magnifier://）打不开 —— "
+                               @"请在 TrollStore 设置里打开 URL Scheme，或确认本 App 是用 TrollStore 安装的"];
+            return;
+        }
+        gA2JITJumpedThisProcess = YES;
+        [run startWaitingWithBudget:kA2JITTrollStoreWaitBudget
+                               tool:A2JITEnablerToolTrollStore
+                         enablerURL:tsURL];
+        return;
+    }
+    a2_log_criterion(@"[A2-JIT-SRC] source=%@ path=sidestore-chain（stikdebug → sidestore → stikjit，"
+                     @"保持既有顺序与 120s 等待窗）", a2jit_src_name(a2jit_source()));
 
     if (alreadyJumped) {
         a2_log_criterion(@"[A2-JIT-ENABLER] 本进程已跳转过一次 ⇒ 不再跳转，只短等待 %.0fs"

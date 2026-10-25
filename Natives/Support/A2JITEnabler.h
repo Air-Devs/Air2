@@ -34,6 +34,11 @@
 //       的状态去建 VM（建 VM 前的最后校验由 A2LegacyJITGateOpen 承担）。
 //    ④ **顺序**：先弹「正在等待 JIT」→ 本次启动到此为止（调用方 return）→ 再 openURL
 //       拉起使能器 → 才轮询。调换任意两步都会让用户「点一下就被踢走」或「弹窗看不见」。
+//    ⑤ **先分安装源**（`[A2-JIT-SRC]`）：TrollStore 装机自带内核级 JIT（安装时由 ldid 授予），
+//       只走 TrollStore 自己的入口（`apple-magnifier://`），**绝不**拉 stikdebug / stikjit /
+//       sidestore，也不用「要求调试器应答 brk #0x69」那条闰门判它（巨魔机上没有调试器 ⇒
+//       恒假 ⇒ 会一直卡在等待）。SideStore / 无工具环境维持既有链与 120s 等待窗。
+//       顺序照老 Air 的 `invokeAfterJITEnabled:`（先 `isTrollStoreInstall()` 分支）。
 //
 //  分层：本模块属 Natives/Support（JIT 环境层），只依赖 A2JITEnvironment 的判据与
 //  日志出口；不认识版本 / 账号 / 下载 / 启动链，也不替上层决定「失败页怎么写」。

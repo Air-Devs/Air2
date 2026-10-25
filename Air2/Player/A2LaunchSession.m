@@ -227,7 +227,7 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                 NSString *why = [A2JITEnabler lastFailureReason] ?: @"原因未知";
                 [A2Log criterion:@"[A2-JIT] 没拿到 JIT ⇒ 出失败页（不建 VM）：%@", why];
                 finish(NO, 0, [NSString stringWithFormat:
-                               @"没有拿到 JIT：%@。\n可在 StikDebug 里为 Air2 开启 JIT 后重试。", why]);
+                               @"没有拿到 JIT：%@。\n请按提示为 Air2 开启 JIT 后重试（安装源与所走路径见日志 [A2-JIT-SRC] 行）。", why]);
                 return;
             }
             // ★回调说「已就绪」也要现场再问一次判据★：判据只在一处，回调只是信号；
@@ -236,7 +236,7 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                 NSString *why = [A2JITEnabler lastFailureReason] ?: @"现场判据仍未通过";
                 [A2Log criterion:@"[A2-JIT-ENABLER] 仍等待中，本次启动已终止（回调称已就绪，现场判据仍否：%@）", why];
                 finish(NO, 0, [NSString stringWithFormat:
-                               @"没有拿到 JIT：%@。\n可在 StikDebug 里为 Air2 开启 JIT 后重试。", why]);
+                               @"没有拿到 JIT：%@。\n请按提示为 Air2 开启 JIT 后重试（安装源与所走路径见日志 [A2-JIT-SRC] 行）。", why]);
                 return;
             }
             [A2Log criterion:@"[A2-JIT] 已拿到 JIT ⇒ 重新进入启动链（第二轮判据即就绪）"];
@@ -825,7 +825,8 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                                                    userInfo:@{ NSLocalizedDescriptionKey:
                             [NSString stringWithFormat:
                                 @"建 VM 前的 JIT 闰门未通过 —— ★没有创建 VM★（不会闪退）。\n%@\n"
-                                @"请用 StikDebug 为 Air2 开启 JIT（并指派 UniversalJIT26 脚本）后重试；"
+                                @"请按本次安装源对应的方式为 Air2 开启 JIT 后重试（SideStore/StikDebug 需指派 UniversalJIT26 脚本；"
+                                @"TrollStore 机见日志 [A2-JIT-SRC] 行）；"
                                 @"判据明细见日志 [A2-JIT-GATE] / [JIT-FLOW] 行。",
                                 gateWhy ?: @"原因未知"] }];
                     }
