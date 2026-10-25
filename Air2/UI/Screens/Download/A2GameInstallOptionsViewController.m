@@ -192,8 +192,17 @@
 #pragma mark - 加载器选择
 
 - (void)loaderCardSelectionDidChange:(A2LoaderCard *)card {
+    // 入口防御：回调必须来自我们自己的卡。
+    // 这类回调是「点一下就崩」的高发位置，宁可在这里打日志安全返回，
+    // 也不要让异常输入一路穿到选择模型里。
+    if (![card isKindOfClass:A2LoaderCard.class]) {
+        [A2Log log:@"[A2-LOADER] 忽略非法选择回调：card=%p 非 A2LoaderCard", card];
+        return;
+    }
+
     // 原版即「不装任何加载器」—— 清空全部选择
     if (card.isVanilla) {
+        [A2Log log:@"[A2-LOADER] 选择 原版（清空全部加载器选择）"];
         [_selection.versions removeAllObjects];
         for (A2LoaderCard *c in _loaderCards) {
             if (c != card) { c.chosen = NO; [c collapse]; }
@@ -206,6 +215,12 @@
 
     A2ModLoaderType type = card.loaderType;
 
+    // 类型必须是我们认识的加载器或前置模组；越界值直接丢弃并记账。
+    if (!A2ModLoaderIsLoader(type) && !A2ModLoaderIsAPIMod(type)) {
+        [A2Log log:@"[A2-LOADER] 忽略未知 type=%ld 的选择回调", (long)type];
+        return;
+    }
+
     // 主加载器之间是【切换】而不是“冲突”：选了 Forge 再点 Fabric，
     // 直接把旧加载器顶掉即可 —— selectType:version: 内部会清掉互斥项。
     // 只有 API 模组（Fabric API 之类）依附主加载器，配错了才提示冲突。
@@ -216,7 +231,21 @@
         return;
     }
 
-    NSString *version = card.selectedVersion;
+    // 卡上给的是模型对象（A2ModLoaderVersion），不是字符串。
+    //
+    // 早先这里是 `NSString *version = card.selectedVersion;` —— 把模型塞进
+    // 字符串形参，selectType:version: 内部第一句 version.length 就发到模型上
+    // ⇒ -[A2ModLoaderVersion length]: unrecognized selector，点任何加载器
+    // 版本都闪退。现在统一用 versionStringFrom: 规整，类型不匹配也不会崩。
+    id rawVersion = card.selectedVersion;
+    NSString *version = [A2ModLoaderSelection versionStringFrom:rawVersion];
+
+    [A2Log log:@"[A2-LOADER] 选择 type=%@ version=%@（卡片=%p 原始类型=%@）",
+        [A2ModLoaderAPI displayNameForType:type],
+        version ?: @"(未选)",
+        card,
+        NSStringFromClass([rawVersion class]) ?: @"(nil)"];
+
     [_selection selectType:type version:version];
 
     // 同步 UI：被互斥清掉的卡片要复位

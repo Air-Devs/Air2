@@ -32,8 +32,22 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, strong, readonly) NSMutableDictionary<NSNumber *, NSString *> *versions;
 
 /// 选定某类型的版本。会自动清除与之互斥的其它选择。
-/// @param version 传 nil 表示取消选择
-- (void)selectType:(A2ModLoaderType)type version:(nullable NSString *)version;
+///
+/// @param version 版本号。接受三种形态，内部统一规整成字符串后再参与比较：
+///                · NSString —— 正常路径
+///                · A2ModLoaderVersion（或任何带 -version 的模型）—— 取它的版本号
+///                · nil / 空串 / NSNull —— 取消选择
+///                ★ 形参类型是 id 而不是 NSString：调用方（卡片的
+///                  selectedVersion）给的本来就是模型对象，早先按 NSString 收
+///                  会在内部第一句 version.length 上发 unrecognized selector
+///                  直接闪退。这里用 id + 统一规整把口子堵在入口。
+- (void)selectType:(A2ModLoaderType)type version:(nullable id)version;
+
+/// 把任意形态的版本描述规整成版本号字符串。
+/// NSString 原样返回；带 -version 的模型取内层值；其余返回 nil。
+/// 公开出来是为了让调用方（UI 层）也用同一套规整，避免再出现
+/// 「模型当字符串用」这类隐式崩溃。
++ (nullable NSString *)versionStringFrom:(nullable id)value;
 
 /// 当前已选的主加载器（可能为 nil）
 @property (nonatomic, readonly, nullable) NSNumber *selectedLoaderType;

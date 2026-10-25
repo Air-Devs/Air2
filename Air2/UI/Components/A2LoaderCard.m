@@ -688,8 +688,9 @@ static void A2LoaderAccent(A2ModLoaderType type, A2ColorScheme *t,
     A2ModLoaderVersion *v = _versions[indexPath.row];
     _selectedVersion = v;
     _chosen = YES;
-    [A2Log log:@"download: 选择加载器 %@ 版本 %@（%@）",
-        [A2ModLoaderAPI displayNameForType:_loaderType], v.version, _mcVersion];
+    [A2Log log:@"[A2-LOADER] 选择 type=%@ version=%@（MC %@，行 %ld）",
+        [A2ModLoaderAPI displayNameForType:_loaderType], v.version, _mcVersion,
+        (long)indexPath.row];
     [_tableView reloadData];
     [self setExpanded:NO animated:YES];
     [self notifySelection];
