@@ -67,7 +67,14 @@ static void A2Main(dispatch_block_t b) {
 @property (nonatomic, copy, nullable) void (^completionBlock)(BOOL, NSError *);
 @end
 
-@implementation A2ModPackInstaller
+@implementation A2ModPackInstaller {
+    BOOL _cancelled;
+}
+
+- (void)cancel {
+    _cancelled = YES;
+    [A2Logger info:@"ModPackInstaller" message:@"用户取消安装"];
+}
 
 #pragma mark - 格式识别
 
@@ -292,6 +299,8 @@ static void A2Main(dispatch_block_t b) {
                  progress:(void (^)(double, NSString *))progress
                completion:(void (^)(BOOL, NSError *))completion {
 
+    _cancelled = NO;
+
     self.zipPath = zipPath;
     self.versionName = versionName;
     self.gameHome = gameHome;
@@ -305,6 +314,7 @@ static void A2Main(dispatch_block_t b) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
 
+        if (self->_cancelled) { [self finishCancelled]; return; }
         if (!manifest) { [self failWithError:error]; return; }
         self.manifest = manifest;
 
@@ -322,6 +332,8 @@ static void A2Main(dispatch_block_t b) {
 /// 确保游戏本体与加载器就绪。
 /// 整合包不包含游戏本体，只声明依赖 —— 缺的话要先装。
 - (void)ensureBaseVersion {
+    if (_cancelled) { [self finishCancelled]; return; }
+
     A2ModPackManifest *m = self.manifest;
 
     // 找本地是否有符合的版本（同游戏版本 + 同加载器）
@@ -616,6 +628,18 @@ static void A2Main(dispatch_block_t b) {
     A2Main(^{
         if (self.progressBlock) {
             self.progressBlock(MAX(0, MIN(1, progress)), message);
+        }
+    });
+}
+
+/// 用户取消 —— 不走 fail 路径，错误信息不同
+- (void)finishCancelled {
+    [A2Logger info:@"A2ModPackInstaller" message:@"安装已取消"];
+    A2Main(^{
+        if (self.completionBlock) {
+            NSError *e = [NSError errorWithDomain:@"A2ModPackInstaller" code:99
+                                         userInfo:@{NSLocalizedDescriptionKey: @"已取消"}];
+            self.completionBlock(NO, e);
         }
     });
 }

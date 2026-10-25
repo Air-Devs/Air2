@@ -114,6 +114,9 @@ typedef NS_ENUM(NSInteger, A2ModPackFormat) {
 
 @interface A2ModPackInstaller : NSObject
 
+/// 取消安装。已下载的文件保留，未开始的不再执行。
+- (void)cancel;
+
 /// 探测某个 zip 是哪种整合包格式（不安装，只识别）
 + (A2ModPackFormat)detectFormatAtPath:(NSString *)zipPath;
 
