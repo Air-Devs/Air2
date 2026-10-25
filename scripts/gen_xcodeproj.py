@@ -491,6 +491,11 @@ def build():
                         "$(SRCROOT)/Air2/Player/Context",
                         "$(SRCROOT)/Air2/Player/Input",
                         "$(SRCROOT)/Air2/Player/Renderer",
+                        # glslang / SPIRV 头 —— shaderc_impl_glue.c 与
+                        # shaderc_sandbox.m 都要 #include "glslang/..."
+                        # 之前 .c 文件没编进工程所以没暴露，修了 .c 收集后
+                        # 立刻报 'glslang/Include/glslang_c_interface.h' not found。
+                        "$(SRCROOT)/Libraries/external/MobileGlues/src/main/cpp/include",
                     )
                 ) + chr(10) + chr(9) * 4 + ")",
                 "CODE_SIGN_STYLE": "Automatic",

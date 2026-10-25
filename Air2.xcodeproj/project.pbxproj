@@ -1729,6 +1729,7 @@
 					"$(SRCROOT)/Air2/Player/Context",
 					"$(SRCROOT)/Air2/Player/Input",
 					"$(SRCROOT)/Air2/Player/Renderer",
+					"$(SRCROOT)/Libraries/external/MobileGlues/src/main/cpp/include",
 				);
 				INFOPLIST_FILE = "Air2/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -1770,6 +1771,7 @@
 					"$(SRCROOT)/Air2/Player/Context",
 					"$(SRCROOT)/Air2/Player/Input",
 					"$(SRCROOT)/Air2/Player/Renderer",
+					"$(SRCROOT)/Libraries/external/MobileGlues/src/main/cpp/include",
 				);
 				INFOPLIST_FILE = "Air2/Info.plist";
 				LD_RUNPATH_SEARCH_PATHS = (
