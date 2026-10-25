@@ -27,7 +27,14 @@ jobs:
     name: 规范检查
     runs-on: ubuntu-latest
     steps:
+      # ★必须拉子模块★
+      # check_imports.py 会扫 Libraries/external/ 下的头文件
+      # （MobileGlues 的 glslang 等）。不拉子模块时那些目录是空的，
+      # 于是判定「引用了不存在的头文件」→ lint 失败，
+      # 而本地因为子模块齐全一直是绿的。
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - name: 目录与命名规范
         run: bash scripts/lint_structure.sh
