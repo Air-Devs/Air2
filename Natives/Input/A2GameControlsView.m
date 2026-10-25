@@ -633,6 +633,11 @@ static int a2_touchSeen = 0;
     CGFloat pad = MAX(12.0, shortSide * 0.030);      // 与屏宽成比例的基础留白（iPhone ≈12）
     CGFloat left   = MAX(sa.left, 0.0)   + pad;      // 横屏刘海在左
     CGFloat bottom = MAX(sa.bottom, 0.0) + pad;      // Home 条在下
+    // ★底部热键条★ 1..9 中心在 H-30、高 36 ⇒ 顶边 H-48。簇的水平范围真的压到它时把簇抬起来，
+    //   否则竖屏 iPhone 上 S 会与「2/3」两键重叠（横屏 iPad/iPhone 横向不相交，保持贴底）。
+    CGFloat hotbarW  = 9 * 36 + 8 * 6;               // 372 = a2_layoutHotbar 的实际总宽
+    CGFloat hotbarX0 = (W - hotbarW) * 0.5;
+    if (left + side > hotbarX0) bottom = MAX(bottom, 36.0 + pad + 4.0);
     // 兜底：屏太矮 / 安全区太大时，至少留 8pt 在可见区内（后面的 clamp 还会再保一道）
     left   = MIN(left,   MAX(8.0, W - side - 8.0));
     bottom = MIN(bottom, MAX(8.0, H - side - 8.0));
