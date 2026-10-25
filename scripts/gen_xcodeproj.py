@@ -143,8 +143,17 @@ def scan_sources():
                 elif f.endswith(".h"):
                     headers.append(rel)
                 elif f.endswith(".c"):
-                    # Air2/Player 里有 .c（shim、sandbox 等），要编进来
-                    if base_name == "Air2/Player":
+                    # Air2/Player 下有 .c（shim / sandbox 等），要编进来。
+                    #
+                    # ⚠️ 这里必须看【相对路径前缀】而不是 base_name ——
+                    # base_name 是遍历根的名字（恒为 "Air2/Player"），
+                    # 之前用它判断等于「永远为真」，但实际 rel 是完整路径，
+                    # 子目录（Player/Renderer/*.c）应该也被收进来。
+                    #
+                    # 之前的写法看着能过，但 shaderc_shim.c 一直没被编译 ——
+                    # 它 #include "shaderc_include.h"（文件不存在），
+                    # 因为没编进工程所以 CI 不报错，等于一个隐形缺失。
+                    if rel.startswith("Air2/Player/"):
                         impl.append(rel)
 
     # ★第三方 C 源（必须显式列出）★

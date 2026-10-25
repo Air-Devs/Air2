@@ -100,10 +100,15 @@
 		2313D67563988A809D80ABBC /* egl_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = E368CBF075B0AB8032581171 /* egl_bridge.m */; };
 		F399FA9A45B20F687631E9C8 /* gl4es_family_boot.m in Sources */ = {isa = PBXBuildFile; fileRef = 2056A2513B531351EF6F4613 /* gl4es_family_boot.m */; };
 		CA5FB58293C7CE4B1660D42D /* gl_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 3D6BFFADE137E817AFABBEE7 /* gl_bridge.m */; };
+		1AF1D478BF3F6C2ACFA1880D /* openal_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = AA85EB0E82DC6C36A7EA7CA7 /* openal_shim.c */; };
 		D963E662806828468DA83EB7 /* osm_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = B430480194987DFD0DE5B92A /* osm_bridge.m */; };
 		256656C1B3B9BB729BD49F20 /* sdl3_hook.m in Sources */ = {isa = PBXBuildFile; fileRef = 877D37201914962A265F7875 /* sdl3_hook.m */; };
 		A66C61E1FD25ECFA681BD47E /* shader_cap_probe.m in Sources */ = {isa = PBXBuildFile; fileRef = 41167DA379475CE71BECC431 /* shader_cap_probe.m */; };
+		8F5741AD24199C221C070B67 /* shaderc_impl_glue.c in Sources */ = {isa = PBXBuildFile; fileRef = 4EBA0900AB704E513396046F /* shaderc_impl_glue.c */; };
+		BAEC5B5ADD3FC4718918C5AB /* shaderc_include.c in Sources */ = {isa = PBXBuildFile; fileRef = 287DA744A433A35B4878F96B /* shaderc_include.c */; };
 		F997B7FAC2D0C9449D7B34B9 /* shaderc_sandbox.m in Sources */ = {isa = PBXBuildFile; fileRef = 05B22A1299F6F9FA174C3C57 /* shaderc_sandbox.m */; };
+		962D1D1BCC018C8A3DB321A7 /* shaderc_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 229333682E81CBEFC1F41F1B /* shaderc_shim.c */; };
+		5A8889AD35BF50CC8B2291E0 /* spvc_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 5F9D85AE4F9ABE9D7CDD8606 /* spvc_shim.c */; };
 		B9BB52B9AB6950D8832318B5 /* virgl_server.m in Sources */ = {isa = PBXBuildFile; fileRef = 7DDE616B504E6BC2BD95893F /* virgl_server.m */; };
 		AFB451E7DE6E2EF951660264 /* vk_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A147B235573B1F4D128EC56 /* vk_bridge.m */; };
 		775874999E7CA10F74D67F52 /* LanPortDetector.m in Sources */ = {isa = PBXBuildFile; fileRef = E147FF8C8EEE4B039515EF61 /* LanPortDetector.m */; };
@@ -303,10 +308,15 @@
 		E368CBF075B0AB8032581171 /* egl_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "egl_bridge.m"; sourceTree = "<group>"; };
 		2056A2513B531351EF6F4613 /* gl4es_family_boot.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "gl4es_family_boot.m"; sourceTree = "<group>"; };
 		3D6BFFADE137E817AFABBEE7 /* gl_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "gl_bridge.m"; sourceTree = "<group>"; };
+		AA85EB0E82DC6C36A7EA7CA7 /* openal_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "openal_shim.c"; sourceTree = "<group>"; };
 		B430480194987DFD0DE5B92A /* osm_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "osm_bridge.m"; sourceTree = "<group>"; };
 		877D37201914962A265F7875 /* sdl3_hook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "sdl3_hook.m"; sourceTree = "<group>"; };
 		41167DA379475CE71BECC431 /* shader_cap_probe.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "shader_cap_probe.m"; sourceTree = "<group>"; };
+		4EBA0900AB704E513396046F /* shaderc_impl_glue.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "shaderc_impl_glue.c"; sourceTree = "<group>"; };
+		287DA744A433A35B4878F96B /* shaderc_include.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "shaderc_include.c"; sourceTree = "<group>"; };
 		05B22A1299F6F9FA174C3C57 /* shaderc_sandbox.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "shaderc_sandbox.m"; sourceTree = "<group>"; };
+		229333682E81CBEFC1F41F1B /* shaderc_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "shaderc_shim.c"; sourceTree = "<group>"; };
+		5F9D85AE4F9ABE9D7CDD8606 /* spvc_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "spvc_shim.c"; sourceTree = "<group>"; };
 		7DDE616B504E6BC2BD95893F /* virgl_server.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "virgl_server.m"; sourceTree = "<group>"; };
 		6A147B235573B1F4D128EC56 /* vk_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "vk_bridge.m"; sourceTree = "<group>"; };
 		E147FF8C8EEE4B039515EF61 /* LanPortDetector.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "LanPortDetector.m"; sourceTree = "<group>"; };
@@ -504,6 +514,7 @@
 		B02010A240899112AEFCE3D0 /* osm_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "osm_bridge.h"; sourceTree = "<group>"; };
 		F99A9074E35208D9A630174A /* osmesa_internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "osmesa_internal.h"; sourceTree = "<group>"; };
 		AC840D7699090BF44B30F98F /* shader_cap_probe.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "shader_cap_probe.h"; sourceTree = "<group>"; };
+		C365481CBCB52D0982F38643 /* shaderc_include.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "shaderc_include.h"; sourceTree = "<group>"; };
 		399CED11E88508EFCFA245AD /* shaderc_sandbox.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "shaderc_sandbox.h"; sourceTree = "<group>"; };
 		AADA24A1BD4D76CBC13563DF /* virgl_server.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "virgl_server.h"; sourceTree = "<group>"; };
 		CD3B92E3823A44A4356AFA4B /* vk_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "vk_bridge.h"; sourceTree = "<group>"; };
@@ -1014,10 +1025,15 @@
 				E368CBF075B0AB8032581171 /* egl_bridge.m */,
 				2056A2513B531351EF6F4613 /* gl4es_family_boot.m */,
 				3D6BFFADE137E817AFABBEE7 /* gl_bridge.m */,
+				AA85EB0E82DC6C36A7EA7CA7 /* openal_shim.c */,
 				B430480194987DFD0DE5B92A /* osm_bridge.m */,
 				877D37201914962A265F7875 /* sdl3_hook.m */,
 				41167DA379475CE71BECC431 /* shader_cap_probe.m */,
+				4EBA0900AB704E513396046F /* shaderc_impl_glue.c */,
+				287DA744A433A35B4878F96B /* shaderc_include.c */,
 				05B22A1299F6F9FA174C3C57 /* shaderc_sandbox.m */,
+				229333682E81CBEFC1F41F1B /* shaderc_shim.c */,
+				5F9D85AE4F9ABE9D7CDD8606 /* spvc_shim.c */,
 				7DDE616B504E6BC2BD95893F /* virgl_server.m */,
 				6A147B235573B1F4D128EC56 /* vk_bridge.m */,
 				DC70190DBE9B404EF1531E30 /* AMEGlassStyle.h */,
@@ -1029,6 +1045,7 @@
 				B02010A240899112AEFCE3D0 /* osm_bridge.h */,
 				F99A9074E35208D9A630174A /* osmesa_internal.h */,
 				AC840D7699090BF44B30F98F /* shader_cap_probe.h */,
+				C365481CBCB52D0982F38643 /* shaderc_include.h */,
 				399CED11E88508EFCFA245AD /* shaderc_sandbox.h */,
 				AADA24A1BD4D76CBC13563DF /* virgl_server.h */,
 				CD3B92E3823A44A4356AFA4B /* vk_bridge.h */,
@@ -1513,10 +1530,15 @@
 				2313D67563988A809D80ABBC /* egl_bridge.m in Sources */,
 				F399FA9A45B20F687631E9C8 /* gl4es_family_boot.m in Sources */,
 				CA5FB58293C7CE4B1660D42D /* gl_bridge.m in Sources */,
+				1AF1D478BF3F6C2ACFA1880D /* openal_shim.c in Sources */,
 				D963E662806828468DA83EB7 /* osm_bridge.m in Sources */,
 				256656C1B3B9BB729BD49F20 /* sdl3_hook.m in Sources */,
 				A66C61E1FD25ECFA681BD47E /* shader_cap_probe.m in Sources */,
+				8F5741AD24199C221C070B67 /* shaderc_impl_glue.c in Sources */,
+				BAEC5B5ADD3FC4718918C5AB /* shaderc_include.c in Sources */,
 				F997B7FAC2D0C9449D7B34B9 /* shaderc_sandbox.m in Sources */,
+				962D1D1BCC018C8A3DB321A7 /* shaderc_shim.c in Sources */,
+				5A8889AD35BF50CC8B2291E0 /* spvc_shim.c in Sources */,
 				B9BB52B9AB6950D8832318B5 /* virgl_server.m in Sources */,
 				AFB451E7DE6E2EF951660264 /* vk_bridge.m in Sources */,
 				775874999E7CA10F74D67F52 /* LanPortDetector.m in Sources */,
