@@ -53,6 +53,7 @@
 
 #import "ios_uikit_bridge.h"
 #import "JavaLauncher.h"
+#import "A2Logger.h"
 #import "A2MemorySettings.h"
 #import "LauncherPreferences.h"
 #import "PLLogOutputView.h"
