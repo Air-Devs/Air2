@@ -13,6 +13,7 @@
 //   自带启动器，内部完成「建 VM + 跑 main」）；只有 libjli 不可用才回退 dlopen(libjvm) +
 //   JNI_CreateJavaVM。原因：后者在真机上停在 `[A2JVM] R4 调用 JNI_CreateJavaVM` 之后不返回。
 // ============================================================================
+#include <unistd.h>
 #import "a2_launch.h"
 #import "a2_log.h"            // R7
 #import "a2_argbuilder.h"     // R3
@@ -471,6 +472,19 @@ int a2_launch_jvm_with_argv(int argc, const char *const argv[], A2LaunchInput in
         JavaVM *vmRef = vm;
         NSString *mainCls = [builder.mainClass copy];
         NSArray *pargs = [builder.programArgs copy];
+        // ★cwd 必须切到 gameDir★（真机证据：MC 报 logs/latest.log 相对路径找不到，
+        //   说明进程 cwd 不是 gameDir；老启动器在进 Main 之前都做这一步）。
+        //   否则 MC 里按相对路径读到的内容会被当成配置解析，表现是 gson
+        //   "Expected BEGIN_OBJECT but was STRING" 之类的假错误。
+        NSUInteger a2gdIdx = [pargs indexOfObject:@"--gameDir"];
+        NSString *a2gd = (a2gdIdx != NSNotFound && a2gdIdx + 1 < pargs.count) ? pargs[a2gdIdx + 1] : nil;
+        if (a2gd.length > 0) {
+            NSFileManager *fm = NSFileManager.defaultManager;
+            [fm createDirectoryAtPath:[a2gd stringByAppendingPathComponent:@"logs"]
+          withIntermediateDirectories:YES attributes:nil error:nil];
+            int rc = chdir(a2gd.UTF8String);
+            a2_log_f(@"[RT-P1] chdir(gameDir) rc=%d path=%@", rc, a2gd);
+        }
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
             JNIEnv *tenv = NULL;
             if (vmRef == NULL || (*vmRef)->AttachCurrentThread(vmRef, (void **)&tenv, NULL) != 0 || tenv == NULL) {
