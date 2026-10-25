@@ -567,7 +567,14 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     }
 
     // ---- ④ dlopen（RTLD_LAZY|RTLD_GLOBAL：与 a2_renderer 同款旗标；符号对后续库可见）----
-    gEglHandle      = dlopen(eglPath.UTF8String,      RTLD_LAZY | RTLD_GLOBAL);
+    // ★KW 时用 RTLD_LOCAL★（真机 lastlog-84）：ANGLE 的 libGLESv2 若以 GLOBAL 加载，
+    //   它导出的 GLES1 入口（glLoadMatrixf 等）会被 MC/LWJGL 的 dlsym(RTLD_DEFAULT) 抢先命中，
+    //   从而绕过 KW 自带 FPE，直接崩在 ANGLE 的 GLES1State（未初始化）。⇒ 只让 KW 自己全局可见。
+    const BOOL a2BackendIsKW = (strstr(rendererName, "krypton") != NULL) || (strstr(rendererName, "nggl4es") != NULL);
+    const int a2GlDepFlags = RTLD_LAZY | (a2BackendIsKW ? RTLD_LOCAL : RTLD_GLOBAL);
+    a2_log_f(@"[A2-GL-BRIDGE] 依赖加载旗标：%s（%s）", a2BackendIsKW ? "RTLD_LOCAL" : "RTLD_GLOBAL",
+             a2BackendIsKW ? "KW：避免 ANGLE 的 GLES1 入口被全局抢先" : "非 KW：保持原行为");
+    gEglHandle      = dlopen(eglPath.UTF8String,      a2GlDepFlags);
     if (gEglHandle == NULL) {
         const char *err = dlerror();
         a2_log_f(@"%s ★阻断★：EGL 兼容底 dlopen 失败 %s（%s）",
@@ -575,7 +582,7 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         a2_gl_bridge_teardown();
         return A2GlBridgeErrLoadFailed;
     }
-    gGlesHandle     = dlopen(glesPath.UTF8String,     RTLD_LAZY | RTLD_GLOBAL);
+    gGlesHandle     = dlopen(glesPath.UTF8String,     a2GlDepFlags);
     if (gGlesHandle == NULL) {
         const char *err = dlerror();
         a2_log_f(@"%s ★阻断★：GLESv2 兼容底 dlopen 失败 %s（%s）",
