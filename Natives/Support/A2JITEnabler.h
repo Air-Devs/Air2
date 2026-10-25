@@ -48,6 +48,21 @@
 
 NS_ASSUME_NONNULL_BEGIN
 
+#pragma mark - 等待期广播（给上层挂钩「保活」，不引入 Natives → App 的反向依赖）
+
+/// ★一次「等待 JIT」开始★：等待窗已上屏、即将 openURL 送去使能器。
+/// 观察者应在收到后启动**后台保活**（静音音频 + 后台继续任务），否则本进程会被系统挂起，
+/// 0.5s 轮询与「回前台继续启动」都会停在挂起那一刻（真机症状：开完 JIT 回来卡死）。
+/// ★调用点★：`Air2/App/A2AppDelegate.m` `didFinishLaunching` 里注册的观察者 ⇒
+/// `A2PairingKeepAliveStart(@"正在等待 JIT…")`。
+/// 发出线程：主线程（同步发出，主队列里的 block 观察者会被就地调用）。
+FOUNDATION_EXPORT NSNotificationName const A2JITEnablerWaitingDidBeginNotification;
+
+/// ★一次「等待 JIT」收尾★：拿到 JIT / 超时 / 用户取消 / 使能器打不开 —— 全部走这里。
+/// 观察者应据此**停止保活**（`A2PairingKeepAliveStop()`）。
+/// 发出线程 / 时机：主线程，且**早于**完成回调（回调里可能立刻重新进入启动链）。
+FOUNDATION_EXPORT NSNotificationName const A2JITEnablerWaitingDidEndNotification;
+
 /**
  * A2JITEnabler —— 启动前的 JIT 判据 + 申请 + 有界等待。
  *

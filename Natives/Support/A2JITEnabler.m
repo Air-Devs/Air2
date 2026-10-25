@@ -32,12 +32,22 @@
 
 #pragma mark - 常量
 
+/// ★等待期广播（定义）★：App 层据此开关后台保活（见 .h 的说明）。
+NSNotificationName const A2JITEnablerWaitingDidBeginNotification =
+    @"A2JITEnablerWaitingDidBeginNotification";
+NSNotificationName const A2JITEnablerWaitingDidEndNotification =
+    @"A2JITEnablerWaitingDidEndNotification";
+
 /// 等待上限：对齐老 Air 的 invokeAfterJITEnabled（120s）。
 static const NSTimeInterval kA2JITWaitBudget = 120.0;
 /// 已经跳过一次之后的等待上限：★防死循环★ 第二次起不再跳，只给调试器一点收尾时间。
 static const NSTimeInterval kA2JITRepeatWaitBudget = 8.0;
 /// 轮询间隔：0.5s（老 Air 同量级；再密只是白刷 brk #0x69）。
 static const NSTimeInterval kA2JITPollInterval = 0.5;
+/// ★回前台强制复查的重新等待预算★：回前台时若墙钟预算已被后台时间吃光，
+/// **重新给这么多秒**（★不因为「等过一次」就判死★）—— 用户可能是第二次才在
+/// StikDebug 里点对，回来就应当还能被接住，而不是弹失败页。
+static const NSTimeInterval kA2JITForegroundRecheckBudget = 10.0;
 /// 心跳日志间隔：让真机日志能看出「还在等」而不是「卡死了」。
 static const NSTimeInterval kA2JITHeartbeat = 10.0;
 /// 弹窗 → 拉起使能器之间的间隔：★顺序有用★ 弹窗先落屏，再 openURL（openURL 会把我们送去
@@ -202,11 +212,16 @@ static A2JITEnablerTool a2jit_pick_enabler(NSURL *_Nullable *_Nullable urlOut) {
 @property (nonatomic, assign) NSTimeInterval lastHeartbeat;
 @property (nonatomic, assign) BOOL finished;
 @property (nonatomic, assign) BOOL probeInFlight;           // 上一发探针还没回来 ⇒ 本轮跳过
+@property (nonatomic, assign) NSUInteger probeGeneration;       // 在途探针的代号（0 = 没有在途）
 @property (nonatomic, assign) BOOL enablerLaunched;          // ★one-shot★ 使能器只拉起一次
 @property (nonatomic, assign) BOOL armedAutoLaunch;          // 是否置过「重挂后自动继续」标记
+@property (nonatomic, assign) BOOL inBackground;            // ★后台期间只保活：不复查、不烧预算★
+@property (nonatomic, assign) NSUInteger foregroundRechecks;   // 回前台强制复查的次数（判据行用）
+@property (nonatomic, assign) BOOL foregroundRecheckPending;   // 这次复查就是「回前台」来的
+@property (nonatomic, assign) BOOL waitingBroadcasted;          // 已广播「开始等」⇒ 收尾时才广播「结束」
 @property (nonatomic, assign) UIBackgroundTaskIdentifier bgTask;
 @property (nonatomic, strong) UIAlertController *alert;
-@property (nonatomic, strong) id activeObserver;
+@property (nonatomic, strong) NSMutableArray<id> *observers;   // 前台/后台切换的观察者（收尾一次撤销）
 @property (nonatomic, copy) NSString *lastWhy;              // 最近一次判据原因（失败页用）
 
 - (void)addCompletion:(void (^)(BOOL))block;
@@ -216,7 +231,9 @@ static A2JITEnablerTool a2jit_pick_enabler(NSURL *_Nullable *_Nullable urlOut) {
                     enablerURL:(NSURL *_Nullable)url;
 - (void)openEnablerURL:(NSURL *)url tool:(A2JITEnablerTool)tool;
 - (void)scheduleNextTick;
-- (void)tick;
+- (void)tickForced:(BOOL)forced;
+- (void)enterBackground;
+- (void)foregroundRecheck;
 
 @end
 
@@ -234,6 +251,7 @@ static NSString *gA2JITLastFailure = nil;
     self = [super init];
     if (self) {
         _completions = [NSMutableArray array];
+        _observers = [NSMutableArray array];
         _bgTask = UIBackgroundTaskInvalid;
     }
     return self;
@@ -256,10 +274,11 @@ static NSString *gA2JITLastFailure = nil;
         [NSUserDefaults.standardUserDefaults synchronize];
     }
 
-    if (self.activeObserver != nil) {
-        [NSNotificationCenter.defaultCenter removeObserver:self.activeObserver];
-        self.activeObserver = nil;
+    // ★撤销前台/后台观察者★（一次等待的全部观察者都在这里收尾，避免下一次等待叠两套）
+    for (id token in self.observers) {
+        [NSNotificationCenter.defaultCenter removeObserver:token];
     }
+    [self.observers removeAllObjects];
     if (self.alert != nil) {
         UIAlertController *alert = self.alert;
         self.alert = nil;
@@ -268,6 +287,16 @@ static NSString *gA2JITLastFailure = nil;
     if (self.bgTask != UIBackgroundTaskInvalid) {
         [UIApplication.sharedApplication endBackgroundTask:self.bgTask];
         self.bgTask = UIBackgroundTaskInvalid;
+    }
+
+    // ★广播「等待结束」⇒ 上层停保活★（拿到 JIT / 超时 / 取消 / 使能器打不开，四个出口都过这里）。
+    //   必须先于完成回调发出：回调里会重新进入启动链（建 VM + 起游戏），音频保活不该跟着进去。
+    //   ★只在真的广播过「开始等」时才发★：`ensureJITThen:` 的「一开始就绪」短路没有开过保活，
+    //   那时发一条「结束」只会让上层白跑一次 Stop() 并打一条误导性的判据行。
+    if (self.waitingBroadcasted) {
+        self.waitingBroadcasted = NO;
+        [NSNotificationCenter.defaultCenter postNotificationName:A2JITEnablerWaitingDidEndNotification
+                                                          object:self];
     }
 
     NSArray<void (^)(BOOL)> *blocks = [self.completions copy];
@@ -332,6 +361,18 @@ static NSString *gA2JITLastFailure = nil;
         a2_log_criterion(@"[A2-JIT-ENABLER] 没有可展示的窗口 ⇒ 只等不提示（本次启动同样不往下走）");
     }
 
+    // ★保活（本单）★：等待窗一上屏就广播「开始等 JIT」，由 App 层（A2AppDelegate 的观察者）
+    //   拉起 A2PairingKeepAlive（静音音频 + 后台继续任务）。
+    //   为什么必须在这里开：紧接着（kA2JITAlertLead 秒后）就 openURL 送去使能器，本进程随即进
+    //   后台；没有保活 ⇒ 进程被挂起 ⇒ 0.5s 轮询与「回前台继续」都停在挂起那一刻（真机症状：
+    //   开完 JIT 回来卡死）。★分层★：Natives 不认识 App 层的保活件，只发广播（见 .h）。
+    a2_log_criterion(@"[A2-JIT-ENABLER] 等待 JIT 开始（保活开）⇒ 轮询 %.1fs/次，预算 %.0fs"
+                     @"（★后台期间不烧预算、不复查★；回前台强制立即复查一次）",
+                     kA2JITPollInterval, budget);
+    self.waitingBroadcasted = YES;
+    [NSNotificationCenter.defaultCenter postNotificationName:A2JITEnablerWaitingDidBeginNotification
+                                                      object:self];
+
     // ★② → ③ 的接缝★ 弹窗先上屏，再拉起使能器；one-shot（openEnablerURL 内再挡一次）。
     if (url != nil) {
         __weak typeof(self) weakSelf = self;
@@ -358,35 +399,97 @@ static NSString *gA2JITLastFailure = nil;
         }
     }];
 
-    // 回到前台 = 用户从使能器切换回来 ⇒ 立刻补一发判据（不必等下一个 0.5s 节拍）。
-    self.activeObserver = [NSNotificationCenter.defaultCenter
-        addObserverForName:UIApplicationDidBecomeActiveNotification
-                    object:nil
-                     queue:[NSOperationQueue mainQueue]
-                usingBlock:^(NSNotification *note) {
-        (void)note;
-        A2JITEnablerRun *run = weakSelf;
-        if (run == nil || run.finished) return;
-        a2_log_criterion(@"[A2-JIT-ENABLER] 已回到前台 ⇒ 立刻复查 JIT");
-        [run tick];
-    }];
+    // ★前台/后台切换（本单）★ —— 这是「开完 JIT 回来卡死」的正面修复：
+    //   · 回前台（UIApplicationDidBecomeActive）⇒ ★强制立即复查一次★：
+    //       不看挂起前的定时器（挂起期间 dispatch_after 全停），也不信任在途探针（它可能
+    //       卡在被挂起的那一刻）。已就绪 ⇒ 直接继续启动；未就绪 ⇒ 重新进入等待（判死是不可能的，
+    //       预算用光也重新给 kA2JITForegroundRecheckBudget）。
+    //   · 切走（WillResignActive / DidEnterBackground）⇒ 只保活：不复查、不烧预算。
+    //   观察者一律在收尾（finishWithOK:）里撤销，下一次等待重新注册，绝不叠两套。
+    A2JITEnablerRun *__weak weakRun = self;
+    void (^addObserver)(NSNotificationName, void (^)(void)) =
+        ^(NSNotificationName name, void (^body)(void)) {
+            id token = [NSNotificationCenter.defaultCenter
+                addObserverForName:name
+                            object:nil
+                             queue:[NSOperationQueue mainQueue]
+                        usingBlock:^(NSNotification *note) {
+                (void)note;
+                A2JITEnablerRun *run = weakRun;
+                if (run == nil || run.finished) return;
+                body();
+            }];
+            [self.observers addObject:token];
+        };
+    addObserver(UIApplicationDidBecomeActiveNotification, ^{ [weakRun foregroundRecheck]; });
+    addObserver(UIApplicationWillResignActiveNotification, ^{ [weakRun enterBackground]; });
+    addObserver(UIApplicationDidEnterBackgroundNotification, ^{ [weakRun enterBackground]; });
 
     [self scheduleNextTick];
+}
+
+#pragma mark - 后台 / 回前台
+
+/// 切走（将要 / 已经进后台）：只保活，不复查、不烧等待预算。
+- (void)enterBackground {
+    if (self.finished || self.inBackground) return;
+    self.inBackground = YES;
+    self.lastTick = [NSDate date].timeIntervalSince1970;
+    a2_log_criterion(@"[A2-JIT-ENABLER] 进后台（保活中）⇒ 暂停复查、暂停等待预算；"
+                     @"回前台会强制立即复查一次（拿到 JIT 才继续启动）");
+}
+
+/// ★回前台 ⇒ 强制立即复查一次★（本单的核心改动）。
+///
+/// 为什么不能只靠定时器：挂起期间 dispatch_after / 主队列全部冻结，回来时「下一次 tick」的
+/// 时间点可能早就过了 —— 老实现只会等下一个 0.5s 节拍（甚至因为 probeInFlight 卡在挂起那一刻
+/// 而永远不再发起新的探针），用户看到的就是「开完 JIT 回来卡死」。
+- (void)foregroundRecheck {
+    if (self.finished) return;
+    NSTimeInterval now = [NSDate date].timeIntervalSince1970;
+    NSTimeInterval away = now - self.lastTick;
+    BOOL wasBackground = self.inBackground;
+    self.inBackground = NO;
+    self.lastTick = now;
+    self.foregroundRechecks += 1;
+    self.foregroundRecheckPending = YES;
+    a2_log_criterion(@"[A2-JIT-ENABLER] 回前台 ⇒ 立即复查 JIT（第 %lu 次；离开 %.0fs；"
+                     @"后台标志=%d）★不看挂起前的定时器、不信任在途探针★",
+                     (unsigned long)self.foregroundRechecks, away > 0 ? away : 0,
+                     (int)wasBackground);
+    [self tickForced:YES];
 }
 
 - (void)scheduleNextTick {
     __weak typeof(self) weakSelf = self;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kA2JITPollInterval * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
-        [weakSelf tick];
+        [weakSelf tickForced:NO];
     });
 }
 
-- (void)tick {
+/// 一轮判据。`forced=YES` ⇒ ★回前台强制复查★：不看定时器节奏、作废在途探针、预算用光也重给。
+- (void)tickForced:(BOOL)forced {
     if (self.finished) return;
 
     NSTimeInterval now = [NSDate date].timeIntervalSince1970;
-    // ★挂起间隙豁免★：用户进 StikDebug 一趟，进程可能被挂起几十秒；墙钟不能白吃预算。
+
+    // ★后台期间：只保活，不复查、不烧预算★
+    //   · 不复查：拿到 JIT 的下一步是「建 VM + 起游戏」，那必须在前台发生（首帧要可见）；
+    //     在后台跑等于把用户扔进一个看不见的黑屏。
+    //   · 不烧预算：用户去 StikDebug 那一趟可能几分钟，墙钟不该算进「等 JIT 的耐心」。
+    if (self.inBackground) {
+        self.lastTick = now;
+        if (now - self.lastHeartbeat >= kA2JITHeartbeat) {
+            self.lastHeartbeat = now;
+            a2_log_criterion(@"[A2-JIT-ENABLER] 在后台等 JIT（保活中，不复查；回前台会强制立即复查）");
+        }
+        [self scheduleNextTick];
+        return;
+    }
+
+    // ★挂起间隙豁免★：保活失效时进程仍可能被挂起几十秒；墙钟不能白吃预算
+    //   （老 Air 的 ame169_waitForJITCondition 同款处理）。
     NSTimeInterval gap = now - self.lastTick;
     if (gap > 2.0) {
         self.deadline += gap;
@@ -395,19 +498,33 @@ static NSString *gA2JITLastFailure = nil;
     self.lastTick = now;
 
     if (now >= self.deadline) {
-        NSString *why = self.lastWhy.length > 0 ? self.lastWhy : @"判据始终未通过";
-        [self finishWithOK:NO reason:[NSString stringWithFormat:@"等待 JIT 超时；最后一次判据：%@", why]];
-        return;
+        if (!forced) {
+            NSString *why = self.lastWhy.length > 0 ? self.lastWhy : @"判据始终未通过";
+            [self finishWithOK:NO reason:[NSString stringWithFormat:@"等待 JIT 超时；最后一次判据：%@", why]];
+            return;
+        }
+        // ★回前台不是「判死」的时机★：预算多半是被后台那段时间吃掉的 ⇒ 重新进入等待。
+        //   这就是「不要只等一次就判死」：回来时总还有一次机会，第二次点对了也能被接住。
+        self.deadline = now + kA2JITForegroundRecheckBudget;
+        a2_log_criterion(@"[A2-JIT-ENABLER] 回前台时等待预算已用光 ⇒ 重新进入等待 %.0fs"
+                         @"（★不判死★，接着复查）", kA2JITForegroundRecheckBudget);
     }
     if (now - self.lastHeartbeat >= kA2JITHeartbeat) {
         self.lastHeartbeat = now;
         a2_log_criterion(@"[A2-JIT-ENABLER] 仍在等待 JIT（剩余 %.0fs）", self.deadline - now);
     }
-    if (self.probeInFlight) {   // 上一发还没回来（brk 最坏 2.5s）⇒ 不叠加
-        [self scheduleNextTick];
-        return;
+    if (self.probeInFlight) {
+        if (!forced) {   // 上一发还没回来（brk 最坏 2.5s）⇒ 不叠加
+            [self scheduleNextTick];
+            return;
+        }
+        // ★回前台强制复查：在途那发可能卡在被挂起的那一刻，永不回来 ⇒ 作废它、重新发★
+        a2_log_criterion(@"[A2-JIT-ENABLER] 回前台强制复查：作废挂起前在途的那一发探针"
+                         @"（№%lu 的结果不再采纳）", (unsigned long)self.probeGeneration);
     }
 
+    self.probeGeneration += 1;
+    NSUInteger gen = self.probeGeneration;
     self.probeInFlight = YES;
     __weak typeof(self) weakSelf = self;
     // 判据要发 brk #0x69（可能阻塞）⇒ 必须在后台队列；结果回主线程收尾。
@@ -417,11 +534,18 @@ static NSString *gA2JITLastFailure = nil;
         dispatch_async(dispatch_get_main_queue(), ^{
             A2JITEnablerRun *run = weakSelf;
             if (run == nil || run.finished) return;
+            if (gen != run.probeGeneration) return;   // 过期结果（已被回前台复查接管）⇒ 丢弃
             run.probeInFlight = NO;
             if (ok) {
+                if (run.foregroundRecheckPending) {
+                    run.foregroundRecheckPending = NO;
+                    a2_log_criterion(@"[A2-JIT-ENABLER] 回前台复查：拿到真区 ⇒ 继续启动"
+                                     @"（沿用同一次请求的 completion / 启动参数，不重新排队）");
+                }
                 [run finishWithOK:YES reason:(why ?: @"判据通过")];
                 return;
             }
+            run.foregroundRecheckPending = NO;
             run.lastWhy = why;
             [run scheduleNextTick];
         });

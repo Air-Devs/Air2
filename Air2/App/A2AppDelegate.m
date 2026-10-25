@@ -44,6 +44,35 @@ didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *
     // ★[PAIRWIRE-KEEPALIVE] BGTaskScheduler 必须在启动早期注册 handler（之后不能再注册）★
     //   设备发起配对时用户要离开 App 去系统设置输码 ⇒ 靠「后台继续任务 + 静音音频」保住进程。
     A2PairingKeepAliveRegisterBGTask();
+
+    // ★[A2-JIT-KEEPALIVE] 等 JIT 期间保活★（本单：修「开完 JIT 回来卡死」）
+    //   真机症状：没 JIT ⇒ 弹「正在等待 JIT」⇒ 跳 StikDebug ⇒ 开完 JIT 回到 Air2 ⇒ 卡死。
+    //   根因：等待期间本进程被系统挂起（只剩 A2JITEnabler 里那条 ~30s 的 beginBackgroundTask），
+    //         0.5s 轮询与「回前台继续启动」都停在挂起那一刻，回来时没有任何东西重新开始判定。
+    //   修法（两层）：
+    //     ① 保活 —— A2JITEnabler 在等待窗上屏/收尾时各发一条广播，这里挂到 A2PairingKeepAlive
+    //        （静音音频 + 后台继续任务）⇒ 等待期间进程不被挂起，轮询照跑；
+    //     ② 复查 —— 回前台的**强制立即复查**在 A2JITEnabler 内部（DidBecomeActive），
+    //        拿到 JIT 就带着同一次请求的参数继续启动，没拿到就重新进入等待（不判死）。
+    //   ★分层★：Natives 不认识 A2PairingKeepAlive（App 层），只发广播；挂钩在这里。
+    //   ★生命周期★：这两个观察者与 App 同寿（AppDelegate 不销毁），故不保存 token。
+    [NSNotificationCenter.defaultCenter addObserverForName:A2JITEnablerWaitingDidBeginNotification
+                                                    object:nil
+                                                     queue:[NSOperationQueue mainQueue]
+                                                usingBlock:^(NSNotification *note) {
+        (void)note;
+        [A2Log criterion:@"[A2-PAIRPIN] 等 JIT ⇒ 保活开（静音音频 + 后台继续任务）"];
+        A2PairingKeepAliveStart(@"正在等待 JIT…");
+    }];
+    [NSNotificationCenter.defaultCenter addObserverForName:A2JITEnablerWaitingDidEndNotification
+                                                    object:nil
+                                                     queue:[NSOperationQueue mainQueue]
+                                                usingBlock:^(NSNotification *note) {
+        (void)note;
+        [A2Log criterion:@"[A2-PAIRPIN] 等 JIT 收尾（拿到 / 超时 / 取消）⇒ 保活关"];
+        A2PairingKeepAliveStop();
+    }];
+
     // 用户在「版本管理」里选过沙盒外的游戏目录时，访问权靠安全作用域书签。
     // 必须在任何读游戏目录的逻辑之前恢复，否则第一轮版本扫描会读到不存在的路径。
     [A2GamePath restoreGameHomeAccess];

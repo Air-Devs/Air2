@@ -21,6 +21,9 @@ static BOOL gBGSubmitted = NO;
 static NSString *gLastBGNote = @"none";   ///< 判据用：submitted / unavailable / failed:<msg> / skipped
 static NSString *gSubtitle = @"等待设备连入…";
 
+// 前向声明：注册函数（下方）的到期回调要用到「取消后台任务」这一支（定义在本文件后段）。
+static void A2PairingBGCancel(void);
+
 #pragma mark - 静音音频
 
 static void A2PairingAudioStart(void) {
@@ -61,6 +64,7 @@ static void A2PairingAudioStart(void) {
 }
 
 static void A2PairingAudioStop(void) {
+    BOOL hadEngine = (gEngine != nil);
     if (gPlayer != nil) {
         [gPlayer stop];
         gPlayer = nil;
@@ -68,6 +72,18 @@ static void A2PairingAudioStop(void) {
     if (gEngine != nil) {
         [gEngine stop];
         gEngine = nil;
+    }
+    // ★只回收我们自己起的会话来★：不主动 setActive:NO 会让「保活已经结束」的进程继续占着
+    //   音频会话（紧接着的建 VM / 游戏音频会被它影响）；但如果这次没起过引擎，就绝不碰别人的会话。
+    if (hadEngine) {
+        NSError *err = nil;
+        [AVAudioSession.sharedInstance setActive:NO
+                                     withOptions:AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
+                                           error:&err];
+        if (err != nil) {
+            [A2Log criterion:@"[A2-PAIRPIN] keepalive 音频会话回收失败: %@",
+             err.localizedDescription ?: @""];
+        }
     }
 }
 
@@ -84,13 +100,16 @@ void A2PairingKeepAliveRegisterBGTask(void) {
             // 配对本身跑在别的队列上；这里只需要在过期时收尾，避免系统判定任务已死。
             [A2Log criterion:@"[A2-PAIRPIN] keepalive 后台任务回调（%@）", task.identifier ?: @"-"];
             task.expirationHandler = ^{
-                [A2Log criterion:@"[A2-PAIRPIN] keepalive 后台任务过期 ⇒ 停止保活（配对可能被挂起）"];
-                A2PairingKeepAliveStop();
+                // ★只让后台任务到期，不整体停保活★：静音音频才是主力（配对 / 等 JIT 都靠它扛住挂起）。
+                //   这里若调 A2PairingKeepAliveStop()，后台继续任务一到期就把音频也停掉 ⇒ 进程照样被挂起。
+                [A2Log criterion:@"[A2-PAIRPIN] keepalive 后台继续任务到期 ⇒ 静音音频继续保活"
+                 @"（keepalive=%s）", (gEngine != nil) ? "audio-on" : "audio-off"];
             };
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(300 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{
                 if (A2PairingKeepAliveIsActive()) {
-                    A2PairingKeepAliveStop();
+                    // 同上：300s 上限只针对「后台继续任务」，音频保活由调用方 Stop() 收尾。
+                    A2PairingBGCancel();
                 }
             });
         }];
@@ -105,7 +124,7 @@ static void A2PairingBGSubmit(void) {
     if (@available(iOS 26.0, *)) {
         BGContinuedProcessingTaskRequest *req =
             [[BGContinuedProcessingTaskRequest alloc] initWithIdentifier:kA2PairingBGTaskIdentifier
-                                                                   title:@"Air2 配对"
+                                                                   title:@"Air2"
                                                                 subtitle:gSubtitle];
         req.strategy = BGContinuedProcessingTaskRequestSubmissionStrategyQueue;
         NSError *err = nil;

@@ -14,6 +14,11 @@
 //      （BGTaskScheduler 必须在启动早期注册 handler，之后不能再注册）
 //    · A2JITSettings.m 的「开始配对」 ⇒ A2PairingKeepAliveStart(subtitle)
 //    · 同一处收尾（成功/失败/取消） ⇒ A2PairingKeepAliveStop()
+//    · ★等 JIT（开着启动不进游戏的那个「正在等待 JIT」窗口）★：A2AppDelegate.m 里挂在
+//      A2JITEnabler 的两条广播上（Natives 不认识本件，只发广播，避免下层依赖上层）：
+//        A2JITEnablerWaitingDidBeginNotification ⇒ A2PairingKeepAliveStart(@"正在等待 JIT…")
+//        A2JITEnablerWaitingDidEndNotification   ⇒ A2PairingKeepAliveStop()
+//      （拿到 JIT / 超时 / 用户取消 四个出口都走 DidEnd ⇒ 保活不会漏关）
 //
 //  判据行（默认可见、可 grep）：[A2-PAIRPIN] keepalive=audio-on|audio-off bg=submitted|unavailable|skipped
 //
