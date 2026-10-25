@@ -52,6 +52,8 @@
 @property (nonatomic, strong) A2SettingsRow *pathRow;
 @property (nonatomic, strong) A2SettingsSection *folderSection;
 @property (nonatomic, strong) NSMutableArray<A2SettingsRow *> *folderRows;
+/// 左侧标签栏（对照 ZL2 的 TabMenu）
+@property (nonatomic, strong) A2VersionTabBar *tabBar;
 @end
 
 @implementation A2VersionSettingsViewController
