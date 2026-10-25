@@ -468,6 +468,11 @@ didReceiveResponse:(NSURLResponse *)response
                 // 上报负增量，让调用方的累计值回退到真实进度
                 if (self.progressHandler) self.progressHandler(-self.receivedBytes, -1);
                 [self discardPartialDownload];
+                // ★计数与哈希必须一起归零★
+                //   只删文件不重置 receivedBytes，后面的增量会叠在旧值上，
+                //   进度虚高、流式哈希也会带着旧前缀（SHA1 必错）。
+                self.receivedBytes = 0;
+                self.streamSHA1Valid = NO;
             });
         }
         [self captureResumeInfoFromResponse:http];
