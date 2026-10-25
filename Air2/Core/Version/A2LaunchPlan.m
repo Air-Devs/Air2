@@ -292,6 +292,10 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
         @"resolution_height" : @"720",
         @"clientid"          : @"air2",
         @"auth_xuid"         : @"",
+        // ★必须给合法 JSON★(真机 1.7.10/1.12.2 崩溃根因)：MC 把 --userProperties 的值当 JSON 解析，
+        //   漏替换时会拿到字面量 "${user_properties}" ⇒ gson 抛
+        //   "Expected BEGIN_OBJECT but was STRING at line 1 column 1" ⇒ Main.main 直接崩。
+        @"user_properties"   : @"{}",
     };
 
     NSMutableArray<NSString *> *arguments = [NSMutableArray array];
