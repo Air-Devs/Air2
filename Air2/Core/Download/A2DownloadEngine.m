@@ -838,10 +838,31 @@ didCompleteWithError:(NSError *)error {
     self.finished = YES;
     self.operation.state = A2DownloadStateCompleted;
     [self stopSpeedTimer];
-    [self.session invalidateAndCancel];
+
+    // ⚠️ 顺序很重要：先回调，再销毁 session。
+    //
+    // 之前是先 invalidateAndCancel 再回调 —— 而 invalidate 是异步的，
+    // session 在后台线程拆解时，回调里 A2BatchDownloader 已经开始
+    // 下一个文件的 startRequest:（又建一个新 session + 一堆 malloc）。
+    // 两条线程同时动 CFNetwork 内部的 session 注册表 → 堆损坏 →
+    // malloc abort（信号 6）。
+    //
+    // 崩溃栈正是这个形状：
+    //   malloc abort ← startRequest: ← startOneRequest: ← finishSuccess
+    //
+    // 现在回调在前、销毁在后，且销毁放在 next runloop，
+    // 让新 session 先建好。
+    NSURLSession *oldSession = self.session;
+    self.session = nil;
 
     A2DownloadCompletion cb = self.completion;
     if (cb) cb(YES, nil);
+
+    if (oldSession) {
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            [oldSession invalidateAndCancel];
+        });
+    }
 }
 
 - (void)finishWithError:(NSError *)error {
@@ -849,11 +870,19 @@ didCompleteWithError:(NSError *)error {
     self.finished = YES;
     [self closeFileHandle];
     [self stopSpeedTimer];
-    [self.session invalidateAndCancel];
+    // 同上：先解绑，回调之后再销毁
+    NSURLSession *oldSession = self.session;
+    self.session = nil;
     self.operation.state = A2DownloadStateFailed;
 
     A2DownloadCompletion cb = self.completion;
     if (cb) cb(NO, error);
+
+    if (oldSession) {
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            [oldSession invalidateAndCancel];
+        });
+    }
 }
 
 #pragma mark 测速
