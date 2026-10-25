@@ -270,6 +270,10 @@
 @property (nonatomic, strong) UIButton *cancelButton;
 @property (nonatomic, strong) NSMutableArray<A2ProgressTaskItem *> *items;
 @property (nonatomic, strong, nullable) A2TaskLogOutput *logOutput;
+/// 步骤标题。可能在 viewDidLoad 之前就被 setSteps: 设进来 ——
+/// 那时 _stepStack 还是 nil，必须暂存，等视图建好再真正生成行。
+@property (nonatomic, copy, nullable) NSArray<NSString *> *pendingStepTitles;
+- (void)applyStepTitles:(NSArray<NSString *> *)stepTitles;
 @end
 
 @implementation A2InstallProgressDialog
@@ -290,6 +294,25 @@
     [super viewDidLoad];
     self.view.backgroundColor = [UIColor colorWithWhite:0 alpha:0.45];
     [self buildCard];
+
+    // ★视图建好之后再把暂存的步骤生成成行★
+    //   之前调用方是「先 setSteps: 再 present」，而 setSteps: 里操作的是
+    //   _stepStack —— 那时 viewDidLoad 还没跑，_stepStack 是 nil，
+    //   addArrangedSubview: 全是空操作。结果弹窗里只有标题和一条
+    //   占满宽度的「取消」按钮，用户看到的就是一个空的取消框。
+    if (self.pendingStepTitles.count > 0) {
+        [self applyStepTitles:self.pendingStepTitles];
+        self.pendingStepTitles = nil;
+    } else {
+        // 兜底：没有步骤也要有一行说明，绝不出现「只有取消按钮」的空弹窗
+        [self applyStepTitles:@[self.dialogTitle.length ? self.dialogTitle : @"准备中…"]];
+    }
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    // 标题可能在 present 之前才被赋值（dialogTitle 是外部属性）
+    if (self.dialogTitle.length > 0) _titleLabel.text = self.dialogTitle;
 }
 
 - (void)buildCard {
@@ -441,6 +464,22 @@
 #pragma mark - 数据
 
 - (void)setSteps:(NSArray<NSString *> *)stepTitles {
+    // 空的步骤列表 = 一个没有任何内容的弹窗（只剩取消按钮）。
+    // 这里直接兜底成一行「准备中…」，从结构上杜绝那种形态。
+    NSArray<NSString *> *titles = (stepTitles.count > 0)
+        ? stepTitles
+        : @[self.dialogTitle.length ? self.dialogTitle : @"准备中…"];
+
+    // 视图还没加载（调用方通常先 setSteps: 再 present）⇒ 先存起来
+    if (!_stepStack) {
+        self.pendingStepTitles = titles;
+        return;
+    }
+    [self applyStepTitles:titles];
+}
+
+/// 真正把步骤生成成行。只在 _stepStack 存在之后调用。
+- (void)applyStepTitles:(NSArray<NSString *> *)stepTitles {
     for (UIView *v in [_stepStack.arrangedSubviews copy]) {
         [_stepStack removeArrangedSubview:v];
         [v removeFromSuperview];

@@ -66,6 +66,8 @@ static const NSInteger kBackoffCount = 5;
 static const NSUInteger kWriteBufferSize = 256 * 1024;
 /// 半成品文件后缀
 static NSString *const kPartSuffix = @".part";
+/// 半成品的「旁注」文件后缀 —— 记录来源与校验器（见 persistPartMeta）
+static NSString *const kPartMetaSuffix = @".part.meta";
 
 #pragma mark - 请求
 
@@ -116,6 +118,9 @@ static NSString *const kPartSuffix = @".part";
 /// 落盘是否出过错。为真时既有内容不可信，重试【不得续传】
 /// （对照 ZL2 的 FileSink.broken）。
 @property (nonatomic, assign) BOOL writeBroken;
+/// 单源「从头再下一次」是否已经用过 ——
+/// 校验不符时先用它给同一个源一次干净的重下机会，再换源。
+@property (nonatomic, assign) BOOL sameCandidateScratchRetry;
 
 // ---- 流式 SHA1（对照 ZL2 的 FileSink.digest）----
 // 边下载边算，避免下完再重读整个文件。
@@ -139,6 +144,15 @@ static NSString *const kPartSuffix = @".part";
 @property (nonatomic, strong, nullable) NSURLSession *session;
 @property (nonatomic, strong, nullable) NSURLSessionDataTask *currentTask;
 @property (nonatomic, strong) dispatch_queue_t queue;
+
+// ---- 本单新增（实现见下方同名方法；这里先声明，避免调用点推断成 id）----
+- (BOOL)adoptPartialDownload;
+- (nullable NSDictionary *)readPartMeta;
+- (void)persistPartMeta;
+- (NSString *)partMetaPath;
+- (void)abandonCorruptCandidate:(NSError *)error;
+- (void)prepareStreamSHA1;
+- (NSArray<NSNumber *> *)parseContentRange:(nullable NSString *)range;
 
 @end
 
@@ -166,8 +180,85 @@ static NSString *const kPartSuffix = @".part";
             [self finishSuccess];
             return;
         }
+        // 2. ★接手上次留下的半成品★
+        //   之前只有「同一进程内重试」才会带 Range —— 进程重开（App 被杀 /
+        //   用户暂停后重进）时 receivedBytes 从 0 开始，而 ensureFileHandleOpen
+        //   是 seekToEndOfFile，于是新数据【接在旧数据后面】写：
+        //   文件大小比目标还大，SHA1 永远算不对，用户看到的就是「下到 90% 又从头」。
+        if (![self adoptPartialDownload]) return;   // 已足够长并校验完时直接返回
         [self startCurrentCandidate];
     });
+}
+
+/// 接手磁盘上已有的半成品。
+/// 返回 NO 表示「已经处理完了」（校验成功/失败），调用方不要再发请求。
+///
+/// 判定顺序（对照 ZL2 的 ResumeContext）：
+///   1. 半成品比期望大小还大 ⇒ 断点一定是坏的（换源/追加写错），丢掉
+///   2. 旁注（.part.meta）里的 sha1 与本请求不符 ⇒ 不是同一个文件，丢掉
+///   3. 若已有的字节正好等于期望大小 ⇒ 直接校验，不浪费流量
+///   4. 否则从已有长度续传（带 If-Range，见 startCurrentCandidate）
+- (BOOL)adoptPartialDownload {
+    NSString *partPath = [self partFilePath];
+    NSDictionary *attrs = [NSFileManager.defaultManager attributesOfItemAtPath:partPath error:nil];
+    int64_t existing = [attrs[NSFileSize] longLongValue];
+    if (existing <= 0) return YES;
+
+    int64_t expect = self.request.expectedSize;
+
+    if (expect > 0 && existing > expect) {
+        [A2Logger warning:@"DownloadEngine"
+                  message:[NSString stringWithFormat:
+                           @"[A2-DL] 断点异常：半成品 %lld 字节 > 期望 %lld，丢弃重下",
+                           existing, expect]];
+        [self discardPartialDownload];
+        return YES;
+    }
+
+    // 旁注校验：字节是从哪个源、哪个版本下的，必须与本请求一致
+    NSDictionary *meta = [self readPartMeta];
+    if (meta) {
+        NSString *metaSHA1 = meta[@"sha1"];
+        if (metaSHA1.length > 0 && self.request.expectedSHA1.length > 0 &&
+            [metaSHA1 caseInsensitiveCompare:self.request.expectedSHA1] != NSOrderedSame) {
+            [A2Logger warning:@"DownloadEngine"
+                      message:@"[A2-DL] 断点旁注的 SHA1 与本次请求不符（换了版本/源），丢弃重下"];
+            [self discardPartialDownload];
+            return YES;
+        }
+        NSString *metaURL = meta[@"url"];
+        if (metaURL.length > 0) self.resolvedURL = [NSURL URLWithString:metaURL];
+        NSString *etag = meta[@"etag"];
+        if (etag.length > 0) self.strongETag = etag;
+        NSString *lm = meta[@"lastModified"];
+        if (lm.length > 0) self.lastModified = lm;
+        NSNumber *cl = meta[@"contentLength"];
+        if (cl.longLongValue > 0) self.contentLength = cl.longLongValue;
+    }
+
+    if (expect > 0 && existing == expect) {
+        // 大小已经够了：只差校验。SHA1 通了就直接完成（零流量）
+        [A2Logger info:@"DownloadEngine"
+               message:[NSString stringWithFormat:
+                        @"[A2-DL] 断点已满：%lld/%lld 字节，直接校验", existing, expect]];
+        self.receivedBytes = existing;
+        [self prepareStreamSHA1];
+        [self verifyAndFinish];
+        return NO;
+    }
+
+    self.receivedBytes = existing;
+    // 把「盘上已有的字节」补报给调用方。
+    // 否则批量进度条会从 0 开始、最大只走到 (总量 − 已有字节) 就停住，
+    // 用户以为下载卡死了（实际已经下完一大半）。
+    if (self.progressHandler) {
+        self.progressHandler(existing, expect > 0 ? expect : -1);
+    }
+    [A2Logger info:@"DownloadEngine"
+           message:[NSString stringWithFormat:
+                    @"[A2-DL] 断点接上：从 %lld 字节继续（总 %lld，来源 %@）",
+                    existing, expect, self.resolvedURL.host ?: @"(未知)"]];
+    return YES;
 }
 
 /// 已存在的文件是否可用 —— SHA1 匹配或 zip 结构完好
@@ -233,9 +324,16 @@ static NSString *const kPartSuffix = @".part";
         self.writeBroken = NO;
     }
 
-    // 有断点则带 If-Range，服务端不匹配会返回 200（我们就从 0 重下）
-    if (self.receivedBytes > 0 && self.ifRangeValidator) {
-        [req setValue:self.ifRangeValidator forHTTPHeaderField:@"If-Range"];
+    // 有断点就带 Range，服务端不匹配会返回 200（我们就从 0 重下）。
+    //
+    // ★没有校验器也要发 Range★
+    //   之前只有在 strongETag/Last-Modified 存在时才发 Range，于是
+    //   「服务端不给 ETag」的镜像永远走全量重下。Range 本身是安全的：
+    //   服务端不认就回 200，handleResponse 里会丢弃半成品从头下。
+    if (self.receivedBytes > 0) {
+        if (self.ifRangeValidator) {
+            [req setValue:self.ifRangeValidator forHTTPHeaderField:@"If-Range"];
+        }
         NSString *range = [NSString stringWithFormat:@"bytes=%lld-", self.receivedBytes];
         [req setValue:range forHTTPHeaderField:@"Range"];
     }
@@ -434,11 +532,16 @@ didReceiveResponse:(NSURLResponse *)response
     int64_t bodyLength = http.expectedContentLength;
     if (self.contentLength != bodyLength + self.receivedBytes) return NO;
 
-    // 校验器：优先 strong ETag
+    // 校验器：优先 strong ETag。
+    //
+    // ★服务端一个校验器都不给时不比 URL/Last-Modified★
+    //   之前这种情况下比的是 `nil` 和 `@""`，永远不等 ⇒ 206 一律判失败，
+    //   等于把「没有 ETag 的镜像」的续传彻底封死。此时 Content-Range
+    //   的 start/end/total 三段精确匹配 + 长度算式已经足够证明是同一份内容。
     if (self.strongETag.length > 0) {
         NSString *etag = http.allHeaderFields[@"ETag"];
         if (![self.strongETag isEqualToString:etag]) return NO;
-    } else {
+    } else if (self.lastModified.length > 0) {
         NSURL *respURL = http.URL;
         if (![respURL.absoluteString isEqualToString:self.resolvedURL.absoluteString]) return NO;
         NSString *lm = http.allHeaderFields[@"Last-Modified"];
@@ -482,7 +585,19 @@ didReceiveResponse:(NSURLResponse *)response
 
 /// 从 200 响应里记录续传所需的校验信息
 - (void)captureResumeInfoFromResponse:(NSHTTPURLResponse *)http {
-    self.contentLength = http.expectedContentLength;
+    // ★206 的 expectedContentLength 是「本次区间长度」，不是文件总长★
+    //   之前无条件写成 contentLength，导致续传完成后的长度校验拿
+    //   总长去和一个区间长度比 —— 永远不相等 ⇒ 文件被判「不完整」删掉重下。
+    int64_t total = 0;
+    if (http.statusCode == 206) {
+        NSString *range = http.allHeaderFields[@"Content-Range"];
+        NSArray<NSNumber *> *parsed = [self parseContentRange:range];
+        if (parsed.count == 3) total = parsed[2].longLongValue;
+    } else {
+        total = http.expectedContentLength;
+    }
+    if (total > 0) self.contentLength = total;
+
     self.resolvedURL = http.URL;
 
     NSString *acceptRanges = http.allHeaderFields[@"Accept-Ranges"];
@@ -502,6 +617,10 @@ didReceiveResponse:(NSURLResponse *)response
         self.strongETag = nil;
         self.lastModified = nil;
     }
+
+    // ★写旁注★ 让「进程被杀之后」的续传也能带 If-Range 做校验，
+    //   否则下次启动只能拿到一个光秃秃的字节数，服务端换了内容也照样拼。
+    [self persistPartMeta];
 }
 
 #pragma mark 数据接收
@@ -512,13 +631,18 @@ didReceiveResponse:(NSURLResponse *)response
 
     if (data.length == 0) return;
 
-    // 流式哈希：在数据到达时就算，不等下完重读磁盘
-    if (self.streamSHA1Valid) {
-        CC_SHA1_Update(&_streamSHA1, data.bytes, (CC_LONG)data.length);
-    }
-
     dispatch_async(self.queue, ^{
-        if (self.finished) return;
+        // ★迟到数据必须丢掉★
+        //   换源/重试/暂停之后，旧 task 还可能再吐几个包。之前这里只判 finished，
+        //   于是旧源的数据被追加进新一次尝试的 .part —— 文件被两段不同的
+        //   字节流拼起来（SHA1 必然对不上，而且白下）。
+        if (self.finished || dataTask != self.currentTask) return;
+
+        // 流式哈希：在数据到达时就算，不等下完重读磁盘。
+        // （放在队列里做：与 prepareStreamSHA1 的补算严格同序）
+        if (self.streamSHA1Valid) {
+            CC_SHA1_Update(&_streamSHA1, data.bytes, (CC_LONG)data.length);
+        }
 
         [self ensureFileHandleOpen];
 
@@ -583,6 +707,9 @@ didReceiveResponse:(NSURLResponse *)response
 didCompleteWithError:(NSError *)error {
 
     dispatch_async(self.queue, ^{
+        // 迟到的旧 task 回调：不推进状态（换源后旧连接可能晚一步报完成）
+        if (task != self.currentTask) return;
+        self.currentTask = nil;
         if (self.finished) return;
         [self flushBuffer];
 
@@ -661,12 +788,10 @@ didCompleteWithError:(NSError *)error {
                            @"长度不符：实际 %lld / 期望 %lld（%lld 字节差）",
                            actualSize, self.contentLength,
                            self.contentLength - actualSize]];
-        [NSFileManager.defaultManager removeItemAtPath:partPath error:nil];
-        NSError *err = [self errorWithCode:A2DownloadErrorIncomplete
-                                   message:[NSString stringWithFormat:
-                                            @"文件不完整（%lld/%lld 字节）",
-                                            actualSize, self.contentLength]];
-        [self handleCandidateFailure:err];
+        [self abandonCorruptCandidate:[self errorWithCode:A2DownloadErrorIncomplete
+                                                  message:[NSString stringWithFormat:
+                                                           @"文件不完整（%lld/%lld 字节）",
+                                                           actualSize, self.contentLength]]];
         return;
     }
 
@@ -686,10 +811,12 @@ didCompleteWithError:(NSError *)error {
             actual = [self sha1OfFile:partPath];
         }
         if (!actual || [actual caseInsensitiveCompare:self.request.expectedSHA1] != NSOrderedSame) {
-            [[NSFileManager defaultManager] removeItemAtPath:partPath error:nil];
-            NSError *err = [self errorWithCode:A2DownloadErrorChecksumMismatch
-                                       message:@"SHA1 校验失败"];
-            [self handleCandidateFailure:err];
+            [A2Logger warning:@"DownloadEngine"
+                      message:[NSString stringWithFormat:
+                               @"SHA1 不符：实际 %@ / 期望 %@",
+                               actual ?: @"(空)", self.request.expectedSHA1]];
+            [self abandonCorruptCandidate:[self errorWithCode:A2DownloadErrorChecksumMismatch
+                                                      message:@"SHA1 校验失败"]];
             return;
         }
     }
@@ -699,23 +826,17 @@ didCompleteWithError:(NSError *)error {
         NSString *ext = destPath.pathExtension.lowercaseString;
         if (([ext isEqualToString:@"zip"] || [ext isEqualToString:@"jar"])
             && ![self hasValidZipEOCD:partPath]) {
-            [[NSFileManager defaultManager] removeItemAtPath:partPath error:nil];
-            NSError *err = [self errorWithCode:A2DownloadErrorChecksumMismatch
-                                       message:@"压缩包结构损坏"];
-            [self handleCandidateFailure:err];
+            [self abandonCorruptCandidate:[self errorWithCode:A2DownloadErrorChecksumMismatch
+                                                      message:@"压缩包结构损坏"]];
             return;
         }
     }
 
     // 大小校验（有期望值时）
-    if (self.request.expectedSize > 0) {
-        NSDictionary *attrs = [[NSFileManager defaultManager] attributesOfItemAtPath:partPath error:nil];
-        if ([attrs[NSFileSize] longLongValue] != self.request.expectedSize) {
-            [[NSFileManager defaultManager] removeItemAtPath:partPath error:nil];
-            [self handleCandidateFailure:[self errorWithCode:A2DownloadErrorChecksumMismatch
-                                                     message:@"文件大小不符"]];
-            return;
-        }
+    if (self.request.expectedSize > 0 && actualSize != self.request.expectedSize) {
+        [self abandonCorruptCandidate:[self errorWithCode:A2DownloadErrorChecksumMismatch
+                                                  message:@"文件大小不符"]];
+        return;
     }
 
     // 原子替换到目标路径
@@ -728,7 +849,64 @@ didCompleteWithError:(NSError *)error {
         return;
     }
 
+    // 成功了：旁注没有意义了，别把「已完成的半成品元信息」留在磁盘上
+    [fm removeItemAtPath:[self partMetaPath] error:nil];
+
     [self finishSuccess];
+}
+
+/// 数据校验不过（长度 / SHA1 / zip 结构 / 大小）的统一出口。
+///
+/// 对照 ZL2 的 scheduleDownload：摘要不符时【丢弃这个文件】并按候选列表
+/// 换下一个源重下 —— 不是在同一份坏数据上退避重试 3 次。
+///
+/// 之前的实现走 handleCandidateFailure（1/2/4 秒退避 + 同一源重试），
+/// 结果是：镜像返回了错的内容 → 我们对着同一个镜像再打 3 遍 → 才换官方源。
+/// 那 3 次注定失败，每次还要等满超时才换，用户看到的是「校验失败后卡很久」。
+- (void)abandonCorruptCandidate:(NSError *)error {
+    if (self.finished) return;
+
+    [self closeFileHandle];
+    [self.currentTask cancel];
+    self.currentTask = nil;
+
+    // 坏字节不能留：留着的话下一次尝试会「从断点续传」接在坏数据后面
+    [self discardPartialDownload];
+    self.receivedBytes = 0;
+    self.streamSHA1Valid = NO;
+    self.retryCount = 0;
+
+    NSString *sourceHost = @"(未知)";
+    if (self.request.candidateURLs.count > 0) {
+        NSInteger idx = MIN(self.candidateIndex, (NSInteger)self.request.candidateURLs.count - 1);
+        if (idx >= 0) sourceHost = self.request.candidateURLs[(NSUInteger)idx].host ?: @"(未知)";
+    }
+    [A2Logger warning:@"DownloadEngine"
+              message:[NSString stringWithFormat:
+                       @"[A2-DL] 校验不过，丢弃后重下：%@（源 %@）",
+                       error.localizedDescription ?: @"(未知)", sourceHost]];
+
+    // 同一个源给一次「干净重下」的机会（断流/半包造成的偶发坏数据）
+    if (!self.sameCandidateScratchRetry) {
+        self.sameCandidateScratchRetry = YES;
+        self.strongETag = nil;
+        self.lastModified = nil;
+        [self startCurrentCandidate];
+        return;
+    }
+
+    // 这个源给了坏数据两次 ⇒ 换源
+    [self.candidateErrors addObject:error];
+    self.candidateIndex++;
+    self.sameCandidateScratchRetry = NO;
+    self.strongETag = nil;
+    self.lastModified = nil;
+
+    if (self.candidateIndex >= (NSInteger)self.request.candidateURLs.count) {
+        [self finishAllCandidatesExhausted];
+        return;
+    }
+    [self startCurrentCandidate];
 }
 
 #pragma mark 失败与换源
@@ -741,6 +919,8 @@ didCompleteWithError:(NSError *)error {
 ///   这个直接 retryCount 拉满 → 立刻切下一个候选 URL。
 - (void)handleCandidateFailureImmediately:(NSError *)error {
     if (self.finished) return;
+    [self flushBuffer];          // 已收数据先落盘，续传才不会丢一段
+    [self persistPartMeta];
     [self closeFileHandle];
     [self.currentTask cancel];
     self.currentTask = nil;
@@ -757,6 +937,8 @@ didCompleteWithError:(NSError *)error {
 ///   限流则完全听服务端的 Retry-After —— 它比我们猜得准
 - (void)handleCandidateFailureWithDelay:(NSError *)error delay:(NSTimeInterval)delay {
     if (self.finished) return;
+    [self flushBuffer];
+    [self persistPartMeta];
     [self closeFileHandle];
     // 只取消当前 task，不销毁 session —— 连接池要留着复用
     [self.currentTask cancel];
@@ -774,6 +956,8 @@ didCompleteWithError:(NSError *)error {
 
 - (void)handleCandidateFailure:(NSError *)error {
     if (self.finished) return;
+    [self flushBuffer];
+    [self persistPartMeta];
     [self closeFileHandle];
     // 只取消当前 task，不销毁 session —— 连接池要留着复用
     [self.currentTask cancel];
@@ -792,7 +976,23 @@ didCompleteWithError:(NSError *)error {
     // 该候选耗尽，记下错误并换源
     [self.candidateErrors addObject:error];
     self.retryCount = 0;
+    self.sameCandidateScratchRetry = NO;
     self.candidateIndex++;
+
+    // ★判据行★ 每文件级换源：真机上「到底切没切、切到哪」的唯一证据
+    {
+        NSUInteger total = self.request.candidateURLs.count;
+        NSString *from = self.request.candidateURLs[(NSUInteger)(self.candidateIndex - 1)].host ?: @"?";
+        NSString *to = (self.candidateIndex < (NSInteger)total)
+            ? (self.request.candidateURLs[(NSUInteger)self.candidateIndex].host ?: @"?")
+            : @"(无更多候选)";
+        [A2Logger info:@"DownloadEngine"
+               message:[NSString stringWithFormat:
+                        @"[A2-DL] 换源 %@ 候选=%ld/%lu %@ -> %@ 原因=%@",
+                        self.request.destinationPath.lastPathComponent,
+                        (long)self.candidateIndex, (unsigned long)total,
+                        from, to, error.localizedDescription ?: @"(未知)"]];
+    }
 
     // 换源时进度回退（新源从头下）
     if (self.receivedBytes > 0 && self.progressHandler) {
@@ -817,7 +1017,9 @@ didCompleteWithError:(NSError *)error {
 
 - (void)discardPartialDownload {
     [self closeFileHandle];
-    [[NSFileManager defaultManager] removeItemAtPath:[self partFilePath] error:nil];
+    NSFileManager *fm = NSFileManager.defaultManager;
+    [fm removeItemAtPath:[self partFilePath] error:nil];
+    [fm removeItemAtPath:[self partMetaPath] error:nil];
     [self.writeBuffer setLength:0];
 }
 
@@ -916,6 +1118,41 @@ didCompleteWithError:(NSError *)error {
     return [self.request.destinationPath stringByAppendingString:kPartSuffix];
 }
 
+- (NSString *)partMetaPath {
+    return [self.request.destinationPath stringByAppendingString:kPartMetaSuffix];
+}
+
+/// 读断点旁注（没有就返回 nil）。旁注只是「提示」，读失败不影响下载。
+- (nullable NSDictionary *)readPartMeta {
+    NSData *data = [NSData dataWithContentsOfFile:[self partMetaPath]];
+    if (data.length == 0) return nil;
+    id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
+    return [json isKindOfClass:NSDictionary.class] ? json : nil;
+}
+
+/// 写断点旁注：来源 URL、校验器、总长度、期望 SHA1。
+///
+/// 为什么需要：内存里的 strongETag/lastModified/contentLength 在进程被杀
+/// 之后全部丢失，下一次只能拿到「.part 有 N 字节」这一条信息 ——
+/// 既没法发 If-Range，也无法判断这 N 字节是不是同一个版本的内容。
+- (void)persistPartMeta {
+    NSString *partPath = [self partFilePath];
+    NSFileManager *fm = NSFileManager.defaultManager;
+    if (![fm fileExistsAtPath:partPath]) return;
+
+    NSMutableDictionary *meta = [NSMutableDictionary dictionary];
+    if (self.resolvedURL.absoluteString.length) meta[@"url"] = self.resolvedURL.absoluteString;
+    if (self.strongETag.length) meta[@"etag"] = self.strongETag;
+    if (self.lastModified.length) meta[@"lastModified"] = self.lastModified;
+    if (self.contentLength > 0) meta[@"contentLength"] = @(self.contentLength);
+    if (self.request.expectedSHA1.length) meta[@"sha1"] = self.request.expectedSHA1;
+    if (self.request.expectedSize > 0) meta[@"size"] = @(self.request.expectedSize);
+    if (meta.count == 0) return;
+
+    NSData *data = [NSJSONSerialization dataWithJSONObject:meta options:0 error:nil];
+    if (data) [data writeToFile:[self partMetaPath] atomically:YES];
+}
+
 - (void)closeFileHandle {
     if (!self.fileHandle) return;
     @try { [self.fileHandle closeFile]; } @catch (NSException *e) {}
@@ -990,8 +1227,9 @@ didCompleteWithError:(NSError *)error {
     dispatch_async(self.queue, ^{
         if (self.finished) return;
 
-        // 先落盘缓冲，保证已收数据都写进 .part 文件
+        // 先落盘缓冲，保证已收数据都写进 .part 文件，再写旁注
         [self flushBuffer];
+        [self persistPartMeta];
         [self closeFileHandle];
 
         // 取消当前请求。
@@ -1003,12 +1241,19 @@ didCompleteWithError:(NSError *)error {
         // 我们的断点是「半成品文件 + Range 请求」：
         // .part 里已有 N 字节，恢复时带 Range: bytes=N- 继续下。
         // 所以暂停只需取消请求，进度本来就在磁盘上。
+        //
+        // ★只取消这一条 task，不销毁 session★
+        //   之前 pause 里 invalidateAndCancel 掉 session，恢复时又要
+        //   重建 TCP + TLS；用户点「暂停 / 继续」几次就是几十次握手。
         [self.currentTask cancel];
-        [self.session invalidateAndCancel];
-        self.session = nil;
+        self.currentTask = nil;
 
         self.operation.state = A2DownloadStatePaused;
         [self stopSpeedTimer];
+
+        [A2Logger info:@"DownloadEngine"
+               message:[NSString stringWithFormat:@"[A2-DL] 暂停：%lld 字节已落盘（%@）",
+                        self.receivedBytes, self.request.destinationPath.lastPathComponent]];
     });
 }
 
@@ -1017,24 +1262,8 @@ didCompleteWithError:(NSError *)error {
         if (self.finished) return;
         self.operation.state = A2DownloadStateRunning;
 
-        // 从 .part 文件的当前长度继续 —— 这就是我们的断点
-        NSDictionary *attrs = [[NSFileManager defaultManager]
-                               attributesOfItemAtPath:[self partFilePath] error:nil];
-        int64_t existing = [attrs[NSFileSize] longLongValue];
-
-        if (self.contentLength > 0 && existing >= self.contentLength) {
-            // 其实已经下完，直接校验
-            [self verifyAndFinish];
-            return;
-        }
-
-        if (existing > 0 && (self.contentLength <= 0 || existing < self.contentLength)) {
-            // startCurrentCandidate 会在 receivedBytes > 0 时自动带 Range 头
-            self.receivedBytes = existing;
-        } else {
-            self.receivedBytes = 0;
-        }
-
+        // ★从磁盘上的真实断点接上★（含跨进程的旁注校验）
+        if (![self adoptPartialDownload]) return;
         [self startCurrentCandidate];
     });
 }
@@ -1046,8 +1275,18 @@ didCompleteWithError:(NSError *)error {
         [self closeFileHandle];
         [self stopSpeedTimer];
         [self.session invalidateAndCancel];
+        self.session = nil;
+        [self.currentTask cancel];
+        self.currentTask = nil;
+
+        // 取消 = 这个文件不要了：半成品与旁注一起删，磁盘不留垃圾。
+        // 同时把已计入的字节回退给调用方，进度条才不会停在半路。
+        if (self.receivedBytes > 0 && self.progressHandler) {
+            self.progressHandler(-self.receivedBytes, -1);
+        }
         [self discardPartialDownload];
-    
+        self.receivedBytes = 0;
+
         self.operation.state = A2DownloadStateCancelled;
         A2DownloadCompletion cb = self.completion;
         if (cb) {
@@ -1115,6 +1354,15 @@ didCompleteWithError:(NSError *)error {
 
     A2DownloadOperation *op = [[A2DownloadOperation alloc] initInternalWithRequest:request key:key];
 
+    [A2Logger info:@"DownloadEngine"
+           message:[NSString stringWithFormat:
+                    @"[A2-DL] 入队 %@ 候选=%lu 期望=%lldB sha1=%@ 键=%@",
+                    request.destinationPath.lastPathComponent,
+                    (unsigned long)request.candidateURLs.count,
+                    request.expectedSize,
+                    request.expectedSHA1.length ? @"有" : @"无",
+                    key]];
+
     A2FileFetcher *fetcher = [A2FileFetcher new];
     fetcher.request = request;
     fetcher.operation = op;
@@ -1123,7 +1371,7 @@ didCompleteWithError:(NSError *)error {
     fetcher.completion = completion;
     op.owner = fetcher;
 
-    self.active[key] = fetcher;
+    @synchronized (self) { self.active[key] = fetcher; }
     [fetcher start];
 
     return op;
@@ -1140,25 +1388,30 @@ didCompleteWithError:(NSError *)error {
 }
 
 - (void)cancelOperation:(A2DownloadOperation *)operation {
+    if (!operation) return;
     A2FileFetcher *f = [self fetcherForOperation:operation];
+    if (operation.resumeKey) {
+        @synchronized (self) { [self.active removeObjectForKey:operation.resumeKey]; }
+    }
     [f cancel];
-    if (operation.resumeKey) [self.active removeObjectForKey:operation.resumeKey];
 }
 
 - (void)cancelAll {
     // 先取快照再遍历 —— cancel 会修改 active 字典，直接遍历会崩
-    NSArray<A2FileFetcher *> *fetchers = self.active.allValues;
-    NSArray<NSString *> *keys = self.active.allKeys;
+    NSArray<A2FileFetcher *> *fetchers = nil;
+    @synchronized (self) {
+        fetchers = self.active.allValues;
+        [self.active removeAllObjects];
+    }
 
     for (A2FileFetcher *f in fetchers) {
         [f cancel];
     }
-    [self.active removeObjectsForKeys:keys];
 }
 
 - (nullable A2FileFetcher *)fetcherForOperation:(A2DownloadOperation *)op {
     if (!op.resumeKey) return nil;
-    return self.active[op.resumeKey];
+    @synchronized (self) { return self.active[op.resumeKey]; }
 }
 
 #pragma mark 便捷方法
@@ -1179,7 +1432,10 @@ didCompleteWithError:(NSError *)error {
     [self startRequest:req
               progress:^(int64_t delta, int64_t total) {
         // 转成累计值给调用方（内部用增量是为了支持回退）
-        static int64_t accumulated = 0;
+        // ★必须是 __block 局部量★ 之前的 `static int64_t accumulated`
+        //   是全进程共享的一个变量：多文件同时下载时它们的增量会累加到
+        //   同一个计数上，进度直接飞到 100% 又跳回来。
+        __block int64_t accumulated = 0;
         accumulated += delta;
         if (accumulated < 0) accumulated = 0;
         if (progress) progress(accumulated, total);

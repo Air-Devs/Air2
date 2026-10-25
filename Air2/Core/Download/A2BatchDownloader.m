@@ -28,6 +28,7 @@
 #import "A2BatchDownloader.h"
 #import "A2Logger.h"
 #import "A2RateLimiter.h"
+#import <stdatomic.h>
 
 /// 进度回调间隔
 static const NSTimeInterval kProgressInterval = 0.5;
@@ -76,12 +77,9 @@ static const NSInteger kSystemicFailureLimit = 12;
 @property (nonatomic, assign) NSInteger maxConnections;
 @property (nonatomic, assign) NSInteger retryRounds;
 
-// 计数器（用锁保护 —— 多个下载线程并发更新）
+/// 只保护「非计数类」的可变容器（失败表 / 在途操作表）。
+/// 计数器全部走原子量（见 @implementation 里的 ivar）—— 见 addDownloadedBytes: 的说明。
 @property (nonatomic, strong) NSLock *lock;
-@property (nonatomic, assign) long long counterDownloadedBytes;
-@property (nonatomic, assign) long long counterTotalBytes;
-@property (nonatomic, assign) NSInteger counterDownloadedFiles;
-@property (nonatomic, assign) NSInteger consecutiveFailures;
 /// 上一秒的字节数 —— 用于算瞬时速度
 @property (nonatomic, assign) long long bytesAtLastTick;
 /// 本批次发起的所有下载操作 —— 取消时逐个取消，
@@ -90,11 +88,28 @@ static const NSInteger kSystemicFailureLimit = 12;
 @property (nonatomic, strong) NSMutableDictionary<NSString *, NSError *> *failures;
 
 @property (nonatomic, strong) NSTimer *progressTimer;
-@property (nonatomic, assign, getter=isCancelled) BOOL cancelled;
 @property (nonatomic, assign) BOOL started;
+
+/// 是否已取消（原子量承载，见 @implementation 里的 _cancelledFlag）
+- (BOOL)isCancelled;
 @end
 
-@implementation A2BatchDownloader
+@implementation A2BatchDownloader {
+    /// ---- 进度计数器：全部原子量 ----
+    ///
+    /// ZL2 的 DownloadStats 用的是 AtomicLong / AtomicInteger：
+    ///   addDownloaded(num)、addCompletedFile()、totalSize、downloadedSize
+    /// 读侧永远拿到「某一瞬间自洽」的数，写侧不排队。
+    ///
+    /// 之前这里是 NSLock + 裸 long long 混用（字节数原子、总大小加锁、
+    /// 速度又是加锁读），于是 UI 上会出现「已下载 > 总大小」这种撕裂值：
+    /// 总大小那一次读发生在后面的写入之前，而已下载读到了更新的值。
+    _Atomic long long _dlBytes;        ///< 已下载字节（可为负：换源回退）
+    _Atomic long long _totalBytes;     ///< 总字节（含已复用文件）
+    _Atomic int      _doneFiles;       ///< 已完成文件数
+    _Atomic int      _consecutiveFails;
+    _Atomic int      _cancelledFlag;
+}
 
 - (instancetype)initWithRequests:(NSArray<A2DownloadRequest *> *)requests
                   maxConnections:(NSInteger)maxConnections
@@ -106,17 +121,28 @@ static const NSInteger kSystemicFailureLimit = 12;
     _retryRounds = MAX(0, retryRounds);
     _lock = [[NSLock alloc] init];
     _failures = [NSMutableDictionary dictionary];
+    _activeOps = [NSMutableArray array];
+    atomic_store(&_dlBytes, 0);
+    atomic_store(&_totalBytes, 0);
+    atomic_store(&_doneFiles, 0);
+    atomic_store(&_consecutiveFails, 0);
+    atomic_store(&_cancelledFlag, 0);
     return self;
+}
+
+#pragma mark - 取消标志
+
+- (BOOL)isCancelled {
+    return atomic_load(&_cancelledFlag) != 0;
 }
 
 #pragma mark - 登记
 
 - (void)registerReusedFileWithPath:(NSString *)path size:(long long)size {
-    [_lock lock];
-    _counterDownloadedFiles += 1;
-    _counterTotalBytes += size;
-    _counterDownloadedBytes += size;
-    [_lock unlock];
+    (void)path;
+    atomic_fetch_add(&_doneFiles, 1);
+    atomic_fetch_add(&_totalBytes, size);
+    atomic_fetch_add(&_dlBytes, size);
 }
 
 #pragma mark - 启动
@@ -124,19 +150,19 @@ static const NSInteger kSystemicFailureLimit = 12;
 - (void)start {
     if (_started) return;
     _started = YES;
-    _cancelled = NO;
+    atomic_store(&_cancelledFlag, 0);
 
     // 先登记全部文件的总量 —— 进度分母从一开始就是对的
-    [_lock lock];
+    long long total = 0;
     for (A2DownloadRequest *req in _requests) {
-        _counterTotalBytes += req.expectedSize;
+        total += req.expectedSize;
     }
-    NSInteger total = (NSInteger)_requests.count;
-    [_lock unlock];
+    atomic_store(&_totalBytes, total);
+    NSInteger count = (NSInteger)_requests.count;
 
     [A2Logger info:@"BatchDownloader"
            message:[NSString stringWithFormat:@"开始批量下载 %ld 个文件，并发 %ld",
-                    (long)total, (long)_maxConnections]];
+                    (long)count, (long)_maxConnections]];
 
     [self publishProgress];
 
@@ -229,6 +255,7 @@ static const NSInteger kSystemicFailureLimit = 12;
 - (void)startOneRequest:(A2DownloadRequest *)req state:(A2BatchRunState *)state {
     __weak typeof(self) weakSelf = self;
 
+    A2DownloadOperation *op =
     [[A2DownloadEngine sharedClient] startRequest:req
         progress:^(int64_t delta, int64_t totalIgnore) {
             (void)totalIgnore;
@@ -238,6 +265,9 @@ static const NSInteger kSystemicFailureLimit = 12;
         completion:^(BOOL success, NSError *error) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
+
+        // 句柄用完即摘：否则 cancel 时会对已完成的操作再取消一遍
+        [self untrackOperationForRequest:req];
 
         BOOL systemic = NO;
         if (success) {
@@ -266,6 +296,35 @@ static const NSInteger kSystemicFailureLimit = 12;
         // 拉下一个，把车道填满
         [self pumpWithState:state];
     }];
+
+    // ★在途句柄必须登记★
+    //   之前 startRequest: 的返回值被直接丢掉，activeOps 永远是空数组，
+    //   于是 cancel 只能「不再发新文件」，已经在飞的几十个下载继续跑到完 ——
+    //   用户看到的就是「点了取消还在下」。
+    if (op) {
+        BOOL alreadyCancelled = NO;
+        [_lock lock];
+        alreadyCancelled = atomic_load(&_cancelledFlag) != 0;
+        if (!alreadyCancelled) [_activeOps addObject:op];
+        [_lock unlock];
+        if (alreadyCancelled) {
+            [[A2DownloadEngine sharedClient] cancelOperation:op];
+        }
+    }
+}
+
+/// 摘掉某个文件对应的在途句柄（完成 / 取消时调用；重复调用安全）
+- (void)untrackOperationForRequest:(A2DownloadRequest *)req {
+    if (req.destinationPath.length == 0) return;
+    [_lock lock];
+    NSMutableArray<A2DownloadOperation *> *kept = [NSMutableArray array];
+    for (A2DownloadOperation *op in _activeOps) {
+        if (op.request.destinationPath &&
+            [op.request.destinationPath isEqualToString:req.destinationPath]) continue;
+        [kept addObject:op];
+    }
+    [_activeOps setArray:kept];
+    [_lock unlock];
 }
 
 - (void)finishRound:(A2BatchRunState *)state {
@@ -305,51 +364,54 @@ static const NSInteger kSystemicFailureLimit = 12;
 /// 改成原子自增 —— 单个 long long 的读改写本来就该用原子操作，
 /// 不需要锁。读的时候用 atomic load 即可（64 位对齐在 arm64 上
 /// 本身就是原子的，但用 stdatomic 语义更明确）。
+///
+/// ★负增量必须接受★：换源/校验失败时引擎会回退上报，
+/// 丢掉负值会让「已下载」永久性偏高（用户看到 120%，或者进度条不回退）。
 - (void)addDownloadedBytes:(long long)delta {
-    if (delta <= 0) return;
-    __atomic_fetch_add(&_counterDownloadedBytes, delta, __ATOMIC_RELAXED);
+    if (delta == 0) return;
+    atomic_fetch_add(&_dlBytes, delta);
 }
 
 - (void)markFileDone {
-    [_lock lock];
-    _counterDownloadedFiles += 1;
+    atomic_fetch_add(&_doneFiles, 1);
     // 任何一次成功都清零连续失败计数 —— 说明网络本身是通的
-    _consecutiveFailures = 0;
-    _activeOps = [NSMutableArray array];
-    [_lock unlock];
+    atomic_store(&_consecutiveFails, 0);
 }
 
 /// 记录失败。返回 YES 表示触发了系统性故障熔断。
 - (BOOL)recordFailure:(A2DownloadRequest *)req error:(NSError *)error {
-    [_lock lock];
     if (req.destinationPath.length) {
+        [_lock lock];
         _failures[req.destinationPath] = error ?: [NSError errorWithDomain:@"A2Batch" code:1
                                                                  userInfo:nil];
+        [_lock unlock];
     }
-    _consecutiveFailures += 1;
+    int fails = atomic_fetch_add(&_consecutiveFails, 1) + 1;
 
     // 熔断条件：一次都没成功过 + 连续失败达到阈值。
     // 只判「连续失败」会误伤 —— 下到一半时网络抖动造成连续失败是正常的。
-    BOOL zeroSuccess = (_counterDownloadedFiles == 0);
-    BOOL systemic = zeroSuccess && (_consecutiveFailures >= kSystemicFailureLimit);
-    [_lock unlock];
-    return systemic;
+    BOOL zeroSuccess = (atomic_load(&_doneFiles) == 0);
+    return zeroSuccess && (fails >= kSystemicFailureLimit);
 }
 
 - (void)resetConsecutiveFailuresForRetry {
-    [_lock lock];
-    _consecutiveFailures = 0;
-    [_lock unlock];
+    atomic_store(&_consecutiveFails, 0);
 }
 
 #pragma mark - 进度与收尾
 
 - (void)publishProgress {
     A2BatchProgress *p = [A2BatchProgress new];
-    [_lock lock];
-    p.downloadedBytes = __atomic_load_n(&_counterDownloadedBytes, __ATOMIC_RELAXED);
-    p.totalBytes = _counterTotalBytes;
-    p.downloadedFiles = _counterDownloadedFiles;
+
+    // ★一次读齐★ 三个数在同一段原子读里取出，UI 不会看到
+    //   「已下载 300MB / 共 200MB」这种自相矛盾的快照。
+    long long done = atomic_load(&_dlBytes);
+    if (done < 0) done = 0;                       // 回退到 0 为止，不显示负数
+    long long total = atomic_load(&_totalBytes);
+    if (total < done) total = done;               // 分母兜底：HEAD 失败/服务端不给大小时
+    p.downloadedBytes = done;
+    p.totalBytes = total;
+    p.downloadedFiles = (NSInteger)atomic_load(&_doneFiles);
     p.totalFiles = (NSInteger)_requests.count;
 
     // 瞬时速度：本次采样与上次采样的字节差 / 时间差
@@ -357,11 +419,9 @@ static const NSInteger kSystemicFailureLimit = 12;
     // 不做平滑 —— 与 ZL2 的 DownloadStats 一致：
     // 「每个报表值就是刚刚完整过去的那一秒里真实落盘的字节数」。
     // 平滑会让数字好看但不真实。
-    long long now = __atomic_load_n(&_counterDownloadedBytes, __ATOMIC_RELAXED);
-    long long delta = now - _bytesAtLastTick;
-    _bytesAtLastTick = now;
+    long long delta = done - _bytesAtLastTick;
+    _bytesAtLastTick = done;
     p.speedBytesPerSec = (double)MAX(0LL, delta) / kProgressInterval;
-    [_lock unlock];
 
     if (self.onProgress) self.onProgress(p);
 }
@@ -372,8 +432,8 @@ static const NSInteger kSystemicFailureLimit = 12;
 
     [_lock lock];
     NSDictionary<NSString *, NSError *> *fails = [_failures copy];
-    NSInteger done = _counterDownloadedFiles;
     [_lock unlock];
+    NSInteger done = (NSInteger)atomic_load(&_doneFiles);
 
     [A2Logger info:@"BatchDownloader"
            message:[NSString stringWithFormat:@"批量下载结束：成功 %ld/%ld，失败 %ld",
@@ -385,7 +445,7 @@ static const NSInteger kSystemicFailureLimit = 12;
 }
 
 - (void)cancel {
-    _cancelled = YES;
+    atomic_store(&_cancelledFlag, 1);
     [_progressTimer invalidate];
     _progressTimer = nil;
     // 只取消本批次发起的操作。
@@ -396,6 +456,9 @@ static const NSInteger kSystemicFailureLimit = 12;
     [self.activeOps removeAllObjects];
     [_lock unlock];
 
+    [A2Logger info:@"BatchDownloader"
+           message:[NSString stringWithFormat:@"取消：逐个取消 %lu 个在途下载",
+                    (unsigned long)ops.count]];
     for (A2DownloadOperation *op in ops) {
         [[A2DownloadEngine sharedClient] cancelOperation:op];
     }

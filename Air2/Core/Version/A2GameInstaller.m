@@ -28,6 +28,7 @@
 #import "A2ModLoaderInstaller.h"
 #import "A2APIModDownloader.h"
 #import "A2Log.h"
+#import <stdarg.h>
 
 /// 官方版本清单地址（Mojang piston-meta）
 static NSString *const kVersionManifestURL = @"https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
@@ -38,6 +39,19 @@ static NSString *const kLibrariesBaseURL = @"https://libraries.minecraft.net";
 
 static NSString *const kUserAgent = @"Air-Devs/Air2/0.1.0 (github.com/Air-Devs/Air2)";
 
+/// ★HEAD 预统计的限流参数★
+///
+/// 预统计只是为了「进度条第一秒就有分母」，不能为了它去打几千个 HEAD 抢掉
+/// 真正下载要用的配额（服务器 429 就是这么来的）。所以：
+///   · 同时最多 6 条
+///   · 待探文件超过 200 个就整体放弃，边下边算
+///   · 总预算 8 秒，到点就带着已探到的部分开工
+///   · 单个失败只计数，不影响下载
+static const NSInteger kHeadMaxConcurrent = 6;
+static const NSInteger kHeadMaxRequests = 200;
+static const NSTimeInterval kHeadRequestTimeout = 6.0;
+static const NSTimeInterval kHeadTotalBudget = 8.0;
+
 static void A2Main(dispatch_block_t block) {
     if ([NSThread isMainThread]) block();
     else dispatch_async(dispatch_get_main_queue(), block);
@@ -45,6 +59,9 @@ static void A2Main(dispatch_block_t block) {
 
 @interface A2GameInstaller ()
 @property (nonatomic, strong, nullable) A2BatchDownloader *activeDownloader;
+/// 单文件下载（版本 json / 客户端 jar / 资源索引）的在途句柄 ——
+/// 「取消安装」要能精确停掉这几条，而不是把 App 里所有下载一起 cancelAll。
+@property (nonatomic, strong) NSMutableArray<A2DownloadOperation *> *activeSingleOps;
 @property (nonatomic, strong, nullable) A2InstallRequest *request;
 /// 原版基底的版本名。
 ///   原版安装 → 与 versionName 相同；
@@ -57,6 +74,21 @@ static void A2Main(dispatch_block_t block) {
 @property (nonatomic, strong) NSURLSession *session;
 @property (nonatomic, copy, nullable) void (^progressBlock)(A2InstallStage, double, NSString *);
 @property (nonatomic, copy, nullable) void (^completionBlock)(BOOL, NSError *);
+
+// ---- 本单新增（实现见下方同名方法）----
+- (void)fetchManifestFromCandidates:(NSArray<NSString *> *)candidates
+                              index:(NSUInteger)index
+                          lastError:(nullable NSError *)lastError;
+- (nullable NSString *)bmclapiURLWithFormat:(NSString *)fmt, ...;
+- (NSArray<NSString *> *)candidateListPrepending:(nullable NSString *)extra
+                                              to:(NSArray<NSString *> *)base;
+- (void)startBatchWithRequests:(NSArray<A2DownloadRequest *> *)requests
+                         stage:(A2InstallStage)stage
+                   messageBase:(NSString *)base
+                maxConnections:(NSInteger)maxConnections
+                       thenRun:(void (^)(NSError * _Nullable))then;
+- (void)preflightMissingSizes:(NSArray<A2DownloadRequest *> *)requests
+                   completion:(void (^)(void))completion;
 @end
 
 @implementation A2InstallRequest
@@ -67,6 +99,7 @@ static void A2Main(dispatch_block_t block) {
 - (instancetype)init {
     self = [super init];
     if (!self) return nil;
+    _activeSingleOps = [NSMutableArray array];
     _session = [NSURLSession sessionWithConfiguration:
                 NSURLSessionConfiguration.defaultSessionConfiguration];
     return self;
@@ -75,9 +108,25 @@ static void A2Main(dispatch_block_t block) {
 - (void)cancel {
     _cancelled = YES;
     [A2Log log:@"installer: 取消安装 %@", self.request.versionName ?: @"(未知)"];
-    // cancelOperation: 的参数标了 nonnull，传 nil 会警告。
-    // 这里改调 cancelAll —— 语义也更对：取消安装就该停掉所有下载。
-    [[A2DownloadEngine sharedClient] cancelAll];
+
+    // ★精确取消★
+    //   之前这里调 [A2DownloadEngine cancelAll] —— 那会把 App 里
+    //   其它页面正在跑的下载（模组 / 整合包 / 资源详情）一起杀掉。
+    //   现在只停本安装流程发起的：批量下载器 + 几条单文件下载。
+    [self.activeDownloader cancel];
+    self.activeDownloader = nil;
+
+    NSArray<A2DownloadOperation *> *ops = nil;
+    @synchronized (self.activeSingleOps) {
+        ops = [self.activeSingleOps copy];
+        [self.activeSingleOps removeAllObjects];
+    }
+    for (A2DownloadOperation *op in ops) {
+        [[A2DownloadEngine sharedClient] cancelOperation:op];
+    }
+
+    [A2Log log:@"[A2-DL] 取消安装：批量下载器已停，单文件 %lu 个已取消",
+     (unsigned long)ops.count];
     [_session invalidateAndCancel];
 }
 
@@ -149,23 +198,56 @@ static void A2Main(dispatch_block_t block) {
 
 - (void)fetchManifest {
     // 版本清单也走镜像 —— 国内直连 piston-meta 很慢，
-    // 这一步是安装的第一个请求，卡在这里最影响观感
-    NSString *manifestURL = [[A2MirrorResolver shared]
-                             candidateURLsForURL:kVersionManifestURL].firstObject
-                         ?: kVersionManifestURL;
+    // 这一步是安装的第一个请求，卡在这里最影响观感。
+    //
+    // ★必须整条候选链依次试★
+    //   之前只取 candidateURLs 的 firstObject：一旦镜像挂了/被限流，
+    //   整个安装直接失败（官方源就在列表里，却完全没用上）。
+    NSArray<NSString *> *candidates =
+        [[A2MirrorResolver shared] candidateURLsForURL:kVersionManifestURL];
+    if (candidates.count == 0) candidates = @[kVersionManifestURL];
+    [self fetchManifestFromCandidates:candidates index:0 lastError:nil];
+}
+
+- (void)fetchManifestFromCandidates:(NSArray<NSString *> *)candidates
+                              index:(NSUInteger)index
+                          lastError:(nullable NSError *)lastError {
+    if (self.cancelled) return;
+    if (index >= candidates.count) {
+        [self failWithError:lastError ?: [NSError errorWithDomain:@"A2Installer" code:1
+                                                        userInfo:@{
+            NSLocalizedDescriptionKey: @"获取版本清单失败（所有来源都不可用）"}]];
+        return;
+    }
+
+    NSString *urlString = candidates[index];
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:
-                               [NSURL URLWithString:manifestURL]];
+                               [NSURL URLWithString:urlString]];
     req.timeoutInterval = 30;
     [req setValue:kUserAgent forHTTPHeaderField:@"User-Agent"];
+
+    [A2Log log:@"[A2-DL] 版本清单候选 %lu/%lu：%@",
+     (unsigned long)(index + 1), (unsigned long)candidates.count,
+     [NSURL URLWithString:urlString].host ?: urlString];
 
     NSURLSessionDataTask *t = [_session dataTaskWithRequest:req
         completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
         if (self.cancelled) return;
-        if (error) { [self failWithError:error]; return; }
 
-        NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
-        if (![json isKindOfClass:NSDictionary.class]) {
-            [self failWithMessage:@"版本清单格式异常"];
+        NSInteger code = [resp isKindOfClass:NSHTTPURLResponse.class]
+            ? ((NSHTTPURLResponse *)resp).statusCode : 0;
+        NSDictionary *json = (error == nil && data.length > 0)
+            ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+
+        if (error || !([json isKindOfClass:NSDictionary.class])) {
+            NSError *e = error ?: [NSError errorWithDomain:@"A2Installer" code:2
+                                                 userInfo:@{
+                NSLocalizedDescriptionKey: [NSString stringWithFormat:
+                    @"版本清单来源不可用（HTTP %ld）", (long)code]}];
+            [A2Log log:@"[A2-DL] 版本清单候选失败 %@：%@（换下一个）",
+             [NSURL URLWithString:urlString].host ?: urlString,
+             e.localizedDescription];
+            [self fetchManifestFromCandidates:candidates index:index + 1 lastError:e];
             return;
         }
 
@@ -202,7 +284,12 @@ static void A2Main(dispatch_block_t block) {
     // 加载器后面会读它、并把它的 jar 硬链到自己的版本目录。
     NSString *dest = [path versionJSONPath:self.baseVersionName];
 
-    [self download:[NSArray arrayWithObject:url]
+    // BMCLAPI 的「版本 json」是按版本号给的端点，路径结构跟 piston-meta
+    // 的 /v1/packages/<sha1>/<ver>.json 完全不同 —— 必须显式构造候选，
+    // 不能只靠前缀映射（否则映射出来的是 404）。
+    NSString *bmcl = [self bmclapiURLWithFormat:@"/version/%@/json", self.request.mcVersion];
+
+    [self download:[self candidateListPrepending:bmcl to:@[url]]
                 to:dest
         stageLabel:A2InstallStageDownloadJSON
            message:@"正在下载版本信息"
@@ -212,6 +299,32 @@ static void A2Main(dispatch_block_t block) {
         if (error) { [self failWithError:error]; return; }
         [self afterVersionJSON:dest];
     }];
+}
+
+/// 构造 BMCLAPI 端点（关掉镜像 / 不在国内 / 没有版本号时返回 nil）
+- (nullable NSString *)bmclapiURLWithFormat:(NSString *)fmt, ... {
+    A2MirrorResolver *mirror = [A2MirrorResolver shared];
+    if (!mirror.enabled || ![A2MirrorResolver isChinaMainland]) return nil;
+    va_list args;
+    va_start(args, fmt);
+    NSString *path = [[NSString alloc] initWithFormat:fmt arguments:args];
+    va_end(args);
+    if (path.length == 0) return nil;
+    return [@"https://bmclapi2.bangbang93.com" stringByAppendingString:path];
+}
+
+/// 把镜像端点插到候选链的最前（官方优先设置时放到最后），并去重。
+- (NSArray<NSString *> *)candidateListPrepending:(nullable NSString *)extra
+                                              to:(NSArray<NSString *> *)base {
+    NSMutableArray<NSString *> *out = [NSMutableArray array];
+    BOOL mirrorFirst = ([A2MirrorResolver shared].priority == A2MirrorPriorityMirrorFirst);
+    if (extra.length > 0 && mirrorFirst) [out addObject:extra];
+    for (NSString *u in base) {
+        if (u.length == 0 || [out containsObject:u]) continue;
+        [out addObject:u];
+    }
+    if (extra.length > 0 && !mirrorFirst && ![out containsObject:extra]) [out addObject:extra];
+    return out;
 }
 
 /// 版本 json 到手后，解析出 jar / libraries / assets 的下载清单
@@ -241,8 +354,13 @@ static void A2Main(dispatch_block_t block) {
     NSString *jarSHA1 = client[@"sha1"];
     NSNumber *jarSize = client[@"size"];
 
+    // 官方地址是 piston-data 的 /v1/objects/<sha1>/client.jar；
+    // BMCLAPI 对应的是按版本号给的 /version/<ver>/client。
+    NSString *bmclJar = [self bmclapiURLWithFormat:@"/version/%@/client", self.request.mcVersion];
+
     [self report:A2InstallStageDownloadJar progress:0 message:@"正在下载客户端…"];
-    [self download:@[jarURL] to:jarDest stageLabel:A2InstallStageDownloadJar
+    [self download:[self candidateListPrepending:bmclJar to:@[jarURL]]
+                to:jarDest stageLabel:A2InstallStageDownloadJar
            message:@"正在下载客户端" sha1:jarSHA1 size:jarSize
            thenRun:^(NSError *error) {
         if (error) { [self failWithError:error]; return; }
@@ -364,8 +482,12 @@ static void A2Main(dispatch_block_t block) {
                            [indexID stringByAppendingPathExtension:@"json"]];
 
     [self report:A2InstallStageDownloadAssets progress:0 message:@"正在下载资源索引…"];
-    // 资源索引同样带 sha1 与 size（MC 的版本 json 里 assetIndex 字段）
-    [self download:@[indexURL] to:indexPath stageLabel:A2InstallStageDownloadAssets
+    // 资源索引同样带 sha1 与 size（MC 的版本 json 里 assetIndex 字段）。
+    // BMCLAPI 的资源索引路径是 /assets/indexes/<id>.json —— 放在官方之后兜底，
+    // 探测失败只多一次 4xx，不影响安装。
+    NSString *bmclIndex = [self bmclapiURLWithFormat:@"/assets/indexes/%@.json", indexID];
+    [self download:[self candidateListPrepending:bmclIndex to:@[indexURL]]
+                to:indexPath stageLabel:A2InstallStageDownloadAssets
            message:@"正在下载资源索引"
               sha1:assetIndex[@"sha1"]
               size:assetIndex[@"size"]
@@ -631,9 +753,13 @@ static void A2Main(dispatch_block_t block) {
 
     A2DownloadRequest *req = [A2DownloadRequest new];
     NSMutableArray<NSURL *> *list = [NSMutableArray array];
+    NSMutableSet<NSString *> *seen = [NSMutableSet set];
     for (NSString *u in urls) {
+        if (u.length == 0 || [seen containsObject:u]) continue;
         NSURL *url = [NSURL URLWithString:u];
-        if (url) [list addObject:url];
+        if (!url) continue;
+        [seen addObject:u];
+        [list addObject:url];
     }
     req.candidateURLs = list;
     req.destinationPath = dest;
@@ -645,13 +771,17 @@ static void A2Main(dispatch_block_t block) {
     if (sha1.length) req.expectedSHA1 = sha1;
     if (size) req.expectedSize = size.longLongValue;
 
+    [A2Log log:@"[A2-DL] 单文件 %@ 候选=%lu（首个 %@）sha1=%@ 期望=%lldB",
+     dest.lastPathComponent, (unsigned long)list.count,
+     list.firstObject.host ?: @"?", sha1.length ? @"有" : @"无",
+     (long long)req.expectedSize];
+
     __weak typeof(self) weakSelf = self;
-    [[A2DownloadEngine sharedClient] startRequest:req
+    __block int64_t acc = 0;
+    A2DownloadOperation *op = [[A2DownloadEngine sharedClient] startRequest:req
         progress:^(int64_t delta, int64_t total) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self || self.cancelled || total <= 0) return;
-        // 用累计值算阶段进度
-        static int64_t acc = 0;
         acc += delta;
         if (acc < 0) acc = 0;
         double p = MIN(1.0, (double)acc / (double)total);
@@ -663,6 +793,10 @@ static void A2Main(dispatch_block_t block) {
         if (!self || self.cancelled) return;
         if (then) then(success ? nil : error);
     }];
+
+    if (op) {
+        @synchronized (self.activeSingleOps) { [self.activeSingleOps addObject:op]; }
+    }
 }
 
 /// 批量下载（逐个串行，避免并发过高被限流）
@@ -729,6 +863,21 @@ static void A2Main(dispatch_block_t block) {
         return;
     }
 
+    // ★判据行★ 镜像候选链是否真的铺开了（每个文件独立 fallback）
+    {
+        NSUInteger multi = 0, withSHA1 = 0, withSize = 0;
+        for (A2DownloadRequest *r in requests) {
+            if (r.candidateURLs.count > 1) multi++;
+            if (r.expectedSHA1.length > 0) withSHA1++;
+            if (r.expectedSize > 0) withSize++;
+        }
+        [A2Log log:@"[A2-DL] 批量 %lu 个文件：多候选 %lu，带 sha1 %lu，带 size %lu（镜像启用=%d 国内=%d 优先=%d）",
+         (unsigned long)requests.count, (unsigned long)multi,
+         (unsigned long)withSHA1, (unsigned long)withSize,
+         mirror.enabled ? 1 : 0, [A2MirrorResolver isChinaMainland] ? 1 : 0,
+         (int)mirror.priority];
+    }
+
     // 并发数可配置 —— 默认 64，与 ZL2 的 DEFAULT_MAX_CONNECTIONS 一致。
     //
     // 我之前降到 16 是错的 —— ZL2 用 64 跑得很稳，说明瓶颈不在并发数。
@@ -737,6 +886,31 @@ static void A2Main(dispatch_block_t block) {
     NSInteger configured = [NSUserDefaults.standardUserDefaults
                             integerForKey:@"A2MaxConnections"];
     NSInteger kMaxConnections = (configured > 0) ? MIN(configured, 128) : 64;
+
+    // ★先补总量，再开工★（有上限的 HEAD 预统计，见 preflightMissingSizes）
+    //
+    // 只探「清单里没给 size」的那几个。MC 的 version json / asset index
+    // 本来就带 size，正常情况下这一步一个请求都不发。
+    __weak typeof(self) weakSelf = self;
+    [self preflightMissingSizes:requests completion:^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self || self.cancelled) return;
+        [self startBatchWithRequests:requests
+                               stage:stage
+                          messageBase:base
+                       maxConnections:kMaxConnections
+                             thenRun:then];
+    }];
+}
+
+/// 真正发起批量下载（预统计完成之后）。
+- (void)startBatchWithRequests:(NSArray<A2DownloadRequest *> *)requests
+                         stage:(A2InstallStage)stage
+                   messageBase:(NSString *)base
+                maxConnections:(NSInteger)kMaxConnections
+                       thenRun:(void (^)(NSError * _Nullable))then {
+
+    if (self.cancelled) return;
 
     // ⚠️ 必须用属性持有：批量下载器是异步的，
     // 用局部变量的话 downloadBatch: 一返回 ARC 就释放它，
@@ -771,14 +945,129 @@ static void A2Main(dispatch_block_t block) {
         if (self.cancelled) return;
 
         if (failures.count > 0) {
-            [A2Log log:@"installer: %@ 完成，%lu 个文件失败",
-                  base, (unsigned long)failures.count];
+            [A2Log log:@"[A2-DL] %@ 完成，%lu 个文件失败", base, (unsigned long)failures.count];
         }
         // 单文件失败不阻断 —— 依赖库里有可选组件，缺几个不影响启动
         if (then) then(nil);
     };
 
     [downloader start];
+}
+
+#pragma mark - 总大小预统计（有上限的 HEAD）
+
+/// 给「清单里没有 size」的文件补大小。
+///
+/// 对照 ZL2 的 DownloadStats：总量来自清单元数据，不靠 HEAD 探。
+/// 我们这里也以清单为准 —— 只有 size 缺失时才会发 HEAD，而且：
+///   · 并发 ≤ kHeadMaxConcurrent(6)，不是几千个一起打
+///   · 待探数 > kHeadMaxRequests(200) 直接放弃（边下边算）
+///   · 总预算 kHeadTotalBudget(8s)，到点开工
+///   · 失败只计数，不影响下载（分母有兜底，见 publishProgress）
+- (void)preflightMissingSizes:(NSArray<A2DownloadRequest *> *)requests
+                   completion:(void (^)(void))completion {
+
+    NSMutableArray<A2DownloadRequest *> *unknown = [NSMutableArray array];
+    for (A2DownloadRequest *req in requests) {
+        if (req.expectedSize <= 0) [unknown addObject:req];
+    }
+
+    if (unknown.count == 0 || unknown.count > (NSUInteger)kHeadMaxRequests || self.cancelled) {
+        if (unknown.count > (NSUInteger)kHeadMaxRequests) {
+            [A2Log log:@"[A2-DL] 预统计跳过：%lu 个文件缺 size（超过上限 %ld），改为边下边算",
+             (unsigned long)unknown.count, (long)kHeadMaxRequests];
+        }
+        if (completion) completion();
+        return;
+    }
+
+    [A2Log log:@"[A2-DL] 预统计：%lu 个文件缺 size，HEAD 并发上限 %ld，预算 %.0fs",
+     (unsigned long)unknown.count, (long)kHeadMaxConcurrent, kHeadTotalBudget];
+
+    NSURLSessionConfiguration *cfg = [NSURLSessionConfiguration ephemeralSessionConfiguration];
+    cfg.timeoutIntervalForRequest = kHeadRequestTimeout;
+    cfg.HTTPMaximumConnectionsPerHost = kHeadMaxConcurrent;
+    cfg.URLCache = nil;
+    cfg.requestCachePolicy = NSURLRequestReloadIgnoringLocalCacheData;
+    NSURLSession *session = [NSURLSession sessionWithConfiguration:cfg];
+
+    NSUInteger total = unknown.count;
+    __block NSUInteger cursor = 0;
+    __block NSUInteger inFlight = 0;
+    __block NSUInteger okCount = 0;
+    __block NSUInteger failCount = 0;
+    __block int64_t sum = 0;
+    __block BOOL finished = NO;
+    NSLock *lock = [NSLock new];
+    NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:kHeadTotalBudget];
+
+    __block void (^pump)(void) = nil;
+    __block void (^finish)(void) = nil;
+
+    finish = ^{
+        BOOL fire = NO;
+        int64_t value = 0;
+        NSUInteger ok = 0, fail = 0;
+        [lock lock];
+        if (!finished) { finished = YES; fire = YES; }
+        value = sum; ok = okCount; fail = failCount;
+        [lock unlock];
+        if (!fire) return;
+        [session finishTasksAndInvalidate];
+        [A2Log log:@"[A2-DL] 预统计结束：命中 %lu，失败 %lu，合计 %.1f MB",
+         (unsigned long)ok, (unsigned long)fail, (double)value / 1048576.0];
+        if (completion) completion();
+    };
+
+    pump = ^{
+        while (YES) {
+            A2DownloadRequest *req = nil;
+            [lock lock];
+            if (finished) { [lock unlock]; return; }
+            if ([deadline timeIntervalSinceNow] <= 0) { [lock unlock]; finish(); return; }
+            if (inFlight >= (NSUInteger)kHeadMaxConcurrent || cursor >= total) { [lock unlock]; break; }
+            req = unknown[cursor++];
+            inFlight++;
+            [lock unlock];
+
+            NSURL *url = req.candidateURLs.firstObject;
+            if (!url) {
+                [lock lock];
+                if (inFlight > 0) inFlight--;
+                failCount++;
+                [lock unlock];
+                continue;
+            }
+            NSMutableURLRequest *hreq = [NSMutableURLRequest requestWithURL:url];
+            hreq.HTTPMethod = @"HEAD";
+            hreq.timeoutInterval = kHeadRequestTimeout;
+            [[session dataTaskWithRequest:hreq
+                      completionHandler:^(NSData *data, NSURLResponse *resp, NSError *error) {
+                int64_t len = (error == nil) ? (int64_t)resp.expectedContentLength : 0;
+                BOOL done = NO;
+                [lock lock];
+                if (len > 0) { sum += len; okCount++; } else { failCount++; }
+                if (len > 0) req.expectedSize = len;   // 回填，批量统计才有分母
+                if (inFlight > 0) inFlight--;
+                done = (cursor >= total && inFlight == 0);
+                [lock unlock];
+                if (done) { finish(); return; }
+                pump();
+            }] resume];
+        }
+
+        BOOL done = NO;
+        [lock lock];
+        done = (cursor >= total && inFlight == 0);
+        [lock unlock];
+        if (done) finish();
+    };
+
+    // 到点强制收尾（有文件一直不返回时不能让下载干等）
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kHeadTotalBudget * NSEC_PER_SEC)),
+                   dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{ finish(); });
+
+    pump();
 }
 
 - (NSString *)formatSpeed:(double)bytesPerSec {

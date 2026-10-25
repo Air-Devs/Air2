@@ -7,6 +7,7 @@
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
+#import "A2Log.h"
 
 #pragma mark - Action
 
@@ -48,6 +49,15 @@
                    message:(NSString *)message
                contentView:(UIView *)contentView
                    actions:(NSArray<A2DialogAction *> *)actions {
+
+    // ★兜底：没有标题、没有正文、也没有自定义内容时补一句有意义的文案★
+    //   这种弹窗在用户眼里就是一个「空的取消框」（只剩按钮占满宽度），
+    //   既没说明发生了什么，也没法操作 —— 属于必须从源头拦掉的状态。
+    if (title.length == 0 && message.length == 0 && contentView == nil) {
+        [A2Log log:@"[A2-DL] 空对话框（无标题/正文/内容），已补默认文案，避免空壳弹窗"];
+        title = @"提示";
+        message = @"操作未完成，请稍后重试。";
+    }
 
     A2Dialog *d = [[A2Dialog alloc] initWithFrame:host.bounds];
     d.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
