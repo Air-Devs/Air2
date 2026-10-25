@@ -29,6 +29,7 @@
 //
 
 #import "A2InstallProgressDialog.h"
+#import "A2Log.h"
 #import "A2IndeterminateBar.h"
 #import "A2TaskLogOutput.h"
 #import "A2TaskLogCard.h"
@@ -274,6 +275,7 @@
 /// 那时 _stepStack 还是 nil，必须暂存，等视图建好再真正生成行。
 @property (nonatomic, copy, nullable) NSArray<NSString *> *pendingStepTitles;
 - (void)applyStepTitles:(NSArray<NSString *> *)stepTitles;
+- (NSArray<NSString *> *)nonEmptyTitles:(NSArray<NSString *> *)titles;
 @end
 
 @implementation A2InstallProgressDialog
@@ -300,13 +302,34 @@
     //   _stepStack —— 那时 viewDidLoad 还没跑，_stepStack 是 nil，
     //   addArrangedSubview: 全是空操作。结果弹窗里只有标题和一条
     //   占满宽度的「取消」按钮，用户看到的就是一个空的取消框。
-    if (self.pendingStepTitles.count > 0) {
-        [self applyStepTitles:self.pendingStepTitles];
+    NSArray<NSString *> *titles = [self nonEmptyTitles:self.pendingStepTitles];
+    if (titles.count > 0) {
+        [self applyStepTitles:titles];
         self.pendingStepTitles = nil;
+        [A2Log log:@"[A2-DL] 进度弹窗：viewDidLoad 后补建 %lu 个步骤行（此前会在空栈上 addArrangedSubview 丢光）",
+                    (unsigned long)titles.count];
     } else {
         // 兜底：没有步骤也要有一行说明，绝不出现「只有取消按钮」的空弹窗
+        [A2Log log:@"[A2-DL] 进度弹窗：没有任何有效步骤，兜底成一行说明，避免空壳弹窗"];
         [self applyStepTitles:@[self.dialogTitle.length ? self.dialogTitle : @"准备中…"]];
     }
+    // 标题也兜住 —— 只有正文没有标题同样是「空壳」观感
+    if (_titleLabel.text.length == 0) _titleLabel.text = @"安装游戏中";
+}
+
+/// 丢掉空串 / 纯空白的步骤标题。
+/// 一个空标题会生成一条「有行高、没文字」的空白行 —— 在用户眼里
+/// 和「弹窗里没内容、只剩取消按钮」是同一个观感，所以从源头滤掉。
+- (NSArray<NSString *> *)nonEmptyTitles:(NSArray<NSString *> *)titles {
+    if (titles.count == 0) return @[];
+    NSMutableArray<NSString *> *out = [NSMutableArray arrayWithCapacity:titles.count];
+    for (id t in titles) {
+        if (![t isKindOfClass:NSString.class]) continue;
+        NSString *s = [(NSString *)t stringByTrimmingCharactersInSet:
+                       [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        if (s.length > 0) [out addObject:s];
+    }
+    return out;
 }
 
 - (void)viewWillAppear:(BOOL)animated {
