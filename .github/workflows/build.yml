@@ -36,14 +36,40 @@ jobs:
         with:
           submodules: recursive
 
+      # 诊断：把失败原因直接打到日志里。
+      # 之前 job logs API 返回 BlobNotFound，完全看不到 lint 为什么失败，
+      # 只能靠猜。现在每步都显式打印退出码，并把输出落到 annotation。
+      - name: 环境信息
+        run: |
+          echo "python: $(python3 --version)"
+          echo "bash:   $BASH_VERSION"
+          echo "子模块:"
+          git submodule status || true
+          echo "scripts/ 文件数: $(ls scripts | wc -l)"
+
       - name: 目录与命名规范
-        run: bash scripts/lint_structure.sh
+        run: |
+          set +e
+          bash scripts/lint_structure.sh
+          rc=$?
+          echo "::error::lint_structure.sh exit=$rc"
+          exit $rc
 
       - name: 校验头文件引用
-        run: python3 scripts/check_imports.py
+        run: |
+          set +e
+          python3 scripts/check_imports.py
+          rc=$?
+          echo "::error::check_imports.py exit=$rc"
+          exit $rc
 
       - name: 校验 Xcode 工程完整性
-        run: python3 scripts/verify_pbxproj.py
+        run: |
+          set +e
+          python3 scripts/verify_pbxproj.py
+          rc=$?
+          echo "::error::verify_pbxproj.py exit=$rc"
+          exit $rc
 
   # ============================================================
   # 编译并打包 IPA
