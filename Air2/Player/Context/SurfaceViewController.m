@@ -1679,6 +1679,7 @@ static BOOL ame87_mcVersionRequiresTextureBuffer(NSString *mcVersionId) {
 }
 
 - (void)launchMinecraft {
+    [A2Logger info:@"GameLaunch" message:@"[1] launchMinecraft 开始"];
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         // Validate metadata first
         if (!self.metadata) {
@@ -1740,7 +1741,13 @@ static BOOL ame87_mcVersionRequiresTextureBuffer(NSString *mcVersionId) {
               accountId, minVersion, windowWidth, windowHeight);
 
         // Launch JVM（args[0] 传 accountId，Java 端 MinecraftAccount.load(accountId) 据此加载账户）
+        [A2Logger info:@"GameLaunch"
+               message:[NSString stringWithFormat:
+                        @"[2] 准备调用 launchJVM（账号=%@ 尺寸=%dx%d Java>=%d）",
+                        accountId, windowWidth, windowHeight, minVersion]];
         int launchResult = launchJVM(accountId, self.metadata, windowWidth, windowHeight, minVersion);
+        [A2Logger info:@"GameLaunch"
+               message:[NSString stringWithFormat:@"[3] launchJVM 返回 %d", launchResult]];
 
         // JVM 启动失败（返回非 0）：移除启动遮罩层，让用户看到错误对话框
         // launchJVM 内部失败时会调用 showDialog 显示错误，此处仅负责清理遮罩层

@@ -294,9 +294,24 @@ static double A2TaskWeight(A2LaunchTask task) {
         // 有损坏/缺失 → 删损坏的，再补下载（剩余 70% 进度）
         [[A2IntegrityChecker new] repairReport:report];
 
+        // ⚠️ 补下载只补「原版」那一份，不要碰当前版本的目录。
+        //
+        // 之前这里 req.versionName = versionName（如 "26.3-fabric"）却没传
+        // loaderType，安装器就把 "26.3-fabric" 当【原版】重装 ——
+        // 结果 Fabric 的版本 JSON 被原版覆盖，加载器丢了，
+        // 而且每次启动都会重装一遍。
+        //
+        // 正确做法（对照 ZL2 的 GameLaunchFlow）：
+        //   校验发现缺文件 → 补的是基底原版（versions/26.3/），
+        //   加载器版（26.3-fabric）通过 inheritsFrom 引用它，不需要重装。
+        NSString *mcVer = self.version.versionInfo.minecraftVersion ?: versionName;
+
         A2InstallRequest *req = [A2InstallRequest new];
-        req.mcVersion = self.version.versionInfo.minecraftVersion ?: versionName;
-        req.versionName = versionName;
+        req.mcVersion = mcVer;
+        // 补下载的目标永远是基底原版
+        req.versionName = mcVer;
+        req.loaderType = nil;       // 明确：不装加载器
+        req.loaderVersion = nil;
         req.gameHome = gameHome;
 
         // ⚠️ 必须用属性持有：install: 是异步的，

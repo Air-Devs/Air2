@@ -106,6 +106,48 @@ static NSString *A2SHA1OfFile(NSString *path) {
         } else {
             NSDictionary *json = [NSJSONSerialization JSONObjectWithData:jsonData options:0 error:nil];
 
+            // ---- 加载器版（有 inheritsFrom）：只校验它自己的 JSON ----
+            //
+            // Fabric/Forge 的版本 JSON 只有 {id, inheritsFrom, libraries(可能为空)}，
+            // 客户端 jar、依赖库、资源全在父版本里。
+            //
+            // 之前这里不分情况一律检查，结果：
+            //   · 加载器版目录下没有 jar → 判「客户端缺失」
+            //   · 触发补下载 → 安装器按原版重装 → 覆盖掉 Fabric 的 JSON
+            //   · 每次启动都重装一遍
+            //
+            // 正确做法：如果主 JSON 有 inheritsFrom，检查【父版本】的完整性，
+            // 本版本只检查自己的 JSON 文件存在。
+            NSString *parentID = json[@"inheritsFrom"];
+            if ([parentID isKindOfClass:NSString.class] && parentID.length > 0) {
+                NSString *parentJSON = [path versionJSONPath:parentID];
+                if (![fm fileExistsAtPath:parentJSON]) {
+                    A2IntegrityIssue *i = [A2IntegrityIssue new];
+                    i.path = parentJSON;
+                    i.kind = @"父版本";
+                    i.reason = [NSString stringWithFormat:@"缺失（%@ 依赖它）", parentID];
+                    [issues addObject:i];
+                }
+                // 父版本的 jar / 库 / 资源由它自己的校验负责，
+                // 这里只校验本版本 JSON 里【额外声明的库】（Fabric 的 loader jar 等）
+                NSArray *ownLibs = json[@"libraries"];
+                if ([ownLibs isKindOfClass:NSArray.class]) {
+                    NSString *libRoot = [path librariesHome];
+                    for (NSDictionary *lib in ownLibs) {
+                        if (![lib isKindOfClass:NSDictionary.class]) continue;
+                        NSDictionary *art = lib[@"downloads"][@"artifact"];
+                        if (![art isKindOfClass:NSDictionary.class]) continue;
+                        NSString *rel = art[@"path"];
+                        if (!rel.length) continue;
+                        [items addObject:@[[libRoot stringByAppendingPathComponent:rel],
+                                           art[@"sha1"] ?: @"",
+                                           art[@"size"] ?: @0,
+                                           @"加载器库"]];
+                    }
+                }
+                goto skip_vanilla_checks;
+            }
+
             // 2. 客户端 jar
             NSDictionary *client = json[@"downloads"][@"client"];
             if ([client isKindOfClass:NSDictionary.class]) {
@@ -165,6 +207,7 @@ static NSString *A2SHA1OfFile(NSString *path) {
             }
         }
 
+        skip_vanilla_checks:;   // 加载器版从这里开始（跳过原版那套检查）
         total = (NSInteger)items.count;
 
         // ---- 逐个检查 ----

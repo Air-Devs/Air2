@@ -29,6 +29,7 @@
 
 #import "LauncherPreferences.h"
 #import "PLProfiles.h"
+#import "A2Settings.h"
 #import "A2VersionManager.h"
 #import "utils.h"
 
@@ -84,6 +85,17 @@ static PLProfiles* current;
     };
     if (valueDefaults[key]) {
         return valueDefaults[key];
+    }
+
+    // ---- 渲染器：优先 A2Settings，回落 Air1 的 video.renderer ----
+    //
+    // 之前只读 getPrefObject(@"video.renderer")，那是 Air1 的偏好键，
+    // Air2 的渲染器设置存在 A2Settings.renderer 里 —— 两边不通，
+    // 结果 resolveKeyForCurrentProfile:@"renderer" 返回 nil，
+    // GameSurfaceView.layerClass 所有分支都不匹配，渲染器完全失效。
+    if ([key isEqualToString:@"renderer"]) {
+        NSString *r = A2Settings.shared.renderer;
+        if (r.length > 0) return r;
     }
 
     NSDictionary *prefDefaults = @{

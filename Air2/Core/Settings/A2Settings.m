@@ -131,7 +131,11 @@ static NSArray<NSString *> *A2SettingsAllKeys(void) {
     _versionIsolationMode = [self isolationModeFromStore];
     _skipIntegrityCheck = [self boolForKey:A2SettingsKeySkipIntegrityCheck defaultValue:NO];
     _ramAllocationMB = [self ramFromStore];
+    // 渲染器默认值：libmobileglues.dylib（Metal 原生 GL 转译，性能最优且兼容 26.x）。
+    // 之前是 nil —— PLProfiles 的 resolveKey:@"renderer" 拿到空值，
+    // GameSurfaceView.layerClass 所有分支都不匹配，渲染器完全失效。
     _renderer = [self stringForKey:A2SettingsKeyRenderer];
+    if (_renderer.length == 0) _renderer = @"libmobileglues.dylib";
     _preferredContentPlatform = [self integerForKey:A2SettingsKeyPreferredContentPlatform
                                       defaultValue:A2SettingsPlatformModrinth];
     _mirrorPriority = [self integerForKey:A2SettingsKeyMirrorPriority
