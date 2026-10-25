@@ -156,6 +156,36 @@ int a2_fallback_gate(const char *reason, const char *loc, const char *details) {
 static int a2_run_main(JNIEnv *env, NSString *mainClass, NSArray<NSString *> *args) {
     if (env == NULL || mainClass.length == 0) return -5;
 
+    // ★cwd 切到 gameDir（真机证据：MC 报 logs/latest.log 相对路径不存在 ⇒ 进程 cwd 不是 gameDir）。
+    //   A2Entry 这条路的 args 只有 2 个（不含 --gameDir），所以要回退到启动计划 JSON 里找。
+    NSString *a2gd = nil;
+    NSUInteger gi = [args indexOfObject:@"--gameDir"];
+    if (gi != NSNotFound && gi + 1 < args.count) a2gd = args[gi + 1];
+    if (a2gd.length == 0 && args.count > 0) {
+        NSString *first = args.firstObject;
+        if ([first hasSuffix:@".json"]) {
+            NSData *jd = [NSData dataWithContentsOfFile:first];
+            if (jd.length) {
+                id obj = [NSJSONSerialization JSONObjectWithData:jd options:0 error:nil];
+                if ([obj isKindOfClass:NSDictionary.class]) {
+                    NSArray *inner = ((NSDictionary *)obj)[@"arguments"];
+                    if ([inner isKindOfClass:NSArray.class]) {
+                        NSUInteger k = [inner indexOfObject:@"--gameDir"];
+                        if (k != NSNotFound && k + 1 < inner.count) a2gd = inner[k + 1];
+                    }
+                }
+            }
+        }
+    }
+    if (a2gd.length > 0) {
+        [NSFileManager.defaultManager createDirectoryAtPath:[a2gd stringByAppendingPathComponent:@"logs"]
+                               withIntermediateDirectories:YES attributes:nil error:nil];
+        int cdrc = chdir(a2gd.UTF8String);
+        a2_log_f(@"[RT-P1] chdir(gameDir) rc=%d path=%@", cdrc, a2gd);
+    } else {
+        a2_log_f(@"[RT-P1] chdir 跳过：没能从参数/计划里取到 gameDir");
+    }
+
     NSString *binary = [mainClass stringByReplacingOccurrencesOfString:@"." withString:@"/"];
     jclass cls = (*env)->FindClass(env, binary.UTF8String);
     if (cls == NULL) {
