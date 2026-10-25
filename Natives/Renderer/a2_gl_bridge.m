@@ -491,6 +491,31 @@ static void *a2_gl_bridge_gles_getprocaddress(const char *name) {
                  (gGlesHandle != NULL && sym == dlsym(gGlesHandle, name)) ? "ANGLE" : "其它");
     }
 
+    // ★KW 白名单★（真机 lastlog-94）：黑名单挡不住 KW 使用的变体（它拿到 ANGLE 的 glLoadMatrixf
+    //   后就崩在 gl::ContextPrivateLoadIdentity）。改为「只放行真 ES3 入口，其余一律空桩」。
+    if (a2_gl_bridge_is_krypton()) {
+        static const char *const kWL[] = {
+            "Shader","Program","Buffer","Texture","Framebuffer","Renderbuffer",
+            "Vertex","Uniform","Draw","String","Error","Integerv","Floatv","Booleanv",
+            "Clear","Viewport","Scissor","Enable","Disable","Blend","Depth","Stencil",
+            "Cull","PixelStore","ReadPixels","Finish","Flush","Hint","LineWidth",
+            "ColorMask","PolygonOffset","FrontFace","ActiveTexture","Get","TexImage",
+            "TexSubImage","TexParameter","GenerateMipmap","Delete","Create","Gen","Bind",
+            "Link","Validate","Attach","Detach","IsEnabled","GetShader","GetProgram", NULL
+        };
+        BOOL allowed = NO;
+        for (int i = 0; kWL[i] != NULL && !allowed; i++) {
+            if (strstr(name, kWL[i]) != NULL) allowed = YES;
+        }
+        if (!allowed) {
+            static char logged[64][48]; static int n = 0; BOOL seen = NO;
+            for (int k = 0; k < n; k++) if (strncmp(logged[k], name, 47) == 0) { seen = YES; break; }
+            if (!seen && n < 64) { strncpy(logged[n], name, 47); logged[n][47]=0; n++; }
+            a2_log_f(@"[A2-GL-WL] KW 非 ES3 入口 ⇒ 空桩：%s", name);
+            return (void *)a2_glstub_unlisted;
+        }
+    }
+
     // ★拒绝把宿主 ANGLE 的 GLES1 固定管线入口交给 KW★
     //   真机证据（lastlog-83，1.7.10）：KW 初始化正常、桥附着正常，到加载画面时崩在
     //   `gl::GLES1State::loadMatrix(angle::Mat4 const&)+0x58`（ANGLE 的 libGLESv2）。
