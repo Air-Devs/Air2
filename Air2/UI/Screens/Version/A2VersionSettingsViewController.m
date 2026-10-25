@@ -85,6 +85,76 @@
     [self refreshIsolationUI];
 }
 
+#pragma mark - 标签布局
+
+/// 左侧标签栏 + 右侧内容（对照 ZL2 的 TabMenu + NavigationUI）
+- (void)setupTabLayout {
+    self.usesScrollContent = YES;
+
+    UIView *host = self.view;
+
+    // ---- 左栏 ----
+    _tabBar = [[A2VersionTabBar alloc] initWithFrame:CGRectZero];
+    _tabBar.selectedTab = A2VersionTabOverview;
+
+    __weak typeof(self) weakSelf = self;
+    _tabBar.onTabChanged = ^(A2VersionTab tab) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self showTab:tab];
+    };
+    [host addSubview:_tabBar];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [_tabBar.topAnchor constraintEqualToAnchor:host.safeAreaLayoutGuide.topAnchor
+                                          constant:A2SpaceM],
+        [_tabBar.leadingAnchor constraintEqualToAnchor:host.leadingAnchor
+                                             constant:A2SpaceM],
+        [_tabBar.widthAnchor constraintEqualToConstant:88],
+        [_tabBar.bottomAnchor constraintLessThanOrEqualToAnchor:host.safeAreaLayoutGuide.bottomAnchor],
+    ]];
+
+    // ---- 右栏：内容区（复用基类的 scrollView + contentStack）----
+    UIScrollView *scroll = self.scrollView;
+    UIStackView *stack = self.contentStack;
+
+    [NSLayoutConstraint activateConstraints:@[
+        [scroll.leadingAnchor constraintEqualToAnchor:_tabBar.trailingAnchor
+                                             constant:A2SpaceM],
+    ]];
+
+    (void)stack;
+    [self showTab:A2VersionTabOverview];
+}
+
+/// 切换标签：清空右栏，重建对应内容
+- (void)showTab:(A2VersionTab)tab {
+    UIStackView *stack = self.contentStack;
+    for (UIView *v in [stack.arrangedSubviews copy]) {
+        [stack removeArrangedSubview:v];
+        [v removeFromSuperview];
+    }
+
+    switch (tab) {
+        case A2VersionTabOverview:
+            [self setupHeaderCard];
+            [self setupIsolationSection];
+            break;
+        case A2VersionTabLaunch:
+            [self setupLaunchSection];
+            break;
+        case A2VersionTabFolder:
+            [self setupFolderSection];
+            break;
+        case A2VersionTabDanger:
+            [self setupDangerSection];
+            break;
+        default:
+            break;
+    }
+
+    [self refreshIsolationUI];
+}
+
 #pragma mark - 顶部信息
 
 - (void)setupHeaderCard {

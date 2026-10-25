@@ -37,6 +37,9 @@
 #import "ios_uikit_bridge.h"
 #import "A2JREManager.h"
 #import "A2Logger.h"
+#import "A2DownloadTask.h"
+#import "A2DownloadTaskCenter.h"
+#import "A2DownloadPanel.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Typography.h"
@@ -68,6 +71,7 @@
 @property (nonatomic, strong, nullable) A2TaskLogOutput *launchLog;
 @property (nonatomic, strong, nullable) id launchProgressObserver;
 @property (nonatomic, copy, nullable) NSString *lastSpeedText;
+
 /// JVM 运行中界面（对照 ZL2 的 JVMScreen）
 @property (nonatomic, strong, nullable) A2JVMRunningViewController *jvmScreen;
 @property (nonatomic, strong) A2BackgroundView *backgroundView;
@@ -360,7 +364,60 @@
 
 - (void)handleThemeChanged:(NSNotification *)note {
     [self applyTheme];
+    [self setupDownloadPanel];
 }
+
+/// 下载进度 —— 用 ZL2 的 TaskFlowDialog 形式（居中弹窗），不是侧边面板。
+///
+/// 我一开始参考 FCL 做了右下角滑出面板，但用户要的是 ZL2 ——
+/// ZL2 根本没有侧边面板，整个下载进度就是一个居中弹窗：
+///   任务清单 + 每步进度条/速率/百分比 + 底部取消
+///
+/// 所以改成：有任务时弹出 A2InstallProgressDialog，任务结束自动关闭。
+- (void)setupDownloadPanel {
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                          selector:@selector(refreshDownloadPanel)
+                                              name:A2DownloadTasksDidChangeNotification
+                                            object:nil];
+    [self refreshDownloadPanel];
+}
+
+- (void)refreshDownloadPanel {
+    NSArray<A2DownloadTask *> *active = A2DownloadTaskCenter.shared.activeTasks;
+
+    // 没任务 → 关掉弹窗
+    if (active.count == 0) {
+        if (self.launchDialog) {
+            [self.launchDialog dismissWithCompletion:nil];
+            self.launchDialog = nil;
+        }
+        return;
+    }
+
+    // 有任务但没弹窗 → 开一个
+    if (!self.launchDialog) {
+        A2TaskLogOutput *log = [[A2TaskLogOutput alloc] initWithTitle:@"下载任务"];
+        A2InstallProgressDialog *dlg = [[A2InstallProgressDialog alloc] initWithLogOutput:log];
+        dlg.dialogTitle = @"下载中";
+        [dlg setSteps:@[@"准备", @"下载", @"校验", @"完成"]];
+        [self presentViewController:dlg animated:YES completion:nil];
+        self.launchDialog = dlg;
+        self.launchLog = log;
+    }
+
+    // 更新当前任务
+    A2DownloadTask *t = active.firstObject;
+    [self.launchDialog updateStepAtIndex:1
+                                   stage:A2ProgressStepStageRunning
+                                 message:t.title
+                                progress:t.progress
+                                    rate:(t.speed > 0
+                                          ? [NSString stringWithFormat:@"%.1f MB/s",
+                                             t.speed / 1048576.0]
+                                          : nil)];
+}
+
+
 
 - (void)applyTheme {
     A2ThemeManager *tm = A2ThemeManager.shared;
