@@ -43,6 +43,8 @@ public final class A2Entry {
         A2LaunchPlan plan = A2LaunchPlan.load(new File(planPath));
 
         A2NativeLibrary.load(plan.nativeLibrary());
+        // ★只读诊断★：打印 LWJGL 认定的 GL/GLES 提供者与库路径（不影响行为）
+        A2GlProviderProbe.dump();
         A2JvmProperties.apply(plan.properties());
 
         ClassLoader loader = ClassLoader.getSystemClassLoader();
