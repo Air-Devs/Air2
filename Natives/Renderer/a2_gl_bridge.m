@@ -19,6 +19,7 @@
 //        只**读**老线（runtime_native）的既有约定（EGLNativeWindowType 取 layer 的
 //        行为事实），未复制其任何代码。
 // ============================================================================
+#include <pthread.h>
 #import "a2_gl_bridge.h"
 #import "a2_log.h"
 #import "a2_frame_perf.h"   // ★[FRAME-PERF] 与渲染器无关的帧性能判据（本文件的帧动作每帧记一次）
@@ -257,12 +258,74 @@ static int a2_gl_bridge_is_krypton(void) {
 /// 交给 gl4es 的 GLES 入口解析器 —— 它在 `-DNOEGL` 下**唯一**的入口来源。
 /// 顺序固定：已 RTLD_GLOBAL 的 GLESv2（ANGLE）→ EGL → eglGetProcAddress。
 /// ★只解析 GLES/EGL 入口，不碰 `gl*` 包装层★：包装层符号由 LWJGL 从后端本体取（名字解析面 1328 个 gl*）。
+// ★GL 入口 trace（诊断）★：给 KW 解析到的 4 个查询函数套壳，打 enter/exit + 线程 id。
+//   目的：1.7.10 在 `GL caps init` 之后卡死，靠“有 enter 没 exit”精确定位到具体调用。
+typedef const unsigned char *(*A2PFN_glGetString)(unsigned int);
+typedef const unsigned char *(*A2PFN_glGetStringi)(unsigned int, unsigned int);
+typedef void               (*A2PFN_glGetIntegerv)(unsigned int, int *);
+typedef unsigned int       (*A2PFN_glGetError)(void);
+static A2PFN_glGetString  gRealGLGetString  = NULL;
+static A2PFN_glGetStringi gRealGLGetStringi = NULL;
+static A2PFN_glGetIntegerv gRealGLGetIntegerv = NULL;
+static A2PFN_glGetError   gRealGLGetError   = NULL;
+static volatile int32_t   gGLTraceCalls     = 0;
+#define A2_GL_TRACE_MAX_CALLS 400   // 只在开头疯狂阶段打日志，避免刷爆
+
+static const unsigned char *a2_trace_glGetString(unsigned int name) {
+    int n = __sync_fetch_and_add(&gGLTraceCalls, 1);
+    if (n < A2_GL_TRACE_MAX_CALLS)
+        a2_log_f("[A2-GL-TRACE] -> enter glGetString(0x%x) tid=%p", name, (void *)pthread_self());
+    const unsigned char *r = (gRealGLGetString != NULL) ? gRealGLGetString(name) : NULL;
+    if (n < A2_GL_TRACE_MAX_CALLS)
+        a2_log_f("[A2-GL-TRACE] <- exit  glGetString(0x%x) = %s", name, r ? (const char *)r : "(null)");
+    return r;
+}
+
+static const unsigned char *a2_trace_glGetStringi(unsigned int name, unsigned int index) {
+    int n = __sync_fetch_and_add(&gGLTraceCalls, 1);
+    if (n < A2_GL_TRACE_MAX_CALLS)
+        a2_log_f("[A2-GL-TRACE] -> enter glGetStringi(0x%x, %u) tid=%p", name, index, (void *)pthread_self());
+    const unsigned char *r = (gRealGLGetStringi != NULL) ? gRealGLGetStringi(name, index) : NULL;
+    if (n < A2_GL_TRACE_MAX_CALLS)
+        a2_log_f("[A2-GL-TRACE] <- exit  glGetStringi(0x%x, %u) = %s", name, index, r ? (const char *)r : "(null)");
+    return r;
+}
+
+static void a2_trace_glGetIntegerv(unsigned int pname, int *data) {
+    int n = __sync_fetch_and_add(&gGLTraceCalls, 1);
+    if (n < A2_GL_TRACE_MAX_CALLS)
+        a2_log_f("[A2-GL-TRACE] -> enter glGetIntegerv(0x%x) tid=%p", pname, (void *)pthread_self());
+    if (gRealGLGetIntegerv != NULL) gRealGLGetIntegerv(pname, data);
+    if (n < A2_GL_TRACE_MAX_CALLS)
+        a2_log_f("[A2-GL-TRACE] <- exit  glGetIntegerv(0x%x) = %d", pname, (data != NULL) ? *data : -1);
+}
+
+static unsigned int a2_trace_glGetError(void) {
+    int n = __sync_fetch_and_add(&gGLTraceCalls, 1);
+    if (n < A2_GL_TRACE_MAX_CALLS)
+        a2_log_f("[A2-GL-TRACE] -> enter glGetError tid=%p", (void *)pthread_self());
+    unsigned int e = (gRealGLGetError != NULL) ? gRealGLGetError() : 0u;
+    if (n < A2_GL_TRACE_MAX_CALLS)
+        a2_log_f("[A2-GL-TRACE] <- exit  glGetError = 0x%x", e);
+    return e;
+}
+
 static void *a2_gl_bridge_gles_getprocaddress(const char *name) {
     if (name == NULL) return NULL;
     void *sym = NULL;
     if (gGlesHandle != NULL) sym = dlsym(gGlesHandle, name);
     if (sym == NULL && gEglHandle != NULL) sym = dlsym(gEglHandle, name);
     if (sym == NULL && gEglGetProcAddress != NULL) sym = gEglGetProcAddress(name);
+    if (sym == NULL) return NULL;
+
+    // ★GL 入口 trace（诊断用）★：1.7.10 + KW 真机表现是「过了 GL caps init 之后卡死」，
+    //   而那一串调用正是 glGetString/glGetStringi/glGetIntegerv/glGetError。
+    //   在这里把宿主 GLES 的这 4 个入口换成带进出日志的壳 —— 只影响 KW（走本解析器）。
+    //   判据：出现 `-> enter` 但没有对应 `exit` 的那一行就是卡点。
+    if (strcmp(name, "glGetString") == 0)      { if (gRealGLGetString == NULL) gRealGLGetString = (A2PFN_glGetString)sym; return (void *)a2_trace_glGetString; }
+    if (strcmp(name, "glGetStringi") == 0)     { if (gRealGLGetStringi == NULL) gRealGLGetStringi = (A2PFN_glGetStringi)sym; return (void *)a2_trace_glGetStringi; }
+    if (strcmp(name, "glGetIntegerv") == 0)    { if (gRealGLGetIntegerv == NULL) gRealGLGetIntegerv = (A2PFN_glGetIntegerv)sym; return (void *)a2_trace_glGetIntegerv; }
+    if (strcmp(name, "glGetError") == 0)       { if (gRealGLGetError == NULL) gRealGLGetError = (A2PFN_glGetError)sym; return (void *)a2_trace_glGetError; }
     return sym;
 }
 
