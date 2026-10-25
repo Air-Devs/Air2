@@ -4,8 +4,38 @@
 //
 
 #import "A2ModLoaderSelection.h"
+#import "A2Log.h"
 
 @implementation A2ModLoaderSelection
+
+#pragma mark - 入参规整
+
++ (NSString *)versionStringFrom:(id)version {
+    if (version == nil || version == (id)[NSNull null]) return nil;
+
+    if ([version isKindOfClass:[NSString class]]) {
+        NSString *s = (NSString *)version;
+        return s.length > 0 ? [s copy] : nil;
+    }
+
+    if ([version isKindOfClass:[A2ModLoaderVersion class]]) {
+        NSString *v = ((A2ModLoaderVersion *)version).version;
+        return [v isKindOfClass:[NSString class]] && v.length > 0 ? [v copy] : nil;
+    }
+
+    // 兜底：别的模型只要暴露 version → NSString 也认。
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+    if ([version respondsToSelector:@selector(version)]) {
+        id v = [version performSelector:@selector(version)];
+        if ([v isKindOfClass:[NSString class]] && [(NSString *)v length] > 0) {
+            return [(NSString *)v copy];
+        }
+    }
+#pragma clang diagnostic pop
+
+    return nil;
+}
 
 - (instancetype)init {
     self = [super init];
@@ -101,9 +131,22 @@
 
 #pragma mark - 选择
 
-- (void)selectType:(A2ModLoaderType)type version:(NSString *)version {
+- (void)selectType:(A2ModLoaderType)type version:(id)version {
+    // 先把入参规整成字符串 —— 传进来的可能是 NSString，也可能是
+    // A2ModLoaderVersion 模型。规整之后只碰字符串，任何对象都不会收到
+    // NSString 的消息（这正是旧版 version.length 崩溃的来源）。
+    NSString *versionString = [A2ModLoaderSelection versionStringFrom:version];
+
+    if (version != nil && versionString == nil) {
+        [A2Log log:@"[A2-LOADER] 忽略无法识别的版本入参 type=%@ raw=<%@>",
+            [A2ModLoaderAPI displayNameForType:type],
+            NSStringFromClass([version class]) ?: @"?"];
+    }
+
     [self.versions removeObjectForKey:@(type)];
-    if (version.length == 0) {
+    if (versionString.length == 0) {
+        [A2Log log:@"[A2-LOADER] 选择 type=%@ version=(取消)",
+            [A2ModLoaderAPI displayNameForType:type]];
         // 取消一个主加载器时，连带取消它对应的 API 模组 ——
         // Fabric 都没了，Fabric API 留着没有意义。
         if (A2ModLoaderIsLoader(type)) {
@@ -127,7 +170,9 @@
         }
     }
 
-    self.versions[@(type)] = version;
+    self.versions[@(type)] = versionString;
+    [A2Log log:@"[A2-LOADER] 选择 type=%@ version=%@",
+        [A2ModLoaderAPI displayNameForType:type], versionString];
 }
 
 - (NSNumber *)selectedLoaderType {

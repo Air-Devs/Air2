@@ -195,6 +195,13 @@
 #pragma mark - 加载器选择
 
 - (void)loaderCardSelectionDidChange:(A2LoaderCard *)card {
+    // 入口防御：委托回调可能收到意外的对象/状态，这里一律不崩。
+    if (![card isKindOfClass:[A2LoaderCard class]]) {
+        [A2Log log:@"[A2-LOADER] 忽略选择回调：card 类型异常 <%@>",
+            NSStringFromClass([card class]) ?: @"nil"];
+        return;
+    }
+
     // 原版即「不装任何加载器」—— 清空全部选择
     if (card.isVanilla) {
         [_selection.versions removeAllObjects];
@@ -216,8 +223,20 @@
         return;
     }
 
-    NSString *version = card.selectedVersion;
+    // 卡里存的是 A2ModLoaderVersion 模型，选择模型只吃版本号字符串，
+    // 统一在这里规整一次；认不出来就按「没选版本」安全处理，不再往
+    // selectType: 里塞对象（旧版就是在这里把对象当 NSString 用而闪退）。
+    NSString *version = [A2ModLoaderSelection versionStringFrom:card.selectedVersion];
+    if (version.length == 0) {
+        [A2Log log:@"[A2-LOADER] 忽略选择回调：%@ 未给出有效版本 raw=<%@>",
+            [A2ModLoaderAPI displayNameForType:type],
+            NSStringFromClass([card.selectedVersion class]) ?: @"nil"];
+        return;
+    }
+
     [_selection selectType:type version:version];
+    [A2Log log:@"[A2-LOADER] 卡片回调 type=%@ version=%@",
+        [A2ModLoaderAPI displayNameForType:type], version];
 
     // 同步 UI：被互斥清掉的卡片要复位
     [self syncCardsWithSelection];
