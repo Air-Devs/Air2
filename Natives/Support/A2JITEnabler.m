@@ -38,8 +38,6 @@ static const NSTimeInterval kA2JITWaitBudget = 120.0;
 static const NSTimeInterval kA2JITRepeatWaitBudget = 8.0;
 /// 轮询间隔：0.5s（老 Air 同量级；再密只是白刷 brk #0x69）。
 static const NSTimeInterval kA2JITPollInterval = 0.5;
-/// 单次区域验证预算：2.5s（A2JITEnvironment 在后台线程允许的切片量级）。
-static const NSTimeInterval kA2JITVerifySlice = 2.5;
 /// 心跳日志间隔：让真机日志能看出「还在等」而不是「卡死了」。
 static const NSTimeInterval kA2JITHeartbeat = 10.0;
 /// 弹窗 → 拉起使能器之间的间隔：★顺序有用★ 弹窗先落屏，再 openURL（openURL 会把我们送去
