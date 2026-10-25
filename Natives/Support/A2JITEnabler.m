@@ -204,7 +204,14 @@ static A2JITSourceFacts a2jit_source_facts(void) {
 
     // 判定（★窄★）：磁盘标记 / TrollStore 本体 = 权威；光有 apple-magnifier:// 还要
     // entitlement 加强（别的工具也可能注册同名 scheme）。
-    if (f.marker != nil || f.appPath != nil || (f.schemeMagnifier == 1 && f.custTrust)) {
+    // ★结论粘住（只增不减）★：scheme 只能在主线程问，而判据也会被等待循环从后台队列调到
+    //   ⇒ 后台那一次可能问不出 scheme。安装源是进程级的常量，一旦任一次探测认定为巨魔就
+    //   记住，避免「主线程判 trollstore、后台判 other ⇒ 后台又落回老 Air 闰门」这种自相矛盾。
+    static BOOL sStickyTrollStore = NO;
+    BOOL trollStore = (f.marker != nil) || (f.appPath != nil) ||
+                      (f.schemeMagnifier == 1 && f.custTrust);
+    if (trollStore) sStickyTrollStore = YES;
+    if (sStickyTrollStore) {
         f.source = A2JITInstallSourceTrollStore;
     } else if (f.schemeSideStore == 1 || f.schemeStikDebug == 1) {
         f.source = A2JITInstallSourceSideStore;
