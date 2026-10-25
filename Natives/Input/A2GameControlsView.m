@@ -23,6 +23,9 @@ static NSString *const kA2MoveModeKey  = @"A2MoveMode";
 static NSString *const kA2LayoutsKey   = @"A2ControlLayouts";     // {方案名: {id: {x,y,w,h,a}}}
 static NSString *const kA2LayoutCurKey = @"A2ControlLayoutCurrent";
 static NSString *const kA2BindingsKey  = @"A2ControlBindings";   // {控件id: GLFW键码}
+// ★移动簇布局版本★ 1 = 旧（WASD+潜 整簇默认坐标写在左上角，上游同样存在）；2 = 整簇锚定左下角安全区
+static NSString *const kA2CtrlLayoutVerKey = @"A2ControlLayoutVersion";
+static const NSInteger kA2CtrlLayoutVer = 2;
 
 /// 输入层：把一次输入合成进 GLFW 事件总线（实现见 Natives/Input/a2_glfw_input.m）
 extern void a2_glfw_input_post_key(long window, int key, int action);
@@ -557,6 +560,11 @@ static int a2_touchSeen = 0;
 
     for (NSString *cid in _movable) {
         UIView *v = _movable[cid];
+        // ★移动簇在 a2_buildDPad 里已自己配好 frame 布局与手势（pan/tap/pinch 全部 cancelsTouchesInView=NO）★
+        //   这里若再套一遍：① bounds 会被改回 60x60，簇内子键落到容器外 ⇒ hitTest 收不到触摸；
+        //   ② 会多挂一个 cancelsTouchesInView=YES 的 pan，手指在方向键上轻微滑动就被判成拖拽 ⇒
+        //   方向键的 touch-up 被取消（走两步就停）。簇的几何与手势都由 a2_layoutDefaultDPad 负责。
+        if (v == _dpadContainer) continue;
         v.translatesAutoresizingMaskIntoConstraints = YES;
         v.bounds = CGRectMake(0, 0, 60, 60);
         // ★手势绝不能吞掉按钮自身的触摸★
@@ -592,6 +600,9 @@ static int a2_touchSeen = 0;
     CGFloat W = CGRectGetWidth(self.bounds)  > 0 ? CGRectGetWidth(self.bounds)  : 874;
     CGFloat H = CGRectGetHeight(self.bounds) > 0 ? CGRectGetHeight(self.bounds) : 402;
 
+    // ★移动簇★ W/A/S/D/潜 是「一整簇」：默认锚在左下角安全区内（原默认坐标写死在左上角）
+    [self a2_layoutDefaultDPad];
+
     // 右下：跳 / 攻 / 用 三个分开摆（原来三者叠在一起）
     _jumpButton.center      = CGPointMake(W - 74,  H - 150);
     _attackButton.center    = CGPointMake(W - 74,  H - 62);
@@ -602,6 +613,107 @@ static int a2_touchSeen = 0;
     _f3Button.center        = CGPointMake(W - 110, 96);
     _keyboardButton.center  = CGPointMake(W - 174, 96);
     _escButton.center       = CGPointMake(W - 302, 96);
+}
+
+#pragma mark - 默认布局：移动簇（W/A/S/D/潜 一整簇）
+
+/// ★只改布局常量★ 把「W/A/S/D + 潜」这一整簇锚定到屏幕左下角的安全区内，并按屏幕短边缩放。
+///   · 只做「整簇平移 + 缩放」：簇内 5 键的相对位置仍由 a2_layoutDPad 等比例算，坐标系与规则零改动
+///     （潜仍在 A 与 D 之间的中央位置，不动它相对其它四键的坐标）。
+///   · 留白 = 安全区 + 与屏幕成比例的基础留白 ⇒ 横屏刘海（左）/Home 条（下）都不会遮住簇。
+- (void)a2_layoutDefaultDPad {
+    CGFloat W = CGRectGetWidth(self.bounds)  > 0 ? CGRectGetWidth(self.bounds)  : 874;
+    CGFloat H = CGRectGetHeight(self.bounds) > 0 ? CGRectGetHeight(self.bounds) : 402;
+    UIEdgeInsets sa = self.safeAreaInsets;
+
+    CGFloat shortSide = MIN(W, H);
+    if (shortSide <= 1) shortSide = 402;
+    CGFloat side = shortSide * 0.42;                 // 基准：iPhone 402 ⇒ ≈169；iPad 603 ⇒ ≈253
+    side = MIN(MAX(side, 132.0), 320.0);             // 上下限：小屏仍可点，大屏别虚胖
+    CGFloat pad = MAX(12.0, shortSide * 0.030);      // 与屏宽成比例的基础留白（iPhone ≈12）
+    CGFloat left   = MAX(sa.left, 0.0)   + pad;      // 横屏刘海在左
+    CGFloat bottom = MAX(sa.bottom, 0.0) + pad;      // Home 条在下
+    // 兜底：屏太矮 / 安全区太大时，至少留 8pt 在可见区内（后面的 clamp 还会再保一道）
+    left   = MIN(left,   MAX(8.0, W - side - 8.0));
+    bottom = MIN(bottom, MAX(8.0, H - side - 8.0));
+
+    _dpadContainer.bounds = CGRectMake(0, 0, side, side);
+    _dpadContainer.center = CGPointMake(left + side * 0.5, H - bottom - side * 0.5);
+    [self a2_layoutDPad];   // 簇内 5 键仍按原等比例规则摆（相对位置不变）
+}
+
+/// ★布局版本迁移★ 旧版把移动簇的默认坐标写在了左上角（上游同样存在），
+/// 且「本机首次进入」会把当时那份布局播种进 NSUserDefaults ⇒ 只改常量对老设备不生效。
+/// 版本号 < 2 时把整簇重锚到左下角并落盘覆盖旧存档；其它控件坐标一个都不动。
+- (void)a2_migrateLayoutVersionIfNeeded {
+    NSInteger v = [NSUserDefaults.standardUserDefaults integerForKey:kA2CtrlLayoutVerKey];
+    if (v >= kA2CtrlLayoutVer) return;
+    [NSUserDefaults.standardUserDefaults setInteger:kA2CtrlLayoutVer forKey:kA2CtrlLayoutVerKey];
+    [self a2_layoutDefaultDPad];
+    a2_log_f(@"[A2-CTRL-LAYOUT] 迁移 v%ld→v%ld：WASD+潜 整簇重锚左下角安全区（簇内相对位置不变）",
+             (long) v, (long) kA2CtrlLayoutVer);
+    if (!_editing) [self a2_saveLayout];   // 落盘，否则下次启动又被旧存档的左上角覆盖
+}
+
+#pragma mark - 真机核对判据：[A2-CTRL-LAYOUT]
+
+/// 控件在控件层坐标系里的 frame（dpad 子键需要多转一层）
+- (CGRect)a2_frameInSelf:(UIView *)v {
+    if (v == nil) return CGRectZero;
+    return v.superview ? [v.superview convertRect:v.frame toView:self] : v.frame;
+}
+
+- (void)a2_logFrameFor:(NSString *)name view:(UIView *)v {
+    if (v == nil) return;
+    CGRect f = [self a2_frameInSelf:v];
+    a2_log_f(@"[A2-CTRL-LAYOUT] %s frame=(%.1f,%.1f,%.1f,%.1f) hidden=%d",
+             name.UTF8String, f.origin.x, f.origin.y, f.size.width, f.size.height, v.hidden ? 1 : 0);
+}
+
+/// ★真机核对用★ 屏幕尺寸 + 每个键的最终 frame（x,y,w,h）+ 簇内 5 键是否都在可见区
+- (void)a2_logControlLayout {
+    CGSize s = self.bounds.size;
+    if (s.width <= 1 || s.height <= 1) return;
+    UIEdgeInsets sa = self.safeAreaInsets;
+    a2_log_f(@"[A2-CTRL-LAYOUT] 屏幕=%.0fx%.0f safe=(t%.0f,l%.0f,b%.0f,r%.0f) 模式=%s 簇边长=%.1f",
+             s.width, s.height, sa.top, sa.left, sa.bottom, sa.right,
+             (_moveMode == A2MoveModeStick ? "stick" : "dpad"),
+             CGRectGetWidth(_dpadContainer.bounds));
+
+    int keys[4] = { kKeyW, kKeyA, kKeyS, kKeyD };
+    [self a2_logFrameFor:@"W"   view:_dirButtons[@(kKeyW)]];
+    [self a2_logFrameFor:@"A"   view:_dirButtons[@(kKeyA)]];
+    [self a2_logFrameFor:@"S"   view:_dirButtons[@(kKeyS)]];
+    [self a2_logFrameFor:@"D"   view:_dirButtons[@(kKeyD)]];
+    [self a2_logFrameFor:@"潜"  view:_sneakButton];
+    [self a2_logFrameFor:@"跳"  view:_jumpButton];
+    [self a2_logFrameFor:@"攻"  view:_attackButton];
+    [self a2_logFrameFor:@"用"  view:_useButton];
+    [self a2_logFrameFor:@"包"  view:_inventoryButton];
+    [self a2_logFrameFor:@"F3"  view:_f3Button];
+    [self a2_logFrameFor:@"⌨"   view:_keyboardButton];
+    [self a2_logFrameFor:@"ESC" view:_escButton];
+    for (NSUInteger i = 0; i < _hotbar.count; i++) {
+        [self a2_logFrameFor:[NSString stringWithFormat:@"热键%lu", (unsigned long) (i + 1)] view:_hotbar[i]];
+    }
+
+    // 判据：簇内 5 键（W/A/S/D/潜）是否全在可见区内
+    int inside = 0;
+    NSMutableArray *cluster = [NSMutableArray array];
+    for (int i = 0; i < 4; i++) {
+        UIButton *b = _dirButtons[@(keys[i])];
+        if (b != nil) [cluster addObject:b];
+    }
+    if (_sneakButton != nil) [cluster addObject:_sneakButton];
+    for (UIView *v in cluster) {
+        CGRect f = [self a2_frameInSelf:v];
+        if (f.size.width > 0.5 &&
+            CGRectGetMinX(f) >= -0.5 && CGRectGetMinY(f) >= -0.5 &&
+            CGRectGetMaxX(f) <= s.width + 0.5 && CGRectGetMaxY(f) <= s.height + 0.5) inside++;
+    }
+    a2_log_f(@"[A2-CTRL-LAYOUT] 判定：簇内 %lu 键全部在可见区=%d（%d/%lu）",
+             (unsigned long) cluster.count, (inside == (int) cluster.count) ? 1 : 0,
+             inside, (unsigned long) cluster.count);
 }
 
 #pragma mark - 阶段3：热键条 + 系统键盘
@@ -762,6 +874,8 @@ static int a2_touchSeen = 0;
         [weakSelf a2_layoutDefaultButtons];
         [weakSelf a2_layoutHotbar];
         for (UIView *v in weakSelf.a2_movableViews) v.alpha = 1.0;
+        [weakSelf a2_clampControlsIntoBounds];
+        [weakSelf a2_logControlLayout];
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"完成" style:UIAlertActionStyleCancel handler:nil]];
 
@@ -924,6 +1038,8 @@ static int a2_touchSeen = 0;
                                MIN(MAX(y, halfH), curH - halfH));
         v.alpha = [e[@"a"] doubleValue] > 0 ? [e[@"a"] doubleValue] : 1.0;
     }
+    // ★移动簇★ 容器尺寸可能被存档/缩放改过 ⇒ 簇内子键按新边长重排（相对位置规则不变）
+    if (CGRectGetWidth(_dpadContainer.bounds) > 1) [self a2_layoutDPad];
 }
 
 
@@ -1109,6 +1225,7 @@ static int a2_touchSeen = 0;
 - (void)a2_reloadSavedLayout {
     [self a2_applySavedLayout];
     [self a2_clampControlsIntoBounds];
+    [self a2_logControlLayout];
 }
 
 - (void)a2_deselect {
@@ -1563,7 +1680,9 @@ static int a2_touchSeen = 0;
     [self a2_layoutDefaultButtons];
     [self a2_layoutHotbar];
     [self a2_applySavedLayout];
+    [self a2_migrateLayoutVersionIfNeeded];   // ★一次性★ 旧存档里簇在左上角 ⇒ 整簇重锚左下角
     [self a2_clampControlsIntoBounds];   // ★边界判断★ 防止默认布局在 iPad 上跑出屏幕
+    [self a2_logControlLayout];          // ★真机核对★ 每个键的最终 frame + 屏幕尺寸
 }
 
 #pragma mark - 编辑器 API（设置里的控件布局编辑器调用）
