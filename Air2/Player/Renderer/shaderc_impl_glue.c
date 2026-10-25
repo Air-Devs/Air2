@@ -99,6 +99,7 @@
 
 #include "glslang/Include/glslang_c_interface.h"
 #include "glslang/Public/resource_limits_c.h"
+#include "glslang_compat.h"
 
 #define SHADERC_EXPORT __attribute__((visibility("default")))
 
@@ -432,7 +433,9 @@ static glue_result_t *ame_glue_compile(glue_compiler_t *compiler,
     input.default_profile = GLSLANG_NO_PROFILE;
     input.force_default_version_and_profile = 0;
     input.forward_compatible = 0;
-    input.resource = glslang_default_resource();
+    input.resource = air2_glslang_default_resource();
+    // 旧版 glslang 没有 glslang_default_resource —— 此时 resource 为 NULL，
+    // glslang 会用自己的默认值（与调用 default_resource 等价）。
 
     int messages = GLSLANG_MSG_SPV_RULES_BIT;
     if (opt != NULL && opt->target_env != 1 && opt->target_env != 2) {
@@ -490,8 +493,8 @@ static glue_result_t *ame_glue_compile(glue_compiler_t *compiler,
             "[amethyst-glue] glslang_shader_create failed (out of memory?)");
     }
     if (entry_point != NULL && *entry_point != '\0' && strcmp(entry_point, "main") != 0)
-        glslang_shader_set_entry_point(shader, entry_point);
-    if (opt != NULL && opt->invert_y) glslang_shader_set_invert_y(shader, true);
+        air2_glslang_shader_set_entry_point(shader, entry_point);
+    if (opt != NULL && opt->invert_y) air2_glslang_shader_set_invert_y(shader, 1);
 
     int shader_options = 0;
     if (opt != NULL) {
