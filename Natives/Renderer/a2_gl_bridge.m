@@ -106,9 +106,13 @@ typedef void      (*A2PFN_set_getprocaddress)(void *(*)(const char *));
 #define A2_EGL_NO_SURFACE            ((A2EGLSurface)0)
 #define A2_EGL_SUCCESS               0x3000
 #define A2_EGL_OPENGL_ES_API         0x30A0
+// ★对齐老 Air `Natives/ctxbridges/gl_bridge.m:1697`（926629869）★：KW 走 `EGL_OPENGL_ES3_BIT`（0x40），
+//   不是 ES2_BIT（0x4）。老 Air 给 1.7.10 与 1.20 建的是同一个 ES3 config + ES3 上下文，不做版本分档。
+#define A2_EGL_OPENGL_ES3_BIT        0x40
 #define A2_EGL_OPENGL_ES2_BIT        0x0004
 #define A2_EGL_SURFACE_TYPE          0x3033
 #define A2_EGL_WINDOW_BIT            0x0004
+#define A2_EGL_PBUFFER_BIT           0x0001
 #define A2_EGL_RENDERABLE_TYPE       0x3040
 #define A2_EGL_RED_SIZE              0x3024
 #define A2_EGL_GREEN_SIZE            0x3023
@@ -502,20 +506,18 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
              A2GlBridgeJudgementTag, eglPath.UTF8String, gEglHandle,
              glesPath.UTF8String, gGlesHandle, rendererName, gRendererHandle);
 
-    // ---- ④b ★NG-GL4ES / KW：先把宿主解析器交给它★（必须在建面/初始化之前）----
-    //   这一支是 `-DNOEGL` 编的：不注册解析器就只能退到 `dlsym(RTLD_NEXT)`，而 ANGLE 比它先加载
-    //   ⇒ 一个 GLES 入口都摸不到（后续 initialize_gl4es 探测硬件扩展时全空）。
+    // ---- ④b ★NG-GL4ES / KW：gl4es 血统的运行时开关（无条件，对齐老 Air）★ ----
+    //   老 Air 在 JavaLauncher 里**无条件全局**设这两个（`Natives/JavaLauncher.m:469` / `:472`）：
+    //   ① `LIBGL_NOINTOVLHACK=1`：关掉 gl4es 的「重载函数 hack」包装层（`src/gl/init.c:504` 读它）；
+    //   ② `LIBGL_NORMALIZE=1`：修 GL4ES 1.1.5+ 的 banner/羊白色偏差（`src/gl/init.c:696` 读它）。
+    //   两者都由 `initialize_gl4es()` 读环境变量 ⇒ 必须在下游 ⑥a 的 init 之前设好。
+    //   ★不设 LIBGL_ES / LIBGL_GL★：老 Air 从不设，KW 的档位来自编译期 `-DDEFAULT_ES=3`
+    //   （`src/gl/init.c:214-224`：未设/非法 ⇒ 落回 DEFAULT_ES=3）。
+    //   ★解析器（set_getprocaddress）不在这里注册★：老 Air 在 makeCurrent **之后**才注册
+    //   （`gl4es_family_boot.m:79-83`），见下游 ⑥a 之前那段。
     if (a2_gl_bridge_is_krypton()) {
-        A2PFN_set_getprocaddress setResolver =
-            (A2PFN_set_getprocaddress)dlsym(gRendererHandle, "set_getprocaddress");
-        if (setResolver == NULL) {
-            a2_log_f(@"[A2-RENDERER] NG-GL4ES 初始化 rc=-1：缺 set_getprocaddress 入口"
-                     @"（%s 不是预期的构建）⇒ 阻断", rendererName);
-            a2_gl_bridge_teardown();
-            return A2GlBridgeErrLoadFailed;
-        }
-        setResolver(a2_gl_bridge_gles_getprocaddress);
-        a2_log_f(@"[A2-RENDERER] NG-GL4ES 已注册宿主 GLES 解析器（GLESv2=ANGLE，handle=%p）", gGlesHandle);
+        setenv("LIBGL_NOINTOVLHACK", "1", 1);
+        setenv("LIBGL_NORMALIZE", "1", 1);
     }
 
     // ---- ⑤ 取 EGL 函数指针表（必需符号缺一即判加载失败）----
@@ -562,7 +564,26 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     }
     if (gEglBindAPI != NULL) gEglBindAPI(A2_EGL_OPENGL_ES_API);
 
+    // ★本段起 isKrypton 是「只改 KW 那条路径」的唯一开关★：KW（NG-GL4ES）按老 Air 的口径走，
+    //   其它后端（metallum / MG / MobileGlues …）的 config、surface、顺序**一字不动**。
+    const BOOL isKrypton = a2_gl_bridge_is_krypton();
+
     {
+        // ★NG-GL4ES / KW 的 config：逐条对齐老 Air `Natives/ctxbridges/gl_bridge.m:1690-1698`（926629869）★
+        //   · `EGL_SURFACE_TYPE = WINDOW|PBUFFER`（老 Air :1696 两项都给）
+        //   · `EGL_RENDERABLE_TYPE = EGL_OPENGL_ES3_BIT (0x40)`（老 Air :1697 —— ★P0★：曾经误用 ES2_BIT）
+        //   · RGBA=8/8/8/8、`EGL_DEPTH_SIZE = 24`（老 Air :1690-1695）
+        //   · **不加** `EGL_STENCIL_SIZE`（老 Air 的 attribs 里没有这一项）
+        const A2EGLint cfgAttribsKrypton[] = {
+            A2_EGL_SURFACE_TYPE,    A2_EGL_WINDOW_BIT | A2_EGL_PBUFFER_BIT,
+            A2_EGL_RENDERABLE_TYPE, A2_EGL_OPENGL_ES3_BIT,
+            A2_EGL_RED_SIZE,        8,
+            A2_EGL_GREEN_SIZE,      8,
+            A2_EGL_BLUE_SIZE,       8,
+            A2_EGL_ALPHA_SIZE,      8,
+            A2_EGL_DEPTH_SIZE,      24,
+            A2_EGL_NONE
+        };
         const A2EGLint cfgAttribs[] = {
             A2_EGL_SURFACE_TYPE,    A2_EGL_WINDOW_BIT,
             A2_EGL_RENDERABLE_TYPE, A2_EGL_OPENGL_ES2_BIT,
@@ -575,9 +596,26 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
             A2_EGL_NONE
         };
         A2EGLint numCfg = 0;
-        if (!gEglChooseConfig(gDpy, cfgAttribs, &gCfg, 1, &numCfg) || numCfg < 1 || gCfg == NULL) {
+        if (!gEglChooseConfig(gDpy, isKrypton ? cfgAttribsKrypton : cfgAttribs, &gCfg, 1, &numCfg)
+            || numCfg < 1 || gCfg == NULL) {
             a2_log_f(@"%s ★阻断★：EGL 建面失败：eglChooseConfig 无可用配置（eglError=0x%x）",
                      A2GlBridgeJudgementTag, (unsigned)(gEglGetError ? gEglGetError() : 0));
+            a2_gl_bridge_teardown();
+            return A2GlBridgeErrEgl;
+        }
+    }
+
+    // ---- ⑥0 ★NG-GL4ES / KW：surface 先于 context（对齐老 Air 建面顺序）★ ----
+    //   老 Air `gl_bridge.m:1838`（eglCreateWindowSurface）在建 context 的 `:1875` **之前**，
+    //   且 gl4es 家族传的是 **NULL** 属性（只有 MobileGL 才显式给 EGL_WIDTH/HEIGHT）⇒
+    //   KW 这里也直接 NULL，不做「先带尺寸、失败再退」的多余尝试。
+    if (isKrypton) {
+        gSurf = gEglCreateWindowSurface(gDpy, gCfg, (A2EGLNativeWindowType)renderable, NULL);
+        if (gSurf == A2_EGL_NO_SURFACE) {
+            a2_log_f(@"%s ★阻断★：EGL 建面失败：eglCreateWindowSurface(NULL 属性) 返回 NO_SURFACE"
+                     @"（eglError=0x%x；句柄=%p 像素格式=%d）",
+                     A2GlBridgeJudgementTag, (unsigned)(gEglGetError ? gEglGetError() : 0),
+                     renderable, host->surface.pixelFormat);
             a2_gl_bridge_teardown();
             return A2GlBridgeErrEgl;
         }
@@ -592,8 +630,7 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         //   NO  ⇒ 请求 ES3（现状）
         //   YES ⇒ 请求 ES1（EGL_OPENGL_ES_API + client version 1；验证「谁在用 GLES1 入口、
         //         而 ANGLE 的 GLES1 状态未初始化」这条假设）
-        //   只作用于 NG-GL4ES / KW；键不存在时用编译期默认 A2_KW_USE_ES1_DEFAULT（A/B 两包靠它分叉）。
-        const BOOL isKrypton = a2_gl_bridge_is_krypton();
+        //   只作用于 NG-GL4ES / KW；键不存在时用编译期默认 A2_KW_CONTEXT_MODE_DEFAULT（A/B 两包靠它分叉）。
         // ★KW 上下文模式（三档）★：A2KWContextMode = "es1" | "es2" | "es3"（缺省看编译期宏）。
         //   真机历史：ES3 ⇒ KW 调 GLES1 撞 ANGLE GLES1State 崩；ES1 ⇒ 只有 GL ES1.1 能力、MC 拒启；
         //   ES2 与「ES3+shader 模拟」两条路待验。
@@ -641,7 +678,8 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         }
     }
 
-    {
+    // ---- ⑥1 其余后端：surface（KW 已在 ⑥0 建过，属性为 NULL）----
+    if (!isKrypton) {
         // 先带尺寸建；若实现不接受 EGL_WIDTH/HEIGHT（非核心 EGL 属性）再退到无属性。
         const A2EGLint surfAttribs[] = {
             A2_EGL_WIDTH,  (A2EGLint)host->surface.widthPixels,
@@ -675,13 +713,30 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
              A2GlBridgeJudgementTag, (void *)gDpy, (void *)gCfg, (void *)gCtx, (void *)gSurf,
              host->surface.widthPixels, host->surface.heightPixels, host->surface.pixelFormat);
 
-    // ---- ⑥a ★NG-GL4ES / KW 显式初始化（NO_INIT_CONSTRUCTOR）★ ----
-    //   位置就是判据：① 库已 dlopen ② 解析器已注册 ③ context 刚 make current 成功。
-    //   上游用 `-DNO_INIT_CONSTRUCTOR` 把构造器关掉了 ⇒ 不调这一步「不崩但黑屏」（GL 入口全空），
-    //   所以本桥把调用与返回码都打成判据行，真机 grep `[A2-RENDERER] NG-GL4ES 初始化 rc=` 即可。
-    if (a2_gl_bridge_is_krypton()) {
+    // ---- ⑥a ★NG-GL4ES / KW：makeCurrent 之后注册解析器 → 再显式初始化（NO_INIT_CONSTRUCTOR）★ ----
+    //   顺序就是老 Air 的契约：`gl4es_family_boot.m:79-83` 先 `set_getprocaddress(resolver)`、
+    //   再 `initialize_gl4es()`，而它的调用点 `egl_bridge.m:973` 严格在 `br_make_current` 成功**之后**。
+    //   本桥此前在建 context 之前注册（语义等价但顺序不同）⇒ 现按老 Air 收拢到 makeCurrent 之后，
+    //   与「库已 dlopen → context 已 current → 注册解析器 → init」这条验证过的链路一致。
+    //   `initialize_gl4es()` 是 `-DNO_INIT_CONSTRUCTOR` 后唯一的初始化入口：漏了「不崩但黑屏」（GL 入口全空）。
+    if (isKrypton) {
+        A2PFN_set_getprocaddress setResolver =
+            (A2PFN_set_getprocaddress)dlsym(gRendererHandle, "set_getprocaddress");
+        if (setResolver == NULL) {
+            a2_log_f(@"[A2-RENDERER] NG-GL4ES 初始化 rc=-1：缺 set_getprocaddress 入口"
+                     @"（%s 不是预期的构建）⇒ 阻断", rendererName);
+            a2_gl_bridge_teardown();
+            return A2GlBridgeErrLoadFailed;
+        }
+        setResolver(a2_gl_bridge_gles_getprocaddress);
+
+        // ★一处汇总判据行★（真机 grep 这一串即可确认四处对齐都生效）
+        a2_log_f(@"[A2-GL-BRIDGE] KW 对齐老Air：NOINTOVLHACK/NORMALIZE 已设；config=ES3_BIT；"
+                 @"surface=NULL；init 顺序=after-makeCurrent");
+
         // ★D 包用★：在初始化之前注入 gl4es 血统的运行时开关，让它用 shader 模拟 GL2.1
         //   而不是把固定管线调用直通给 ANGLE 的 GLES1 实现（真机：ES3 下直通会 SIGBUS）。
+        //   ★默认关闭★：老 Air 从不设 LIBGL_ES/LIBGL_GL，档位来自编译期 -DDEFAULT_ES=3。
         if (A2_KW_ENV_HINT_DEFAULT != 0) {
             setenv("LIBGL_ES", "3", 1);
             setenv("LIBGL_GL", "21", 1);
