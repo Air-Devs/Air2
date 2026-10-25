@@ -189,6 +189,29 @@ static int a2_run_main(JNIEnv *env, NSString *mainClass, NSArray<NSString *> *ar
         int cdrc = chdir(a2gd.UTF8String);
         a2_log_f(@"[RT-P1] chdir(gameDir) rc=%d path=%s", cdrc, a2gd.UTF8String);
 
+        // ★自动修复 usercache.json★（真机 1.7.10/1.12.2 崩溃根因）：
+        //   这个文件必须是 JSON 对象；若是数组/坏格式，MC 的 gson 会抛
+        //   "Expected BEGIN_OBJECT but was STRING" ⇒ 直接崩在 Main.main。
+        //   处理：备份成 .bak，再写一个合法的 {}（MC 自己会补内容）。
+        {
+            NSString *uc = [a2gd stringByAppendingPathComponent:@"usercache.json"];
+            NSData *ucData = [NSData dataWithContentsOfFile:uc];
+            BOOL needFix = NO;
+            if (ucData.length == 0) {
+                needFix = YES;
+            } else {
+                id ucObj = [NSJSONSerialization JSONObjectWithData:ucData options:0 error:nil];
+                if (![ucObj isKindOfClass:NSDictionary.class]) needFix = YES;
+            }
+            if (needFix) {
+                NSString *bak = [uc stringByAppendingPathExtension:@"bak"];
+                [NSFileManager.defaultManager removeItemAtPath:bak error:nil];
+                [NSFileManager.defaultManager moveItemAtPath:uc toPath:bak error:nil];
+                [[@"{}" dataUsingEncoding:NSUTF8StringEncoding] writeToFile:uc atomically:YES];
+                a2_log_f(@"[RT-P1] usercache.json 非法 ⇒ 已备份为 .bak 并重建 {}");
+            }
+        }
+
         // ★一次性诊断(73b4dc7+)★：MC 用 gson 读某个 JSON 时拿到的是字符串 ⇒
         //   扫 gameDir 下所有 *.json，把「以引号开头 / 解析失败」的文件指名道姓打出来。
         NSMutableArray<NSString *> *dirs = [NSMutableArray arrayWithObject:a2gd];
