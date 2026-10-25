@@ -92,19 +92,6 @@ typedef NS_ENUM(NSInteger, A2JITExecProbeResult) {
 /// ★[JIT-P0.1] 发起一次后台有界探测（不等待、不阻塞调用方；同一时刻一发在途）。
 + (void)kickBackgroundVerify;
 
-/// ★[JIT-FLOW] 内联验证一次（成功一次即缓存；失败限流 2s）。主线程 1.5s / 后台 3.0s 预算。
-+ (BOOL)verifyWritableRegion;
-
-/// 等待就绪谓词：非镜像路径用匿名页执行式自证；镜像 / Universal 路径用 brk 区域验证。
-+ (BOOL)waitReadyVerified;
-
-/// ★非镜像路径（iOS < 26）的真凭据★：匿名页执行式探针**真的跑过**
-/// （mmap → 写一条真指令 → mprotect(RX) → 真的 call 并核对返回值）。
-/// 它与 `verifiedRegion` 是同一性质的东西 ——「本进程现在**真的能执行**自产代码」——
-/// 而不是 entitlement / CS_DEBUGGED 那种「能力声明」。镜像设备（iOS 26+）恒返回 NO：
-/// 那种口径只认 brk #0x69 交付的区（没有区的声明/attach 一律不算）。
-+ (BOOL)execProofObtained;
-
 /// 已通过验证的 JIT 区指针（未验证过返回 NULL）。供诊断 / 复用。
 + (void *_Nullable)verifiedRegion;
 

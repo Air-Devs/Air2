@@ -475,7 +475,6 @@ static void *gA2JITVerifiedRegion = NULL;
 static size_t gA2JITDeliveredBytes = 0;   // 调试器实际交付的 region 字节数（vm_region_64 读到的 size）
 static int gA2JITBrkCount = 0;   // ★排查用★ 本进程发了几次 brk #0x69
 static BOOL   gA2JITVerified = NO;
-static NSTimeInterval gA2JITLastVerifyAttempt = 0;
 static int    gA2JITVerifyAttempts = 0;
 static A2JITRegionVerdict gA2JITRegionVerdict = A2JITRegionVerdictUnknown;
 static NSString *gA2JITRegionEvidence = nil;
@@ -714,20 +713,6 @@ static int gA2JITEnsureKickInflight = 0;
 
 @implementation A2JITEnvironment
 
-+ (BOOL)verifyWritableRegion {
-    if (gA2JITVerified) {
-        return YES;
-    }
-    NSTimeInterval now = [NSDate date].timeIntervalSince1970;
-    if (gA2JITLastVerifyAttempt > 0 && (now - gA2JITLastVerifyAttempt) < 2.0) {
-        return NO;   // 限流：等待循环里每轮都会调到这个函数
-    }
-    gA2JITLastVerifyAttempt = now;
-
-    NSTimeInterval deadline = [NSThread isMainThread] ? 1.5 : 3.0;   // [JIT-HANG]
-    return a2_jit_verify_region_bounded(deadline, "A2JITEnvironment.verifyWritableRegion");
-}
-
 + (BOOL)ensureVerifiedWithinBudget:(NSTimeInterval)budget reason:(NSString **)whyOut {
     // ★排查开关(2026-10-17)★ A2SkipJITMachinery=YES(默认) ⇒ 整条自研 JIT 取证链全部跳过：
     //   不发 brk #0x69、不做 exec-probe、不做区域自证。目的：把「我们的 JIT 代码」
@@ -865,26 +850,6 @@ static int gA2JITEnsureKickInflight = 0;
     });
 }
 
-+ (BOOL)waitReadyVerified {
-    if (!a2_jit_device_needs_debug_mapping()) {
-        return (a2_jit_exec_probe_anonymous() == A2JITExecProbeExecOK);
-    }
-    return [self verifyWritableRegion];
-}
-
-+ (BOOL)execProofObtained {
-    static BOOL sProved = NO;   // 成功一次即缓存（探针不会再变成不可用）
-    if (sProved) return YES;
-    // ★只在非镜像设备上有意义★：iOS 26+ 的判据是「brk #0x69 交付的区」（见 verifiedRegion）。
-    if (a2_jit_device_needs_debug_mapping()) return NO;
-    if (a2_jit_exec_probe_anonymous() == A2JITExecProbeExecOK) {
-        sProved = YES;
-        a2_jit_log("[A2JIT] exec-proof obtained：匿名页真执行过 ⇒ 本机 JIT 现在可用（非镜像路径）");
-        return YES;
-    }
-    return NO;
-}
-
 + (void *)verifiedRegion {
     return gA2JITVerifiedRegion;
 }
@@ -912,7 +877,6 @@ static int gA2JITEnsureKickInflight = 0;
 + (void)invalidateCache {
     gA2JITVerified = NO;
     gA2JITVerifiedRegion = NULL;
-    gA2JITLastVerifyAttempt = 0;
     gA2JITRegionVerdict = A2JITRegionVerdictUnknown;
     a2_jit_log("[A2JIT] usability cache invalidated (JIT toggled / returned to foreground)");
 }
