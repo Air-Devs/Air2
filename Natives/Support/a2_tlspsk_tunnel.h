@@ -62,6 +62,12 @@ typedef NS_ENUM(NSInteger, A2TLSPskTunnelState) {
                                       reason:(NSString *_Nullable *_Nullable)reason;
 /// 主动关闭（幂等）。
 - (void)close;
+
+@optional
+/// 协商到的套件（如 «0x00AF»）；未握手 ⇒ «-»。★是握手结果，不是配置值★。
+- (NSString *)negotiatedCipherSuite;
+/// 协商到的版本（如 «TLSv1.2»）；未握手 ⇒ «-»。
+- (NSString *)negotiatedTLSVersion;
 @end
 
 /// 主机准入策略：返回 YES 才允许连。★默认 = 本机/私有网段/链路本地/.local（不上云）★。
@@ -77,6 +83,14 @@ typedef BOOL (^A2TLSPskHostPolicy)(NSString *host);
 
 /// 当前状态（如实）。
 @property (nonatomic, readonly) A2TLSPskTunnelState state;
+
+/// ★握手结果★ 协商到的套件（如 «0x00AF»）；未握手 ⇒ «-»。由后端在握手成功后提供。
+@property (nonatomic, readonly, copy) NSString *lastNegotiatedCipherSuite;
+/// ★握手结果★ 协商到的版本（如 «TLSv1.2»）；未握手 ⇒ «-»。
+@property (nonatomic, readonly, copy) NSString *lastNegotiatedTLSVersion;
+
+/// 「版本 / 套件」一句话（如 «TLSv1.2 / 0x00AF»）；未握手 ⇒ «未握手»。★不谎报★。
+- (NSString *)negotiatedSummary;
 
 /// 注册/替换后端（幂等；后注册的覆盖先前的）。★可替换性的唯一入口★。
 + (void)registerBackend:(id<A2TLSPskTunnelBackend>)backend;

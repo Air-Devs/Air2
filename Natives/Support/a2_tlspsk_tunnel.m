@@ -60,6 +60,8 @@ static A2TLSPskHostPolicy gA2TLSPskHostPolicy = nil;
 
 @interface A2TLSPskTunnel ()
 @property (nonatomic, readwrite) A2TLSPskTunnelState state;
+@property (nonatomic, readwrite, copy) NSString *lastNegotiatedCipherSuite;
+@property (nonatomic, readwrite, copy) NSString *lastNegotiatedTLSVersion;
 @end
 
 @implementation A2TLSPskTunnel
@@ -76,8 +78,19 @@ static A2TLSPskHostPolicy gA2TLSPskHostPolicy = nil;
     if (self) {
         _enabled = NO;                          // ★默认关★
         _state = A2TLSPskTunnelStateIdle;
+        // 未握手 ⇒ «-»（不是「猜一个 TLS1.2」）。
+        _lastNegotiatedCipherSuite = @"-";
+        _lastNegotiatedTLSVersion = @"-";
     }
     return self;
+}
+
+- (NSString *)negotiatedSummary {
+    if (self.state != A2TLSPskTunnelStateReady) {
+        return @"未握手";
+    }
+    return [NSString stringWithFormat:@"%@ / %@",
+            self.lastNegotiatedTLSVersion, self.lastNegotiatedCipherSuite];
 }
 
 + (void)registerBackend:(id<A2TLSPskTunnelBackend>)backend {
@@ -160,6 +173,22 @@ static A2TLSPskHostPolicy gA2TLSPskHostPolicy = nil;
                                      timeout:timeout
                                       reason:&sub];
     self.state = ok ? A2TLSPskTunnelStateReady : A2TLSPskTunnelStateFailed;
+    if (ok) {
+        // ★记下**后端的握手结果**（不是我们配置的白名单）★：后端未实现可选方法 ⇒ «-»，不猜。
+        id<A2TLSPskTunnelBackend> backend = gA2TLSPskBackend;
+        self.lastNegotiatedCipherSuite =
+            [backend respondsToSelector:@selector(negotiatedCipherSuite)]
+                ? [backend negotiatedCipherSuite] : @"-";
+        self.lastNegotiatedTLSVersion =
+            [backend respondsToSelector:@selector(negotiatedTLSVersion)]
+                ? [backend negotiatedTLSVersion] : @"-";
+        a2_log_f(@"[A2-TLSPK] 握手完成 %s → %s:%u（%s）",
+                 [[self negotiatedSummary] UTF8String], host.UTF8String,
+                 (unsigned) port, [[A2TLSPskTunnel backendName] UTF8String]);
+    } else {
+        self.lastNegotiatedCipherSuite = @"-";
+        self.lastNegotiatedTLSVersion = @"-";
+    }
     if (!ok && reason) { *reason = sub ?: @"后端建连失败（未给出原因——★视为不谎报的失败★）"; }
     return ok;
 }
@@ -171,7 +200,9 @@ static A2TLSPskHostPolicy gA2TLSPskHostPolicy = nil;
         if (reason) { *reason = @"隧道未就绪（未建连或已关闭）"; }
         return NO;
     }
-    return [gA2TLSPskBackend sendFrame:frame timeout:timeout reason:reason];
+    BOOL ok = [gA2TLSPskBackend sendFrame:frame timeout:timeout reason:reason];
+    if (!ok) { self.state = A2TLSPskTunnelStateFailed; }   // ★发不出去就不是 Ready★
+    return ok;
 }
 
 - (nullable NSData *)receiveFrameWithTimeout:(NSTimeInterval)timeout
@@ -180,7 +211,9 @@ static A2TLSPskHostPolicy gA2TLSPskHostPolicy = nil;
         if (reason) { *reason = @"隧道未就绪（未建连或已关闭）"; }
         return nil;
     }
-    return [gA2TLSPskBackend receiveFrameWithTimeout:timeout reason:reason];
+    NSData *d = [gA2TLSPskBackend receiveFrameWithTimeout:timeout reason:reason];
+    if (d == nil) { self.state = A2TLSPskTunnelStateFailed; }  // ★收不到就不是 Ready★
+    return d;
 }
 
 - (void)close {

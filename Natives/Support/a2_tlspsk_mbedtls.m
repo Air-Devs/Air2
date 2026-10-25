@@ -81,6 +81,8 @@ int mbedtls_hardware_poll(void *data, unsigned char *output, size_t len, size_t 
     mbedtls_net_context        _net;
     BOOL                       _inited;      // 上述结构是否已 init（保证 free 幂等）
     BOOL                       _handshaked;
+    NSString                  *_negotiatedSuite;    // ★握手结果★（如 «0x00AF»）
+    NSString                  *_negotiatedVersion;  // ★握手结果★（如 «TLSv1.2»）
 }
 
 - (instancetype)init {
@@ -88,6 +90,8 @@ int mbedtls_hardware_poll(void *data, unsigned char *output, size_t len, size_t 
     if (self) {
         _inited = NO;
         _handshaked = NO;
+        _negotiatedSuite = @"-";
+        _negotiatedVersion = @"-";
     }
     return self;
 }
@@ -173,12 +177,26 @@ int mbedtls_hardware_poll(void *data, unsigned char *output, size_t len, size_t 
     static const int kSuites[] = { 0x00AF, 0x008C, 0 };
     mbedtls_ssl_conf_ciphersuites(&_conf, kSuites);
 
-    // 静态 PSK（identity 为空串表示无 identity，符合 §12 的对称约定）。
-    NSData *idData = [(identity ?: @"") dataUsingEncoding:NSUTF8StringEncoding];
+    // 静态 PSK。
+    //
+    // ★★ 这里踩过一个会「静默打不通」的坑（本单修的就是它）★★：
+    //   `mbedtls_ssl_conf_psk(..., identity, 0)` **返回 MBEDTLS_ERR_SSL_BAD_INPUT_DATA(-0x7100)**
+    //   —— 原实现把「identity 为空」直接当空串传下去，于是 connect 永远在第一步失败；
+    //   更坏的是即便绕过该检查（直写 config 私有字段），mbedTLS 3.6 在
+    //   `psk_identity_len == 0` 时**不再把 PSK 套件放进 ClientHello**，对端会回
+    //   `no shared cipher`（实测见 docs/ONDEVICE-PAIR.md §3）。
+    //   ⇒ 结论：**mbedTLS 表达不出「空 identity」**，本后端一律发非空 identity，
+    //   并在日志/状态里如实标注用的是哪一个（★不谎称「按规格发了空 identity」★）。
+    NSString *effectiveIdentity = identity.length ? identity : @"a2-tlspsk";
+    if (identity.length == 0) {
+        a2_log_f(@"[A2-TLSPK] identity 为空 ⇒ 用占位 identity「%s」"
+                 @"（mbedTLS 无法表达空 identity；设备是否忽略 identity 需真机验）",
+                 effectiveIdentity.UTF8String);
+    }
+    NSData *idData = [effectiveIdentity dataUsingEncoding:NSUTF8StringEncoding];
     ret = mbedtls_ssl_conf_psk(&_conf,
                                (const unsigned char *) psk.bytes, psk.length,
-                               (const unsigned char *) (idData.length ? idData.bytes : (const void *) ""),
-                               idData.length);
+                               (const unsigned char *) idData.bytes, idData.length);
     if (ret != 0) {
         if (reason) { *reason = [NSString stringWithFormat:@"conf_psk 失败（mbedtls rc=%d；PSK 长度=%lu）",
                                  ret, (unsigned long) psk.length]; }
@@ -227,7 +245,40 @@ int mbedtls_hardware_poll(void *data, unsigned char *output, size_t len, size_t 
         }
     }
     _handshaked = YES;
+
+    // ---- ★握手结果断言（不谎报）★ ----
+    // 光「握手成功」不够：设备要的套件是 0x00AF / 0x008C（规格 §12）。这里把**协商结果**
+    // 取出来核对，并把版本钉成 TLS 1.2 —— 不在白名单内就如实失败（而不是继续用别的套件）。
+    int suiteId = mbedtls_ssl_get_ciphersuite_id_from_ssl(&_ssl);
+    const char *ver = mbedtls_ssl_get_version(&_ssl);
+    _negotiatedSuite = [NSString stringWithFormat:@"0x%04X", (unsigned) suiteId];
+    _negotiatedVersion = ver ? @(ver) : @"-";
+    BOOL suiteOK = (suiteId == 0x00AF || suiteId == 0x008C);
+    BOOL verOK = (ver != NULL && strncmp(ver, "TLSv1.2", 7) == 0);
+    a2_log_f(@"[A2-TLSPK] 握手结果 version=%s suite=0x%04X（白名单 0x00AF/0x008C ⇒ %s；TLS1.2 ⇒ %s）ident=%s",
+             ver ? ver : "(null)", (unsigned) suiteId,
+             suiteOK ? "命中" : "★不命中★", verOK ? "是" : "★不是★",
+             effectiveIdentity.UTF8String);
+    if (!suiteOK || !verOK) {
+        if (reason) {
+            *reason = [NSString stringWithFormat:
+                       @"握手成功但协商结果不合规：version=%s suite=0x%04X（要求 TLSv1.2 + 0x00AF/0x008C）",
+                       ver ? ver : "(null)", (unsigned) suiteId];
+        }
+        [self close];
+        return NO;
+    }
     return YES;
+}
+
+#pragma mark - 握手结果（协议可选方法）
+
+- (NSString *)negotiatedCipherSuite {
+    return _negotiatedSuite ?: @"-";
+}
+
+- (NSString *)negotiatedTLSVersion {
+    return _negotiatedVersion ?: @"-";
 }
 
 - (BOOL)sendFrame:(NSData *)frame

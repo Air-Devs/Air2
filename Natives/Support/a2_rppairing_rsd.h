@@ -18,12 +18,13 @@
 //
 //  ★本单实现到哪一步（如实，有实测证据）★：
 //    · 发现（NWBrowser）/连接（NWConnection）/帧读写/JSON 信封/pair-verify 消息流：**真实现**。
-//    · **TLS-PSK 隧道：只做到「PSK 就绪 + 配置构建 + 能力如实点名」，未打通**。
-//      实测证据：iOS 26.2 SDK 的 `SecProtocolOptions.h` 里 **没有** 任何 PSK 套件
-//      （`grep -c tls_ciphersuite_PSK` = 0），而设备要求 0x00AF/0x008C；
-//      `sec_protocol_options_add_pre_shared_key` 虽然存在，但无法把这两套套件加进 ClientHello，
-//      ⇒ 走公开 API 的 TLS 栈**给不出**设备要的套件。要真打通只有按 §12 手写 TLS 1.2 PSK
-//      （PRF/HMAC/AES-CBC/Finished）—— 那是独立一单的量级，属「需要拍板」的架构点。
+//    · TLS-PSK 隧道：★已打通「隧道本体」★——改走随仓 mbedTLS（Apache-2.0）后端，
+//      见同目录 a2_tlspsk_mbedtls.m / a2_tlspsk_tunnel.{h,m} / a2_tlspsk_selftest.{h,m}：
+//      真握手 + 协商断言（0x00AF/0x008C + TLSv1.2）+ 回环自检
+//      （tests/Natives/run_tlspsk_tunnel_tests.py）。仍**未**验证的是设备侧互操作：
+//      ① 设备是否接受非空 PSK identity（mbedTLS 表达不出空 identity，见
+//      docs/ONDEVICE-PAIR.md §3）；② PSK 真值（pair-verify 的 shared secret）→ 隧道的接线
+//      仍无调用方（属主线业务逻辑）。
 //
 //  ★与「不碰别的工作」的边界★：本文件只做「发现 + 连接 + 握手 + 产出配对文件」，
 //    不含 DDI 取得/挂载，也不含 JIT↔建 VM 串联，更不实现 RSD service 的调用。

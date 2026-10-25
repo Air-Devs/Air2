@@ -34,11 +34,14 @@
 
 #import "A2SettingsSections.h"
 #import "A2DiagnosticsSettings.h"
+#import "A2OnDevicePairingSettings.h"   // [A2-PAIR-ONDEVICE] 诊断 › 设备内配对（调试开关控制显示）
 
 @interface A2SettingsViewController ()
 @property (nonatomic, strong) A2CategoryNavView *nav;
 @property (nonatomic, strong) UIScrollView *detailScroll;
 @property (nonatomic, strong) UIStackView *detailStack;
+/// 当前选中的分类索引（「设备内配对」开关切换后要按同一个索引重建内容）。
+@property (nonatomic, assign) NSInteger currentIndex;
 @end
 
 @implementation A2SettingsViewController
@@ -105,9 +108,26 @@
     ]];
 
     [_nav selectIndex:0 animated:NO];
+
+    // [A2-PAIR-ONDEVICE] 「设备内配对」调试开关切换后重建当前分类（入口出现/消失，
+    //  不留「点了没反应」的死行）。通知只由 A2OnDevicePairingSettings 发出。
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                          selector:@selector(onDevicePairingEntryDidChange:)
+                                              name:A2OnDevicePairingEntryDidChangeNotification
+                                            object:nil];
+}
+
+- (void)dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+- (void)onDevicePairingEntryDidChange:(NSNotification *)note {
+    (void) note;
+    [self rebuildContentForIndex:_currentIndex];
 }
 
 - (void)rebuildContentForIndex:(NSInteger)index {
+    _currentIndex = index;
     for (UIView *v in _detailStack.arrangedSubviews) {
         [_detailStack removeArrangedSubview:v];
         [v removeFromSuperview];
@@ -125,6 +145,7 @@
     } else if (index == 2) {
         [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildDuoSimSectionWithHost:self]];
+        [_detailStack addArrangedSubview:[A2OnDevicePairingSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2JITSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2AboutSettings buildWithHost:self]];
     }
