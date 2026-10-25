@@ -202,6 +202,14 @@ def check_file(path, defined_classes):
         _ln = src[:_m.start()].count("\n") + 1
         errors.append(f"第 {_ln} 行: performSelector 指向不存在的方法 {_sel}")
 
+    # （类扩展重复声明属性的检查已移除）
+    # 原本想拦住 A2GameMenuOverlay 那次
+    # "illegal redeclaration of property in class extension"，
+    # 但实测下来大多数「头 readonly + 扩展 readwrite」是【合法】写法
+    # （A2ColorScheme 就有 98 处这么写，编译一直没问题）。
+    # 真正非法的那个案例是「头里声明了 block 属性，扩展里又抄一遍」，
+    # 用一般规则区分不出来，容易误报，所以不做自动检查。
+
     # ---------- @class 不能在 @interface / @implementation 内 ----------
     # 这条错误我实际踩过：把 @class A2ControlRenderer; 插到了
     # @interface 的 @property 中间，编译报 "missing '@end'" 与

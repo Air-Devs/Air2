@@ -37,8 +37,8 @@ static const CGFloat kEdgeInset = 10;
 @property (nonatomic, strong) UILabel *statsLabel;
 @property (nonatomic, assign, readwrite, getter=isExpanded) BOOL expanded;
 @property (nonatomic, assign) CGPoint ballCenter;
-/// 点「控件设置」时回调（由 SurfaceViewController 提供编辑器）
-@property (nonatomic, copy, nullable) void (^onOpenEditor)(void);
+// onOpenEditor 已在头文件声明，类扩展里不要重复 —— 重声明会报
+// "illegal redeclaration of property in class extension"
 /// 浮球旋转（展开时 45°，收起时回正）
 - (void)rotateBallToAngle:(CGFloat)angle;
 @end
