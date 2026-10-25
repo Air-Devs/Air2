@@ -50,23 +50,11 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2Runti
             @"en": @"Renderer",
             @"ja": @"レンダラー",
         },
-        @"runtime.row.renderer.detail": @{
-            @"zh-Hans": @"启动时显式加载所选 dylib",
-            @"zh-Hant": @"啟動時顯式載入所選 dylib",
-            @"en": @"Loads the chosen dylib at launch",
-            @"ja": @"起動時に選択した dylib を読み込みます",
-        },
         @"runtime.row.jre": @{
             @"zh-Hans": @"Java 运行时",
             @"zh-Hant": @"Java 執行環境",
             @"en": @"Java runtime",
             @"ja": @"Java ランタイム",
-        },
-        @"runtime.row.jre.detail": @{
-            @"zh-Hans": @"成为启动计划的 javaHome",
-            @"zh-Hant": @"成為啟動計畫的 javaHome",
-            @"en": @"Becomes the plan's javaHome",
-            @"ja": @"起動プランの javaHome になります",
         },
         @"runtime.row.scale": @{
             @"zh-Hans": @"渲染分辨率",
@@ -112,12 +100,6 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2Runti
             @"en": @"Not bundled",
             @"ja": @"未同梱",
         },
-        @"runtime.none": @{
-            @"zh-Hans": @"未选择",
-            @"zh-Hant": @"未選擇",
-            @"en": @"Not set",
-            @"ja": @"未選択",
-        },
 
         // ---------------- 选择器 ----------------
         @"runtime.pick.renderer.title": @{
@@ -143,12 +125,6 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2Runti
             @"zh-Hant": @"未內建的檔位仍可選中，但啟動時會如實阻斷（不自動換檔）",
             @"en": @"Non-bundled entries can be picked, but the launch will block honestly (no auto-switch)",
             @"ja": @"未同梱の項目も選択できますが、起動時に正直にブロックされます（自動切替なし）",
-        },
-        @"runtime.cancel": @{
-            @"zh-Hans": @"取消",
-            @"zh-Hant": @"取消",
-            @"en": @"Cancel",
-            @"ja": @"キャンセル",
         },
         @"runtime.scale.native": @{
             @"zh-Hans": @"原生",
