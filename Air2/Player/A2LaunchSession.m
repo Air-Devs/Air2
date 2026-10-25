@@ -79,14 +79,15 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
 /// ★默认渲染器按版本推导★（用户/实例显式选择永远优先）
 ///   26.2 / 26.3 → metallum（当前唯一验证过的 Metal 面）
 ///   26.1 及其它 1.13+ → MobileGlues（GL3.2+ 需要它）
-///   1.12 及更早 → gl4es（GL1.x/2.x 固定管线）
+///   1.12 及更早 → NG-GL4ES / KW（GL1.x/2.x 固定管线；不可用时由调用点回退 gl4es）
 static NSString *A2DefaultRendererForVersion(NSInteger major, NSInteger minor) {
     if (major >= 26) {
         if (major == 26 && (minor == 2 || minor == 3)) return @"libmetallum.dylib";
         return @"libmobileglues.dylib";
     }
     if (major == 1 && minor >= 13) return @"libmobileglues.dylib";
-    return @"libgl4es_114.dylib";
+    if (major == 1 && minor <= 12) return A2RendererNGGL4ESKWDylibName;
+    return @"libgl4es_114.dylib";   // 远古轨道（classic/Alpha/Beta，major=0）仍走老线兼容底
 }
 
 /// 从目录名取 LWJGL 版本号：lwjgl-341 → 341，lwjgl-2 → 200（便于比较大小）
@@ -301,6 +302,22 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
     A2Renderer *renderer = [A2RendererCatalog candidateForIdentifier:selRenderer ?: @""]
         ?: [A2RendererCatalog candidateForIdentifier:autoRendererID]
         ?: [A2RendererCatalog defaultCandidate];
+
+    // ★默认推导的回退（只对「没人显式选过」生效）★
+    //   ≤1.12 的默认项是 NG-GL4ES / KW；它不在包内（或文件在但 dlopen 不起来）⇒ 退到同一家族
+    //   的老线 gl4es（同一份选择逻辑里回退，不是在下游偷偷换后端）。
+    //   用户/实例显式选了它 ⇒ 不走这里：下面 isBundled 闸门会如实阻断并给出原因。
+    if (!rendererFromUser && [renderer.identifier isEqualToString:A2RendererNGGL4ESKWDylibName]) {
+        NSString *fallbackWhy = [A2RendererCatalog bundleDiagnosisForCandidate:renderer
+                                                              frameworksPath:frameworks];
+        A2Renderer *compatFallback = [A2RendererCatalog candidateForIdentifier:@"libgl4es_114.dylib"];
+        if (fallbackWhy != nil && compatFallback != nil) {
+            [A2Log criterion:@"[A2-RENDERER] 回退 gl4es：默认项 %@ 不可用（%@）⇒ %@",
+             renderer.identifier, fallbackWhy, compatFallback.identifier];
+            renderer = compatFallback;
+        }
+    }
+
     NSString *rendererSource = instanceRenderer.length
         ? @"instance" : (rendererFromUser ? @"user" : @"default");
     NSString *rendererSourceWord = instanceRenderer.length

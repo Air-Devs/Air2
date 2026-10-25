@@ -23,6 +23,8 @@
 
 @implementation A2RendererCatalog
 
+NSString *const A2RendererNGGL4ESKWDylibName = @"libnggl4es_kw.dylib";
+
 + (NSArray<A2Renderer *> *)allCandidates {
     // ★顺序即 UI 顺序★：主推 → 兼容底 → 实验（未内置）。
     static NSArray<A2Renderer *> *candidates = nil;
@@ -36,6 +38,13 @@
             [[A2Renderer alloc] initWithIdentifier:@"libgl4es_114.dylib"
                                        displayName:@"GL4ES"
                                          dylibName:@"libgl4es_114.dylib"
+                                             notes:@"compat"],
+            // ★NG-GL4ES / KW★（Krypton Wrapper）—— ≤1.12.2 的默认固定管线后端。
+            //   与上面那只老线 GL4ES 并列「兼容底」：两支都能接 GL 1.x/2.x，但这一只
+            //   要求宿主显式初始化（见头文件注释），所以是**独立标识**而不是替换。
+            [[A2Renderer alloc] initWithIdentifier:A2RendererNGGL4ESKWDylibName
+                                       displayName:@"NG-GL4ES / KW"
+                                         dylibName:A2RendererNGGL4ESKWDylibName
                                              notes:@"compat"],
             [[A2Renderer alloc] initWithIdentifier:@"libmobileglues.dylib"
                                        displayName:@"MobileGlues"

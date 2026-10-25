@@ -228,6 +228,13 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2Runti
             @"en": @"NG-GL4ES (libnggl4es.dylib)",
             @"ja": @"NG-GL4ES（libnggl4es.dylib）",
         },
+        // ★≤1.12.2 的默认固定管线后端★（Krypton Wrapper 构建：ES3 转译 + 宿主显式初始化）
+        @"runtime.renderer.nggl4es_kw": @{
+            @"zh-Hans": @"NG-GL4ES / KW（libnggl4es_kw.dylib）",
+            @"zh-Hant": @"NG-GL4ES / KW（libnggl4es_kw.dylib）",
+            @"en": @"NG-GL4ES / KW (libnggl4es_kw.dylib)",
+            @"ja": @"NG-GL4ES / KW（libnggl4es_kw.dylib）",
+        },
         @"runtime.renderer.moltenvk": @{
             @"zh-Hans": @"MoltenVK（libMoltenVK.dylib）",
             @"zh-Hant": @"MoltenVK（libMoltenVK.dylib）",

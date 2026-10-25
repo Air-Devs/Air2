@@ -135,6 +135,10 @@ static void testRendererCatalog(void) {
           A2RendererTierCompat, @"gl4es 档位 = 兼容底");
     eqInt([A2RendererCatalog tierForIdentifier:@"libmobileglues.dylib"],
           A2RendererTierExperimental, @"mobileglues 档位 = 实验（未内置）");
+    eqInt([A2RendererCatalog tierForIdentifier:@"libnggl4es_kw.dylib"],
+          A2RendererTierCompat, @"★NG-GL4ES / KW 档位 = 兼容底（≤1.12.2 的默认项）★");
+    eqStr([A2RendererCatalog nameLocalizationKeyForIdentifier:@"libnggl4es_kw.dylib"],
+          @"runtime.renderer.nggl4es_kw", @"NG-GL4ES / KW 文案 key");
     eqInt([A2RendererCatalog tierForIdentifier:@"lib-不存在.dylib"],
           A2RendererTierExperimental, @"★没登记的标识不猜成主推★");
 
@@ -460,6 +464,7 @@ static void testWiring(void) {
     NSArray<NSString *> *staged = @[
         @"Libraries/Renderers/libmetallum.dylib",
         @"Libraries/Renderers/libgl4es_114.dylib",
+        @"Libraries/Renderers/libnggl4es_kw.dylib",
         @"Libraries/Frameworks/libEGL.framework/libEGL",
         @"Libraries/Frameworks/libGLESv2.framework/libGLESv2",
     ];

@@ -66,6 +66,17 @@ typedef NS_ENUM(NSInteger, A2RendererGLClass) {
 
 @interface A2RendererCatalog : NSObject
 
+/// ★固定管线首选后端（NG-GL4ES / KW）的标识★ = dylib 文件名。
+///
+/// 它是 `-DDEFAULT_ES=3 -DNOEGL -DNO_INIT_CONSTRUCTOR` 编出来的 gl4es 变体（Krypton Wrapper），
+/// 与老线 `libgl4es_114.dylib` 是**两支二进制**，不能互相替代：
+///   · 老线那只在 dlopen 时自带 constructor 初始化（`initialize_gl4es()` 由它自己调）；
+///   · 这一只的 constructor 被 `NO_INIT_CONSTRUCTOR` 关掉 ⇒ ★宿主必须在游戏 context
+///     成为 current 之后显式调 `initialize_gl4es()`★，漏掉不崩但黑屏（见 `Natives/Renderer/a2_gl_bridge.m` ⑥a）。
+/// 为什么常量放 Core：≤1.12 的「默认项」与「不可用时的回退判据」都在 Player 的启动会话里，
+/// 而清单登记在本类 ⇒ 三处必须同一份字面量（否则改一处忘一处就是石山）。
+extern NSString *const A2RendererNGGL4ESKWDylibName;
+
 /// 全部候选（★稳定顺序★：主推 → 兼容底 → 实验）。
 /// 每一项的 `identifier` = dylib 文件名，`displayName` = 技术名（回退用），`dylibName` = 同名。
 + (NSArray<A2Renderer *> *)allCandidates;

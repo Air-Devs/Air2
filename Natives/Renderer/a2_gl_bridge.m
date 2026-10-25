@@ -35,6 +35,11 @@ const char *const A2GlBridgeJudgementTag        = "[A2-GLBRIDGE]";
 const char *const A2GlBridgeEglLibraryRelPath   = "libEGL.framework/libEGL";
 const char *const A2GlBridgeGlesLibraryRelPath  = "libGLESv2.framework/libGLESv2";
 
+/// ★NG-GL4ES / KW★ 的 dylib 文件名（= 渲染器清单里的标识，见 `A2RendererCatalog`）。
+/// Natives 不认识 Core、Core 也反向依赖不了本层（分层）⇒ 这里是字面量，
+/// 与 `a2_renderer.h` 的 `A2RendererMetalDylibName` / `A2RendererCompatDylibName` 同一做法。
+static const char *const A2GlBridgeKryptonDylibName = "libnggl4es_kw.dylib";
+
 // ---------------------------------------------------------------------------
 // EGL/GL 最小类型与常量（Khronos 公开 ABI 的事实性数值；本层不 import 其头文件）
 // ---------------------------------------------------------------------------
@@ -70,6 +75,15 @@ typedef void      (*A2PFN_glScissor)(int, int, int, int);
 typedef void      (*A2PFN_glEnable)(uint32_t);
 typedef void      (*A2PFN_glDisable)(uint32_t);
 typedef void      (*A2PFN_glGetIntegerv)(uint32_t, int *);
+
+// ---- ★gl4es 家族（NG-GL4ES / KW）的宿主契约★（上游原型都是 `void f(void)`）----
+//  · `set_getprocaddress(void *(*)(const char *))`：把 GLES 入口解析器交给 gl4es。
+//    该变体是 `-DNOEGL` 编的 —— 它不建自己的 EGL、也不 dlopen GLESv2 去摸入口，
+//    不注册就只能退到 `dlsym(RTLD_NEXT)`，而 ANGLE 比它先加载 ⇒ 一个入口都找不到。
+//  · `initialize_gl4es(void)`：`-DNO_INIT_CONSTRUCTOR` 把构造器关掉之后，初始化是宿主的责任。
+//    漏掉的表现是「不崩但黑屏 / GL 调用全空」，所以本桥在 context current 之后立刻调它。
+typedef void      (*A2PFN_initialize_gl4es)(void);
+typedef void      (*A2PFN_set_getprocaddress)(void *(*)(const char *));
 
 #define A2_EGL_DEFAULT_DISPLAY       ((void *)0)
 #define A2_EGL_NO_DISPLAY            ((A2EGLDisplay)0)
@@ -144,6 +158,9 @@ static int   gSurfaceHeightPixels = 0;   // 同上（高）
 static A2GlFrameCallback gFrameCb = NULL;
 static void *gFrameUser = NULL;
 
+/// 已经显式 `initialize_gl4es()` 过的镜像（gl4es 内部只认第一次初始化 ⇒ 重入 attach 时不重复调）。
+static void *gKryptonInitedHandle = NULL;
+
 // ============================================================================
 //  内部：清理 / 归一化句柄 / 取符号 / 帧动作
 // ============================================================================
@@ -163,7 +180,11 @@ static void a2_gl_bridge_teardown(void) {
     if (gEglTerminate != NULL && gDpy != A2_EGL_NO_DISPLAY) {
         gEglTerminate(gDpy);
     }
-    if (gRendererHandle != NULL) { dlclose(gRendererHandle); gRendererHandle = NULL; }
+    if (gRendererHandle != NULL) {
+        dlclose(gRendererHandle);
+        gRendererHandle = NULL;
+        gKryptonInitedHandle = NULL;   // 镜像已关 ⇒ 下次 attach 必须重新初始化
+    }
     if (gGlesHandle != NULL)     { dlclose(gGlesHandle);     gGlesHandle = NULL; }
     if (gEglHandle != NULL)      { dlclose(gEglHandle);      gEglHandle = NULL; }
 
@@ -206,6 +227,39 @@ static void *a2_gl_bridge_egl_symbol(void *handle, const char *name, int *missin
         *missing = 1;
     }
     return sym;
+}
+
+/// 当前后端是否 = ★NG-GL4ES / KW★（那一支需要宿主「注册解析器 + 显式初始化」）。
+/// ★精确比较，不做模糊匹配★：`libnggl4es.dylib`（老的那支，自带 constructor）不能命中。
+static int a2_gl_bridge_is_krypton(void) {
+    return (gBackendName[0] != '\0' && strcmp(gBackendName, A2GlBridgeKryptonDylibName) == 0);
+}
+
+/// 交给 gl4es 的 GLES 入口解析器 —— 它在 `-DNOEGL` 下**唯一**的入口来源。
+/// 顺序固定：已 RTLD_GLOBAL 的 GLESv2（ANGLE）→ EGL → eglGetProcAddress。
+/// ★只解析 GLES/EGL 入口，不碰 `gl*` 包装层★：包装层符号由 LWJGL 从后端本体取（名字解析面 1328 个 gl*）。
+static void *a2_gl_bridge_gles_getprocaddress(const char *name) {
+    if (name == NULL) return NULL;
+    void *sym = NULL;
+    if (gGlesHandle != NULL) sym = dlsym(gGlesHandle, name);
+    if (sym == NULL && gEglHandle != NULL) sym = dlsym(gEglHandle, name);
+    if (sym == NULL && gEglGetProcAddress != NULL) sym = gEglGetProcAddress(name);
+    return sym;
+}
+
+/// ★显式初始化 NG-GL4ES / KW★ —— 必须在**游戏 context 成为 current 之后**调用（见 attach ⑥a）。
+/// 上游原型是 `void initialize_gl4es(void)`（无返回值），所以这里的 rc 只回答「调用成没成」：
+///   0  = 已调用（本轮；或同一镜像此前已初始化过）
+///  -1  = 库没导出 `initialize_gl4es`（装了别的构建 ⇒ 不能假装初始化过）
+static int a2_gl_bridge_krypton_initialize(void) {
+    if (gRendererHandle == NULL) return -1;
+    A2PFN_initialize_gl4es init =
+        (A2PFN_initialize_gl4es)dlsym(gRendererHandle, "initialize_gl4es");
+    if (init == NULL) return -1;
+    if (gKryptonInitedHandle == gRendererHandle) return 0;   // 同一镜像已初始化（gl4es 只认第一次）
+    init();
+    gKryptonInitedHandle = gRendererHandle;
+    return 0;
 }
 
 /// ★帧回调体★：本层每帧做一次可判据的可用性动作，并按**当前渲染倍率的 drawable 像素尺寸**
@@ -328,6 +382,7 @@ int a2_gl_bridge_backend_is_egl(const char *rendererName) {
         "libmetallum.dylib",         // Metal（自研）
         "libmobileglues.dylib",
         "libnggl4es.dylib",
+        "libnggl4es_kw.dylib",       // NG-GL4ES / KW（≤1.12.2 默认；宿主必须显式 initialize_gl4es）
         "libtinygl4angle.dylib",
     };
     for (size_t i = 0; i < sizeof(kEglBackends) / sizeof(kEglBackends[0]); i++) {
@@ -432,6 +487,22 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
              A2GlBridgeJudgementTag, eglPath.UTF8String, gEglHandle,
              glesPath.UTF8String, gGlesHandle, rendererName, gRendererHandle);
 
+    // ---- ④b ★NG-GL4ES / KW：先把宿主解析器交给它★（必须在建面/初始化之前）----
+    //   这一支是 `-DNOEGL` 编的：不注册解析器就只能退到 `dlsym(RTLD_NEXT)`，而 ANGLE 比它先加载
+    //   ⇒ 一个 GLES 入口都摸不到（后续 initialize_gl4es 探测硬件扩展时全空）。
+    if (a2_gl_bridge_is_krypton()) {
+        A2PFN_set_getprocaddress setResolver =
+            (A2PFN_set_getprocaddress)dlsym(gRendererHandle, "set_getprocaddress");
+        if (setResolver == NULL) {
+            a2_log_f(@"[A2-RENDERER] NG-GL4ES 初始化 rc=-1：缺 set_getprocaddress 入口"
+                     @"（%s 不是预期的构建）⇒ 阻断", rendererName);
+            a2_gl_bridge_teardown();
+            return A2GlBridgeErrLoadFailed;
+        }
+        setResolver(a2_gl_bridge_gles_getprocaddress);
+        a2_log_f(@"[A2-RENDERER] NG-GL4ES 已注册宿主 GLES 解析器（GLESv2=ANGLE，handle=%p）", gGlesHandle);
+    }
+
     // ---- ⑤ 取 EGL 函数指针表（必需符号缺一即判加载失败）----
     int missing = 0;
     gEglGetDisplay          = (A2PFN_eglGetDisplay)a2_gl_bridge_egl_symbol(gEglHandle, "eglGetDisplay", &missing);
@@ -498,13 +569,28 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     }
 
     {
-        const A2EGLint ctxAttribs[] = { A2_EGL_CONTEXT_CLIENT_VERSION, 2, A2_EGL_NONE };
+        // ★NG-GL4ES / KW 是 `-DDEFAULT_ES=3` 编的★（上游口径：只在 GLES3 上转译，绕开 ANGLE 的
+        //   GLES1 路径）⇒ 它要 ES3 上下文；其它后端仍然只要 ES2（行为一字不改）。
+        //   实现上先按需版本建、被拒再退 ES2 —— 退回去时**如实记一行**，不假装拿到了 ES3。
+        const A2EGLint wantVersion = a2_gl_bridge_is_krypton() ? 3 : 2;
+        const A2EGLint ctxAttribs[] = { A2_EGL_CONTEXT_CLIENT_VERSION, wantVersion, A2_EGL_NONE };
         gCtx = gEglCreateContext(gDpy, gCfg, A2_EGL_NO_CONTEXT, ctxAttribs);
+        if (gCtx == A2_EGL_NO_CONTEXT && wantVersion != 2) {
+            a2_log_f(@"[A2-RENDERER] NG-GL4ES 上下文：ES%ld 被拒（eglError=0x%x）⇒ 退 ES2 重试"
+                     @"（GLES3 转译路径可能不可用）", (long)wantVersion,
+                     (unsigned)(gEglGetError ? gEglGetError() : 0));
+            const A2EGLint ctxAttribs2[] = { A2_EGL_CONTEXT_CLIENT_VERSION, 2, A2_EGL_NONE };
+            gCtx = gEglCreateContext(gDpy, gCfg, A2_EGL_NO_CONTEXT, ctxAttribs2);
+        }
         if (gCtx == A2_EGL_NO_CONTEXT) {
             a2_log_f(@"%s ★阻断★：EGL 建面失败：eglCreateContext 返回 NO_CONTEXT（eglError=0x%x）",
                      A2GlBridgeJudgementTag, (unsigned)(gEglGetError ? gEglGetError() : 0));
             a2_gl_bridge_teardown();
             return A2GlBridgeErrEgl;
+        }
+        if (wantVersion != 2) {
+            a2_log_f(@"[A2-RENDERER] NG-GL4ES 上下文就绪：请求 client version=ES%ld context=%p",
+                     (long)wantVersion, (void *)gCtx);
         }
     }
 
@@ -541,6 +627,21 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     a2_log_f(@"%s EGL 就绪：display=%p config=%p context=%p surface=%p（%dx%d 像素；像素格式=%d）",
              A2GlBridgeJudgementTag, (void *)gDpy, (void *)gCfg, (void *)gCtx, (void *)gSurf,
              host->surface.widthPixels, host->surface.heightPixels, host->surface.pixelFormat);
+
+    // ---- ⑥a ★NG-GL4ES / KW 显式初始化（NO_INIT_CONSTRUCTOR）★ ----
+    //   位置就是判据：① 库已 dlopen ② 解析器已注册 ③ context 刚 make current 成功。
+    //   上游用 `-DNO_INIT_CONSTRUCTOR` 把构造器关掉了 ⇒ 不调这一步「不崩但黑屏」（GL 入口全空），
+    //   所以本桥把调用与返回码都打成判据行，真机 grep `[A2-RENDERER] NG-GL4ES 初始化 rc=` 即可。
+    if (a2_gl_bridge_is_krypton()) {
+        int initRC = a2_gl_bridge_krypton_initialize();
+        a2_log_f(@"[A2-RENDERER] NG-GL4ES 初始化 rc=%d（backend=%s；context=%p 已 current）%s",
+                 initRC, rendererName, (void *)gCtx,
+                 (initRC == 0) ? " ⇒ 已在宿主 context 上初始化" : " ⇒ ★阻断：缺 initialize_gl4es 入口★");
+        if (initRC != 0) {
+            a2_gl_bridge_teardown();
+            return A2GlBridgeErrLoadFailed;
+        }
+    }
 
     // ---- ⑥b [FRAME-PERF] 回报实际 drawable 尺寸（可核对：与「请求的缩放后尺寸」是否一致）----
     // 为什么单独查一次：部分实现在 iOS 上按图层的点尺寸 × 缩放决定 drawable，会**忽略**请求尺寸。
