@@ -41,14 +41,19 @@ const char *const A2GlBridgeGlesLibraryRelPath  = "libGLESv2.framework/libGLESv2
 static const char *const A2GlBridgeKryptonDylibName = "libnggl4es_kw.dylib";
 
 /// ★A2KWUseES1 的编译期默认值★（A/B 出包时只改这一处，或用命令行 `-DA2_KW_USE_ES1_DEFAULT=1`）
-///   0 = 请求 ES3（现状默认）  1 = 请求 ES1
-///   运行期仍由偏好键 `A2KWUseES1`（Boolean）覆盖：键存在就听键的，键不存在才落到本默认值。
-#ifndef A2_KW_USE_ES1_DEFAULT
-#define A2_KW_USE_ES1_DEFAULT 0
+///   0 = 请求 ES3（现状默认）  1 = 请求 ES1  2 = 请求 ES2
+///   运行期仍由偏好键 `A2KWContextMode`（String: es1/es2/es3）覆盖；兼容旧键 A2KWUseES1（Boolean）。
+#ifndef A2_KW_CONTEXT_MODE_DEFAULT
+#define A2_KW_CONTEXT_MODE_DEFAULT 0
+#endif
+/// D 包用：1 ⇒ 在 initialize_gl4es 之前注入 LIBGL_ES=3 / LIBGL_GL=21（gl4es 血统的 shader 模拟开关）
+#ifndef A2_KW_ENV_HINT_DEFAULT
+#define A2_KW_ENV_HINT_DEFAULT 0
 #endif
 
 /// 偏好键名（运行期覆盖用；只影响 NG-GL4ES / KW 的上下文版本）
 static NSString *const A2GlBridgeKWUseES1Key = @"A2KWUseES1";
+static NSString *const A2GlBridgeKWContextModeKey = @"A2KWContextMode";
 
 // ---------------------------------------------------------------------------
 // EGL/GL 最小类型与常量（Khronos 公开 ABI 的事实性数值；本层不 import 其头文件）
@@ -589,18 +594,27 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         //         而 ANGLE 的 GLES1 状态未初始化」这条假设）
         //   只作用于 NG-GL4ES / KW；键不存在时用编译期默认 A2_KW_USE_ES1_DEFAULT（A/B 两包靠它分叉）。
         const BOOL isKrypton = a2_gl_bridge_is_krypton();
-        BOOL kwUseES1 = (A2_KW_USE_ES1_DEFAULT != 0);
+        // ★KW 上下文模式（三档）★：A2KWContextMode = "es1" | "es2" | "es3"（缺省看编译期宏）。
+        //   真机历史：ES3 ⇒ KW 调 GLES1 撞 ANGLE GLES1State 崩；ES1 ⇒ 只有 GL ES1.1 能力、MC 拒启；
+        //   ES2 与「ES3+shader 模拟」两条路待验。
+        NSInteger kwMode = A2_KW_CONTEXT_MODE_DEFAULT;   // 0=ES3 1=ES1 2=ES2
         {
-            id kwES1Pref = [NSUserDefaults.standardUserDefaults objectForKey:A2GlBridgeKWUseES1Key];
-            if (kwES1Pref != nil) {
-                kwUseES1 = [NSUserDefaults.standardUserDefaults boolForKey:A2GlBridgeKWUseES1Key];
+            id m = [NSUserDefaults.standardUserDefaults objectForKey:A2GlBridgeKWContextModeKey];
+            if ([m isKindOfClass:NSString.class]) {
+                NSString *s = [(NSString *)m lowercaseString];
+                if ([s isEqualToString:@"es1"]) kwMode = 1;
+                else if ([s isEqualToString:@"es2"]) kwMode = 2;
+                else if ([s isEqualToString:@"es3"]) kwMode = 0;
+            } else if (m != nil) {
+                // 兼容旧键 A2KWUseES1
+                kwMode = [NSUserDefaults.standardUserDefaults boolForKey:A2GlBridgeKWUseES1Key] ? 1 : 0;
             }
         }
         if (isKrypton) {
-            a2_log_f(@"[A2-GL-BRIDGE] KW 上下文 client version=%s（键 A2KWUseES1）",
-                     kwUseES1 ? "ES1" : "ES3");
+            a2_log_f(@"[A2-GL-BRIDGE] KW 上下文模式=%s（键 A2KWContextMode；0=ES3 1=ES1 2=ES2）",
+                     (kwMode == 1) ? "ES1" : ((kwMode == 2) ? "ES2" : "ES3"));
         }
-        const A2EGLint wantVersion = isKrypton ? (kwUseES1 ? 1 : 3) : 2;
+        const A2EGLint wantVersion = isKrypton ? (kwMode == 1 ? 1 : (kwMode == 2 ? 2 : 3)) : 2;
         A2EGLint gotVersion = wantVersion;   // ★实际拿到的版本★（回退时为 fbVersion，日志按它记，不假装）
         const A2EGLint ctxAttribs[] = { A2_EGL_CONTEXT_CLIENT_VERSION, wantVersion, A2_EGL_NONE };
         gCtx = gEglCreateContext(gDpy, gCfg, A2_EGL_NO_CONTEXT, ctxAttribs);
@@ -666,6 +680,13 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     //   上游用 `-DNO_INIT_CONSTRUCTOR` 把构造器关掉了 ⇒ 不调这一步「不崩但黑屏」（GL 入口全空），
     //   所以本桥把调用与返回码都打成判据行，真机 grep `[A2-RENDERER] NG-GL4ES 初始化 rc=` 即可。
     if (a2_gl_bridge_is_krypton()) {
+        // ★D 包用★：在初始化之前注入 gl4es 血统的运行时开关，让它用 shader 模拟 GL2.1
+        //   而不是把固定管线调用直通给 ANGLE 的 GLES1 实现（真机：ES3 下直通会 SIGBUS）。
+        if (A2_KW_ENV_HINT_DEFAULT != 0) {
+            setenv("LIBGL_ES", "3", 1);
+            setenv("LIBGL_GL", "21", 1);
+            a2_log_f(@"[A2-GL-BRIDGE] KW env LIBGL_ES=3 LIBGL_GL=21（编译期 A2_KW_ENV_HINT_DEFAULT=1）");
+        }
         int initRC = a2_gl_bridge_krypton_initialize();
         a2_log_f(@"[A2-RENDERER] NG-GL4ES 初始化 rc=%d（backend=%s；context=%p 已 current）%s",
                  initRC, rendererName, (void *)gCtx,
