@@ -29,7 +29,8 @@
 #import "A2RuntimeStrings.h"        // Player 同层 —— 四语文案（阻断文案 + 判据行的「源」）
 #import "A2LegacyProfile.h"
 #import "A2IntegrityChecker.h"
-#import "A2JITEnabler.h"            // Natives/Support —— JIT 闸门的唯一实现（判据→申请→等待）
+#import "A2JITEnabler.h"
+#import "A2LegacyJITGate.h"            // Natives/Support —— JIT 闸门的唯一实现（判据→申请→等待）
 #import "A2LegacyAssetsMapper.h"    // Core/Version —— 远古资源映射（virtual / map_to_resources）
 #import "A2Log.h"
 
@@ -209,7 +210,9 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
         return;
     }
 
-    if (![A2JITEnabler isJITReadyNow]) {
+    // ★老 Air 口径★ isJITEnabled 为真（entitlement / CS_DEBUGGED）就**直接启动**，
+    //   不再走自造的握手/尺寸等待；只有它也为假才去拉起使能器并等待。
+    if (!A2JITIsEnabled(0) && ![A2JITEnabler isJITReadyNow]) {
         [A2Log criterion:@"[A2-JIT-ENABLER] 未就绪 ⇒ 中止启动（不建 VM）（先弹等待窗 → 再拉起使能器 → 拿到 JIT 才重新启动）"];
         sWaitingForJIT = YES;
         __block BOOL resumed = NO;   // ★重入护栏★：同一次等待只认第一次回调
