@@ -58,8 +58,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// major → 「适合哪些 MC 版本」的四语文案 key（未知 major 返回 `runtime.jre.mc.unknown`）。
 + (NSString *)mcRangeLocalizationKeyForMajorVersion:(NSInteger)majorVersion;
 
-/// 该目录是否是**可用的**运行时根：`<javaHome>/lib/server/libjvm.dylib` 存在
-/// （= `a2_vmloader` 的首选布局，也是 `scripts/stage_runtime.sh` 的自证条件）。
+/// libjvm 在 javaHome 下的三种相对路径（★唯一一份表★）：
+///   `lib/server/libjvm.dylib`（Java 11+ / 本工程四档 openjdk）、
+///   `jre/lib/server/libjvm.dylib`（经典 macOS JDK 8 布局）、
+///   `lib/hotspot/libjvm.dylib`（历史 hotspot 布局）。
+/// ★与 `Natives/Context/a2_vmloader.m` 的 `a2_vm_resolve_libjvm()` 逐项一致★ ——
+/// 判据（本类）与消费者（vmloader）必须是同一份口径，否则「补了包也判未内置」。
++ (NSArray<NSString *> *)libjvmRelativePaths;
+
+/// 该目录是否是**可用的**运行时根：上面三种布局任一命中即算可用（与 vmloader 同表）。
 /// javaHome 为空 ⇒ NO（未内置/不完整，不猜）。
 + (BOOL)isUsableJavaHome:(nullable NSString *)javaHome;
 

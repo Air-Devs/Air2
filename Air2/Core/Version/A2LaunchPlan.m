@@ -487,7 +487,16 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     //   真机现象：阶段6「创建 JVM」之后只剩 OpenJDK 的 deprecation 警告，再无输出。
     //   VM 自己的统一日志能把这中间的初始化阶段逐条打出来（输出量很小），
     //   卡住的最后一行即是断点。定位到原因后这行随即删除。
-    [options addObject:@"-Xlog:init=debug:stderr"];   // ★必须指定 stderr★：App 里 stdout 无处可去
+    //   ★必须按 JRE 门控★：`-Xlog:` 是 Java 9+ 的统一日志选项，Java 8 的 VM 会
+    //   直接报 `Unrecognized option: -Xlog:init=debug:stderr` ⇒ `JNI_CreateJavaVM`
+    //   失败（整条 java-8 路线一行代码废掉，矩阵 §4-③）。Java 8 走静默（老线的
+    //   `-Xloggc:` 那套也不再追加：本链已无需要它定位的问题）。
+    if (javaMajorVersion >= 9) {
+        [options addObject:@"-Xlog:init=debug:stderr"];   // ★必须指定 stderr★：App 里 stdout 无处可去
+    } else {
+        [A2Log criterion:@"[A2-JRE] java-%ld 不认 -Xlog（Java 9+ 才有）⇒ 本条诊断选项不下发（否则建 VM 必失败）",
+              (long)javaMajorVersion];
+    }
 
     // ★追加类路径的唯一可行方式（Java 9+）：必须带，否则 A2Entry 追加 MC 库时被模块系统挡下。
     // ★实验开关(2026-10-17)★ 真机探针:卡在 JavaCalls::call_helper(VM 初始化期就在执行 Java 代码),
@@ -501,13 +510,17 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     {
         id diagVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2VMDiagAll"];
         BOOL diagAll = (diagVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2VMDiagAll"];
-        if (diagAll) {
+        // ★同样按 JRE 门控★：这 4 条 `-Xlog:*` 也是 Java 9+ 语法，Java 8 上
+        //   `-Xlog:class+load=…` 一样是 `Unrecognized option` ⇒ 建 VM 失败。
+        if (diagAll && javaMajorVersion >= 9) {
             [options addObject:@"-Xlog:class+load=info:stderr"];
             [options addObject:@"-Xlog:class+init=debug:stderr"];
             [options addObject:@"-Xlog:safepoint=info:stderr"];
             [options addObject:@"-Xlog:gc=info:stderr"];
             [options addObject:@"-XX:+UnlockDiagnosticVMOptions"];
             [options addObject:@"-XX:+PrintFlagsFinal"];
+        } else if (diagAll) {
+            [A2Log criterion:@"[A2-JRE] java-%ld ⇒ 全量 -Xlog 探针整组不下发（Java 9+ 语法）", (long)javaMajorVersion];
         }
     }
 

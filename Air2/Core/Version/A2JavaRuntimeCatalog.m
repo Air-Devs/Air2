@@ -57,16 +57,28 @@
     }
 }
 
++ (NSArray<NSString *> *)libjvmRelativePaths {
+    // ★唯一一份表★：与 `Natives/Context/a2_vmloader.m` 的 `a2_vm_resolve_libjvm()`
+    // 三项逐字一致（tests/Runtime 断言两处都认这三种布局）。
+    // 为什么不能只认第一种：官方/Amethyst 的 java-8 是经典 JDK 8 布局
+    // `jre/lib/server/libjvm.dylib` ⇒ 只认 `lib/server` 会把「真的能启动的 java-8」
+    // 判成「未内置/不完整」，用户永远进不去（矩阵 §4-⑤）。
+    return @[ @"lib/server/libjvm.dylib",
+              @"jre/lib/server/libjvm.dylib",
+              @"lib/hotspot/libjvm.dylib" ];
+}
+
 + (BOOL)isUsableJavaHome:(nullable NSString *)javaHome {
-    // 判据 = 启动链真正要 dlopen 的那个文件（a2_vmloader 首选布局），
+    // 判据 = 启动链真正要 dlopen 的那个文件，且**与 vmloader 同一份相对路径表**，
     // 不是「目录存在」——目录在而 libjvm 缺正是「看着内置、一启动就失败」的形态。
     if (javaHome.length == 0) return NO;
-    NSString *libjvm = [[javaHome stringByAppendingPathComponent:@"lib"]
-                        stringByAppendingPathComponent:@"server"];
-    libjvm = [libjvm stringByAppendingPathComponent:@"libjvm.dylib"];
-    BOOL isDir = NO;
-    BOOL exists = [NSFileManager.defaultManager fileExistsAtPath:libjvm isDirectory:&isDir];
-    return exists && !isDir;
+    NSFileManager *fm = NSFileManager.defaultManager;
+    for (NSString *rel in [self libjvmRelativePaths]) {
+        NSString *libjvm = [javaHome stringByAppendingPathComponent:rel];
+        BOOL isDir = NO;
+        if ([fm fileExistsAtPath:libjvm isDirectory:&isDir] && !isDir) return YES;
+    }
+    return NO;
 }
 
 @end

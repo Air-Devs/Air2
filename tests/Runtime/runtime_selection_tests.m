@@ -18,6 +18,7 @@
 //
 
 #import <Foundation/Foundation.h>
+#import <dlfcn.h>                  // ★内置判定新口径：文件在 + 能 dlopen★（测里也要能 dlopen）
 
 #import "A2Renderer.h"
 #import "A2RendererCatalog.h"
@@ -68,8 +69,11 @@ static BOOL WriteFile(NSString *path, NSData *data) {
 }
 
 /// 造一个「假包内 Frameworks 目录」：把给定文件名都建成非空文件。
+/// ★注意★：纯文本文件**不是**能 dlopen 的 Mach-O ⇒ 新口径下它们判「未内置」
+/// （这正是要测的行为：文件在 ≠ 内置）。
 static NSString *FakeFrameworks(NSArray<NSString *> *names) {
     NSString *dir = [TempDir() stringByAppendingPathComponent:@"Frameworks"];
+    [[NSFileManager defaultManager] removeItemAtPath:dir error:NULL];   // 每次重建（避免上一条用例残留）
     [[NSFileManager defaultManager] createDirectoryAtPath:dir
                               withIntermediateDirectories:YES attributes:nil error:NULL];
     for (NSString *n in names) {
@@ -77,6 +81,38 @@ static NSString *FakeFrameworks(NSArray<NSString *> *names) {
                atomically:YES encoding:NSUTF8StringEncoding error:NULL];
     }
     return dir;
+}
+
+/// 找一个「真能 dlopen 的 dylib」当替身（新口径 = 文件存在 + 能 dlopen 才算内置）。
+/// ★来源优先级★：测试 runner 现编的探针 dylib（A2_TEST_LOADABLE_DYLIB，确定性最好）
+/// → 系统库 / 框架二进制（macOS 11+ 多数在 dyld 共享缓存里，磁盘上可能没有文件）。
+static NSString *RealLoadableDylib(void) {
+    static NSString *found = nil;
+    if (found != nil) return found;
+    NSString *envPath = NSProcessInfo.processInfo.environment[@"A2_TEST_LOADABLE_DYLIB"];
+    if (envPath.length > 0 && [NSFileManager.defaultManager fileExistsAtPath:envPath]) {
+        void *h = dlopen(envPath.UTF8String, RTLD_LAZY);
+        if (h != NULL) { dlclose(h); found = envPath; return found; }
+    }
+    for (NSString *p in @[ @"/System/Library/Frameworks/Foundation.framework/Foundation",
+                           @"/System/Library/Frameworks/CoreFoundation.framework/CoreFoundation",
+                           @"/usr/lib/libSystem.B.dylib", @"/usr/lib/libobjc.A.dylib",
+                           @"/usr/lib/libz.1.dylib", @"/usr/lib/libc++.1.dylib" ]) {
+        if (![[NSFileManager defaultManager] fileExistsAtPath:p]) continue;
+        void *h = dlopen(p.UTF8String, RTLD_LAZY);
+        if (h != NULL) { dlclose(h); found = p; break; }
+    }
+    return found;
+}
+
+/// 把 dir/name 做成指向系统真 dylib 的符号链接（⇒ 可 dlopen ⇒ 判已内置）。
+static BOOL LinkFakeDylib(NSString *dir, NSString *name) {
+    NSString *real = RealLoadableDylib();
+    if (real == nil) return NO;
+    NSString *dst = [dir stringByAppendingPathComponent:name];
+    [[NSFileManager defaultManager] removeItemAtPath:dst error:NULL];
+    return [[NSFileManager defaultManager] createSymbolicLinkAtPath:dst
+                                               withDestinationPath:real error:NULL];
 }
 
 // ============================================================================
@@ -120,16 +156,25 @@ static void testRendererCatalog(void) {
     eqStr([A2RendererCatalog nameLocalizationKeyForIdentifier:@"libOSMesa.8.dylib"],
           @"runtime.renderer.osmesa_8", @"OSMesa.8 文案 key（点号折成下划线）");
 
-    // ★包内有无 = 现算★（不缓存、不猜）
-    NSString *fw = FakeFrameworks(@[ @"libmetallum.dylib", @"libgl4es_114.dylib" ]);
+    // ★包内有无 = 现算★（不缓存、不猜）。新口径：文件存在 **且** 能 dlopen 成功才算内置。
+    NSString *fw = FakeFrameworks(@[ @"libgl4es_114.dylib" ]);   // 纯文本 = 不是可加载 dylib
+    LinkFakeDylib(fw, @"libmetallum.dylib");                     // 真能 dlopen 的替身
     ok([A2RendererCatalog isBundled:[A2RendererCatalog candidateForIdentifier:@"libmetallum.dylib"]
-                      frameworksPath:fw], @"metallum 在 ⇒ 已内置");
-    ok([A2RendererCatalog isBundled:[A2RendererCatalog candidateForIdentifier:@"libgl4es_114.dylib"]
-                      frameworksPath:fw], @"gl4es 在 ⇒ 已内置");
+                      frameworksPath:fw], @"metallum 文件在 + 能 dlopen ⇒ 已内置");
+    ok(![A2RendererCatalog isBundled:[A2RendererCatalog candidateForIdentifier:@"libgl4es_114.dylib"]
+                       frameworksPath:fw], @"★文件在但 dlopen 不成功 ⇒ 未内置（不是「恒真」）★");
     ok(![A2RendererCatalog isBundled:[A2RendererCatalog candidateForIdentifier:@"libmobileglues.dylib"]
                        frameworksPath:fw], @"★mobileglues 不在 ⇒ 未内置★");
     ok(![A2RendererCatalog isBundled:[A2RendererCatalog candidateForIdentifier:@"libmetallum.dylib"]
                        frameworksPath:nil], @"★frameworksPath 为空 ⇒ 判未内置（不猜）★");
+    NSString *whyNot = [A2RendererCatalog bundleDiagnosisForCandidate:
+                        [A2RendererCatalog candidateForIdentifier:@"libgl4es_114.dylib"]
+                                                       frameworksPath:fw];
+    ok(whyNot.length > 0 && [whyNot containsString:@"dlopen"],
+       @"★未内置的原因指明是 dlopen 失败（给用户看的那句）★");
+    ok([A2RendererCatalog bundleDiagnosisForCandidate:
+        [A2RendererCatalog candidateForIdentifier:@"libmetallum.dylib"] frameworksPath:fw] == nil,
+       @"已内置 ⇒ 诊断为空");
 
     // 登记进既有注册表（不另起一套解析）：解析结果与选择一致；不允许回落时不瞎给
     A2Renderers *reg = [A2Renderers shared];
@@ -197,6 +242,45 @@ static void testJavaRuntimeCatalog(void) {
     ok([A2JavaRuntimeCatalog isUsableJavaHome:home], @"补上 lib/server/libjvm.dylib ⇒ 可用");
     ok(![A2JavaRuntimeCatalog isUsableJavaHome:nil], @"nil ⇒ 不可用（不猜）");
     ok(![A2JavaRuntimeCatalog isUsableJavaHome:@""], @"空串 ⇒ 不可用（不猜）");
+
+    // ★§4-⑤ 三种布局（= a2_vmloader 的同一份表）★：只认 lib/server 会把标准 JDK 8
+    //   （jre/lib/server）判成「未内置」⇒ 补了 java-8 也启动不了。
+    eqInt((NSInteger)[A2JavaRuntimeCatalog libjvmRelativePaths].count, 3,
+          @"libjvm 相对路径表 = 三种布局（与 vmloader 同表）");
+    NSString *j8 = [TempDir() stringByAppendingPathComponent:@"java_runtimes/java-8-openjdk"];
+    WriteFile([j8 stringByAppendingPathComponent:@"jre/lib/server/libjvm.dylib"],
+              [@"x" dataUsingEncoding:NSUTF8StringEncoding]);
+    ok([A2JavaRuntimeCatalog isUsableJavaHome:j8],
+       @"★经典 JDK8 布局 jre/lib/server/libjvm.dylib ⇒ 可用（否则 java-8 永远「未内置」）★");
+    NSString *hotspot = [TempDir() stringByAppendingPathComponent:@"java_runtimes/java-8-hotspot"];
+    WriteFile([hotspot stringByAppendingPathComponent:@"lib/hotspot/libjvm.dylib"],
+              [@"x" dataUsingEncoding:NSUTF8StringEncoding]);
+    ok([A2JavaRuntimeCatalog isUsableJavaHome:hotspot], @"历史 hotspot 布局 lib/hotspot ⇒ 可用");
+    ok(![A2JavaRuntimeCatalog isUsableJavaHome:
+         [TempDir() stringByAppendingPathComponent:@"java_runtimes/java-8-empty"]],
+       @"只有目录、三种布局都没有 ⇒ 仍不可用（不猜）");
+
+    // ★能力判据（[A2-COMPAT] 三元闸门的输入）★
+    eqInt([A2RendererCatalog glClassForIdentifier:@"libMoltenVK.dylib"], A2RendererGLClassNotGL,
+          @"★MoltenVK = Vulkan ICD ⇒ 不是 GL 后端（下发 opengl.libname 必崩）★");
+    eqInt([A2RendererCatalog glClassForIdentifier:@"libgl4es_114.dylib"], A2RendererGLClassFixedOnly,
+          @"gl4es_114 ⇒ 固定管线（GL 上限 2.1）");
+    eqInt([A2RendererCatalog glClassForIdentifier:@"libnggl4es.dylib"], A2RendererGLClassFixedOnly,
+          @"nggl4es ⇒ 固定管线家族");
+    eqInt([A2RendererCatalog glClassForIdentifier:@"libmetallum.dylib"], A2RendererGLClassModern,
+          @"metallum ⇒ 现代（Metal 直通）");
+    eqInt([A2RendererCatalog requiredJavaMajorForIdentifier:@"libmetallum.dylib"
+                                                 versionID:@"26.3" mcMajor:26 mcMinor:3], 25,
+          @"★metallum × 26.3 ⇒ 需要 java-25（类集主版本 69）★");
+    eqInt([A2RendererCatalog requiredJavaMajorForIdentifier:@"libmetallum.dylib"
+                                                 versionID:@"1.21.11" mcMajor:1 mcMinor:21], 21,
+          @"metallum × 1.21.11 ⇒ 需要 java-21（类集 65）");
+    eqInt([A2RendererCatalog requiredJavaMajorForIdentifier:@"libmetallum.dylib"
+                                                 versionID:@"1.20.4" mcMajor:1 mcMinor:20], 0,
+          @"metallum × 无类集版本 ⇒ 本判据不覆盖（不猜）");
+    eqInt([A2RendererCatalog requiredJavaMajorForIdentifier:@"libmobileglues.dylib"
+                                                 versionID:@"26.3" mcMajor:26 mcMinor:3], 0,
+          @"mobileglues 不挑 JRE ⇒ 无下限");
 
     [[NSFileManager defaultManager] removeItemAtPath:[home stringByDeletingPathExtension]
                                               error:NULL];

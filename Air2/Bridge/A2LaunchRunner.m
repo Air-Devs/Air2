@@ -31,6 +31,14 @@
 //   Input 层的中立表面查询面（见 Natives/Input/a2_glfw_window.h）即可（同 [LAUNCH-PLAN-FACTS] 的口径）。
 // ============================================================================
 
+// ★取窗口的判据只有一份★：Natives/Input/a2_controls_overlay.m 的 `a2_top_visible_window()`
+// （控件覆盖层与 GL 桥必须用同一个「最顶层可见窗口」口径，否则 26.3 的 SDL 画面窗
+//  会被 keyWindow 规则漏掉 ⇒ 上下文建得出来、画面在被盖住那层 = 黑屏）。
+extern UIWindow *a2_top_visible_window(void);
+
+/// 帧回调计数（★静态★：改绑发生在本次调用返回之后，栈变量会变成悬垂指针）
+static int gA2RunnerFrameCounter = 0;
+
 /// 采集宿主表面（★主线程★：UIKit 查询契约要求）。口径与 +currentRuntimeFacts 一致
 /// （宿主窗口 bounds × screen.scale = 像素），字段类型复用 Natives 的中立描述 `A2GlfwSurface`。
 static A2GlfwSurface A2RunnerHostSurface(void) {
@@ -45,12 +53,22 @@ static A2GlfwSurface A2RunnerHostSurface(void) {
                 break;
             }
         }
-        UIWindow *host = nil;
-        for (UIWindow *w in activeScene.windows) {
-            if (w.isKeyWindow) { host = w; break; }
+        // ★宿主表面 = 最顶层可见窗口（与控件覆盖层同一份判定）★
+        //   26.3 起 MC 走 SDL 窗口栈：SDL 的画面窗是**后建的另一个 UIWindow**，
+        //   而 keyWindow 往往还是启动器自己的窗口 ⇒ 只认 keyWindow ＝ 画面落在被遮住的层。
+        UIWindow *host = a2_top_visible_window();
+        if (host == nil) {
+            for (UIWindow *w in activeScene.windows) {
+                if (w.isKeyWindow) { host = w; break; }
+            }
         }
-        if (host == nil) host = activeScene.windows.firstObject;   // 无 key window 时的兜底
+        if (host == nil) host = activeScene.windows.firstObject;   // 兜底：同一 scene 内的首个窗口
         if (host == nil) return;
+
+        [A2Log criterion:@"[A2-COMPAT] 宿主表面取窗口=%@ level=%.0f bounds=%.0fx%.0f"
+         @"（口径=最顶层可见窗口，与控件覆盖层同一份实现）",
+         NSStringFromClass(host.class), (double)host.windowLevel,
+         (double)host.bounds.size.width, (double)host.bounds.size.height];
 
         UIScreen *screen = (activeScene.screen != nil) ? activeScene.screen : UIScreen.mainScreen;
         CGFloat scale = screen.scale;                              // ★与 +currentRuntimeFacts 同口径★
@@ -95,6 +113,51 @@ static void A2RunnerFrameCallback(void *user) {
     if (*counter == 1 || (*counter % A2RunnerFrameLogEveryNFrames) == 0) {
         a2_frame_perf_log_line();
     }
+}
+
+// ---------------------------------------------------------------------------
+//  ★⑦ SDL 窗口相位：晚出现的画面窗 ⇒ 改绑 GL 桥★
+// ---------------------------------------------------------------------------
+//  26.3 的 SDL 画面窗是 MC 启动后才建的，而本链在**建 VM 之前**就取宿主表面 ⇒ 那一刻
+//  只能拿到启动器窗口。这里做一次有界等待（每秒一探、最多 6 秒）：若出现了**不同的**
+//  最顶层可见窗口，就把 GL 桥改绑到它上面（attach 本身可重入：先彻底清掉上一次）。
+//  ★只在「确实换了窗口」时动作★ —— 26.2 的 GLFW 宿主路径不会出现新窗口，零行为差异。
+//  ★帧回调计数器必须是静态的★：本函数在 launchWithPlanPath 返回之后才可能跑，
+//  栈上变量的地址会悬垂。
+static void A2RunnerRebindSurfaceIfTopWindowChanged(UIWindow *attachedWindow,
+                                                    NSString *rendererDylib,
+                                                    NSString *frameworksPath,
+                                                    int attemptsLeft) {
+    if (attemptsLeft <= 0 || attachedWindow == nil) return;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        UIWindow *top = a2_top_visible_window();
+        if (top == nil || top == attachedWindow) {
+            A2RunnerRebindSurfaceIfTopWindowChanged(attachedWindow, rendererDylib, frameworksPath,
+                                                    attemptsLeft - 1);
+            return;
+        }
+        A2GlfwSurface s = A2RunnerHostSurface();      // 内部按主线程口径采集（此刻已在主线程）
+        if (s.nativeWindow == NULL || s.nativeWindow == (__bridge void *)attachedWindow) {
+            A2RunnerRebindSurfaceIfTopWindowChanged(attachedWindow, rendererDylib, frameworksPath,
+                                                    attemptsLeft - 1);
+            return;
+        }
+        A2GlHostSurface host = {0};
+        host.surface       = s;
+        host.rendererName  = rendererDylib.UTF8String;
+        host.frameCallback = A2RunnerFrameCallback;
+        host.frameUser     = &gA2RunnerFrameCounter;
+        int rc = a2_gl_bridge_attach(&host, frameworksPath);
+        [A2Log criterion:@"[A2-COMPAT] %@ SDL 窗口相位：宿主表面改绑 %@ → %@（attach rc=%d）",
+         (rc == 0) ? @"✅" : @"⚠️",
+         NSStringFromClass(attachedWindow.class), NSStringFromClass(top.class), rc];
+        if (rc != 0) {
+            // 改绑失败不推翻已经在跑的启动（旧绑定仍在）⇒ 如实记一行，继续等下一次
+            A2RunnerRebindSurfaceIfTopWindowChanged(attachedWindow, rendererDylib, frameworksPath,
+                                                    attemptsLeft - 1);
+        }
+    });
 }
 
 @implementation A2LaunchRunner
@@ -224,7 +287,7 @@ static void A2RunnerFrameCallback(void *user) {
     //   + 帧回调里 glClear（可判据的可用性证据）。
     // ★阻断口径（不静默回退）★：非 EGL/GL 系后端（如主推 Metal）本桥不负责 ⇒ rc=1，**不阻断**；
     //   是 EGL/GL 系但缺库/无表面/建面失败 ⇒ 负值，**如实阻断**（-12），绝不换成别的渲染器。
-    int glFrameCounter = 0;
+    gA2RunnerFrameCounter = 0;                        // 每次启动重新计数（静态计数器的唯一重置点）
     A2GlHostSurface glHost = {0};
 
     // ---- ★[FRAME-PERF] 分辨率缩放：只改**表面像素**（drawable），逻辑尺寸（点）不动★ ----
@@ -249,7 +312,7 @@ static void A2RunnerFrameCallback(void *user) {
     glHost.surface       = hostSurface;               // 原生窗口句柄 + 像素格式 + 尺寸（已按倍率缩放）
     glHost.rendererName  = rendererDylib.UTF8String;  // 与上面同一份已解析的 dylib 名（Bridge 不读偏好）
     glHost.frameCallback = A2RunnerFrameCallback;     // 帧回调（每 N 帧一行 [FRAME]；桥每帧末尾回调）
-    glHost.frameUser     = &glFrameCounter;
+    glHost.frameUser     = &gA2RunnerFrameCounter;
 
     int glRC = a2_gl_bridge_attach(&glHost, frameworksPath);
     [A2Log log:@"[A2-GLBRIDGE] GL 桥附着完成 rc=%d（0=已建出上下文；1=非 EGL/GL 系不归本桥；-1=缺库；-2=加载失败；-3=无表面；-4=EGL 建面失败）",
@@ -258,6 +321,13 @@ static void A2RunnerFrameCallback(void *user) {
         [A2Log log:@"[A2-GLBRIDGE] ★阻断启动★：所选渲染器是 EGL/GL 系，但未能建出 GL 上下文（rc=%d）—— 缺什么/为何失败见上一行，改选已内置的渲染器后重试",
          glRC];
         return -12;
+    }
+    // ★⑦ 建面用到的窗口可能不是最终画面窗★（26.3 的 SDL 窗口在 MC 启动后才出现）⇒
+    //   起一个有界等待：若之后出现「不同的最顶层可见窗口」，把桥改绑过去。
+    //   非 EGL 系（rc=1，本桥未附着）不参与（它的建面归后端自己）。
+    if (glRC == 0) {
+        A2RunnerRebindSurfaceIfTopWindowChanged((__bridge UIWindow *)glHost.surface.nativeWindow,
+                                                rendererDylib, frameworksPath, 6);
     }
 
     // ---- ★[FRAME-PERF] 预览态基线帧★ ----
@@ -268,7 +338,7 @@ static void A2RunnerFrameCallback(void *user) {
     for (int i = 0; i < A2RunnerPreviewFrameCount; i++) {
         a2_gl_bridge_present_frame();
     }
-    if (glFrameCounter == 0) {
+    if (gA2RunnerFrameCounter == 0) {
         // 桥没附着（后端不归本桥）⇒ 如实说「没有帧样本」，不编造。
         a2_frame_perf_log_line();
     }

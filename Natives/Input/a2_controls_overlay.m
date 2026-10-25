@@ -31,13 +31,20 @@ static A2GameControlsView *a2_find_controls(UIView *root) {
 }
 
 /// 当前最顶层的可见窗口（SDL 的窗口通常也是普通 UIWindow）
-static UIWindow *a2_top_window(void) {
+/// ★对外★（非 static）：GL 桥取宿主表面用的是**同一份判定** —— 26.3 走 SDL 窗口栈时，
+/// `keyWindow` 是启动器自己的窗口，而真正的画面窗是 SDL 后建的、层级更高的那个
+/// （见 Natives/Input/a2_glfw_window.m 的注释）。两处各写一份必然漂移，所以只留这一份。
+UIWindow *a2_top_visible_window(void) {
     UIWindow *top = nil;
     for (UIWindow *w in UIApplication.sharedApplication.windows) {
         if (w.isHidden || w.alpha < 0.01 || w.bounds.size.width <= 1) continue;
         if (top == nil || w.windowLevel >= top.windowLevel) top = w;
     }
     return top ?: UIApplication.sharedApplication.keyWindow;
+}
+
+static UIWindow *a2_top_window(void) {
+    return a2_top_visible_window();
 }
 
 static void a2_sdl_controls_tick(void) {

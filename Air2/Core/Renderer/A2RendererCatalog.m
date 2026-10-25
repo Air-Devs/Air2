@@ -19,6 +19,8 @@
 
 #import "A2RendererCatalog.h"
 
+#include <dlfcn.h>   // ★内置判定 = 文件存在 + 能 dlopen★（与 a2_renderer_load_named 同一口径）
+
 @implementation A2RendererCatalog
 
 + (NSArray<A2Renderer *> *)allCandidates {
@@ -103,15 +105,81 @@
     return [@"runtime.renderer." stringByAppendingString:slug];
 }
 
-+ (BOOL)isBundled:(A2Renderer *)candidate frameworksPath:(nullable NSString *)frameworksPath {
-    // 未内置 = 包内 Frameworks 里没有这个文件。frameworksPath 为空时**不猜**（回 NO）。
-    if (candidate == nil || frameworksPath.length == 0) return NO;
++ (A2RendererGLClass)glClassForIdentifier:(NSString *)identifier {
+    // ★按标识的稳定词根判定（与 A2LegacyProfile.rendererSupportsFixedPipeline: 同一套词根口径）★
+    if (identifier.length == 0) return A2RendererGLClassNotGL;
+    NSString *lower = identifier.lowercaseString;
+
+    // MoltenVK = Vulkan ICD：导出 vkGetInstanceProcAddr 一族，**没有 EGL、也没有 gl\***。
+    // 把它当 GL 库下发 ⇒ LWJGL 取 gl* 符号必失败（闪退）；它也永远不可能进 EGL 白名单。
+    if ([lower containsString:@"moltenvk"]) return A2RendererGLClassNotGL;
+
+    // gl4es 家族（libgl4es_114 / libnggl4es）= GL 1.x/2.x → GLES 的固定管线翻译层：
+    //   对外报的 GL_VERSION 上限是 2.1，拿不到 1.13+ 要的 3.2 core（core profile 语义也没有）。
+    if ([lower containsString:@"gl4es"]) return A2RendererGLClassFixedOnly;
+
+    // metallum（Metal 直通，靠 agent 换 GpuBackend）/ mobileglues（GL 4.5）。
+    // ★libtinygl4angle 不在此列做硬判据★：矩阵只到「[静态-能力] ANGLE 只报 ES 语义」，
+    //   没有实测上限，硬拦会误杀；它的风险由 26.3 宿主表面那条（⑦）与真机日志处理。
+    return A2RendererGLClassModern;
+}
+
++ (NSInteger)requiredJavaMajorForIdentifier:(NSString *)identifier
+                                  versionID:(NSString *)versionID
+                                    mcMajor:(NSInteger)mcMajor
+                                    mcMinor:(NSInteger)mcMinor {
+    // ★只对 metallum 有硬下限★（类集主版本写死在 jar 里，是二进制事实，不是配置）：
+    //   java-17 × 26.x ⇒ premain 的 MetallumAgent(65) 加载失败 ⇒ 建 VM 失败；
+    //   java-21 × 26.x ⇒ agent 起得来、classes26x(69) 一个也 define 不上 ⇒ 黑屏。
+    if (identifier.length == 0) return 0;
+    if (![identifier.lowercaseString containsString:@"metallum"]) return 0;
+
+    if (mcMajor >= 26) return 25;
+    // 1.21.11 是唯一有类集（65）的 1.21.x 档位 ⇒ 下限 21；其它 1.21.x 无类集（另由告警处理）。
+    if (mcMajor == 1 && mcMinor == 21 && [versionID hasPrefix:@"1.21.11"]) return 21;
+    return 0;
+}
+
++ (nullable NSString *)bundleDiagnosisForCandidate:(A2Renderer *)candidate
+                                    frameworksPath:(nullable NSString *)frameworksPath {
+    // 未内置 = 包内 Frameworks 里没有这个文件 / 有了也 dlopen 不起来。frameworksPath 为空时**不猜**。
+    if (candidate == nil || frameworksPath.length == 0) return @"包内未解析出 Frameworks 路径";
     NSString *name = candidate.dylibName ?: candidate.identifier;
-    if (name.length == 0) return NO;
+    if (name.length == 0) return @"候选没有 dylib 文件名";
     NSString *path = [frameworksPath stringByAppendingPathComponent:name];
+
     BOOL isDir = NO;
-    BOOL exists = [NSFileManager.defaultManager fileExistsAtPath:path isDirectory:&isDir];
-    return exists && !isDir;
+    if (![NSFileManager.defaultManager fileExistsAtPath:path isDirectory:&isDir] || isDir) {
+        return [NSString stringWithFormat:@"包内缺 Frameworks/%@", name];
+    }
+
+    // ★判据与真正的加载处同一口径★（a2_renderer_load_named 用 RTLD_LAZY|RTLD_GLOBAL）：
+    //   能 dlopen 才算「内置」——「文件在、依赖缺」正是 GL4ES 那种「入了也不合格」的形态。
+    //   包内文件只读 ⇒ 结果按路径缓存（避免设置页每行都真的 dlopen 一次）。
+    static NSMutableDictionary<NSString *, NSString *> *cache = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ cache = [NSMutableDictionary dictionary]; });
+    @synchronized (cache) {
+        NSString *cached = cache[path];
+        if (cached != nil) return cached.length > 0 ? cached : nil;
+    }
+
+    NSString *reason = nil;
+    void *handle = dlopen(path.UTF8String, RTLD_LAZY | RTLD_GLOBAL);
+    if (handle == NULL) {
+        const char *err = dlerror();
+        reason = [NSString stringWithFormat:@"dlopen 失败：%s", err ? err : "(dlerror 无输出)"];
+    } else {
+        dlclose(handle);   // 只做判定；真正加载由 Natives/Renderer 负责（不在这里留句柄）
+    }
+    @synchronized (cache) {
+        cache[path] = reason ?: @"";
+    }
+    return reason;
+}
+
++ (BOOL)isBundled:(A2Renderer *)candidate frameworksPath:(nullable NSString *)frameworksPath {
+    return [self bundleDiagnosisForCandidate:candidate frameworksPath:frameworksPath] == nil;
 }
 
 + (void)registerAllCandidatesIntoRegistry:(A2Renderers *)registry {

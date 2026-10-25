@@ -52,6 +52,18 @@ typedef NS_ENUM(NSInteger, A2RendererTier) {
     A2RendererTierExperimental= 2,  ///< 实验 / 尚未内置（保留入口，选中会如实阻断）
 };
 
+/// ★渲染后端的 GL 能力等级★（静态元数据，判据用；不代表包内是否内置 —— 那是 `+isBundled:`）。
+///
+/// 为什么要有它：`isBundled` 只能回答「文件在不在」，答不了「这个后端能不能当 GL 用」。
+/// 两条静态失败组合正是照着这个缺口生成的：
+///   · MoltenVK 是 **Vulkan ICD**（无 EGL / 无 `gl*` 导出）⇒ 被当成 GL 库下发必崩；
+///   · gl4es 家族的上限是 **GL 2.x 固定管线** ⇒ 接不了 1.13+（要求 GL 3.2 core）。
+typedef NS_ENUM(NSInteger, A2RendererGLClass) {
+    A2RendererGLClassNotGL     = -1,  ///< 不是 GL 后端（Vulkan 直通：MoltenVK）⇒ 启动链不得下发 `opengl.libname`
+    A2RendererGLClassFixedOnly = 0,   ///< GL 1.x/2.x 固定管线翻译层（gl4es 家族）⇒ 只接 1.12.2 及更早
+    A2RendererGLClassModern    = 1,   ///< GL 3.2+ / Metal 直通（metallum / mobileglues）⇒ 1.13+ 及 26.x
+};
+
 @interface A2RendererCatalog : NSObject
 
 /// 全部候选（★稳定顺序★：主推 → 兼容底 → 实验）。
@@ -71,7 +83,27 @@ typedef NS_ENUM(NSInteger, A2RendererTier) {
 + (NSString *)tierLocalizationKeyForTier:(A2RendererTier)tier;
 + (NSString *)nameLocalizationKeyForIdentifier:(NSString *)identifier;
 
-/// 包内是否已内置该渲染后端（`<frameworksPath>/<dylibName>` 存在且是普通文件）。
+/// 该后端的 GL 能力等级（静态元数据；未登记的标识按「not GL」处理，不猜成可用）。
++ (A2RendererGLClass)glClassForIdentifier:(NSString *)identifier;
+
+/// 该后端在某版本上**要求的 JRE 下限**（major）。返回 0 = 本判据不覆盖该组合（不猜）。
+/// 判据来自 `metallum_agent.jar` 的类集主版本（实测）：
+///   · `classes261/262/263` = 69（Java 25）⇒ 26.x 需要 java-25；
+///   · `classes12111_1_21_11` = 65（Java 21）+ agent 本体 65 ⇒ 1.21.11 至少 java-21。
+/// 其它版本没有对应类集 ⇒ 由「metallum 类集覆盖」告警处理，这里返回 0 不重复判。
++ (NSInteger)requiredJavaMajorForIdentifier:(NSString *)identifier
+                                  versionID:(NSString *)versionID
+                                    mcMajor:(NSInteger)mcMajor
+                                    mcMinor:(NSInteger)mcMinor;
+
+/// ★内置判定诊断★：nil = 已内置（文件在 **且** 能 dlopen）；否则为可读原因
+/// （「缺文件」/「dlopen 失败：<dlerror>」）。给阻断文案用，避免只说「未内置」。
++ (nullable NSString *)bundleDiagnosisForCandidate:(A2Renderer *)candidate
+                                    frameworksPath:(nullable NSString *)frameworksPath;
+
+/// 包内是否已内置该渲染后端 —— ★文件存在 **且** 能 dlopen 成功★才算内置。
+/// 只用 `fileExistsAtPath` 会把「文件在但依赖缺失/架构不符」判成内置（实测 GL4ES 依赖
+/// `@rpath/libEGL.framework`，只拷它一个就会 dlopen 失败）⇒ 闸门形同虚设。
 /// frameworksPath 为空 ⇒ NO（未内置，不猜）。
 + (BOOL)isBundled:(A2Renderer *)candidate frameworksPath:(nullable NSString *)frameworksPath;
 

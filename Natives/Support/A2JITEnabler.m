@@ -539,7 +539,7 @@ static NSString *gA2JITLastFailure = nil;
             if (ok) {
                 if (run.foregroundRecheckPending) {
                     run.foregroundRecheckPending = NO;
-                    a2_log_criterion(@"[A2-JIT-ENABLER] 回前台复查：拿到真区 ⇒ 继续启动"
+                    a2_log_criterion(@"[A2-JIT-ENABLER] 回前台复查：握手完成（哨兵+Extension）⇒ 继续启动"
                                      @"（沿用同一次请求的 completion / 启动参数，不重新排队）");
                 }
                 [run finishWithOK:YES reason:(why ?: @"判据通过")];

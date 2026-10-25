@@ -15,10 +15,14 @@
 //      ⇒ 这里直接转调，避免在同一进程里布第二套 SIGTRAP 窗口（两套网会互相接管）。
 //    · 是否镜像设备 = A2JITEnvironment.needsDebuggerMapping（tree510 DeviceNeedsDebugJITMapping 的等价物）。
 //
-//  ★本单补齐的最后一段（④' 段）★：老 Air 拿到 Universal 基础脚本的握手哨兵
+//  ★判据（方案 A，对齐老 Air）★：老 Air 拿到 Universal 基础脚本的握手哨兵
 //  `0xE0000069`（寄存器回读形态 `0xcccccccc690000e0`）后下发 Extension 就建 VM——
-//  真区在那之后才由 libjvm 自己发 brk #0x69 取得。Air2 把「真区到手」也验掉：
-//  哨兵 ⇒ 下发 Extension ⇒ 有界重试 brk #0x69 ⇒ ★只认真区（size≥期望 且 可写）才放行★。
+//  真区在那之后才由 libjvm 自己发 brk #0x69 取得。所以闸门只判【握手是否完成】：
+//  哨兵已识别 + Extension 已下发成功 + 至少一次 brk #0x69 被调试器服务 ⇒ 放行。
+//  ★不再要求本进程先拿到 size≥64MB 的真区★ —— 闸门自己发的那发 brk 用的是固定小页长度
+//  （getpagesize），64MB 是 libjvm 按 -XX:ReservedCodeCacheSize 建 VM 时才自己发的；
+//  拿「探测 brk 的返回值」去要求 64MB，逻辑上永远不成立（真机 lastlog.old-6 的假失败根因）。
+//  region 的 size / 期望 / 保护位一律【只打日志，不参与判定】。
 //
 
 #import "A2LegacyJITGate.h"
@@ -167,7 +171,7 @@ BOOL A2JIT26IsLikelyDebuggerKeepAttached(void) {
 }
 
 // ============================================================================
-// ④' Air2 增补：★哨兵识别 → 下发 Extension → 有界重试到真区★
+// ④' Air2 增补：★握手（哨兵 → Extension → brk 被服务）★
 // ----------------------------------------------------------------------------
 //  为什么需要这一段（真机证据 lastlog-64）：
 //    `[JIT-FLOW] verified: debugger serviced brk #0x69 -> JIT region
@@ -178,17 +182,25 @@ BOOL A2JIT26IsLikelyDebuggerKeepAttached(void) {
 //    高位 0xCC 是半填充垃圾。老 Air 把这当「可以下发 Extension 了」的信号，
 //    ★不是★「JIT 已就绪」。Air2 之前把它当成功放行 ⇒ 没区却建 VM ⇒ 首帧 SIGBUS。
 //
-//  这一段把顺序固化成四步（老 Air 的握手 + Air2 的有界重试）：
-//    ① 分类：哨兵 / 无映射 / 太小 / 只读 / 真区（判据见 a2gate_classify）；
-//    ② 哨兵 ⇒ 下发 UniversalJIT26Extension.js（把 legacyCommands[0x69] 换成真建区）；
-//    ③ 重试 brk #0x69（有界：A2GATE_RETRY_ATTEMPTS 次 × A2GATE_RETRY_INTERVAL_S 秒）；
-//    ④ 只认「真区」= 非哨兵 + vm_region 有映射 + size ≥ 期望(A2JITRegionMB，默认 64MB)
-//       + 可写（cur/max 含 VM_PROT_WRITE）。
+//  ★方案 A（真机 lastlog.old-6 之后的修正）★：
+//    Air2 曾在哨兵之后要求「本进程先拿到 size≥64MB 且可写的真区」才放行，真机表现是
+//    「Extension 已下发 ⇒ 立刻重试 brk #0x69（期望 size≥67108864）⇒ 重试 2 次后仍未拿到
+//    真区：最后一发=失败（size 小于期望）⇒ ★JIT 未就绪★ ⇒ 失败页」。根因是**判据错**，不是 JIT 没开：
+//    闸门自己发的那发 brk 用固定小页长度（getpagesize），而 64MB 是 libjvm 建 VM 时按
+//    -XX:ReservedCodeCacheSize 自己发 brk 才要的 ⇒ 用「探测 brk 的返回值」去要求 64MB，
+//    逻辑上永远不成立。故按老 Air 的口径收敛判据：
+//      ① entitlement（能力声明，只进日志/原因文案，不单独放行）；
+//      ② 调试器在岗（三探针）；
+//      ③ 哨兵已识别 ⇒ 下发 UniversalJIT26Extension.js（把 legacyCommands[0x69] 换成真建区）；
+//      ④ brk #0x69 至少有一次被调试器服务（返回值非 NULL）⇒ 握手完成 ⇒ 放行。
+//    ★真正的建区与尺寸由 libjvm 建 VM 时自己发 brk 完成★；我们不拦、也不替它验收 ——
+//    拿不到时由 libjvm 自己报错（它的 rc 才是结论）。region 的 size / 期望 / 保护位只打日志，
+//    ★不参与任何判定★（真机日志里写「仅供参考，不参与判定」）。
 //
 //  ★不用 mprotect 自证可写★：真机证据（A2JITEnvironment.m ③ 的注释 / _RT_P0_2.md）——
 //  对调试器交付的 JIT 页做 mprotect(RW)→mprotect(RX) 会撤掉 iOS 26+ 给它的
 //  「可执行祝福」，等于把一块可用区做成废区。可写性只从 vm_region_64 的
-//  当前/最大保护位读（实测真区 cur=0x5 max=0x7 ⇒ max 含 W）。
+//  当前/最大保护位读，且仅用于日志。
 // ============================================================================
 
 /// Universal 基础脚本 `P0=E0000069` 的寄存器回读形态低 32 位。
@@ -197,24 +209,27 @@ BOOL A2JIT26IsLikelyDebuggerKeepAttached(void) {
 #define A2GATE_SENTINEL_LO_SWAPPED  0xE0000069u
 /// 哨兵的地址高位（寄存器半填充垃圾：0xcccccccc690000e0）。
 #define A2GATE_SENTINEL_HI          0xccccccccu
-/// 「小到不可能是 code cache」的阈值：一页 = 16KB（arm64）。
+/// 「小到不可能是 code cache」的阈值：一页 = 16KB（arm64）。★仅用于日志档位★。
 #define A2GATE_SENTINEL_MAX_BYTES   16384ull
-/// 有界重试：次数与间隔（老 Air 只在建 VM 前发一发；这里补上有界重试）。
+/// 有界重试：次数与间隔（哨兵 ⇒ 下发 Extension ⇒ 再取一发做取证；★不是「等到大区」★）。
 #define A2GATE_RETRY_ATTEMPTS       3
 #define A2GATE_RETRY_INTERVAL_S     2.0
-/// 等待循环里的限流：两次「取区」尝试至少间隔（秒）。
+/// 等待循环里的限流：两次「握手探测」至少间隔（秒）。
 #define A2GATE_REOBTAIN_THROTTLE_S  2.0
 
+/// brk #0x69 返回值的★日志档位★（a2gate_classify 的产物）。
+///   ★只让真机 grep 时一眼分清「见到了什么」，一律不参与放行判定★ ——
+///   判定只看「这一发有没有被服务」（NULL 之外都算服务过），见 a2gate_handshake。
 typedef NS_ENUM(NSInteger, A2GateRegionKind) {
-    A2GateRegionKindNone      = 0,  ///< 没应答（NULL）：调试器不在岗或 Extension 未交付
-    A2GateRegionKindSentinel  = 1,  ///< 握手哨兵（0x690000E0 / 0xcccccccc… / 小页且不可写）
-    A2GateRegionKindUnmapped  = 2,  ///< 非哨兵但进程内无映射（垃圾返回值）
-    A2GateRegionKindTooSmall  = 3,  ///< 真映射，但 size < 期望（不够当 code cache）
-    A2GateRegionKindReadOnly  = 4,  ///< 真映射且够大，但没有任何写权限
-    A2GateRegionKindReal      = 5,  ///< ★真区★：非哨兵 + 有映射 + size≥期望 + 可写
+    A2GateRegionKindNone     = 0,  ///< 没应答（NULL）：调试器不在岗 / 没指派脚本 ⇒ ★未服务★
+    A2GateRegionKindSentinel = 1,  ///< 握手哨兵（0x690000E0 / 0xcccccccc… / 小页且不可写）
+    A2GateRegionKindUnmapped = 2,  ///< 非哨兵但进程内无映射（垃圾返回值）
+    A2GateRegionKindSmall    = 3,  ///< 有映射，但 size 小于期望（★仅日志：闸门发的是小页 brk★）
+    A2GateRegionKindReadOnly = 4,  ///< 有映射且够大，但没有写权限（★仅日志★）
+    A2GateRegionKindMapped   = 5,  ///< 非哨兵 + 进程内有映射（真指针；尺寸/保护位仅进日志）
 };
 
-/// 一次 brk #0x69 返回值的完整取证（日志与判定都用它）。
+/// 一次 brk #0x69 返回值的完整取证（★日志用★）。
 typedef struct {
     void *addr;
     size_t wantBytes;
@@ -224,12 +239,13 @@ typedef struct {
     BOOL mapped;
     BOOL writable;
     BOOL executable;
-    const char *rule;   ///< 命中的判据短语（日志用，静态字符串）
+    const char *rule;   ///< 命中的档位短语（日志用，静态字符串）
 } A2GateRegionInfo;
 
 /// tree510 JIT26CreateRegionLegacySafe 的 expected 口径
 /// （= A2JITEnvironment.expectedRegionBytes：偏好键 `A2JITRegionMB` 覆盖，未设 ⇒ 64MB）。
-static size_t a2gate_want_bytes(void) {
+/// ★方案 A：这个值只用于日志对照★ —— 闸门自己不发这么大（发 getpagesize），更不拿它当判据。
+static size_t a2gate_expect_bytes(void) {
     size_t want = [A2JITEnvironment expectedRegionBytes];
     if (want == 0) {
         want = 64u * 1024u * 1024u;
@@ -237,13 +253,14 @@ static size_t a2gate_want_bytes(void) {
     return want;
 }
 
-/// ★分类★：把 brk #0x69 的返回值判成 6 档之一。纯只读（vm_region_64），无副作用。
-static A2GateRegionKind a2gate_classify(void *r, size_t want, A2GateRegionInfo *info) {
+/// ★取证★：把 brk #0x69 的返回值判成 6 档之一。纯只读（vm_region_64），无副作用。
+///   ★档位只决定日志文案，不决定放行★；放行只看 a2gate_handshake 的 ready。
+static A2GateRegionKind a2gate_classify(void *r, size_t expect, A2GateRegionInfo *info) {
     A2GateRegionInfo local;
     if (info == NULL) info = &local;
     memset(info, 0, sizeof(*info));
     info->addr = r;
-    info->wantBytes = want;
+    info->wantBytes = expect;
     info->rule = "";
 
     if (r == NULL) {
@@ -261,7 +278,7 @@ static A2GateRegionKind a2gate_classify(void *r, size_t want, A2GateRegionInfo *
         return A2GateRegionKindSentinel;
     }
 
-    // ② 真映射与保护位：vm_region_64 只读查询。
+    // ② 真映射与保护位：vm_region_64 只读查询（结果只进日志）。
     size_t pageLen = (size_t)getpagesize();
     unsigned int cur = 0, maxp = 0;
     unsigned long long sz = 0;
@@ -282,28 +299,28 @@ static A2GateRegionKind a2gate_classify(void *r, size_t want, A2GateRegionInfo *
         info->rule = "size<=16KB 且不可写";
         return A2GateRegionKindSentinel;
     }
-    // ④ 够大才可能是 code cache。
-    if (info->vmSize < (unsigned long long)want) {
-        info->rule = "size < 期望";
-        return A2GateRegionKindTooSmall;
+    // ④ 尺寸/保护位只影响日志档位 —— ★不再有任何「size 小于期望 ⇒ 未就绪」的判定★。
+    if (info->vmSize < (unsigned long long)expect) {
+        info->rule = "映射小于期望值（仅日志，不参与判定）";
+        return A2GateRegionKindSmall;
     }
     if (!info->writable) {
-        info->rule = "够大但无写权限";
+        info->rule = "无写权限（仅日志，不参与判定）";
         return A2GateRegionKindReadOnly;
     }
-    info->rule = "真区（size≥期望 且 可写）";
-    return A2GateRegionKindReal;
+    info->rule = "非哨兵 + 有映射（真指针）";
+    return A2GateRegionKindMapped;
 }
 
-/// 分类档位的中文名（日志用；三种关键状态各自一眼可辨）。
+/// 档位的中文名（日志用；关键状态各自一眼可辨）。
 static NSString *a2gate_kind_name(A2GateRegionKind k) {
     switch (k) {
-        case A2GateRegionKindNone:     return @"无应答";
+        case A2GateRegionKindNone:     return @"无应答（未服务）";
         case A2GateRegionKindSentinel: return @"握手哨兵";
         case A2GateRegionKindUnmapped: return @"垃圾返回（无映射）";
-        case A2GateRegionKindTooSmall: return @"太小";
-        case A2GateRegionKindReadOnly: return @"只读";
-        case A2GateRegionKindReal:     return @"★真区★";
+        case A2GateRegionKindSmall:    return @"映射偏小（仅日志）";
+        case A2GateRegionKindReadOnly: return @"只读（仅日志）";
+        case A2GateRegionKindMapped:   return @"真指针（有映射）";
     }
     return @"未知";
 }
@@ -360,150 +377,174 @@ static BOOL a2gate_deliver_extension(void) {
     return ok;
 }
 
-/// 真区缓存：一旦确认就留驻复用（每次重发 brk 都是几十 MB 的分配）。
-static void *gA2GateRealRegion = NULL;
-static size_t gA2GateRealRegionBytes = 0;
-static NSTimeInterval gA2GateLastObtainAttempt = 0;
-static int gA2GateObtainAttempts = 0;
-/// 本进程是否曾见过握手哨兵（复用真区时仍要如实回答「见没见过」）。
+/// ── 进程级握手结论（老 Air 的 `static void *result` 记忆语义）──
+///   握手成功一次就留驻：之后每次问「就绪没」不再重发 brk（每发一发都是调试器侧的一次分配）。
+static BOOL gA2GateHandshakeDone = NO;
+/// 本进程是否曾见过握手哨兵 / Extension 是否下发成功（「凭哪条放行」的取证）。
 static BOOL gA2GateSawSentinel = NO;
+static BOOL gA2GateExtDelivered = NO;
+/// 最近一次被服务的那发 brk 的地址与尺寸（★只用于日志★：不复用、不 munmap、不参与判定）。
+static void *gA2GateLastRegion = NULL;
+static size_t gA2GateLastRegionBytes = 0;
+static A2GateRegionInfo gA2GateLastInfo;
+static NSTimeInterval gA2GateLastAttempt = 0;
+static int gA2GateAttempts = 0;
 
-/// ★取真区★：唯一入口。返回最终分类；info 回填取证；sawSentinel/extDelivered 回填过程事实。
-///   throttle=YES ⇒ 等待循环用（两次尝试至少间隔 A2GATE_REOBTAIN_THROTTLE_S，防每 0.5s 打一发 brk）；
+/// 一次握手（哨兵 → Extension → brk 被服务）的全部取证。★判定只看 ready★。
+typedef struct {
+    BOOL ready;         ///< ★放行判据★：serviced && (非哨兵 || Extension 已下发成功)
+    BOOL serviced;      ///< 至少一发 brk #0x69 被调试器服务（返回值非 NULL）
+    BOOL sawSentinel;   ///< 见过 Universal 基础脚本的握手哨兵
+    BOOL extTried;      ///< 尝试过下发 Extension
+    BOOL extDelivered;  ///< Extension 下发成功（brk #0xf00d cmd=2 被服务）
+    int  brks;          ///< 本次实际发了几发 brk
+    A2GateRegionKind kind;   ///< 最后一发的档位（★仅日志★）
+    A2GateRegionInfo info;   ///< 最后一发的取证（★仅日志★）
+} A2GateHandshake;
+
+/// ★握手★：唯一入口，★放行判据就是它的 ready★。
+///   probeLen = 闸门向调试器讨的字节数（老 Air 口径 = getpagesize()）；
+///   expect   = 期望大小，★只为日志对照★（64MB 是 libjvm 建 VM 时自己发 brk 才要的，闸门不要求）；
+///   throttle=YES ⇒ 等待循环用（两次探测至少间隔 A2GATE_REOBTAIN_THROTTLE_S，防每 0.5s 打一发 brk）；
 ///   throttle=NO  ⇒ 建 VM 前的一次性闰门用（绝不因为限流而误拦）。
-///   attempts=2 且 interval=0 ⇒ 「Extension 刚装好就立刻再探一发」（哨兵 → 真区的常见路径）；
-///   attempts=3 且 interval=2 ⇒ 建 VM 前的有界重试（本单要求）。
-static A2GateRegionKind a2gate_obtain_real_region(size_t want,
-                                                  int attempts,
-                                                  NSTimeInterval interval,
-                                                  BOOL throttle,
-                                                  A2GateRegionInfo *info,
-                                                  BOOL *sawSentinelOut,
-                                                  BOOL *extDeliveredOut) {
-    if (sawSentinelOut) *sawSentinelOut = NO;
-    if (extDeliveredOut) *extDeliveredOut = NO;
+static BOOL a2gate_handshake(size_t probeLen, size_t expect,
+                             int attempts, NSTimeInterval interval, BOOL throttle,
+                             A2GateHandshake *hs) {
+    A2GateHandshake local;
+    if (hs == NULL) hs = &local;
+    memset(hs, 0, sizeof(*hs));
+    hs->kind = A2GateRegionKindNone;
+    hs->info.rule = "未探测";
+    hs->info.wantBytes = expect;
     if (attempts < 1) attempts = 1;
 
-    // ⓪ 复用：已确认的真区只要还在映射里就直接用，不再发 brk。
-    if (gA2GateRealRegion != NULL) {
-        A2GateRegionInfo cached;
-        if (a2gate_classify(gA2GateRealRegion, want, &cached) == A2GateRegionKindReal) {
-            if (info) *info = cached;
-            // 「见没见过哨兵」如实回答；Extension 是否已下发由 a2gate_deliver_extension 自己记账
-            // （调用方若需要仍会问到它，已下发则直接回 YES，不会重复发）。
-            if (sawSentinelOut) *sawSentinelOut = gA2GateSawSentinel;
-            if (extDeliveredOut) *extDeliveredOut = NO;
-            a2_jit_log("[A2JIT] 复用已确认的真区 %p（size=%llu ≥ want=%zu，不再重发 brk #0x69）",
-                       gA2GateRealRegion, cached.vmSize, want);
-            return A2GateRegionKindReal;
-        }
-        a2_jit_log("[A2JIT] 缓存的真区 %p 已失效（%s）⇒ 重新取", gA2GateRealRegion, cached.rule);
-        gA2GateRealRegion = NULL;
-        gA2GateRealRegionBytes = 0;
+    // ⓪ 本进程已握手成功过 ⇒ 直接放行（不再重发 brk）。
+    if (gA2GateHandshakeDone) {
+        hs->ready = YES;
+        hs->serviced = YES;
+        hs->sawSentinel = gA2GateSawSentinel;
+        hs->extTried = hs->extDelivered = gA2GateExtDelivered;
+        hs->kind = A2GateRegionKindMapped;
+        hs->info = gA2GateLastInfo;
+        hs->info.wantBytes = expect;
+        if (hs->info.rule == NULL) hs->info.rule = "（本进程此前已完成握手）";
+        a2_log_criterion(@"[JIT-FLOW] 握手此前已完成（本进程）⇒ 直接放行；region size=%llu"
+                         @"（期望 %zu，仅供参考，不参与判定）",
+                         hs->info.vmSize, expect);
+        return YES;
     }
 
     // ① 限流：等待循环 0.5s 一轮，不限流会每轮发一发 brk。
     NSTimeInterval now = [NSDate date].timeIntervalSince1970;
-    if (throttle && gA2GateLastObtainAttempt > 0 &&
-        (now - gA2GateLastObtainAttempt) < A2GATE_REOBTAIN_THROTTLE_S) {
-        if (info) {
-            memset(info, 0, sizeof(*info));
-            info->wantBytes = want;
-            info->rule = "限流中（距上次取区不足 2s）";
-        }
-        return A2GateRegionKindNone;
+    if (throttle && gA2GateLastAttempt > 0 &&
+        (now - gA2GateLastAttempt) < A2GATE_REOBTAIN_THROTTLE_S) {
+        hs->info.rule = "限流中（距上次探测不足 2s）";
+        return NO;
     }
-    gA2GateLastObtainAttempt = now;
-    gA2GateObtainAttempts++;
-
-    A2GateRegionInfo cur;
-    memset(&cur, 0, sizeof(cur));
-    cur.wantBytes = want;
-    cur.rule = "未探测";
-    A2GateRegionKind kind = A2GateRegionKindNone;
-    BOOL sawSentinel = NO;
-    BOOL extensionTried = NO;
+    gA2GateLastAttempt = now;
+    gA2GateAttempts++;
 
     for (int i = 0; i < attempts; i++) {
         if (i > 0 && interval > 0) {
             [NSThread sleepForTimeInterval:interval];   // 有界重试的间隔
         }
         // ← tree510 JIT26CreateRegionLegacySafe(len)：brk #0x69；无人服务返回 NULL 不致死。
-        void *r = a2_jit_brk69_create_region_safe(want);
-        kind = a2gate_classify(r, want, &cur);
+        void *r = a2_jit_brk69_create_region_safe(probeLen);
+        hs->brks = i + 1;
+        hs->kind = a2gate_classify(r, expect, &hs->info);
 
-        // ★三种关键状态各打一行，真机 grep 一眼可辨★
-        if (kind == A2GateRegionKindReal) {
-            a2_log_criterion(@"[JIT-FLOW] ★真区★ confirmed: brk #0x69 -> %p (size=%llu bytes ≥ 期望=%zu, "
-                             @"cur=0x%x max=0x%x writable=%d executable=%d) -- real JIT region"
-                             @"（第 %d/%d 发，先见过哨兵=%d）",
-                             r, cur.vmSize, want, cur.cur, cur.max,
-                             (int)cur.writable, (int)cur.executable, i + 1, attempts, (int)sawSentinel);
-            gA2GateRealRegion = r;
-            gA2GateRealRegionBytes = (size_t)cur.vmSize;
-            if (info) *info = cur;
-            if (sawSentinelOut) *sawSentinelOut = sawSentinel;
-            if (extDeliveredOut) *extDeliveredOut = extensionTried;
-            return A2GateRegionKindReal;
-        }
-        if (kind == A2GateRegionKindSentinel) {
-            sawSentinel = YES;
-            gA2GateSawSentinel = YES;
-            a2_log_criterion(@"[JIT-FLOW] 哨兵 handshake detected（第 %d/%d 发）: brk #0x69 -> %p "
-                             @"(size=%llu cur=0x%x max=0x%x writable=%d, 判据=%s) "
-                             @"⇒ 这是 Universal 基础脚本的握手哨兵，★不是 JIT 区★",
-                             i + 1, attempts, r, cur.vmSize, cur.cur, cur.max,
-                             (int)cur.writable, cur.rule);
-        } else if (kind == A2GateRegionKindNone) {
+        if (hs->kind == A2GateRegionKindNone) {
+            // 没人服务（调试器不在岗 / 没指派脚本）：cmd=2 走的也是 brk #0xf00d，同样不会有人应答
+            // ⇒ 这一轮不下发 Extension，下一轮再试（调试器可能刚 attach）。
             a2_log_criterion(@"[JIT-FLOW] brk #0x69 无应答（第 %d/%d 发）: NULL "
-                             @"(调试器在岗=%d traced=%d exn=%d) —— 本进程没有拿到区",
+                             @"(调试器在岗=%d traced=%d exn=%d) —— 这一发没被服务",
                              i + 1, attempts,
                              (int)A2JIT26IsLikelyDebuggerKeepAttached(),
                              (int)A2JIT26DebuggerAttachedViaPtrace(),
                              (int)A2JIT26DebuggerViaExceptionPorts());
-        } else {
-            a2_log_criterion(@"[JIT-FLOW] 非真区（第 %d/%d 发）: brk #0x69 -> %p "
-                             @"(size=%llu 期望=%zu cur=0x%x max=0x%x writable=%d, 判据=%s)",
-                             i + 1, attempts, r, cur.vmSize, want, cur.cur, cur.max,
-                             (int)cur.writable, cur.rule);
+            continue;
         }
 
-        // ② 哨兵 / 非真区 ⇒ 下发 Extension（把 legacyCommands[0x69] 换成真建区），
-        //    下一个 brk 才会由调试器真建区并回真地址。★只发一次★。
-        //    NULL（无人应答）时不下发：cmd=2 走的也是 brk #0xf00d，没人服务只会再失败一次。
-        if (!extensionTried && kind != A2GateRegionKindNone) {
-            extensionTried = YES;
-            if (a2gate_deliver_extension()) {
-                a2_log_criterion(@"[JIT-FLOW] Extension 已下发 ⇒ 立刻重试 brk #0x69"
-                                 @"（期望拿到 size≥%zu 且可写的真区）", want);
+        // ★brk 被调试器服务了★：NULL 之外的任何应答都算（哨兵 / 一页 / 只读 / 大区）。
+        //   数值（size / 期望 / 保护位）只进日志，★不参与判定★。
+        hs->serviced = YES;
+        gA2GateLastRegion = r;
+        gA2GateLastRegionBytes = (size_t)hs->info.vmSize;
+        gA2GateLastInfo = hs->info;
+        if (hs->kind == A2GateRegionKindSentinel) {
+            hs->sawSentinel = YES;
+            gA2GateSawSentinel = YES;
+            a2_log_criterion(@"[JIT-FLOW] 哨兵 handshake detected（第 %d/%d 发）: brk #0x69 -> %p "
+                             @"(size=%llu cur=0x%x max=0x%x writable=%d, 档位=%s) "
+                             @"⇒ Universal 基础脚本的握手哨兵，★不是 JIT 区★"
+                             @"（真区由 libjvm 建 VM 时自己发 brk 取）",
+                             i + 1, attempts, r, hs->info.vmSize, hs->info.cur, hs->info.max,
+                             (int)hs->info.writable, hs->info.rule);
+        } else {
+            a2_log_criterion(@"[JIT-FLOW] brk #0x69 已被服务（第 %d/%d 发）: -> %p "
+                             @"(size=%llu 期望=%zu cur=0x%x max=0x%x writable=%d executable=%d, "
+                             @"档位=%s) -- serviced；region 数值仅供参考，不参与判定",
+                             i + 1, attempts, r, hs->info.vmSize, expect,
+                             hs->info.cur, hs->info.max,
+                             (int)hs->info.writable, (int)hs->info.executable, hs->info.rule);
+        }
+
+        // ② Extension：哨兵必须下发（老 Air 的握手）；非哨兵也尽力补发一次（legacy 脚本判别要用）。
+        //    ★整次握手只发一次★。
+        if (!hs->extTried) {
+            hs->extTried = YES;
+            hs->extDelivered = a2gate_deliver_extension();
+            if (hs->extDelivered) {
+                a2_log_criterion(@"[JIT-FLOW] Extension 已下发 ⇒ 再发一发 brk #0x69 做取证"
+                                 @"（region size 仅供参考，不参与判定；真区由 libjvm 建 VM 时自己取）");
             }
+        }
+
+        // ③ ★判定★：非哨兵（已服务）⇒ 握手完成；哨兵 ⇒ 必须 Extension 也下发成功。
+        if (hs->serviced && (!hs->sawSentinel || hs->extDelivered)) {
+            // 哨兵刚被 Extension 换成真建区 ⇒ 再探一发只为取证 region 数值；其余直接收尾。
+            BOOL wantForensics = (hs->kind == A2GateRegionKindSentinel && (i + 1) < attempts);
+            if (!wantForensics) break;
         }
     }
 
-    // ③ 重试用尽仍是哨兵/小页/无应答 ⇒ 未就绪（调用方不得建 VM）。
-    if (info) *info = cur;
-    if (sawSentinelOut) *sawSentinelOut = sawSentinel;
-    if (extDeliveredOut) *extDeliveredOut = extensionTried;
-    a2_log_criterion(@"[JIT-FLOW] 重试 %d 次后仍未拿到真区：最后一发=%s（%s）⇒ ★JIT 未就绪★"
-                     @"（本进程第 %d 次取区）",
-                     attempts, a2gate_kind_name(kind).UTF8String, cur.rule, gA2GateObtainAttempts);
-    return kind;
+    // ④ 收尾判定：★只看「有没有被服务」+「哨兵那条路 Extension 有没有下发成功」★。
+    //    size / 期望 / 保护位一律不参与（见 ④' 段：闸门发的是小页 brk，64MB 归 libjvm）。
+    hs->ready = hs->serviced && (!hs->sawSentinel || hs->extDelivered);
+    gA2GateExtDelivered = hs->extDelivered;
+    if (hs->ready) {
+        gA2GateHandshakeDone = YES;
+        a2_log_criterion(@"[JIT-FLOW] 握手完成（哨兵+Extension）⇒ 放行；region size=%llu"
+                         @"（期望 %zu，仅供参考，不参与判定；见过哨兵=%d 第 %d 次探测 %d 发）",
+                         hs->info.vmSize, expect, (int)hs->sawSentinel,
+                         gA2GateAttempts, hs->brks);
+    } else {
+        a2_log_criterion(@"[JIT-FLOW] 握手未完成（第 %d 次探测，%d 发）：最后一发=%s（%s）；"
+                         @"见过哨兵=%d；Extension 下发=%d ⇒ 未就绪（不建 VM）",
+                         gA2GateAttempts, hs->brks,
+                         a2gate_kind_name(hs->kind).UTF8String, hs->info.rule,
+                         (int)hs->sawSentinel, (int)hs->extDelivered);
+    }
+    return hs->ready;
 }
 
 // ============================================================================
-// ④ tree510 utils.m L1437–L1497：真能力判据（★判据改为「真区」，见 ④' 段★）
+// ④ tree510 utils.m L1437–L1497：真能力判据
+//   ★判据（方案 A）= 握手完成★：调试器在岗 + brk #0x69 被服务 + 哨兵那条路 Extension 已下发。
+//   ★不再要求「本进程先拿到 size≥期望(64MB) 的真区」★（理由见 ④' 段：那发探测 brk 只有一页，
+//   64MB 是 libjvm 建 VM 时自己发的；拿探测结果要求 64MB 永远不成立）。
 // ============================================================================
-static void *gA2AmeJITVerifiedRegion = NULL;
+static void *gA2AmeJITVerifiedRegion = NULL;   ///< 最近一次被服务的那发 brk 的地址（★仅日志/原因文案★）
 static BOOL   gA2AmeJITVerified = NO;
 static NSTimeInterval gA2AmeJITLastVerifyAttempt = 0;
 static int    gA2AmeJITVerifyAttempts = 0;
 
-// 向调试器讨一块 JIT 区并★验收它是不是真区★。
-//   老 Air 的这条判据只要求「调试器应答了」（含哨兵）；Air2 补上「应答的内容必须是
-//   真区」——只拿到哨兵 ⇒ 未就绪（保持等待、不建 VM），见 ④' 段。
-//   等待循环 0.5s 一轮 ⇒ 单发 + 2s 限流（限流在 a2gate_obtain_real_region 里）。
-BOOL A2AMEJITVerifyWritableJITRegion(void) {
-    if (gA2AmeJITVerified && gA2AmeJITVerifiedRegion != NULL) {
+// 发 brk #0x69 确认「已被服务」，并完成哨兵 → Extension 的握手。
+//   老 Air 的这条判据只要求「调试器应答了」（哨兵也算应答）；方案 A 与它一致，
+//   region 的 size / 保护位只记录供诊断（★不参与判定★）。
+//   等待循环 0.5s 一轮 ⇒ 单发 + 2s 限流（限流在 a2gate_handshake 里）。
+BOOL A2AMEJITVerifyJITHandshake(void) {
+    if (gA2AmeJITVerified) {
         return YES;
     }
     NSTimeInterval now = [NSDate date].timeIntervalSince1970;
@@ -514,28 +555,26 @@ BOOL A2AMEJITVerifyWritableJITRegion(void) {
     gA2AmeJITLastVerifyAttempt = now;
     gA2AmeJITVerifyAttempts++;
 
-    size_t want = a2gate_want_bytes();
-    A2GateRegionInfo info;
-    BOOL sawSentinel = NO, extDelivered = NO;
-    // ★attempts=2 + interval=0★：拿到哨兵时先装 Extension，然后**立刻**再探一发 ——
-    //   这是「哨兵 → 真区」最常见的路径，不能让调用方（启动链 ② 的 verify）先失败一次。
-    A2GateRegionKind kind = a2gate_obtain_real_region(want, 2, 0.0, YES,
-                                                      &info, &sawSentinel, &extDelivered);
+    size_t probe = (size_t)getpagesize();      // 老 Air 口径：闸门只讨一页
+    size_t expect = a2gate_expect_bytes();     // 仅日志对照
+    A2GateHandshake hs;
+    // ★attempts=2 + interval=0★：拿到哨兵时先装 Extension，然后**立刻**再探一发做取证 ——
+    //   不让调用方（启动链 ② 的 verify）先失败一次。
+    BOOL ready = a2gate_handshake(probe, expect, 2, 0.0, YES, &hs);
 
-    if (kind != A2GateRegionKindReal) {
-        a2_log_criterion(@"[JIT-FLOW] false-positive guard triggered (#%d): brk #0x69 没有交付真区"
-                         @"（%s：%s）-- NOT counting JIT as ready (isJITEnabled=%d keepAttached=%d "
-                         @"traced=%d exn=%d)",
-                         gA2AmeJITVerifyAttempts, a2gate_kind_name(kind).UTF8String, info.rule,
+    if (!ready) {
+        a2_log_criterion(@"[JIT-FLOW] 握手未完成（#%d）：%s（%s）-- 不把 JIT 记为已就绪"
+                         @"（isJITEnabled=%d keepAttached=%d traced=%d exn=%d）",
+                         gA2AmeJITVerifyAttempts, a2gate_kind_name(hs.kind).UTF8String, hs.info.rule,
                          (int)A2JITIsEnabled(NO), (int)A2JIT26IsLikelyDebuggerKeepAttached(),
                          (int)A2JIT26DebuggerAttachedViaPtrace(), (int)A2JIT26DebuggerViaExceptionPorts());
         return NO;
     }
-    gA2AmeJITVerifiedRegion = info.addr;
+    gA2AmeJITVerifiedRegion = hs.info.addr;
     gA2AmeJITVerified = YES;
-    a2_log_criterion(@"[JIT-FLOW] verified: brk #0x69 -> 真区 @%p（size=%llu ≥ 期望=%zu, cur=0x%x "
-                     @"max=0x%x, writable=1）-- real JIT capability confirmed",
-                     info.addr, info.vmSize, want, info.cur, info.max);
+    a2_log_criterion(@"[JIT-FLOW] 握手完成（哨兵+Extension）⇒ 放行；region size=%llu"
+                     @"（期望 %zu，仅供参考，不参与判定）-- JIT handshake ok (%p)",
+                     hs.info.vmSize, expect, hs.info.addr);
     return YES;
 }
 
@@ -558,10 +597,14 @@ BOOL A2AMEJITWaitReadyVerified(void) {
     if (!A2LegacyJITGateRequiresDebugMapping()) {
         return A2AMEJITBothMappingKindsExecutable();
     }
+    // ★四条件顺序（不退回「只看 CS_DEBUGGED 就放行」）★
+    //   ① entitlement（能力声明）：只进 reason / 日志，★不单独放行★；
+    //   ② 调试器在岗（三探针）—— 没有它 brk #0x69 一定无人应答；
+    //   ③④ 哨兵/Extension 握手 + brk 被服务（A2AMEJITVerifyJITHandshake 内按此顺序）。
     if (!A2JIT26IsLikelyDebuggerKeepAttached()) {
         return NO;
     }
-    return A2AMEJITVerifyWritableJITRegion();
+    return A2AMEJITVerifyJITHandshake();
 }
 
 // ============================================================================
@@ -578,14 +621,15 @@ BOOL A2LegacyJITGateReadyNow(NSString *_Nullable *_Nullable whyOut) {
         if (whyOut) *whyOut = @"非镜像设备（<iOS 26）：老 Air 的 JIT 闰门整块跳过 ⇒ 直接放行";
         return YES;
     }
-    // 镜像设备：唯一判据 = 老 Air 的 AMEJITWaitReadyVerified ★严格化为「拿到真区」★
-    //   （调试器在岗 + brk #0x69 交付的必须是真区，哨兵不算）。
+    // 镜像设备：唯一判据 = 老 Air 的 AMEJITWaitReadyVerified
+    //   ★方案 A：只要握手完成（哨兵 + Extension + brk 被服务）就放行★，
+    //   不要求本进程先拿到 64MB 真区（那由 libjvm 建 VM 时自己发 brk 取）。
     if (A2AMEJITWaitReadyVerified()) {
         if (whyOut) {
             *whyOut = [NSString stringWithFormat:
-                @"brk #0x69 已交付真区（region=%p，size=%zu ≥ 期望=%zu 且可写）：isJITEnabled=%d "
-                @"keepAttached=%d traced=%d exn=%d",
-                gA2AmeJITVerifiedRegion, gA2GateRealRegionBytes, a2gate_want_bytes(),
+                @"握手完成（哨兵+Extension）⇒ 放行（region=%p，size=%zu 仅供参考；isJITEnabled=%d "
+                @"keepAttached=%d traced=%d exn=%d）",
+                gA2AmeJITVerifiedRegion, gA2GateLastRegionBytes,
                 (int)A2JITIsEnabled(NO), (int)A2JIT26IsLikelyDebuggerKeepAttached(),
                 (int)A2JIT26DebuggerAttachedViaPtrace(), (int)A2JIT26DebuggerViaExceptionPorts()];
         }
@@ -600,10 +644,10 @@ BOOL A2LegacyJITGateReadyNow(NSString *_Nullable *_Nullable whyOut) {
                 (int)A2JIT26DebuggerViaExceptionPorts(), (int)A2JITIsEnabled(NO)];
         } else {
             *whyOut = [NSString stringWithFormat:
-                @"调试器在岗，但 brk #0x69 只回【握手哨兵 0x690000E0 / 一页不可写】或没应答："
-                @"还没有交付 size≥%zu 且可写的真 JIT 区（traced=%d exn=%d，第 %d 次探测）"
+                @"调试器在岗，但握手没完成（哨兵/Extension 或 brk #0x69 没被服务）："
+                @"Extension 下发=%d（traced=%d exn=%d，第 %d 次探测）"
                 @"⇒ JIT 并未真正就绪，不能建 VM",
-                a2gate_want_bytes(), (int)A2JIT26DebuggerAttachedViaPtrace(),
+                (int)gA2GateExtDelivered, (int)A2JIT26DebuggerAttachedViaPtrace(),
                 (int)A2JIT26DebuggerViaExceptionPorts(), gA2AmeJITVerifyAttempts];
         }
     }
@@ -612,8 +656,8 @@ BOOL A2LegacyJITGateReadyNow(NSString *_Nullable *_Nullable whyOut) {
 
 // ============================================================================
 // ⑤ tree510 JavaLauncher.m L1384–L1544：建 JVM 之前的闰门
-//   ★Air2 增补★：老 Air 走到「拿到哨兵 ⇒ 下发 Extension」就放行；这里再补上
-//   「有界重试到真区」，★只认真区才放行★（见 ④' 段）。
+//   ★方案 A（对齐老 Air）★：老 Air 走到「拿到哨兵 ⇒ 下发 Extension」就放行建 VM ——
+//   真区在那之后由 libjvm 自己发 brk #0x69 取得。★这里不再要求 64MB 真区★（见 ④' 段）。
 // ============================================================================
 A2LegacyJITGateOutcome A2LegacyJITGateOpen(NSString *_Nullable *_Nullable whyOut) {
     // tree510：`BOOL requiresDebugJITMapping = DeviceNeedsDebugJITMapping();`
@@ -624,79 +668,61 @@ A2LegacyJITGateOutcome A2LegacyJITGateOpen(NSString *_Nullable *_Nullable whyOut
         return A2LegacyJITGateOutcomeOpen;
     }
 
-    size_t want = a2gate_want_bytes();
-    a2_log_criterion(@"[A2-JIT-GATE] 建 VM 前闰门开始：向调试器讨 %zu 字节（%.0f MB）的 JIT 区"
-                     @"（有界重试 %d 次 × %.0fs；★哨兵不算成功★）",
-                     want, (double)want / (1024.0 * 1024.0),
-                     A2GATE_RETRY_ATTEMPTS, A2GATE_RETRY_INTERVAL_S);
+    // tree510（逐字）：`JIT26CreateRegionLegacySafe(getpagesize())` —— ★闸门只讨一页★。
+    //   64MB 的真区是 libjvm 建 VM 时按 -XX:ReservedCodeCacheSize 自己发的，闸门不替它要。
+    size_t probe = (size_t)getpagesize();
+    size_t expect = a2gate_expect_bytes();    // 仅日志对照（A2JITRegionMB，默认 64MB）
+    a2_log_criterion(@"[A2-JIT-GATE] 建 VM 前闰门开始：握手探测（brk #0x69 讨 %zu 字节 = 一页；"
+                     @"期望值 %zu 仅作日志参考；有界 %d 发 × %.0fs）",
+                     probe, expect, A2GATE_RETRY_ATTEMPTS, A2GATE_RETRY_INTERVAL_S);
 
-    // tree510（逐字，含 static 缓存语义）：
-    //     static void *result;
-    //     if(!result) result = JIT26CreateRegionLegacySafe(getpagesize());
-    // → ★Air2 改为「复用已确认的真区 / 有界重试到真区」★（缓存也在 obtain 里）。
-    A2GateRegionInfo info;
-    BOOL sawSentinel = NO, extDelivered = NO;
-    A2GateRegionKind kind = a2gate_obtain_real_region(want, A2GATE_RETRY_ATTEMPTS,
-                                                      A2GATE_RETRY_INTERVAL_S, NO,
-                                                      &info, &sawSentinel, &extDelivered);
+    A2GateHandshake hs;
+    BOOL ready = a2gate_handshake(probe, expect, A2GATE_RETRY_ATTEMPTS,
+                                  A2GATE_RETRY_INTERVAL_S, NO, &hs);
 
-    // ③ ★只认真区才放行★ —— 哨兵 / 小页 / 无应答一律未就绪，调用方不得建 VM。
-    if (kind != A2GateRegionKindReal) {
-        if (kind == A2GateRegionKindNone) {
+    if (!ready) {
+        // ★不拦真正的建区★：这里拦的只有「握手没成」（调试器没服务 / Extension 没下发）。
+        if (!hs.serviced) {
             // tree510 原文：JIT26CreateRegionLegacy returned NULL -- JIT26 debugger not servicing brk
             a2_log_criterion(@"[JIT26] JIT26CreateRegionLegacy returned NULL -- JIT26 debugger not "
                              @"servicing brk; requesting JIT and waiting before aborting launch");
         }
-        a2_log_criterion(@"[A2-JIT-GATE] ★未就绪 ⇒ 不建 VM★：最后一发=%s（%s）；"
+        a2_log_criterion(@"[A2-JIT-GATE] 握手未完成 ⇒ 不建 VM：最后一发=%s（%s）；"
                          @"见过哨兵=%d；Extension 下发=%d（老 Air 同分支：showDialog + return 1）",
-                         a2gate_kind_name(kind).UTF8String, info.rule,
-                         (int)sawSentinel, (int)extDelivered);
+                         a2gate_kind_name(hs.kind).UTF8String, hs.info.rule,
+                         (int)hs.sawSentinel, (int)hs.extDelivered);
         if (whyOut) {
-            NSString *base = [NSString stringWithFormat:
-                @"brk #0x69 没有交付真 JIT 区（%s：%s）",
-                a2gate_kind_name(kind).UTF8String, info.rule];
-            if (kind == A2GateRegionKindNone) {
-                *whyOut = [base stringByAppendingString:
-                    @"。调试器不在应答状态（或没给它指派 UniversalJIT26 脚本）"];
-            } else if (kind == A2GateRegionKindSentinel) {
-                *whyOut = [NSString stringWithFormat:
-                    @"%@。★只拿到 Universal 基础脚本的握手哨兵 0x690000E0（不是 JIT 区）★：Extension %@；"
-                    @"请确认 StikDebug 已给 Air2 指派 UniversalJIT26 脚本（Extension 装好后同一发 brk "
-                    @"才会真建区）",
-                    base, extDelivered ? @"已下发但仍只回哨兵" : @"下发失败"];
+            if (!hs.serviced) {
+                *whyOut = @"brk #0x69 无人应答（调试器不在岗，或没给 Air2 指派 UniversalJIT26 脚本）"
+                          @"—— 握手没开始，不能建 VM";
             } else {
                 *whyOut = [NSString stringWithFormat:
-                    @"%@。期望 ≥%zu 字节（%.0f MB）且可写；实得 %llu 字节 cur=0x%x max=0x%x"
-                    @"（偏好键 A2JITRegionMB 可调小期望值）",
-                    base, want, (double)want / (1024.0 * 1024.0), info.vmSize, info.cur, info.max];
+                    @"已见到 Universal 基础脚本的握手哨兵 0x690000E0，但 Extension 没下发成功"
+                    @"（%@）—— 请确认 StikDebug 已给 Air2 指派 UniversalJIT26 脚本（含 Extension）",
+                    hs.extTried ? @"brk #0xf00d cmd=2 未被服务，或包里缺 Extension 脚本"
+                                : @"未尝试"];
             }
         }
-        return (kind == A2GateRegionKindSentinel) ? A2LegacyJITGateOutcomeSentinelOnly
-                                                  : A2LegacyJITGateOutcomeNoRegion;
+        return hs.sawSentinel ? A2LegacyJITGateOutcomeSentinelOnly
+                              : A2LegacyJITGateOutcomeNoRegion;
     }
 
-    // 真区到手。★若这一路上没见过哨兵★（第一发就是真区）⇒ 不是「Universal 基础脚本 +
-    //   Extension」这条链交付的（多半是设备上装的老 legacy 脚本，只服务一次断点）。
-    //   尽力补发一次 Extension，让后续 brk #0x69 也走真建区；补发不成功 = 老 Air 的
-    //   LegacyScript 分支（提示换 Universal 脚本并中止，不建 VM）。
-    if (!sawSentinel && !extDelivered) {
-        if (!a2gate_deliver_extension()) {
-            void *legacy = info.addr;
-            munmap(legacy, (size_t)getpagesize());
-            gA2GateRealRegion = NULL;
-            gA2GateRealRegionBytes = 0;
-            a2_log_criterion(@"[A2-JIT-GATE] brk #0x69 直接回了真指针 %p（没经过哨兵）且 Extension 下发失败 "
-                             @"⇒ 设备上装的是 legacy 脚本；老 Air 同分支：提示改用 Universal JIT 脚本并"
-                             @"中止启动（不建 VM）", legacy);
-            if (whyOut) {
-                *whyOut = @"设备上装的是 legacy JIT 脚本（brk #0x69 直接回真指针、Extension 收不到）"
-                          @"—— 请改用 UniversalJIT26 脚本后重试";
-            }
-            return A2LegacyJITGateOutcomeLegacyScript;
+    // ★若这一路上没见过哨兵★（第一发就是真指针）⇒ 不是「Universal 基础脚本 + Extension」这条链
+    //   交付的（多半是设备上装的老 legacy 脚本，只服务一次断点）。尽力补发一次 Extension，
+    //   让后续 brk #0x69 也走真建区；补发不成功 = 老 Air 的 LegacyScript 分支
+    //   （提示换 Universal 脚本并中止，不建 VM）。
+    if (!hs.sawSentinel && !hs.extDelivered) {
+        a2_log_criterion(@"[A2-JIT-GATE] brk #0x69 直接回了真指针 %p（没经过哨兵）且 Extension 下发失败 "
+                         @"⇒ 设备上装的是 legacy 脚本；老 Air 同分支：提示改用 Universal JIT 脚本并"
+                         @"中止启动（不建 VM）", hs.info.addr);
+        if (whyOut) {
+            *whyOut = @"设备上装的是 legacy JIT 脚本（brk #0x69 直接回真指针、Extension 收不到）"
+                      @"—— 请改用 UniversalJIT26 脚本后重试";
         }
+        return A2LegacyJITGateOutcomeLegacyScript;
     }
 
-    // 到这里 == 老 Air 的成功分支（哨兵 + Extension 已下发）★且多验了一步「真区」★：
+    // 到这里 == 老 Air 的成功分支（哨兵 + Extension 已下发）★握手完成★：
     // 设 detachAfterFirstBr + 清 BAD_ACCESS 异常端口。
     BOOL jit26AlwaysAttached =
         [NSUserDefaults.standardUserDefaults boolForKey:@"A2JITAlwaysAttached"];
@@ -709,14 +735,18 @@ A2LegacyJITGateOutcome A2LegacyJITGateOpen(NSString *_Nullable *_Nullable whyOut
     task_set_exception_ports(mach_task_self(), EXC_MASK_BAD_ACCESS, 0,
                              EXCEPTION_DEFAULT, MACHINE_THREAD_STATE);
 
-    a2_log_criterion(@"[A2-JIT-GATE] ★放行 ⇒ 可以建 VM★（真区 %p：size=%llu ≥ 期望=%zu 且可写；"
-                     @"哨兵先现=%d；Extension 已下发=%d；SetDetachAfterFirstBr(%d)）",
-                     info.addr, info.vmSize, want, (int)sawSentinel, (int)extDelivered,
+    a2_log_criterion(@"[A2-JIT-GATE] 握手完成（哨兵+Extension）⇒ 放行；region size=%llu"
+                     @"（期望 %zu，仅供参考，不参与判定）★放行 ⇒ 可以建 VM★"
+                     @"（region=%p；哨兵先现=%d；Extension 已下发=%d；SetDetachAfterFirstBr(%d)）",
+                     hs.info.vmSize, expect, hs.info.addr,
+                     (int)hs.sawSentinel, (int)hs.extDelivered,
                      jit26AlwaysAttached ? 0 : 1);
     if (whyOut) {
         *whyOut = [NSString stringWithFormat:
-            @"JIT 已就绪（老 Air 闰门 + Air2 真区验收：brk #0x69 交付 %p，size=%llu ≥ 期望=%zu 且可写；"
-            @"UniversalJIT26Extension 已下发）", info.addr, info.vmSize, want];
+            @"JIT 已就绪（握手完成：哨兵 %@ + UniversalJIT26Extension 已下发 + brk #0x69 被服务；"
+            @"region=%p size=%llu 仅供参考 —— 真区由 libjvm 建 VM 时自己取）",
+            hs.sawSentinel ? @"已识别" : @"未出现（直接回真指针）",
+            hs.info.addr, hs.info.vmSize];
     }
     return A2LegacyJITGateOutcomeOpen;
 }

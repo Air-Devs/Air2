@@ -75,6 +75,20 @@ def main():
     tmpdir = tempfile.mkdtemp(prefix="a2rt_tests_")
     binary = os.path.join(tmpdir, "runtime_selection_tests")
 
+    # ★给「内置判定」用例准备一个真能 dlopen 的 dylib★
+    #   macOS 11+ 把系统库放进了 dyld 共享缓存，磁盘上没有可直接 dlopen 的文件，
+    #   所以这里在临时目录里现编一个最小 dylib，路径通过环境变量交给测试。
+    probe_dylib = os.path.join(tmpdir, "liba2_probe.dylib")
+    probe_src = os.path.join(tmpdir, "a2_probe.c")
+    with open(probe_src, "w") as f:
+        f.write("int a2_probe_symbol(void) { return 1; }\n")
+    pc = subprocess.run([clang, "-dynamiclib", "-o", probe_dylib, probe_src],
+                        capture_output=True, text=True)
+    if pc.returncode != 0:
+        print("!! 探针 dylib 编译失败：%s" % pc.stderr.strip()[:400])
+        return 1
+    env = dict(os.environ, A2_TEST_LOADABLE_DYLIB=probe_dylib)
+
     includes = []
     for inc in INCLUDE_DIRS:
         includes += ["-I", inc]
@@ -92,7 +106,7 @@ def main():
         return 1
 
     print("run: %s\n" % binary)
-    run = subprocess.run([binary], capture_output=True, text=True)
+    run = subprocess.run([binary], capture_output=True, text=True, env=env)
     out = run.stdout + run.stderr
     sys.stdout.write(out)
 

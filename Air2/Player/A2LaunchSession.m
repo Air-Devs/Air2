@@ -315,11 +315,15 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
         NSString *nameKey = [A2RendererCatalog nameLocalizationKeyForIdentifier:renderer.identifier];
         NSString *name = [A2RuntimeStrings stringForKey:nameKey];
         if ([name isEqualToString:nameKey]) name = renderer.identifier;   // 缺 key ⇒ 技术名兜底
-        [A2Log log:@"[A2-RENDERER] ★阻断启动★：所选渲染器未内置（%s）—— 包内缺 Frameworks/%s",
-         renderer.identifier.UTF8String, renderer.identifier.UTF8String];
+        // ★判据行带原因★：未内置有两种（缺文件 / 文件在但 dlopen 失败），分开写清
+        NSString *why = [A2RendererCatalog bundleDiagnosisForCandidate:renderer
+                                                      frameworksPath:frameworks] ?: @"原因未知";
+        [A2Log criterion:@"[A2-COMPAT] ❌ 渲染器 %@ 未内置（%@）⇒ 阻断", renderer.identifier, why];
         finish(NO, 0, [NSString stringWithFormat:
-                       [A2RuntimeStrings stringForKey:@"runtime.blocked.renderer"],
-                       name, renderer.identifier]);
+                       @"%@\n（%@）",
+                       [NSString stringWithFormat:[A2RuntimeStrings stringForKey:@"runtime.blocked.renderer"],
+                        name, renderer.identifier],
+                       why]);
         return;
     }
 
@@ -547,16 +551,81 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
             return;
         }
     }
-    // ★渲染器 × 版本兼容矩阵(只告警)★
-    //   metallum 的类集只覆盖 1.21.5+ / 26.x；其它版本选它不拦，但如实提示“未验证”，
-    //   用户仍可尝试（这就是「扩大可启动面」的口径：不静默选，也不硬堵）。
+    // ========================================================================
+    // ★[A2-COMPAT] 渲染器 × 版本 × JRE 三元闸门（先判后拦）★
+    // ------------------------------------------------------------------------
+    // 为什么要有这一段：`isBundled` 只答「文件在不在」，答不了「这个后端能不能
+    // 在这个版本 + 这个 JRE 上跑」。三条静态失败组合就是从这个缺口漏下去的：
+    //   ① MoltenVK 当 GL 后端（Vulkan ICD，无 EGL/gl*）⇒ 100% 闪退；
+    //   ④ metallum × JRE<25（类集主版本 69）⇒ 建 VM 失败 / 黑屏；
+    //   ⑥ gl4es 家族 × 1.13+（GL 上限 2.1 < 要求的 3.2 core）⇒ Unsupported GL version。
+    // 判据全部来自 A2RendererCatalog 的静态元数据（一处定义），本段只消费结果。
+    // ★口径★：判据不满足 ⇒ `finish(NO,…)` 出可读失败页（不闪退、不静默换后端）。
+    // ========================================================================
     {
-        NSString *rid = renderer.identifier.lowercaseString ?: @"";
-        if ([rid containsString:@"metallum"]) {
-            BOOL agentSupports = (a2McMajor == 26 && (a2McMinor == 2 || a2McMinor == 3));
+        A2RendererGLClass glClass = [A2RendererCatalog glClassForIdentifier:renderer.identifier];
+        BOOL wantsModernGL = (a2McMajor >= 26) || (a2McMajor == 1 && a2McMinor >= 13);
+
+        // ① 非 GL 后端：本链只会把它写成 `-Dorg.lwjgl.opengl.libname`，
+        //    而它的真实身份是 Vulkan ICD（`-Dorg.lwjgl.vulkan.libname` 已由计划无条件下发）。
+        if (glClass == A2RendererGLClassNotGL) {
+            [A2Log criterion:@"[A2-COMPAT] ❌ %@ 不是 GL 后端（Vulkan ICD：无 EGL、无 gl* 导出）"
+             @"⇒ 阻断。它的 Vulkan 身份由 -Dorg.lwjgl.vulkan.libname 承担，不能当 opengl.libname 用",
+             renderer.identifier];
+            finish(NO, 0, [NSString stringWithFormat:
+                           @"%@ 是 Vulkan 驱动（MoltenVK），不是 OpenGL 后端。\n"
+                           @"当前启动链只支持 GL / Metal 后端，把它当作 OpenGL 库加载取不到 gl* 符号，"
+                           @"必然闪退 —— 已拦下（没有建 VM）。\n\n"
+                           @"请在「设置 → 运行环境 → 渲染器」改选 Metal (metallum) 或 MobileGlues 后重试。",
+                           renderer.identifier]);
+            return;
+        }
+
+        // ④ 渲染器 × JRE 下限（metallum：26.x 需 25、1.21.11 需 21）
+        NSInteger needJRE = [A2RendererCatalog requiredJavaMajorForIdentifier:renderer.identifier
+                                                                    versionID:version.name
+                                                                      mcMajor:a2McMajor
+                                                                      mcMinor:a2McMinor];
+        if (needJRE > 0 && jreMajor > 0 && jreMajor < needJRE) {
+            [A2Log criterion:@"[A2-COMPAT] ❌ %@ 需要 java-%ld（类集按 Java %ld 编译），当前 java-%ld"
+             @"（%@）⇒ 阻断", renderer.identifier, (long)needJRE, (long)needJRE, (long)jreMajor, jreDir];
+            finish(NO, 0, [NSString stringWithFormat:
+                           @"%@ 的注入类集是用 Java %ld 编译的（class 主版本 %ld），"
+                           @"当前选的是 Java %ld —— 在低版本 JRE 上它要么 premain 加载失败（建 VM 失败），"
+                           @"要么一个类也 define 不上（黑屏）。\n\n"
+                           @"两条出路：\n"
+                           @"· 改选 Java 运行时 java-%ld-openjdk（设置 → 运行环境 → Java 运行时）；\n"
+                           @"· 或改选 MobileGlues 渲染器（不挑 JRE）。",
+                           renderer.identifier, (long)needJRE, (long)(needJRE + 44),
+                           (long)jreMajor, (long)needJRE]);
+            return;
+        }
+
+        // ⑥ 版本 × GL 能力下限（gl4es 家族：GL 1.x/2.x 固定管线 ⇒ 只接 1.12.2 及更早）
+        if (glClass == A2RendererGLClassFixedOnly && wantsModernGL) {
+            [A2Log criterion:@"[A2-COMPAT] ❌ %@ 的 GL 上限是 2.1（固定管线翻译层），"
+             @"而 MC %@ 要求 GL 3.2+ core ⇒ 阻断（否则 GL.createCapabilities 抛 Unsupported GL version）",
+             renderer.identifier, version.name];
+            finish(NO, 0, [NSString stringWithFormat:
+                           @"%@ 是 GL 1.x/2.x 的固定管线翻译层（对外最多报 GL 2.1），"
+                           @"而 %@ 启动时要 GL 3.2+（core profile）—— 接不上，已拦下（没有建 VM）。\n\n"
+                           @"请在「设置 → 运行环境 → 渲染器」改选 MobileGlues（GL 4.5）后重试。",
+                           renderer.identifier, version.name]);
+            return;
+        }
+
+        [A2Log criterion:@"[A2-COMPAT] ✅ %@ × %@ × java-%ld 通过闸门"
+         @"（glClass=%ld needJRE=%ld wantsModernGL=%d）",
+         renderer.identifier, version.name, (long)jreMajor, (long)glClass, (long)needJRE,
+         wantsModernGL ? 1 : 0];
+
+        // ⑦ metallum 类集覆盖（保持「只告警」口径：没有类集 ≠ 一定崩，但会无内容可注入）
+        if ([renderer.identifier.lowercaseString containsString:@"metallum"]) {
+            BOOL agentSupports = (a2McMajor >= 26) ||
+                                 (a2McMajor == 1 && a2McMinor == 21 && [version.name hasPrefix:@"1.21.11"]);
             if (!agentSupports) {
-                [A2Log criterion:@"[A2-COMPAT] 提示：metallum 官方类集覆盖 1.21.5+/26.x，"
-                 @"本版本 %@ 属未验证组合（仍会尝试注入）", version.name];
+                [A2Log criterion:@"[A2-COMPAT] ⚠️ metallum 官方类集只覆盖 1.21.11 / 26.x，"
+                 @"本版本 %@ 属未验证组合（无类集可注入 ⇒ 有声音没画面的形态；仍会尝试注入）", version.name];
             }
         }
     }
