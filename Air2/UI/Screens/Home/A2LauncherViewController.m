@@ -808,6 +808,12 @@
                                  skipAccountRefresh:NO
                                 skipIntegrityCheck:[self shouldSkipIntegrityCheck]
                                          completion:^(BOOL success, NSError *error) {
+        // ⚠️ 协调器在后台线程回调（它的最后一个 Task 跑在
+        // dispatch_get_global_queue 上）。这里所有代码都会碰 UI，
+        // 必须先切主线程 —— 否则会崩：
+        //   "Modifications to the layout engine must not be performed
+        //    from a background thread"
+        dispatch_async(dispatch_get_main_queue(), ^{
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
 
@@ -886,6 +892,7 @@
         }
 
         UIKit_launchMinecraftSurfaceVC(window, metadata);
+        });   // dispatch_async(main)
     }];
 }
 

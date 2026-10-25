@@ -359,10 +359,20 @@ static double A2TaskWeight(A2LaunchTask task) {
     [self reportTask:A2LaunchTaskStartGame fraction:1 message:@"准备就绪"];
 
     self.launching = NO;
+
+    // ⚠️ 统一在主线程回调 —— 调用方拿到成功后会立刻建 UI
+    // （A2JVMRunningViewController 等）。它的 viewDidLoad 会改 Auto Layout，
+    // 后台线程做这件事直接崩：
+    //   "Modifications to the layout engine must not be performed
+    //    from a background thread"
     if (self.finalCompletion) {
         void (^cb)(BOOL, NSError *) = self.finalCompletion;
         self.finalCompletion = nil;
-        cb(YES, nil);
+        if ([NSThread isMainThread]) {
+            cb(YES, nil);
+        } else {
+            dispatch_async(dispatch_get_main_queue(), ^{ cb(YES, nil); });
+        }
     }
 }
 
@@ -376,7 +386,11 @@ static double A2TaskWeight(A2LaunchTask task) {
     if (self.finalCompletion) {
         void (^cb)(BOOL, NSError *) = self.finalCompletion;
         self.finalCompletion = nil;
-        cb(NO, error);
+        if ([NSThread isMainThread]) {
+            cb(NO, error);
+        } else {
+            dispatch_async(dispatch_get_main_queue(), ^{ cb(NO, error); });
+        }
     }
 }
 
