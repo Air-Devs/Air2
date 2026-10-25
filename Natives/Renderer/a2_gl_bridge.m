@@ -312,6 +312,167 @@ static unsigned int a2_trace_glGetError(void) {
     return e;
 }
 
+// ---------------------------------------------------------------------------
+// ★GLES1 固定管线「空实现桩」★ —— KW 拒绝分支的返回物（真机 lastlog-87 的修因）
+// ---------------------------------------------------------------------------
+//  证据链：`[A2-GL-PTR] glLoadMatrixf: KW=0x127622e08 ANGLE=0x1281b2a28 resolver=0x0`
+//    ⇒ ① KW 与 ANGLE 的地址不同（不是全局符号抢先命中）；
+//      ② 我们的解析器确实拒绝了（返回 NULL）；
+//      ③ 崩溃却仍落在 ANGLE 的 `gl::GLES1State::loadMatrix`。
+//    ⇒ MC 拿到的既不是 KW 也不是我们 ⇒ KW 在拿到 NULL 后**回落到宿主 eglGetProcAddress**
+//      （= ANGLE 的 libEGL），把 ANGLE 的 GLES1 入口又拿了回去。
+//  修法：拒绝时不再给 NULL，改给**我们自己的空实现**（非空指针 ⇒ KW 不再去问 EGL）。
+//        KW 的固定管线本来就由它自带的 FPE 负责（老 Air 的行为），宿主侧这些入口纯属冗余。
+//  签名：逐条按 Khronos GLES1 公开原型声明 —— **不能**用统一的无参转调顶替
+//        （调用方按真实原型摆参数寄存器/栈，签名对不上即 UB）。这些入口**没有一个是变参**。
+// ---------------------------------------------------------------------------
+
+/// 桩调用记账（★去重：每个名字只在首次被调用时打一行★，避免逐帧刷屏）
+#define A2_GL_STUB_MAX_NAMES 128
+static char             gGLStubSeen[A2_GL_STUB_MAX_NAMES][40];
+static int              gGLStubSeenCount = 0;
+static volatile int32_t gGLStubCalls     = 0;   // 累计调用次数（判据可核对「桩确实被用上了」）
+static pthread_mutex_t  gGLStubLock      = PTHREAD_MUTEX_INITIALIZER;
+
+/// 记录一次桩调用。首见才输出判据行：`[A2-GL-STUB] <name> 被调用（KW 固定管线回落）`
+/// 走 a2_log_criterion（判据行统一出口）⇒ 同时进控制台与「运行日志」页读的那份 lastlog.txt。
+static void a2_gl_stub_note(const char *name) {
+    __sync_fetch_and_add(&gGLStubCalls, 1);
+    int firstTime = 0;
+    pthread_mutex_lock(&gGLStubLock);
+    int seen = 0;
+    for (int i = 0; i < gGLStubSeenCount; i++) {
+        if (strncmp(gGLStubSeen[i], name, 39) == 0) { seen = 1; break; }
+    }
+    if (!seen && gGLStubSeenCount < A2_GL_STUB_MAX_NAMES) {
+        strncpy(gGLStubSeen[gGLStubSeenCount], name, 39);
+        gGLStubSeen[gGLStubSeenCount][39] = '\0';
+        gGLStubSeenCount++;
+        firstTime = 1;
+    }
+    pthread_mutex_unlock(&gGLStubLock);
+    if (firstTime) a2_log_criterion(@"[A2-GL-STUB] %s 被调用（KW 固定管线回落）", name);
+}
+
+// —— 桩体生成宏：每个桩只做「记账 + return」，参数只为对齐 ABI，故逐个 (void) 掉 ——
+#define A2_STUB0(n) static void a2_glstub_##n(void) \
+    { a2_gl_stub_note(#n); }
+#define A2_STUB1(n, T1) static void a2_glstub_##n(T1 a1) \
+    { (void)a1; a2_gl_stub_note(#n); }
+#define A2_STUB2(n, T1, T2) static void a2_glstub_##n(T1 a1, T2 a2) \
+    { (void)a1; (void)a2; a2_gl_stub_note(#n); }
+#define A2_STUB3(n, T1, T2, T3) static void a2_glstub_##n(T1 a1, T2 a2, T3 a3) \
+    { (void)a1; (void)a2; (void)a3; a2_gl_stub_note(#n); }
+#define A2_STUB4(n, T1, T2, T3, T4) static void a2_glstub_##n(T1 a1, T2 a2, T3 a3, T4 a4) \
+    { (void)a1; (void)a2; (void)a3; (void)a4; a2_gl_stub_note(#n); }
+#define A2_STUB6(n, T) static void a2_glstub_##n(T a1, T a2, T a3, T a4, T a5, T a6) \
+    { (void)a1; (void)a2; (void)a3; (void)a4; (void)a5; (void)a6; a2_gl_stub_note(#n); }
+
+// —— 分量族：生成 <p>2<s>/<p>3<s>/<p>4<s> 与向量版 <p>2<s>v… （const T *）——
+#define A2_STUB_FAMILY_234(p, s, T) \
+    A2_STUB2(p##2##s, T, T) A2_STUB3(p##3##s, T, T, T) A2_STUB4(p##4##s, T, T, T, T) \
+    A2_STUB1(p##2##s##v, const T *) A2_STUB1(p##3##s##v, const T *) A2_STUB1(p##4##s##v, const T *)
+#define A2_STUB_FAMILY_34(p, s, T) \
+    A2_STUB3(p##3##s, T, T, T) A2_STUB4(p##4##s, T, T, T, T) \
+    A2_STUB1(p##3##s##v, const T *) A2_STUB1(p##4##s##v, const T *)
+
+// 顶点：float/double/int/short（GLES1 允许 float 以外用「x/s/i」入口，名字不变）
+A2_STUB_FAMILY_234(glVertex, f, float)
+A2_STUB_FAMILY_234(glVertex, d, double)
+A2_STUB_FAMILY_234(glVertex, i, int)
+A2_STUB_FAMILY_234(glVertex, s, short)
+// 纹理坐标：2/3/4 分量 + 1 分量
+A2_STUB_FAMILY_234(glTexCoord, f, float)
+A2_STUB_FAMILY_234(glTexCoord, d, double)
+A2_STUB1(glTexCoord1f, float) A2_STUB1(glTexCoord1fv, const float *)
+A2_STUB1(glTexCoord1d, double) A2_STUB1(glTexCoord1dv, const double *)
+// 颜色：GLES1 只有 3/4 分量
+A2_STUB_FAMILY_34(glColor, f, float)
+A2_STUB_FAMILY_34(glColor, d, double)
+A2_STUB_FAMILY_34(glColor, i, int)
+A2_STUB_FAMILY_34(glColor, ub, unsigned char)
+// 法线：只有 3 分量
+A2_STUB3(glNormal3f, float, float, float) A2_STUB1(glNormal3fv, const float *)
+A2_STUB3(glNormal3d, double, double, double) A2_STUB1(glNormal3dv, const double *)
+A2_STUB3(glNormal3i, int, int, int) A2_STUB1(glNormal3iv, const int *)
+A2_STUB3(glNormal3s, short, short, short) A2_STUB1(glNormal3sv, const short *)
+// 光栅位置
+A2_STUB_FAMILY_234(glRasterPos, f, float)
+A2_STUB_FAMILY_234(glRasterPos, d, double)
+// 索引（颜色表；ES1 已弃用但仍可能被索要）
+A2_STUB1(glIndexf, float) A2_STUB1(glIndexfv, const float *)
+A2_STUB1(glIndexd, double) A2_STUB1(glIndexdv, const double *)
+A2_STUB1(glIndexi, int) A2_STUB1(glIndexiv, const int *)
+A2_STUB1(glIndexs, short) A2_STUB1(glIndexsv, const short *)
+A2_STUB1(glIndexub, unsigned char) A2_STUB1(glIndexubv, const unsigned char *)
+// 矩阵栈 / 投影（glOrtho/glFrustum 的 GLdouble 版与 GLES1 的 f 版都在）
+A2_STUB1(glMatrixMode, unsigned int)
+A2_STUB0(glLoadIdentity)
+A2_STUB1(glLoadMatrixf, const float *) A2_STUB1(glLoadMatrixd, const double *)
+A2_STUB1(glMultMatrixf, const float *) A2_STUB1(glMultMatrixd, const double *)
+A2_STUB0(glPushMatrix) A2_STUB0(glPopMatrix)
+A2_STUB6(glOrtho, double) A2_STUB6(glOrthof, float)
+A2_STUB6(glFrustum, double) A2_STUB6(glFrustumf, float)
+// 立即模式 / 客户端状态 / 光照状态
+A2_STUB1(glBegin, unsigned int) A2_STUB0(glEnd)
+A2_STUB1(glEnableClientState, unsigned int) A2_STUB1(glDisableClientState, unsigned int)
+A2_STUB1(glShadeModel, unsigned int)
+A2_STUB2(glAlphaFunc, unsigned int, float)
+A2_STUB2(glClipPlane, unsigned int, const double *)
+
+/// ★兜底桩★：前缀命中但未逐个登记的名字（如 glVertex4sv 之外的冷门变体）。
+/// GLES1 这批入口**全部**是 void 返回、只收标量/指针参数、**无变参** ⇒ `void(void)` 原型
+/// 在 arm64/x86_64 上忽略参数是安全的。正常路径不应落到这里（落到了=该补登记）。
+static void a2_glstub_unlisted(void) { a2_gl_stub_note("(未登记的 GLES1 入口)"); }
+
+// —— 名字 → 桩 的表（精确匹配；前缀命中但表里没有 ⇒ 兜底桩）——
+typedef struct { const char *name; void *fn; } A2GLStubEntry;
+#define A2_STUB_ENTRY(n) { #n, (void *)a2_glstub_##n },
+#define A2_STUB_ENTRIES_234(p, s) \
+    A2_STUB_ENTRY(p##2##s) A2_STUB_ENTRY(p##3##s) A2_STUB_ENTRY(p##4##s) \
+    A2_STUB_ENTRY(p##2##s##v) A2_STUB_ENTRY(p##3##s##v) A2_STUB_ENTRY(p##4##s##v)
+#define A2_STUB_ENTRIES_34(p, s) \
+    A2_STUB_ENTRY(p##3##s) A2_STUB_ENTRY(p##4##s) \
+    A2_STUB_ENTRY(p##3##s##v) A2_STUB_ENTRY(p##4##s##v)
+
+static const A2GLStubEntry kGLStubs[] = {
+    A2_STUB_ENTRIES_234(glVertex, f) A2_STUB_ENTRIES_234(glVertex, d)
+    A2_STUB_ENTRIES_234(glVertex, i) A2_STUB_ENTRIES_234(glVertex, s)
+    A2_STUB_ENTRIES_234(glTexCoord, f) A2_STUB_ENTRIES_234(glTexCoord, d)
+    A2_STUB_ENTRY(glTexCoord1f) A2_STUB_ENTRY(glTexCoord1fv)
+    A2_STUB_ENTRY(glTexCoord1d) A2_STUB_ENTRY(glTexCoord1dv)
+    A2_STUB_ENTRIES_34(glColor, f) A2_STUB_ENTRIES_34(glColor, d)
+    A2_STUB_ENTRIES_34(glColor, i) A2_STUB_ENTRIES_34(glColor, ub)
+    A2_STUB_ENTRY(glNormal3f) A2_STUB_ENTRY(glNormal3fv)
+    A2_STUB_ENTRY(glNormal3d) A2_STUB_ENTRY(glNormal3dv)
+    A2_STUB_ENTRY(glNormal3i) A2_STUB_ENTRY(glNormal3iv)
+    A2_STUB_ENTRY(glNormal3s) A2_STUB_ENTRY(glNormal3sv)
+    A2_STUB_ENTRIES_234(glRasterPos, f) A2_STUB_ENTRIES_234(glRasterPos, d)
+    A2_STUB_ENTRY(glIndexf) A2_STUB_ENTRY(glIndexfv)
+    A2_STUB_ENTRY(glIndexd) A2_STUB_ENTRY(glIndexdv)
+    A2_STUB_ENTRY(glIndexi) A2_STUB_ENTRY(glIndexiv)
+    A2_STUB_ENTRY(glIndexs) A2_STUB_ENTRY(glIndexsv)
+    A2_STUB_ENTRY(glIndexub) A2_STUB_ENTRY(glIndexubv)
+    A2_STUB_ENTRY(glMatrixMode) A2_STUB_ENTRY(glLoadIdentity)
+    A2_STUB_ENTRY(glLoadMatrixf) A2_STUB_ENTRY(glLoadMatrixd)
+    A2_STUB_ENTRY(glMultMatrixf) A2_STUB_ENTRY(glMultMatrixd)
+    A2_STUB_ENTRY(glPushMatrix) A2_STUB_ENTRY(glPopMatrix)
+    A2_STUB_ENTRY(glOrtho) A2_STUB_ENTRY(glOrthof)
+    A2_STUB_ENTRY(glFrustum) A2_STUB_ENTRY(glFrustumf)
+    A2_STUB_ENTRY(glBegin) A2_STUB_ENTRY(glEnd)
+    A2_STUB_ENTRY(glEnableClientState) A2_STUB_ENTRY(glDisableClientState)
+    A2_STUB_ENTRY(glShadeModel) A2_STUB_ENTRY(glAlphaFunc) A2_STUB_ENTRY(glClipPlane)
+    { NULL, NULL }
+};
+
+/// 查桩：命中返回非空函数指针；未登记返回 NULL（调用方退到兜底桩）。
+static void *a2_gl_stub_lookup(const char *name) {
+    for (int i = 0; kGLStubs[i].name != NULL; i++) {
+        if (strcmp(kGLStubs[i].name, name) == 0) return kGLStubs[i].fn;
+    }
+    return NULL;
+}
+
 static void *a2_gl_bridge_gles_getprocaddress(const char *name) {
     if (name == NULL) return NULL;
     void *sym = NULL;
@@ -339,14 +500,23 @@ static void *a2_gl_bridge_gles_getprocaddress(const char *name) {
         size_t n = strlen(kGLES1OnlyPrefixes[i]);
         if (strncmp(name, kGLES1OnlyPrefixes[i], n) == 0) {
             if (a2_gl_bridge_is_krypton()) {
+                // ★拒绝 = 不给宿主实现，但**也不能给 NULL**★（lastlog-87：给 NULL 时 KW 会回落到
+                //   宿主 eglGetProcAddress 拿回 ANGLE 的同类入口，崩点原样复现）
+                //   ⇒ 改喂我们自己的空实现桩：非空指针 ⇒ KW 不再问 EGL；固定管线由它的 FPE 负责。
+                void *stub = a2_gl_stub_lookup(name);
                 static char logged[64][40]; static int loggedCount = 0;
                 int seen = 0;
                 for (int k = 0; k < loggedCount; k++) if (strncmp(logged[k], name, 39) == 0) { seen = 1; break; }
                 if (!seen && loggedCount < 64) {
                     strncpy(logged[loggedCount], name, 39); logged[loggedCount][39] = '\0'; loggedCount++;
                     ++gKryptonGLES1Rejected;
-                    a2_log_f(@"[A2-GL-BRIDGE] KW 拒绝宿主 GLES1 入口：%s", name);
+                    if (stub != NULL) {
+                        a2_log_f(@"[A2-GL-BRIDGE] KW 拒绝宿主 GLES1 入口：%s ⇒ 返回空实现桩（阻断 eglGetProcAddress 回落）", name);
+                    } else {
+                        a2_log_f(@"[A2-GL-BRIDGE] KW 拒绝宿主 GLES1 入口：%s ⇒ 返回兜底空实现桩（未逐个登记；同 ABI：void 返回、无变参）", name);
+                    }
                 }
+                return (stub != NULL) ? stub : (void *)a2_glstub_unlisted;
             }
             return NULL;
         }
@@ -862,8 +1032,12 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
             void *kwLM  = dlsym(gRendererHandle, "glLoadMatrixf");
             void *angLM = (gGlesHandle != NULL) ? dlsym(gGlesHandle, "glLoadMatrixf") : NULL;
             void *resLM = a2_gl_bridge_gles_getprocaddress("glLoadMatrixf");
-            a2_log_f(@"[A2-GL-PTR] glLoadMatrixf: KW=%p ANGLE=%p resolver=%p（若 resolver==ANGLE ⇒ 解析器仍在喂 ANGLE）",
+            a2_log_f(@"[A2-GL-PTR] glLoadMatrixf: KW=%p ANGLE=%p resolver=%p"
+                     @"（本轮期望：resolver = 我们的空实现桩，既不是 0 也不是 ANGLE）",
                      kwLM, angLM, resLM);
+            a2_log_f(@"[A2-GL-PTR] 空桩表 %d 条；KW 已拒绝 %d 个宿主 GLES1 入口；桩累计被调用 %d 次",
+                     (int)(sizeof(kGLStubs) / sizeof(kGLStubs[0]) - 1), (int)gKryptonGLES1Rejected,
+                     (int)gGLStubCalls);
             void *kwI = dlsym(gRendererHandle, "initialize_gl4es");
             void *kwS = dlsym(gRendererHandle, "set_getprocaddress");
             a2_log_f(@"[A2-GL-PTR] KW 本体 initialize_gl4es=%p set_getprocaddress=%p handle=%p",
