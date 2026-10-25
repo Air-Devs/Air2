@@ -73,6 +73,18 @@
 
 @implementation A2AccountViewController
 
+- (instancetype)init {
+    self = [super init];
+    if (!self) return nil;
+    // ⚠️ 必须在 init 里设，不能等到 viewDidLoad ——
+    // 基类的 viewDidLoad 会先根据这个标志决定创建
+    // setupScrollContent 还是 setupPlainContent。
+    // 我在子类 viewDidLoad 里设成 NO 时，plainContentView 已经是 nil 了，
+    // 后面拿它当约束宿主就是「anchor 到 nil」，直接崩溃。
+    _usesScrollContent = NO;
+    return self;
+}
+
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.pageTitle = @"账号管理";
@@ -95,9 +107,8 @@
 
 - (void)setupSplitLayout {
     // 左右 3:7（对照 ZL2 的 AccountManageScreen）
-    self.usesScrollContent = NO;
-
-    UIView *host = self.plainContentView;
+    // usesScrollContent 已在 init 里设为 NO
+    UIView *host = self.plainContentView ?: self.view;
 
     // ---- 左栏 ----
     _leftPanel = [[A2AccountLeftPanel alloc] initWithFrame:CGRectZero];

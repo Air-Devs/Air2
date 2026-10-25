@@ -58,10 +58,12 @@
 /// 长按时弹出的操作
 @property (nonatomic, copy, nullable) void (^onDelete)(void);
 @property (nonatomic, copy, nullable) void (^onRename)(void);
-@end
-
-/// 选中回调放在单独的协议里，避免与 UIControl 的 target-action 混淆
-@interface A2GamePathRow (Selection)
+/// 点击回调。
+///
+/// ⚠️ 必须放在主 @interface 里，不能放 category ——
+/// category 不能合成存储属性，编译器不会自动生成 setOnSelect:，
+/// 运行时调 row.onSelect = ... 就崩 unrecognized selector。
+/// 我之前就是把它单独放在 A2GamePathRow (Selection) 里，点了版本管理直接闪退。
 @property (nonatomic, copy, nullable) void (^onSelect)(void);
 @end
 

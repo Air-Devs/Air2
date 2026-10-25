@@ -31,6 +31,7 @@
 //
 
 #import "A2VersionSettingsViewController.h"
+#import "A2VersionTabBar.h"
 #import "A2VersionIsolation.h"
 #import "A2SettingsSection.h"
 #import "A2SettingsRow.h"
@@ -79,12 +80,8 @@
     [super viewDidLoad];
     self.pageTitle = _version.name;
 
-    [self setupHeaderCard];
-    [self setupIsolationSection];
-    [self setupFolderSection];
-    [self setupLaunchSection];
-    [self setupDangerSection];
-
+    // 左侧标签栏 + 右侧内容（对照 ZL2 的 TabMenu + NavigationUI）
+    [self setupTabLayout];
     [self refreshIsolationUI];
 }
 

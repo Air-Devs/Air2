@@ -191,6 +191,7 @@
 		5C3C3472B73A413C081E753F /* A2VersionListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */; };
 		7635F6BA870CB67CA1FBFDF4 /* A2VersionRowView.m in Sources */ = {isa = PBXBuildFile; fileRef = 8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */; };
 		D33BBA190C82A6A3205F3A9E /* A2VersionSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */; };
+		AE9C6658254A1DE3418C1353 /* A2VersionTabBar.m in Sources */ = {isa = PBXBuildFile; fileRef = FDDDCB082DAEC15FCB03865C /* A2VersionTabBar.m */; };
 		27702DAD22876D499AD213EF /* A2ColorScheme.m in Sources */ = {isa = PBXBuildFile; fileRef = 93BF612ED3930C6A33249855 /* A2ColorScheme.m */; };
 		141BC76960489907EC08BDBA /* A2ColorTheme+Seed.m in Sources */ = {isa = PBXBuildFile; fileRef = 25966F1F7F932D2795B0F1A8 /* A2ColorTheme+Seed.m */; };
 		86D43CE5B95D29876BF7D34D /* A2ColorTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = 82FE348CB0D3A5CE4DD665A1 /* A2ColorTheme.m */; };
@@ -393,6 +394,7 @@
 		ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionListViewController.m"; sourceTree = "<group>"; };
 		8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionRowView.m"; sourceTree = "<group>"; };
 		4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionSettingsViewController.m"; sourceTree = "<group>"; };
+		FDDDCB082DAEC15FCB03865C /* A2VersionTabBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionTabBar.m"; sourceTree = "<group>"; };
 		93BF612ED3930C6A33249855 /* A2ColorScheme.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorScheme.m"; sourceTree = "<group>"; };
 		25966F1F7F932D2795B0F1A8 /* A2ColorTheme+Seed.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorTheme+Seed.m"; sourceTree = "<group>"; };
 		82FE348CB0D3A5CE4DD665A1 /* A2ColorTheme.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorTheme.m"; sourceTree = "<group>"; };
@@ -584,6 +586,7 @@
 		271E6A92F0F655D2A7EA5627 /* A2VersionListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionListViewController.h"; sourceTree = "<group>"; };
 		EF8A5FB174D5923A21B4D162 /* A2VersionRowView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionRowView.h"; sourceTree = "<group>"; };
 		E0C16E70541109926240BD8B /* A2VersionSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionSettingsViewController.h"; sourceTree = "<group>"; };
+		AE1934FEA19B175F6667747E /* A2VersionTabBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionTabBar.h"; sourceTree = "<group>"; };
 		DAC23739A567EAE9F7189258 /* A2ColorScheme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorScheme.h"; sourceTree = "<group>"; };
 		89FE8C9FAF9D157BFC4F8D14 /* A2ColorTheme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorTheme.h"; sourceTree = "<group>"; };
 		7CD8335A45FF442EAEDE63C3 /* A2ColorTheme_Internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorTheme_Internal.h"; sourceTree = "<group>"; };
@@ -1326,11 +1329,13 @@
 				ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */,
 				8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */,
 				4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */,
+				FDDDCB082DAEC15FCB03865C /* A2VersionTabBar.m */,
 				C595542224E314960D0F3C02 /* A2ModListViewController.h */,
 				830A4845C2484A246469AEE3 /* A2VersionExportViewController.h */,
 				271E6A92F0F655D2A7EA5627 /* A2VersionListViewController.h */,
 				EF8A5FB174D5923A21B4D162 /* A2VersionRowView.h */,
 				E0C16E70541109926240BD8B /* A2VersionSettingsViewController.h */,
+				AE1934FEA19B175F6667747E /* A2VersionTabBar.h */,
 			);
 			path = Version;
 			sourceTree = "<group>";
@@ -1599,6 +1604,7 @@
 				5C3C3472B73A413C081E753F /* A2VersionListViewController.m in Sources */,
 				7635F6BA870CB67CA1FBFDF4 /* A2VersionRowView.m in Sources */,
 				D33BBA190C82A6A3205F3A9E /* A2VersionSettingsViewController.m in Sources */,
+				AE9C6658254A1DE3418C1353 /* A2VersionTabBar.m in Sources */,
 				27702DAD22876D499AD213EF /* A2ColorScheme.m in Sources */,
 				141BC76960489907EC08BDBA /* A2ColorTheme+Seed.m in Sources */,
 				86D43CE5B95D29876BF7D34D /* A2ColorTheme.m in Sources */,
