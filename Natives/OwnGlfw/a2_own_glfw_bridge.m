@@ -40,6 +40,7 @@
 #include <jni.h>
 #include <string.h>
 #include "a2_glfw_window.h"
+#include "a2_glfw_trace.h"
 #include "a2_log.h"
 
 #define A2_OWN_GLFW_JAVA_CLASS     "org/lwjgl/glfw/GLFW"
@@ -146,6 +147,11 @@ JNIEXPORT void JNICALL Java_org_lwjgl_glfw_GLFW_nTerminate
 JNIEXPORT jboolean JNICALL Java_org_lwjgl_glfw_GLFW_nCreateWindow
   (JNIEnv* env, jclass cls, jlong window, jint width, jint height, jstring title) {
     (void) cls;
+    // ★[A2-GLFW-TRACE]★ 黑屏卡死定位：只有 enter 没 exit = 卡在建窗里（主队列那段 UIKit 工作）。
+    long long trT0 = a2_glfw_tr_us();
+    unsigned long long trTid = a2_glfw_tr_tid();
+    a2_log_f(@"[A2-GLFW-TRACE] enter glfwCreateWindow tid=%llu window=%lld w=%d h=%d",
+             trTid, (long long) window, (int) width, (int) height);
     char titleUtf[256];
     titleUtf[0] = '\0';
     if (env != NULL && title != NULL) {
@@ -160,11 +166,15 @@ JNIEXPORT jboolean JNICALL Java_org_lwjgl_glfw_GLFW_nCreateWindow
     if (!ok) {
         a2_log_f(@"[A2-GLFW] nCreateWindow 失败 window=%ld %dx%d",
                  (long) window, (int) width, (int) height);
+        a2_log_f(@"[A2-GLFW-TRACE] exit glfwCreateWindow tid=%llu rc=0 ms=%lld",
+                 trTid, a2_glfw_tr_ms(trT0));
         return JNI_FALSE;
     }
     a2_log_f(@"[A2-GLFW] nCreateWindow 受理 window=%ld %dx%d title=\"%s\""
              "（UIKit 建窗异步到主队列；就绪后另有「窗口就绪」日志）",
              (long) window, (int) width, (int) height, titleUtf);
+    a2_log_f(@"[A2-GLFW-TRACE] exit glfwCreateWindow tid=%llu rc=1 ms=%lld",
+             trTid, a2_glfw_tr_ms(trT0));
     return JNI_TRUE;
 }
 
@@ -206,20 +216,40 @@ JNIEXPORT void JNICALL Java_org_lwjgl_glfw_GLFW_nMakeContextCurrent
     (void) env;
     (void) cls;
     (void) window;
+    // ★[A2-GLFW-TRACE]★ 卡在这里 = 渲染器 eglMakeCurrent 没返回（后端初始化卡死）。
+    long long trT0 = a2_glfw_tr_us();
+    unsigned long long trTid = a2_glfw_tr_tid();
+    a2_log_f(@"[A2-GLFW-TRACE] enter glfwMakeContextCurrent tid=%llu window=%lld",
+             trTid, (long long) window);
     // ★2026-10-18★ 不再空实现：MC 在渲染线程上调用它后立刻要 GL.createCapabilities，
     //   必须在这一线程把 EGL 上下文设为 current（真机否则报
     //   "There is no OpenGL context current in the current thread"）。
     extern int a2_gl_bridge_make_current(void);
     int rc = a2_gl_bridge_make_current();
     a2_log_f(@"[A2-GLFW] nMakeContextCurrent window=%lld rc=%d", (long long) window, rc);
+    a2_log_f(@"[A2-GLFW-TRACE] exit glfwMakeContextCurrent tid=%llu rc=%d ms=%lld",
+             trTid, rc, a2_glfw_tr_ms(trT0));
 }
 
 JNIEXPORT void JNICALL Java_org_lwjgl_glfw_GLFW_nSwapBuffers
   (JNIEnv* env, jclass cls, jlong window) {
     (void) env;
     (void) cls;
-    (void) window;
     // ★刻意空实现★：呈现是渲染器的事（本层与渲染后端解耦）。
+    // ★[A2-GLFW-TRACE]★ 每帧都调 ⇒ 只打前 20 次（超过 100ms 的慢调用另计，不受限）。
+    static unsigned long trSwapN = 0;
+    unsigned long n = ++trSwapN;
+    long long trT0 = a2_glfw_tr_us();
+    unsigned long long trTid = a2_glfw_tr_tid();
+    if (n <= 20) {
+        a2_log_f(@"[A2-GLFW-TRACE] enter glfwSwapBuffers tid=%llu window=%lld n=%lu",
+                 trTid, (long long) window, n);
+    }
+    long long ms = a2_glfw_tr_ms(trT0);
+    if (n <= 20 || ms >= 100) {
+        a2_log_f(@"[A2-GLFW-TRACE] exit glfwSwapBuffers tid=%llu rc=0 ms=%lld n=%lu%s",
+                 trTid, ms, n, (n > 20) ? "（慢调用，超 20 次仍打）" : "");
+    }
 }
 
 JNIEXPORT void JNICALL Java_org_lwjgl_glfw_GLFW_nSwapInterval
@@ -233,9 +263,22 @@ JNIEXPORT void JNICALL Java_org_lwjgl_glfw_GLFW_nSwapInterval
 JNIEXPORT void JNICALL Java_org_lwjgl_glfw_GLFW_nPollEvents
   (JNIEnv* env, jclass cls) {
     (void) cls;
+    // ★[A2-GLFW-TRACE]★ 每帧都调 ⇒ 只打前 20 次；★卡在这里 = 事件 pump 里的 Java upcall 没返回★。
+    static unsigned long trPollN = 0;
+    unsigned long n = ++trPollN;
+    long long trT0 = a2_glfw_tr_us();
+    unsigned long long trTid = a2_glfw_tr_tid();
+    if (n <= 20) {
+        a2_log_f(@"[A2-GLFW-TRACE] enter glfwPollEvents tid=%llu n=%lu", trTid, n);
+    }
     gPumpEnv = env;
     a2_glfw_event_pump();
     gPumpEnv = NULL;
+    long long ms = a2_glfw_tr_ms(trT0);
+    if (n <= 20 || ms >= 100) {
+        a2_log_f(@"[A2-GLFW-TRACE] exit glfwPollEvents tid=%llu rc=0 ms=%lld n=%lu%s",
+                 trTid, ms, n, (n > 20) ? "（慢调用，超 20 次仍打）" : "");
+    }
 }
 
 JNIEXPORT void JNICALL Java_org_lwjgl_glfw_GLFW_nWaitEvents

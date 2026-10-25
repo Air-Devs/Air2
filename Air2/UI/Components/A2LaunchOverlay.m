@@ -176,13 +176,15 @@ static UIProgressView *gProgress = nil;
         //   真正撤遮罩由 native 的「首帧」通知驱动（A2GameFirstFrame）。
         gStageLabel.text = @"游戏启动中…";
         gProgress.progress = 0.95;
-        // ★首帧兜底★ 主类已派发但迟迟没有首帧 ⇒ 不假装成功，把真实状态告诉用户
+        // ★首帧兜底★ 主类已派发但迟迟没有首帧 ⇒ 不假装成功，把真实状态告诉用户。
+        //   ★只提示、不杀进程★：1.17 + MG 首次进世界要编译着色器/建区块，120s 并非异常；
+        //   提前退出会毁掉一次本来能干成的启动（也毁掉诊断样本）。
         if (gFirstFrameWatchdog == nil) {
-            gFirstFrameWatchdog = [NSTimer scheduledTimerWithTimeInterval:25.0 repeats:NO block:^(NSTimer *tm) {
+            gFirstFrameWatchdog = [NSTimer scheduledTimerWithTimeInterval:120.0 repeats:NO block:^(NSTimer *tm) {
                 if (gOverlayView == nil) return;           // 已经撤了就啥也不做
                 gStageLabel.text = @"画面仍未出现（可能在编译着色器/加载资源）";
                 gProgress.progress = 0.95;
-                [A2Log log:@"[A2-LAUNCH] ★首帧超时★ 阶段8已过 25s 仍未收到 A2GameFirstFrame（遮罩保持）"];
+                [A2Log log:@"[A2-LAUNCH] ★首帧超时（120s，不杀）★ 阶段8已过 120s 仍未收到 A2GameFirstFrame（遮罩保持，进程继续）"];
             }];
         }
         return;

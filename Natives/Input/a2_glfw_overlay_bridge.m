@@ -109,6 +109,7 @@
 #include <pthread.h>
 #import <UIKit/UIKit.h>
 #import "a2_glfw_window.h"
+#import "a2_glfw_trace.h"
 #import "a2_log.h"
 
 // ============================================================================
@@ -560,6 +561,11 @@ A2_GLFW_ENTRY jlong pojavGetCurrentContext(void) {
 // ★本层只造「中立窗口」并返回句柄★：尺寸/标题由中立层的建窗流程与 UIKit 决定（真实尺寸经
 // 「窗口就绪」事件回到 Java），图形上下文不在这里创建（渲染器职责）。
 A2_GLFW_ENTRY jlong pojavCreateContext(jlong share) {
+    // ★[A2-GLFW-TRACE]★ 只有 enter 没 exit = 卡在建窗里。
+    long long trT0 = a2_glfw_tr_us();
+    unsigned long long trTid = a2_glfw_tr_tid();
+    a2_log_f(@"[A2-GLFW-TRACE] enter glfwCreateWindow tid=%llu share=%lld",
+             trTid, (long long) share);
     pthread_mutex_lock(&gLock);
     long handle = gNextHandle++;
     pthread_mutex_unlock(&gLock);
@@ -567,6 +573,8 @@ A2_GLFW_ENTRY jlong pojavCreateContext(jlong share) {
     if (!a2_glfw_window_create(handle, 0, 0, "Minecraft")) {
         // 建窗被拒（平台未初始化/句柄重复/超上限）：如实返回 0，Java 侧按「无窗口」处理。
         a2_log_f(@"[A2-GLFW-PEER] pojavCreateContext 失败：中立层建窗被拒 handle=%ld", handle);
+        a2_log_f(@"[A2-GLFW-TRACE] exit glfwCreateWindow tid=%llu rc=0 ms=%lld",
+                 trTid, a2_glfw_tr_ms(trT0));
         return 0;
     }
 
@@ -576,11 +584,18 @@ A2_GLFW_ENTRY jlong pojavCreateContext(jlong share) {
 
     a2_log_f(@"[A2-GLFW-PEER] pojavCreateContext share=%ld ⇒ handle=%ld"
              "（已受理；真实尺寸以「窗口就绪」事件为准）", (long) share, handle);
+    a2_log_f(@"[A2-GLFW-TRACE] exit glfwCreateWindow tid=%llu rc=%lld ms=%lld",
+             trTid, (long long) handle, a2_glfw_tr_ms(trT0));
     return (jlong) handle;
 }
 
 // ★渲染器交接点（本层刻意不做图形工作）★：绑定当前上下文属渲染器。
 A2_GLFW_ENTRY void pojavMakeCurrent(jlong window) {
+    // ★[A2-GLFW-TRACE]★ 卡在这里 = 渲染器 eglMakeCurrent 没返回（后端初始化卡死）。
+    long long trT0 = a2_glfw_tr_us();
+    unsigned long long trTid = a2_glfw_tr_tid();
+    a2_log_f(@"[A2-GLFW-TRACE] enter glfwMakeContextCurrent tid=%llu window=%lld",
+             trTid, (long long) window);
     pthread_mutex_lock(&gLock);
     gCurrentContext = (long) window;
     pthread_mutex_unlock(&gLock);
@@ -589,17 +604,33 @@ A2_GLFW_ENTRY void pojavMakeCurrent(jlong window) {
     extern int a2_gl_bridge_make_current(void);
     int mrc = a2_gl_bridge_make_current();
     a2_log_f(@"[A2-GLFW-PEER] pojavMakeCurrent window=%ld rc=%d", (long) window, mrc);
+    a2_log_f(@"[A2-GLFW-TRACE] exit glfwMakeContextCurrent tid=%llu rc=%d ms=%lld",
+             trTid, mrc, a2_glfw_tr_ms(trT0));
 }
 
 // ★渲染器交接点★：呈现属渲染器；每帧都会调 ⇒ 只在首次打一行判据，不刷屏。
 A2_GLFW_ENTRY void pojavSwapBuffers(jlong window) {
+    // ★[A2-GLFW-TRACE]★ 每帧都调 ⇒ 只打前 20 次（超 100ms 的慢调用另计，不受限）。
+    static unsigned long trSwapN = 0;
+    unsigned long n = ++trSwapN;
+    long long trT0 = a2_glfw_tr_us();
+    unsigned long long trTid = a2_glfw_tr_tid();
+    if (n <= 20) {
+        a2_log_f(@"[A2-GLFW-TRACE] enter glfwSwapBuffers tid=%llu window=%lld n=%lu",
+                 trTid, (long long) window, n);
+    }
     pthread_mutex_lock(&gLock);
     gSwapCount++;
-    long n = gSwapCount;
+    long sn = gSwapCount;
     pthread_mutex_unlock(&gLock);
-    if (n == 1) {
+    if (sn == 1) {
         a2_log_f(@"[A2-GLFW-PEER] pojavSwapBuffers 首次调用 window=%ld"
                  "（本层只保留 ABI 入口；呈现属渲染器）", (long) window);
+    }
+    long long ms = a2_glfw_tr_ms(trT0);
+    if (n <= 20 || ms >= 100) {
+        a2_log_f(@"[A2-GLFW-TRACE] exit glfwSwapBuffers tid=%llu rc=0 ms=%lld n=%lu%s",
+                 trTid, ms, n, (n > 20) ? "（慢调用，超 20 次仍打）" : "");
     }
 }
 
@@ -626,16 +657,30 @@ A2_GLFW_ENTRY void pojavSetWindowHint(jint hint, jint value) {
 
 // glfwPollEvents（GLFW.java:1150-1152）→ 中立层事件队列在此刻、本线程排空。
 A2_GLFW_ENTRY void pojavPumpEvents(jlong window) {
+    // ★[A2-GLFW-TRACE]★ 每帧都调 ⇒ 只打前 20 次；★只有 enter 没 exit = pump 里 Java upcall 卡住★。
+    static unsigned long trPollN = 0;
+    unsigned long n = ++trPollN;
+    long long trT0 = a2_glfw_tr_us();
+    unsigned long long trTid = a2_glfw_tr_tid();
+    if (n <= 20) {
+        a2_log_f(@"[A2-GLFW-TRACE] enter glfwPollEvents tid=%llu window=%lld n=%lu",
+                 trTid, (long long) window, n);
+    }
     pthread_mutex_lock(&gLock);
     gPumpCount++;
-    long n = gPumpCount;
+    long pn = gPumpCount;
     pthread_mutex_unlock(&gLock);
 
     a2_glfw_event_pump();
 
-    if (n == 1) {
+    if (pn == 1) {
         a2_log_f(@"[A2-GLFW-PEER] pojavPumpEvents 首次调用 window=%ld"
                  "（事件在 Java 线程上排空 ⇒ 回调同线程）", (long) window);
+    }
+    long long ms = a2_glfw_tr_ms(trT0);
+    if (n <= 20 || ms >= 100) {
+        a2_log_f(@"[A2-GLFW-TRACE] exit glfwPollEvents tid=%llu rc=0 ms=%lld n=%lu%s",
+                 trTid, ms, n, (n > 20) ? "（慢调用，超 20 次仍打）" : "");
     }
 }
 

@@ -29,6 +29,7 @@
 #import "a2_glfw_window.h"
 #import "A2GameControlsView.h"
 #import "a2_glfw_input.h"
+#import "a2_glfw_trace.h"
 #import "a2_log.h"
 
 #import <UIKit/UIKit.h>
@@ -222,6 +223,14 @@ static void a2_glfw_host_snapshot(long handle, int *wp, int *hp, int *wpx, int *
 
 // ---- 事件投递助手（★一律在锁外调用★）----
 static void a2_glfw_emit_size(long handle, int wp, int hp, int wpx, int hpx) {
+    // ★[A2-GLFW-TRACE]★ glfwGetFramebufferSize 在本仓【没有 native 入口】：两套 Java GLFW
+    //   （JavaApp/src/{lwjgl,ownglfw}/org/lwjgl/glfw/GLFW.java）都直接用 Java 侧状态返回该值，
+    //   而那份状态的值就产生在**这里**。⇒ 在「供值点」打 enter/exit（真实来源，不假装是每次调用），
+    //   用于回答「MC 拿到的帧缓冲尺寸是多少、什么时候变成这个值的」。
+    long long trT0 = a2_glfw_tr_us();
+    unsigned long long trTid = a2_glfw_tr_tid();
+    a2_log_f(@"[A2-GLFW-TRACE] enter glfwGetFramebufferSize tid=%llu window=%ld pts=%dx%d fb=%dx%d",
+             trTid, handle, wp, hp, wpx, hpx);
     A2GlfwEvent ev;
     memset(&ev, 0, sizeof(ev));
     ev.window = handle;
@@ -233,6 +242,9 @@ static void a2_glfw_emit_size(long handle, int wp, int hp, int wpx, int hpx) {
     ev.type = A2_GLFW_EVENT_FRAMEBUFFER_SIZE;
     ev.i0 = wpx; ev.i1 = hpx;
     a2_glfw_event_post(&ev);
+
+    a2_log_f(@"[A2-GLFW-TRACE] exit glfwGetFramebufferSize tid=%llu rc=1 ms=%lld fb=%dx%d",
+             trTid, a2_glfw_tr_ms(trT0), wpx, hpx);
 }
 
 /// ★iPhone Duo / 分屏 / 折叠展开★ 宿主视图尺寸变了（不只是旋转）时重算并上报。
