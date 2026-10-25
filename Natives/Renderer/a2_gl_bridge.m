@@ -274,39 +274,39 @@ static volatile int32_t   gGLTraceCalls     = 0;
 static const unsigned char *a2_trace_glGetString(unsigned int name) {
     int n = __sync_fetch_and_add(&gGLTraceCalls, 1);
     if (n < A2_GL_TRACE_MAX_CALLS)
-        a2_log_f("[A2-GL-TRACE] -> enter glGetString(0x%x) tid=%p", name, (void *)pthread_self());
+        a2_log_f(@"[A2-GL-TRACE] -> enter glGetString(0x%x) tid=%p", name, (void *)pthread_self());
     const unsigned char *r = (gRealGLGetString != NULL) ? gRealGLGetString(name) : NULL;
     if (n < A2_GL_TRACE_MAX_CALLS)
-        a2_log_f("[A2-GL-TRACE] <- exit  glGetString(0x%x) = %s", name, r ? (const char *)r : "(null)");
+        a2_log_f(@"[A2-GL-TRACE] <- exit  glGetString(0x%x) = %s", name, r ? (const char *)r : "(null)");
     return r;
 }
 
 static const unsigned char *a2_trace_glGetStringi(unsigned int name, unsigned int index) {
     int n = __sync_fetch_and_add(&gGLTraceCalls, 1);
     if (n < A2_GL_TRACE_MAX_CALLS)
-        a2_log_f("[A2-GL-TRACE] -> enter glGetStringi(0x%x, %u) tid=%p", name, index, (void *)pthread_self());
+        a2_log_f(@"[A2-GL-TRACE] -> enter glGetStringi(0x%x, %u) tid=%p", name, index, (void *)pthread_self());
     const unsigned char *r = (gRealGLGetStringi != NULL) ? gRealGLGetStringi(name, index) : NULL;
     if (n < A2_GL_TRACE_MAX_CALLS)
-        a2_log_f("[A2-GL-TRACE] <- exit  glGetStringi(0x%x, %u) = %s", name, index, r ? (const char *)r : "(null)");
+        a2_log_f(@"[A2-GL-TRACE] <- exit  glGetStringi(0x%x, %u) = %s", name, index, r ? (const char *)r : "(null)");
     return r;
 }
 
 static void a2_trace_glGetIntegerv(unsigned int pname, int *data) {
     int n = __sync_fetch_and_add(&gGLTraceCalls, 1);
     if (n < A2_GL_TRACE_MAX_CALLS)
-        a2_log_f("[A2-GL-TRACE] -> enter glGetIntegerv(0x%x) tid=%p", pname, (void *)pthread_self());
+        a2_log_f(@"[A2-GL-TRACE] -> enter glGetIntegerv(0x%x) tid=%p", pname, (void *)pthread_self());
     if (gRealGLGetIntegerv != NULL) gRealGLGetIntegerv(pname, data);
     if (n < A2_GL_TRACE_MAX_CALLS)
-        a2_log_f("[A2-GL-TRACE] <- exit  glGetIntegerv(0x%x) = %d", pname, (data != NULL) ? *data : -1);
+        a2_log_f(@"[A2-GL-TRACE] <- exit  glGetIntegerv(0x%x) = %d", pname, (data != NULL) ? *data : -1);
 }
 
 static unsigned int a2_trace_glGetError(void) {
     int n = __sync_fetch_and_add(&gGLTraceCalls, 1);
     if (n < A2_GL_TRACE_MAX_CALLS)
-        a2_log_f("[A2-GL-TRACE] -> enter glGetError tid=%p", (void *)pthread_self());
+        a2_log_f(@"[A2-GL-TRACE] -> enter glGetError tid=%p", (void *)pthread_self());
     unsigned int e = (gRealGLGetError != NULL) ? gRealGLGetError() : 0u;
     if (n < A2_GL_TRACE_MAX_CALLS)
-        a2_log_f("[A2-GL-TRACE] <- exit  glGetError = 0x%x", e);
+        a2_log_f(@"[A2-GL-TRACE] <- exit  glGetError = 0x%x", e);
     return e;
 }
 
