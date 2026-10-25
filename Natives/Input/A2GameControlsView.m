@@ -23,9 +23,11 @@ static NSString *const kA2MoveModeKey  = @"A2MoveMode";
 static NSString *const kA2LayoutsKey   = @"A2ControlLayouts";     // {方案名: {id: {x,y,w,h,a}}}
 static NSString *const kA2LayoutCurKey = @"A2ControlLayoutCurrent";
 static NSString *const kA2BindingsKey  = @"A2ControlBindings";   // {控件id: GLFW键码}
-// ★移动簇布局版本★ 1 = 旧（WASD+潜 整簇默认坐标写在左上角，上游同样存在）；2 = 整簇锚定左下角安全区
+// ★移动键布局版本★ 1 = 旧（W/A/S/D/潜 默认坐标写在左上角）
+//                      2 = 整簇容器锚定左下角（已被撤掉：簇容器让五键无法单独编辑）
+//                      3 = 五键各自独立控件，默认坐标分别落在左下角安全区
 static NSString *const kA2CtrlLayoutVerKey = @"A2ControlLayoutVersion";
-static const NSInteger kA2CtrlLayoutVer = 2;
+static const NSInteger kA2CtrlLayoutVer = 3;
 
 /// 输入层：把一次输入合成进 GLFW 事件总线（实现见 Natives/Input/a2_glfw_input.m）
 extern void a2_glfw_input_post_key(long window, int key, int action);
@@ -165,13 +167,17 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 // 前置声明：这些在 @implementation 里定义得较晚，self.xxx 的点语法需要先见到声明
 - (UIViewController *)a2_topViewController;
 - (NSArray<UIView *> *)a2_movableViews;
+- (void)a2_buildMoveKeys;
+- (NSArray<UIView *> *)a2_moveKeyViews;
+- (void)a2_layoutDefaultMoveKeys;
+- (void)a2_placeMoveKey:(UIView *)v center:(CGPoint)c size:(CGFloat)s;
+- (void)a2_logControlLayout;
 @end
 
 @implementation A2GameControlsView {
     long _window;
     A2MoveMode _moveMode;
 
-    UIView *_dpadContainer;
     NSMutableDictionary<NSNumber *, UIButton *> *_dirButtons;   // key -> button
     UIButton *_sneakButton;
 
@@ -239,7 +245,7 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
                     ?: [NSMutableDictionary dictionary];
         _restFrames = [NSMutableDictionary dictionary];
 
-        [self a2_buildDPad];
+        [self a2_buildMoveKeys];
         [self a2_buildStick];
         [self a2_buildJump];
         [self a2_buildActionButtons];
@@ -267,63 +273,47 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     return b;
 }
 
-- (void)a2_buildDPad {
-    _dpadContainer = [[UIView alloc] initWithFrame:CGRectZero];
-    // ★改 frame 布局★ 原来用 Auto Layout 钉死 190x190 ⇒ 编辑器里选不中、也改不了大小
-    _dpadContainer.translatesAutoresizingMaskIntoConstraints = YES;
-    _dpadContainer.backgroundColor = [UIColor clearColor];
-    _dpadContainer.multipleTouchEnabled = YES;
-    [self addSubview:_dpadContainer];
-
+/// ★五键各自独立★ W/A/S/D/潜 直接挂在控件层上（不是容器里的子键）：
+///   与跳/攻/用/ESC 同级别 ⇒ 通用 60×60 循环给它们配同样的 pan/pinch/tap/长按手势，
+///   编辑器里可以逐个选中、拖动、缩放、改键、删除、单独存进布局。
+- (void)a2_buildMoveKeys {
     _dirButtons = [NSMutableDictionary dictionary];
+    NSArray *ids    = @[ @"w", @"a", @"s", @"d" ];
     NSArray *titles = @[ @"W", @"A", @"S", @"D" ];
     int keys[4] = { kKeyW, kKeyA, kKeyS, kKeyD };
     for (int i = 0; i < 4; i++) {
         UIButton *b = [self a2_makeButton:titles[i]];
         b.tag = keys[i];
         b.translatesAutoresizingMaskIntoConstraints = YES;
+        b.bounds = CGRectMake(0, 0, 60, 60);
         [b addTarget:self action:@selector(a2_dirTouchDown:) forControlEvents:UIControlEventTouchDown];
         [b addTarget:self action:@selector(a2_dirTouchUp:) forControlEvents:UIControlEventTouchUpInside |
                                                                UIControlEventTouchUpOutside |
                                                                UIControlEventTouchCancel];
-        [_dpadContainer addSubview:b];
+        [self addSubview:b];
         _dirButtons[@(keys[i])] = b;
+        _movable[ids[i]] = b;
     }
 
     _sneakButton = [self a2_makeButton:@"潜"];
     _sneakButton.tag = kKeyLeftShift;
     _sneakButton.translatesAutoresizingMaskIntoConstraints = YES;
+    _sneakButton.bounds = CGRectMake(0, 0, 60, 60);
     [_sneakButton addTarget:self action:@selector(a2_toggleSneak) forControlEvents:UIControlEventTouchUpInside];
-    [_dpadContainer addSubview:_sneakButton];
-
-    _dpadContainer.bounds = CGRectMake(0, 0, 190, 190);
-    [self a2_layoutDPad];
-
-    // ★可编辑★ 编辑器里能选中/拖动/缩放
-    _movable[@"dpad"] = _dpadContainer;
-    UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)];
-    pan.cancelsTouchesInView = NO;
-    [_dpadContainer addGestureRecognizer:pan];
-    UITapGestureRecognizer *t2 = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(a2_tapControl:)];
-    t2.cancelsTouchesInView = NO;
-    [_dpadContainer addGestureRecognizer:t2];
-    UIPinchGestureRecognizer *pz = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(a2_pinchItem:)];
-    pz.cancelsTouchesInView = NO;
-    [_dpadContainer addGestureRecognizer:pz];
+    [self addSubview:_sneakButton];
+    _movable[@"sneak"] = _sneakButton;
 }
 
-/// 按容器当前大小重排十字键（等比例）
-- (void)a2_layoutDPad {
-    CGRect r = _dpadContainer.bounds;
-    if (r.size.width <= 1 || r.size.height <= 1) return;
-    CGFloat side = MIN(r.size.width, r.size.height);
-    CGFloat b = side * 0.30;
-    CGFloat cx = CGRectGetMidX(r), cy = CGRectGetMidY(r);
-    _dirButtons[@(kKeyW)].frame = CGRectMake(cx - b / 2, 0, b, b);
-    _dirButtons[@(kKeyS)].frame = CGRectMake(cx - b / 2, r.size.height - b, b, b);
-    _dirButtons[@(kKeyA)].frame = CGRectMake(0, cy - b / 2, b, b);
-    _dirButtons[@(kKeyD)].frame = CGRectMake(r.size.width - b, cy - b / 2, b, b);
-    _sneakButton.frame = CGRectMake(cx - b * 0.45, cy - b * 0.45, b * 0.9, b * 0.9);
+/// 移动五键（顺序固定：W/A/S/D/潜）
+- (NSArray<UIView *> *)a2_moveKeyViews {
+    NSMutableArray *a = [NSMutableArray array];
+    int keys[4] = { kKeyW, kKeyA, kKeyS, kKeyD };
+    for (int i = 0; i < 4; i++) {
+        UIButton *b = _dirButtons[@(keys[i])];
+        if (b != nil) [a addObject:b];
+    }
+    if (_sneakButton != nil) [a addObject:_sneakButton];
+    return a;
 }
 
 - (void)a2_buildStick {
@@ -371,7 +361,8 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
 - (void)a2_applyMode {
     BOOL stick = (_moveMode == A2MoveModeStick);
-    _dpadContainer.hidden = stick;
+    // ★五键各自独立★ 摇杆模式下逐个隐藏（没有容器了）
+    for (UIView *v in [self a2_moveKeyViews]) v.hidden = stick;
     _stick.hidden = !stick;
 }
 
@@ -560,11 +551,8 @@ static int a2_touchSeen = 0;
 
     for (NSString *cid in _movable) {
         UIView *v = _movable[cid];
-        // ★移动簇在 a2_buildDPad 里已自己配好 frame 布局与手势（pan/tap/pinch 全部 cancelsTouchesInView=NO）★
-        //   这里若再套一遍：① bounds 会被改回 60x60，簇内子键落到容器外 ⇒ hitTest 收不到触摸；
-        //   ② 会多挂一个 cancelsTouchesInView=YES 的 pan，手指在方向键上轻微滑动就被判成拖拽 ⇒
-        //   方向键的 touch-up 被取消（走两步就停）。簇的几何与手势都由 a2_layoutDefaultDPad 负责。
-        if (v == _dpadContainer) continue;
+        // ★五键与其它键同级别★ W/A/S/D/潜 也是普通控件：统一 60×60 起手，
+        //   位置/大小由 a2_layoutDefaultButtons 里的 a2_layoutDefaultMoveKeys 单独给。
         v.translatesAutoresizingMaskIntoConstraints = YES;
         v.bounds = CGRectMake(0, 0, 60, 60);
         // ★手势绝不能吞掉按钮自身的触摸★
@@ -600,8 +588,8 @@ static int a2_touchSeen = 0;
     CGFloat W = CGRectGetWidth(self.bounds)  > 0 ? CGRectGetWidth(self.bounds)  : 874;
     CGFloat H = CGRectGetHeight(self.bounds) > 0 ? CGRectGetHeight(self.bounds) : 402;
 
-    // ★移动簇★ W/A/S/D/潜 是「一整簇」：默认锚在左下角安全区内（原默认坐标写死在左上角）
-    [self a2_layoutDefaultDPad];
+    // ★五键★ W/A/S/D/潜 各自独立，默认坐标分别算到左下角安全区
+    [self a2_layoutDefaultMoveKeys];
 
     // 右下：跳 / 攻 / 用 三个分开摆（原来三者叠在一起）
     _jumpButton.center      = CGPointMake(W - 74,  H - 150);
@@ -615,25 +603,26 @@ static int a2_touchSeen = 0;
     _escButton.center       = CGPointMake(W - 302, 96);
 }
 
-#pragma mark - 默认布局：移动簇（W/A/S/D/潜 一整簇）
+#pragma mark - 默认布局：W/A/S/D/潜 五个独立键
 
-/// ★只改布局常量★ 把「W/A/S/D + 潜」这一整簇锚定到屏幕左下角的安全区内，并按屏幕短边缩放。
-///   · 只做「整簇平移 + 缩放」：簇内 5 键的相对位置仍由 a2_layoutDPad 等比例算，坐标系与规则零改动
-///     （潜仍在 A 与 D 之间的中央位置，不动它相对其它四键的坐标）。
-///   · 留白 = 安全区 + 与屏幕成比例的基础留白 ⇒ 横屏刘海（左）/Home 条（下）都不会遮住簇。
-- (void)a2_layoutDefaultDPad {
+/// ★只改默认坐标，不做容器★ 把五个键**分别**摆到左下角安全区内：
+///   · 先用与原十字簇同一套几何（边长 side = 短边 × 0.42，键 b = side × 0.30，潜 = 0.9b）
+///     算出五键的中心点 ⇒ 它们之间的相对排布/间距与旧版一模一样，只是不再有容器视图。
+///   · 留白 = 安全区 + 与屏幕成比例的基础留白（≥12pt）⇒ 横屏刘海（左）/Home 条（下）都不遮键。
+///   · 与底部 1..9 热键条水平相交时把整块抬到热键条上方 ⇒ 不压热键条。
+- (void)a2_layoutDefaultMoveKeys {
     CGFloat W = CGRectGetWidth(self.bounds)  > 0 ? CGRectGetWidth(self.bounds)  : 874;
     CGFloat H = CGRectGetHeight(self.bounds) > 0 ? CGRectGetHeight(self.bounds) : 402;
     UIEdgeInsets sa = self.safeAreaInsets;
 
     CGFloat shortSide = MIN(W, H);
     if (shortSide <= 1) shortSide = 402;
-    CGFloat side = shortSide * 0.42;                 // 基准：iPhone 402 ⇒ ≈169；iPad 603 ⇒ ≈253
+    CGFloat side = shortSide * 0.42;                 // 五键占用的方块边长：iPhone 402 ⇒ ≈169；iPad 603 ⇒ ≈253
     side = MIN(MAX(side, 132.0), 320.0);             // 上下限：小屏仍可点，大屏别虚胖
     CGFloat pad = MAX(12.0, shortSide * 0.030);      // 与屏宽成比例的基础留白（iPhone ≈12）
     CGFloat left   = MAX(sa.left, 0.0)   + pad;      // 横屏刘海在左
     CGFloat bottom = MAX(sa.bottom, 0.0) + pad;      // Home 条在下
-    // ★底部热键条★ 1..9 中心在 H-30、高 36 ⇒ 顶边 H-48。簇的水平范围真的压到它时把簇抬起来，
+    // ★底部热键条★ 1..9 中心在 H-30、高 36 ⇒ 顶边 H-48。五键的水平范围真的压到它时把整块抬起来，
     //   否则竖屏 iPhone 上 S 会与「2/3」两键重叠（横屏 iPad/iPhone 横向不相交，保持贴底）。
     CGFloat hotbarW  = 9 * 36 + 8 * 6;               // 372 = a2_layoutHotbar 的实际总宽
     CGFloat hotbarX0 = (W - hotbarW) * 0.5;
@@ -642,27 +631,40 @@ static int a2_touchSeen = 0;
     left   = MIN(left,   MAX(8.0, W - side - 8.0));
     bottom = MIN(bottom, MAX(8.0, H - side - 8.0));
 
-    _dpadContainer.bounds = CGRectMake(0, 0, side, side);
-    _dpadContainer.center = CGPointMake(left + side * 0.5, H - bottom - side * 0.5);
-    [self a2_layoutDPad];   // 簇内 5 键仍按原等比例规则摆（相对位置不变）
+    // 五键中心（与旧簇内相对坐标完全一致：W 上 / A 左 / S 下 / D 右 / 潜 居中）
+    CGFloat b  = side * 0.30;
+    CGFloat cx = left + side * 0.5;
+    CGFloat cy = H - bottom - side * 0.5;
+    [self a2_placeMoveKey:_dirButtons[@(kKeyW)] center:CGPointMake(cx, cy - side * 0.5 + b * 0.5) size:b];
+    [self a2_placeMoveKey:_dirButtons[@(kKeyA)] center:CGPointMake(left + b * 0.5, cy)             size:b];
+    [self a2_placeMoveKey:_dirButtons[@(kKeyS)] center:CGPointMake(cx, H - bottom - b * 0.5)       size:b];
+    [self a2_placeMoveKey:_dirButtons[@(kKeyD)] center:CGPointMake(left + side - b * 0.5, cy)      size:b];
+    [self a2_placeMoveKey:_sneakButton         center:CGPointMake(cx, cy)                          size:b * 0.9];
 }
 
-/// ★布局版本迁移★ 旧版把移动簇的默认坐标写在了左上角（上游同样存在），
+/// 单个默认摆放：设置正方形边长 + 中心（五键各管自己，互不牵连）
+- (void)a2_placeMoveKey:(UIView *)v center:(CGPoint)c size:(CGFloat)s {
+    if (v == nil || s <= 1) return;
+    v.bounds = CGRectMake(0, 0, s, s);
+    v.center = c;
+}
+
+/// ★布局版本迁移★ 旧版把移动键的默认坐标写在左上角（v1），v2 把它们装进一个整簇容器（已撤掉）；
 /// 且「本机首次进入」会把当时那份布局播种进 NSUserDefaults ⇒ 只改常量对老设备不生效。
-/// 版本号 < 2 时把整簇重锚到左下角并落盘覆盖旧存档；其它控件坐标一个都不动。
+/// 版本号 < 3 时按新默认（五键各自 / 左下角）重锚这五个键并落盘；其它控件坐标一个都不动，且只做一次。
 - (void)a2_migrateLayoutVersionIfNeeded {
     NSInteger v = [NSUserDefaults.standardUserDefaults integerForKey:kA2CtrlLayoutVerKey];
     if (v >= kA2CtrlLayoutVer) return;
     [NSUserDefaults.standardUserDefaults setInteger:kA2CtrlLayoutVer forKey:kA2CtrlLayoutVerKey];
-    [self a2_layoutDefaultDPad];
-    a2_log_f(@"[A2-CTRL-LAYOUT] 迁移 v%ld→v%ld：WASD+潜 整簇重锚左下角安全区（簇内相对位置不变）",
+    [self a2_layoutDefaultMoveKeys];
+    a2_log_f(@"[A2-CTRL-LAYOUT] 迁移 v%ld→v%ld：W/A/S/D/潜 五键各自重锚左下角安全区（已无簇容器）",
              (long) v, (long) kA2CtrlLayoutVer);
     if (!_editing) [self a2_saveLayout];   // 落盘，否则下次启动又被旧存档的左上角覆盖
 }
 
 #pragma mark - 真机核对判据：[A2-CTRL-LAYOUT]
 
-/// 控件在控件层坐标系里的 frame（dpad 子键需要多转一层）
+/// 控件在控件层坐标系里的 frame（五个移动键现在也是控件层的直接子视图，等价于 frame）
 - (CGRect)a2_frameInSelf:(UIView *)v {
     if (v == nil) return CGRectZero;
     return v.superview ? [v.superview convertRect:v.frame toView:self] : v.frame;
@@ -675,17 +677,15 @@ static int a2_touchSeen = 0;
              name.UTF8String, f.origin.x, f.origin.y, f.size.width, f.size.height, v.hidden ? 1 : 0);
 }
 
-/// ★真机核对用★ 屏幕尺寸 + 每个键的最终 frame（x,y,w,h）+ 簇内 5 键是否都在可见区
+/// ★真机核对用★ 屏幕尺寸 + 每个键的最终 frame（x,y,w,h）逐个打印（已无簇信息）
 - (void)a2_logControlLayout {
     CGSize s = self.bounds.size;
     if (s.width <= 1 || s.height <= 1) return;
     UIEdgeInsets sa = self.safeAreaInsets;
-    a2_log_f(@"[A2-CTRL-LAYOUT] 屏幕=%.0fx%.0f safe=(t%.0f,l%.0f,b%.0f,r%.0f) 模式=%s 簇边长=%.1f",
+    a2_log_f(@"[A2-CTRL-LAYOUT] 屏幕=%.0fx%.0f safe=(t%.0f,l%.0f,b%.0f,r%.0f) 模式=%s",
              s.width, s.height, sa.top, sa.left, sa.bottom, sa.right,
-             (_moveMode == A2MoveModeStick ? "stick" : "dpad"),
-             CGRectGetWidth(_dpadContainer.bounds));
+             (_moveMode == A2MoveModeStick ? "stick" : "dpad"));
 
-    int keys[4] = { kKeyW, kKeyA, kKeyS, kKeyD };
     [self a2_logFrameFor:@"W"   view:_dirButtons[@(kKeyW)]];
     [self a2_logFrameFor:@"A"   view:_dirButtons[@(kKeyA)]];
     [self a2_logFrameFor:@"S"   view:_dirButtons[@(kKeyS)]];
@@ -702,23 +702,22 @@ static int a2_touchSeen = 0;
         [self a2_logFrameFor:[NSString stringWithFormat:@"热键%lu", (unsigned long) (i + 1)] view:_hotbar[i]];
     }
 
-    // 判据：簇内 5 键（W/A/S/D/潜）是否全在可见区内
-    int inside = 0;
-    NSMutableArray *cluster = [NSMutableArray array];
-    for (int i = 0; i < 4; i++) {
-        UIButton *b = _dirButtons[@(keys[i])];
-        if (b != nil) [cluster addObject:b];
-    }
-    if (_sneakButton != nil) [cluster addObject:_sneakButton];
-    for (UIView *v in cluster) {
+    // 判据①：五个移动键各自是否都在可见区内
+    // 判据②：五个移动键是否有任何一个与底部 1..9 热键条相交（不压热键条）
+    NSArray<UIView *> *moveKeys = [self a2_moveKeyViews];
+    int inside = 0, overlap = 0;
+    CGRect hotbarUnion = CGRectNull;
+    for (UIView *b in _hotbar) hotbarUnion = CGRectUnion(hotbarUnion, [self a2_frameInSelf:b]);
+    for (UIView *v in moveKeys) {
         CGRect f = [self a2_frameInSelf:v];
         if (f.size.width > 0.5 &&
             CGRectGetMinX(f) >= -0.5 && CGRectGetMinY(f) >= -0.5 &&
             CGRectGetMaxX(f) <= s.width + 0.5 && CGRectGetMaxY(f) <= s.height + 0.5) inside++;
+        if (!CGRectIsNull(hotbarUnion) && CGRectIntersectsRect(f, hotbarUnion)) overlap++;
     }
-    a2_log_f(@"[A2-CTRL-LAYOUT] 判定：簇内 %lu 键全部在可见区=%d（%d/%lu）",
-             (unsigned long) cluster.count, (inside == (int) cluster.count) ? 1 : 0,
-             inside, (unsigned long) cluster.count);
+    a2_log_f(@"[A2-CTRL-LAYOUT] 判定：移动五键 %lu 个全部在可见区=%d（%d/%lu） 与热键条相交=%d",
+             (unsigned long) moveKeys.count, (inside == (int) moveKeys.count) ? 1 : 0,
+             inside, (unsigned long) moveKeys.count, overlap);
 }
 
 #pragma mark - 阶段3：热键条 + 系统键盘
@@ -905,7 +904,6 @@ static int a2_touchSeen = 0;
     v.center = CGPointMake(v.center.x + t.x, v.center.y + t.y);
     [pan setTranslation:CGPointZero inView:self];
     [self a2_layoutHandleForSelected];
-    if (pan.view == _dpadContainer) [self a2_layoutDPad];
 }
 
 - (void)a2_pinchItem:(UIPinchGestureRecognizer *)pinch {
@@ -915,7 +913,6 @@ static int a2_touchSeen = 0;
     v.bounds = CGRectMake(0, 0, MAX(28, v.bounds.size.width * s), MAX(28, v.bounds.size.height * s));
     pinch.scale = 1.0;
     [self a2_layoutHandleForSelected];
-    if (pinch.view == _dpadContainer) [self a2_layoutDPad];
 }
 
 - (void)a2_askNewLayoutName {
@@ -1043,8 +1040,6 @@ static int a2_touchSeen = 0;
                                MIN(MAX(y, halfH), curH - halfH));
         v.alpha = [e[@"a"] doubleValue] > 0 ? [e[@"a"] doubleValue] : 1.0;
     }
-    // ★移动簇★ 容器尺寸可能被存档/缩放改过 ⇒ 簇内子键按新边长重排（相对位置规则不变）
-    if (CGRectGetWidth(_dpadContainer.bounds) > 1) [self a2_layoutDPad];
 }
 
 
