@@ -101,15 +101,12 @@ check-jre:
 
 # ------------------------------------------------------------
 natives: bootstrap
-	@echo "==> 编译原生层"
-	@if [ -f "$(NATIVESDIR)/CMakeLists.txt" ]; then \
-		cmake -S "$(NATIVESDIR)" -B "$(BUILDDIR)/natives" \
-			-DCMAKE_BUILD_TYPE="$(CMAKE_BUILD_TYPE)" \
-			-DCMAKE_OSX_DEPLOYMENT_TARGET=14.0; \
-		cmake --build "$(BUILDDIR)/natives" --parallel; \
-	else \
-		echo "  (cmake/CMakeLists.txt 尚未就绪)"; \
-	fi
+	@echo "==> 生成 Xcode 工程（原生层走 Xcode 编译，不再用 CMake）"
+	@python3 "$(SOURCEDIR)/scripts/gen_xcodeproj.py"
+	@echo ""
+	@echo "  原生层由 Air2.xcodeproj 编译。"
+	@echo "  之前的 cmake/CMakeLists.txt 是 Air1 副本，引用了 10 个已删文件，"
+	@echo "  make natives 会静默空转（假绿），已移除该分支。"
 
 # ------------------------------------------------------------
 java: bootstrap

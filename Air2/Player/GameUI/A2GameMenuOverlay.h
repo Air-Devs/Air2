@@ -102,6 +102,9 @@ typedef NS_ENUM(NSInteger, A2FPSDisplayMode) {
 /// 游戏 surface —— 分辨率调整会作用到它
 @property (nonatomic, weak, nullable) CALayer *gameLayer;
 
+/// 长按浮球 → 打开控件编辑器（对照 ZL2 的 GameBall 长按）
+@property (nonatomic, copy, nullable) void (^onOpenEditor)(void);
+
 - (void)applyTheme;
 
 /// 更新 FPS / 内存显示（悬浮球旁的小字）。

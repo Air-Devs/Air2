@@ -41,6 +41,8 @@
 #import "A2AccountManager.h"
 #import "A2LaunchSplashView.h"
 #import "A2GameMenuOverlay.h"
+#import "A2ControlEditorViewController.h"
+#import "A2Toast.h"
 #import "A2Multiplayer.h"
 #import "A2GameLaunchCoordinator.h"
 #import "A2ResolutionManager.h"
@@ -1120,6 +1122,20 @@ CGPoint lastVirtualMousePoint = {0, 0};
     // 这里恢复成完整实现。
     self.ctrlView = [[A2ControlRenderer alloc] initWithLayout:[A2DefaultControls makeLayout]];
 
+    // ---- 悬浮球（对照 ZL2 的 GameBall）----
+    //   · 可拖动、松手吸附边缘
+    //   · 长按 → 控件编辑器
+    self.gameMenuOverlay = [[A2GameMenuOverlay alloc] initWithFrame:self.view.bounds];
+    self.gameMenuOverlay.autoresizingMask = UIViewAutoresizingFlexibleWidth
+                                          | UIViewAutoresizingFlexibleHeight;
+
+    __weak typeof(self) weakSelf = self;
+    self.gameMenuOverlay.onOpenEditor = ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        [self openControlEditor];
+    };
+    [self.view addSubview:self.gameMenuOverlay];
+
     self.surfaceView = [[GameSurfaceView alloc] initWithFrame:self.view.frame];
     self.surfaceView.layer.contentsScale = screenScale * resolutionScale;
     self.surfaceView.layer.magnificationFilter = self.surfaceView.layer.minificationFilter = kCAFilterNearest;
@@ -1314,6 +1330,29 @@ CGPoint lastVirtualMousePoint = {0, 0};
     [self setupLaunchOverlay];
 
     [self launchMinecraft];
+}
+
+/// 打开控件编辑器（悬浮球长按触发）
+- (void)openControlEditor {
+    A2ControlLayout *layout = self.ctrlView.layout;
+    if (!layout) {
+        [A2Toast show:@"控件布局未加载" inView:self.view];
+        return;
+    }
+
+    A2ControlEditorViewController *ed =
+        [[A2ControlEditorViewController alloc] initWithLayout:layout];
+    ed.filePath = nil;   // 内置布局先不落盘
+    __weak typeof(self) weakSelf = self;
+    ed.onSave = ^(A2ControlLayout *l) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self loadCustomControls];
+        [A2Toast show:@"控件已更新" inView:self.view];
+    };
+
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:ed];
+    nav.modalPresentationStyle = UIModalPresentationFullScreen;
+    [self presentViewController:nav animated:YES completion:nil];
 }
 
 - (void)reloadMousePointerImage {
