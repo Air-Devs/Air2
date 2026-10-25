@@ -758,6 +758,75 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
 ///   · 需要看日志（整合包等）：双列弹窗，宽度 80%
 ///
 /// 我们的做法：始终带日志（用户遇到问题能截图），因此始终双列。
++ (void)presentModPackDialogFrom:(UIViewController *)host
+                         packPath:(NSString *)zipPath
+                      versionName:(NSString *)versionName {
+
+    // 整合包的安装阶段与「装原版+加载器」不同：
+    //   解析清单 → 下载文件 → 解压覆盖 → 完成
+    // 但展示形态统一用 A2InstallProgressDialog（与游戏安装一致）。
+    A2TaskLogOutput *log = [[A2TaskLogOutput alloc]
+                            initWithTitle:[NSString stringWithFormat:@"导入 %@", versionName]];
+
+    A2InstallProgressDialog *dialog = [[A2InstallProgressDialog alloc] initWithLogOutput:log];
+    dialog.dialogTitle = @"导入整合包";
+
+    NSArray<NSString *> *steps = @[
+        @"解析整合包",
+        @"下载缺失文件",
+        @"解压并写入",
+        @"完成",
+    ];
+    [dialog setSteps:steps];
+
+    A2ModPackInstaller *installer = [[A2ModPackInstaller alloc] init];
+
+    dialog.onCancel = ^{
+        [installer cancel];
+    };
+
+    [host presentViewController:dialog animated:YES completion:^{
+        [log start];
+
+        [installer installPackAtPath:zipPath
+                          versionName:versionName
+                             gameHome:A2VersionManager.shared.gameHome
+                             progress:^(double progress, NSString *message) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                // 粗略映射：前 10% 解析，10~70% 下载，70~100% 解压
+                NSInteger idx = progress < 0.1 ? 0 : (progress < 0.7 ? 1 : 2);
+                [dialog updateStepAtIndex:idx
+                                    stage:A2ProgressStepStageRunning
+                                  message:message
+                                 progress:progress
+                                     rate:nil];
+            });
+        }
+                           completion:^(BOOL success, NSError *error) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (success) {
+                    [dialog updateStepAtIndex:3
+                                        stage:A2ProgressStepStageCompleted
+                                      message:@"完成"
+                                     progress:1.0
+                                         rate:nil];
+                    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
+                                                 (int64_t)(0.6 * NSEC_PER_SEC)),
+                                   dispatch_get_main_queue(), ^{
+                        [dialog dismissWithCompletion:nil];
+                    });
+                } else {
+                    [dialog updateStepAtIndex:3
+                                        stage:A2ProgressStepStageRunning
+                                      message:(error.localizedDescription ?: @"导入失败")
+                                     progress:-1
+                                         rate:nil];
+                }
+            });
+        }];
+    }];
+}
+
 + (void)presentAsDialogFrom:(UIViewController *)host
                 mcVersion:(NSString *)mcVersion
               versionName:(NSString *)versionName

@@ -864,11 +864,10 @@ static const CGFloat kHeaderIconSize = 72;
     // 版本名用整合包名（去掉不合法字符）
     NSString *versionName = [packName stringByReplacingOccurrencesOfString:@"/" withString:@"-"];
 
-    // 进安装进度页，由它展示安装过程
-    A2InstallingViewController *vc =
-        [[A2InstallingViewController alloc] initWithModPackPath:zipPath
-                                                    versionName:versionName];
-    [self.navigationController pushViewController:vc animated:YES];
+    // 用弹窗形态，与游戏安装统一
+    [A2InstallingViewController presentModPackDialogFrom:self
+                                                 packPath:zipPath
+                                              versionName:versionName];
 }
 
 #pragma mark - UITableViewDataSource

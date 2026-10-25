@@ -58,6 +58,10 @@ NS_ASSUME_NONNULL_BEGIN
 ///
 /// 这是推荐的入口 —— 弹窗能盖住底层列表、装完自动关闭，
 /// 不需要用户返回。整页模式保留给需要长日志的整合包安装。
++ (void)presentModPackDialogFrom:(UIViewController *)host
+                     packPath:(NSString *)zipPath
+                  versionName:(NSString *)versionName;
+
 + (void)presentAsDialogFrom:(UIViewController *)host
                   mcVersion:(NSString *)mcVersion
                 versionName:(NSString *)versionName

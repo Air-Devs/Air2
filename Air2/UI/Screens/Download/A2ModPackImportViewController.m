@@ -202,10 +202,11 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
     // 去掉路径不合法字符
     versionName = [versionName stringByReplacingOccurrencesOfString:@"/" withString:@"-"];
 
-    A2InstallingViewController *vc =
-        [[A2InstallingViewController alloc] initWithModPackPath:_pickedPath
-                                                    versionName:versionName];
-    [self.navigationController pushViewController:vc animated:YES];
+    // 用弹窗形态，与游戏安装统一（之前这里是推进去的圆环整页，
+    // 两套界面并存导致「看起来没变化」）。
+    [A2InstallingViewController presentModPackDialogFrom:self
+                                                 packPath:_pickedPath
+                                              versionName:versionName];
 }
 
 @end
