@@ -267,7 +267,11 @@ def check_component_dependencies():
                    'A2ColorTheme_Internal.h'}
 
     issues = []
-    for sub in ("Air2/UI/Components", "Air2/UI/Screens"):
+    # 之前只扫 UI 两层 —— Player/Context 里用了 A2Logger 却没 import
+    # 就连着两次漏过（JavaLauncher / SurfaceViewController）。
+    for sub in ("Air2/UI/Components", "Air2/UI/Screens",
+                "Air2/Player/Context", "Air2/Player/GameUI",
+                "Air2/Player/Controls", "Air2/App"):
         base = os.path.join(ROOT, sub)
         if not os.path.isdir(base):
             continue
@@ -286,6 +290,12 @@ def check_component_dependencies():
 
                 imported = set(re.findall(r'#import\s+"(\w+\.h)"', code_only))
                 own = f[:-2] + ".h"
+                # 同名头文件自己也会引一批（例如 A2ControlRenderer.h 引了
+                # A2ControlLayout.h），这类传递引入不算缺失。
+                own_path = os.path.join(dirpath, own)
+                if os.path.exists(own_path):
+                    own_src = open(own_path).read()
+                    imported |= set(re.findall(r'#import\s+"(\w+\.h)"', own_src))
 
                 for t in set(re.findall(r'\b(A2[A-Z]\w+)\b', code_only)):
                     if t not in type_to_header:

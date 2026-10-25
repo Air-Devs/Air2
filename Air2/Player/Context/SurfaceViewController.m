@@ -32,6 +32,8 @@
 #import "LauncherPreferences.h"
 #import "PLProfiles.h"
 #import "SurfaceViewController.h"
+#import "A2Logger.h"
+#import "A2Account.h"
 #import "A2TouchTransport.h"
 #import "A2ControlRenderer.h"
 #import "A2ControlLayout.h"

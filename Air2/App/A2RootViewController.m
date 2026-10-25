@@ -33,6 +33,7 @@
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 #import "A2Log.h"
+#import "A2DownloadTask.h"
 
 @interface A2RootViewController ()
 @property (nonatomic, strong) A2NavigationController *nav;
