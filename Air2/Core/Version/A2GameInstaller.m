@@ -37,6 +37,11 @@ static NSString *const kLibrariesBaseURL = @"https://libraries.minecraft.net";
 
 static NSString *const kUserAgent = @"Air-Devs/Air2/0.1.0 (github.com/Air-Devs/Air2)";
 
+/// ★整批熔断阈值★ 连续这么多个文件失败、且整批一个都没成功 ⇒ 判定为「源/网络整体不可用」，
+///   中止整批并把可读错误往上抛。继续把剩下几百个文件挨个打一遍只会拖时间、还会让限流更糟。
+static const NSUInteger kBatchBreakAfterConsecutiveFailures = 5;
+
+
 static void A2Main(dispatch_block_t block) {
     if ([NSThread isMainThread]) block();
     else dispatch_async(dispatch_get_main_queue(), block);
@@ -763,6 +768,8 @@ static void A2Main(dispatch_block_t block) {
     __block NSUInteger index = 0;          // 下一个待发
     __block NSUInteger done = 0;           // 已完成（含失败）
     __block NSUInteger failed = 0;
+    __block NSUInteger succeeded = 0;      // ★熔断判据★ 整批成功数
+    __block NSUInteger consecutiveFailures = 0;  // ★熔断判据★ 连续失败数（成功即清零）
     __block BOOL finished = NO;
     __weak typeof(self) weakSelf = self;
 
@@ -789,31 +796,72 @@ static void A2Main(dispatch_block_t block) {
                    thenRun:^(NSError *error) {
                 __strong typeof(weakSelf) self = weakSelf;
                 if (!self) return;
-                // 单个文件失败不中断整体 —— 依赖库里有可选组件，下载不到不影响启动
-                if (error) failed++;
-                done++;
-                // ★文案统一★：整批只用"已下载 X / 共 Y · P%"这一种串，进度按文件数推进，
-                //   ★不再★在文件完成瞬间切成别的文案（那正是"来回闪"的来源）。
-                {
-                    // ★只按字节算★（按文件个数算会与字节进度打架 ⇒ 用户看到 100%/60% 闪）
-                    @synchronized (self) {
-                        if (self.a2BatchBytesDone > self.a2BatchBytesTotal) {
-                            self.a2BatchBytesTotal = self.a2BatchBytesDone;
-                        }
-                        double bp = (self.a2BatchBytesTotal > 0)
-                            ? MIN(1.0, (double)self.a2BatchBytesDone / (double)self.a2BatchBytesTotal)
-                            : 0.0;
-                        [self report:stage progress:bp
-                             message:[NSString stringWithFormat:@"已下载 %.1f MB / 共 %.1f MB · %.0f%%",
-                                      (double)self.a2BatchBytesDone / 1048576.0,
-                                      (double)self.a2BatchBytesTotal / 1048576.0,
-                                      bp * 100.0]];
+
+                NSError *breakerError = nil;
+                BOOL allDone = NO;
+                NSUInteger stillQueued = 0;
+                NSUInteger consecutiveSnapshot = 0;
+                NSString *lastReason = error.localizedDescription;
+
+                @synchronized (self) {
+                    // 已熔断/已完成：迟到的完成回调不再推进状态机
+                    if (finished) return;
+
+                    // 单个文件失败默认不中断整体 —— 依赖库里有可选组件，下载不到不影响启动。
+                    // 但「连续失败且整批零成功」不是单文件问题 ⇒ 见下方熔断。
+                    if (error) { failed++; consecutiveFailures++; }
+                    else { succeeded++; consecutiveFailures = 0; }
+                    done++;
+
+                    // ★文案统一★：整批只用"已下载 X / 共 Y · P%"这一种串，进度按字节推进，
+                    //   ★不再★在文件完成瞬间切成别的文案（那正是"来回闪"的来源）。
+                    if (self.a2BatchBytesDone > self.a2BatchBytesTotal) {
+                        self.a2BatchBytesTotal = self.a2BatchBytesDone;
+                    }
+                    double bp = (self.a2BatchBytesTotal > 0)
+                        ? MIN(1.0, (double)self.a2BatchBytesDone / (double)self.a2BatchBytesTotal)
+                        : 0.0;
+                    [self report:stage progress:bp
+                         message:[NSString stringWithFormat:@"已下载 %.1f MB / 共 %.1f MB · %.0f%%",
+                                  (double)self.a2BatchBytesDone / 1048576.0,
+                                  (double)self.a2BatchBytesTotal / 1048576.0,
+                                  bp * 100.0]];
+
+                    // ★整批熔断★ 连续 N 个失败且零成功 ⇒ 源/网络整体不可用，别把剩下几百个再打一遍
+                    if (succeeded == 0 && consecutiveFailures >= kBatchBreakAfterConsecutiveFailures) {
+                        finished = YES;
+                        self.a2InBatch = NO;
+                        consecutiveSnapshot = consecutiveFailures;
+                        stillQueued = (total > done) ? (total - done) : 0;
+                        breakerError = [NSError errorWithDomain:A2DownloadErrorDomain
+                                                           code:A2DownloadErrorAllCandidatesExhausted
+                                                       userInfo:@{
+                            NSLocalizedDescriptionKey: [NSString stringWithFormat:
+                                @"下载已中止：连续 %lu 个文件失败且没有一个是成功的（下载源或网络不可用）%@",
+                                (unsigned long)consecutiveFailures,
+                                lastReason.length > 0
+                                    ? [NSString stringWithFormat:@"，最后一个错误：%@", lastReason]
+                                    : @""],
+                        }];
+                    } else if (done >= total) {
+                        finished = YES;
+                        self.a2InBatch = NO;
+                        allDone = YES;
                     }
                 }
-                if (done >= total) {
-                    if (finished) return;
-                    finished = YES;
-                    @synchronized (self) { self.a2InBatch = NO; }
+
+                if (breakerError) {
+                    // 还在飞的一起收掉：它们的结果对这次安装已经没有意义
+                    [[A2DownloadEngine sharedClient] cancelAll];
+                    [A2Log log:@"[A2-DL] 整批熔断：连续失败 %lu 个、成功 0 个，已中止；未发起 %lu 个，末次原因=%@",
+                                 (unsigned long)consecutiveSnapshot,
+                                 (unsigned long)stillQueued,
+                                 lastReason ?: @"(未知)"];
+                    if (then) then(breakerError);
+                    pump = nil;
+                    return;
+                }
+                if (allDone) {
                     [A2Log log:@"[A2-DL] batch 完成：%lu 个，失败 %lu，总大小 %.1f MB",
                                  (unsigned long)total, (unsigned long)failed,
                                  (double)self.a2BatchBytesTotal / 1048576.0];

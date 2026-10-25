@@ -56,6 +56,145 @@ static const NSInteger kBackoffCount = 3;
 static const NSUInteger kWriteBufferSize = 256 * 1024;
 /// 半成品文件后缀
 static NSString *const kPartSuffix = @".part";
+/// Retry-After 封顶：服务端可能给 3600，装包不能干等一小时（超了就按封顶值重试）
+static const NSTimeInterval kMaxRetryAfterSeconds = 30.0;
+/// 限流降并发后，连续多少次成功把上限 +1（逐步恢复，不一次弹回）
+static const NSInteger kGateRecoverAfterSuccesses = 4;
+
+@class A2FileFetcher;
+
+#pragma mark - 引擎私有接口（fetcher 用）
+
+/// fetcher 只持 task，session 归引擎。这些方法定义在引擎实现里。
+@interface A2DownloadEngine (Private)
+- (NSURLSession *)sharedSession;
+- (void)attachFetcher:(A2FileFetcher *)fetcher toTask:(NSURLSessionDataTask *)task;
+- (void)detachTask:(nullable NSURLSessionTask *)task;
+- (void)fetcherDidFinish:(A2FileFetcher *)fetcher;
+@end
+
+#pragma mark - 全局并发闸门
+
+/// 进程级并发闸门。
+///
+/// 会话复用之后每个文件不再各建一条 NSURLSession，连接池/TLS 会话只建一次；
+/// 但服务端限流是「按 IP / 按账号」的进程级事实，所以还需要一个进程级闸门：
+///   · 收到 429 / 503 ⇒ 立刻把并发上限砍半（已在飞的不动，新请求排队）
+///   · 之后每连续 4 次成功 ⇒ 上限 +1，逐步恢复到基线
+/// 基线取偏好键 A2DownloadConcurrency（与 installer 的批量窗口同一个键，缺省 16）。
+@interface A2DownloadGate : NSObject
++ (instancetype)sharedGate;
+/// 取一个并发槽位：有空位立即回调，否则 FIFO 排队（回调在闸门串行队列上）
+- (void)acquireSlot:(dispatch_block_t)ready;
+/// 归还槽位（与 acquireSlot 严格成对；调用方自己保证不重复归还）
+- (void)releaseSlot;
+/// 429/503：降并发 + 记录冷却时间（秒，0 表示按退避重试）
+- (void)throttledFor:(NSTimeInterval)retryAfter reason:(NSString *)reason;
+/// 一次成功：累计成功数，够数就恢复一档并发
+- (void)noteSuccess;
+- (NSInteger)currentLimit;
+@end
+
+@implementation A2DownloadGate {
+    dispatch_queue_t _q;
+    NSInteger _limit;       ///< 当前允许并发
+    NSInteger _baseLimit;   ///< 基线（恢复目标）
+    NSInteger _inFlight;
+    NSInteger _successStreak;
+    NSMutableArray<dispatch_block_t> *_waiters;
+    BOOL _loggedQueueing;
+}
+
+/// 基线并发：与 installer 的 A2DownloadConcurrency 同键，避免两处各说一套
+static NSInteger A2DownloadBaseLimit(void) {
+    NSInteger v = [NSUserDefaults.standardUserDefaults integerForKey:@"A2DownloadConcurrency"];
+    if (v <= 0) v = 16;
+    return MAX(1, MIN(32, v));
+}
+
++ (instancetype)sharedGate {
+    static A2DownloadGate *shared = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ shared = [[A2DownloadGate alloc] init]; });
+    return shared;
+}
+
+- (instancetype)init {
+    self = [super init];
+    if (!self) return nil;
+    _q = dispatch_queue_create("dev.airdevs.air2.download.gate", DISPATCH_QUEUE_SERIAL);
+    _baseLimit = _limit = A2DownloadBaseLimit();
+    _waiters = [NSMutableArray array];
+    return self;
+}
+
+- (void)acquireSlot:(dispatch_block_t)ready {
+    if (!ready) return;
+    dispatch_async(_q, ^{
+        if (self->_inFlight < self->_limit) {
+            self->_inFlight++;
+            ready();
+            return;
+        }
+        [self->_waiters addObject:[ready copy]];
+        if (!self->_loggedQueueing) {
+            self->_loggedQueueing = YES;
+            [A2Log log:@"[A2-DL] 并发闸门排队：limit=%ld inFlight=%ld 等待=%lu（429/503 后降并发生效）",
+                  (long)self->_limit, (long)self->_inFlight, (unsigned long)self->_waiters.count];
+        }
+    });
+}
+
+- (void)releaseSlot {
+    dispatch_async(_q, ^{
+        if (self->_inFlight > 0) self->_inFlight--;
+        [self pumpLocked];
+    });
+}
+
+/// 只在 _q 上调用
+- (void)pumpLocked {
+    while (self->_waiters.count > 0 && self->_inFlight < self->_limit) {
+        dispatch_block_t blk = self->_waiters.firstObject;
+        [self->_waiters removeObjectAtIndex:0];
+        self->_inFlight++;
+        blk();
+    }
+    if (self->_waiters.count == 0) self->_loggedQueueing = NO;
+}
+
+- (void)throttledFor:(NSTimeInterval)retryAfter reason:(NSString *)reason {
+    dispatch_async(_q, ^{
+        NSInteger next = MAX(1, self->_limit / 2);
+        BOOL changed = (next < self->_limit);
+        self->_limit = next;
+        self->_successStreak = 0;
+        [A2Log log:@"[A2-DL] 限流降并发 %ld -> %ld retryAfter=%.0fs reason=%@",
+              (long)(changed ? self->_limit * 2 : self->_limit), (long)self->_limit,
+              retryAfter < 0 ? 0 : retryAfter, reason ?: @"(未知)"];
+    });
+}
+
+- (void)noteSuccess {
+    dispatch_async(_q, ^{
+        if (self->_limit >= self->_baseLimit) return;
+        self->_successStreak++;
+        if (self->_successStreak < kGateRecoverAfterSuccesses) return;
+        self->_successStreak = 0;
+        self->_limit++;
+        [A2Log log:@"[A2-DL] 并发恢复 %ld/%ld", (long)self->_limit, (long)self->_baseLimit];
+        [self pumpLocked];
+    });
+}
+
+- (NSInteger)currentLimit {
+    __block NSInteger v = 0;
+    dispatch_sync(_q, ^{ v = self->_limit; });
+    return v;
+}
+
+@end
+
 
 #pragma mark - 请求
 
@@ -117,8 +256,11 @@ static NSString *const kPartSuffix = @".part";
 @property (nonatomic, assign) int64_t bytesSinceLastTick;
 @property (nonatomic, assign) int64_t lastReportedTotal;
 
-@property (nonatomic, strong, nullable) NSURLSession *session;
 @property (nonatomic, strong, nullable) NSURLSessionDataTask *currentTask;
+/// currentTask 是否正握着一个并发闸门的槽位（槽位跟 task 走，必须成对归还）
+@property (nonatomic, assign) BOOL currentTaskHoldsSlot;
+/// 共享 session 的持有者（fetcher 自己不再建 session）
+@property (nonatomic, weak, nullable) A2DownloadEngine *engine;
 @property (nonatomic, strong) dispatch_queue_t queue;
 
 @end
@@ -185,6 +327,11 @@ static NSString *const kPartSuffix = @".part";
         return;
     }
 
+    // 每次发起（含重试/换源）前先把上一条 task 摘干净：
+    // 旧 task 取消 + 从 task→fetcher 映射里移除 + 归还闸门槽位，
+    // 这样它迟到的 delegate 回调不会再串到这一次 attempt 上。
+    [self detachCurrentTask];
+
     NSURL *url = self.request.candidateURLs[self.candidateIndex];
     NSMutableURLRequest *req = [NSMutableURLRequest requestWithURL:url];
     req.timeoutInterval = 60;
@@ -197,18 +344,37 @@ static NSString *const kPartSuffix = @".part";
         [req setValue:range forHTTPHeaderField:@"Range"];
     }
 
-    NSURLSessionConfiguration *cfg = NSURLSessionConfiguration.defaultSessionConfiguration;
-    cfg.timeoutIntervalForRequest = 60;
-    cfg.timeoutIntervalForResource = 3600;
-    // ★2026-10-18 提速★ 小文件多 ⇒ 连接池上限要跟批量并发同量级，否则并发被压回 8。
-    cfg.HTTPMaximumConnectionsPerHost = 32;
-    cfg.HTTPShouldUsePipelining = YES;      // 老字段（现代系统多忽略），保留无害
-    cfg.waitsForConnectivity = NO;          // 无网时立即失败由上层重试，别在这里干等
-    self.session = [NSURLSession sessionWithConfiguration:cfg delegate:self delegateQueue:nil];
+    // ★会话复用★ 全部文件共一条 session（引擎持有），这里只拿 task。
+    //   以前每个 fetcher 每次尝试都 sessionWithConfiguration → 64 个文件 64 次
+    //   TCP+TLS 握手，连接池/HTTP2 复用全废。现在只有会话缓存与多路复用。
+    A2DownloadEngine *engine = self.engine ?: [A2DownloadEngine sharedClient];
+    NSURLSession *session = [engine sharedSession];
 
-    self.currentTask = [self.session dataTaskWithRequest:req];
-    [self.currentTask resume];
+    // 并发闸门：429/503 之后上限被砍半，这里自然排队；正常时与批量窗口同量级（不额外限流）
+    __weak typeof(self) weakSelf = self;
+    [[A2DownloadGate sharedGate] acquireSlot:^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) { [[A2DownloadGate sharedGate] releaseSlot]; return; }
+        dispatch_async(self.queue, ^{
+            if (self.finished || self.currentTask != nil) {
+                [[A2DownloadGate sharedGate] releaseSlot];
+                return;
+            }
+            NSURLSessionDataTask *task = [session dataTaskWithRequest:req];
+            if (!task) {
+                [[A2DownloadGate sharedGate] releaseSlot];
+                [self handleCandidateFailure:[self errorWithCode:A2DownloadErrorInvalidParameter
+                                                         message:@"请求无法构造"]];
+                return;
+            }
+            self.currentTask = task;
+            self.currentTaskHoldsSlot = YES;
+            [engine attachFetcher:self toTask:task];
+            [task resume];
+        });
+    }];
 }
+
 
 /// If-Range 的取值：优先 strong ETag，否则 Last-Modified
 - (NSString *)ifRangeValidator {
@@ -219,19 +385,19 @@ static NSString *const kPartSuffix = @".part";
 
 #pragma mark 响应处理
 
-- (void)URLSession:(NSURLSession *)session
-          dataTask:(NSURLSessionDataTask *)dataTask
-didReceiveResponse:(NSURLResponse *)response
- completionHandler:(void (^)(NSURLSessionResponseDisposition))completionHandler {
+/// 由引擎的 session delegate 转发进来（引擎按 task 找到本 fetcher）
+- (void)handleResponse:(NSURLResponse *)response
+               forTask:(NSURLSessionDataTask *)dataTask
+     completionHandler:(void (^)(NSURLSessionResponseDisposition))completionHandler {
 
-    NSHTTPURLResponse *http = (NSHTTPURLResponse *)response;
-    NSInteger code = http.statusCode;
+    NSHTTPURLResponse *http = [response isKindOfClass:NSHTTPURLResponse.class]
+        ? (NSHTTPURLResponse *)response : nil;
+    NSInteger code = http ? http.statusCode : 0;
 
     if (code < 200 || code >= 300) {
         completionHandler(NSURLSessionResponseCancel);
-        NSError *err = [self errorWithCode:A2DownloadErrorNetworkFailure
-                                   message:[NSString stringWithFormat:@"HTTP %ld", (long)code]];
-        dispatch_async(self.queue, ^{ [self handleCandidateFailure:err]; });
+        // ★状态分类★ 不再一律当“网络抖动”重试 —— 见 classifyHTTPStatus
+        [self classifyHTTPStatus:code headers:http.allHeaderFields];
         return;
     }
 
@@ -267,6 +433,67 @@ didReceiveResponse:(NSURLResponse *)response
     });
 
     completionHandler(NSURLSessionResponseAllow);
+}
+
+/// ★HTTP 状态分类（本单三改之一）★
+///   以前所有非 2xx 都走 handleCandidateFailure（指数退避重试 3 次再换源）——
+///   对 403/404 这种“源本身没有这个文件”的情况，重试只是把同一个 4xx 再打三遍，
+///   还会在批量里把每个文件都拖慢 7 秒。
+///
+///   现在的分类：
+///     · 4xx（除 408/429）⇒ 该源对本文件不可用：不重试，立刻换下一个候选
+///     · 429 / 503      ⇒ 服务端限流/过载：读 Retry-After，全局并发砍半，按冷却时间再试
+///     · 其余 5xx / 408 ⇒ 按原退避（1s/2s/4s）重试
+- (void)classifyHTTPStatus:(NSInteger)code headers:(NSDictionary *)headers {
+    // 状态分类与后续状态机推进都放到 fetcher 串行队列（delegate 回调在 session 的队列上）
+    dispatch_async(self.queue, ^{
+        if (self.finished) return;
+        NSString *msg = [NSString stringWithFormat:@"HTTP %ld", (long)code];
+        NSError *err = [self errorWithCode:A2DownloadErrorNetworkFailure message:msg];
+
+        BOOL rateLimited = (code == 429 || code == 503);
+        BOOL hardClientError = (code >= 400 && code < 500 && code != 408 && code != 429);
+
+        if (rateLimited) {
+            NSTimeInterval retryAfter = [self retryAfterFromHeaders:headers];
+            [[A2DownloadGate sharedGate] throttledFor:retryAfter reason:msg];
+            [A2Log log:@"[A2-DL] 限流 %@ retryAfter=%.0fs 全局并发上限=%ld（冷却后重试）",
+                  msg, retryAfter, (long)[[A2DownloadGate sharedGate] currentLimit]];
+            [self failCurrentCandidateWith:err hard:NO minDelay:retryAfter];
+            return;
+        }
+
+        if (hardClientError) {
+            [A2Log log:@"[A2-DL] 源不可用 %@ （4xx 不重试，直接换源）", msg];
+            [self failCurrentCandidateWith:err hard:YES minDelay:0];
+            return;
+        }
+
+        [self failCurrentCandidateWith:err hard:NO minDelay:0];
+    });
+}
+
+/// Retry-After 既可能是秒数，也可能是 HTTP 日期；解析不出来就返回 0（用退避）
+- (NSTimeInterval)retryAfterFromHeaders:(NSDictionary *)headers {
+    NSString *raw = headers[@"Retry-After"];
+    if (raw.length == 0) return 0;
+
+    NSTimeInterval seconds = raw.doubleValue;
+    if (seconds > 0) return MIN(seconds, kMaxRetryAfterSeconds);
+
+    static NSDateFormatter *fmt = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        fmt = [NSDateFormatter new];
+        fmt.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+        fmt.timeZone = [NSTimeZone timeZoneWithAbbreviation:@"GMT"];
+        fmt.dateFormat = @"EEE, dd MMM yyyy HH:mm:ss zzz";
+    });
+    NSDate *date = [fmt dateFromString:raw];
+    if (!date) return 0;
+    NSTimeInterval delta = date.timeIntervalSinceNow;
+    if (delta <= 0) return 0;
+    return MIN(delta, kMaxRetryAfterSeconds);
 }
 
 /// 校验 206 响应是否真的对得上我们的断点
@@ -353,14 +580,13 @@ didReceiveResponse:(NSURLResponse *)response
 
 #pragma mark 数据接收
 
-- (void)URLSession:(NSURLSession *)session
-          dataTask:(NSURLSessionDataTask *)dataTask
-    didReceiveData:(NSData *)data {
+- (void)handleData:(NSData *)data forTask:(NSURLSessionDataTask *)dataTask {
 
     if (data.length == 0) return;
 
     dispatch_async(self.queue, ^{
-        if (self.finished) return;
+        // 迟到的旧 task 数据不写盘（换源/重试后 currentTask 已经换了）
+        if (self.finished || (dataTask != self.currentTask)) return;
 
         [self ensureFileHandleOpen];
 
@@ -403,11 +629,14 @@ didReceiveResponse:(NSURLResponse *)response
     [self.writeBuffer setLength:0];
 }
 
-- (void)URLSession:(NSURLSession *)session
-              task:(NSURLSessionTask *)task
-didCompleteWithError:(NSError *)error {
+/// 由引擎转发（按 task 找到本 fetcher）
+- (void)handleTask:(NSURLSessionTask *)task didCompleteWithError:(NSError *)error {
 
     dispatch_async(self.queue, ^{
+        // 迟到的旧 task 回调：不推进状态，也不还槽（槽在 detach 时已还）
+        if (task != self.currentTask) return;
+        self.currentTask = nil;
+        [self releaseTaskSlot];
         if (self.finished) return;
         [self flushBuffer];
 
@@ -480,16 +709,32 @@ didCompleteWithError:(NSError *)error {
 
 #pragma mark 失败与换源
 
-/// 当前候选失败 —— 先退避重试，重试耗尽再换下一个候选
+/// 当前候选失败 —— 先退避重试，重试耗尽再换下一个候选（默认路径：可重试的失败）
 - (void)handleCandidateFailure:(NSError *)error {
+    [self failCurrentCandidateWith:error hard:NO minDelay:0];
+}
+
+/// 失败的唯一出口。
+///   hard=YES（4xx 之类“这个源对这个文件就是不行”）⇒ 跳过重试，直接换源
+///   minDelay>0（429/503 的 Retry-After）⇒ 重试间隔至少这么久（封顶 kMaxRetryAfterSeconds）
+- (void)failCurrentCandidateWith:(NSError *)error hard:(BOOL)hard minDelay:(NSTimeInterval)minDelay {
     if (self.finished) return;
     [self closeFileHandle];
-    [self.session invalidateAndCancel];
-    self.session = nil;
 
-    if (self.retryCount < kBackoffCount) {
+    // ★换源/重试前先摘干净旧 task★
+    //   旧实现的问题是“每个 fetcher 一条 session，换源时不 invalidate”，
+    //   每换一次源就漏一条 session（连接池 + 队列 + delegate 全挂在那儿）。
+    //   现在 session 只有引擎一条，换源只需取消 task 并从映射里摘除 ——
+    //   迟到的回调因为 task != currentTask 会被丢掉，不会串到新 attempt。
+    [self detachCurrentTask];
+
+    if (!hard && self.retryCount < kBackoffCount) {
         NSTimeInterval delay = kBackoffSeconds[self.retryCount];
+        if (minDelay > delay) delay = MIN(minDelay, kMaxRetryAfterSeconds);
         self.retryCount++;
+        [A2Log log:@"[A2-DL] 重试 attempt=%ld/%ld delay=%.0fs 原因=%@",
+              (long)self.retryCount, (long)kBackoffCount, delay,
+              error.localizedDescription ?: @"(未知)"];
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)),
                        self.queue, ^{
             if (!self.finished) [self startCurrentCandidate];
@@ -497,7 +742,7 @@ didCompleteWithError:(NSError *)error {
         return;
     }
 
-    // 该候选耗尽，记下错误并换源
+    // 该候选耗尽（硬失败立刻算耗尽），记下错误并换源
     [self.candidateErrors addObject:error];
     self.retryCount = 0;
     self.candidateIndex++;
@@ -529,12 +774,35 @@ didCompleteWithError:(NSError *)error {
 }
 
 - (void)restartCurrentCandidateFromScratch {
+    [self detachCurrentTask];
     [self discardPartialDownload];
     self.receivedBytes = 0;
     self.strongETag = nil;
     self.lastModified = nil;
     self.retryCount = 0;
     if (!self.finished) [self startCurrentCandidate];
+}
+
+#pragma mark task / 槽位
+
+/// 取消当前 task 并从引擎的 task→fetcher 映射里摘除，同时归还并发槽位。
+/// 只在 self.queue 上调用（startCurrentCandidate / 失败出口 / pause / cancel / finish）。
+- (void)detachCurrentTask {
+    NSURLSessionDataTask *task = self.currentTask;
+    if (task) {
+        self.currentTask = nil;
+        A2DownloadEngine *engine = self.engine ?: [A2DownloadEngine sharedClient];
+        [engine detachTask:task];       // 先摘映射：迟到的 delegate 回调将查不到 fetcher
+        [task cancel];
+    }
+    [self releaseTaskSlot];
+}
+
+/// 归还闸门槽位（槽位跟 task 走，成对归还；重复调用是安全的）
+- (void)releaseTaskSlot {
+    if (!self.currentTaskHoldsSlot) return;
+    self.currentTaskHoldsSlot = NO;
+    [[A2DownloadGate sharedGate] releaseSlot];
 }
 
 - (void)discardPartialDownload {
@@ -560,7 +828,12 @@ didCompleteWithError:(NSError *)error {
     self.finished = YES;
     self.operation.state = A2DownloadStateCompleted;
     [self stopSpeedTimer];
-    [self.session invalidateAndCancel];
+    [self detachCurrentTask];               // 只还槽 + 摘映射，共享 session 不销毁
+    [[A2DownloadGate sharedGate] noteSuccess];
+    {
+        A2DownloadEngine *engine = self.engine ?: [A2DownloadEngine sharedClient];
+        [engine fetcherDidFinish:self];
+    }
 
     A2DownloadCompletion cb = self.completion;
     if (cb) cb(YES, nil);
@@ -571,8 +844,12 @@ didCompleteWithError:(NSError *)error {
     self.finished = YES;
     [self closeFileHandle];
     [self stopSpeedTimer];
-    [self.session invalidateAndCancel];
+    [self detachCurrentTask];
     self.operation.state = A2DownloadStateFailed;
+    {
+        A2DownloadEngine *engine = self.engine ?: [A2DownloadEngine sharedClient];
+        [engine fetcherDidFinish:self];
+    }
 
     A2DownloadCompletion cb = self.completion;
     if (cb) cb(NO, error);
@@ -696,9 +973,8 @@ didCompleteWithError:(NSError *)error {
         // 我们的断点是「半成品文件 + Range 请求」：
         // .part 里已有 N 字节，恢复时带 Range: bytes=N- 继续下。
         // 所以暂停只需取消请求，进度本来就在磁盘上。
-        [self.currentTask cancel];
-        [self.session invalidateAndCancel];
-        self.session = nil;
+        // ★共享 session 不在这里 invalidate★ —— 只取消这一条 task、还掉闸门槽位。
+        [self detachCurrentTask];
 
         self.operation.state = A2DownloadStatePaused;
         [self stopSpeedTimer];
@@ -738,9 +1014,13 @@ didCompleteWithError:(NSError *)error {
         self.finished = YES;
         [self closeFileHandle];
         [self stopSpeedTimer];
-        [self.session invalidateAndCancel];
+        [self detachCurrentTask];
         [self discardPartialDownload];
-    
+        {
+        A2DownloadEngine *engine = self.engine ?: [A2DownloadEngine sharedClient];
+        [engine fetcherDidFinish:self];
+    }
+
         self.operation.state = A2DownloadStateCancelled;
         A2DownloadCompletion cb = self.completion;
         if (cb) {
@@ -755,9 +1035,14 @@ didCompleteWithError:(NSError *)error {
 
 #pragma mark - 客户端
 
-@interface A2DownloadEngine ()
+@interface A2DownloadEngine () <NSURLSessionDataDelegate>
 @property (nonatomic, strong) NSMutableDictionary<NSString *, A2FileFetcher *> *active;
 @property (nonatomic, strong) dispatch_queue_t queue;
+/// ★会话复用★ 进程内唯一一条 session：连接池 / TLS 会话 / HTTP2 多路复用都只在这里建立一次。
+///   delegate 挂在引擎上，回调按 taskIdentifier 分发给对应的 fetcher。
+@property (nonatomic, strong, nullable) NSURLSession *session;
+/// taskIdentifier -> fetcher（session 只有一条，靠它把回调送回正确的下载句柄）
+@property (nonatomic, strong) NSMutableDictionary<NSNumber *, A2FileFetcher *> *taskMap;
 @end
 
 @implementation A2DownloadEngine
@@ -780,8 +1065,99 @@ didCompleteWithError:(NSError *)error {
     if (!self) return nil;
     (void)configuration;
     _active = [NSMutableDictionary dictionary];
+    _taskMap = [NSMutableDictionary dictionary];
     _queue = dispatch_queue_create("dev.airdevs.air2.download", DISPATCH_QUEUE_SERIAL);
     return self;
+}
+
+- (void)dealloc {
+    [self.session invalidateAndCancel];
+}
+
+#pragma mark 共享 session
+
+- (NSURLSession *)sharedSession {
+    @synchronized (self) {
+        if (self.session) return self.session;
+
+        NSURLSessionConfiguration *cfg = NSURLSessionConfiguration.defaultSessionConfiguration;
+        cfg.timeoutIntervalForRequest = 60;
+        cfg.timeoutIntervalForResource = 3600;
+        // 小文件多 ⇒ 单 host 连接上限要跟批量并发同量级（iOS 默认 6 会把并发压回去）
+        cfg.HTTPMaximumConnectionsPerHost = 32;
+        cfg.HTTPShouldUsePipelining = YES;      // 老字段（现代系统多忽略），保留无害
+        cfg.waitsForConnectivity = NO;          // 无网时立即失败由上层重试，别在这里干等
+
+        // delegateQueue=nil ⇒ NSURLSession 自建串行 queue，保证 didReceiveResponse/didReceiveData/
+        // didCompleteWithError 的先后顺序；真正的活都 dispatch 到各 fetcher 自己的队列。
+        self.session = [NSURLSession sessionWithConfiguration:cfg delegate:self delegateQueue:nil];
+
+        // ★判据行★ 只要这条出现一次（而不是每个文件一次），就说明会话复用生效了。
+        [A2Log log:@"[A2-DL] session 复用：进程内单实例（每文件不再各建 session）maxConnPerHost=%ld",
+              (long)cfg.HTTPMaximumConnectionsPerHost];
+        return self.session;
+    }
+}
+
+#pragma mark task -> fetcher 分发
+
+- (void)attachFetcher:(A2FileFetcher *)fetcher toTask:(NSURLSessionDataTask *)task {
+    if (!fetcher || !task) return;
+    @synchronized (self) { self.taskMap[@(task.taskIdentifier)] = fetcher; }
+}
+
+- (void)detachTask:(NSURLSessionTask *)task {
+    if (!task) return;
+    @synchronized (self) { [self.taskMap removeObjectForKey:@(task.taskIdentifier)]; }
+}
+
+- (nullable A2FileFetcher *)fetcherForTask:(NSURLSessionTask *)task {
+    if (!task) return nil;
+    @synchronized (self) { return self.taskMap[@(task.taskIdentifier)]; }
+}
+
+/// 下载句柄收尾：从活跃表与映射里摘掉，避免 active/taskMap 只增不减
+- (void)fetcherDidFinish:(A2FileFetcher *)fetcher {
+    if (!fetcher) return;
+    @synchronized (self) {
+        NSArray<NSString *> *keys = [self.active allKeysForObject:fetcher];
+        if (keys.count > 0) [self.active removeObjectsForKeys:keys];
+        for (NSNumber *key in self.taskMap.allKeys) {
+            if (self.taskMap[key] == fetcher) [self.taskMap removeObjectForKey:key];
+        }
+    }
+}
+
+#pragma mark NSURLSessionDataDelegate（转发到对应 fetcher）
+
+- (void)URLSession:(NSURLSession *)session
+          dataTask:(NSURLSessionDataTask *)dataTask
+didReceiveResponse:(NSURLResponse *)response
+ completionHandler:(void (^)(NSURLSessionResponseDisposition))completionHandler {
+
+    A2FileFetcher *fetcher = [self fetcherForTask:dataTask];
+    if (!fetcher) { completionHandler(NSURLSessionResponseCancel); return; }
+    [fetcher handleResponse:response forTask:dataTask completionHandler:completionHandler];
+}
+
+- (void)URLSession:(NSURLSession *)session
+          dataTask:(NSURLSessionDataTask *)dataTask
+    didReceiveData:(NSData *)data {
+
+    A2FileFetcher *fetcher = [self fetcherForTask:dataTask];
+    if (!fetcher) return;
+    [fetcher handleData:data forTask:dataTask];
+}
+
+- (void)URLSession:(NSURLSession *)session
+              task:(NSURLSessionTask *)task
+didCompleteWithError:(NSError *)error {
+
+    A2FileFetcher *fetcher = [self fetcherForTask:task];
+    // 映射先摘：后续迟到的数据/回调不会再落到这个 fetcher
+    [self detachTask:task];
+    if (!fetcher) return;
+    [fetcher handleTask:task didCompleteWithError:error];
 }
 
 - (A2DownloadOperation *)startRequest:(A2DownloadRequest *)request
@@ -810,13 +1186,14 @@ didCompleteWithError:(NSError *)error {
 
     A2FileFetcher *fetcher = [A2FileFetcher new];
     fetcher.request = request;
+    fetcher.engine = self;          // ★session 归引擎，fetcher 只持 task★
     fetcher.operation = op;
     fetcher.progressHandler = progress;
     fetcher.speedHandler = speed;
     fetcher.completion = completion;
     op.owner = fetcher;
 
-    self.active[key] = fetcher;
+    @synchronized (self) { self.active[key] = fetcher; }
     [fetcher start];
 
     return op;
@@ -835,23 +1212,29 @@ didCompleteWithError:(NSError *)error {
 - (void)cancelOperation:(A2DownloadOperation *)operation {
     A2FileFetcher *f = [self fetcherForOperation:operation];
     [f cancel];
-    if (operation.resumeKey) [self.active removeObjectForKey:operation.resumeKey];
+    if (operation.resumeKey) {
+        @synchronized (self) { [self.active removeObjectForKey:operation.resumeKey]; }
+    }
 }
 
 - (void)cancelAll {
     // 先取快照再遍历 —— cancel 会修改 active 字典，直接遍历会崩
-    NSArray<A2FileFetcher *> *fetchers = self.active.allValues;
-    NSArray<NSString *> *keys = self.active.allKeys;
+    NSArray<A2FileFetcher *> *fetchers = nil;
+    NSArray<NSString *> *keys = nil;
+    @synchronized (self) {
+        fetchers = self.active.allValues;
+        keys = self.active.allKeys;
+        [self.active removeObjectsForKeys:keys];
+    }
 
     for (A2FileFetcher *f in fetchers) {
         [f cancel];
     }
-    [self.active removeObjectsForKeys:keys];
 }
 
 - (nullable A2FileFetcher *)fetcherForOperation:(A2DownloadOperation *)op {
     if (!op.resumeKey) return nil;
-    return self.active[op.resumeKey];
+    @synchronized (self) { return self.active[op.resumeKey]; }
 }
 
 #pragma mark 便捷方法
