@@ -211,7 +211,7 @@ static int a2_run_main(JNIEnv *env, NSString *mainClass, NSArray<NSString *> *ar
                 BOOL badShape = (obj == nil) || ![obj isKindOfClass:NSDictionary.class];
                 if (startsQuote || badShape) {
                     bad++;
-                    NSString *head = [[[NSString alloc] initWithData:[d subdataWithRange:NSMakeRange(0, MIN((NSUInteger)80, d.length))]
+                    NSString *head = [[NSString alloc] initWithData:[d subdataWithRange:NSMakeRange(0, MIN((NSUInteger)80, d.length))]
                                                             encoding:NSUTF8StringEncoding];
                     a2_log_f(@"[RT-P1][JSON-BAD] %@ size=%lu startsQuote=%d dict=%d head=%@",
                              full, (unsigned long)d.length, (int)startsQuote,
