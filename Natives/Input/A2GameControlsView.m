@@ -549,6 +549,14 @@ static int a2_touchSeen = 0;
     [self addSubview:_escButton];
     _movable[@"esc"] = _escButton;
 
+    // ★方向键/潜行专用的 pan 白名单★ 这五键按住时不能被 pan 抢走触摸（见下面循环里的注释）。
+    static NSSet<NSString *> *a2PanNoCancelIds = nil;
+    static dispatch_once_t a2PanNoCancelOnce;
+    dispatch_once(&a2PanNoCancelOnce, ^{
+        a2PanNoCancelIds = [NSSet setWithObjects:@"w", @"a", @"s", @"d", @"sneak", nil];
+    });
+    NSMutableArray<NSString *> *a2PanNoCancelHit = [NSMutableArray array];
+
     for (NSString *cid in _movable) {
         UIView *v = _movable[cid];
         // ★五键与其它键同级别★ W/A/S/D/潜 也是普通控件：统一 60×60 起手，
@@ -559,7 +567,12 @@ static int a2_touchSeen = 0;
         //   默认 cancelsTouchesInView=YES ⇒ 轻点一旦被手势识别，UIButton 的
         //   touch-up 就被取消 ⇒ 只有高亮、动作永不执行（真机现象："右上四键有高亮没作用"）。
         UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)];
-        pan.cancelsTouchesInView = YES;   // ★滑动=取消按钮点击(区分滑动与轻点)
+        // ★方向键/潜行例外★ 按住 W/A/S/D/潜 时手指常会滑出按钮范围：cancelsTouchesInView=YES
+        //   会让 pan 一识别就取消 UIButton 的触摸 ⇒ 键在半路松开（走着走着停一下）。
+        //   这五键改成 NO：触摸继续送到按钮，松手才 touch-up；拖动布局照旧由 pan 处理。
+        BOOL a2IsMoveKey = [a2PanNoCancelIds containsObject:cid];
+        pan.cancelsTouchesInView = a2IsMoveKey ? NO : YES;   // ★滑动=取消按钮点击(区分滑动与轻点)
+        if (a2IsMoveKey) [a2PanNoCancelHit addObject:cid];
         [v addGestureRecognizer:pan];
 
         UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(a2_pinchItem:)];
@@ -574,6 +587,15 @@ static int a2_touchSeen = 0;
         hold.minimumPressDuration = 0.6;
         hold.cancelsTouchesInView = NO;
         [v addGestureRecognizer:hold];
+    }
+
+    // ★一次性自证日志★ 明确列出哪些键的 pan 不吞触摸，其余键仍是 YES
+    static BOOL a2PanLogOnce = NO;
+    if (!a2PanLogOnce) {
+        a2PanLogOnce = YES;
+        NSArray *sorted = [a2PanNoCancelHit sortedArrayUsingSelector:@selector(compare:)];
+        a2_log_f(@"[A2-CTRL-PAN] pan.cancelsTouchesInView=NO 的键：%@（其余键保持 YES）",
+                 [sorted componentsJoinedByString:@","]);
     }
     _attackButton.bounds    = CGRectMake(0, 0, 76, 76);
     _useButton.bounds       = CGRectMake(0, 0, 76, 76);
