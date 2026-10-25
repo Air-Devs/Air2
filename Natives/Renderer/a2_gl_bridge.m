@@ -1042,6 +1042,12 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
             void *kwS = dlsym(gRendererHandle, "set_getprocaddress");
             a2_log_f(@"[A2-GL-PTR] KW 本体 initialize_gl4es=%p set_getprocaddress=%p handle=%p",
                      kwI, kwS, gRendererHandle);
+            // ★同一手法查 glLoadIdentity★：hs_err 栈显示 MC 的 GL11.glLoadIdentity 落到了 ANGLE。
+            //   若 KW 侧为 NULL ⇒ KW 没导出它，LWJGL 才会回落到别的镜像（修法明确）。
+            void *kwLI  = dlsym(gRendererHandle, "glLoadIdentity");
+            void *angLI = (gGlesHandle != NULL) ? dlsym(gGlesHandle, "glLoadIdentity") : NULL;
+            a2_log_f(@"[A2-GL-PTR] glLoadIdentity: KW=%p ANGLE=%p（KW 为 NULL ⇒ LWJGL 必须回落）",
+                     kwLI, angLI);
         }
     }
 
