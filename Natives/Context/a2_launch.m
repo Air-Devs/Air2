@@ -187,7 +187,7 @@ static int a2_run_main(JNIEnv *env, NSString *mainClass, NSArray<NSString *> *ar
         [NSFileManager.defaultManager createDirectoryAtPath:[a2gd stringByAppendingPathComponent:@"logs"]
                                withIntermediateDirectories:YES attributes:nil error:nil];
         int cdrc = chdir(a2gd.UTF8String);
-        a2_log_f(@"[RT-P1] chdir(gameDir) rc=%d path=%@", cdrc, a2gd);
+        a2_log_f("[RT-P1] chdir(gameDir) rc=%d path=%s", cdrc, a2gd.UTF8String);
 
         // ★一次性诊断(73b4dc7+)★：MC 用 gson 读某个 JSON 时拿到的是字符串 ⇒
         //   扫 gameDir 下所有 *.json，把「以引号开头 / 解析失败」的文件指名道姓打出来。
@@ -213,10 +213,11 @@ static int a2_run_main(JNIEnv *env, NSString *mainClass, NSArray<NSString *> *ar
                     bad++;
                     NSString *head = [[NSString alloc] initWithData:[d subdataWithRange:NSMakeRange(0, MIN((NSUInteger)80, d.length))]
                                                             encoding:NSUTF8StringEncoding];
-                    a2_log_f(@"[RT-P1][JSON-BAD] %@ size=%lu startsQuote=%d dict=%d head=%@",
-                             full, (unsigned long)d.length, (int)startsQuote,
+                    // ★a2_log_f 是 C 的 printf 风格，不吃 %@★ ⇒ 一律走 UTF8String。
+                    a2_log_f("[RT-P1][JSON-BAD] %s size=%lu startsQuote=%d dict=%d head=%s",
+                             full.UTF8String, (unsigned long)d.length, (int)startsQuote,
                              (int)[obj isKindOfClass:NSDictionary.class],
-                             [head stringByReplacingOccurrencesOfString:@"\n" withString:@" "]);
+                             [head stringByReplacingOccurrencesOfString:@"\n" withString:@" "].UTF8String);
                 }
             }
         }
