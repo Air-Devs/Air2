@@ -40,6 +40,16 @@ const char *const A2GlBridgeGlesLibraryRelPath  = "libGLESv2.framework/libGLESv2
 /// 与 `a2_renderer.h` 的 `A2RendererMetalDylibName` / `A2RendererCompatDylibName` 同一做法。
 static const char *const A2GlBridgeKryptonDylibName = "libnggl4es_kw.dylib";
 
+/// ★A2KWUseES1 的编译期默认值★（A/B 出包时只改这一处，或用命令行 `-DA2_KW_USE_ES1_DEFAULT=1`）
+///   0 = 请求 ES3（现状默认）  1 = 请求 ES1
+///   运行期仍由偏好键 `A2KWUseES1`（Boolean）覆盖：键存在就听键的，键不存在才落到本默认值。
+#ifndef A2_KW_USE_ES1_DEFAULT
+#define A2_KW_USE_ES1_DEFAULT 0
+#endif
+
+/// 偏好键名（运行期覆盖用；只影响 NG-GL4ES / KW 的上下文版本）
+static NSString *const A2GlBridgeKWUseES1Key = @"A2KWUseES1";
+
 // ---------------------------------------------------------------------------
 // EGL/GL 最小类型与常量（Khronos 公开 ABI 的事实性数值；本层不 import 其头文件）
 // ---------------------------------------------------------------------------
@@ -572,15 +582,38 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         // ★NG-GL4ES / KW 是 `-DDEFAULT_ES=3` 编的★（上游口径：只在 GLES3 上转译，绕开 ANGLE 的
         //   GLES1 路径）⇒ 它要 ES3 上下文；其它后端仍然只要 ES2（行为一字不改）。
         //   实现上先按需版本建、被拒再退 ES2 —— 退回去时**如实记一行**，不假装拿到了 ES3。
-        const A2EGLint wantVersion = a2_gl_bridge_is_krypton() ? 3 : 2;
+        //
+        // ★A/B 探针：偏好键 `A2KWUseES1`（Boolean，默认 NO）★
+        //   NO  ⇒ 请求 ES3（现状）
+        //   YES ⇒ 请求 ES1（EGL_OPENGL_ES_API + client version 1；验证「谁在用 GLES1 入口、
+        //         而 ANGLE 的 GLES1 状态未初始化」这条假设）
+        //   只作用于 NG-GL4ES / KW；键不存在时用编译期默认 A2_KW_USE_ES1_DEFAULT（A/B 两包靠它分叉）。
+        const BOOL isKrypton = a2_gl_bridge_is_krypton();
+        BOOL kwUseES1 = (A2_KW_USE_ES1_DEFAULT != 0);
+        {
+            id kwES1Pref = [NSUserDefaults.standardUserDefaults objectForKey:A2GlBridgeKWUseES1Key];
+            if (kwES1Pref != nil) {
+                kwUseES1 = [NSUserDefaults.standardUserDefaults boolForKey:A2GlBridgeKWUseES1Key];
+            }
+        }
+        if (isKrypton) {
+            a2_log_f(@"[A2-GL-BRIDGE] KW 上下文 client version=%s（键 A2KWUseES1）",
+                     kwUseES1 ? "ES1" : "ES3");
+        }
+        const A2EGLint wantVersion = isKrypton ? (kwUseES1 ? 1 : 3) : 2;
+        A2EGLint gotVersion = wantVersion;   // ★实际拿到的版本★（回退时为 fbVersion，日志按它记，不假装）
         const A2EGLint ctxAttribs[] = { A2_EGL_CONTEXT_CLIENT_VERSION, wantVersion, A2_EGL_NONE };
         gCtx = gEglCreateContext(gDpy, gCfg, A2_EGL_NO_CONTEXT, ctxAttribs);
         if (gCtx == A2_EGL_NO_CONTEXT && wantVersion != 2) {
-            a2_log_f(@"[A2-RENDERER] NG-GL4ES 上下文：ES%ld 被拒（eglError=0x%x）⇒ 退 ES2 重试"
+            // ES1 被拒时**退到基线 ES3**（而不是 ES2）：KW 是 DEFAULT_ES=3 编的，ES2 是它没测过的
+            // 第三态 ⇒ 退 ES2 会让 A/B 比不出东西；退 ES3 才等于「回到 A 包现状」。
+            const A2EGLint fbVersion = (wantVersion == 1) ? 3 : 2;
+            a2_log_f(@"[A2-RENDERER] NG-GL4ES 上下文：ES%ld 被拒（eglError=0x%x）⇒ 退 ES%ld 重试"
                      @"（GLES3 转译路径可能不可用）", (long)wantVersion,
-                     (unsigned)(gEglGetError ? gEglGetError() : 0));
-            const A2EGLint ctxAttribs2[] = { A2_EGL_CONTEXT_CLIENT_VERSION, 2, A2_EGL_NONE };
+                     (unsigned)(gEglGetError ? gEglGetError() : 0), (long)fbVersion);
+            const A2EGLint ctxAttribs2[] = { A2_EGL_CONTEXT_CLIENT_VERSION, fbVersion, A2_EGL_NONE };
             gCtx = gEglCreateContext(gDpy, gCfg, A2_EGL_NO_CONTEXT, ctxAttribs2);
+            if (gCtx != A2_EGL_NO_CONTEXT) gotVersion = fbVersion;
         }
         if (gCtx == A2_EGL_NO_CONTEXT) {
             a2_log_f(@"%s ★阻断★：EGL 建面失败：eglCreateContext 返回 NO_CONTEXT（eglError=0x%x）",
@@ -589,8 +622,8 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
             return A2GlBridgeErrEgl;
         }
         if (wantVersion != 2) {
-            a2_log_f(@"[A2-RENDERER] NG-GL4ES 上下文就绪：请求 client version=ES%ld context=%p",
-                     (long)wantVersion, (void *)gCtx);
+            a2_log_f(@"[A2-RENDERER] NG-GL4ES 上下文就绪：请求 client version=ES%ld 实得=ES%ld context=%p",
+                     (long)wantVersion, (long)gotVersion, (void *)gCtx);
         }
     }
 
