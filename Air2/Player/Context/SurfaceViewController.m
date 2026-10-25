@@ -1117,7 +1117,6 @@ CGPoint lastVirtualMousePoint = {0, 0};
     // 上游曾临时改成裸 UIView —— 那样控件系统就没接上，
     // 这里恢复成完整实现。
     self.ctrlView = [[A2ControlRenderer alloc] initWithLayout:[A2DefaultControls makeLayout]];
-    [self performSelector:@selector(initCategory_Navigation)];
 
     self.surfaceView = [[GameSurfaceView alloc] initWithFrame:self.view.frame];
     self.surfaceView.layer.contentsScale = screenScale * resolutionScale;
@@ -1132,8 +1131,6 @@ CGPoint lastVirtualMousePoint = {0, 0};
 
     [self.rootView addSubview:self.touchView];
     [self.rootView addSubview:self.ctrlView];
-
-    [self performSelector:@selector(setupCategory_Navigation)];
 
     UIHoverGestureRecognizer *hoverGesture = [[NSClassFromString(@"UIHoverGestureRecognizer") alloc] initWithTarget:self action:@selector(surfaceOnHover:)];
     [self.touchView addGestureRecognizer:hoverGesture];
@@ -1273,7 +1270,6 @@ CGPoint lastVirtualMousePoint = {0, 0};
     }
 
     [self.rootView addSubview:self.inputTextField];
-    [self performSelector:@selector(initCategory_LogView)];
     [self updateJetsamControl];
     [self updatePreferenceChanges];
     [self loadCustomControls];

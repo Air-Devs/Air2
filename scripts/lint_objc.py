@@ -185,6 +185,23 @@ def check_file(path, defined_classes):
             f"@interface({ifaces}) + @implementation({impls}) + @protocol({protos}) "
             f"= {ifaces+impls+protos} ≠ @end({ends})")
 
+    # ---------- performSelector 必须指向本文件存在的方法 ----------
+    # performSelector: 是编译期不检查的 —— 方法不存在只在运行时崩
+    # "unrecognized selector"。我在 SurfaceViewController 里就踩过：
+    # 三个 initCategory_* 的实现早被删了，调用点还在，
+    # 启动游戏时直接崩。
+    _impl = set(re.findall(r"^-\s*\([^)]*\)\s*(\w+)", src, re.M))
+    for _m in re.finditer(r"performSelector:\s*@selector\((\w+)\)", src):
+        _sel = _m.group(1)
+        if _sel in _impl:
+            continue
+        # 系统/其他类的方法（suspend / surface / ...）不归本文件管，
+        # 只报以 init/setup/load/update/handle/on 开头的（我们的命名习惯）
+        if not re.match(r"^(init|setup|load|update|handle|on|apply|build|refresh)", _sel):
+            continue
+        _ln = src[:_m.start()].count("\n") + 1
+        errors.append(f"第 {_ln} 行: performSelector 指向不存在的方法 {_sel}")
+
     # ---------- @class 不能在 @interface / @implementation 内 ----------
     # 这条错误我实际踩过：把 @class A2ControlRenderer; 插到了
     # @interface 的 @property 中间，编译报 "missing '@end'" 与

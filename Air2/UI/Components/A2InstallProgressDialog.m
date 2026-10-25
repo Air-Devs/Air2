@@ -293,146 +293,98 @@
 }
 
 - (void)buildCard {
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+
+    // ---- 卡片 ----
     _card = [[UIView alloc] initWithFrame:CGRectZero];
     _card.translatesAutoresizingMaskIntoConstraints = NO;
-    // ZL2: MaterialTheme.shapes.extraLarge（28）+ shadowElevation 6
     _card.layer.cornerRadius = A2RadiusXL;
     _card.layer.cornerCurve = kCACornerCurveContinuous;
-    _card.layer.shadowColor = UIColor.blackColor.CGColor;
-    _card.layer.shadowOpacity = 0.18;
-    _card.layer.shadowRadius = 6;
-    _card.layer.shadowOffset = CGSizeMake(0, 3);
+    _card.backgroundColor = t.cSurfaceContainerHigh;
+    _card.clipsToBounds = YES;
     [self.view addSubview:_card];
 
-    // 内容容器（圆角裁剪与阴影不能在同层）
-    UIView *content = [[UIView alloc] initWithFrame:CGRectZero];
-    content.translatesAutoresizingMaskIntoConstraints = NO;
-    content.layer.cornerRadius = A2RadiusXL;
-    content.layer.cornerCurve = kCACornerCurveContinuous;
-    content.clipsToBounds = YES;
-    [_card addSubview:content];
-
+    // ---- 标题 ----
     _titleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     _titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
     _titleLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightSemibold];
     _titleLabel.textAlignment = NSTextAlignmentCenter;
     _titleLabel.text = _dialogTitle;
 
-    // 步骤列表（可滚动）
+    // ---- 步骤列表 ----
     _stepScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
     _stepScroll.translatesAutoresizingMaskIntoConstraints = NO;
     _stepScroll.showsVerticalScrollIndicator = NO;
-    _stepScroll.alwaysBounceHorizontal = NO;
 
     _stepStack = [[UIStackView alloc] initWithFrame:CGRectZero];
     _stepStack.translatesAutoresizingMaskIntoConstraints = NO;
     _stepStack.axis = UILayoutConstraintAxisVertical;
-    // ZL2: 步骤间距 16，每项额外 padding(vertical 6) → 合计 28 的视觉间距
     _stepStack.spacing = 16;
     [_stepScroll addSubview:_stepStack];
 
-    // 取消按钮（fillMaxWidth）
+    // ---- 取消按钮 ----
     _cancelButton = [UIButton buttonWithType:UIButtonTypeSystem];
     _cancelButton.translatesAutoresizingMaskIntoConstraints = NO;
     [_cancelButton setTitle:@"取消" forState:UIControlStateNormal];
     _cancelButton.titleLabel.font = [UIFont systemFontOfSize:16 weight:UIFontWeightMedium];
+    _cancelButton.backgroundColor = t.cPrimary;
+    [_cancelButton setTitleColor:t.cOnPrimary forState:UIControlStateNormal];
     _cancelButton.layer.cornerRadius = A2RadiusL;
     _cancelButton.layer.cornerCurve = kCACornerCurveContinuous;
     [_cancelButton addTarget:self action:@selector(cancelTapped)
             forControlEvents:UIControlEventTouchUpInside];
 
-    [_card addSubview:content];
-    [content addSubview:_titleLabel];
-    [content addSubview:_stepScroll];
-    [content addSubview:_cancelButton];
+    // ---- 用垂直 StackView 组织（避免手写一堆互相冲突的约束）----
+    //
+    // 之前是手写 content 容器 + 十几个约束，结果高度算不出来，
+    // 整个弹窗塌成一个超大的取消按钮。StackView 天然处理
+    // 「按内容撑开 + 各自算高度」，不会出现这种问题。
+    UIStackView *v = [[UIStackView alloc] initWithArrangedSubviews:
+                      @[_titleLabel, _stepScroll, _cancelButton]];
+    v.translatesAutoresizingMaskIntoConstraints = NO;
+    v.axis = UILayoutConstraintAxisVertical;
+    v.spacing = 16;
+    [v setCustomSpacing:20 afterView:_titleLabel];
+    [_card addSubview:v];
 
-    // ---- 双列布局（有日志时）----
-    if (_logOutput) {
-        _logCard = [[A2TaskLogCard alloc] initWithFrame:CGRectZero];
-        _logCard.logOutput = _logOutput;
-        [content addSubview:_logCard];
-    }
-
-    CGFloat cardWidthRatio = _logOutput ? 0.8 : 0.0;
-
-    NSMutableArray<NSLayoutConstraint *> *cs = [NSMutableArray array];
-
-    [cs addObjectsFromArray:@[
+    [NSLayoutConstraint activateConstraints:@[
+        // 卡片：居中，宽度 380~屏幕 60%
         [_card.centerXAnchor constraintEqualToAnchor:self.view.centerXAnchor],
         [_card.centerYAnchor constraintEqualToAnchor:self.view.centerYAnchor],
+        [_card.widthAnchor constraintGreaterThanOrEqualToConstant:380],
+        [_card.widthAnchor constraintLessThanOrEqualToAnchor:self.view.widthAnchor
+                                                   multiplier:0.75],
         [_card.heightAnchor constraintLessThanOrEqualToAnchor:self.view.heightAnchor
                                                    multiplier:0.85],
-        // 卡片高度下限 —— 否则所有子视图高度都「弹性」时整体会塌成 0
-        [_card.heightAnchor constraintGreaterThanOrEqualToConstant:200],
 
-        [content.topAnchor constraintEqualToAnchor:_card.topAnchor],
-        [content.bottomAnchor constraintEqualToAnchor:_card.bottomAnchor],
-        [content.leadingAnchor constraintEqualToAnchor:_card.leadingAnchor],
-        [content.trailingAnchor constraintEqualToAnchor:_card.trailingAnchor],
+        // 内容：内边距 20
+        [v.topAnchor constraintEqualToAnchor:_card.topAnchor constant:20],
+        [v.bottomAnchor constraintEqualToAnchor:_card.bottomAnchor constant:-20],
+        [v.leadingAnchor constraintEqualToAnchor:_card.leadingAnchor constant:20],
+        [v.trailingAnchor constraintEqualToAnchor:_card.trailingAnchor constant:-20],
 
-        // padding 16（ZL2）
-        [_titleLabel.topAnchor constraintEqualToAnchor:content.topAnchor constant:16],
-        [_titleLabel.leadingAnchor constraintEqualToAnchor:content.leadingAnchor constant:16],
-        [_titleLabel.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-16],
+        // 取消按钮定高
+        [_cancelButton.heightAnchor constraintEqualToConstant:44],
 
-        [_stepScroll.topAnchor constraintEqualToAnchor:_titleLabel.bottomAnchor constant:16],
-        [_stepScroll.leadingAnchor constraintEqualToAnchor:content.leadingAnchor constant:16],
+        // 步骤区：给一个确定的高度区间，否则内容为空时会塌成 0
+        [_stepScroll.heightAnchor constraintGreaterThanOrEqualToConstant:88],
+        [_stepScroll.heightAnchor constraintLessThanOrEqualToConstant:320],
 
-        [_stepStack.topAnchor constraintEqualToAnchor:_stepScroll.contentLayoutGuide.topAnchor
-                                              constant:6],   // 每项 vertical padding 6
-        [_stepStack.bottomAnchor constraintEqualToAnchor:_stepScroll.contentLayoutGuide.bottomAnchor
-                                                 constant:-6],
+        // 步骤栈在 scrollView 里
+        [_stepStack.topAnchor constraintEqualToAnchor:_stepScroll.contentLayoutGuide.topAnchor],
+        [_stepStack.bottomAnchor constraintEqualToAnchor:_stepScroll.contentLayoutGuide.bottomAnchor],
         [_stepStack.leadingAnchor constraintEqualToAnchor:_stepScroll.contentLayoutGuide.leadingAnchor],
         [_stepStack.trailingAnchor constraintEqualToAnchor:_stepScroll.contentLayoutGuide.trailingAnchor],
         [_stepStack.widthAnchor constraintEqualToAnchor:_stepScroll.frameLayoutGuide.widthAnchor],
-
-        // 步骤区必须有一个确定的高度区间，否则会被压成 0
-        [_stepScroll.heightAnchor constraintGreaterThanOrEqualToConstant:80],
-        [_stepScroll.heightAnchor constraintLessThanOrEqualToConstant:320],
-
-        [_cancelButton.topAnchor constraintEqualToAnchor:_stepScroll.bottomAnchor constant:16],
-        [_cancelButton.bottomAnchor constraintEqualToAnchor:content.bottomAnchor constant:-16],
-        [_cancelButton.leadingAnchor constraintEqualToAnchor:content.leadingAnchor constant:16],
-        [_cancelButton.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-16],
-        [_cancelButton.heightAnchor constraintEqualToConstant:44],
     ]];
 
-    // 宽度：有日志时 80%，否则自适应（给个上下限）
+    // 日志列（有 logOutput 时才建）
     if (_logOutput) {
-        [cs addObject:[_card.widthAnchor constraintEqualToAnchor:self.view.widthAnchor
-                                                      multiplier:cardWidthRatio]];
-        // 左右分栏：步骤列 | 日志列
-        CGFloat half = 0;
-        (void)half;
-        [cs addObjectsFromArray:@[
-            [_logCard.topAnchor constraintEqualToAnchor:_titleLabel.bottomAnchor constant:16],
-            [_logCard.bottomAnchor constraintEqualToAnchor:_cancelButton.topAnchor constant:-16],
-            [_logCard.leadingAnchor constraintEqualToAnchor:_stepScroll.trailingAnchor constant:16],
-            [_logCard.trailingAnchor constraintEqualToAnchor:content.trailingAnchor constant:-16],
-            [_logCard.widthAnchor constraintEqualToAnchor:_stepScroll.widthAnchor],
-            [_stepScroll.bottomAnchor constraintEqualToAnchor:_cancelButton.topAnchor constant:-16],
-            // ⚠️ 有日志时也要给 _stepScroll 定右边 —— 之前只在无日志分支设过，
-            // 这个分支里 _stepScroll 宽度算不出来，整块内容被压成 0，
-            // 弹窗只剩底部那个 fillMaxWidth 的取消按钮。
-            // 宽度由 _logCard.width == _stepScroll.width + 三列间距反推，
-            // 这里显式给出右边界更稳。
-        ]];
-    } else {
-        [cs addObjectsFromArray:@[
-            [_card.widthAnchor constraintGreaterThanOrEqualToConstant:380],
-            [_card.widthAnchor constraintLessThanOrEqualToAnchor:self.view.widthAnchor
-                                                      multiplier:0.6],
-            [_stepScroll.trailingAnchor constraintEqualToAnchor:content.trailingAnchor
-                                                       constant:-16],
-            [_stepScroll.heightAnchor constraintLessThanOrEqualToConstant:320],
-        ]];
+        _logCard = [[A2TaskLogCard alloc] initWithFrame:CGRectZero];
+        _logCard.logOutput = _logOutput;
     }
-
-    [NSLayoutConstraint activateConstraints:cs];
-
-    [self applyTheme];
-    [self observeTheme];
 }
+
 
 - (void)observeTheme {
     __weak typeof(self) weakSelf = self;
@@ -497,9 +449,10 @@
 
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    // ZL2: cardColor(false) + onCardColor()
-    _card.subviews.firstObject.backgroundColor = t.cSurfaceContainerHigh;
+    // 现在没有单独的 content 容器了，直接设卡片
+    _card.backgroundColor = t.cSurfaceContainerHigh;
     _titleLabel.textColor = t.cOnSurface;
+    _stepScroll.backgroundColor = UIColor.clearColor;
 
     _cancelButton.backgroundColor = t.cPrimary;
     [_cancelButton setTitleColor:t.cOnPrimary forState:UIControlStateNormal];
