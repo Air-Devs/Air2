@@ -109,7 +109,8 @@ static NSString *const kPartSuffix = @".part";
 @property (nonatomic, assign) NSInteger candidateIndex;
 @property (nonatomic, assign) NSInteger retryCount;
 @property (nonatomic, assign) BOOL finished;
-@property (nonatomic, copy, nullable) NSMutableArray<NSError *> *candidateErrors;
+// 可变数组必须 strong，copy 会变成不可变 NSArray
+@property (nonatomic, strong, nullable) NSMutableArray<NSError *> *candidateErrors;
 
 // 断点续传校验信息（对应 ZL2 的 ResumeContext）
 @property (nonatomic, assign) int64_t contentLength;
@@ -1064,6 +1065,10 @@ didCompleteWithError:(NSError *)error {
 
 @interface A2DownloadEngine ()
 @property (nonatomic, strong) NSMutableDictionary<NSString *, A2FileFetcher *> *active;
+/// ⚠️ self.active 被多线程并发读写（64 车道同时 startRequest /
+/// finishSuccess 里删除 / cancel 里遍历），
+/// NSMutableDictionary 不是线程安全的 —— 不加锁会堆损坏（SIGSEGV）。
+@property (nonatomic, strong) NSLock *activeLock;
 @property (nonatomic, strong) dispatch_queue_t queue;
 @end
 
@@ -1087,6 +1092,7 @@ didCompleteWithError:(NSError *)error {
     if (!self) return nil;
     (void)configuration;
     _active = [NSMutableDictionary dictionary];
+    _activeLock = [[NSLock alloc] init];
     _queue = dispatch_queue_create("dev.airdevs.air2.download", DISPATCH_QUEUE_SERIAL);
     return self;
 }
@@ -1123,7 +1129,9 @@ didCompleteWithError:(NSError *)error {
     fetcher.completion = completion;
     op.owner = fetcher;
 
+    [self.activeLock lock];
     self.active[key] = fetcher;
+    [self.activeLock unlock];
     [fetcher start];
 
     return op;
@@ -1142,23 +1150,35 @@ didCompleteWithError:(NSError *)error {
 - (void)cancelOperation:(A2DownloadOperation *)operation {
     A2FileFetcher *f = [self fetcherForOperation:operation];
     [f cancel];
-    if (operation.resumeKey) [self.active removeObjectForKey:operation.resumeKey];
+    if (operation.resumeKey) {
+        [self.activeLock lock];
+        [self.active removeObjectForKey:operation.resumeKey];
+        [self.activeLock unlock];
+    }
 }
 
 - (void)cancelAll {
     // 先取快照再遍历 —— cancel 会修改 active 字典，直接遍历会崩
+    [self.activeLock lock];
     NSArray<A2FileFetcher *> *fetchers = self.active.allValues;
     NSArray<NSString *> *keys = self.active.allKeys;
+    [self.activeLock unlock];
 
     for (A2FileFetcher *f in fetchers) {
         [f cancel];
     }
+
+    [self.activeLock lock];
     [self.active removeObjectsForKeys:keys];
+    [self.activeLock unlock];
 }
 
 - (nullable A2FileFetcher *)fetcherForOperation:(A2DownloadOperation *)op {
     if (!op.resumeKey) return nil;
-    return self.active[op.resumeKey];
+    [self.activeLock lock];
+    A2FileFetcher *f = self.active[op.resumeKey];
+    [self.activeLock unlock];
+    return f;
 }
 
 #pragma mark 便捷方法

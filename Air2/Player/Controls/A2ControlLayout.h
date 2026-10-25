@@ -139,7 +139,10 @@ typedef NS_ENUM(NSInteger, A2ControlWidgetType) {
 @property (nonatomic, copy) NSString *identifier;
 @property (nonatomic, copy) NSString *name;
 @property (nonatomic, assign) BOOL visibleByDefault;
-@property (nonatomic, copy) NSMutableArray<A2ControlWidget *> *widgets;
+/// ⚠️ 必须是 strong，不能用 copy ——
+/// copy 会把 NSMutableArray 复制成不可变的 NSArray，
+/// 之后 addObject: 直接崩 unrecognized selector。
+@property (nonatomic, strong) NSMutableArray<A2ControlWidget *> *widgets;
 @property (nonatomic, copy, nullable) NSDictionary *rawJSON;
 - (NSDictionary *)toJSON;
 @end
@@ -154,13 +157,14 @@ typedef NS_ENUM(NSInteger, A2ControlWidgetType) {
 @property (nonatomic, copy, nullable) NSString *author;
 
 /// 所有层（ZL2 的 layers）
-@property (nonatomic, copy) NSMutableArray<A2ControlLayer *> *layers;
+/// 同上：可变数组必须 strong
+@property (nonatomic, strong) NSMutableArray<A2ControlLayer *> *layers;
 
 /// 扁平化后的全部控件（渲染与编辑器用）
 @property (nonatomic, readonly) NSArray<A2ControlWidget *> *allWidgets;
 
-@property (nonatomic, copy) NSMutableDictionary<NSString *, NSDictionary *> *buttonStyles;
-@property (nonatomic, copy) NSMutableDictionary<NSString *, NSDictionary *> *joystickStyles;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *buttonStyles;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSDictionary *> *joystickStyles;
 @property (nonatomic, copy, nullable) NSDictionary *rawRoot;
 
 + (nullable instancetype)layoutFromJSON:(NSDictionary *)json error:(NSError **)error;
