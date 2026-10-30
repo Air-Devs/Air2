@@ -123,6 +123,38 @@ static const CGFloat kEdgeInset = 10;
 }
 
 /// 长按浮球 → 打开控件编辑器
+// ---- 触摸穿透 ----
+//
+// 这个视图【铺满全屏】，用来放浮球和 FPS 显示。如果不重写 hitTest，
+// 它会拦截所有触摸 —— 浮球能点，但下面 ctrlView 里的所有游戏控件
+// （摇杆 / 攻击 / 跳跃 …）全都按不动。
+//
+// 规则：只有点在浮球（含放大后的命中区）或 statsLabel 上才自己处理，
+// 其余一律返回 nil 交给下层。
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    if (!self.isUserInteractionEnabled || self.isHidden || self.alpha < 0.01) {
+        return nil;
+    }
+
+    // 浮球命中区放大到 56pt（视觉 48）—— 手指按 48 的圆很难一次命中，
+    // 放大到 56 是小屏触控的通行做法。
+    if (_ball && !_ball.hidden) {
+        CGFloat grow = 8;
+        CGRect hit = CGRectInset(_ball.frame, -grow, -grow);
+        if (CGRectContainsPoint(hit, point)) {
+            return _ball;
+        }
+    }
+
+    if (_statsLabel && !_statsLabel.hidden) {
+        if (CGRectContainsPoint(CGRectInset(_statsLabel.frame, -6, -6), point)) {
+            return _statsLabel;
+        }
+    }
+
+    return nil;   // 交给下层（控件层 / 游戏画面）
+}
+
 - (void)handleLongPress:(UILongPressGestureRecognizer *)g {
     if (g.state != UIGestureRecognizerStateBegan) return;
     if (self.onOpenEditor) self.onOpenEditor();
