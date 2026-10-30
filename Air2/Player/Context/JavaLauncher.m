@@ -2642,6 +2642,34 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
     //   (egl_bridge 的 PojavFirstFrameRendered 会把阶段推到「完成」并撤遮罩)。
     AmeLaunchProgressSetStage(AmeLaunchStageWaitingFirstFrame);
 
+    // ---- 还原信号处置（对照 ZL2 的 jre_launcher.c:launchJVM）----
+    //
+    // ZL2 在调 JLI_Launch 之前把 SIGHUP..NSIG 全部重置：SIGSEGV 设 IGN，
+    // 其余设 DFL。原因是 dalvik/JVM 接管信号之前，宿主进程里挂的
+    // handler 会干扰 JVM 自己的 fatal error 流程。
+    //
+    // 我们的做法略有不同 —— 保留崩溃捕获（否则黑屏时一点日志都没有），
+    // 只处理 JVM 明确不喜欢的几个：
+    //   · SIGPIPE  → IGN：Java 的 socket/pipe 写入失败靠 errno，
+    //                不该因 SIGPIPE 直接杀进程
+    //   · SIGSYS / SIGTRAP → DFL：JVM 的 safepoint / 断言依赖默认行为
+    //   · 其余保持不动（A2CrashHandler 带 SA_RESETHAND，触发一次就恢复 DFL）
+    //
+    // 这条差异是 ZL2 与我们在「启动后立刻黑屏无日志」上的已知分界点之一，
+    // 先把明显不兼容的几个改掉，再观察日志。
+    {
+        struct sigaction ign, dfl;
+        memset(&ign, 0, sizeof(ign));
+        memset(&dfl, 0, sizeof(dfl));
+        ign.sa_handler = SIG_IGN;
+        dfl.sa_handler = SIG_DFL;
+        sigemptyset(&ign.sa_mask);
+        sigemptyset(&dfl.sa_mask);
+        sigaction(SIGPIPE, &ign, NULL);
+        sigaction(SIGSYS,  &dfl, NULL);
+        sigaction(SIGTRAP, &dfl, NULL);
+    }
+
     return pJLI_Launch(++margc, margv,
                    0, NULL, // sizeof(const_jargs) / sizeof(char *), const_jargs,
                    0, NULL, // sizeof(const_appclasspath) / sizeof(char *), const_appclasspath,

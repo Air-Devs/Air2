@@ -207,6 +207,12 @@ NSString *A2LogLevelName(A2LogLevel level) {
     if (_logHandle) {
         @try {
             [_logHandle writeData:data];
+            // ⚠️ 必须同步到磁盘 —— NSFileHandle 的写入先落在内核缓冲，
+            // 进程被信号杀掉（SIGSEGV / SIGABRT）时缓冲里的内容会全部丢失。
+            //
+            // 这就是「启动黑屏后日志里什么都没有」的原因：
+            // 崩溃前最后几十行根本没写进文件。
+            [_logHandle synchronizeFile];
         } @catch (NSException *e) {
             // 写盘失败 → 降级到内存缓冲（对应 ZL2 的 ByteArrayOutputStream 兜底）
             _logHandle = nil;
