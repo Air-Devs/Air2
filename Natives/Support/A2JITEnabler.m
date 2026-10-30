@@ -398,6 +398,28 @@ static A2JITPreferredSource a2jit_preferred_source(void) {
     return A2JITPreferredSourceAuto;
 }
 
+#pragma mark - [JIT-DETACH-STIKDEBUG] 「JIT 就绪后主动 detach + self-mmap 兜底」的生效判据
+
+//  ★为什么要一个「总开关」而不是只看来源★
+//  这两条新行为（JIT 一就绪就让调试器脱离、调试器不认 detach 就自己 mmap 一块 RWX）都会
+//  **改动真实运行行为**：前者会让调试器提前撒手（后续 brk #0x69 没人应答），后者换掉
+//  code cache 的来源。它们只在「用户明确选了 StikDebug 这条路」时才有意义（StikDebug
+//  开完 JIT 会一直占着调试器，正是这两个动作要解决的），其他来源上照做只会平白引入
+//  调试器提前脱离 / 自 map 越权的风险 ⇒ 用开关 + 来源双条件把它钉住：
+//    条件① 开关（本键，默认关）  ② 来源严格 == stikdebug（走唯一读取点 a2jit_preferred_source）
+//  ★不成立就完全按旧行为走★（A2JITEnvironment 里两条新逻辑一个字节都不执行）。
+NSString *const A2JITLauncherEnabledKey = @"a2jit.launcherEnabled";
+
+BOOL a2jit_detach_selfmmap_armed(void) {
+    // ① 开关：缺键当 NO（不给存量装机偷偷换行为）
+    id raw = [NSUserDefaults.standardUserDefaults objectForKey:A2JITLauncherEnabledKey];
+    BOOL on = (raw == nil) ? NO
+                           : [NSUserDefaults.standardUserDefaults boolForKey:A2JITLauncherEnabledKey];
+    if (!on) return NO;
+    // ② 来源：★只问 a2jit_preferred_source()★，不在这里再读一遍 a2jit.preferredSource
+    return a2jit_preferred_source() == A2JITPreferredSourceStikDebug;
+}
+
 /// 每次决策一行：`[JIT-SRC] preferred=<值> ⇒ <命中/失败原因>`。
 /// ★同一结论只打一次★：判据在等待期 0.5s 一轮，逐轮重打只会把日志刷成噪音
 /// （与 a2jit_direct_source_reason 的「只缓存日志」同一处理）。

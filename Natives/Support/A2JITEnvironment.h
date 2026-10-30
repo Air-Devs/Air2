@@ -140,6 +140,22 @@ BOOL a2_jit_send_script_safe(const char *utf8, size_t len);
 /// 无人应答时返回 NO（降级），不致死。
 BOOL a2_jit_set_detach_after_first_br(BOOL detach);
 
+/// ★[JIT-DETACH-STIKDEBUG] JIT 就绪后主动请求调试器脱离★（cmd=3 的统一入口）。
+///
+/// 与 `a2_jit_set_detach_after_first_br` 的区别不在协议，而在**生效条件**：
+/// 只有「JIT 启动器开关已开（`A2JITLauncherEnabledKey`）**且** 用户钉死的来源严格 == stikdebug」
+/// 时才会真发那一发 brk #0xf00d cmd=3；否则**不发**、返回 NO，并打一行
+/// `[A2JIT] detach/mmap 跳过（preferred≠stikdebug 或开关未开）`（每进程只打一次）。
+/// @return YES = 调试器受理了 detach（serviced）；NO = 未被受理，或本就不该发。
+BOOL a2_jit_request_detach_now(void);
+
+/// ★[JIT-DETACH-STIKDEBUG] 进程自身 mmap 一块 RWX 作 code cache 兜底★
+/// `mmap(NULL, size, R|W|X, MAP_PRIVATE|MAP_ANON, -1, 0)`。
+/// 失败返回 NULL（并打 errno —— 无 JIT 权限的机型这里就是 EPERM）；
+/// 成功打 `[A2JIT] self-mmap exec ok addr=… size=…`。
+/// ★只管分配★：调用方自行决定是否把它当 code cache（见 A2JITEnvironment.m 的兜底分支）。
+void *_Nullable a2_jit_self_mmap_exec(size_t size);
+
 /// 统一诊断日志（前缀 [A2JIT]；写 stderr，随 stdout/stderr 重定向进 latestlog.txt）。
 void a2_jit_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 

@@ -273,6 +273,19 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
             @"en": @"JIT launcher: %@ (applies to the next game launch)",
             @"ja": @"JIT ランチャー：%@（次回のゲーム起動から有効）",
         },
+        // [JIT-DETACH-STIKDEBUG] 「JIT 启动器」总开关（键 a2jit.launcherEnabled，见 A2JITEnabler.h）
+        @"jit.launcher.detach.title": @{
+            @"zh-Hans": @"JIT 就绪后主动 detach",
+            @"zh-Hant": @"JIT 就緒後主動 detach",
+            @"en": @"Detach debugger once JIT is ready",
+            @"ja": @"JIT 準備後にデタッチ",
+        },
+        @"jit.launcher.detach.subtitle": @{
+            @"zh-Hans": @"仅来源=StikDebug 时生效：拿到 JIT 就请调试器脱离，并在它不认 detach 时改用进程自身 mmap 兜底",
+            @"zh-Hant": @"僅來源=StikDebug 時生效：拿到 JIT 就請偵錯器脫離，並在它不認 detach 時改用行程自身 mmap 兜底",
+            @"en": @"Only applies when the launcher source is StikDebug: ask the debugger to detach as soon as JIT is ready, and fall back to the app's own mmap if it refuses",
+            @"ja": @"取得元が StikDebug のときのみ適用：JIT を取得したらデバッガにデタッチを要求し、拒否されたらプロセス自身の mmap で代替します",
+        },
 
         @"jit.row.next": @{
             @"zh-Hans": @"下一步动作",

@@ -83,6 +83,20 @@ FOUNDATION_EXPORT NSNotificationName const A2JITEnablerWaitingDidBeginNotificati
 /// 发出线程 / 时机：主线程，且**早于**完成回调（回调里可能立刻重新进入启动链）。
 FOUNDATION_EXPORT NSNotificationName const A2JITEnablerWaitingDidEndNotification;
 
+#pragma mark - [JIT-DETACH-STIKDEBUG] 「JIT 就绪后主动 detach + self-mmap 兜底」的生效判据
+
+/// 「JIT 启动器」**总开关**的存储键（★写入点唯一 = 设置页「JIT 启动器」那一行区域★）。
+/// 关着 ⇒ `A2JITEnvironment` 的两条新行为（主动请求 detach、self-mmap 兜底）完全不介入，
+/// 行为与改动前逐字一致。★默认关★（缺键当 NO）：不给存量装机偷偷换行为。
+FOUNDATION_EXPORT NSString *const A2JITLauncherEnabledKey;
+
+/// 上述两条新行为此刻是否该生效。**两个条件同时成立才 YES**：
+///   ① 用户在设置页打开了「JIT 启动器」开关（`A2JITLauncherEnabledKey`）；
+///   ② 用户钉死的来源**严格** == `stikdebug`（读取仍只有 `a2jit_preferred_source()` 一处，
+///      本函数不自己读 `a2jit.preferredSource` 键 —— 不许出现第二套读取）。
+/// 为 NO 时调用方必须完全按旧行为走（不发 cmd=3、不 mmap），只留一行「跳过」日志。
+BOOL a2jit_detach_selfmmap_armed(void);
+
 /**
  * A2JITEnabler —— 启动前的 JIT 判据 + 申请 + 有界等待。
  *

@@ -46,6 +46,7 @@
 #import "A2Log.h"     // [A2Log criterion:]：判据行的统一出口（控制台 + 会话日志文件）
 #import "A2JITSystemToolLauncher.h"
 #import "A2JITEnvironmentProbe.h"
+#import "A2JITEnabler.h"        // [JIT-DETACH-STIKDEBUG] A2JITLauncherEnabledKey（开关写入点用）
 #import "A2JITAutoPairingEngineBridge.h"
 // [JIT-AUTOPAIR-3] 配对码来源（可选项表）与设备发起档的 6 位码会话
 #import "A2JITPairingPinSource.h"
@@ -771,6 +772,26 @@ static NSString *A2JITLauncherLabelForSource(NSString *source) {
         }
         [sheet presentFrom:hvc];
     };
+
+    // ---- [JIT-DETACH-STIKDEBUG] 「JIT 启动器」总开关（★写入点唯一 = 本段★）----
+    //   紧跟在上面那行来源选择后面：同一处能力、同一屏，开关关着 ⇒ A2JITEnvironment 里那两条
+    //   新逻辑（JIT 就绪后主动 detach、调试器不认 detach 时 self-mmap 兜底）一个字节都不执行。
+    //   ★还要来源严格 == stikdebug 才生效★：判据在 Natives/Support 的
+    //   a2jit_detach_selfmmap_armed()（来源仍只由 a2jit_preferred_source() 读，本页只写值）。
+    BOOL launcherArmOn = [NSUserDefaults.standardUserDefaults boolForKey:A2JITLauncherEnabledKey];
+    A2SettingsRow *launcherArmRow = [[A2SettingsRow alloc] init];
+    launcherArmRow.symbolName = @"bolt.badge.clock.fill";
+    launcherArmRow.title = [A2JITStrings stringForKey:@"jit.launcher.detach.title"];
+    launcherArmRow.subtitle = [A2JITStrings stringForKey:@"jit.launcher.detach.subtitle"];
+    launcherArmRow.accessory = A2SettingsRowAccessorySwitch;
+    launcherArmRow.on = launcherArmOn;
+    launcherArmRow.onToggle = ^(BOOL isOn) {
+        [NSUserDefaults.standardUserDefaults setBool:isOn forKey:A2JITLauncherEnabledKey];
+        [NSUserDefaults.standardUserDefaults synchronize];
+        [A2Log criterion:@"[JIT-SRC] settings: JIT 启动器开关 → %@（键 %@；来源须为 stikdebug 才生效，下次启动游戏生效）",
+         isOn ? @"开" : @"关", A2JITLauncherEnabledKey];
+    };
+    [section addRow:launcherArmRow];
 
     A2SettingsRow *nextRow = [[A2SettingsRow alloc] init];
     nextRow.symbolName = @"arrow.right.circle.fill";

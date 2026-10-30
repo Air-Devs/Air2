@@ -11,6 +11,7 @@
 //
 
 #import "A2JITEnvironment.h"
+#import "A2JITEnabler.h"   // [JIT-DETACH-STIKDEBUG] a2jit_detach_selfmmap_armed()（来源/开关双条件）
 
 #import <dlfcn.h>
 #import <errno.h>
@@ -185,6 +186,47 @@ BOOL a2_jit_set_detach_after_first_br(BOOL detach) {
     }
     a2_jit_trap_pop(idx, &oldsa);
     return ok;
+}
+
+// ============================================================================
+// ★[JIT-DETACH-STIKDEBUG]★ JIT 就绪后主动请求 detach + self-mmap 兜底。
+//
+//   要解决的真机问题是「StikDebug 开完 JIT 后一直占着调试器、lldb 永远挂不上」：
+//     · 第一步：拿到可执行区就**主动**请调试器在首个 brk 后脱离（cmd=3），把调试器让出来；
+//     · 第二步：若调试器不认 cmd=3（返回 NO ⇒ 它不会自己撒手），说明这条路上没有
+//       「代映射」的提供者，由**进程自身** mmap 一块 RWX 当 code cache 兜底。
+//   ★两条都只在「JIT 启动器开关已开 且 来源严格 == stikdebug」时生效★（判据只有
+//   a2jit_detach_selfmmap_armed() 一处）；条件不满足 ⇒ 不发 brk、不 mmap，行为与改动前一致。
+// ============================================================================
+
+/// 记：cmd=3 只在「开关开 + 来源==stikdebug」时才发，`NO` 因此有两个来源
+/// （本不该发 / 发了调试器不认）；调用方（兜底分支）先用 a2jit_detach_selfmmap_armed() 分开这两者。
+BOOL a2_jit_request_detach_now(void) {
+    if (!a2jit_detach_selfmmap_armed()) {
+        static BOOL sSkipLogged = NO;
+        if (!sSkipLogged) {
+            sSkipLogged = YES;
+            NSLog(@"[A2JIT] detach/mmap 跳过（preferred≠stikdebug 或开关未开）");
+        }
+        return NO;
+    }
+    BOOL serviced = a2_jit_set_detach_after_first_br(YES);
+    NSLog(@"[A2JIT] detach-after-first-brk requested=%@", serviced ? @"serviced" : @"NOT serviced");
+    return serviced;
+}
+
+void *a2_jit_self_mmap_exec(size_t size) {
+    if (size == 0) size = (size_t)getpagesize();
+    void *p = mmap(NULL, size, PROT_READ | PROT_WRITE | PROT_EXEC,
+                   MAP_PRIVATE | MAP_ANON, -1, 0);
+    if (p == MAP_FAILED) {
+        int e = errno;
+        NSLog(@"[A2JIT] self-mmap exec FAILED size=%zu errno=%d(%s) —— 本机不给进程自产可执行页",
+              size, e, strerror(e));
+        return NULL;
+    }
+    NSLog(@"[A2JIT] self-mmap exec ok addr=%p size=%zu", p, size);
+    return p;
 }
 
 BOOL a2_jit_send_script_safe(const char *utf8, size_t len) {
@@ -585,6 +627,9 @@ static void *a2_jit_brk69_bounded(NSTimeInterval deadlineSec, const char *why) {
 //   来源：utils.m L1649–L1758（ameJITVerifyRegionBounded）。
 static BOOL a2_jit_verify_region_bounded(NSTimeInterval deadline, const char *why) {
     size_t len = (size_t)getpagesize();
+    // ★[JIT-DETACH-STIKDEBUG]★ 本区是否由「进程自身 mmap」兜底得来（参与 verdict/取证文案）。
+    //   必须在下面任何 goto 之前初始化 —— 否则复用分支跳过去会读到未初始化值。
+    BOOL selfMapped = NO;
     gA2JITVerifyAttempts++;
 
     // ★复用★：已经拿到并仍映射的区域直接复用，不再每次重发 brk
@@ -601,6 +646,21 @@ static BOOL a2_jit_verify_region_bounded(NSTimeInterval deadline, const char *wh
     void *r = a2_jit_brk69_bounded(deadline, why);   // 无人服务/超时返回 NULL 不致死
     gA2JITBrkCount++;
     if (r == NULL) {
+        // ★[JIT-DETACH-STIKDEBUG] self-mmap 兜底★（只在「JIT 启动器开关开 + 来源==stikdebug」时）
+        //   判据就是本单要验证的那件事：先主动请求 detach，调试器**不认**（返回 NO ⇒ 它不会在
+        //   首个 brk 之后撒手）⇒ 这条路上没有代映射的提供者，改用进程自身 mmap 的 RWX 页当
+        //   code cache。条件不满足 / detach 被受理 / mmap 被内核拒，都原样落到下面的旧分支。
+        if (a2jit_detach_selfmmap_armed() && !a2_jit_request_detach_now()) {
+            void *self = a2_jit_self_mmap_exec(a2_jit_expected_region_bytes());
+            if (self != NULL) {
+                r = self;
+                selfMapped = YES;
+                a2_jit_log("[A2JIT] code cache fallback: 调试器不认 cmd=3(detach) ⇒ 改用进程自身 mmap 区 %p"
+                           " 作 JVM code cache（size=%zu）", self, a2_jit_expected_region_bytes());
+            }
+        }
+    }
+    if (r == NULL) {
         a2_jit_log("[A2JIT] false-positive guard triggered (#%d, why=%s): brk #0x69 NOT serviced -- "
                    "NOT counting JIT as enabled", gA2JITVerifyAttempts, why);
         gA2JITRegionEvidence = @"brk #0x69 未被服务（无调试器应答）—— 返回 NULL";
@@ -609,7 +669,9 @@ static BOOL a2_jit_verify_region_bounded(NSTimeInterval deadline, const char *wh
     }
 
 a2_verify_have_region:
-    if (gA2JITVerifiedRegion != NULL) { r = gA2JITVerifiedRegion; }
+    // ★selfMapped 时不得被「留驻区」覆盖★：那一块是上一次的（可能已失效的）地址，
+    //   本轮的 code cache 是刚才 mmap 出来的那块。
+    if (gA2JITVerifiedRegion != NULL && !selfMapped) { r = gA2JITVerifiedRegion; }
 
     // ① 挡掉 legacy 通道的哨兵 / 显然垃圾的返回值。
     //    新版 Universal 脚本已废弃 legacy brk #0x69：应答 0xE0000069（“请指派 Universal JIT 脚本”）。
@@ -701,9 +763,13 @@ a2_verify_have_region:
     a2_jit_log("[A2JIT] verified: JIT region @%p (%zu bytes) usable as JVM code cache "
                "(cur=0x%x max=0x%x max含W=%d max含X=%d 自证proof=%ld 仅参考; why=%s)",
                r, len, cur, maxp, maxHasW, maxHasX, (long)proof, why);
-    gA2JITRegionEvidence = [NSString stringWithFormat:
-        @"已验证可用 [addr=%p mapped=1 cur=0x%x max=0x%x size=%llu max含W=%d max含X=%d 自证proof=%ld(仅参考)]",
-        r, cur, maxp, rsz, maxHasW, maxHasX, (long)proof];
+    gA2JITRegionEvidence = selfMapped
+        ? [NSString stringWithFormat:
+            @"已验证可用（进程自身 mmap RWX 兜底，★非调试器代映射★）[addr=%p mapped=1 cur=0x%x max=0x%x size=%llu]",
+            r, cur, maxp, rsz]
+        : [NSString stringWithFormat:
+            @"已验证可用 [addr=%p mapped=1 cur=0x%x max=0x%x size=%llu max含W=%d max含X=%d 自证proof=%ld(仅参考)]",
+            r, cur, maxp, rsz, maxHasW, maxHasX, (long)proof];
     return YES;
 }
 
@@ -793,7 +859,15 @@ static int gA2JITEnsureKickInflight = 0;
             //   后续的 brk #0x69（否则一脱离就没人应答，后续 JIT 请求全落空、只等 8 秒后被杀）。
             size_t want = a2_jit_expected_region_bytes();
             size_t got  = gA2JITDeliveredBytes;
-            if (gA2JITVerifiedRegion != NULL && got >= want) {
+            // ★[JIT-DETACH-STIKDEBUG]★ 拿到可执行区之后**无条件**请求调试器 detach
+            //   （含下面旧分支里「只交付一页 / region 非空但 size 不够」那条 —— 那条以前是不发的）。
+            //   生效条件只有一处：a2jit_detach_selfmmap_armed()（JIT 启动器开关开 + 来源==stikdebug）；
+            //   不满足 ⇒ 落到下面两条★原样未改★的旧分支，行为与改动前逐字一致。
+            if (a2jit_detach_selfmmap_armed()) {
+                a2_jit_log("[A2JIT] detach-after-first-brk：JIT 已就绪（region=%p size=%zu expected=%zu）⇒ 主动请求",
+                           gA2JITVerifiedRegion, got, want);
+                (void)a2_jit_request_detach_now();
+            } else if (gA2JITVerifiedRegion != NULL && got >= want) {
                 BOOL detach = a2_jit_set_detach_after_first_br(YES);
                 a2_jit_log("[A2JIT] SetDetachAfterFirstBr(1) %s (region=%p size=%zu>=expected=%zu)",
                            detach ? "serviced" : "NOT serviced", gA2JITVerifiedRegion, got, want);
