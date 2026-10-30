@@ -24,6 +24,9 @@
 
 #import <UIKit/UIKit.h>
 #import <unistd.h>
+#import <stdlib.h>            // getenv（JB_ROOT_PATH）
+#import <string.h>
+#import <sys/sysctl.h>        // KERN_PROC / KERN_PROC_PID：调试器侧证据（见 ①'' JIT 来源认定）
 
 #import "A2JITEnvironment.h"   // 区域验收快照（logRegionSnapshot，仅日志）
 #import "A2LegacyJITGate.h"    // ★唯一判据 = 老 Air（tree510）那套，原样移植★
@@ -239,6 +242,67 @@ static A2JITInstallSource a2jit_source(void) {
     return f.source;
 }
 
+#pragma mark - ①'' JIT 来源认定（调试器在岗 / 越狱环境）
+
+//  ★以下是新增的两条 JIT 来源认定（排在安装源之后、使能器选择之前）★
+//  背景：真机上存在「本进程其实已经能用 JIT，但既没有 TrollStore 标记、也没有使能器可拉起」
+//  的机器 —— 以前它们被判「未就绪」⇒ 去拉 stikdebug/sidestore ⇒ 白等 120s 才失败：
+//    (a) 调试器在岗：进程被 trace（内核 P_TRACED 置位）。JIT 是**调试器**给的，
+//        再拉一个使能器纯属多余（还会把用户踢出 App）；
+//    (b) 越狱环境：rootless（/var/jb）/ dpkg 系（/var/lib/dpkg）/ 环境变量显式给 JB_ROOT_PATH。
+//        这类机器上 App 由越狱的 ldid 签名、自带内核级 JIT ⇒ 同样不需要使能器。
+//  ★它们只决定「就绪」★：建 VM 前的闰门仍是 A2LegacyJITGateOpen（另一个出口，未改）——
+//  调试器不给 brk #0x69 时那道闸门照样会拦，不会带着「没真的拿到 JIT」去建 VM。
+
+/// getppid() 的进程名是否含 `debugserver`（**辅助证据**，读不到 / 失败都不影响主判）。
+/// ★用 sysctl 而不是 proc_name★：KERN_PROC_PID 的 p_comm 免链接 libproc，且与 P_TRACED 同族接口。
+static BOOL a2jit_parent_is_debugserver(void) {
+    struct kinfo_proc info;
+    size_t size = sizeof(info);
+    int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, getppid()};
+    memset(&info, 0, sizeof(info));
+    if (sysctl(mib, 4, &info, &size, NULL, 0) != 0) return NO;
+    return strstr(info.kp_proc.p_comm, "debugserver") != NULL;
+}
+
+/// (a) 进程是否被调试器 trace。
+/// ★P_TRACED 的读取只有一处★：A2LegacyJITGate.m 的 `A2JIT26DebuggerAttachedViaPtrace()`
+/// （sysctl KERN_PROC/KERN_PROC_PID 读 `kp_proc.p_flag`）—— 这里**转调**，不复制第二份。
+/// ★不用 csops 的 CS_DEBUGGED★：它只说明「签名带了调试权限」，进程没被 trace 时也常置位。
+static BOOL a2jit_src_debugger_attached(void) {
+    return A2JIT26DebuggerAttachedViaPtrace() || a2jit_parent_is_debugserver();
+}
+
+/// (b) 越狱环境。
+static BOOL a2jit_src_jailbreak(void) {
+    if (getenv("JB_ROOT_PATH") != NULL) return YES;
+    return [NSFileManager.defaultManager fileExistsAtPath:@"/var/jb"] ||
+           [NSFileManager.defaultManager fileExistsAtPath:@"/var/lib/dpkg"];
+}
+
+/// 两条「直接认定可用」的来源合成一条结论：命中 ⇒ 返回可读原因（非 nil）；都不命中 ⇒ nil。
+/// ★不缓存判定★：调试器可能在启动**之后**才附加（StikDebug 就是对现成进程 PT_ATTACH），
+///   缓存会让晚到的 attach 永远判不出来。★只缓存日志★：等待期 0.5s 一轮，命中项不变就不再打。
+static NSString *_Nullable a2jit_direct_source_reason(void) {
+    NSString *reason = nil;
+    NSString *hit = nil;
+    if (a2jit_src_debugger_attached()) {
+        hit = @"debugger";
+        reason = [NSString stringWithFormat:
+                  @"调试器在岗（P_TRACED，ppid=%d）⇒ 直接认定 JIT 可用", getppid()];
+    } else if (a2jit_src_jailbreak()) {
+        hit = @"jailbreak";
+        reason = @"越狱环境（/var/jb | /var/lib/dpkg | JB_ROOT_PATH）⇒ 直接认定 JIT 可用";
+    }
+    static NSString *sLoggedHit = nil;   // 上次打过日志的命中项（nil = 还没打过）
+    if (hit != nil && ![hit isEqualToString:sLoggedHit]) {
+        sLoggedHit = hit;
+        a2_log_criterion(@"[JIT-SRC] debugger|jailbreak ⇒ 直接放行（命中 %@）：%@；不拉任何外部使能器",
+                         hit, reason);
+    }
+    return reason;
+}
+
 /// ★TrollStore 机的 JIT 就绪判定（不需要调试器）★
 /// 巨魔机的 JIT 来自**安装时**由 ldid 签进 App 的内核级权限 ⇒ 判据不能是「有没有活的调试器
 /// 应答 brk #0x69」（那条在巨魔机上恒假 ⇒ 能玩的环境被自己的闸门拦死）。
@@ -312,6 +376,15 @@ static void a2jit_log_region(const char *tag) {
 ///     也算应答 —— 它正是老 Air 要求的值）。
 /// why = 可读原因（凭哪一条放行 / 为什么不成），整段文案由 A2LegacyJITGate 给出。
 static BOOL a2jit_ready_now(NSString *_Nullable *_Nullable why) {
+    // ★新来源优先（[JIT-SRC]）★：调试器在岗 / 越狱环境 ⇒ 直接认定可用，
+    //   ★不拉任何外部使能器★（`ensureJITThen:` 的「① 判据再确认」就走这里 ⇒ 立刻
+    //   回调 YES 交回启动链，既不弹等待窗也不 openURL）。
+    //   ★顺序★：这两条在前，其后才是既有的 trollstore / sidestore 分支（一行未改）。
+    NSString *directWhy = a2jit_direct_source_reason();
+    if (directWhy != nil) {
+        if (why) *why = directWhy;
+        return YES;
+    }
     // ★安装源分支（[A2-JIT-SRC]）★：TrollStore 机的 JIT 不是「调试器代映射」来的
     //   ⇒ 不能用老 Air 闰门（那条要求有活的调试器应答 brk #0x69，巨魔机上恒假 ⇒
     //   会一直卡在「等待 JIT」）。其余环境（SideStore / 无工具）判据一字不改。

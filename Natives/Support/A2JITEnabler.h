@@ -39,6 +39,11 @@
 //       sidestore，也不用「要求调试器应答 brk #0x69」那条闰门判它（巨魔机上没有调试器 ⇒
 //       恒假 ⇒ 会一直卡在等待）。SideStore / 无工具环境维持既有链与 120s 等待窗。
 //       顺序照老 Air 的 `invokeAfterJITEnabled:`（先 `isTrollStoreInstall()` 分支）。
+//    ⑥ **另有两条「直接认定可用」的来源**（`[JIT-SRC]`，判定在 ⑤ 之后、使能器之前）：
+//       被调试器 trace（`P_TRACED`）/ 越狱环境（`/var/jb` | `/var/lib/dpkg` | `JB_ROOT_PATH`）
+//       ⇒ 就绪直接为真，**不拉任何外部使能器**（JIT 不是使能器那条链给的）。命中会打
+//       `[JIT-SRC] debugger|jailbreak ⇒ 直接放行`。★只影响「就绪」★：建 VM 前的闰门
+//       （`openLegacyGateBeforeVMBuild:`）仍按老 Air 口径走，不会带着没拿到的 JIT 去建 VM。
 //
 //  分层：本模块属 Natives/Support（JIT 环境层），只依赖 A2JITEnvironment 的判据与
 //  日志出口；不认识版本 / 账号 / 下载 / 启动链，也不替上层决定「失败页怎么写」。
@@ -93,7 +98,8 @@ FOUNDATION_EXPORT NSNotificationName const A2JITEnablerWaitingDidEndNotification
 + (BOOL)isJITReadyNow;
 
 /// 与 `isJITReadyNow` **同一判据**，另回传可读原因（供失败页 / 判据行 / 诊断）。
-/// ★不要另写一份判定★：两者都直接转调 A2LegacyJITGateReadyNow。
+/// ★不要另写一份判定★：两者都走 `a2jit_ready_now`（内部顺序：调试器/越狱两条新来源 ⇒
+/// TrollStore 专线 ⇒ `A2LegacyJITGateReadyNow`；见文件头 ⑤ ⑥）。
 + (BOOL)isJITReadyNowWithReason:(NSString *_Nullable *_Nullable)whyOut;
 
 /// 打一行区域验收快照（`[A2JIT] region=… size=… (X MB) expected=… enough=0|1 tag=…`）。
