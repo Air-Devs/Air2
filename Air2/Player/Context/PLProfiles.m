@@ -31,6 +31,7 @@
 #import "PLProfiles.h"
 #import "A2Settings.h"
 #import "A2VersionManager.h"
+#import "A2JREManager.h"
 #import "utils.h"
 
 static PLProfiles* current;
@@ -96,6 +97,25 @@ static PLProfiles* current;
     if ([key isEqualToString:@"renderer"]) {
         NSString *r = A2Settings.shared.renderer;
         if (r.length > 0) return r;
+    }
+
+    // ---- javaVersion 同理：Air1 的 java.java_homes 偏好键，Air2 不用 ----
+    //
+    // JavaLauncher.m:1508 会读这个键：
+    //     int preferredJavaVersion = [PLProfiles resolveKey:@"javaVersion"].intValue;
+    //     if (preferredJavaVersion > 0) minVersion = preferredJavaVersion;
+    //
+    // 返回 0 时不会覆盖调用方的 minVersion，但也失去了兜底作用。
+    // 这里返回 A2JREManager 对当前版本选中的 JRE 版本，让两边一致。
+    if ([key isEqualToString:@"javaVersion"]) {
+        A2Version *cur = A2VersionManager.shared.currentVersion;
+        if (cur) {
+            NSString *mc = cur.versionInfo.minecraftVersion ?: cur.name;
+            A2JRE *jre = [A2JREManager.shared jreForVersionName:cur.name mcVersion:mc];
+            if (jre.majorVersion > 0) {
+                return [NSString stringWithFormat:@"%ld", (long)jre.majorVersion];
+            }
+        }
     }
 
     NSDictionary *prefDefaults = @{

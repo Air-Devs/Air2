@@ -1722,6 +1722,36 @@ static BOOL ame87_mcVersionRequiresTextureBuffer(NSString *mcVersionId) {
     return major >= 26;
 }
 
+/// 按 MC 版本号推算所需的最低 Java 版本（Mojang 官方规则）。
+///
+/// 用来给 metadata 缺失 javaVersion 的场景兜底 ——
+/// 之前默认成 8，导致用 Java 8 参数启动 26.x（要求 Java 25）。
+static int A2RequiredJavaVersionForMCVersion(NSString *verName) {
+    if (![verName isKindOfClass:NSString.class] || verName.length == 0) return 8;
+
+    // "26.3" / "26.3-fabric" / "1.20.1" → 取主次版本号
+    NSArray<NSString *> *parts = [verName componentsSeparatedByString:@"-"];
+    NSString *core = parts.firstObject ?: verName;
+    NSArray<NSString *> *nums = [core componentsSeparatedByString:@"."];
+    NSInteger major = nums.count > 0 ? [nums[0] integerValue] : 0;
+    NSInteger minor = nums.count > 1 ? [nums[1] integerValue] : 0;
+
+    // 26.x 起 Mojang 强制 Java 25（javaVersion.majorVersion = 25）
+    if (major >= 26) return 25;
+
+    // 1.20.5 起要求 Java 21
+    if (major == 1) {
+        if (minor >= 21) return 21;              // 1.21.x
+        if (minor == 20) {
+            return ([core compare:@"1.20.5" options:NSNumericSearch] != NSOrderedAscending)
+                ? 21 : 17;
+        }
+        if (minor >= 18) return 17;              // 1.18 ~ 1.20.4
+        if (minor >= 17) return 16;              // 1.17（实际常用 17）
+    }
+    return 8;
+}
+
 - (void)launchMinecraft {
     [A2Logger info:@"GameLaunch" message:@"[1] launchMinecraft 开始"];
     {
@@ -1764,14 +1794,46 @@ static BOOL ame87_mcVersionRequiresTextureBuffer(NSString *mcVersionId) {
             return;
         }
 
-        // Get Java version
+        // ---- 决定最低 Java 版本 ----
+        //
+        // ⚠️ 默认值 8 是个陷阱：metadata 里没有 javaVersion 时（我们的
+        // 主页曾经就是这样），minVersion 永远是 8，于是
+        //   · JavaLauncher.m:1515 走 `if (minVersion <= 8)` 分支，
+        //     选了 Java 8 的 caciocavallo AWT 垫片
+        //   · getSelectedJavaHome(..., 8) 可能挑到 Java 8 运行时
+        //   · 用 Java 8 跑 MC 26.3（要求 Java 25）→ 卡死 / 黑屏
+        //
+        // 现在三层兜底：metadata → 版本 JSON → 按 MC 版本推算。
         int minVersion = [self.metadata[@"javaVersion"][@"majorVersion"] intValue];
         if (minVersion == 0) {
             minVersion = [self.metadata[@"javaVersion"][@"version"] intValue];
         }
+
+        // 兜底 2：直接读版本 JSON 的 javaVersion
         if (minVersion == 0) {
-            minVersion = 8; // Default to Java 8
+            NSString *verName = self.metadata[@"id"] ?: self.metadata[@"versionName"];
+            if ([verName isKindOfClass:NSString.class] && verName.length > 0) {
+                NSString *jsonPath = [NSString stringWithFormat:@"%@/versions/%@/%@.json",
+                                      self.metadata[@"gameHome"] ?: @"",
+                                      verName, verName];
+                NSData *d = [NSData dataWithContentsOfFile:jsonPath];
+                if (d) {
+                    NSDictionary *j = [NSJSONSerialization JSONObjectWithData:d options:0 error:nil];
+                    id jv = j[@"javaVersion"];
+                    if ([jv isKindOfClass:NSDictionary.class]) {
+                        minVersion = [jv[@"majorVersion"] intValue];
+                    }
+                }
+            }
         }
+
+        // 兜底 3：按 MC 版本推算（Mojang 的规则）
+        if (minVersion == 0) {
+            NSString *verName = self.metadata[@"id"] ?: self.metadata[@"versionName"];
+            minVersion = A2RequiredJavaVersionForMCVersion(verName);
+        }
+
+        if (minVersion <= 0) minVersion = 8;   // 最后兜底（只在完全未知时）
         
         // 账号：Air2 用 A2AccountManager（Air1 的 BaseAuthenticator 已不存在）
         A2Account *account = A2AccountManager.shared.currentAccount;

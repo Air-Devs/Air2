@@ -855,6 +855,19 @@
         A2JRE *jre = [A2JREManager.shared jreForVersionName:current.name mcVersion:mc];
         if (jre.path.length) metadata[@"javaHome"] = jre.path;
 
+        // ⚠️ 必须带 javaVersion —— SurfaceViewController 用它决定 minVersion：
+        //     int minVersion = metadata[@"javaVersion"][@"majorVersion"]
+        //     if (minVersion == 0) minVersion = 8;   // 默认 Java 8！
+        //
+        // 之前没传这个键 → minVersion 永远是 8，
+        // 而 MC 26.3 要 Java 25 → 用错误版本参数启动 → 卡死/黑屏。
+        if (jre.majorVersion > 0) {
+            metadata[@"javaVersion"] = @{ @"majorVersion": @(jre.majorVersion) };
+        }
+
+        // launchJVM 还会读 metadata[@"id"] 做版本判断
+        metadata[@"id"] = current.name;
+
         [A2Logger info:@"Launch"
                message:[NSString stringWithFormat:
                         @"前置检查通过 → 拉起 JVM（版本=%@ Java=%@ 账号=%@）",
