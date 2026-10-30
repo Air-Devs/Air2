@@ -1035,6 +1035,9 @@ CGPoint lastVirtualMousePoint = {0, 0};
 - (void)viewDidLoad
 {
     [super viewDidLoad];
+    [A2Logger info:@"Boot" message:@"[0] SurfaceViewController.viewDidLoad 开始"];
+    [A2Logger info:@"Boot" message:[NSString stringWithFormat:@"      metadata 键: %@",
+        [[self.metadata allKeys] componentsJoinedByString:@","] ?: @"(nil)"]];
     isControlModifiable = NO;
     self.isMacCatalystApp = NSProcessInfo.processInfo.isMacCatalystApp;
     // Load MetalHUD library
@@ -1721,6 +1724,14 @@ static BOOL ame87_mcVersionRequiresTextureBuffer(NSString *mcVersionId) {
 
 - (void)launchMinecraft {
     [A2Logger info:@"GameLaunch" message:@"[1] launchMinecraft 开始"];
+    {
+        // 把渲染器的实际取值打出来 —— 之前 nil 导致所有分支都不匹配
+        NSString *r = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
+        [A2Logger info:@"GameLaunch" message:[NSString stringWithFormat:
+            @"     renderer=%@", r ?: @"(nil)"]];
+        [A2Logger info:@"GameLaunch" message:[NSString stringWithFormat:
+            @"     javaHome(metadata)=%@", self.metadata[@"javaHome"] ?: @"(nil)"]];
+    }
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         // Validate metadata first
         if (!self.metadata) {
