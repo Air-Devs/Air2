@@ -562,6 +562,43 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
 
 @end
 
+#pragma mark - [JIT-SRC] 「JIT 启动器」可选项（★写入点唯一 = 本文件★）
+
+//  ★六个取值是跨层契约★：逐字存进 NSUserDefaults 的 `a2jit.preferredSource`，由
+//  `Natives/Support/A2JITEnabler.m` 的 `a2jit_preferred_source()` 解析（那边是唯一读取点，
+//  且只认这六个串 —— 别的值一律按 auto 处理并落一行判据）。
+//  ★改这里的取值必须同时改那边★（NSUserDefaults 里存的就是这些串）。
+//  ★本页只负责写与显示★：判据 / 回退 / 失败原因全在 Natives 那一处（分层：UI 不判 JIT）。
+static NSString *const kA2JITLauncherPrefKey = @"a2jit.preferredSource";
+
+/// 选项表 = { 取值, 四语文案 key }。顺序 = 弹窗里的顺序（默认档在前）。
+static NSArray<NSArray<NSString *> *> *A2JITLauncherOptionTable(void) {
+    return @[
+        @[ @"auto",       @"jit.launcher.auto" ],
+        @[ @"debugger",   @"jit.launcher.debugger" ],
+        @[ @"jailbreak",  @"jit.launcher.jailbreak" ],
+        @[ @"trollstore", @"jit.launcher.trollstore" ],
+        @[ @"stikdebug",  @"jit.launcher.stikdebug" ],
+        @[ @"sidestore",  @"jit.launcher.sidestore" ],
+    ];
+}
+
+/// 当前生效的取值（缺键 / 空串 ⇒ auto；★与 Natives 侧的缺省口径一致★）。
+static NSString *A2JITCurrentLauncherSource(void) {
+    NSString *raw = [NSUserDefaults.standardUserDefaults stringForKey:kA2JITLauncherPrefKey];
+    return raw.length > 0 ? raw : @"auto";
+}
+
+/// 取值 → 四语文案（未知取值回落 auto 的文案，不显示空行 / 不显示裸标识符）。
+static NSString *A2JITLauncherLabelForSource(NSString *source) {
+    for (NSArray<NSString *> *opt in A2JITLauncherOptionTable()) {
+        if ([opt[0] isEqualToString:source]) {
+            return [A2JITStrings stringForKey:opt[1]];
+        }
+    }
+    return [A2JITStrings stringForKey:@"jit.launcher.auto"];
+}
+
 #pragma mark - 面板
 
 @implementation A2JITSettings
@@ -686,6 +723,54 @@ static NSString *A2JITPairWireStageKey(A2JITDeviceInitiatedPairingStage stage) {
     strategyRow.symbolName = @"slider.horizontal.3";
     strategyRow.title = [A2JITStrings stringForKey:@"jit.row.strategy"];
     [section addRow:strategyRow];
+
+    // ---- [JIT-SRC] JIT 启动器（★用户可选来源；写入点唯一 = 本段★）----
+    //   放在「分级策略」下面：策略回答「这台机按系统分到哪一档」（只读结论），
+    //   本行回答「这一档里具体用哪条来源去拿 JIT」（可选项）。两者不是一回事，不合并。
+    A2SettingsRow *launcherRow = [[A2SettingsRow alloc] init];
+    launcherRow.symbolName = @"arrow.up.forward.app.fill";
+    launcherRow.title = [A2JITStrings stringForKey:@"jit.row.launcher"];
+    launcherRow.accessory = A2SettingsRowAccessoryDisclosure;
+    [section addRow:launcherRow];
+
+    __weak A2SettingsRow *weakLauncherRow = launcherRow;
+    __weak UIViewController *launcherHost = host;
+    // 值一变就刷新本行（选完立刻显示新值；生效点是「下次启动游戏」，见副标题）。
+    void (^refreshLauncherRow)(void) = ^{
+        A2SettingsRow *row = weakLauncherRow;
+        row.valueText = A2JITLauncherLabelForSource(A2JITCurrentLauncherSource());
+        row.subtitle = [A2JITStrings stringForKey:@"jit.launcher.subtitle"];
+    };
+    refreshLauncherRow();
+
+    launcherRow.onTap = ^{
+        UIViewController *hvc = launcherHost;
+        if (hvc == nil) { return; }
+        NSString *cur = A2JITCurrentLauncherSource();
+        // 与「配对码来源」同一套二级选择界面（A2OptionSheet + 选中勾），不另造控件。
+        A2OptionSheet *sheet =
+            [A2OptionSheet sheetWithTitle:[A2JITStrings stringForKey:@"jit.row.launcher"]
+                                  message:[A2JITStrings stringForKey:@"jit.launcher.subtitle"]];
+        for (NSArray<NSString *> *opt in A2JITLauncherOptionTable()) {
+            NSString *value = opt[0];
+            NSString *label = [A2JITStrings stringForKey:opt[1]];
+            [sheet addOptionWithTitle:label
+                             selected:[value isEqualToString:cur]
+                          destructive:NO
+                              handler:^{
+                // ★写入点唯一★：键 = kA2JITLauncherPrefKey，值 = 六个契约串之一。
+                [NSUserDefaults.standardUserDefaults setObject:value forKey:kA2JITLauncherPrefKey];
+                [NSUserDefaults.standardUserDefaults synchronize];
+                [A2Log criterion:@"[JIT-SRC] settings: JIT 启动器 → %@（键 %@；下次启动游戏生效）",
+                 value, kA2JITLauncherPrefKey];
+                refreshLauncherRow();
+                [A2Toast show:[NSString stringWithFormat:
+                                [A2JITStrings stringForKey:@"jit.launcher.toast.selected"], label]
+                       inView:hvc.view];
+            }];
+        }
+        [sheet presentFrom:hvc];
+    };
 
     A2SettingsRow *nextRow = [[A2SettingsRow alloc] init];
     nextRow.symbolName = @"arrow.right.circle.fill";

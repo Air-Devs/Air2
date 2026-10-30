@@ -217,6 +217,63 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
             @"en": @"Strategy",
             @"ja": @"段階ポリシー",
         },
+
+        // ---------------- [JIT-SRC] JIT 启动器（用户可选来源；值见 A2JITSettings.m） ----------------
+        @"jit.row.launcher": @{
+            @"zh-Hans": @"JIT 启动器",
+            @"zh-Hant": @"JIT 啟動器",
+            @"en": @"JIT launcher",
+            @"ja": @"JIT ランチャー",
+        },
+        @"jit.launcher.auto": @{
+            @"zh-Hans": @"自动（调试器/越狱 → TrollStore → 外部工具）",
+            @"zh-Hant": @"自動（偵錯器/越獄 → TrollStore → 外部工具）",
+            @"en": @"Auto (debugger/jailbreak → TrollStore → external tools)",
+            @"ja": @"自動（デバッガ/脱獄 → TrollStore → 外部ツール）",
+        },
+        @"jit.launcher.debugger": @{
+            @"zh-Hans": @"只用调试器（lldb attach）",
+            @"zh-Hant": @"只用偵錯器（lldb attach）",
+            @"en": @"Debugger only (lldb attach)",
+            @"ja": @"デバッガのみ（lldb attach）",
+        },
+        @"jit.launcher.jailbreak": @{
+            @"zh-Hans": @"只用越狱环境",
+            @"zh-Hant": @"只用越獄環境",
+            @"en": @"Jailbroken environment only",
+            @"ja": @"脱獄環境のみ",
+        },
+        @"jit.launcher.trollstore": @{
+            @"zh-Hans": @"只用 TrollStore",
+            @"zh-Hant": @"只用 TrollStore",
+            @"en": @"TrollStore only",
+            @"ja": @"TrollStore のみ",
+        },
+        @"jit.launcher.stikdebug": @{
+            @"zh-Hans": @"只用 StikDebug",
+            @"zh-Hant": @"只用 StikDebug",
+            @"en": @"StikDebug only",
+            @"ja": @"StikDebug のみ",
+        },
+        @"jit.launcher.sidestore": @{
+            @"zh-Hans": @"只用 SideStore / stikjit",
+            @"zh-Hant": @"只用 SideStore / stikjit",
+            @"en": @"SideStore / stikjit only",
+            @"ja": @"SideStore / stikjit のみ",
+        },
+        @"jit.launcher.subtitle": @{
+            @"zh-Hans": @"选哪条就只用哪条：该来源不可用会直接失败并说明原因（不回退）。下次启动游戏生效",
+            @"zh-Hant": @"選哪條就只用哪條：該來源不可用會直接失敗並說明原因（不回退）。下次啟動遊戲生效",
+            @"en": @"Only the chosen source is used: if it is unavailable the launch fails with a reason (no fallback). Applies to the next game launch.",
+            @"ja": @"選んだ取得元のみを使用します。使えない場合は理由を出して失敗します（フォールバックなし）。次回のゲーム起動から有効です。",
+        },
+        @"jit.launcher.toast.selected": @{
+            @"zh-Hans": @"JIT 启动器：%@（下次启动游戏生效）",
+            @"zh-Hant": @"JIT 啟動器：%@（下次啟動遊戲生效）",
+            @"en": @"JIT launcher: %@ (applies to the next game launch)",
+            @"ja": @"JIT ランチャー：%@（次回のゲーム起動から有効）",
+        },
+
         @"jit.row.next": @{
             @"zh-Hans": @"下一步动作",
             @"zh-Hant": @"下一步動作",

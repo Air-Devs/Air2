@@ -44,14 +44,24 @@
 //       ⇒ 就绪直接为真，**不拉任何外部使能器**（JIT 不是使能器那条链给的）。命中会打
 //       `[JIT-SRC] debugger|jailbreak ⇒ 直接放行`。★只影响「就绪」★：建 VM 前的闰门
 //       （`openLegacyGateBeforeVMBuild:`）仍按老 Air 口径走，不会带着没拿到的 JIT 去建 VM。
+//    ⑦ **JIT 启动器可由用户钉死**（`a2jit.preferredSource`，默认 `auto`）：
+//       `auto` = 上面 ⑤⑥ 那套自动探测（★默认，行为一字未改★）；
+//       `debugger` / `jailbreak` / `trollstore` / `stikdebug` / `sidestore` = ★只尝试该来源★，
+//       不可用就**直接失败并说明原因**（`debugger` 未 attach ⇒「需先用调试器附加」；
+//       `jailbreak` 无越狱迹象 ⇒「未检测到越狱环境」），★绝不静默回退到 stikdebug★ ——
+//       静默回退会让用户无法判断「到底是谁在给我 JIT」。
+//       键的读取**只有一处**（实现里的 `a2jit_preferred_source()`），调用点仅限判据入口
+//       （`a2jit_ready_now`）与使能器挑选处（`a2jit_pick_enabler` / `a2jit_start_preferred_run`）；
+//       写入点唯一 = 设置页「运行环境 › JIT」的「JIT 启动器」行（`A2JITSettings.m`）。
+//       每次决策落一行 `[JIT-SRC] preferred=<值> ⇒ 命中/失败：<原因>`。
 //
 //  分层：本模块属 Natives/Support（JIT 环境层），只依赖 A2JITEnvironment 的判据与
 //  日志出口；不认识版本 / 账号 / 下载 / 启动链，也不替上层决定「失败页怎么写」。
 //
-//  ★为什么没有「用哪个使能器」的偏好键★：老 Air 的 debug.jit_enabler 有设置页
-//  写入点，Air2 的设置页由既有 JIT 供给面板（A2JITExternalToolProvider）承担。
-//  本模块若自带一个没人写的键，就是死配置 ⇒ 改为按「本机已安装能力」探测选择，
-//  回退顺序写死在实现里（见 A2JITEnabler.m 的 a2jit_pick_tool 注释）。
+//  ★关于「用哪个使能器」★：⑦ 的键是**用户可见的选择项**（设置页有行、有默认值、有判据行）；
+//  没被选中（也就是 `auto`）时仍按「本机已安装能力」探测选择，回退顺序写死在实现里
+//  （见 A2JITEnabler.m 的 `a2jit_pick_enabler` 注释）。★不做「没人写的死配置」★：
+//  这个键的写入点只有设置页那一处，读点只有 `a2jit_preferred_source()`。
 //
 
 #import <Foundation/Foundation.h>

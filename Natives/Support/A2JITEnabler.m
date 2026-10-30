@@ -333,6 +333,121 @@ static BOOL a2jit_trollstore_ready(NSString *_Nullable *_Nullable whyOut) {
     return NO;
 }
 
+#pragma mark - ①''' JIT 启动器偏好（用户可选来源：a2jit.preferredSource）
+
+//  ★为什么要有这一档★
+//  真机上「拿到 JIT」有六条互不相干的路（调试器 attach / 越狱环境的 ldid 签名 / TrollStore /
+//  StikDebug / SideStore / 上面那套自动探测）。自动探测的取舍对多数人够用，但对「我明明是开着
+//  调试器就能玩，它偏把我踢去 StikDebug」这类问题，用户需要一个能**钉死来源**的开关：
+//  选中哪一条就只用哪一条；该来源不可用 ⇒ 直接失败并说明原因。
+//  ★绝不静默回退★：静默回退正是「用户无法判断到底是谁在给我 JIT」的根源。
+//
+//  ★读取点唯一★：NSUserDefaults 的读取只在本文件的 `a2jit_preferred_source()` 一处。
+//  调用点（三处，全是判定 / 拉起入口）：
+//    ① `a2jit_ready_now()`           —— 判据按选中的来源分流（不成立即 NO + 原因）；
+//    ② `a2jit_pick_enabler()`        —— 使能器只在选中的来源里挑（挑不到就 None + 原因）；
+//    ③ `a2jit_start_preferred_run()` —— 非 auto 的流程守卫（不让安装源分支把来源抢走）。
+//
+//  ★六个取值是跨层契约★（NSUserDefaults 里存的就是它们，逐字相同）：
+//    `auto` `debugger` `jailbreak` `trollstore` `stikdebug` `sidestore`
+//  写入点 = `Air2/UI/Screens/Settings/A2JITSettings.m` 的「JIT 启动器」行；
+//  改这六个串必须同时改那里（那边有对应的四语文案表项）。
+
+typedef NS_ENUM(NSInteger, A2JITPreferredSource) {
+    A2JITPreferredSourceAuto       = 0,  ///< 自动（★默认★ = 本模块既有行为，一行未改）
+    A2JITPreferredSourceDebugger   = 1,  ///< 只用调试器 attach（lldb / Xcode）
+    A2JITPreferredSourceJailbreak  = 2,  ///< 只用越狱环境（/var/jb、/var/lib/dpkg、JB_ROOT_PATH）
+    A2JITPreferredSourceTrollStore = 3,  ///< 只用 TrollStore（apple-magnifier://）
+    A2JITPreferredSourceStikDebug  = 4,  ///< 只用 StikDebug（stikdebug://）
+    A2JITPreferredSourceSideStore  = 5,  ///< 只用 SideStore（sidestore://；不可用时才用 stikjit://）
+};
+
+/// ★键名唯一定义处★（六个取值见上面那段契约说明）。
+static NSString *const kA2JITPreferredSourceKey = @"a2jit.preferredSource";
+
+static NSString *a2jit_preferred_source_name(A2JITPreferredSource src) {
+    switch (src) {
+        case A2JITPreferredSourceDebugger:   return @"debugger";
+        case A2JITPreferredSourceJailbreak:  return @"jailbreak";
+        case A2JITPreferredSourceTrollStore: return @"trollstore";
+        case A2JITPreferredSourceStikDebug:  return @"stikdebug";
+        case A2JITPreferredSourceSideStore:  return @"sidestore";
+        case A2JITPreferredSourceAuto:       break;
+    }
+    return @"auto";
+}
+
+/// ★唯一读取点★：缺键 / 空串 ⇒ auto（默认）；六个契约值以外 ⇒ 也按 auto，但如实记一行
+/// （不把「用户写了个错值」悄悄当成默认值 —— 那是又一处「到底是谁在给我 JIT」的黑箱）。
+/// ★不做缓存★：设置页改完即写盘，下次判定就该按新值（本进程内改也能立刻生效）。
+static A2JITPreferredSource a2jit_preferred_source(void) {
+    NSString *raw = [NSUserDefaults.standardUserDefaults stringForKey:kA2JITPreferredSourceKey];
+    if (raw.length == 0) return A2JITPreferredSourceAuto;   // 缺省当 auto
+    if ([raw isEqualToString:@"debugger"])   return A2JITPreferredSourceDebugger;
+    if ([raw isEqualToString:@"jailbreak"])  return A2JITPreferredSourceJailbreak;
+    if ([raw isEqualToString:@"trollstore"]) return A2JITPreferredSourceTrollStore;
+    if ([raw isEqualToString:@"stikdebug"])  return A2JITPreferredSourceStikDebug;
+    if ([raw isEqualToString:@"sidestore"])  return A2JITPreferredSourceSideStore;
+    if ([raw isEqualToString:@"auto"])       return A2JITPreferredSourceAuto;
+    static NSString *sLoggedUnknown = nil;
+    if (![raw isEqualToString:sLoggedUnknown]) {
+        sLoggedUnknown = raw;
+        a2_log_criterion(@"[JIT-SRC] preferred=%@ ⇒ 未知取值，按 auto 处理（键 %@；合法值见 A2JITSettings）",
+                         raw, kA2JITPreferredSourceKey);
+    }
+    return A2JITPreferredSourceAuto;
+}
+
+/// 每次决策一行：`[JIT-SRC] preferred=<值> ⇒ <命中/失败原因>`。
+/// ★同一结论只打一次★：判据在等待期 0.5s 一轮，逐轮重打只会把日志刷成噪音
+/// （与 a2jit_direct_source_reason 的「只缓存日志」同一处理）。
+static void a2jit_log_decision(A2JITPreferredSource src, BOOL hit, NSString *_Nullable detail) {
+    NSString *line = [NSString stringWithFormat:@"[JIT-SRC] preferred=%@ ⇒ %@：%@",
+                      a2jit_preferred_source_name(src), hit ? @"命中" : @"失败", detail ?: @"—"];
+    static NSString *sLastLine = nil;
+    if ([line isEqualToString:sLastLine]) return;
+    sLastLine = line;
+    a2_log_criterion(@"%@", line);
+}
+
+/// 非 auto：本进程现在能不能建 VM —— ★只按选中的那一条来源判★（不做任何跨来源补位）。
+/// 判据本身一律复用既有实现（不新造第二套）：调试器 / 越狱 = ①'' 那两条；TrollStore =
+/// `a2jit_trollstore_ready`；StikDebug / SideStore = 老 Air 闰门 `A2LegacyJITGateReadyNow`
+/// （它们拿到 JIT 的唯一形式就是「调试器代映射 + brk #0x69 被服务」）。
+static BOOL a2jit_preferred_ready_now(A2JITPreferredSource src, NSString *_Nullable *_Nullable whyOut) {
+    switch (src) {
+        case A2JITPreferredSourceDebugger:
+            if (a2jit_src_debugger_attached()) {
+                if (whyOut) *whyOut = [NSString stringWithFormat:
+                    @"调试器在岗（P_TRACED / ppid=debugserver，ppid=%d）⇒ 直接认定 JIT 可用", getppid()];
+                return YES;
+            }
+            if (whyOut) *whyOut = @"需先用调试器附加（lldb attach / Xcode 调试）：本进程当前没有被 trace";
+            return NO;
+
+        case A2JITPreferredSourceJailbreak:
+            if (a2jit_src_jailbreak()) {
+                if (whyOut) *whyOut = @"越狱环境（/var/jb | /var/lib/dpkg | JB_ROOT_PATH）⇒ 直接认定 JIT 可用";
+                return YES;
+            }
+            if (whyOut) *whyOut = @"未检测到越狱环境（/var/jb、/var/lib/dpkg、JB_ROOT_PATH 都不存在）";
+            return NO;
+
+        case A2JITPreferredSourceTrollStore:
+            return a2jit_trollstore_ready(whyOut);
+
+        case A2JITPreferredSourceStikDebug:
+        case A2JITPreferredSourceSideStore:
+            return A2LegacyJITGateReadyNow(whyOut);
+
+        case A2JITPreferredSourceAuto:
+            break;
+    }
+    // auto 不该走到这里（调用方已分流）；真走到就如实返回 NO，不假装就绪。
+    if (whyOut) *whyOut = @"auto 不走「单一来源」判定";
+    return NO;
+}
+
 #pragma mark - ① 判据
 
 /// 本进程是否「被调试器 / 使能器拉起」（getppid() ≠ 1）。
@@ -376,6 +491,17 @@ static void a2jit_log_region(const char *tag) {
 ///     也算应答 —— 它正是老 Air 要求的值）。
 /// why = 可读原因（凭哪一条放行 / 为什么不成），整段文案由 A2LegacyJITGate 给出。
 static BOOL a2jit_ready_now(NSString *_Nullable *_Nullable why) {
+    // ★JIT 启动器偏好（`a2jit.preferredSource`）★：选中非 auto ⇒ ★只按那一条来源判★
+    //   （不成立的来源就是「本次没拿到 JIT」，由调用方出失败页并说明缺什么）；★绝不回退★。
+    //   auto ⇒ 下面既有的三段顺序一字未改（这是默认行为，任何改动都是回归风险）。
+    A2JITPreferredSource preferred = a2jit_preferred_source();
+    if (preferred != A2JITPreferredSourceAuto) {
+        NSString *preferredWhy = nil;
+        BOOL preferredOK = a2jit_preferred_ready_now(preferred, &preferredWhy);
+        a2jit_log_decision(preferred, preferredOK, preferredWhy);
+        if (why) *why = preferredWhy;
+        return preferredOK;
+    }
     // ★新来源优先（[JIT-SRC]）★：调试器在岗 / 越狱环境 ⇒ 直接认定可用，
     //   ★不拉任何外部使能器★（`ensureJITThen:` 的「① 判据再确认」就走这里 ⇒ 立刻
     //   回调 YES 交回启动链，既不弹等待窗也不 openURL）。
@@ -451,7 +577,65 @@ static NSURL *a2jit_url_stikjit(void) {
 ///   3. sidestore —— SideJIT 老形式，同样不重拉（iOS 17.0–17.3 唯一可用的一条）；
 ///   4. stikjit —— **会重拉 App**，用户会被踢出启动流程，故放最后。
 /// 全部 canOpenURL=NO ⇒ None：不白等 120s，直接给可读原因（老 Air 的 MissingTool 同款处理）。
-static A2JITEnablerTool a2jit_pick_enabler(NSURL *_Nullable *_Nullable urlOut) {
+///
+/// ★JIT 启动器偏好（`a2jit.preferredSource`）★：用户钉死来源时★只在选中的那条里挑★，
+/// 挑不到就 None + `whyOut`（★不回退到别的来源★）；auto 走下面的既有数组顺序（一字未改）。
+static A2JITEnablerTool a2jit_pick_enabler(NSURL *_Nullable *_Nullable urlOut,
+                                          NSString *_Nullable *_Nullable whyOut) {
+    if (urlOut) *urlOut = nil;
+    if (whyOut) *whyOut = nil;
+
+    A2JITPreferredSource preferred = a2jit_preferred_source();
+    if (preferred != A2JITPreferredSourceAuto) {
+        // 该来源下允许的候选（最多两条：sidestore 档的 sidestore:// + stikjit:// 属同一家）。
+        NSURL *candidates[2] = { nil, nil };
+        A2JITEnablerTool tools[2] = { A2JITEnablerToolNone, A2JITEnablerToolNone };
+        switch (preferred) {
+            case A2JITPreferredSourceTrollStore:
+                candidates[0] = a2jit_url_trollstore();
+                tools[0] = A2JITEnablerToolTrollStore;
+                break;
+            case A2JITPreferredSourceStikDebug:
+                candidates[0] = a2jit_url_stikdebug();
+                tools[0] = A2JITEnablerToolStikDebug;
+                break;
+            case A2JITPreferredSourceSideStore:
+                candidates[0] = a2jit_url_sidestore();
+                tools[0] = A2JITEnablerToolSideStore;
+                candidates[1] = a2jit_url_stikjit();
+                tools[1] = A2JITEnablerToolStikJIT;
+                break;
+            case A2JITPreferredSourceDebugger:
+            case A2JITPreferredSourceJailbreak:
+            case A2JITPreferredSourceAuto:
+                break;   // 调试器 / 越狱没有「可拉起的使能器」（JIT 不是外部工具给的）
+        }
+        for (size_t i = 0; i < sizeof(tools) / sizeof(tools[0]); i++) {
+            NSURL *url = candidates[i];
+            if (url == nil || tools[i] == A2JITEnablerToolNone) continue;
+            if (a2jit_can_open(url) == 1) {
+                if (urlOut) *urlOut = url;
+                return tools[i];
+            }
+        }
+        if (whyOut) {
+            if (preferred == A2JITPreferredSourceDebugger || preferred == A2JITPreferredSourceJailbreak) {
+                *whyOut = [NSString stringWithFormat:
+                    @"所选 JIT 启动器＝%@ 不靠外部工具 ⇒ %@",
+                    a2jit_preferred_source_name(preferred),
+                    preferred == A2JITPreferredSourceDebugger
+                        ? @"需先用调试器附加（本进程未被 trace）"
+                        : @"未检测到越狱环境"];
+            } else {
+                *whyOut = [NSString stringWithFormat:
+                    @"所选 JIT 启动器＝%@ 在本机打不开（未安装，或它的 URL scheme 未被处理）；"
+                    @"★按所选来源如实失败，不回退到其它工具★",
+                    a2jit_preferred_source_name(preferred)];
+            }
+        }
+        return A2JITEnablerToolNone;
+    }
+
     NSURL *(*builders[])(void) = { a2jit_url_stikdebug, a2jit_url_trollstore,
                                    a2jit_url_sidestore, a2jit_url_stikjit };
     A2JITEnablerTool tools[] = { A2JITEnablerToolStikDebug, A2JITEnablerToolTrollStore,
@@ -514,6 +698,65 @@ static A2JITEnablerRun *gA2JITRun = nil;
 static BOOL gA2JITJumpedThisProcess = NO;
 /// 最近一次失败原因（给 lastFailureReason 读）。
 static NSString *gA2JITLastFailure = nil;
+
+#pragma mark - ②' 非 auto 的申请通道（钉死来源，不回退）
+
+/// ★`ensureJITThen:` 的偏好分岔★：非 auto ⇒ 只走选中的那一条来源。
+/// 由 `ensureJITThen:` 在「判据再确认」失败之后、安装源分支之前调用。
+///
+/// 返回值：YES = 已接管本次申请（要么已用可读原因收尾，要么已起等待并 return）；
+///         NO  = 用户选的是 auto ⇒ 调用方继续跑既有流程（★auto 一字未改★）。
+///
+/// 语义（★钉死来源 = 不回退★）：
+///   · debugger / jailbreak：这两种来源没有可拉起的使能器 ⇒ 判据不成即失败，原因里直接写
+///     「需先用调试器附加」/「未检测到越狱环境」（★不落到 stikdebug 去白等 120s★）；
+///   · trollstore / stikdebug / sidestore：只拉起该来源的 URL（sidestore 档允许 stikjit，
+///     两者同属 SideStore 那一家）；打不开 ⇒ 直接失败并点名（★不回退到 stikdebug★）。
+static BOOL a2jit_start_preferred_run(A2JITEnablerRun *run,
+                                      BOOL alreadyJumped,
+                                      NSString *_Nullable judgeWhy) {
+    A2JITPreferredSource preferred = a2jit_preferred_source();
+    if (preferred == A2JITPreferredSourceAuto) return NO;
+
+    NSString *name = a2jit_preferred_source_name(preferred);
+    NSString *why = judgeWhy.length > 0 ? judgeWhy : @"判据未通过";
+
+    // ① 调试器 / 越狱：判据不成立就没有下一步可做（闸门只认「调试器真的在岗」）。
+    //    ★决策行已在 a2jit_ready_now 里打过（同一结论去重）★，这里只负责收尾。
+    if (preferred == A2JITPreferredSourceDebugger || preferred == A2JITPreferredSourceJailbreak) {
+        [run finishWithOK:NO reason:[NSString stringWithFormat:@"所选 JIT 启动器＝%@：%@", name, why]];
+        return YES;
+    }
+
+    // ② 同一进程只请求一次（铁律②）：已请求过 ⇒ 只短等，不再拉起第二个使能器。
+    if (alreadyJumped) {
+        a2_log_criterion(@"[JIT-SRC] preferred=%@ ⇒ 本进程已请求过一次（ppid=%d）⇒ 不再拉起，"
+                         @"只短等 %.0fs；%@", name, getppid(), kA2JITRepeatWaitBudget, why);
+        [run startWaitingWithBudget:kA2JITRepeatWaitBudget tool:A2JITEnablerToolNone enablerURL:nil];
+        return YES;
+    }
+
+    // ③ 只在选中的来源里挑 URL（挑不到 ⇒ None + 原因，不回退）。
+    NSURL *url = nil;
+    NSString *pickWhy = nil;
+    A2JITEnablerTool tool = a2jit_pick_enabler(&url, &pickWhy);
+    if (tool == A2JITEnablerToolNone) {
+        NSString *reason = pickWhy.length > 0 ? pickWhy
+            : [NSString stringWithFormat:@"所选 JIT 启动器＝%@ 不可用", name];
+        a2jit_log_decision(preferred, NO, reason);
+        [run finishWithOK:NO reason:reason];
+        return YES;
+    }
+
+    // ④ 预算按来源给：巨魔的 JIT 是安装时授予的（秒级），其余要用户去使能器里点（120s）。
+    NSTimeInterval budget = (tool == A2JITEnablerToolTrollStore) ? kA2JITTrollStoreWaitBudget
+                                                                 : kA2JITWaitBudget;
+    a2jit_log_decision(preferred, YES,
+                       [NSString stringWithFormat:@"拉起 %@：%@", a2jit_tool_name(tool), url.absoluteString]);
+    gA2JITJumpedThisProcess = YES;
+    [run startWaitingWithBudget:budget tool:tool enablerURL:url];
+    return YES;
+}
 
 @implementation A2JITEnablerRun
 
@@ -977,6 +1220,17 @@ static NSString *gA2JITLastFailure = nil;
     NSTimeInterval budget = alreadyJumped ? kA2JITRepeatWaitBudget : kA2JITWaitBudget;
 
     // ═════════════════════════════════════════════════════════════════════════
+    // ★JIT 启动器偏好（`a2jit.preferredSource`）★ —— 用户钉死来源时只走那一条
+    // -------------------------------------------------------------------------
+    //  放在「安装源分支」之前：用户既然点名了来源，就不许安装源探测（TrollStore / SideStore）
+    //  把来源改掉；该来源不可用 ⇒ 直接失败并说明原因（★不静默回退到 stikdebug★）。
+    //  auto ⇒ 返回 NO，下面的既有流程一字未改（默认行为零风险）。
+    // ═════════════════════════════════════════════════════════════════════════
+    if (a2jit_start_preferred_run(run, alreadyJumped, why)) {
+        return;
+    }
+
+    // ═════════════════════════════════════════════════════════════════════════
     // ★安装源分支（[A2-JIT-SRC]）★ —— TrollStore 机只走 TrollStore 自己的 JIT
     // -------------------------------------------------------------------------
     //  顺序照老 Air 的 invokeAfterJITEnabled:（DownloadViewController.m L3891–L4100）：
@@ -1035,7 +1289,8 @@ static NSString *gA2JITLastFailure = nil;
     }
 
     NSURL *url = nil;
-    A2JITEnablerTool tool = a2jit_pick_enabler(&url);
+    // ★走的是 auto★（非 auto 已在上面 a2jit_start_preferred_run 里接管）⇒ 不需要来源原因。
+    A2JITEnablerTool tool = a2jit_pick_enabler(&url, NULL);
     if (tool == A2JITEnablerToolNone) {
         // 一个都打不开：不白等 120s（老 Air 的 MissingTool 分支同款），立刻给可读原因。
         [run finishWithOK:NO
