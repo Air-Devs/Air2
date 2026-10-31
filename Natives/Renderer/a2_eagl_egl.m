@@ -33,8 +33,10 @@
 //    `[A2-EAGL] selftest PASS center=0x…`（失败则该行换成 `step=<名> rc=<码>`）
 //
 //  ★石山自检（每个新增符号的调用点）★
-//    · `a2_eagl_egl_engage`      ← 本文件 `a2_eagl_egl_selftest()`；P2 宿主选择（待接）
-//    · `a2_eagl_egl_is_engaged`  ← 同上（自检开头的幂等判断日志）
+//    · `a2_eagl_egl_engage`      ← 本文件 `a2_eagl_egl_selftest()`；`a2_renderer_load_named()`（选到宿主 EGL 后端时）
+//    · `a2_eagl_egl_is_engaged`  ← 同上（自检开头的幂等判断日志）+ `a2_gl_bridge_attach` 的 MG 判据行
+//    · `a2_fe_engage_allowed`    ← `a2_fe_gles_open`（dlopen 闸门）/ `a2_fe_eagl_class`（类查询闸门）
+//    · `a2_fe_eagl_class`        ← 上面六个 `egl*`/自检里原本直接 `NSClassFromString(@"EAGLContext")` 的地方
 //    · `a2_eagl_egl_selftest`    ← Air2/UI/Screens/Settings/A2DiagnosticsSettings.m 的
 //                                  「假 EGL 自检」行（onTap）
 //    · 23 个 `egl*`              ← 自检全流程（每个都至少被调用一次）+ 渲染器/P2 直接使用
@@ -131,6 +133,30 @@ static BOOL        gGlesOpenTried;               ///< dlopen 只尝试一次（�
 static EGLenum     gBoundAPI = EGL_OPENGL_ES_API;///< eglBindAPI 记住的客户端 API
 static NSUInteger  gSwapCount;                   ///< eglSwapBuffers 总帧数（判据行用）
 static int         gProcMissLogged;              ///< eglGetProcAddress 未命中日志条数上限
+
+// ---------------------------------------------------------------------------
+//  ★懒加载闸门（真机 iOS 16.7 的修因）★
+// ---------------------------------------------------------------------------
+//  只允许在 `a2_eagl_egl_engage()` 之后才碰 OpenGLES 镜像与 `EAGLContext` 类：
+//    · `dlopen("…/OpenGLES.framework/OpenGLES")` 会把**系统 GLES 镜像**带进进程。MG（MobileGlues）
+//      随后把「flat namespace 里抢到 `gl*` 的那个镜像」当成它的 backend library，而系统 GLES
+//      没有 EGL ⇒ MG 自报 `EGL entry point eglGetDisplay is not available in the backend library`
+//      并初始化失败（真机 lastlog：`glTexImage2D flat=… 归属=系统GLES（MG=…）`）；
+//    · 未 engage 时本层对外的 `egl*` 一律**让路**给真 EGL（见头文件「未接管」一节）⇒ 本层一个
+//      GL 入口都用不上，提前把镜像拉进来只有代价、没有任何收益。
+//  调用点：`a2_fe_gles_open`（dlopen 闸门）与 `a2_fe_eagl_class`（类查询闸门）。
+// ---------------------------------------------------------------------------
+static BOOL a2_fe_engage_allowed(void) {
+    return gEngaged;
+}
+
+/// 取 `EAGLContext` 类（★未 engage ⇒ Nil★，绝不因一次类查询把 OpenGLES 带进进程）。
+/// 调用点：`a2_fe_gles_ready` / `eglTerminate` / `eglCreateContext` / `eglDestroyContext` /
+///         `eglMakeCurrent` / `eglReleaseThread` / `a2_eagl_egl_selftest`。
+static Class a2_fe_eagl_class(void) {
+    if (!a2_fe_engage_allowed()) return Nil;
+    return NSClassFromString(@"EAGLContext");   // ★全文件唯一一处★（其余入口一律走本函数）
+}
 
 static __thread EGLint tlsError = EGL_SUCCESS;   ///< EGL 错误是**每线程**的（规范 §2.2）
 static __thread void  *tlsCurrentContext;        ///< 本线程 current context（raw：ARC 不允许
@@ -354,6 +380,9 @@ static id a2_fe_drawable_layer_new(void *hostOrView, EGLint wantW, EGLint wantH,
 //  GL 入口（全部经 OpenGLES 镜像句柄，★不进进程 flat namespace★）
 // ===========================================================================
 static BOOL a2_fe_gles_open(void) {
+    // ★闸门★：未 engage ⇒ 绝不 dlopen 系统 OpenGLES（见 a2_fe_engage_allowed 的注释）。
+    //   不置 gGlesOpenTried：engage 之后首次取 GL 入口时才真的加载。
+    if (!a2_fe_engage_allowed()) return NO;
     if (gGlesOpenTried) return gGlesImage != NULL;
     gGlesOpenTried = YES;
 
@@ -365,6 +394,7 @@ static BOOL a2_fe_gles_open(void) {
                  dlerror() ?: "unknown");
         return NO;
     }
+    a2_log_f(@"[A2-EAGL] OpenGLES 镜像按需加载完成（engage 后首次取 GL 入口；未 engage 时本层从不加载它）");
     return YES;
 }
 
@@ -382,7 +412,7 @@ static void *a2_fe_gl_symbol(const char *name) {
 /// GLES 是否可用（自检第一步的判据：镜像 + EAGLContext 类都得在）。
 /// 抽 6 个「后面一定会用」的入口验证镜像真是 GLES —— 缺一个就把结论如实打出来，不硬撞。
 static BOOL a2_fe_gles_ready(void) {
-    if (NSClassFromString(@"EAGLContext") == nil) {
+    if (a2_fe_eagl_class() == nil) {
         a2_log_f(@"[A2-EAGL] 缺 EAGLContext 类（OpenGLES.framework 未加载）");
         return NO;
     }
@@ -731,7 +761,10 @@ void a2_eagl_egl_engage(void) {
     a2_fe_ensure_state();
     if (gEngaged) return;
     gEngaged = YES;
-    a2_log_criterion(@"[A2-EAGL] engage：本层接管 egl*（此前一律让路给进程内真实 EGL）");
+    // ★engage 之后才允许加载 OpenGLES★（见 a2_fe_engage_allowed 的注释）：这里不主动 dlopen，
+    //   真正的加载发生在 engage 后第一次取 GL 入口/类的时候（按需、且只一次）。
+    a2_log_criterion(@"[A2-EAGL] engage：本层接管 egl*（此前一律让路给进程内真实 EGL）；"
+                     @"此后才按需加载 OpenGLES（engage 之前本层不加载系统 OpenGLES）");
 }
 
 EGLBoolean a2_eagl_egl_is_engaged(void) {
@@ -784,7 +817,7 @@ EGLBoolean eglTerminate(EGLDisplay dpy) {
     }
     for (A2FakeEglContext *c in [gContexts copy]) {
         if (tlsCurrentContext == (__bridge void *)c) {
-            id cls = NSClassFromString(@"EAGLContext");
+            id cls = a2_fe_eagl_class();
             [(id<A2EAGLContextClassFace>)cls setCurrentContext:nil];
             tlsCurrentContext = NULL;
             tlsCurrentDraw = tlsCurrentRead = NULL;
@@ -1219,7 +1252,7 @@ EGLContext eglCreateContext(EGLDisplay dpy, EGLConfig config, EGLContext share_c
         return EGL_NO_CONTEXT;
     }
 
-    Class cls = NSClassFromString(@"EAGLContext");
+    Class cls = a2_fe_eagl_class();
     if (cls == nil) {
         a2_fe_set_error(EGL_BAD_ALLOC);
         a2_log_f(@"[A2-FAKEEGL] eglCreateContext ★失败★：EAGLContext 类不存在");
@@ -1257,7 +1290,7 @@ EGLBoolean eglDestroyContext(EGLDisplay dpy, EGLContext ctx) {
         return EGL_FALSE;
     }
     if (tlsCurrentContext == (__bridge void *)c) {
-        id cls = NSClassFromString(@"EAGLContext");
+        id cls = a2_fe_eagl_class();
         [(id<A2EAGLContextClassFace>)cls setCurrentContext:nil];
         tlsCurrentContext = NULL;
         tlsCurrentDraw = tlsCurrentRead = NULL;
@@ -1278,7 +1311,7 @@ EGLBoolean eglMakeCurrent(EGLDisplay dpy, EGLSurface draw, EGLSurface read, EGLC
         return EGL_FALSE;
     }
 
-    id cls = NSClassFromString(@"EAGLContext");
+    id cls = a2_fe_eagl_class();
 
     // ① 解绑（ctx == EGL_NO_CONTEXT）：draw/read 也必须为空。
     if (ctx == EGL_NO_CONTEXT) {
@@ -1470,7 +1503,7 @@ EGLBoolean eglReleaseThread(void) {
     A2_FE_IDLE_OR(eglReleaseThread, "eglReleaseThread", (), EGL_FALSE);
     // 规范：释放本线程的 EGL 资源（本层即「把 current 解掉」），不改进程级 display/config。
     if (tlsCurrentContext != NULL) {
-        id cls = NSClassFromString(@"EAGLContext");
+        id cls = a2_fe_eagl_class();
         [(id<A2EAGLContextClassFace>)cls setCurrentContext:nil];
     }
     tlsCurrentContext = tlsCurrentDraw = tlsCurrentRead = NULL;
@@ -1523,7 +1556,7 @@ int a2_eagl_egl_selftest(void) {
     }
 
     // 保存调用线程原来的 EAGL 上下文（自检结束要还回去，不能留下副作用）。
-    Class ctxClass = NSClassFromString(@"EAGLContext");
+    Class ctxClass = a2_fe_eagl_class();
     id prevCurrent = [(id<A2EAGLContextClassFace>)ctxClass currentContext];
 
     int rc = 0;

@@ -122,11 +122,71 @@ static void A2RunnerFrameCallback(void *user) {
 //  ★⑦ SDL 窗口相位：晚出现的画面窗 ⇒ 改绑 GL 桥★
 // ---------------------------------------------------------------------------
 //  26.3 的 SDL 画面窗是 MC 启动后才建的，而本链在**建 VM 之前**就取宿主表面 ⇒ 那一刻
-//  只能拿到启动器窗口。这里做一次有界等待（每秒一探、最多 6 秒）：若出现了**不同的**
-//  最顶层可见窗口，就把 GL 桥改绑到它上面（attach 本身可重入：先彻底清掉上一次）。
-//  ★只在「确实换了窗口」时动作★ —— 26.2 的 GLFW 宿主路径不会出现新窗口，零行为差异。
+//  只能拿到启动器窗口。这里做一次有界等待（每秒一探、最多 6 秒）：若出现了**不同的游戏宿主窗口**，
+//  就把 GL 桥改绑到它上面（attach 本身可重入：先彻底清掉上一次）。
+//  ★只在「游戏宿主窗口确实换了」时动作★ —— 26.2 的 GLFW 宿主路径不会出现新窗口，零行为差异。
+//
+//  ★真机 iOS 16.7 的崩因（本函数的唯一判据就是为此立的）★
+//    `[A2-COMPAT] 宿主表面取窗口=UITextEffectsWindow level=10`（键盘/文本效果辅助窗）
+//      ⇒ 旧实现拿 `a2_top_visible_window()`（按 windowLevel 取高）当「新画面窗」
+//      ⇒ 在 GCD 回调里对系统辅助窗再跑一次 `a2_gl_bridge_attach` ⇒ SIGSEGV。
+//    ⇒ 变更判定改成「**只比较游戏宿主窗口**」：`A2RunnerIsGameHostWindow()` 认可的两个来源
+//       ① GLFW 宿主视图所在的窗口（`a2_glfw_window_game_view()` 的 `view.window`，最强判据）；
+//       ② 没有 GLFW 宿主视图时（26.3 SDL 路径 / 视图还没建出）只认 keyWindow。
+//       系统辅助窗（`UITextEffectsWindow` / `UIRemoteKeyboardWindow` / `UIKeyboardWindow`）
+//       与「windowLevel > 0 但不是游戏窗口」的窗口**一律不算变更**，一帧都不碰 GL。
+//  ★失败不破坏现状★：任何一步失败 / attach 返回非 0 ⇒ 只记一行，**保留旧表面继续用**
+//   （本函数自己不销毁任何表面；attach 的失败路径见 [A2-GLBRIDGE] 的 `★attach 中止★` 行）。
 //  ★帧回调计数器必须是静态的★：本函数在 launchWithPlanPath 返回之后才可能跑，
 //  栈上变量的地址会悬垂。
+
+/// 系统辅助窗口（键盘 / 输入法 / 文本效果）—— ★永远不是游戏宿主窗口★。
+/// 判据用**类名**（这几个类都是私有类，没有公开 API 可判）；iOS 16 真机上键盘弹出即出现。
+static BOOL A2RunnerIsSystemAuxiliaryWindow(UIWindow *w) {
+    if (w == nil) return NO;
+    NSString *cls = NSStringFromClass(w.class);
+    return [cls isEqualToString:@"UITextEffectsWindow"] ||
+           [cls isEqualToString:@"UIRemoteKeyboardWindow"] ||
+           [cls isEqualToString:@"UIKeyboardWindow"];
+}
+
+/// 被忽略过的辅助窗类名（★每种只记一行日志★：相位等待每秒一探，否则会刷屏）。
+static NSMutableSet<NSString *> *gA2RunnerIgnoredAuxWindowClasses = nil;
+
+/// 该窗口是不是「游戏宿主窗口」（★相位改绑的唯一判据★；见上面 ①② 两条来源）。
+static BOOL A2RunnerIsGameHostWindow(UIWindow *w) {
+    if (w == nil) return NO;
+    if (A2RunnerIsSystemAuxiliaryWindow(w)) return NO;      // 键盘 / 文本效果：连判据都不参与
+
+    // ① ★最强判据：GLFW 宿主视图所在窗口★（游戏画面真的挂在这个窗口上）
+    void *gameViewRaw = a2_glfw_window_game_view();
+    if (gameViewRaw != NULL) {
+        UIView *gameView = (__bridge UIView *)gameViewRaw;
+        UIWindow *gameWindow = gameView.window;
+        if (gameWindow != nil) return (gameWindow == w);
+    }
+
+    // ② 没有 GLFW 宿主视图（26.3 SDL 路径 / 视图还没建出来）⇒ 只认 keyWindow。
+    //    ★这里不按 windowLevel 取高★：MC 的画面窗本身就由 a2_glfw_window.m 复用成 keyWindow
+    //    （层级抬到 StatusBar+1），而层级更高的一律是系统辅助窗 —— 那正是旧口径选错的那一类。
+    //    ★已知取舍★：若某个 MC 版本的画面窗既不是 keyWindow、也没有 GLFW 宿主视图，本判据会让
+    //    相位改绑不触发（保持初始表面）。这是**故意**的：宁可少改绑，也不拿辅助窗去建面
+    //    （真机 iOS 16.7 的 SIGSEGV 就是后者）。真出现这种版本，修法是让该路径也走 GLFW 宿主视图。
+    return w.isKeyWindow;
+}
+
+/// 记一行「这个窗口不是游戏宿主窗口 ⇒ 不改绑」（每种类名只记一次）。
+static void A2RunnerLogIgnoredRebindTarget(UIWindow *w, UIWindow *attachedWindow) {
+    if (w == nil) return;
+    NSString *cls = NSStringFromClass(w.class);
+    if (gA2RunnerIgnoredAuxWindowClasses == nil) gA2RunnerIgnoredAuxWindowClasses = [NSMutableSet set];
+    if ([gA2RunnerIgnoredAuxWindowClasses containsObject:cls]) return;
+    [gA2RunnerIgnoredAuxWindowClasses addObject:cls];
+    [A2Log criterion:@"[A2-COMPAT] ⚠️ 相位改绑跳过：%@ level=%.0f 不是游戏宿主窗口"
+     @"（系统辅助窗 / 非 keyWindow）⇒ 不改绑，当前表面保持 %@",
+     cls, (double)w.windowLevel, NSStringFromClass(attachedWindow.class)];
+}
+
 static void A2RunnerRebindSurfaceIfTopWindowChanged(UIWindow *attachedWindow,
                                                     NSString *rendererDylib,
                                                     NSString *frameworksPath,
@@ -135,16 +195,20 @@ static void A2RunnerRebindSurfaceIfTopWindowChanged(UIWindow *attachedWindow,
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
         UIWindow *top = a2_top_visible_window();
-        if (top == nil || top == attachedWindow) {
+        // ★变更判定：只比游戏宿主窗口★（键盘/文本效果等辅助窗在这里就被挡掉，绝不进 attach）
+        if (top == nil || top == attachedWindow || !A2RunnerIsGameHostWindow(top)) {
+            if (top != nil && top != attachedWindow) A2RunnerLogIgnoredRebindTarget(top, attachedWindow);
             A2RunnerRebindSurfaceIfTopWindowChanged(attachedWindow, rendererDylib, frameworksPath,
                                                     attemptsLeft - 1);
             return;
         }
-        // ★改绑目标 = 这一轮探到的那个窗口本身（不是重新按主窗口口径挑一遍）★：
-        //   晚出现的画面窗（26.3 SDL）本来就不是 keyWindow，按主窗口口径重挑会挑回原窗口，
+        // ★改绑目标 = 这一轮探到的那个游戏宿主窗口本身（不是重新按主窗口口径挑一遍）★：
+        //   晚出现的画面窗（26.3 SDL）本来就不是「主窗口口径」下的那一个，按主窗口重挑会挑回原窗口，
         //   这条相位改绑就白等了。主窗口口径只管初始表面。
         A2GlfwSurface s = A2RunnerSurfaceForWindow(top);
-        if (s.nativeWindow == NULL) {
+        if (s.nativeWindow == NULL || s.nativeView == NULL) {
+            [A2Log log:@"[A2-COMPAT] ⚠️ 相位改绑跳过：%@ 给不出宿主视图/句柄 ⇒ 保留旧表面，下一轮再试",
+             NSStringFromClass(top.class)];
             A2RunnerRebindSurfaceIfTopWindowChanged(attachedWindow, rendererDylib, frameworksPath,
                                                     attemptsLeft - 1);
             return;
@@ -160,10 +224,17 @@ static void A2RunnerRebindSurfaceIfTopWindowChanged(UIWindow *attachedWindow,
          NSStringFromClass(attachedWindow.class), NSStringFromClass(top.class),
          (double)top.windowLevel, rc];
         if (rc != 0) {
-            // 改绑失败不推翻已经在跑的启动（旧绑定仍在）⇒ 如实记一行，继续等下一次
+            // ★失败不推翻已在跑的启动★：本函数不销毁任何表面，只如实记一行并留待下一轮；
+            //   「为什么没建成」看紧邻的 [A2-GLBRIDGE] 阻断/中止行（缺库？缺 egl 入口？）。
+            [A2Log log:@"[A2-COMPAT] ⚠️ 相位改绑失败（rc=%d）⇒ 保留旧表面继续用，不释放、不阻断启动；"
+             @"原因见上一行 [A2-GLBRIDGE]", rc];
             A2RunnerRebindSurfaceIfTopWindowChanged(attachedWindow, rendererDylib, frameworksPath,
                                                     attemptsLeft - 1);
+            return;
         }
+        // 成功 ⇒ 之后以新窗口为基准继续等下一次相位变化（不重复拿旧窗口比较）
+        A2RunnerRebindSurfaceIfTopWindowChanged(top, rendererDylib, frameworksPath,
+                                                attemptsLeft - 1);
     });
 }
 

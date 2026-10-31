@@ -242,7 +242,14 @@ typedef struct {
 // ---------------------------------------------------------------------------
 
 /// 让本层**接管**进程里的 EGL 名字（此后 eglXxx 走本层实现，不再让路给真 EGL）。
-/// 幂等。调用点：`a2_eagl_egl_selftest()` 开头（自检即接管）、P2 的宿主选择。
+/// 幂等。调用点：`a2_eagl_egl_selftest()` 开头（自检即接管）、P2 的宿主选择
+/// （`Natives/Renderer/a2_renderer.m` 的 `a2_renderer_load_named`）。
+///
+/// ★懒加载契约（真机 iOS 16.7 的判据）★：本层**只有在本函数被调用之后**才允许加载
+/// `OpenGLES.framework`（dlopen）与查询 `EAGLContext` 类。未 engage 时本层对外一律「让路」，
+/// 不碰 GL 入口 ⇒ 提前把系统 GLES 镜像拉进进程没有任何收益，而 MG（MobileGlues）会把
+/// 「flat namespace 里抢到 `gl*` 的镜像」当成自己的 backend library（系统 GLES 没有 EGL
+/// ⇒ MG 报 `EGL entry point eglGetDisplay is not available in the backend library`）。
 void a2_eagl_egl_engage(void);
 
 /// 是否已接管（供宿主/日志判断；未接管时本层对 egl* 一律让路）。

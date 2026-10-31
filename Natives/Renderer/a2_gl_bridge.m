@@ -390,6 +390,23 @@ static void *a2_gl_bridge_egl_entry_handle(void) {
     return (a2_gl_bridge_egl_source() == A2GlBridgeEglSourceMG) ? gRendererHandle : gEglHandle;
 }
 
+/// ★EGL 入口表的完整性判据★（返回**第一个**空入口名；全有 ⇒ NULL）—— 唯一产地。
+/// 为什么必须单列：入口表只有两态（⑤ 一次填齐 / teardown 一次清空），半张表 = 上一轮中途失败；
+/// 此时任何 `egl*` 解引用都可能崩在空指针上（真机 iOS 16.7：键鼠窗触发相位改绑后再跑 attach
+/// ⇒ SIGSEGV in `a2_gl_bridge_attach`）。★判据只此一处★，两处调用点都不另写比较：
+///   ① attach 开头（重入 teardown 之前 —— 缺入口就**不 teardown**，旧表面保持可用）；
+///   ② attach ⑤ 的必需符号装配处（`missing` 成立时用它点名「缺谁、因此中止」）。
+static const char *a2_gl_bridge_egl_entry_missing(void) {
+    if (gEglGetDisplay          == NULL) return "eglGetDisplay";
+    if (gEglInitialize          == NULL) return "eglInitialize";
+    if (gEglChooseConfig        == NULL) return "eglChooseConfig";
+    if (gEglCreateContext       == NULL) return "eglCreateContext";
+    if (gEglMakeCurrent         == NULL) return "eglMakeCurrent";
+    if (gEglCreateWindowSurface == NULL) return "eglCreateWindowSurface";
+    if (gEglSwapBuffers         == NULL) return "eglSwapBuffers";
+    return NULL;
+}
+
 /// ★GL 入口的唯一取法★（调用点：attach ⑦ / ⑦b 的 8 个帧动作入口）。
 ///   顺序：① 门面的 `eglGetProcAddress`（句柄同 `a2_gl_bridge_egl_entry_handle()`）；
 ///        ② 同一个门面句柄上 `dlsym`；③ 最后才退到宿主 GLESv2（ANGLE / 系统 OpenGLES）。
@@ -475,6 +492,11 @@ static void a2_gl_bridge_log_egl_layers(void) {
         a2_log_criterion(@"[A2-GLBRIDGE] EGL 门面=MG（%d/%d 入口，句柄=%p）；"
                          @"宿主=ANGLE（libEGL/libGLESv2 已 RTLD_GLOBAL）",
                          gMgEglEntriesGot, gMgEglEntriesTotal, gRendererHandle);
+    } else if (gMgEglFirstMissing == NULL && gMgEglEntriesGot > 0) {
+        // ★MG 入口是齐的、却没被采用★：只可能是 ④a4 的归属核对把它退回去了（见该处日志）。
+        a2_log_criterion(@"[A2-GLBRIDGE] EGL 门面=ANGLE（MG 自带 EGL %d/%d 齐备，但归属不对 ⇒ 已退回 ANGLE 建面）；"
+                         @"宿主=ANGLE 同镜像",
+                         gMgEglEntriesGot, gMgEglEntriesTotal);
     } else {
         a2_log_criterion(@"[A2-GLBRIDGE] EGL 门面=ANGLE（MG 缺 %s）；"
                          @"宿主=ANGLE（libEGL/libGLESv2 已 RTLD_GLOBAL）",
@@ -631,9 +653,13 @@ static void a2_gl_bridge_reassert_angle_global(NSString *eglPath, NSString *gles
 /// ★两行归属核对 + 一次重试★（调用点：`a2_gl_bridge_attach` 的 ④a3，MG 后端**一次**）。
 /// 期望：MG 后端下 flat namespace 的 `eglGetDisplay` 与 `glTexImage2D` 都归 **ANGLE**
 ///   （ANGLE 在 MG 之前 RTLD_GLOBAL 进全局表；MG 自己的 `gl*` 只是门面，不该再抢 flat）。
-/// 归属不是 ANGLE ⇒ 重试一次（`a2_gl_bridge_reassert_angle_global`）；仍不对 ⇒ 打 `★归属仍不对★`
-/// 并**继续启动**（不阻断 —— 这只是判据，阻断与否由 MG 自己初始化成功与否说话）。
-static void a2_gl_bridge_verify_angle_ownership(NSString *eglPath, NSString *glesPath) {
+/// 归属不是 ANGLE ⇒ 重试一次（`a2_gl_bridge_reassert_angle_global`）；仍不对 ⇒ 打 `★归属仍不对★`。
+///
+/// @return 1 = 归属已对（ANGLE）；0 = 仍不对（调用方据此**退回 ANGLE 建面**，见 attach ④a4）。
+///   ★返回值只回答「MG 门面能不能用」★：归属不对时 MG 的 `egl*` 必然拿不到 backend library
+///   （真机 iOS 16.7：`归属=系统GLES` ⇒ MG 自报 `EGL entry point eglGetDisplay is not available
+///   in the backend library`），继续在它上面建面只会拿到空指针 ⇒ 崩。
+static int a2_gl_bridge_verify_angle_ownership(NSString *eglPath, NSString *glesPath) {
     // MG 自己的 `glTexImage2D` 导出（对照项，不参与判定）：flat 与它不同 ≠ 一定是问题，
     // 但把两枚地址并排放进同一行，才能一眼看出「MG 是不是把自己的导出丢了」。
     void *mgGlTexImage2D = (gRendererHandle != NULL) ? dlsym(gRendererHandle, "glTexImage2D") : NULL;
@@ -641,7 +667,7 @@ static void a2_gl_bridge_verify_angle_ownership(NSString *eglPath, NSString *gle
     A2GlBridgeSymbolOwner glOwner  = a2_gl_bridge_log_owner("glTexImage2D", mgGlTexImage2D);
     if (eglOwner == A2GlBridgeSymbolOwnerAngle && glOwner == A2GlBridgeSymbolOwnerAngle) {
         a2_log_criterion(@"[A2-GLBRIDGE] 归属核对结论：flat namespace 归 ANGLE（门面=MG / 宿主=ANGLE）");
-        return;
+        return 1;
     }
     a2_log_f(@"[A2-GLBRIDGE] 归属不对（eglGetDisplay=%s / glTexImage2D=%s）⇒ 重试一次",
              a2_gl_bridge_owner_label(eglOwner), a2_gl_bridge_owner_label(glOwner));
@@ -650,11 +676,12 @@ static void a2_gl_bridge_verify_angle_ownership(NSString *eglPath, NSString *gle
     A2GlBridgeSymbolOwner glOwnerRetry  = a2_gl_bridge_log_owner("glTexImage2D", mgGlTexImage2D);
     if (eglOwnerRetry == A2GlBridgeSymbolOwnerAngle && glOwnerRetry == A2GlBridgeSymbolOwnerAngle) {
         a2_log_criterion(@"[A2-GLBRIDGE] 归属核对结论（重试后）：flat namespace 归 ANGLE");
-        return;
+        return 1;
     }
-    a2_log_f(@"[A2-GLBRIDGE] ★归属仍不对★ eglGetDisplay=%s / glTexImage2D=%s ⇒ 继续启动（不阻断；"
-             @"MG 若再报 backend library 缺 egl* 就是这两行的事）",
+    a2_log_f(@"[A2-GLBRIDGE] ★归属仍不对★ eglGetDisplay=%s / glTexImage2D=%s ⇒ 不阻断启动，"
+             @"但 MG 门面不再用来建面（见下一行「退回 ANGLE 建面」）",
              a2_gl_bridge_owner_label(eglOwnerRetry), a2_gl_bridge_owner_label(glOwnerRetry));
+    return 0;
 }
 
 /// 当前后端是否 = ★NG-GL4ES / KW★（那一支需要宿主「注册解析器 + 显式初始化」）。
@@ -1357,6 +1384,17 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     const BOOL a2BackendIsMG = (a2_gl_bridge_is_mobileglues() != 0);
 
     // ---- 重入：先彻底清掉上一次（不留半成品）----
+    // ★保命前置判据（真机 iOS 16.7：键盘/文本效果窗触发相位改绑后再跑 attach ⇒ SIGSEGV）★：
+    //   旧表面还在（gAttached）或入口表非空 ⇒ 先核入口表完整性。缺一个就**中止且不 teardown**
+    //   —— 旧表面继续出帧，绝不把 GL 表面释放空、也绝不带着空指针往下走。
+    if (gAttached || gEglGetDisplay != NULL) {
+        const char *lostEntry = a2_gl_bridge_egl_entry_missing();
+        if (lostEntry != NULL) {
+            a2_log_f(@"[A2-GLBRIDGE] ★attach 中止★ 缺 egl 入口：%s（入口表不完整 ⇒ 不 teardown，"
+                     @"旧表面保持不动、继续用）", lostEntry);
+            return A2GlBridgeErrEgl;
+        }
+    }
     if (gAttached) {
         a2_log_f(@"[A2-GLBRIDGE] 已附着 ⇒ 先释放上一次的 EGL/GL 资源再重建");
         a2_gl_bridge_teardown();
@@ -1409,6 +1447,16 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
              (a2BackendIsMG && !hostEglBackend)
                  ? "；MG 后端不加载系统 GLES（防它被 MG 认成 backend library）"
                  : "");
+    // ★判据行（真机 grep 这一行即可确认「假 EGL 层没有提前把系统 OpenGLES 带进进程」）★：
+    //   MG 后端下系统的 OpenGLES.framework 一旦被任何一路 dlopen 进来，MG 就会把它当 backend
+    //   library（而它没有 EGL）⇒ 报 `EGL entry point eglGetDisplay is not available…`。
+    //   本层两条保证：① 本文件只在宿主 EGL 后端（libeagl.dylib）里加载系统 GLES；
+    //                ② 假 EGL 层（a2_eagl_egl.m）在 engage 之前不 dlopen OpenGLES、不查 EAGLContext。
+    if (a2BackendIsMG && !hostEglBackend) {
+        a2_log_criterion(@"[A2-GLBRIDGE] MG 后端：未加载系统 OpenGLES（EAGL 未 engage=%s；"
+                         @"本层只加载 ANGLE libGLESv2）",
+                         a2_eagl_egl_is_engaged() ? "否，已 engage" : "是");
+    }
 
     // ---- ③0 ★MG：ANGLE 先行、MG 后行★ ----
     //   ★顺序（lastlog-105 的修因，★不许再反转★）★：
@@ -1434,7 +1482,9 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         }
         a2_gl_bridge_use_own_egl();   // 门面=MG / 回退 ANGLE（日志点明缺哪个入口）；宿主恒 ANGLE
     }
-    const BOOL eglFromMG = (a2_gl_bridge_egl_source() == A2GlBridgeEglSourceMG);
+    // ★门面来源★：④a3 的归属核对可能把它改回 ANGLE（MG 门面不可用时）⇒ 这里不能是 const，
+    //   否则下面的判据行会报「门面=MG」而实际建面用的是 ANGLE（两种事实必须一致）。
+    BOOL eglFromMG = (a2_gl_bridge_egl_source() == A2GlBridgeEglSourceMG);
 
     // ★三层都要求存在★：门面（MG 或 ANGLE 自带）恒需要后端本体；ANGLE 的 libEGL/libGLESv2
     //   在 MG 门面下**仍是必需**（它们是宿主，缺了 MG 的门面无处落地）。
@@ -1505,8 +1555,31 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         a2_gl_bridge_teardown();
         return A2GlBridgeErrLoadFailed;
     }
-    // ★两层判据行★（MG 后端专有）：到这里门面句柄与 ANGLE 宿主句柄都已落地，一行答完「谁当门面、谁当宿主」。
+    // ★两层判据行 / 兼容底判据行 都放在 ④a3·④a4 之后★：归属核对可能把门面从 MG 退回 ANGLE，
+    //   这两行必须报**定稿后**的事实（否则会印「门面=MG」而实际建面用的是 ANGLE）。
     if (a2BackendIsMG && !hostEglBackend) {
+        // ---- ④a3 ★归属核对（dladdr）★（MG 后端专有）----
+        //   取代旧的「后端导出指针 == flat 指针」比法：那个比法只能回答「同不同源」，
+        //   而且在 ANGLE 先加载后必然报「被抢走」（false alarm）—— 它答不了「归哪个镜像」。
+        //   两行固定格式（真机 grep `归属核对` 即可判读），不通过则重试一次（见函数内注释）。
+        int angleOwnershipOK = a2_gl_bridge_verify_angle_ownership(eglPath, glesPath);
+
+        // ---- ④a4 ★MG 门面不可用 ⇒ 退回 ANGLE 建面★（判据：④a3 的归属结论）----
+        //   真机 iOS 16.7：`glTexImage2D flat=… 归属=系统GLES（MG=…）` ⇒ MG 自报
+        //   `EGL entry point eglGetDisplay is not available in the backend library`，
+        //   而本桥若继续在 MG 门面上建面 ⇒ 空指针 ⇒ SIGSEGV（`a2_gl_bridge_attach`）。
+        //   归属不对时 MG 的 `egl*` 必然失败 ⇒ ★不再走 MG 门面★，EGL 入口改从 ANGLE 解析
+        //   （ANGLE 本就在 ③0 以 RTLD_GLOBAL 加载、且是宿主）—— 至少能出预览帧、不崩。
+        //   ★只换门面来源★：后端名 / 加载顺序 / 依赖旗标一律不动（不假装换了渲染器）。
+        if (!angleOwnershipOK) {
+            gEglSource = A2GlBridgeEglSourceAngle;
+            eglFromMG = NO;
+            a2_log_criterion(@"[A2-GLBRIDGE] ★退回 ANGLE 建面★ MG 门面归属不对 ⇒ EGL 入口改从 %s 解析"
+                             @"（MG 本体仍已 RTLD_GLOBAL 加载；后端名不变=%s）",
+                             eglPath.UTF8String, gBackendName);
+        }
+        // ★两层判据行★（MG 后端专有）：门面句柄与 ANGLE 宿主句柄都已落地、归属结论已定稿，
+        //   一行答完「谁当门面、谁当宿主」。
         a2_gl_bridge_log_egl_layers();
     }
     a2_log_f(@"[A2-GLBRIDGE] 已加载兼容底：EGL 门面=%s handle=%p；EGL 宿主=%s handle=%p；"
@@ -1517,14 +1590,6 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
              gEglHandle,
              glesPath.UTF8String, gGlesHandle,
              glLayerName, gRendererHandle);
-
-    if (a2BackendIsMG && !hostEglBackend) {
-        // ---- ④a3 ★归属核对（dladdr）★（MG 后端专有）----
-        //   取代旧的「后端导出指针 == flat 指针」比法：那个比法只能回答「同不同源」，
-        //   而且在 ANGLE 先加载后必然报「被抢走」（false alarm）—— 它答不了「归哪个镜像」。
-        //   两行固定格式（真机 grep `归属核对` 即可判读），不通过则重试一次（见函数内注释）。
-        a2_gl_bridge_verify_angle_ownership(eglPath, glesPath);
-    }
 
     // ---- ④b ★NG-GL4ES / KW：gl4es 血统的运行时开关（无条件，对齐老 Air）★ ----
     //   老 Air 在 JavaLauncher 里**无条件全局**设这两个（`Natives/JavaLauncher.m:469` / `:472`）：
@@ -1552,8 +1617,16 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     gEglCreateWindowSurface = (A2PFN_eglCreateWindowSurface)a2_gl_bridge_egl_symbol(eglEntryHandle, "eglCreateWindowSurface", &missing);
     gEglMakeCurrent         = (A2PFN_eglMakeCurrent)a2_gl_bridge_egl_symbol(eglEntryHandle, "eglMakeCurrent", &missing);
     gEglGetError            = (A2PFN_eglGetError)a2_gl_bridge_egl_symbol(eglEntryHandle, "eglGetError", &missing);
+    // ★eglSwapBuffers 也进必需集★：它就是「上屏/换页」本身，缺了这份表就不完整
+    //   （`a2_gl_bridge_egl_entry_missing()` 的判据集与这里必须逐字一致）。
+    gEglSwapBuffers         = (A2PFN_eglSwapBuffers)a2_gl_bridge_egl_symbol(eglEntryHandle, "eglSwapBuffers", &missing);
     if (missing) {
-        a2_log_f(@"%s ★阻断★：EGL 函数指针表不全（见上一行点名的符号）", A2GlBridgeJudgementTag);
+        // ★attach 中止（保命）★：必需入口缺一 ⇒ 不打空指针、不再往下建面。
+        //   点名用 `a2_gl_bridge_egl_entry_missing()`（唯一判据），与上面逐符号的阻断行互补：
+        //   逐符号那行说「缺谁」，这行说「因此中止」，便于真机 grep 一条即定位。
+        const char *lostEntry = a2_gl_bridge_egl_entry_missing();
+        a2_log_f(@"[A2-GLBRIDGE] ★attach 中止★ 缺 egl 入口：%s（函数指针表不全 ⇒ 不继续解引用）",
+                 (lostEntry != NULL) ? lostEntry : "未知");
         a2_gl_bridge_teardown();
         return A2GlBridgeErrLoadFailed;
     }
@@ -1561,7 +1634,7 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     // `eglGetConfigAttrib` 只用来把「选定配置的位深」打进判据行（⑥ 之后），缺了不影响建面 ⇒ 同样宽容。
     gEglGetConfigAttrib   = (A2PFN_eglGetConfigAttrib)a2_gl_bridge_egl_symbol(eglEntryHandle, "eglGetConfigAttrib", NULL);
     gEglBindAPI           = (A2PFN_eglBindAPI)dlsym(eglEntryHandle, "eglBindAPI");
-    gEglSwapBuffers       = (A2PFN_eglSwapBuffers)dlsym(eglEntryHandle, "eglSwapBuffers");
+    // ★eglSwapBuffers 不在这里★：它已进必需集（见上），重复解析只会把同一份结论写第二遍。
     gEglGetProcAddress    = (A2PFN_eglGetProcAddress)dlsym(eglEntryHandle, "eglGetProcAddress");
     gEglDestroySurface    = (A2PFN_eglDestroySurface)dlsym(eglEntryHandle, "eglDestroySurface");
     gEglDestroyContext    = (A2PFN_eglDestroyContext)dlsym(eglEntryHandle, "eglDestroyContext");
