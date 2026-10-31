@@ -498,6 +498,165 @@ static int a2_gl_bridge_open_renderer(const char *rendererPath) {
     return 1;
 }
 
+// ---------------------------------------------------------------------------
+//  ★加载顺序（ANGLE → MG → 其它）与符号归属核对★
+// ---------------------------------------------------------------------------
+//  真机 lastlog-105（1.20.1 + MG + java-21，包 0ff9416）：
+//    `[A2-GLBRIDGE] 符号归属核对：glTexImage2D 后端导出=0x12bcd9a84 / flat=0x26a9eacf4 ⇒ ★被别的库抢走★`
+//    `EGL entry point eglGetDisplay is not available in the backend library`   ← MG 自报
+//  ⇒ flat 那枚地址落在 **dyld 共享缓存**（系统 OpenGLES），不是 ANGLE。MG 把「抢到 glTexImage2D 的
+//    那个镜像」当成 backend library，而系统 GLES 没有 EGL ⇒ MG 初始化失败；本桥随后继续用空指针
+//    ⇒ SIGSEGV（`a2_gl_bridge_attach + 2860`）。
+//  ⇒ 修法两条：① ANGLE 的 libEGL/libGLESv2 ★必须在 MG 本体之前★ 以 RTLD_GLOBAL 进 flat namespace；
+//              ② MG 后端 ★不 dlopen 系统 OpenGLES★（系统 GLES 只留给宿主 EGL / EAGL 后端）。
+//  ⇒ 加载完再用 `dladdr()` 逐符号核对归属 —— 不走「指针相等」那套：它只能回答「同不同源」，
+//    答不了「归哪个镜像」（lastlog-105 正是这两者分家）。
+
+/// ★符号归属分类★（判据只有一条：`dladdr()` 给出的镜像路径子串 —— 不比地址高低、不看加载先后）。
+typedef enum {
+    A2GlBridgeSymbolOwnerNone = 0,    ///< flat namespace 里取不到这个符号
+    A2GlBridgeSymbolOwnerAngle,       ///< ANGLE：`…/libEGL.framework/libEGL` 或 `…/libGLESv2.framework/libGLESv2`
+    A2GlBridgeSymbolOwnerMG,          ///< MobileGlues：`…/libmobileglues.dylib`
+    A2GlBridgeSymbolOwnerSystemGles,  ///< 系统 GLES：`…/OpenGLES.framework/OpenGLES`（dyld 共享缓存）
+    A2GlBridgeSymbolOwnerOther,       ///< 其它镜像 / `dladdr` 取不到路径（不猜）
+} A2GlBridgeSymbolOwner;
+
+/// ★加载顺序：ANGLE 先行★（MG 后端专有；调用点：`a2_gl_bridge_attach` 的 ③0，MG 本体之前**一次**）。
+/// 句柄落在 `gEglHandle` / `gGlesHandle`（与 ④ 同一个产地 ⇒ teardown 的释放口径不变，不新增第三对句柄）。
+/// 幂等：已加载直接成功（`dlopen` 返回同一句柄，不重复计数）。
+/// 返回 1 = 两份都已在 flat namespace（RTLD_GLOBAL）；0 = 缺任意一份（已打阻断行，调用方据此中止）。
+static int a2_gl_bridge_load_angle_first(NSString *eglPath, NSString *glesPath) {
+    if (eglPath == nil || glesPath == nil) {
+        a2_log_f(@"[A2-GLBRIDGE] ★阻断★：MG 后端要求 ANGLE 先行，但 EGL/GLESv2 路径缺失（frameworksPath 未解析）");
+        return 0;
+    }
+    if (gEglHandle == NULL) {
+        gEglHandle = dlopen(eglPath.UTF8String, RTLD_LAZY | RTLD_GLOBAL);
+        if (gEglHandle == NULL) {
+            const char *err = dlerror();
+            a2_log_f(@"[A2-GLBRIDGE] ★阻断★：ANGLE libEGL 先行加载失败 %s（%s）",
+                     eglPath.UTF8String, err ? err : "(dlerror 无输出)");
+            return 0;
+        }
+    }
+    if (gGlesHandle == NULL) {
+        gGlesHandle = dlopen(glesPath.UTF8String, RTLD_LAZY | RTLD_GLOBAL);
+        if (gGlesHandle == NULL) {
+            const char *err = dlerror();
+            a2_log_f(@"[A2-GLBRIDGE] ★阻断★：ANGLE libGLESv2 先行加载失败 %s（%s）",
+                     glesPath.UTF8String, err ? err : "(dlerror 无输出)");
+            return 0;
+        }
+    }
+    a2_log_f(@"[A2-GLBRIDGE] 加载顺序=ANGLE→MG→其它：ANGLE 先入 flat namespace（RTLD_GLOBAL）"
+             @"libEGL handle=%p；libGLESv2 handle=%p",
+             gEglHandle, gGlesHandle);
+    return 1;
+}
+
+/// ★符号归属取法★（唯一产地：`dlsym(RTLD_DEFAULT)` + `dladdr`）。
+/// `addrOut` 回填 flat namespace 里那枚地址（取不到 = NULL）；返回值只按镜像路径分类。
+static A2GlBridgeSymbolOwner a2_gl_bridge_symbol_owner(const char *name, void **addrOut) {
+    void *addr = (name != NULL) ? dlsym(RTLD_DEFAULT, name) : NULL;
+    if (addrOut != NULL) *addrOut = addr;
+    if (addr == NULL) return A2GlBridgeSymbolOwnerNone;
+    Dl_info info;
+    memset(&info, 0, sizeof(info));
+    if (dladdr(addr, &info) == 0 || info.dli_fname == NULL || info.dli_fname[0] == '\0') {
+        return A2GlBridgeSymbolOwnerOther;   // 地址不属于任何镜像路径（汇编桩等）⇒ 归「其它」，不猜
+    }
+    if (strstr(info.dli_fname, "libEGL.framework") != NULL ||
+        strstr(info.dli_fname, "libGLESv2.framework") != NULL) {
+        return A2GlBridgeSymbolOwnerAngle;
+    }
+    if (strstr(info.dli_fname, "libmobileglues") != NULL) return A2GlBridgeSymbolOwnerMG;
+    if (strstr(info.dli_fname, "OpenGLES.framework") != NULL) return A2GlBridgeSymbolOwnerSystemGles;
+    return A2GlBridgeSymbolOwnerOther;
+}
+
+/// 归属标签（★日志锚点 `归属=`★；取值 ANGLE / 系统GLES / MG / 其它 / 无符号）。
+static const char *a2_gl_bridge_owner_label(A2GlBridgeSymbolOwner owner) {
+    switch (owner) {
+        case A2GlBridgeSymbolOwnerAngle:      return "ANGLE";
+        case A2GlBridgeSymbolOwnerSystemGles: return "系统GLES";
+        case A2GlBridgeSymbolOwnerMG:         return "MG";
+        case A2GlBridgeSymbolOwnerOther:      return "其它";
+        case A2GlBridgeSymbolOwnerNone:       break;
+    }
+    return "无符号";
+}
+
+/// 核对**一行**（调用点：`a2_gl_bridge_verify_angle_ownership` 的两行）。格式固定、便于 grep：
+///   `[A2-GLBRIDGE] 归属核对 <符号> flat=0x… 归属=ANGLE|系统GLES|其它`
+///   `[A2-GLBRIDGE] 归属核对 <符号> flat=0x… 归属=…（MG=0x…）`   ← 传了 MG 自带导出时才带括号
+static A2GlBridgeSymbolOwner a2_gl_bridge_log_owner(const char *name, void *mgOwnExport) {
+    void *addr = NULL;
+    A2GlBridgeSymbolOwner owner = a2_gl_bridge_symbol_owner(name, &addr);
+    if (mgOwnExport != NULL) {
+        a2_log_f(@"[A2-GLBRIDGE] 归属核对 %s flat=%p 归属=%s（MG=%p）",
+                 name, addr, a2_gl_bridge_owner_label(owner), mgOwnExport);
+    } else {
+        a2_log_f(@"[A2-GLBRIDGE] 归属核对 %s flat=%p 归属=%s",
+                 name, addr, a2_gl_bridge_owner_label(owner));
+    }
+    return owner;
+}
+
+/// ★归属纠正（重试一次；调用点：`a2_gl_bridge_verify_angle_ownership` 发现归属不对时）★。
+///  ① 「若可控」放掉一份系统 OpenGLES 的句柄：`RTLD_NOLOAD` 只取**已加载**镜像的句柄
+///     （不触发新加载），紧随的 `dlclose` 把引用计数配平 —— 共享缓存镜像真卸得掉就卸，
+///     卸不掉也无害（不改变本进程已解析的绑定）。
+///  ② 再以 **RTLD_GLOBAL** dlopen ANGLE 两份（幂等）：`dlopen` 的 +1 由紧跟的 `dlclose` 配平，
+///     镜像本身仍由 `gEglHandle`/`gGlesHandle` 持有 ⇒ 不会真卸载，只是把 GLOBAL 归属再确认一次。
+static void a2_gl_bridge_reassert_angle_global(NSString *eglPath, NSString *glesPath) {
+    const char *systemGlesPath = "/System/Library/Frameworks/OpenGLES.framework/OpenGLES";
+    void *sysHandle = dlopen(systemGlesPath, RTLD_LAZY | RTLD_NOLOAD);
+    if (sysHandle != NULL) {
+        dlclose(sysHandle);
+        a2_log_f(@"[A2-GLBRIDGE] 归属纠正①：系统 OpenGLES 句柄=%p 已释放一份（RTLD_NOLOAD 配对 dlclose）",
+                 sysHandle);
+    } else {
+        a2_log_f(@"[A2-GLBRIDGE] 归属纠正①：系统 OpenGLES 当前未加载（无抢占句柄可放）");
+    }
+    NSString *anglePaths[2] = { eglPath, glesPath };
+    for (int i = 0; i < 2; i++) {
+        if (anglePaths[i] == nil) continue;
+        void *h = dlopen(anglePaths[i].UTF8String, RTLD_LAZY | RTLD_GLOBAL);
+        if (h != NULL) dlclose(h);   // ★配平引用计数★（镜像仍由 gEglHandle/gGlesHandle 持有）
+        a2_log_f(@"[A2-GLBRIDGE] 归属纠正②：%s 再次 RTLD_GLOBAL dlopen ⇒ %s",
+                 anglePaths[i].UTF8String, (h != NULL) ? "OK（句柄已配平）" : "FAILED");
+    }
+}
+
+/// ★两行归属核对 + 一次重试★（调用点：`a2_gl_bridge_attach` 的 ④a3，MG 后端**一次**）。
+/// 期望：MG 后端下 flat namespace 的 `eglGetDisplay` 与 `glTexImage2D` 都归 **ANGLE**
+///   （ANGLE 在 MG 之前 RTLD_GLOBAL 进全局表；MG 自己的 `gl*` 只是门面，不该再抢 flat）。
+/// 归属不是 ANGLE ⇒ 重试一次（`a2_gl_bridge_reassert_angle_global`）；仍不对 ⇒ 打 `★归属仍不对★`
+/// 并**继续启动**（不阻断 —— 这只是判据，阻断与否由 MG 自己初始化成功与否说话）。
+static void a2_gl_bridge_verify_angle_ownership(NSString *eglPath, NSString *glesPath) {
+    // MG 自己的 `glTexImage2D` 导出（对照项，不参与判定）：flat 与它不同 ≠ 一定是问题，
+    // 但把两枚地址并排放进同一行，才能一眼看出「MG 是不是把自己的导出丢了」。
+    void *mgGlTexImage2D = (gRendererHandle != NULL) ? dlsym(gRendererHandle, "glTexImage2D") : NULL;
+    A2GlBridgeSymbolOwner eglOwner = a2_gl_bridge_log_owner("eglGetDisplay", NULL);
+    A2GlBridgeSymbolOwner glOwner  = a2_gl_bridge_log_owner("glTexImage2D", mgGlTexImage2D);
+    if (eglOwner == A2GlBridgeSymbolOwnerAngle && glOwner == A2GlBridgeSymbolOwnerAngle) {
+        a2_log_criterion(@"[A2-GLBRIDGE] 归属核对结论：flat namespace 归 ANGLE（门面=MG / 宿主=ANGLE）");
+        return;
+    }
+    a2_log_f(@"[A2-GLBRIDGE] 归属不对（eglGetDisplay=%s / glTexImage2D=%s）⇒ 重试一次",
+             a2_gl_bridge_owner_label(eglOwner), a2_gl_bridge_owner_label(glOwner));
+    a2_gl_bridge_reassert_angle_global(eglPath, glesPath);
+    A2GlBridgeSymbolOwner eglOwnerRetry = a2_gl_bridge_log_owner("eglGetDisplay", NULL);
+    A2GlBridgeSymbolOwner glOwnerRetry  = a2_gl_bridge_log_owner("glTexImage2D", mgGlTexImage2D);
+    if (eglOwnerRetry == A2GlBridgeSymbolOwnerAngle && glOwnerRetry == A2GlBridgeSymbolOwnerAngle) {
+        a2_log_criterion(@"[A2-GLBRIDGE] 归属核对结论（重试后）：flat namespace 归 ANGLE");
+        return;
+    }
+    a2_log_f(@"[A2-GLBRIDGE] ★归属仍不对★ eglGetDisplay=%s / glTexImage2D=%s ⇒ 继续启动（不阻断；"
+             @"MG 若再报 backend library 缺 egl* 就是这两行的事）",
+             a2_gl_bridge_owner_label(eglOwnerRetry), a2_gl_bridge_owner_label(glOwnerRetry));
+}
+
 /// 当前后端是否 = ★NG-GL4ES / KW★（那一支需要宿主「注册解析器 + 显式初始化」）。
 /// ★精确比较，不做模糊匹配★：`libnggl4es.dylib`（老的那支，自带 constructor）不能命中。
 static int a2_gl_bridge_is_krypton(void) {
@@ -505,7 +664,7 @@ static int a2_gl_bridge_is_krypton(void) {
 }
 
 /// 当前后端是否 = ★MobileGlues★（唯一判据来源：dylib 名子串 `mobileglues`）。
-/// ★两处共用，不许各自写字面量★：① 依赖库的加载旗标（② 与 ④）；② MG 的符号归属核对（④a2）。
+/// ★两处共用，不许各自写字面量★：① 依赖库的加载旗标（④）；② MG 的归属核对（④a3）。
 static int a2_gl_bridge_is_mobileglues(void) {
     return (gBackendName[0] != '\0' && strstr(gBackendName, "mobileglues") != NULL);
 }
@@ -1181,7 +1340,7 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     //   · EGL 句柄 = `dlopen(NULL)`（主镜像；`egl*` 已在主二进制里，flat namespace 第一位）
     //     ⇒ 建面用的 EGL 就是「假 EGL → EAGLContext/CAEAGLLayer」，不是 ANGLE；
     //   · GL 层 = MobileGlues（下方 `glLayerName`）⇒ `gBackendName` 记的是 **GL 层**，
-    //     MG 的 RTLD_LOCAL / 符号归属核对等判据全都照旧命中（不另写一套 MG 判据）。
+    //     MG 的 RTLD_GLOBAL / 归属核对等判据全都照旧命中（不另写一套 MG 判据）。
     const int hostEglBackend = a2_gl_bridge_backend_is_host_egl(rendererName);
     const char *glLayerName = hostEglBackend ? A2GlBridgeHostEglLayerDylib : rendererName;
     if (hostEglBackend) {
@@ -1229,33 +1388,46 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         ? nil   // 宿主 EGL 后端没有包内 EGL：`egl*` 就在主二进制里（见 ①b）
         : [frameworksPath stringByAppendingPathComponent:
            [NSString stringWithUTF8String:A2GlBridgeEglLibraryRelPath]];
-    // ★GLES 兼容底的两种形态★：
-    //   · 普通后端 = ANGLE 的 libGLESv2（随包在 Frameworks/libGLESv2.framework/）；
-    //   · 宿主 EGL 后端 = **系统 OpenGLES**（假 EGL 的 EAGL 上下文就建在它上面，
-    //     `glClear`/`glViewport` 等帧动作也必须打同一份实现）。
-    NSString *glesPath     = hostEglBackend
+    // ★GLES 兼容底的两种形态（★MG 后端禁用系统 GLES★）★：
+    //   · 宿主 EGL 后端（libeagl.dylib）= **系统 OpenGLES**（假 EGL 的 EAGL 上下文建在它上面，
+    //     `glClear`/`glViewport` 等帧动作必须打同一份实现）；
+    //   · 其余（含 MG）= ANGLE 的 libGLESv2（随包在 Frameworks/libGLESv2.framework/）。
+    //   ★为什么 MG 绝不加载系统 GLES★ 真机 lastlog-105：系统 GLES 在 dyld 共享缓存里，一旦被
+    //   MG 认成 backend library，flat namespace 的 `glTexImage2D` 就落到它，而它**没有 EGL**
+    //   ⇒ MG 报 `EGL entry point eglGetDisplay is not available in the backend library` 并失败。
+    //   ★唯一判据是 hostEglBackend★（= EAGL 后端），不在这里另写「后端名是不是 MG」的判断。
+    const BOOL glesFromSystemGles = (hostEglBackend != 0);
+    NSString *glesPath     = glesFromSystemGles
         ? @"/System/Library/Frameworks/OpenGLES.framework/OpenGLES"
         : [frameworksPath stringByAppendingPathComponent:
            [NSString stringWithUTF8String:A2GlBridgeGlesLibraryRelPath]];
     NSString *rendererPath = [frameworksPath stringByAppendingPathComponent:
                               [NSString stringWithUTF8String:glLayerName]];
+    a2_log_f(@"[A2-GLBRIDGE] GLES 兼容底=%s（%s）%s",
+             glesFromSystemGles ? "系统 OpenGLES" : "ANGLE libGLESv2",
+             glesFromSystemGles ? "宿主 EGL / EAGL 后端上屏链" : "MG 及其它后端的宿主 GL 层",
+             (a2BackendIsMG && !hostEglBackend)
+                 ? "；MG 后端不加载系统 GLES（防它被 MG 认成 backend library）"
+                 : "");
 
-    // ---- ③0 ★MG：先加载本体、问它要 EGL★ ----
-    //   真机证据（1.20.1 + MG 2.0.16）：本桥用 ANGLE 的 libEGL 建上下文、只把 MG 当 GL 库，
-    //   MG 随即在 `[libmobileglues.dylib+0x3e4e4] glGetError` SIGBUS，并自报
-    //   `SYMBOL THEFT: flat namespace resolves glTexImage2D/glDrawArrays … to ANGLE 地址`。
-    //   老 Air 的做法（`Natives/ctxbridges/egl_bridge.m:260-285`）是**先到渲染器自己的句柄**
-    //   里 dlsym 整套 `egl*`，取不到才回退兼容底 ⇒ 这里对齐。
-    //   ★顺序：MG 先、ANGLE 后（★这一条不许反转★）★ —— flat namespace 与 `RTLD_NEXT` 都只往
-    //   **更晚加载**的镜像里找符号：MG 先加载 ⇒ 它的 `gl*` 在 dlsym(RTLD_DEFAULT) 里排第一（不被
-    //   ANGLE 抢）；ANGLE 后加载 ⇒ MG 的门面按 `RTLD_NEXT`/全局空间能找到宿主 `eglGetDisplay`。
-    //   ★ANGLE 兼容底照旧要求并加载（真机 lastlog-104）★：跳过 ANGLE 后 MG 自己报
-    //   `EGL entry point eglGetDisplay is not available in the backend library` 并 SIGSEGV 循环
-    //   —— 它只导出**门面**，宿主（backend library）必须另有其人 ⇒ ANGLE 就是那个宿主。
-    //   ★与宿主 EGL 后端互斥★：libeagl.dylib 的 EGL 是主二进制的假 EGL（①b）。这里排除它只为
-    //   **保住加载顺序**（宿主 EGL 后端的本体仍按 ④ 的常规顺序最后加载）；「MG 的 egl* 能不能用」
-    //   这件事本身由 `a2_gl_bridge_use_own_egl()` 内部那条 `gHostEgl` 判据说话 —— 不在这里另判。
+    // ---- ③0 ★MG：ANGLE 先行、MG 后行★ ----
+    //   ★顺序（lastlog-105 的修因，★不许再反转★）★：
+    //     ① 先把 ANGLE 的 libEGL/libGLESv2 以 RTLD_GLOBAL 放进 flat namespace（a2_gl_bridge_load_angle_first）；
+    //     ② 再加载 MG 本体（RTLD_GLOBAL）；③ 其它后端仍按 ④ 的常规顺序最后加载。
+    //   为什么不能再「MG 先、ANGLE 后」（上一版 lastlog-104 的写法）：那样 flat namespace 里排第一的
+    //   `gl*` 会落到**系统 OpenGLES**（共享缓存里、早于我们的 dlopen 就在全局表），MG 把它当
+    //   backend library ⇒ 找不到 `eglGetDisplay` ⇒ 初始化失败 ⇒ 本桥拿到空指针 ⇒ SIGSEGV。
+    //   ★MG 的 egl* 仍是门面★（判据在 `a2_gl_bridge_use_own_egl()` 内部，与 gHostEgl 绑定，不在这里另判）；
+    //   ★与宿主 EGL 后端（libeagl.dylib）互斥★：那条链的 EGL 是主二进制的假 EGL（①b），
+    //   系统 GLES 才是它的 GL 层 ⇒ 不预加载 ANGLE，也不改顺序。
+    BOOL anglePreloaded = NO;
     if (a2BackendIsMG && !hostEglBackend) {
+        anglePreloaded = (a2_gl_bridge_load_angle_first(eglPath, glesPath) != 0);
+        if (!anglePreloaded) {
+            a2_log_f(@"[A2-GLBRIDGE] ★阻断★：MG 后端要求 ANGLE 先入 flat namespace，但 ANGLE 兼容底未就绪");
+            a2_gl_bridge_teardown();
+            return A2GlBridgeErrLoadFailed;
+        }
         if (!a2_gl_bridge_open_renderer(rendererPath.UTF8String)) {
             a2_gl_bridge_teardown();
             return A2GlBridgeErrLoadFailed;
@@ -1283,11 +1455,13 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     // ★KW 时用 RTLD_LOCAL★（真机 lastlog-84）：ANGLE 的 libGLESv2 若以 GLOBAL 加载，
     //   它导出的 GLES1 入口（glLoadMatrixf 等）会被 MC/LWJGL 的 dlsym(RTLD_DEFAULT) 抢先命中，
     //   从而绕过 KW 自带 FPE，直接崩在 ANGLE 的 GLES1State（未初始化）。⇒ 只让 KW 自己全局可见。
-    // ★MG 时改为 RTLD_GLOBAL★（真机 lastlog-104 的修因）：MG 那套 `egl*` 只是**门面**，它要落到
-    //   **宿主 EGL**（backend library）才真正工作；宿主 = ANGLE 的 libEGL/libGLESv2 ⇒ 必须以
-    //   RTLD_GLOBAL 进 flat namespace，MG 才解析得到 `eglGetDisplay`/`eglGetProcAddress`。
-    //   ★lastlog-101 的 SYMBOL THEFT 不因此复发★：MG 在 ③0 就先加载（GLOBAL），ANGLE 后加载
-    //   ⇒ `dlsym(RTLD_DEFAULT)` 先命中 MG 自己的 `gl*` 导出；ANGLE 只负责 egl* 与 MG 的宿主后端。
+    // ★MG 时恒 RTLD_GLOBAL★：MG 那套 `egl*` 只是**门面**，它要落到 **宿主 EGL**（backend library）
+    //   才真正工作；宿主 = ANGLE 的 libEGL/libGLESv2 ⇒ 两者都必须进 flat namespace，
+    //   MG 才解析得到 `eglGetDisplay`/`eglGetProcAddress`。
+    //   ★ANGLE 已由 ③0 先行加载★（`a2_gl_bridge_load_angle_first`）：这里复用句柄、不重复 dlopen
+    //   （重复只多一份引用计数，teardown 还要多配平一次）。
+    //   ★SYMBOL THEFT 不复发的条件★：ANGLE 必须**早于** MG 进全局表 ⇒ flat 里的 `gl*` 命中 ANGLE，
+    //   而不是系统 GLES。反转回「MG 先」即复发 lastlog-105（本单的根因），③0 的顺序就是这条契约。
     // ★KW 沿用原来的模糊判定★（`strstr`）：`libnggl4es.dylib`（老的那支）与
     //   `libnggl4es_kw.dylib` 都按 KW 处理 —— 这是 lastlog-84 起的行为，不在本单里改口径。
     const BOOL a2BackendIsKW = (strstr(rendererName, "krypton") != NULL) || (strstr(rendererName, "nggl4es") != NULL);
@@ -1299,28 +1473,34 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         a2_log_f(@"[A2-GLBRIDGE] 旗标理由：KW 要自己的 GLES1 入口生效 ⇒ 不让兼容底的 gl* 进 flat namespace（防符号被抢）");
     }
 
-    // ★EGL 那一份★：宿主 EGL 后端 = 主镜像（`dlopen(NULL)`，不能 dlclose）；
-    //   其余（含 MG 门面）= ANGLE 的 libEGL。★MG 门面下这个句柄是「宿主」，不是门面★ ——
-    //   门面句柄由 `a2_gl_bridge_egl_entry_handle()` 给（= MG 本体），两者不混用。
-    gEglHandle      = hostEglBackend ? dlopen(NULL, RTLD_LAZY)
-                                     : dlopen(eglPath.UTF8String, a2GlDepFlags);
-    if (gEglHandle == NULL) {
-        const char *err = dlerror();
-        a2_log_f(@"[A2-GLBRIDGE] ★阻断★：EGL 兼容底 dlopen 失败 %s（%s）",
-                 hostEglBackend ? "(main image)" : eglPath.UTF8String, err ? err : "(dlerror 无输出)");
-        a2_gl_bridge_teardown();
-        return A2GlBridgeErrLoadFailed;
-    }
-    gGlesHandle     = dlopen(glesPath.UTF8String,     a2GlDepFlags);
-    if (gGlesHandle == NULL) {
-        const char *err = dlerror();
-        a2_log_f(@"%s ★阻断★：GLESv2 兼容底 dlopen 失败 %s（%s）",
-                 A2GlBridgeJudgementTag, glesPath.UTF8String, err ? err : "(dlerror 无输出)");
-        a2_gl_bridge_teardown();
-        return A2GlBridgeErrLoadFailed;
+    if (anglePreloaded) {
+        // ③0 已把 ANGLE 两份放进 flat namespace（同一对句柄、同一个产地）⇒ ④ 只确认、不再加载。
+        a2_log_f(@"[A2-GLBRIDGE] ANGLE 宿主句柄复用 ③0 的加载（④ 不重复 dlopen）：libEGL=%p；libGLESv2=%p",
+                 gEglHandle, gGlesHandle);
+    } else {
+        // ★EGL 那一份★：宿主 EGL 后端 = 主镜像（`dlopen(NULL)`，不能 dlclose）；
+        //   其余（含 MG 门面）= ANGLE 的 libEGL。★MG 门面下这个句柄是「宿主」，不是门面★ ——
+        //   门面句柄由 `a2_gl_bridge_egl_entry_handle()` 给（= MG 本体），两者不混用。
+        gEglHandle      = hostEglBackend ? dlopen(NULL, RTLD_LAZY)
+                                         : dlopen(eglPath.UTF8String, a2GlDepFlags);
+        if (gEglHandle == NULL) {
+            const char *err = dlerror();
+            a2_log_f(@"[A2-GLBRIDGE] ★阻断★：EGL 兼容底 dlopen 失败 %s（%s）",
+                     hostEglBackend ? "(main image)" : eglPath.UTF8String, err ? err : "(dlerror 无输出)");
+            a2_gl_bridge_teardown();
+            return A2GlBridgeErrLoadFailed;
+        }
+        gGlesHandle     = dlopen(glesPath.UTF8String,     a2GlDepFlags);
+        if (gGlesHandle == NULL) {
+            const char *err = dlerror();
+            a2_log_f(@"%s ★阻断★：GLESv2 兼容底 dlopen 失败 %s（%s）",
+                     A2GlBridgeJudgementTag, glesPath.UTF8String, err ? err : "(dlerror 无输出)");
+            a2_gl_bridge_teardown();
+            return A2GlBridgeErrLoadFailed;
+        }
     }
     // 后端本体（GL 层 = MG / compat 底 / KW …）：RTLD_GLOBAL 让 MC 后续能直接解析到它的 GL 符号。
-    // ★MG 已在 ③0 加载过★（顺序必须是 MG 先），这里由 a2_gl_bridge_open_renderer 幂等返回成功。
+    // ★MG 已在 ③0 加载过★（顺序必须是 ANGLE 之后），这里由 a2_gl_bridge_open_renderer 幂等返回成功。
     if (!a2_gl_bridge_open_renderer(rendererPath.UTF8String)) {
         a2_gl_bridge_teardown();
         return A2GlBridgeErrLoadFailed;
@@ -1338,20 +1518,12 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
              glesPath.UTF8String, gGlesHandle,
              glLayerName, gRendererHandle);
 
-    if (a2BackendIsMG) {
-        // ---- ④a2 ★符号归属核对★（MG 自己要报 SYMBOL THEFT 的那件事，我们自己也取一份证据）----
-        //   真机 lastlog-101：`[MG] SYMBOL THEFT … the application is calling someone else`。
-        //   本行直接回答「flat namespace 里这个 gl* 归谁」—— 与 MG 自己的报错互为旁证。
-        //   ★两层栈下这一行的预期仍是「归 MG」★：MG 在 ③0 先加载（GLOBAL）、ANGLE 在 ④ 后加载
-        //   ⇒ 先到先得，ANGLE 的 gl* 只可能在 MG 缺这个导出时才露头。若这里报「被抢走」，
-        //   说明加载顺序被改动过（③0 必须先于 ④）。
-        void *ownSym  = dlsym(gRendererHandle, "glTexImage2D");
-        void *flatSym = dlsym(RTLD_DEFAULT, "glTexImage2D");
-        a2_log_f(@"%s 符号归属核对：glTexImage2D 后端导出=%p / flat=%p ⇒ %s",
-                 A2GlBridgeJudgementTag, ownSym, flatSym,
-                 (ownSym != NULL && flatSym == ownSym)
-                     ? "归 MG 自己（未被抢）"
-                     : "★被别的库抢走★（flat namespace 里还有别的导出者：查是否有库以 GLOBAL 抢先加载）");
+    if (a2BackendIsMG && !hostEglBackend) {
+        // ---- ④a3 ★归属核对（dladdr）★（MG 后端专有）----
+        //   取代旧的「后端导出指针 == flat 指针」比法：那个比法只能回答「同不同源」，
+        //   而且在 ANGLE 先加载后必然报「被抢走」（false alarm）—— 它答不了「归哪个镜像」。
+        //   两行固定格式（真机 grep `归属核对` 即可判读），不通过则重试一次（见函数内注释）。
+        a2_gl_bridge_verify_angle_ownership(eglPath, glesPath);
     }
 
     // ---- ④b ★NG-GL4ES / KW：gl4es 血统的运行时开关（无条件，对齐老 Air）★ ----
