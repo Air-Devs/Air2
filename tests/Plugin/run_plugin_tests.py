@@ -47,6 +47,8 @@ ZIP_READER_SRC = os.path.join(ADDONS_DIR, "A2ZipReader.m")
 # ★2026-10-31★ 安装器现在会查「是否改启动链」⇒ 依赖 A2PluginLaunchChainRisk.m 的三个导出符号，
 # 不把它编进来链接就会失败（真跑踩到：Undefined symbols _A2PluginLaunchChainPermissionIds/Names）。
 LAUNCH_RISK_SRC = os.path.join(PLUGIN_DIR, "A2PluginLaunchChainRisk.m")
+# 权限目录（A2PluginPermissionInfoForId）—— A2PluginLaunchChainRisk 用它取 shortName。
+PERMISSION_STORE_SRC = os.path.join(PLUGIN_DIR, "A2PluginPermissionStore.m")
 LOG_SRC = os.path.join(UTILS_DIR, "A2Log.m")
 
 # 每个目标 = 一个可执行文件（用例各自用独立临时目录，互不污染）
@@ -61,7 +63,7 @@ TARGETS = [
         "name": "plugin_installer_tests",
         "test": os.path.join(HERE, "plugin_installer_tests.m"),
         "sources": [MANIFEST_SRC, REGISTRY_SRC, EXTRACTOR_SRC, INSTALLER_SRC,
-                    ZIP_READER_SRC, LAUNCH_RISK_SRC, LOG_SRC],
+                    ZIP_READER_SRC, LAUNCH_RISK_SRC, PERMISSION_STORE_SRC, LOG_SRC],
         "libraries": ["-lz"],       # A2ZipReader 的 deflate 走 zlib
     },
 ]
