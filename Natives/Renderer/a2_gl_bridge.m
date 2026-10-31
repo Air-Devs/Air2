@@ -1397,6 +1397,28 @@ static A2GlBridgeRect a2_gl_bridge_view_bounds(void *view) {
     return r;
 }
 
+/// ★把宿主视图所在的窗口抬到可见层级★（不改任何渲染状态）。
+/// 真机证据（5c16780）：改绑成功、CAMetalLayer 上有内容且逐帧变化，但屏幕全黑；
+/// 同时日志显示「重绑到 GLFW 宿主视图 view=A2GlfwView level=-1」——
+/// 窗口层级为 -1 意味着它在所有普通窗口【下面】⇒ 画了也看不见。
+/// 这里把 windowLevel 抬到 UIWindowLevelStatusBar+1（1001），并在抬前后各记一行。
+static void a2_gl_bridge_raise_host_window(void *view) {
+    if (view == NULL) return;
+    SEL winSel = NSSelectorFromString(@"window");
+    SEL levelSel = NSSelectorFromString(@"windowLevel");
+    SEL setLevelSel = NSSelectorFromString(@"setWindowLevel:");
+    id v = (__bridge id)view;
+    if (![v respondsToSelector:winSel]) return;
+    id win = [v performSelector:winSel];
+    if (win == nil || ![win respondsToSelector:levelSel] || ![win respondsToSelector:setLevelSel]) return;
+    double before = ((double (*)(id, SEL))objc_msgSend)(win, levelSel);
+    if (before >= 1000.0) return;                       // 已经在状态栏之上 ⇒ 不动
+    ((void (*)(id, SEL, double))objc_msgSend)(win, setLevelSel, 1001.0);
+    double after = ((double (*)(id, SEL))objc_msgSend)(win, levelSel);
+    a2_log_f(@"[A2-GLBRIDGE] ★宿主窗口抬层★ windowLevel %.0f ⇒ %.0f（原层级在普通窗口之下 ⇒ 画面不可见）",
+             before, after);
+}
+
 /// 视图所在的窗口（只用于判据行的 windowLevel；取不到回 NULL）。
 static void *a2_gl_bridge_view_window(void *view) {
     if (view == NULL) return NULL;
@@ -1513,6 +1535,7 @@ static void a2_gl_bridge_ensure_game_view_surface(void) {
     // ★2026-10-31 判据★ 改绑成功：把新旧表面与宿主都打出来。
     //   真机（5070717）：像素采样 R239 G50 B61 说明游戏在画，但屏幕黑 ⇒
     //   必须确认这一行给出的 newSurf 是否已经从「启动器图层」换到了「CAMetalLayer」。
+    a2_gl_bridge_raise_host_window(want);   // ★层级核对★ level<0 时抬到可见层（否则画了也黑）
     a2_log_f(@"[A2-GLBRIDGE] ★改绑成功★ 旧 surface=%p ⇒ 新 surface=%p（宿主=%p class=%s）",
              (void *)oldSurf, (void *)newSurf, (void *)eglWant,
              (eglWant != NULL) ? NSStringFromClass([(__bridge id)eglWant class]).UTF8String : "(null)");
