@@ -62,31 +62,41 @@ extern NSString *const A2PluginErrorCodeKey;
 /// userInfo 键：出错的字段路径（如 `files[3].path`）。没有具体字段时不存在。
 extern NSString *const A2PluginErrorFieldKey;
 
-/// 安装期错误码。字符串取值与 `docs/PLUGIN-AUTHORING.md` 的失败原因表同源：
-/// 文档里的 `E_SCHEMA` / `E_PATH_ESCAPE` / `E_SIZE_LIMIT` 在本层分别落在
-/// `E_FIELD` / `E_PATH` / `E_SIZE` —— 本层按「字段 / 路径 / 上限」三类收口，
-/// 文档那三个名字是它们的上位说法，管理页展示的仍是本枚举给出的码。
+/// 安装期错误码。机器码是**本枚举**给出的那套；每条后面的「文档码」标注它对应
+/// `docs/PLUGIN-AUTHORING.md` 第十二节失败原因表里的哪一行 —— 一个文档码可能被
+/// 拆成多个机器码（作者看到更具体的原因），但**不存在**没有文档行的机器码。
+/// 管理页展示机器码，作者文档按文档码查表。
 typedef NS_ENUM(NSInteger, A2PluginError) {
     A2PluginErrorNone = 0,
     /// JSON 整体不成立：空文件、带 BOM、语法错、根节点不是对象。
+    /// 文档码：`E_SCHEMA`（包根缺 manifest.json 时另见 `E_MANIFEST_MISSING`，同归此码）。
     A2PluginErrorFormat,
     /// 字段层不成立：缺必填、类型不符、未知字段、取值非法、重复项。
+    /// 文档码：`E_SCHEMA`。
     A2PluginErrorField,
     /// 包格式版本不受支持（< 2 或 > 宿主最大值）。
+    /// 文档码：`E_FORMAT_VERSION`。
     A2PluginErrorFormatVersion,
     /// `permissions` 里出现目录之外的权限 id。
+    /// 文档码：`E_SCHEMA`（权限枚举值非法）。
     A2PluginErrorPermUnknown,
     /// 路径穿越：任一字符串含 `..` / 绝对路径 / 反斜杠 / 控制字符。
+    /// 文档码：`E_PATH_ESCAPE`（符号链接条目另见安装器的 `E_LINK`）。
     A2PluginErrorPath,
     /// 超出上限：文件数、路径长度、单文件大小、包体大小。
+    /// 文档码：`E_SIZE_LIMIT`。
     A2PluginErrorSize,
     /// `type` 不是 `json` / `js`（`native` 属 P5 的附加字段，不是 type 值）。
+    /// 文档码：`E_TYPE_UNSUPPORTED` / `E_NATIVE_UNSUPPORTED`。
     A2PluginErrorTypeUnsupported,
     /// `platforms` 不含当前平台（宿主只承诺 ios）。
+    /// 文档码：`E_PLATFORM`。
     A2PluginErrorPlatform,
     /// `type: json` 申请了只有 JS 才能用的运行时权限。
+    /// 文档码：`E_JSON_PERM`。
     A2PluginErrorJsonPerm,
     /// 包根出现了已移除的签名文件（`AIR2SIG.json`）。
+    /// 文档码：`E_LEGACY_SIGNATURE`。
     A2PluginErrorLegacySignature,
 };
 
@@ -125,16 +135,15 @@ FOUNDATION_EXPORT BOOL A2PluginIsValidVersion(NSString *version);
 #pragma mark - 上限
 
 /// 安装期上限。由安装器传入（它才知道包体与条目数），本层只提供判定入口。
-/// 默认值按 P1 安装器口径：包 64 MB / 5000 文件 / 路径 200 字节。
-/// （`docs/PLUGIN-SYSTEM.md` 3.3 写的是 4096 文件 / 255 字节 —— 那是对外承诺的
-/// 上限，安装器可传入更严格的值；本层不写死，避免两处数字再次漂移。）
+/// 取值就是 `docs/PLUGIN-SYSTEM.md` 3.3「硬性上限」表对外承诺的数字
+/// （包 64 MB / 文件数 4096 / 路径 255 字节）—— 文档是唯一口径，代码不另立更严或有别的值。
 typedef struct A2PluginLimits {
     unsigned long long maxPackageBytes;
     NSUInteger maxFileCount;
     NSUInteger maxPathLength;
 } A2PluginLimits;
 
-/// 默认上限（64 MB / 5000 / 200）。
+/// 默认上限（64 MB / 4096 文件 / 255 字节路径）。
 FOUNDATION_EXPORT A2PluginLimits A2PluginDefaultLimits(void);
 
 #pragma mark - 依赖

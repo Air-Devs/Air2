@@ -229,11 +229,20 @@ static void testManifestAccepts(void) {
     eqStr(ErrorCode(sizeError), @"E_SIZE", @"超包体给 E_SIZE");
     NSError *countError = nil;
     BOOL tooMany = [minimal validatePackageEnvelopeWithBytes:1024
-                                                   fileCount:5001
+                                                   fileCount:4097
                                                       limits:A2PluginDefaultLimits()
                                                        error:&countError];
-    ok(!tooMany, @"文件数超过 5000 被拒");
+    ok(!tooMany, @"文件数超过 4096 被拒");
     eqStr(ErrorCode(countError), @"E_SIZE", @"超文件数给 E_SIZE");
+
+    // 默认上限必须就是 PLUGIN-SYSTEM 3.3 对外承诺的那三个数字（改这里=改承诺）
+    A2PluginLimits docLimits = A2PluginDefaultLimits();
+    ok(docLimits.maxPackageBytes == 64ULL * 1024ULL * 1024ULL,
+       @"默认包体上限对齐 PLUGIN-SYSTEM 3.3：64 MB");
+    eqInt((NSInteger)docLimits.maxFileCount, 4096,
+          @"默认文件数上限对齐 PLUGIN-SYSTEM 3.3：4096");
+    eqInt((NSInteger)docLimits.maxPathLength, 255,
+          @"默认路径长度上限对齐 PLUGIN-SYSTEM 3.3：255 字节");
 }
 
 #pragma mark - manifest 反例

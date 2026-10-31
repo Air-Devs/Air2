@@ -458,8 +458,8 @@ static BOOL A2AllKeysAllowed(NSDictionary *dict, NSSet<NSString *> *allowed, NSS
 A2PluginLimits A2PluginDefaultLimits(void) {
     A2PluginLimits limits;
     limits.maxPackageBytes = 64ULL * 1024ULL * 1024ULL;
-    limits.maxFileCount = 5000;
-    limits.maxPathLength = 200;
+    limits.maxFileCount = 4096;
+    limits.maxPathLength = 255;
     return limits;
 }
 
