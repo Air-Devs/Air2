@@ -2171,6 +2171,23 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
             a2_gl_bridge_teardown();
             return A2GlBridgeErrEgl;
         }
+        // ★2026-10-31 黑屏诊断（6616cae 真机：swap 已提交但屏幕全黑）★
+        //   记录「交给 eglCreateWindowSurface 的到底是什么」：
+        //   hostEglBackend=1 ⇒ A2FakeEglWindowSize{宽,高,图层}（假 EGL 契约）；
+        //   hostEglBackend=0 ⇒ 图层/视图指针本身（真 EGL，如 ANGLE 方案 A）。
+        {
+            const char *cls = "(null)";
+            if (renderable != NULL) {
+                @try {
+                    id obj = (__bridge id)renderable;
+                    cls = NSStringFromClass([obj class]).UTF8String;
+                } @catch (__unused NSException *e) {
+                    cls = "(not-an-objc-object)";
+                }
+            }
+            a2_log_f(@"[A2-GLBRIDGE] EGL 建面成功：surface=%p hostEglBackend=%d renderable=%p class=%s drawable=%dx%d 像素",
+                     (void *)gSurf, hostEglBackend ? 1 : 0, renderable, cls, drawableW, drawableH);
+        }
     }
 
     if (!gEglMakeCurrent(gDpy, gSurf, gSurf, gCtx)) {
