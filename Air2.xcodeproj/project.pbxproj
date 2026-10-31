@@ -167,6 +167,7 @@
 		5A0A0E6AE2BBFCAD8A947CA9 /* A2Toast.m in Sources */ = {isa = PBXBuildFile; fileRef = F3C972A56B473038ED5074FD /* A2Toast.m */; };
 		46BEB683A03C405C1E74C0B2 /* A2VersionCard.m in Sources */ = {isa = PBXBuildFile; fileRef = DCF1F61258EDBCB81698B32B /* A2VersionCard.m */; };
 		69B050006C721F65AC2315AD /* A2PluginCriticalConfirmFlow.m in Sources */ = {isa = PBXBuildFile; fileRef = A6274C74E88528285ABDA035 /* A2PluginCriticalConfirmFlow.m */; };
+		2CA1D3BD16BB6DF3348245FF /* A2PluginListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 81EB0E25DD2621A4D363F9F7 /* A2PluginListViewController.m */; };
 		A3D7DE3AE8F36DD1C2F3037D /* A2PluginPermissionSheet.m in Sources */ = {isa = PBXBuildFile; fileRef = B00FCC47D562C0BD0A1A6C14 /* A2PluginPermissionSheet.m */; };
 		5440FDEA95986768641FF753 /* A2BaseViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */; };
 		DB69EBBFE2FB627A405DED59 /* A2LicenseViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6068960D14B3D649188A52E4 /* A2LicenseViewController.m */; };
@@ -384,6 +385,7 @@
 		F3C972A56B473038ED5074FD /* A2Toast.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Toast.m"; sourceTree = "<group>"; };
 		DCF1F61258EDBCB81698B32B /* A2VersionCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionCard.m"; sourceTree = "<group>"; };
 		A6274C74E88528285ABDA035 /* A2PluginCriticalConfirmFlow.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PluginCriticalConfirmFlow.m"; sourceTree = "<group>"; };
+		81EB0E25DD2621A4D363F9F7 /* A2PluginListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PluginListViewController.m"; sourceTree = "<group>"; };
 		B00FCC47D562C0BD0A1A6C14 /* A2PluginPermissionSheet.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PluginPermissionSheet.m"; sourceTree = "<group>"; };
 		BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BaseViewController.m"; sourceTree = "<group>"; };
 		6068960D14B3D649188A52E4 /* A2LicenseViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LicenseViewController.m"; sourceTree = "<group>"; };
@@ -589,6 +591,7 @@
 		DBF31C9D8FD1524E6BEB2D62 /* A2Toast.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Toast.h"; sourceTree = "<group>"; };
 		88C9076497160DA45470EFB1 /* A2VersionCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionCard.h"; sourceTree = "<group>"; };
 		C23E370A81246F8355FF184F /* A2PluginCriticalConfirmFlow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PluginCriticalConfirmFlow.h"; sourceTree = "<group>"; };
+		0DCF1C63E48A5DBE4E79DBA6 /* A2PluginListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PluginListViewController.h"; sourceTree = "<group>"; };
 		4CB07C9CB2B0A052F6FEA48A /* A2PluginPermissionSheet.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PluginPermissionSheet.h"; sourceTree = "<group>"; };
 		346D941B767D969728343CD3 /* A2BaseViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BaseViewController.h"; sourceTree = "<group>"; };
 		95928851A19F7FC341B8F44F /* A2LicenseViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LicenseViewController.h"; sourceTree = "<group>"; };
@@ -1218,8 +1221,10 @@
 			isa = PBXGroup;
 			children = (
 				A6274C74E88528285ABDA035 /* A2PluginCriticalConfirmFlow.m */,
+				81EB0E25DD2621A4D363F9F7 /* A2PluginListViewController.m */,
 				B00FCC47D562C0BD0A1A6C14 /* A2PluginPermissionSheet.m */,
 				C23E370A81246F8355FF184F /* A2PluginCriticalConfirmFlow.h */,
+				0DCF1C63E48A5DBE4E79DBA6 /* A2PluginListViewController.h */,
 				4CB07C9CB2B0A052F6FEA48A /* A2PluginPermissionSheet.h */,
 			);
 			path = Plugin;
@@ -1662,6 +1667,7 @@
 				5A0A0E6AE2BBFCAD8A947CA9 /* A2Toast.m in Sources */,
 				46BEB683A03C405C1E74C0B2 /* A2VersionCard.m in Sources */,
 				69B050006C721F65AC2315AD /* A2PluginCriticalConfirmFlow.m in Sources */,
+				2CA1D3BD16BB6DF3348245FF /* A2PluginListViewController.m in Sources */,
 				A3D7DE3AE8F36DD1C2F3037D /* A2PluginPermissionSheet.m in Sources */,
 				5440FDEA95986768641FF753 /* A2BaseViewController.m in Sources */,
 				DB69EBBFE2FB627A405DED59 /* A2LicenseViewController.m in Sources */,

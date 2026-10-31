@@ -133,6 +133,29 @@ NS_ASSUME_NONNULL_BEGIN
                                                  source:(A2PluginInstallSource *)source
                                                   error:(NSError **)error;
 
+/// 读取该插件**当前已安装这一版**的 manifest（`<Plugins>/<id>/<registry.version>/manifest.json`）。
+///
+/// 管理页 / 授权页需要它来显示名字、作者（自述）、申请的权限集与主版本号；
+/// 目录布局的知识只在安装器里留一份，UI 不自己拼路径（ARCHITECTURE：View 不拼路径）。
+///
+/// 读之前先 `loadWithError:` 重读注册表：返回的 manifest 必须与磁盘上的
+/// `registry.version` 一致，拿旧条目的版本号去拼路径会读到已经不存在的目录。
+/// 失败原因：没装（注册表里没有这个条目）/ 注册表读不出来 / 目录里没有 manifest.json /
+/// manifest 校验不过（被改过或损坏）。调用方按「这个插件现在不可用」处理。
+- (nullable A2PluginManifest *)installedManifestForPluginId:(NSString *)pluginId
+                                                     error:(NSError **)error;
+
+/// 写 registry 的 `enabled`（用户开关）。注册表负责原子写，本方法只做两件事：
+/// 改字段、盖 `updatedAt`，写失败时把内存拨回去（失败后 registry 仍是磁盘上的状态）。
+///
+/// 为什么放在这里而不是让管理页直接改条目：`updatedAt` 属于写入规则，
+/// 界面上改 registry 字段等于把一条写入规则抄进 View（ARCHITECTURE：View 不内嵌实现）。
+///
+/// 已知缺口：PLUGIN-SECURITY 3.4 补充规则 7 要求用户动配置时 `userSeq + 1`，
+/// 但 `A2PluginRegistry.userSeq` 目前只有只读属性、没有自增入口（与 ③ 同一个缺口），
+/// 所以这里不写一个假的 `userSeq`。
+- (BOOL)applyEnabled:(BOOL)enabled forPluginId:(NSString *)pluginId error:(NSError **)error;
+
 /// 卸载：先删注册表条目（注册表是唯一事实来源，条目没了就不再被加载），再删目录。
 /// 删目录失败**不算失败**（4.6 第 3 条：下次启动按孤儿目录清理），但会写一行日志。
 - (BOOL)uninstallPluginId:(NSString *)pluginId error:(NSError **)error;

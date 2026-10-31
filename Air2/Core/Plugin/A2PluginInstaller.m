@@ -513,6 +513,105 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
     return result;
 }
 
+#pragma mark 读取已安装 manifest
+
+- (nullable A2PluginManifest *)installedManifestForPluginId:(NSString *)pluginId
+                                                     error:(NSError **)error {
+    if (pluginId.length == 0) {
+        if (error) {
+            *error = A2PluginErrorMake(A2PluginErrorField, @"id", @"读取 manifest 需要插件 id");
+        }
+        return nil;
+    }
+
+    // 先重读注册表：目录名来自 registry.version，用内存里的旧版本号会读到已删的目录。
+    NSError *loadError = nil;
+    if (![self.registry loadWithError:&loadError]) {
+        if (error) {
+            *error = A2PluginErrorMake(A2PluginErrorIO, nil, @"注册表读不出来：%@",
+                                       loadError.localizedDescription ?: @"未知原因");
+        }
+        return nil;
+    }
+    A2PluginRegistryEntry *entry = [self.registry entryForPluginId:pluginId];
+    if (!entry) {
+        if (error) {
+            *error = A2PluginErrorMake(A2PluginErrorIO, @"id", @"注册表里没有 %@", pluginId);
+        }
+        return nil;
+    }
+
+    NSString *versionDirectory =
+        [self.pluginsDirectory stringByAppendingPathComponent:pluginId];
+    NSString *manifestPath =
+        [[versionDirectory stringByAppendingPathComponent:entry.version]
+            stringByAppendingPathComponent:@"manifest.json"];
+    NSError *fileError = nil;
+    NSData *data = [NSData dataWithContentsOfFile:manifestPath
+                                          options:0
+                                            error:&fileError];
+    if (!data) {
+        [self logLine:@"读不到已安装的 manifest：%@（%@）", manifestPath,
+         fileError.localizedDescription ?: @"未知原因"];
+        if (error) {
+            *error = A2PluginErrorMake(A2PluginErrorIO, nil,
+                                       @"安装目录里没有可读的 manifest.json：%@",
+                                       fileError.localizedDescription ?: @"未知原因");
+        }
+        return nil;
+    }
+
+    NSError *manifestError = nil;
+    A2PluginManifest *manifest = [A2PluginManifest manifestWithData:data
+                                                             limits:self.limits
+                                                              error:&manifestError];
+    if (!manifest) {
+        // 校验不过 = 装好的包被改过或损坏 —— 不降级放行，交给上层判「不可用」。
+        [self logLine:@"已安装的 manifest 校验不过：%@（%@）",
+         pluginId, manifestError.localizedDescription ?: @"未知原因"];
+        if (error) *error = manifestError;
+        return nil;
+    }
+    return manifest;
+}
+
+- (BOOL)applyEnabled:(BOOL)enabled forPluginId:(NSString *)pluginId error:(NSError **)error {
+    if (pluginId.length == 0) {
+        if (error) {
+            *error = A2PluginErrorMake(A2PluginErrorField, @"id", @"启用 / 停用需要插件 id");
+        }
+        return NO;
+    }
+
+    NSError *loadError = nil;
+    if (![self.registry loadWithError:&loadError]) {
+        if (error) {
+            *error = A2PluginErrorMake(A2PluginErrorIO, nil, @"注册表读不出来：%@",
+                                       loadError.localizedDescription ?: @"未知原因");
+        }
+        return NO;
+    }
+    A2PluginRegistryEntry *entry = [self.registry entryForPluginId:pluginId];
+    if (!entry) {
+        if (error) {
+            *error = A2PluginErrorMake(A2PluginErrorField, @"id", @"注册表里没有 %@", pluginId);
+        }
+        return NO;
+    }
+    if (entry.isEnabled == enabled) return YES;      // 幂等：状态没变就不写盘
+
+    entry.enabled = enabled;
+    entry.updatedAt = A2ISO8601Now();
+    NSError *writeError = nil;
+    if (![self.registry upsertEntry:entry error:&writeError]) {
+        entry.enabled = !enabled;                    // 内存回滚，保持「界面 == 磁盘」
+        if (error) *error = writeError;
+        return NO;
+    }
+    [self logLine:@"用户%@插件：%@", enabled ? @"启用" : @"停用", pluginId];
+    return YES;
+}
+
 #pragma mark 卸载
 
 - (BOOL)uninstallPluginId:(NSString *)pluginId error:(NSError **)error {

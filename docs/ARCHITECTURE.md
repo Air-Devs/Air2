@@ -67,7 +67,7 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 | `Download/` | 下载引擎：分片、断点续传、镜像回退、速度自适应 |
 | `Addons/` | Mod / 资源包 / 光影 / 整合包的识别、依赖解析、安装 |
 | `Renderer/` | 渲染后端抽象与注册表（Metal / kopper / VirGL / GL4ES…） |
-| `Plugin/` | 插件系统数据层与安装器：`manifest.json` 解析校验、`registry.json` 原子读写、`.air2plugin` 包的解压安全校验、安装 / 卸载 / 回退、权限存储与目录（授权判定、`approvedHashes`、后果翻译表） |
+| `Plugin/` | 插件系统数据层与安装器：`manifest.json` 解析校验、`registry.json` 原子读写、`.air2plugin` 包的解压安全校验、安装 / 卸载 / 回退、读取已安装这一版的 manifest、权限存储与目录（授权判定、`approvedHashes`、后果翻译表） |
 | `Path/` | 沙盒路径规划，所有路径只在此处拼装 |
 | `Settings/` | 设置项注册表、类型安全的读写、默认值、迁移 |
 
@@ -79,7 +79,7 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 |---|---|
 | `Screens/` | 页面级视图，一屏一文件 |
 | `Components/` | 跨页面复用的小组件（按钮、卡片、弹窗） |
-| `Plugin/` | 插件相关界面：授权页（按后果分 5 组折叠）、critical 权限的三次确认流程 |
+| `Plugin/` | 插件相关界面：管理页（列表 / 详情 / 启停 / 卸载 / 导入）、授权页（按后果分 5 组折叠）、critical 权限的三次确认流程 |
 | `Control/` | 游戏内触控层（虚拟按键、摇杆、布局编辑） |
 | `Theme/` | 配色、字体、间距、动效常量 |
 

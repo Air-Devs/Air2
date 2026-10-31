@@ -40,6 +40,8 @@
 #import "A2ResolutionManager.h"
 #import "A2JREManageViewController.h"
 #import "A2DiagnosticsSettings.h"
+#import "A2PluginListViewController.h"
+#import "A2PluginRegistry.h"
 
 @interface A2SettingsViewController ()
 @property (nonatomic, strong) A2CategoryNavView *nav;
@@ -76,6 +78,7 @@
         [A2NavCategory title:@"外观"   symbol:@"paintpalette.fill"],
         [A2NavCategory title:@"下载"   symbol:@"arrow.down.circle" division:YES],
         [A2NavCategory title:@"诊断"   symbol:@"stethoscope" division:YES],
+        [A2NavCategory title:@"插件"   symbol:@"puzzlepiece.extension.fill" division:YES],
     ];
 
     __weak typeof(self) weakSelf = self;
@@ -298,6 +301,16 @@
     return row;
 }
 
+/// 已安装插件数。读不出来就说读不出来 —— 显示「0 个」会被当成「一个都没装」。
+- (NSString *)pluginSummaryText {
+    A2PluginRegistry *registry = [[A2PluginRegistry alloc] initWithPluginsDirectory:nil];
+    NSError *error = nil;
+    if (![registry loadWithError:&error]) return @"注册表读不出来";
+    NSUInteger count = [registry allEntries].count;
+    if (count == 0) return @"还没有安装插件";
+    return [NSString stringWithFormat:@"已安装 %lu 个", (unsigned long)count];
+}
+
 - (void)rebuildContentForIndex:(NSInteger)index {
     for (UIView *v in _detailStack.arrangedSubviews) {
         [_detailStack removeArrangedSubview:v];
@@ -384,6 +397,27 @@
     } else if (index == 4) {
         [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2AboutSettings buildWithHost:self]];
+    } else if (index == 5) {
+        // 插件系统（安装器 / 注册表 / 权限存储）的唯一入口。
+        // 旧的渲染器插件仍在「渲染 → 渲染器」里 —— 两条线在 P1 并存，互不影响。
+        A2SettingsSection *sec = [[A2SettingsSection alloc] initWithTitle:@"插件"];
+        sec.footerText = @"插件的每一项能力都写在权限里。安装之后可以逐项查看、关掉或重新审查。";
+
+        A2SettingsRow *row = [[A2SettingsRow alloc] init];
+        row.symbolName = @"puzzlepiece.extension.fill";
+        row.title = @"插件";
+        row.subtitle = [self pluginSummaryText];
+        row.accessory = A2SettingsRowAccessoryDisclosure;
+        row.showsSeparator = NO;
+        __weak typeof(self) weakSelf = self;
+        row.onTap = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            A2PluginListViewController *vc = [A2PluginListViewController defaultController];
+            [self.navigationController pushViewController:vc animated:YES];
+        };
+        [sec addRow:row];
+
+        [_detailStack addArrangedSubview:sec];
     }
 }
 
