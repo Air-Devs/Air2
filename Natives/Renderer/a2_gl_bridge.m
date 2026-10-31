@@ -1664,12 +1664,22 @@ void a2_gl_bridge_swap_buffers(void) {
         static unsigned long a2_pxProbeN = 0;
         if ((++a2_pxProbeN % 60) == 1) {
             typedef void (*A2PFN_glReadPixels)(int, int, int, int, unsigned, unsigned, void *);
-            A2PFN_glReadPixels rp = (A2PFN_glReadPixels)dlsym(RTLD_DEFAULT, "glReadPixels");
+            // ★从 GL 层句柄取★：flat namespace 可能解析到系统 GLES（MG 报过 SYMBOL THEFT），
+            //   那样读的就不是 MC 实际绘制用的那条链路 ⇒ 恒 0 是假象。
+            void *glLayerHandle = gRendererHandle;
+            A2PFN_glReadPixels rp = glLayerHandle
+                ? (A2PFN_glReadPixels)dlsym(glLayerHandle, "glReadPixels") : NULL;
+            const char *rpSrc = "GL层句柄";
+            if (rp == NULL) {
+                rp = (A2PFN_glReadPixels)dlsym(RTLD_DEFAULT, "glReadPixels");
+                rpSrc = "RTLD_DEFAULT";
+            }
             if (rp != NULL && gWidthPixels > 2 && gHeightPixels > 2) {
                 unsigned char px[4] = { 0, 0, 0, 0 };
                 rp(gWidthPixels / 2, gHeightPixels / 2, 1, 1, 0x1908 /*GL_RGBA*/, 0x1401 /*GL_UNSIGNED_BYTE*/, px);
                 a2_log_f(@"[A2-GLBRIDGE] 采样中心像素 #%lu = R%u G%u B%u A%u（全 0 ⇒ 没画；非 0 ⇒ 画了没上屏）",
                          a2_pxProbeN, px[0], px[1], px[2], px[3]);
+                a2_log_f(@"[A2-GLBRIDGE] 像素采样来源=%s handle=%p", rpSrc, glLayerHandle);
             }
         }
         if (!gGamePresented) {
