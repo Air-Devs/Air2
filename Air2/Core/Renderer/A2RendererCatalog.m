@@ -25,6 +25,7 @@
 
 NSString *const A2RendererNGGL4ESKWDylibName = @"libnggl4es_kw.dylib";
 NSString *const A2RendererHostEGLDylibName  = @"libeagl.dylib";
+NSString *const A2RendererMobileGluesDylibName = @"libmobileglues.dylib";
 
 + (NSArray<A2Renderer *> *)allCandidates {
     // ★顺序即 UI 顺序★：主推（按默认优先级） → 兼容底 → 实验（未内置）。
@@ -55,9 +56,9 @@ NSString *const A2RendererHostEGLDylibName  = @"libeagl.dylib";
                                        displayName:@"NG-GL4ES / KW"
                                          dylibName:A2RendererNGGL4ESKWDylibName
                                              notes:@"compat"],
-            [[A2Renderer alloc] initWithIdentifier:@"libmobileglues.dylib"
+            [[A2Renderer alloc] initWithIdentifier:A2RendererMobileGluesDylibName
                                        displayName:@"MobileGlues"
-                                         dylibName:@"libmobileglues.dylib"
+                                         dylibName:A2RendererMobileGluesDylibName
                                              notes:@"experimental"],
             [[A2Renderer alloc] initWithIdentifier:@"libnggl4es.dylib"
                                        displayName:@"NG-GL4ES"
@@ -87,6 +88,19 @@ NSString *const A2RendererHostEGLDylibName  = @"libeagl.dylib";
         if ([r.identifier isEqualToString:identifier]) return r;
     }
     return nil;
+}
+
++ (BOOL)isExperimentalLaunchChainIdentifier:(NSString *)identifier {
+    // ★2026-10 起新接的三条链路 = 实验性启动链★（用户在启动时要点 10 次免责确认）：
+    //   · MG     —— glGetError 曾崩在宿主函数表为空（见 A2LaunchSession 的 MG_DIRECTORY_PATH 段），
+    //               现在靠 DirectGLES 后端跑，仍在真机验证期；
+    //   · EAGL   —— EGL 那一半是本二进制的假 EGL，GL 层仍是 MG，同样的验证期；
+    //   · KW     —— `NO_INIT_CONSTRUCTOR` 变体（宿主必须显式 initialize_gl4es），黑屏风险最高。
+    // ★metallum / 内置 gl4es 不在本判据内★：它们是既有链路，不打扰用户。
+    if (identifier.length == 0) return NO;
+    return [identifier isEqualToString:A2RendererMobileGluesDylibName]
+        || [identifier isEqualToString:A2RendererHostEGLDylibName]
+        || [identifier isEqualToString:A2RendererNGGL4ESKWDylibName];
 }
 
 + (A2RendererTier)tierForIdentifier:(NSString *)identifier {
@@ -175,7 +189,7 @@ NSString *const A2RendererHostEGLDylibName  = @"libeagl.dylib";
     //   ⇒ 判据落在 GL 层候选上（同一套「文件在 + 能 dlopen」口径，不另造一套），
     //     原因串前面加一句「宿主 EGL 的 GL 层不可用」，让阻断文案说清缺的是哪一半。
     if ([candidate.identifier isEqualToString:A2RendererHostEGLDylibName]) {
-        A2Renderer *glLayer = [self candidateForIdentifier:@"libmobileglues.dylib"];
+        A2Renderer *glLayer = [self candidateForIdentifier:A2RendererMobileGluesDylibName];
         if (glLayer == nil) return @"宿主 EGL 的 GL 层候选未登记";
         NSString *why = [self bundleDiagnosisForCandidate:glLayer frameworksPath:frameworksPath];
         return why ? [@"宿主 EGL 的 GL 层不可用：" stringByAppendingString:why] : nil;

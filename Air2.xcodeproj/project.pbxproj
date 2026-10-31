@@ -95,6 +95,7 @@
 		349881CC525759AC6BD5202D /* A2JITStrategySelector.m in Sources */ = {isa = PBXBuildFile; fileRef = 9AEFB11C2421A6A801BA8DA9 /* A2JITStrategySelector.m */; };
 		3E7A1E373EBB4063806E133D /* A2JITStrings.m in Sources */ = {isa = PBXBuildFile; fileRef = C6BEF988E9AE08A5BCC6ECA9 /* A2JITStrings.m */; };
 		3FDC0A16279F2E406E9C9759 /* A2JITVerdictGuidance.m in Sources */ = {isa = PBXBuildFile; fileRef = 3E3FDFB8F4E3D5FDEDD6221C /* A2JITVerdictGuidance.m */; };
+		C01CF5C58B288C9A722004EA /* A2LaunchAlertPresenter.m in Sources */ = {isa = PBXBuildFile; fileRef = FC6B269465B93D33BC760808 /* A2LaunchAlertPresenter.m */; };
 		11706200BD2498A07AEBFDA9 /* A2LaunchChain.m in Sources */ = {isa = PBXBuildFile; fileRef = 5BA8D2CBACEBC7883477ABED /* A2LaunchChain.m */; };
 		4632370EACB8DDC10063691D /* A2LaunchFailure.m in Sources */ = {isa = PBXBuildFile; fileRef = 95F4A01F2F650DB147A7BA9C /* A2LaunchFailure.m */; };
 		DAA2D257F8CD8CA05DCCAC2C /* A2LaunchSession.m in Sources */ = {isa = PBXBuildFile; fileRef = F9D2B84C59CFA5FD3F242D06 /* A2LaunchSession.m */; };
@@ -329,6 +330,7 @@
 		9AEFB11C2421A6A801BA8DA9 /* A2JITStrategySelector.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITStrategySelector.m"; sourceTree = "<group>"; };
 		C6BEF988E9AE08A5BCC6ECA9 /* A2JITStrings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITStrings.m"; sourceTree = "<group>"; };
 		3E3FDFB8F4E3D5FDEDD6221C /* A2JITVerdictGuidance.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITVerdictGuidance.m"; sourceTree = "<group>"; };
+		FC6B269465B93D33BC760808 /* A2LaunchAlertPresenter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchAlertPresenter.m"; sourceTree = "<group>"; };
 		5BA8D2CBACEBC7883477ABED /* A2LaunchChain.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchChain.m"; sourceTree = "<group>"; };
 		95F4A01F2F650DB147A7BA9C /* A2LaunchFailure.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchFailure.m"; sourceTree = "<group>"; };
 		F9D2B84C59CFA5FD3F242D06 /* A2LaunchSession.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchSession.m"; sourceTree = "<group>"; };
@@ -556,6 +558,7 @@
 		D201ED16953E2525484A6DD4 /* A2JITStrategySelector.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITStrategySelector.h"; sourceTree = "<group>"; };
 		70F08401DFE783BD3C882CB1 /* A2JITStrings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITStrings.h"; sourceTree = "<group>"; };
 		23C094589B9B6B114C880DE3 /* A2JITVerdictGuidance.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITVerdictGuidance.h"; sourceTree = "<group>"; };
+		06A1B0CD32B0EF07172CD1DD /* A2LaunchAlertPresenter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchAlertPresenter.h"; sourceTree = "<group>"; };
 		CD73B6F629B6E7F371515ED5 /* A2LaunchChain.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchChain.h"; sourceTree = "<group>"; };
 		BC566C68096E2DB672692452 /* A2LaunchFailure.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchFailure.h"; sourceTree = "<group>"; };
 		8E0BDA8C8294193F556DAE77 /* A2LaunchSession.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchSession.h"; sourceTree = "<group>"; };
@@ -835,6 +838,7 @@
 				9AEFB11C2421A6A801BA8DA9 /* A2JITStrategySelector.m */,
 				C6BEF988E9AE08A5BCC6ECA9 /* A2JITStrings.m */,
 				3E3FDFB8F4E3D5FDEDD6221C /* A2JITVerdictGuidance.m */,
+				FC6B269465B93D33BC760808 /* A2LaunchAlertPresenter.m */,
 				5BA8D2CBACEBC7883477ABED /* A2LaunchChain.m */,
 				95F4A01F2F650DB147A7BA9C /* A2LaunchFailure.m */,
 				F9D2B84C59CFA5FD3F242D06 /* A2LaunchSession.m */,
@@ -863,6 +867,7 @@
 				D201ED16953E2525484A6DD4 /* A2JITStrategySelector.h */,
 				70F08401DFE783BD3C882CB1 /* A2JITStrings.h */,
 				23C094589B9B6B114C880DE3 /* A2JITVerdictGuidance.h */,
+				06A1B0CD32B0EF07172CD1DD /* A2LaunchAlertPresenter.h */,
 				CD73B6F629B6E7F371515ED5 /* A2LaunchChain.h */,
 				BC566C68096E2DB672692452 /* A2LaunchFailure.h */,
 				8E0BDA8C8294193F556DAE77 /* A2LaunchSession.h */,
@@ -1663,6 +1668,7 @@
 				349881CC525759AC6BD5202D /* A2JITStrategySelector.m in Sources */,
 				3E7A1E373EBB4063806E133D /* A2JITStrings.m in Sources */,
 				3FDC0A16279F2E406E9C9759 /* A2JITVerdictGuidance.m in Sources */,
+				C01CF5C58B288C9A722004EA /* A2LaunchAlertPresenter.m in Sources */,
 				11706200BD2498A07AEBFDA9 /* A2LaunchChain.m in Sources */,
 				4632370EACB8DDC10063691D /* A2LaunchFailure.m in Sources */,
 				DAA2D257F8CD8CA05DCCAC2C /* A2LaunchSession.m in Sources */,
@@ -1881,7 +1887,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
-				CURRENT_PROJECT_VERSION = "b9f5ad6";
+				CURRENT_PROJECT_VERSION = "f4f3ea6";
 				DEAD_CODE_STRIPPING = "NO";
 				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";
@@ -1927,7 +1933,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
-				CURRENT_PROJECT_VERSION = "b9f5ad6";
+				CURRENT_PROJECT_VERSION = "f4f3ea6";
 				DEAD_CODE_STRIPPING = "NO";
 				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";

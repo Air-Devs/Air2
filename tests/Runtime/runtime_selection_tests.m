@@ -148,6 +148,21 @@ static void testRendererCatalog(void) {
     eqInt([A2RendererCatalog tierForIdentifier:@"lib-不存在.dylib"],
           A2RendererTierExperimental, @"★没登记的标识不猜成主推★");
 
+    // ★实验性启动链的判据★（启动侧据此弹 10 次免责确认；metallum / 内置 gl4es 不弹）
+    eqStr(A2RendererMobileGluesDylibName, @"libmobileglues.dylib", @"MG 标识常量 = dylib 文件名");
+    ok([A2RendererCatalog isExperimentalLaunchChainIdentifier:@"libmobileglues.dylib"],
+       @"MG 属于实验性启动链");
+    ok([A2RendererCatalog isExperimentalLaunchChainIdentifier:@"libeagl.dylib"],
+       @"★EAGL 属于实验性启动链（宿主假 EGL，GL 层是 MG）★");
+    ok([A2RendererCatalog isExperimentalLaunchChainIdentifier:@"libnggl4es_kw.dylib"],
+       @"★NG-GL4ES / KW 属于实验性启动链★");
+    ok(![A2RendererCatalog isExperimentalLaunchChainIdentifier:@"libmetallum.dylib"],
+       @"metallum 不属于实验性启动链（不弹确认）");
+    ok(![A2RendererCatalog isExperimentalLaunchChainIdentifier:@"libgl4es_114.dylib"],
+       @"内置 gl4es 不属于实验性启动链（不弹确认）");
+    ok(![A2RendererCatalog isExperimentalLaunchChainIdentifier:@""],
+       @"空标识不判成实验性启动链");
+
     // 标识就是 dylib 文件名（= 老线 RENDERER_NAME_* 词汇表；也是 NSUserDefaults 存的值）
     NSMutableSet *ids = [NSMutableSet set];
     BOOL allDylib = YES;

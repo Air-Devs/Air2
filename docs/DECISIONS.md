@@ -333,3 +333,31 @@
 - **落地**：`Natives/Support/A2LegacyJITGate.[hm]`（`a2gate_handshake` 取代 `a2gate_obtain_real_region`；
   `A2AMEJITVerifyWritableJITRegion` → `A2AMEJITVerifyJITHandshake`）、`Natives/Support/A2JITEnabler.m`（回前台复查判据行文案）。
 
+---
+
+## ADR-014：实验性启动链（MG / EAGL / KW）启动前须逐次通过 10 次免责确认，且不缓存「已同意」
+
+- **状态**：已接受
+- **日期**：2026-10-31
+- **背景**：`libmobileglues.dylib`（MG）、`libeagl.dylib`（宿主假 EGL + MG）、`libnggl4es_kw.dylib`（KW）
+  三条链路仍在调试期：真机上出现过宿主函数表为空（`eglGetDisplay is not available`）、
+  `NO_INIT_CONSTRUCTOR` 未显式 `initialize_gl4es()` 导致的黑屏，以及首帧取指 / 宿主表面相关的闪退。
+  失败现象与「用户自己改过渲染器 / 加了模组」高度混淆 ⇒ 用户要求把「这是实验性链路、后果自负」
+  在启动前**明确告知到位**，而不是靠一句 toast。
+- **决策**：
+  1. 判据只有一个：`+[A2RendererCatalog isExperimentalLaunchChainIdentifier:]`（Core/Renderer）。
+     metallum / 内置 gl4es **不弹**。
+  2. 时机：`A2LaunchSession.startCurrentVersionWithCompletion:` 内、**所有「不建 VM 就阻断」的闸门之后、
+     建 VM 之前**（放闸门前 = 用户白点 10 次才被拦；放建 VM 后 = 已经来不及）。
+  3. 形式：标准 `UIAlertController`（alert 样式，**不用 ActionSheet** —— 见 `check_no_glass.py` 判据 E），
+     逐次弹 10 次、点了才弹下一个（不阻塞、不 sleep）；每次都完整显示免责声明，第 10 次追加
+     「继续即表示你已知晓并自行承担后果」。任一「取消」⇒ 本次启动终止（不建 VM），且**不**弹失败页。
+  4. ★每次都重弹、不缓存★：同一会话内重复启动也要重新走完 10 次（用户明令），
+     实现上**不写入任何「已同意」状态**（无 NSUserDefaults 键、无进程内标志）。
+- **理由**：这三条链路的失败模式目前无法与「改动导致」区分，只有在启动前把责任边界说清，
+  才能让真机迭代的失败报告有意义；逐次确认（而非一次总同意）能挡住「习惯性连点」。
+- **风险 / 边界**：10 次点击耗时可能超过主页的 90 秒看门狗（`A2LauncherViewController.launchGame`），
+  那时会多一条「启动链 90 秒没有返回」的提示（启动仍继续，见下条）；不在本 ADR 内改动看门狗口径。
+- **落地**：`Air2/Core/Renderer/A2RendererCatalog.[hm]`（判据 + `A2RendererMobileGluesDylibName`）、
+  `Air2/Player/A2LaunchAlertPresenter.[hm]`（10 次确认与宿主查找）、`Air2/Player/A2LaunchSession.m`（确认门）、
+  `tests/Runtime/runtime_selection_tests.m`（判据覆盖 MG/EAGL/KW，排除 metallum/gl4es）。

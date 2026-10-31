@@ -90,6 +90,23 @@ extern NSString *const A2RendererNGGL4ESKWDylibName;
 /// 阻断判据三处必须同一份字面量（同 `A2RendererNGGL4ESKWDylibName` 的理由）。
 extern NSString *const A2RendererHostEGLDylibName;
 
+/// ★GL 层 = MobileGlues 的标识★ = `libmobileglues.dylib`。
+///
+/// 它同时是「宿主 EGL 后端（`libeagl.dylib`）」的 GL 层 —— 后者只提供 EGL（假 EGL 在
+/// 本二进制里），GL 3.2+ 的翻译由这一只做。三处必须同一份字面量：候选表、
+/// `+bundleDiagnosisForCandidate:` 的宿主 EGL 判据、`+isExperimentalLaunchChainIdentifier:`。
+extern NSString *const A2RendererMobileGluesDylibName;
+
+/// ★是否属于「实验性启动链」★（判定 = 渲染器标识；供启动侧决定是否弹免责确认）。
+///
+/// 实验性启动链 = 2026-10 起新接、仍在调试的三条：
+///   · `libmobileglues.dylib` —— MG（GL on 宿主 GLES，DirectGLES 后端）
+///   · `libeagl.dylib`        —— 宿主假 EGL → CAEAGLLayer 上屏，GL 层仍是 MG
+///   · `libnggl4es_kw.dylib`  —— NG-GL4ES / KW（`NO_INIT_CONSTRUCTOR` 变体）
+/// ★metallum / 内置 gl4es 不属于本判据★（它们是既有链路，不提示）。
+/// ★调用点★：`Air2/Player/A2LaunchSession.m`（解析出渲染器之后、建 VM 之前的确认门）。
++ (BOOL)isExperimentalLaunchChainIdentifier:(NSString *)identifier;
+
 /// 全部候选（★稳定顺序★：主推 → 兼容底 → 实验）。
 /// 每一项的 `identifier` = dylib 文件名，`displayName` = 技术名（回退用），`dylibName` = 同名。
 + (NSArray<A2Renderer *> *)allCandidates;

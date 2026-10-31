@@ -14,6 +14,7 @@
 #import "A2LaunchRunner.h"
 #import "A2LaunchChain.h"            // ①→②→③ 的顺序与状态（★单一真相源★）
 #import "A2LaunchFailure.h"          // 失败分类 / 判据行 / 用户文案（Player 纯逻辑）
+#import "A2LaunchAlertPresenter.h"   // 确认窗呈现 + 宿主查找（实验性启动链的 10 次免责确认）
 #import "A2JITReadinessProbe.h"       // ② 的结论枚举（verdict；判据实现见 A2JITEnabler）
 #import "A2JITScriptDelivery.h"      // ① 下发脚本（Bridge → Natives 的下发原语）
 #import "A2LaunchContract.h"
@@ -782,214 +783,252 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
         }
     }
 
-    // 建 VM 会阻塞 ⇒ 放后台队列；结果回主线程。
-    // ★启动遮罩★ 从这里开始用户看不到任何进展 ⇒ 立刻盖上，阶段播报会驱动它。
-    [A2LaunchOverlay show];
-    // ★26.3+（SDL 窗口栈）★ 我们自己那条「GLFW 建窗时顺带加控件」不会执行
-    //   ⇒ 这里主动建一层控件覆盖层；事件由 a2_sdl_input 镜像进 SDL。
-    //   26.2 及更早不受影响（它们走 GLFW 宿主视图那条老路）。
-    if ((a2McMajor == 26 && a2McMinor >= 3) || a2McMajor > 26) {
-        extern void a2_controls_overlay_start_for_sdl(void);
-        a2_controls_overlay_start_for_sdl();
-        [A2Log criterion:@"[A2-CONTROLS] 26.3+ 走 SDL 控件覆盖层（a2_controls_overlay）"];
-    }
-
-    // ========================================================================
-    // ★启动前完整性核对★（口径对齐 PCL：对着版本清单逐项核，不是只看目录在不在）
-    //   目的：缺库/坏 jar 时立刻给可读结论，而不是白花 20 秒建 VM 再崩。
-    //   开关：设置→「跳过完整性检查」(A2GlobalSkipIntegrityCheck) 或版本级覆盖。
-    // ========================================================================
-    {
-        BOOL globalSkip = A2Settings.shared.skipIntegrityCheck;
-        BOOL skip = [version.isolation shouldSkipIntegrityCheckWithGlobal:globalSkip] || globalSkip;
-        if (skip) {
-            [A2Log criterion:@"[A2-INTEGRITY] 已按设置跳过完整性检查"];
-        } else {
-            A2IntegrityReport *rep = [A2IntegrityChecker checkVersionAtPath:version.versionPath
-                                                                  versionID:version.name
-                                                                   gameHome:gameHome];
-            [A2Log criterion:@"[A2-INTEGRITY] %@", rep.summary];
-            if (rep.level == A2IntegrityLevelFatal) {
-                [A2Log criterion:@"[A2-INTEGRITY] ★阻断启动★ %@", rep.fatalReason ?: @"完整性检查未通过"];
-                finish(NO, 0, [NSString stringWithFormat:@"版本不完整：%@",
-                               rep.fatalReason ?: @"请重新下载该版本"]);
-                return;
-            }
-            if (rep.level == A2IntegrityLevelWarning) {
-                [A2Log criterion:@"[A2-INTEGRITY] 告警（不拦路）：%@", rep.summary];
-            }
+    // ★以下 = 确认通过之后才执行的部分★（定义在前，由下面的 [A2-EXPERIMENTAL] 确认门调用）：
+    //   启动遮罩 → 26.3+ 控件覆盖层 → 完整性核对 → 后台链（① 下发脚本 → ② 探测 JIT → ③ 建 VM）。
+    void (^proceedWithLaunch)(void) = ^{
+        // 建 VM 会阻塞 ⇒ 放后台队列；结果回主线程。
+        // ★启动遮罩★ 从这里开始用户看不到任何进展 ⇒ 立刻盖上，阶段播报会驱动它。
+        [A2LaunchOverlay show];
+        // ★26.3+（SDL 窗口栈）★ 我们自己那条「GLFW 建窗时顺带加控件」不会执行
+        //   ⇒ 这里主动建一层控件覆盖层；事件由 a2_sdl_input 镜像进 SDL。
+        //   26.2 及更早不受影响（它们走 GLFW 宿主视图那条老路）。
+        if ((a2McMajor == 26 && a2McMinor >= 3) || a2McMajor > 26) {
+            extern void a2_controls_overlay_start_for_sdl(void);
+            a2_controls_overlay_start_for_sdl();
+            [A2Log criterion:@"[A2-CONTROLS] 26.3+ 走 SDL 控件覆盖层（a2_controls_overlay）"];
         }
-    }
 
-    [A2Log log:@"[A2-LAUNCH] 进入后台链：plan=%@ renderer=%@ jre=%@",
-                 planPath.lastPathComponent ?: @"(nil)", renderer.identifier, jreDir];
-    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
-        // ====================================================================
-        // ★[A2-LEGACY] 远古资源映射（virtual / map_to_resources）★
-        // --------------------------------------------------------------------
-        // 为什么放在这里（而不是安装阶段）：映射目标是 `<gameDir>/resources/`，
-        // 而 instance 的 gameDir 只有到这里才最终确定（实例隔离 / 自愈都会改它）。
-        // 幂等 + 硬链接 ⇒ 第二次启动几乎没有成本；放在建 VM 之前即可。
-        // 失败不拦路：映射不全会表现为「无音效 / 英文界面」，不该让整个启动失败。
-        // ====================================================================
-        if (legacyProfile != nil && legacyProfile.isClassicGeneration) {
-            NSError *mapError = nil;
-            A2LegacyAssetsMapResult *mapResult =
-                [A2LegacyAssetsMapper mapAssetsForVersionDirectory:version.versionPath
-                                                         versionID:version.name
-                                                        assetsRoot:assetsDir
-                                                           gameDir:gameDir
-                                                             error:&mapError];
-            if (mapResult != nil) {
-                [A2Log criterion:@"%@", [mapResult summaryLine]];
-                if (mapResult.missingObjects > 0) {
-                    [A2Log log:@"[A2-LEGACY] 有 %lu 个资源对象缺失（重装该版本可补齐）",
-                     (unsigned long)mapResult.missingObjects];
-                }
+        // ========================================================================
+        // ★启动前完整性核对★（口径对齐 PCL：对着版本清单逐项核，不是只看目录在不在）
+        //   目的：缺库/坏 jar 时立刻给可读结论，而不是白花 20 秒建 VM 再崩。
+        //   开关：设置→「跳过完整性检查」(A2GlobalSkipIntegrityCheck) 或版本级覆盖。
+        // ========================================================================
+        {
+            BOOL globalSkip = A2Settings.shared.skipIntegrityCheck;
+            BOOL skip = [version.isolation shouldSkipIntegrityCheckWithGlobal:globalSkip] || globalSkip;
+            if (skip) {
+                [A2Log criterion:@"[A2-INTEGRITY] 已按设置跳过完整性检查"];
             } else {
-                [A2Log log:@"[A2-LEGACY] 资源映射跳过：%@", mapError.localizedDescription ?: @"(无详情)"];
+                A2IntegrityReport *rep = [A2IntegrityChecker checkVersionAtPath:version.versionPath
+                                                                      versionID:version.name
+                                                                       gameHome:gameHome];
+                [A2Log criterion:@"[A2-INTEGRITY] %@", rep.summary];
+                if (rep.level == A2IntegrityLevelFatal) {
+                    [A2Log criterion:@"[A2-INTEGRITY] ★阻断启动★ %@", rep.fatalReason ?: @"完整性检查未通过"];
+                    finish(NO, 0, [NSString stringWithFormat:@"版本不完整：%@",
+                                   rep.fatalReason ?: @"请重新下载该版本"]);
+                    return;
+                }
+                if (rep.level == A2IntegrityLevelWarning) {
+                    [A2Log criterion:@"[A2-INTEGRITY] 告警（不拦路）：%@", rep.summary];
+                }
             }
         }
 
-        // ★[JIT↔VM] 启动链：① 下发脚本 → ② 探测 JIT → ③ 建 VM★
-        //   ★「走到哪一步 / 为什么停」只由 chain.stage + chain.failureReason 一处持有★；
-        //   ★JIT 是否可用只由老 Air 那套判据给出（A2LegacyJITGate，经 A2JITEnabler）★ ——
-        //   A2JITEnvironment 的自创口径（entitlement / CS_DEBUGGED / verifiedRegion 放行）
-        //   已停用：两套判据同时参与会互相打架（真机症状：先死后放 / 放行后闪退）。
-        //   ★禁止用局部 BOOL 记 JIT 状态★（历史缺陷：早期下发路径用局部变量记「已就绪」，
-        //   与判据结果不一致 ⇒ 误判；本单改用单一真相源，见 tests/JIT §⑱ 的回归断言）。
-        __block int vmRC = 0;
-        // ② 的结论 / 取证（只作日志与失败页文案；判定本身在 A2LegacyJITGate 里）。
-        __block A2JITReadinessVerdict lastVerdict = A2JITReadinessVerdictUnknown;
-        __block NSString *lastEvidence = nil;
+        [A2Log log:@"[A2-LAUNCH] 进入后台链：plan=%@ renderer=%@ jre=%@",
+                     planPath.lastPathComponent ?: @"(nil)", renderer.identifier, jreDir];
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+            // ====================================================================
+            // ★[A2-LEGACY] 远古资源映射（virtual / map_to_resources）★
+            // --------------------------------------------------------------------
+            // 为什么放在这里（而不是安装阶段）：映射目标是 `<gameDir>/resources/`，
+            // 而 instance 的 gameDir 只有到这里才最终确定（实例隔离 / 自愈都会改它）。
+            // 幂等 + 硬链接 ⇒ 第二次启动几乎没有成本；放在建 VM 之前即可。
+            // 失败不拦路：映射不全会表现为「无音效 / 英文界面」，不该让整个启动失败。
+            // ====================================================================
+            if (legacyProfile != nil && legacyProfile.isClassicGeneration) {
+                NSError *mapError = nil;
+                A2LegacyAssetsMapResult *mapResult =
+                    [A2LegacyAssetsMapper mapAssetsForVersionDirectory:version.versionPath
+                                                             versionID:version.name
+                                                            assetsRoot:assetsDir
+                                                               gameDir:gameDir
+                                                                 error:&mapError];
+                if (mapResult != nil) {
+                    [A2Log criterion:@"%@", [mapResult summaryLine]];
+                    if (mapResult.missingObjects > 0) {
+                        [A2Log log:@"[A2-LEGACY] 有 %lu 个资源对象缺失（重装该版本可补齐）",
+                         (unsigned long)mapResult.missingObjects];
+                    }
+                } else {
+                    [A2Log log:@"[A2-LEGACY] 资源映射跳过：%@", mapError.localizedDescription ?: @"(无详情)"];
+                }
+            }
 
-        A2LaunchChain *chain = [A2LaunchChain
-            chainWithDeliverScript:^BOOL(NSError **deliverError) {
-                // ① 实现 = Bridge 的 A2JITScriptDelivery（Natives 下发原语只在 Bridge 里调）；失败【不拦路】。
-                BOOL ok = [A2JITScriptDelivery deliverSelfContainedScriptWithError:deliverError];
-                [A2Log log:@"%@", [A2LaunchFailure jitvmLineWithStep:@"script"
-                                                             verdict:A2JITReadinessVerdictUnknown
-                                                           enableJIT:NO
-                                                          reasonText:(ok ? @"JIT 脚本已下发"
-                                                                        : @"JIT 脚本未下发（不拦路；② 会兜底）")
-                                                            evidence:nil]];
-                return ok;
-            }
-            verify:^BOOL(NSString **reason) {
-                // ② ★唯一判据 = 老 Air（tree510）那套★：A2JITEnabler → A2LegacyJITGate 的
-                //   `A2LegacyJITGateReadyNow`（= AMEJITWaitReadyVerified）。这里**不再**调
-                //   A2JITEnvironment 的自创口径，避免两套判据打架。
-                NSString *gateWhy = nil;
-                BOOL ok = [A2JITEnabler isJITReadyNowWithReason:&gateWhy];
-                lastVerdict = ok ? A2JITReadinessVerdictUsable : A2JITReadinessVerdictNotServiced;
-                lastEvidence = gateWhy;
-                // ★这一行就是「JIT 就绪结论」★：verdict / enable（是否放行建 VM）/ reason 齐备，
-                //   供真机一眼判成败（未就绪=NotServiced；老 Air 判据只有这两档）。
-                [A2Log log:@"%@", [A2LaunchFailure jitvmLineWithStep:@"verify"
-                                                             verdict:lastVerdict
-                                                           enableJIT:ok
-                                                          reasonText:gateWhy
-                                                            evidence:nil]];
-                if (!ok && reason) *reason = gateWhy;
-                return ok;
-            }
-            createJVM:^BOOL(NSError **vmError) {
-                // ============================================================
-                // ★★建 VM 之前的唯一闰门（老 Air `JavaLauncher.m` 原样移植）★★
-                //   老 Air 在这一步做的是：发一发 `brk #0x69` 确认调试器在服务、拿到
-                //   Universal 脚本的哨兵后下发 UniversalJIT26Extension.js（把
-                //   legacyCommands[0x69] 换成真建区）+ 设 detachAfterFirstBr + 清
-                //   EXC_MASK_BAD_ACCESS 异常端口。**这些动作缺一不可**：跳过它直接建 VM
-                //   就是「没真的开 JIT 却建 VM」⇒ 首帧取指 SIGBUS（真机闪退的根因）。
-                //   ★本块是全工程唯一建 VM 的地方★（launchWithPlanPath 的唯一调用点），
-                //   所以闰门也只能挂在这里。
-                // ============================================================
-                NSString *gateWhy = nil;
-                if (![A2JITEnabler openLegacyGateBeforeVMBuild:&gateWhy]) {
-                    [A2Log criterion:@"[A2-JIT-GATE] 未就绪 ⇒ 中止启动（不建 VM）（老 Air 闰门拦下）"];
+            // ★[JIT↔VM] 启动链：① 下发脚本 → ② 探测 JIT → ③ 建 VM★
+            //   ★「走到哪一步 / 为什么停」只由 chain.stage + chain.failureReason 一处持有★；
+            //   ★JIT 是否可用只由老 Air 那套判据给出（A2LegacyJITGate，经 A2JITEnabler）★ ——
+            //   A2JITEnvironment 的自创口径（entitlement / CS_DEBUGGED / verifiedRegion 放行）
+            //   已停用：两套判据同时参与会互相打架（真机症状：先死后放 / 放行后闪退）。
+            //   ★禁止用局部 BOOL 记 JIT 状态★（历史缺陷：早期下发路径用局部变量记「已就绪」，
+            //   与判据结果不一致 ⇒ 误判；本单改用单一真相源，见 tests/JIT §⑱ 的回归断言）。
+            __block int vmRC = 0;
+            // ② 的结论 / 取证（只作日志与失败页文案；判定本身在 A2LegacyJITGate 里）。
+            __block A2JITReadinessVerdict lastVerdict = A2JITReadinessVerdictUnknown;
+            __block NSString *lastEvidence = nil;
+
+            A2LaunchChain *chain = [A2LaunchChain
+                chainWithDeliverScript:^BOOL(NSError **deliverError) {
+                    // ① 实现 = Bridge 的 A2JITScriptDelivery（Natives 下发原语只在 Bridge 里调）；失败【不拦路】。
+                    BOOL ok = [A2JITScriptDelivery deliverSelfContainedScriptWithError:deliverError];
+                    [A2Log log:@"%@", [A2LaunchFailure jitvmLineWithStep:@"script"
+                                                                 verdict:A2JITReadinessVerdictUnknown
+                                                               enableJIT:NO
+                                                              reasonText:(ok ? @"JIT 脚本已下发"
+                                                                            : @"JIT 脚本未下发（不拦路；② 会兜底）")
+                                                                evidence:nil]];
+                    return ok;
+                }
+                verify:^BOOL(NSString **reason) {
+                    // ② ★唯一判据 = 老 Air（tree510）那套★：A2JITEnabler → A2LegacyJITGate 的
+                    //   `A2LegacyJITGateReadyNow`（= AMEJITWaitReadyVerified）。这里**不再**调
+                    //   A2JITEnvironment 的自创口径，避免两套判据打架。
+                    NSString *gateWhy = nil;
+                    BOOL ok = [A2JITEnabler isJITReadyNowWithReason:&gateWhy];
+                    lastVerdict = ok ? A2JITReadinessVerdictUsable : A2JITReadinessVerdictNotServiced;
+                    lastEvidence = gateWhy;
+                    // ★这一行就是「JIT 就绪结论」★：verdict / enable（是否放行建 VM）/ reason 齐备，
+                    //   供真机一眼判成败（未就绪=NotServiced；老 Air 判据只有这两档）。
+                    [A2Log log:@"%@", [A2LaunchFailure jitvmLineWithStep:@"verify"
+                                                                 verdict:lastVerdict
+                                                               enableJIT:ok
+                                                              reasonText:gateWhy
+                                                                evidence:nil]];
+                    if (!ok && reason) *reason = gateWhy;
+                    return ok;
+                }
+                createJVM:^BOOL(NSError **vmError) {
+                    // ============================================================
+                    // ★★建 VM 之前的唯一闰门（老 Air `JavaLauncher.m` 原样移植）★★
+                    //   老 Air 在这一步做的是：发一发 `brk #0x69` 确认调试器在服务、拿到
+                    //   Universal 脚本的哨兵后下发 UniversalJIT26Extension.js（把
+                    //   legacyCommands[0x69] 换成真建区）+ 设 detachAfterFirstBr + 清
+                    //   EXC_MASK_BAD_ACCESS 异常端口。**这些动作缺一不可**：跳过它直接建 VM
+                    //   就是「没真的开 JIT 却建 VM」⇒ 首帧取指 SIGBUS（真机闪退的根因）。
+                    //   ★本块是全工程唯一建 VM 的地方★（launchWithPlanPath 的唯一调用点），
+                    //   所以闰门也只能挂在这里。
+                    // ============================================================
+                    NSString *gateWhy = nil;
+                    if (![A2JITEnabler openLegacyGateBeforeVMBuild:&gateWhy]) {
+                        [A2Log criterion:@"[A2-JIT-GATE] 未就绪 ⇒ 中止启动（不建 VM）（老 Air 闰门拦下）"];
+                        if (vmError) {
+                            *vmError = [NSError errorWithDomain:A2LaunchChainJITGateErrorDomain
+                                                           code:-1
+                                                       userInfo:@{ NSLocalizedDescriptionKey:
+                                [NSString stringWithFormat:
+                                    @"建 VM 前的 JIT 闰门未通过 —— ★没有创建 VM★（不会闪退）。\n%@\n"
+                                    @"请按本次安装源对应的方式为 Air2 开启 JIT 后重试（SideStore/StikDebug 需指派 UniversalJIT26 脚本；"
+                                    @"TrollStore 机见日志 [A2-JIT-SRC] 行）；"
+                                    @"判据明细见日志 [A2-JIT-GATE] / [JIT-FLOW] 行。",
+                                    gateWhy ?: @"原因未知"] }];
+                        }
+                        return NO;
+                    }
+                    // ③ Bridge 唯一调 a2_launch_jvm_with_argv 的地方（★只有闰门放行才会走到这里★）。
+                    [A2Log log:@"%@", [A2LaunchFailure jitvmLineWithStep:@"vm"
+                                                                 verdict:lastVerdict
+                                                               enableJIT:YES
+                                                              reasonText:gateWhy ?: @"JIT 已就绪 ⇒ 走带 JIT 的启动参数路径"
+                                                                evidence:lastEvidence]];
+                    [A2Log log:@"[A2-LAUNCH] ③ 建 VM 开始（可能要 10~60 秒；若之后没有“建 VM 返回”行 ⇒ 卡在建 VM）"];
+                    // ★区域验收快照（建 VM 前）★：拿到的是 64MB 还是一页/没有，一眼可见。
+                    //   拿不到不是错误（iOS 26+ 的区由 libjvm 建 VM 时自己发 brk #0x69 取）。
+                    [A2JITEnabler logRegionSnapshot:@"before-vm"];
+                    vmRC = [A2LaunchRunner launchWithPlanPath:planPath
+                                                 entryJarPath:entryJar
+                                               patchJarPath:patchJar
+                                                   jvmOptions:jvmOptions
+                                                     javaHome:javaHome
+                                                      gameDir:gameDir
+                                                     userHome:userHome
+                                                       tmpDir:tmpDir
+                                                librariesPath:librariesDir
+                                                     lwjglDir:lwjglDir
+                                               frameworksPath:frameworks
+                                                rendererDylib:renderer.identifier
+                                                  renderScale:renderScale];
+                    [A2Log log:@"[A2-LAUNCH] ③ 建 VM 返回 rc=%d", vmRC];
+                    // ★区域验收快照（建 VM 之后）★：此刻 libjvm 已经发过它自己那发 brk #0x69，
+                    //   这一行如实报本模块视角拿到的区（拿不到不追责：libjvm 的 rc 才是结论）。
+                    [A2JITEnabler logRegionSnapshot:@"after-vm"];
+                    if (vmRC == 0) {
+                        return YES;
+                    }
                     if (vmError) {
-                        *vmError = [NSError errorWithDomain:A2LaunchChainJITGateErrorDomain
-                                                       code:-1
+                        *vmError = [NSError errorWithDomain:@"A2LaunchChainCreateVM"
+                                                       code:vmRC
                                                    userInfo:@{ NSLocalizedDescriptionKey:
-                            [NSString stringWithFormat:
-                                @"建 VM 前的 JIT 闰门未通过 —— ★没有创建 VM★（不会闪退）。\n%@\n"
-                                @"请按本次安装源对应的方式为 Air2 开启 JIT 后重试（SideStore/StikDebug 需指派 UniversalJIT26 脚本；"
-                                @"TrollStore 机见日志 [A2-JIT-SRC] 行）；"
-                                @"判据明细见日志 [A2-JIT-GATE] / [JIT-FLOW] 行。",
-                                gateWhy ?: @"原因未知"] }];
+                            [A2LaunchFailure userMessageForVMFailureCode:vmRC] }];
                     }
                     return NO;
-                }
-                // ③ Bridge 唯一调 a2_launch_jvm_with_argv 的地方（★只有闰门放行才会走到这里★）。
-                [A2Log log:@"%@", [A2LaunchFailure jitvmLineWithStep:@"vm"
-                                                             verdict:lastVerdict
-                                                           enableJIT:YES
-                                                          reasonText:gateWhy ?: @"JIT 已就绪 ⇒ 走带 JIT 的启动参数路径"
-                                                            evidence:lastEvidence]];
-                [A2Log log:@"[A2-LAUNCH] ③ 建 VM 开始（可能要 10~60 秒；若之后没有“建 VM 返回”行 ⇒ 卡在建 VM）"];
-                // ★区域验收快照（建 VM 前）★：拿到的是 64MB 还是一页/没有，一眼可见。
-                //   拿不到不是错误（iOS 26+ 的区由 libjvm 建 VM 时自己发 brk #0x69 取）。
-                [A2JITEnabler logRegionSnapshot:@"before-vm"];
-                vmRC = [A2LaunchRunner launchWithPlanPath:planPath
-                                             entryJarPath:entryJar
-                                           patchJarPath:patchJar
-                                               jvmOptions:jvmOptions
-                                                 javaHome:javaHome
-                                                  gameDir:gameDir
-                                                 userHome:userHome
-                                                   tmpDir:tmpDir
-                                            librariesPath:librariesDir
-                                                 lwjglDir:lwjglDir
-                                           frameworksPath:frameworks
-                                            rendererDylib:renderer.identifier
-                                              renderScale:renderScale];
-                [A2Log log:@"[A2-LAUNCH] ③ 建 VM 返回 rc=%d", vmRC];
-                // ★区域验收快照（建 VM 之后）★：此刻 libjvm 已经发过它自己那发 brk #0x69，
-                //   这一行如实报本模块视角拿到的区（拿不到不追责：libjvm 的 rc 才是结论）。
-                [A2JITEnabler logRegionSnapshot:@"after-vm"];
-                if (vmRC == 0) {
-                    return YES;
-                }
-                if (vmError) {
-                    *vmError = [NSError errorWithDomain:@"A2LaunchChainCreateVM"
-                                                   code:vmRC
-                                               userInfo:@{ NSLocalizedDescriptionKey:
-                        [A2LaunchFailure userMessageForVMFailureCode:vmRC] }];
-                }
-                return NO;
-            }];
+                }];
 
-        NSError *chainError = nil;
-        if ([chain runWithError:&chainError]) {
-            finish(YES, 0, @"自研链：主类 main 正常返回");
-            return;
-        }
+            NSError *chainError = nil;
+            if ([chain runWithError:&chainError]) {
+                finish(YES, 0, @"自研链：主类 main 正常返回");
+                return;
+            }
 
-        // 如实分类（按【停在哪一步】），不把推测当结论。
-        // ★建 VM 前的 JIT 自检拦下★：VM 一次都没创建 ⇒ 不是「建 VM 失败 rc=…」，
-        //   按 JIT 阻断如实报（错误域由链原样带回，见 A2LaunchChainJITGateErrorDomain）。
-        if ([chainError.domain isEqualToString:A2LaunchChainJITGateErrorDomain]) {
-            [A2Log criterion:@"[A2-CHAIN] ③ 未进入：JIT 就绪校验在建 VM 前拦下 —— %@",
-             chainError.localizedDescription ?: @"(无详情)"];
-            finish(NO, 0, chainError.localizedDescription ?: @"JIT 未就绪：没有创建 VM");
-            return;
-        }
-        A2LaunchFailureClass cls = [A2LaunchFailure classForChainStage:chain.stage];
-        if (cls == A2LaunchFailureClassJITBlocked) {
-            // ★JIT 不可用 ⇒ 如实阻断：打判据行 + 给「怎么开」（按 verdict 分流的四语文案）★
-            A2JITReadinessVerdict verdict = lastVerdict;
-            [A2Log log:@"%@", [A2LaunchFailure diagnosticForJITVerdict:verdict
-                                                              evidence:lastEvidence]];
-            finish(NO, 0, [A2LaunchFailure userMessageForJITVerdict:verdict]);
-            return;
-        }
-        if (cls == A2LaunchFailureClassVMFailed) {
-            [A2Log log:@"[A2-CHAIN] ③ 建 VM 失败 rc=%d", vmRC];
-            finish(NO, vmRC, [A2LaunchFailure userMessageForVMFailureCode:vmRC]);
-            return;
-        }
-        finish(NO, 0, chainError.localizedDescription ?: @"启动链未完成");
-    });
+            // 如实分类（按【停在哪一步】），不把推测当结论。
+            // ★建 VM 前的 JIT 自检拦下★：VM 一次都没创建 ⇒ 不是「建 VM 失败 rc=…」，
+            //   按 JIT 阻断如实报（错误域由链原样带回，见 A2LaunchChainJITGateErrorDomain）。
+            if ([chainError.domain isEqualToString:A2LaunchChainJITGateErrorDomain]) {
+                [A2Log criterion:@"[A2-CHAIN] ③ 未进入：JIT 就绪校验在建 VM 前拦下 —— %@",
+                 chainError.localizedDescription ?: @"(无详情)"];
+                finish(NO, 0, chainError.localizedDescription ?: @"JIT 未就绪：没有创建 VM");
+                return;
+            }
+            A2LaunchFailureClass cls = [A2LaunchFailure classForChainStage:chain.stage];
+            if (cls == A2LaunchFailureClassJITBlocked) {
+                // ★JIT 不可用 ⇒ 如实阻断：打判据行 + 给「怎么开」（按 verdict 分流的四语文案）★
+                A2JITReadinessVerdict verdict = lastVerdict;
+                [A2Log log:@"%@", [A2LaunchFailure diagnosticForJITVerdict:verdict
+                                                                  evidence:lastEvidence]];
+                finish(NO, 0, [A2LaunchFailure userMessageForJITVerdict:verdict]);
+                return;
+            }
+            if (cls == A2LaunchFailureClassVMFailed) {
+                [A2Log log:@"[A2-CHAIN] ③ 建 VM 失败 rc=%d", vmRC];
+                finish(NO, vmRC, [A2LaunchFailure userMessageForVMFailureCode:vmRC]);
+                return;
+            }
+            finish(NO, 0, chainError.localizedDescription ?: @"启动链未完成");
+        });
+    };
+
+    // ========================================================================
+    // ★[A2-EXPERIMENTAL] 实验性启动链（MG / EAGL / KW）的 10 次免责确认★
+    // ------------------------------------------------------------------------
+    // 判据 = 渲染器标识属于实验性启动链（唯一判据在 A2RendererCatalog，本层只消费结论）；
+    // metallum / 内置 gl4es 不弹。
+    // ★位置★：所有「不建 VM 就阻断」的闸门之后、建 VM 之前 ——
+    //   放到闸门之前 ⇒ 用户白点 10 次才被兼容闸门拦下；放到建 VM 之后 ⇒ 已经来不及。
+    // ★每次都重弹、不做任何缓存★（用户明令）：本层不读写「已同意」状态 ——
+    //   同一会话内重复启动也要重新走完 10 次。
+    // ★不用 sleep 串行弹★：10 次由 A2LaunchAlertPresenter 逐个弹（点了才弹下一个）；
+    //   确认通过才执行 proceedWithLaunch()；取消则本次启动到此为止（不建 VM、不弹失败页）。
+    // ========================================================================
+    if ([A2RendererCatalog isExperimentalLaunchChainIdentifier:renderer.identifier]) {
+        [A2Log criterion:@"[A2-EXPERIMENTAL] 需要确认：renderer=%@（实验性启动链）⇒ 先弹 10 次免责确认，确认前不建 VM",
+         renderer.identifier];
+        [A2LaunchAlertPresenter confirmExperimentalChainForRendererIdentifier:renderer.identifier
+                                                                  completion:^(BOOL proceed) {
+            if (!proceed) {
+                [A2Log criterion:@"[A2-EXPERIMENTAL] 本次启动终止：免责确认未通过（没有建 VM）"];
+                // ★不弹失败页★：用户自己按了取消，不是启动失败（与 sWaitingForJIT 分支同一口径）。
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    completion([A2LaunchSessionResult resultWithStarted:NO
+                                                             returnCode:0
+                                                                message:@"已取消启动：实验性启动链的免责确认没有通过（未创建 VM）"]);
+                });
+                return;
+            }
+            proceedWithLaunch();
+        }];
+        return;
+    }
+    // 非实验性链路（metallum / 内置 gl4es）⇒ 不打扰用户，原样启动。
+    proceedWithLaunch();
 }
 
 
@@ -998,15 +1037,9 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
 /// 启动失败时呈现一个可读的失败页（替代“直接闪退”）。
 ///   入口：A2LaunchSession.finish()（started == NO）。
 + (void)a2_presentLaunchFailureWithMessage:(NSString *)message returnCode:(NSInteger)rc {
-    UIWindow *keyWin = nil;
-    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
-        if (![scene isKindOfClass:UIWindowScene.class]) continue;
-        for (UIWindow *w in ((UIWindowScene *)scene).windows) {
-            if (w.isKeyWindow) { keyWin = w; break; }
-        }
-    }
-    UIViewController *top = keyWin.rootViewController;
-    while (top.presentedViewController) top = top.presentedViewController;
+    // ★宿主查找只有一处★：与实验性启动链的确认窗共用 A2LaunchAlertPresenter
+    //   （此前这段「key window → 沿 presentedViewController 下钻」在这里手写了一遍，两份拷贝）。
+    UIViewController *top = [A2LaunchAlertPresenter topViewController];
     if (top == nil) return;
 
     NSString *title = [NSString stringWithFormat:@"启动失败（rc=%ld）", (long)rc];
