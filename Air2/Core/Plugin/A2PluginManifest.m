@@ -185,6 +185,8 @@ NSString *A2PluginErrorCodeString(A2PluginError code) {
         case A2PluginErrorIO: return @"E_IO";
         case A2PluginErrorNoPreviousVersion: return @"E_NO_PREVIOUS";
         case A2PluginErrorBuiltin: return @"E_BUILTIN";
+        case A2PluginErrorLaunchChainUnconfirmed: return @"E_LAUNCH_CHAIN_UNCONFIRMED";
+        case A2PluginErrorUserCancelled: return @"E_USER_CANCELLED";
     }
     return @"E_FIELD";
 }

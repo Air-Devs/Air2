@@ -129,6 +129,15 @@ typedef NS_ENUM(NSInteger, A2PluginError) {
     /// 该插件随 App 打包，不允许卸载。
     /// 文档码：无对应行（宿主策略，不是包的问题）。
     A2PluginErrorBuiltin,
+    /// 这个插件会修改启动链（判据见 `A2PluginLaunchChainRisk`），安装必须先过 10 次免责确认，
+    /// 但调用方**没有提供确认闸门** ⇒ 拒装。
+    /// 文档码：无对应行（宿主装配错误，不是包的问题）。
+    /// ★为什么拒装而不是放行★：少传一个 block 就绕过了 10 次确认，等于确认门形同虚设；
+    /// 安全边界不能依赖「调用方记得传」。
+    A2PluginErrorLaunchChainUnconfirmed,
+    /// 用户在 10 次确认里的任意一次点了「取消」⇒ 安装终止（暂存已清理、注册表未写）。
+    /// 文档码：无对应行（这不算失败，是用户的选择）。
+    A2PluginErrorUserCancelled,
 };
 
 /// 错误码的字符串形式（`E_FORMAT` / `E_FIELD` / …）。

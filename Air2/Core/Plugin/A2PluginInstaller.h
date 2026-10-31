@@ -100,6 +100,21 @@ NS_ASSUME_NONNULL_BEGIN
 
 #pragma mark - 安装器
 
+/// 启动链闸门：安装期的 10 次免责确认挂在这里（判据见 `A2PluginLaunchChainRisk`）。
+///
+/// 调用时机由安装器决定：**校验 + 版本规则都通过之后、换目录和写 registry 之前**，
+/// 且**只对「会修改启动链的插件」调用一次**（其余插件根本不进闸门）。
+/// 入参 `permissions` = 命中判据的权限 id（固定顺序，非空）。
+///
+/// 返回 YES = 用户确认通过，安装继续；NO = 取消（安装器清暂存、不写 registry、
+/// 以 `A2PluginErrorUserCancelled` 失败返回）。
+///
+/// ★实现里可以阻塞★：10 次弹窗本来就要等用户点完，闸门是同步返回的。
+/// 因此**安装必须在非主线程执行**（弹窗自己跳主线程，见 `A2PluginLaunchChainConfirm`）。
+/// ★不要在闸门里做别的判断★（「要不要弹」只由安装器 + 判据集合决定）。
+typedef BOOL (^A2PluginLaunchChainGate)(A2PluginManifest *manifest,
+                                        NSArray<NSString *> *permissions);
+
 @interface A2PluginInstaller : NSObject
 
 /// @param registry 注册表实例（由装配处注入，本类不持有单例 —— 单例会让单测互相污染）。
@@ -126,9 +141,22 @@ NS_ASSUME_NONNULL_BEGIN
 /// 日志出口，默认走 `A2Log`。单测塞一个收集器来断言关键步骤各有一行。
 @property (nonatomic, copy, nullable) void (^logSink)(NSString *line);
 
-/// 安装一个包。
+/// 安装一个包。**必须**在非主线程调用（会修改启动链的插件要在这里等用户点 10 次确认）。
 /// 前置条件：调用方已拿到本地文件 URL（网络包由下载层先落地）。
 /// @param source 来源事实；kind 不在枚举内会以 `E_FIELD` 拒装
+/// @param launchChainGate 启动链闸门（见 `A2PluginLaunchChainGate`）。
+///        ★会修改启动链的插件传 nil ⇒ 以 `E_LAUNCH_CHAIN_UNCONFIRMED` 拒装★（不静默放行）；
+///        不修改启动链的插件永不调用它。
+- (nullable A2PluginInstallResult *)installPackageAtURL:(NSURL *)url
+                                                 source:(A2PluginInstallSource *)source
+                                       launchChainGate:(nullable A2PluginLaunchChainGate)launchChainGate
+                                                  error:(NSError **)error;
+
+/// 不带启动链闸门的安装（等价于 `launchChainGate:nil`）。
+///
+/// 只给「确定不会修改启动链的调用方」用：单测、离线迁移、内置插件装配。
+/// ★会修改启动链的包在这里一定被拒★（`E_LAUNCH_CHAIN_UNCONFIRMED`）——
+/// 少传一个参数就能跳过 10 次确认的话，那道确认门等于不存在。
 - (nullable A2PluginInstallResult *)installPackageAtURL:(NSURL *)url
                                                  source:(A2PluginInstallSource *)source
                                                   error:(NSError **)error;

@@ -23,6 +23,7 @@
 #import <zlib.h>
 
 #import "A2PluginInstaller.h"
+#import "A2PluginLaunchChainRisk.h"
 #import "A2PluginManifest.h"
 #import "A2PluginRegistry.h"
 
@@ -640,6 +641,111 @@ static void testIntegrityAndHostGate(void) {
        @"打开 allowsJSPlugins 后 JS 插件可以装");
 }
 
+#pragma mark - 用例：安装会改启动链的插件（10 次免责确认闸门）
+
+/// 判据集合 + 闸门三态（没闸门 / 取消 / 通过）+ 「不改启动链的插件根本不进闸门」。
+/// ★闸门只给 YES/NO，10 次弹窗是 UI 的事★：这里钉的是「安装器不许在没确认时落盘」。
+static void testLaunchChainConfirmGate(void) {
+    NSString *plugins = TempDirectory();
+    A2PluginRegistry *registry = nil;
+    A2PluginInstaller *installer = MakeInstaller(plugins, &registry);
+    installer.allowsJSPlugins = YES;      // 只有 JS 插件能申请启动类权限（json 型会被 E_JSON_PERM 拒）
+    NSString *stagingDirectory = [plugins stringByAppendingPathComponent:@".staging"];
+
+    NSDictionary<NSString *, NSData *> *files = @{@"entry.js": UTF8(@"export default {};")};
+    NSMutableDictionary *manifest = PluginManifest(@"top.example.launch", @"1.0.0");
+    manifest[@"type"] = @"js";
+    manifest[@"entry"] = @"entry.js";
+    // 故意打乱顺序 + 混一项不影响启动链的：验证「命中集合与顺序由判据集合决定」
+    manifest[@"permissions"] = @[@"launch.gameArgs", @"launch.args", @"ui.contribute"];
+    DeclareFiles(manifest, files);
+    NSURL *url = WritePackage(Package(manifest, files), @"launch.air2plugin");
+
+    // ① 判据集合本身（6 项；改名 / 漏改会被这行钉住）
+    NSSet<NSString *> *ids = A2PluginLaunchChainPermissionIds();
+    eqInt((NSInteger)ids.count, 6, @"启动链判据集合 = 6 项");
+    ok([ids containsObject:@"native.code"], @"native.code 在判据集合里（目录未登记也要命中）");
+    ok(A2PluginLaunchChainPermissionNames(@[@"launch.args", @"native.code"]).length > 0,
+       @"人话名单非空（目录外的 id 回退为 id 本身）");
+
+    // ② 没有闸门 ⇒ 拒装（少传一个 block 不等于「已同意」）
+    NSError *error = nil;
+    ok([installer installPackageAtURL:url source:LocalSource() error:&error] == nil,
+       @"会改启动链的插件：没有确认闸门时被拒装");
+    expectReject(@"没有闸门给 E_LAUNCH_CHAIN_UNCONFIRMED", error, @"E_LAUNCH_CHAIN_UNCONFIRMED");
+    ok([registry entryForPluginId:@"top.example.launch"] == nil, @"被拒的安装没有写 registry");
+    ok(!FileExists([plugins stringByAppendingPathComponent:@"top.example.launch"]),
+       @"被拒的安装没有留下插件目录");
+    ok(([[NSFileManager defaultManager] contentsOfDirectoryAtPath:stagingDirectory
+                                                           error:NULL] ?: @[]).count == 0,
+       @"被拒的安装把暂存目录清空了");
+
+    // ③ 闸门返回「取消」⇒ 安装终止、磁盘干净
+    __block NSInteger gateCalls = 0;
+    __block NSArray<NSString *> *gatePermissions = nil;
+    error = nil;
+    A2PluginInstallResult *cancelled = [installer
+        installPackageAtURL:url
+                     source:LocalSource()
+            launchChainGate:^BOOL(A2PluginManifest *gateManifest,
+                                  NSArray<NSString *> *permissions) {
+        gateCalls++;
+        gatePermissions = permissions;
+        ok(gateManifest == nil || [gateManifest.pluginId isEqualToString:@"top.example.launch"],
+           @"闸门拿到的是本次安装的 manifest");
+        return NO;
+    }
+                      error:&error];
+    ok(cancelled == nil, @"★取消 ⇒ 安装终止（不换目录、不写 registry）★");
+    expectReject(@"取消给 E_USER_CANCELLED", error, @"E_USER_CANCELLED");
+    eqInt(gateCalls, 1, @"闸门只调一次");
+    eqStr([gatePermissions componentsJoinedByString:@","], @"launch.args,launch.gameArgs",
+          @"★命中集合 = 判据集合顺序（不跟 manifest 的书写顺序），ui.contribute 不算★");
+    ok([registry entryForPluginId:@"top.example.launch"] == nil, @"取消后 registry 里没有这个插件");
+    ok(!FileExists([plugins stringByAppendingPathComponent:@"top.example.launch"]),
+       @"取消后没有留下插件目录");
+    ok(([[NSFileManager defaultManager] contentsOfDirectoryAtPath:stagingDirectory
+                                                           error:NULL] ?: @[]).count == 0,
+       @"取消后暂存目录已清空");
+
+    // ④ 闸门通过 ⇒ 正常落盘
+    gateCalls = 0;
+    error = nil;
+    A2PluginInstallResult *installed = [installer
+        installPackageAtURL:url
+                     source:LocalSource()
+            launchChainGate:^BOOL(A2PluginManifest *gateManifest,
+                                  NSArray<NSString *> *permissions) {
+        gateCalls++;
+        return YES;
+    }
+                      error:&error];
+    ok(installed != nil, [NSString stringWithFormat:@"确认通过后安装成功（错误：%@）",
+                          error.localizedDescription ?: @"无"]);
+    eqInt(gateCalls, 1, @"确认通过时闸门也只调一次");
+    ok([registry entryForPluginId:@"top.example.launch"] != nil, @"确认通过后写进了 registry");
+
+    // ⑤ 不改启动链的插件：闸门根本不该被调用
+    NSDictionary<NSString *, NSData *> *plainFiles = @{@"ui/a.json": UTF8(@"{\"a\":1}")};
+    NSMutableDictionary *plainManifest = PluginManifest(@"top.example.plain", @"1.0.0");
+    DeclareFiles(plainManifest, plainFiles);
+    NSURL *plainURL = WritePackage(Package(plainManifest, plainFiles), @"plain.air2plugin");
+
+    __block NSInteger plainGateCalls = 0;
+    error = nil;
+    A2PluginInstallResult *plain = [installer
+        installPackageAtURL:plainURL
+                     source:LocalSource()
+            launchChainGate:^BOOL(A2PluginManifest *gateManifest,
+                                  NSArray<NSString *> *permissions) {
+        plainGateCalls++;
+        return NO;      // 即使返回 NO，这个插件也不该进闸门
+    }
+                      error:&error];
+    ok(plain != nil, @"不申请启动类权限的插件照常安装");
+    eqInt(plainGateCalls, 0, @"★不改启动链的插件不进闸门（不打扰用户）★");
+}
+
 #pragma mark - 用例：来源校验
 
 static void testSourceValidation(void) {
@@ -665,6 +771,7 @@ int main(void) {
         testRollback();
         testZipSafety();
         testIntegrityAndHostGate();
+        testLaunchChainConfirmGate();
         testSourceValidation();
 
         printf("\n---- %d passed, %d failed ----\n", gPass, gFail);

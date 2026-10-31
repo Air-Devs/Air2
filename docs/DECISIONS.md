@@ -791,3 +791,50 @@
 - **落地**：`PLUGIN-SECURITY.md` 3.1 / 3.2 / 3.2.1 / 3.3 / 3.4 / 3.5 / 6.3 / 6.4 / 8.1 / 第九节；
   `PLUGIN-SYSTEM.md` 4.5 / 第六节（registry 字段、写入规则、迁移）/ 第七节（P1/P2 验收）；
   `PLUGIN-AUTHORING.md` 3.3 / 第五节 / 9.2 / 9.3；`P0-V3-CHANGELOG.md`。
+
+---
+
+## ADR-025：安装「会修改启动链的插件」须逐次通过 10 次免责确认（不缓存同意）
+
+- 状态：已接受
+- 日期：2026-10-31
+
+  - 背景：第三方插件可以申请 `launch.args` / `launch.gameArgs` / `launch.classpath` /
+    `launch.env.code` / `java.agent` / `native.code`，这些能力允许它在**游戏主类之前**
+    追加参数、改类路径、注入 javaagent 或原生代码。启动链被这样改动后，游戏起的失败
+    （启动不了 / 黑屏 / 闪退 / 存档损坏）无法与「启动器的问题」区分，真机迭代时的
+    失败报告会因此失真。用户要求：**装之前**把责任边界逐次说到位（10 次），
+    而不是靠一句 toast 或一次总同意。
+  - 决策：
+    1. **判据只有一个**：`A2PluginLaunchChainRisk`（Core/Plugin）的判据集合 ——
+       `launch.args`、`launch.gameArgs`、`launch.classpath`、`launch.env.code`、
+       `java.agent`、`native.code`；manifest 申请了其中**任意一项**即视为「会修改启动链」。
+       ★不按风险级推导★：`files.game.write.content` / `version.patch` / `native.module` 同为
+       critical 但不改「游戏怎么被启动」，它们走各自的三次确认（ADR-021 / ADR-024）。
+    2. **时机**：`A2PluginInstaller` 完成校验与版本规则、**换目录和写 registry 之前**调用
+       闸门（`A2PluginLaunchChainGate`）。放校验之前 = 用户白点 10 次才被格式/降级规则拦下；
+       放写盘之后 = 已经来不及。
+    3. **形式**：`A2PluginLaunchChainConfirm` 逐个弹 10 次 `UIAlertController`（alert 样式，
+       不用 ActionSheet），点了才弹下一个；标题 `修改启动链的插件（n/10）`，正文每次完整
+       重述「插件 <名称> 申请了会修改启动链的权限：<人话名单>」+ 固定免责句，第 10 次
+       追加「继续即表示你已知晓并自行承担后果」；按钮 `取消` / `继续（n/10）`，
+       第 10 次为 `我已知晓，安装`。
+    4. **取消语义**：任一次取消 ⇒ 安装终止（清暂存、不写 registry、以 `E_USER_CANCELLED`
+       返回）。★没有闸门也拒装★（`E_LAUNCH_CHAIN_UNCONFIRMED`）：少传一个 block 就跳过
+       确认的话，这道门等于不存在。
+    5. ★不缓存同意★：没有 NSUserDefaults 键、没有进程内标志，每次安装都从头走完 10 次。
+  - 理由：逐次确认（而非一次总同意）能挡住「习惯性连点」；把确认挂在**安装**而不是**启动**
+    上，是因为「启动链被改了」这个事实在安装时就已确定，而启动时既不知道是哪个插件改的、
+    也不该让用户为上一次安装反复付费（主树 ADR-014 的渲染器侧确认已因此撤销）。
+  - 与 critical 三次确认的关系：两者目的不同、都保留 —— 10 次是「我知道这个包会动启动链，
+    我自担后果」，三次确认是「我授予它某一项 critical 能力」（授权页内，逐项、5 秒倒计时）。
+    10 次**不**授予任何权限，安装后的低/中默认值与 critical 默认关的规则不变。
+  - 并发 / 线程：闸门是同步 BOOL 返回的（10 次弹窗本来就要等），因此**安装必须在非主线程
+    执行**；同步版确认窗在主线程被调用时直接按取消处理（拒绝主线程自锁）。
+  - 落地：`Air2/Core/Plugin/A2PluginLaunchChainRisk.[hm]`（判据集合 + 人话名单）、
+    `Air2/Core/Plugin/A2PluginInstaller.[hm]`（闸门与取消清理）、
+    `Air2/Core/Plugin/A2PluginManifest.[hm]`（`E_LAUNCH_CHAIN_UNCONFIRMED` / `E_USER_CANCELLED`）、
+    `Air2/UI/Plugin/A2PluginLaunchChainConfirm.[hm]`（10 次弹窗与同步桥）、
+    `Air2/UI/Plugin/A2PluginListViewController.m`（导入走后台安装 + 收尾）、
+    `tests/Plugin/plugin_installer_tests.m`（判据集合 / 三态闸门 / 磁盘无残留）。
+

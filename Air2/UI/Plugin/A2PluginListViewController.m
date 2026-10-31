@@ -34,6 +34,7 @@
 
 #import "A2Dialog.h"
 #import "A2PluginInstaller.h"
+#import "A2PluginLaunchChainConfirm.h"
 #import "A2PluginManifest.h"
 #import "A2PluginPermissionSheet.h"
 #import "A2PluginRegistry.h"
@@ -224,6 +225,11 @@ static void A2PluginConfirmUninstall(UIViewController *presenter,
 @property (nonatomic, strong) A2PluginRegistry *registry;
 @property (nonatomic, strong) A2PluginInstaller *installer;
 @property (nonatomic, strong) A2PluginPermissionStore *store;
+
+/// 安装结束（主线程）：报结果 / 重画 / 进授权页。
+/// 安装跑在后台队列上（会改启动链的插件要在闸门里等 10 次确认），所以收尾单列一个方法。
+- (void)finishImportWithResult:(nullable A2PluginInstallResult *)result
+                         error:(nullable NSError *)error;
 
 @end
 
@@ -459,11 +465,46 @@ didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
         return;
     }
 
-    A2PluginInstallResult *result = [self.installer installPackageAtURL:url
-                                                                source:source
-                                                                 error:&error];
+    // ★安装放到后台线程★：会修改启动链的插件要在闸门里等用户点完 10 次免责确认，
+    //   闸门是同步返回的（`A2PluginLaunchChainGate`），主线程上做不了这件事
+    //   （弹窗自己跳主线程，见 A2PluginLaunchChainConfirm）。
+    A2PluginInstaller *installer = self.installer;
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSError *installError = nil;
+        A2PluginInstallResult *result = [installer
+            installPackageAtURL:url
+                         source:source
+                launchChainGate:^BOOL(A2PluginManifest *manifest,
+                                      NSArray<NSString *> *permissions) {
+            // 闸门可能在后台线程被调用；同步版内部派发到主线程弹窗并等结果。
+            // ★self 只作宿主控制器用★：控制器已释放（用户退回上一页）⇒ 传 nil ⇒ 确认失败 ⇒ 不安装。
+            return [A2PluginLaunchChainConfirm confirmSynchronouslyForManifest:manifest
+                                                                   permissions:permissions
+                                                                          from:weakSelf];
+        }
+                          error:&installError];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            if (!self) return;
+            [self finishImportWithResult:result error:installError];
+        });
+    });
+}
+
+/// 安装结束（主线程）：报结果 → 重画 → 进授权页。
+/// ★从「后台装完」这条路上来★：所以这里是独立方法，不在 documentPicker 的栈里。
+- (void)finishImportWithResult:(nullable A2PluginInstallResult *)result
+                         error:(nullable NSError *)error {
     if (!result) {
-        [A2Toast show:A2PluginErrorText(error, @"安装失败") inView:self.view];
+        // ★用户取消不是失败★：10 次免责确认里点了「取消」时，如实说「已取消」，
+        // 不报「安装失败」（那会让用户以为包坏了，回头又装一遍）。
+        NSString *code = error.userInfo[A2PluginErrorCodeKey];
+        if ([code isEqualToString:A2PluginErrorCodeString(A2PluginErrorUserCancelled)]) {
+            [A2Toast show:@"已取消安装（这个插件会修改启动链）" inView:self.view];
+        } else {
+            [A2Toast show:A2PluginErrorText(error, @"安装失败") inView:self.view];
+        }
         [self reload];
         return;
     }

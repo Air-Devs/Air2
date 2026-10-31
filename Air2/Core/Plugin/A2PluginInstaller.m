@@ -32,6 +32,7 @@
 #import <string.h>
 
 #import "A2Log.h"
+#import "A2PluginLaunchChainRisk.h"   // 启动链判据集合（10 次免责确认的触发条件）
 #import "A2PluginPackageExtractor.h"
 #import "A2PluginRegistry.h"
 
@@ -298,8 +299,19 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
 
 #pragma mark 安装
 
+/// 无闸门入口：转发而已（见头文件：会改启动链的包在这里必被拒，不静默放行）。
 - (nullable A2PluginInstallResult *)installPackageAtURL:(NSURL *)url
                                                  source:(A2PluginInstallSource *)source
+                                                  error:(NSError **)error {
+    return [self installPackageAtURL:url
+                             source:source
+                    launchChainGate:nil
+                              error:error];
+}
+
+- (nullable A2PluginInstallResult *)installPackageAtURL:(NSURL *)url
+                                                 source:(A2PluginInstallSource *)source
+                                       launchChainGate:(nullable A2PluginLaunchChainGate)launchChainGate
                                                   error:(NSError **)error {
     if (![source isKindOfClass:A2PluginInstallSource.class]) {
         if (error) {
@@ -413,7 +425,47 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
         }
     }
 
-    // ④ 换目录（同卷 rename，原子）
+    // ④ ★启动链闸门 = 10 次免责确认★
+    // ========================================================================
+    // 判据：manifest 申请了会改启动链的权限（唯一判据 = A2PluginLaunchChainRisk）。
+    // 时机：★校验 + 版本规则都过了、马上要换目录写 registry 之前★ ——
+    //   放到校验之前 ⇒ 用户白点 10 次才被格式/降级规则拦下；
+    //   放到写盘之后 ⇒ 已经来不及（注册表里已经有了）。
+    // ★不做「已同意」缓存★：每次安装都从头走完 10 次（用户明令）。
+    // 取消 / 没有闸门 ⇒ 清暂存、不写 registry、返回 nil（磁盘与注册表都干净）。
+    // ========================================================================
+    NSArray<NSString *> *launchChainPermissions =
+        A2PluginLaunchChainPermissionsForManifest(manifest);
+    if (launchChainPermissions.count > 0) {
+        [self logLine:@"需要启动链免责确认：%@ 申请了 %lu 项（%@）",
+         manifest.pluginId, (unsigned long)launchChainPermissions.count,
+         [launchChainPermissions componentsJoinedByString:@","]];
+        if (launchChainGate == nil) {
+            [NSFileManager.defaultManager removeItemAtPath:staging error:NULL];
+            [self logLine:@"安装失败：%@ 会修改启动链，但没有确认闸门 ⇒ 拒装（不把「没问过」当成「已同意」）",
+             manifest.pluginId];
+            if (error) {
+                *error = A2PluginErrorMake(A2PluginErrorLaunchChainUnconfirmed, @"permissions",
+                                           @"%@ 会修改启动链，安装前需要通过免责确认", manifest.pluginId);
+            }
+            return nil;
+        }
+        // ★闸门是同步的、可能在实现里阻塞★（10 次弹窗要等用户点完，见 A2PluginLaunchChainGate）。
+        BOOL proceed = launchChainGate(manifest, launchChainPermissions);
+        if (!proceed) {
+            [NSFileManager.defaultManager removeItemAtPath:staging error:NULL];
+            [self logLine:@"用户取消：启动链免责确认未通过 ⇒ 终止安装（暂存已清理，registry 未写）"];
+            if (error) {
+                *error = A2PluginErrorMake(A2PluginErrorUserCancelled, nil,
+                                           @"已取消安装：%@ 会修改启动链，免责确认没有通过",
+                                           manifest.pluginId);
+            }
+            return nil;
+        }
+        [self logLine:@"启动链免责确认通过：%@ —— 继续安装", manifest.pluginId];
+    }
+
+    // ⑤ 换目录（同卷 rename，原子）
     NSFileManager *fileManager = NSFileManager.defaultManager;
     NSString *pluginDirectory =
         [self.pluginsDirectory stringByAppendingPathComponent:manifest.pluginId];
@@ -456,7 +508,7 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
     }
     [self logLine:@"换目录完成：%@", target];
 
-    // ⑤ 写注册表
+    // ⑥ 写注册表
     A2PluginRegistryEntry *entry = [self entryForManifest:manifest
                                                  existing:existing
                                                    source:source
@@ -476,7 +528,7 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
     [self logLine:@"写 registry 完成：%@ %@，seq=%ld",
      manifest.pluginId, manifest.version, (long)self.registry.seq];
 
-    // ⑥ 保留上一版：先清掉更早的保留版（4.5：每个插件最多留 1 个旧版本目录），再把旧目录收进来
+    // ⑦ 保留上一版：先清掉更早的保留版（4.5：每个插件最多留 1 个旧版本目录），再把旧目录收进来
     if (existing && existing.version.length) {
         NSString *oldDirectory = [pluginDirectory stringByAppendingPathComponent:existing.version];
         BOOL oldDirectoryIsSeparate = ![existing.version isEqualToString:manifest.version];
