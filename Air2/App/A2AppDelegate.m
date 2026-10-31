@@ -34,6 +34,7 @@
 #import "A2Log.h"
 #import "A2CrashReportViewController.h"
 #import "A2PairingKeepAlive.h"   // [PAIRWIRE-KEEPALIVE] 配对期间保活
+#import "A2RendererImporter.h"  // 导入的渲染器插件：启动时扫一遍（见 docs/RENDERER_PLUGIN_SPEC.md）
 
 @implementation A2AppDelegate
 
@@ -143,6 +144,15 @@ didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *
         }
         [@"" writeToFile:marker atomically:YES encoding:NSUTF8StringEncoding error:NULL];
     }
+
+    // ★导入的渲染器插件：启动时扫一遍★
+    //   为什么在启动时扫：插件目录是用户可见的（Documents），可能被文件 App 改动过；
+    //   列表只靠「导入时写内存」的话，重启后就会是空的（假状态）。
+    //   放后台队列：要遍历目录 + 读 Mach-O 头，不能压在主线程的首帧上。
+    //   扫完发 A2RendererPluginsDidChangeNotification（主线程），管理页据此刷新。
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        [A2RendererImporter.shared reloadAll];
+    });
 
     [A2Log log:@"AppDelegate: didFinishLaunching 完成"];
 

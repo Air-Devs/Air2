@@ -570,6 +570,60 @@ action sheet 列全部候选，**未内置的项照列但标「未内置」**（
 `Natives/LauncherPreferences.m`（渲染器候选表 + `rendererLibraryExists` 过滤）、
 `LauncherPreferences.m:351 getSelectedJavaHome`（JRE 分档选择）。★只拄口径，未搬运代码★。
 
+### 渲染器插件导入（`.air2plugin`）—— [RENDER-PLUGIN]
+
+**要解决的是什么**：渲染后端不该只有随包的那几个。用户/开发者把自己的 GL 实现打成
+`.air2plugin`（zip）导入，导入后在「设置 → 渲染 → 渲染器插件」里管理（导入 / 查看 / 卸载）。
+
+**文件（本单从 tag `pre-overwrite-20261031` 取回并适配）**
+
+| 文件 | 层 | 职责 |
+|---|---|---|
+| `Air2/Core/Renderer/A2RendererLibraryLayout.[hm]` | Core | 库布局词汇表（combined / separate / glOnly）+ 是否需要独立 EGL 的唯一判据 |
+| `Air2/Core/Renderer/A2RendererPlugin.[hm]` | Core | manifest → 值对象 + **静态**校验（字段 / 路径 / Mach-O arm64 / 导出符号）。★不 dlopen、不碰 zip★ |
+| `Air2/Core/Renderer/A2RendererImporter.[hm]` | Core | 解压到 staging → 校验 → 内容摘要 → **原子换目录**（失败回滚）→ 安装记录 → 通知；卸载；启动扫描 |
+| `Air2/UI/Screens/Settings/A2RendererPluginViewController.[hm]` | UI | 管理页：导入入口 + 内置清单（只读）+ 已导入卡片（名称/版本/作者/布局/来源/可否用 + 卸载） |
+| `docs/RENDERER_PLUGIN_SPEC.md` | docs | 包格式与 manifest 规范（作者向） |
+
+**调用点**
+
+| 环节 | 位置 | 行为 |
+|---|---|---|
+| 设置入口 | `A2RuntimeSettings.m` 的 `rendererImportRowWithHost:` | 「导入渲染器…」→ push 管理页（与渲染器行、JRE 行同一分组） |
+| 启动扫描 | `A2AppDelegate.m`（`didFinishLaunching` 末尾，后台队列） | `[A2RendererImporter.shared reloadAll]` —— 插件目录用户可见，重启后必须重扫，否则列表是假状态 |
+| 导入/卸载 | 管理页 | `importPluginAtPath:progress:completion:` / `removePlugin:error:` |
+| 内置清单 | 管理页 | 直接读 `A2RendererCatalog.allCandidates` + `isBundled:frameworksPath:`（★不另抄名单★） |
+
+**导入闸门（任一项不过 ⇒ 拒装，磁盘无残留）**
+
+| 判据 | 失败时 |
+|---|---|
+| zip 条目路径（`..` / 绝对路径 / 反斜杠 / 控制字符） | 整包拒装（不是跳过该条） |
+| 落盘复核：符号链接 / 非普通文件 | 拒装 |
+| `manifest.json` 份数（0 或 >1） | 拒装（>1 视为夹带第二个插件） |
+| `formatVersion == 1`、`rendererId` / `displayName` / `rendererGLPath` 必填 | 拒装，文案点名字段 |
+| `rendererId` 是安全目录名（`[A-Za-z0-9._-]`，≤64，不以 `.` 开头） | 拒装（否则 `../` 能把文件写出插件目录） |
+| 库文件：存在 + 普通文件 + 在包内 + Mach-O **arm64** + `filetype=MH_DYLIB` + 导出 `glGetString` | 拒装，文案给具体原因（ELF / 32 位 / 无 arm64 切片 / 不是 dylib / 缺符号） |
+| `ios.minSystemVersion` 高于本机 | 拒装（「需要 iOS ≥ x，本机 y」；未声明视为满足） |
+| 同 id + 同 version + 内容摘要不同 | 拒装（请改 version）；内容相同 ⇒ 幂等命中，磁盘不动 |
+
+**原子安装**：`Renderers/.staging/<uuid>` 解压校验 → 写 `install.json` → rename 到
+`.incoming/<uuid>` → 旧目录 rename 到 `.trash/<uuid>` → 新目录 rename 到 `Renderers/{rendererId}`；
+任一步失败把旧目录挪回原位。★目录名换一次是原子的 ⇒ 用户要么看到旧版、要么看到新版★。
+
+**★导入项不进渲染器候选表★**（本单的明确边界）：启动链只从 `<App>/Frameworks/` 加载
+（`Natives/Renderer/a2_renderer.m`），装到 Documents 的库在签名环境里加载不了 ——
+把它们列进「选哪个渲染器」就是「选了必定失败」的假选项。管理页只负责**装/看/删**，
+选择入口仍然只有 `A2RuntimeSettings` 的渲染器行一处。
+
+**★为什么导入阶段不 dlopen★**：`dlopen` 会执行库的 constructor，GL 库的 constructor
+假设 EGL 上下文已就绪 ⇒ 探测阶段直接 SIGSEGV（实测 MobileGlues 崩在 `init_target_egl`）。
+静态判据（架构 + 导出符号）足够挡住「拿错平台/拿错文件」，真实加载留给启动链。
+
+**日志锚点（真机 grep）**：`renderer-import: 插件「…」… 导入成功（首次安装/已覆盖旧版本）`、
+`renderer-import: ★拒装★ … ⇒ <原因>`、`renderer-import: ★已回滚★旧版本回到 …`、
+`renderer-import: 扫描到 N 个导入渲染器（跳过 M 个坏目录）`。
+
 ### 渲染器 surface / GL 桥（缺口③）—— [GL-BRIDGE]
 
 **缺口（接线前）**：`[RENDER-WIRE]`/`[RENDER-SEL]` 只做到「选 + `dlopen`」——

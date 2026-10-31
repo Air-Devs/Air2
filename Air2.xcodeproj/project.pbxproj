@@ -59,6 +59,9 @@
 		6A6F891D61316F9322AA89DB /* A2RenderScaleCatalog.m in Sources */ = {isa = PBXBuildFile; fileRef = 40A79BB8E06A88A0FEE25433 /* A2RenderScaleCatalog.m */; };
 		8B0D65271C85EAABC46B0226 /* A2Renderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 47106E1A43667C70F671BED2 /* A2Renderer.m */; };
 		FF385466CB276B950E721B7C /* A2RendererCatalog.m in Sources */ = {isa = PBXBuildFile; fileRef = 72515A7BFB0670C8C454D5D5 /* A2RendererCatalog.m */; };
+		01B85F275BBECA53B5E85F73 /* A2RendererImporter.m in Sources */ = {isa = PBXBuildFile; fileRef = 8D34430FDEB24984AD0E55DB /* A2RendererImporter.m */; };
+		E1702ED5DBB625CDC1ACD1E2 /* A2RendererLibraryLayout.m in Sources */ = {isa = PBXBuildFile; fileRef = B7393994B61F671185A745FD /* A2RendererLibraryLayout.m */; };
+		A23C776EFCE2C90AC27775E1 /* A2RendererPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = E79BEBB401EDD0A1A09B4A61 /* A2RendererPlugin.m */; };
 		E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */ = {isa = PBXBuildFile; fileRef = 035FB3CC4FE4018F44632AD5 /* A2Settings.m */; };
 		15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */; };
 		20B189CC369DA2AC61DD52DF /* A2IntegrityChecker.m in Sources */ = {isa = PBXBuildFile; fileRef = FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */; };
@@ -164,6 +167,7 @@
 		4E8862CE6096E92EC0407A66 /* A2OnDevicePairingSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = C355A13B8154816E9B230718 /* A2OnDevicePairingSettings.m */; };
 		C5EF3AABAA24EA6D5AB1A374 /* A2OnDevicePairingViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 7998970398F32EF950F5586A /* A2OnDevicePairingViewController.m */; };
 		DC9A725659424ECF0E571881 /* A2PairingNotifier.m in Sources */ = {isa = PBXBuildFile; fileRef = D8BC5772897E023DFBFB4D08 /* A2PairingNotifier.m */; };
+		4F0C55C53DF109102154C739 /* A2RendererPluginViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = B53FD56CE6A8FAC76A2445BE /* A2RendererPluginViewController.m */; };
 		D8FA542F7EBB121B40454E86 /* A2RuntimeSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = A05E5FC7A4D468C3B145E7EF /* A2RuntimeSettings.m */; };
 		1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */; };
 		F3A3A971AE05998E6D648440 /* A2ModListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 86984D61C69EA55C028368AC /* A2ModListViewController.m */; };
@@ -286,6 +290,9 @@
 		40A79BB8E06A88A0FEE25433 /* A2RenderScaleCatalog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RenderScaleCatalog.m"; sourceTree = "<group>"; };
 		47106E1A43667C70F671BED2 /* A2Renderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Renderer.m"; sourceTree = "<group>"; };
 		72515A7BFB0670C8C454D5D5 /* A2RendererCatalog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererCatalog.m"; sourceTree = "<group>"; };
+		8D34430FDEB24984AD0E55DB /* A2RendererImporter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererImporter.m"; sourceTree = "<group>"; };
+		B7393994B61F671185A745FD /* A2RendererLibraryLayout.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererLibraryLayout.m"; sourceTree = "<group>"; };
+		E79BEBB401EDD0A1A09B4A61 /* A2RendererPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererPlugin.m"; sourceTree = "<group>"; };
 		035FB3CC4FE4018F44632AD5 /* A2Settings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Settings.m"; sourceTree = "<group>"; };
 		044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameInstaller.m"; sourceTree = "<group>"; };
 		FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2IntegrityChecker.m"; sourceTree = "<group>"; };
@@ -391,6 +398,7 @@
 		C355A13B8154816E9B230718 /* A2OnDevicePairingSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2OnDevicePairingSettings.m"; sourceTree = "<group>"; };
 		7998970398F32EF950F5586A /* A2OnDevicePairingViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2OnDevicePairingViewController.m"; sourceTree = "<group>"; };
 		D8BC5772897E023DFBFB4D08 /* A2PairingNotifier.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PairingNotifier.m"; sourceTree = "<group>"; };
+		B53FD56CE6A8FAC76A2445BE /* A2RendererPluginViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererPluginViewController.m"; sourceTree = "<group>"; };
 		A05E5FC7A4D468C3B145E7EF /* A2RuntimeSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RuntimeSettings.m"; sourceTree = "<group>"; };
 		9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsViewController.m"; sourceTree = "<group>"; };
 		86984D61C69EA55C028368AC /* A2ModListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModListViewController.m"; sourceTree = "<group>"; };
@@ -504,6 +512,9 @@
 		C744196F4F440B96FB2AEF8F /* A2RenderScaleCatalog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RenderScaleCatalog.h"; sourceTree = "<group>"; };
 		12B70B0E6FB31B7E75D61633 /* A2Renderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Renderer.h"; sourceTree = "<group>"; };
 		AFE13A591BDAAC52AA2CB55D /* A2RendererCatalog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererCatalog.h"; sourceTree = "<group>"; };
+		5D1F57A737C10747C284745F /* A2RendererImporter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererImporter.h"; sourceTree = "<group>"; };
+		F4115040F39E483024559030 /* A2RendererLibraryLayout.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererLibraryLayout.h"; sourceTree = "<group>"; };
+		F9D789402D37A2E55281C611 /* A2RendererPlugin.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererPlugin.h"; sourceTree = "<group>"; };
 		8D9149596220C9F4F49C460D /* A2Settings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Settings.h"; sourceTree = "<group>"; };
 		8407C36C2C93136130B9F07E /* A2GameInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameInstaller.h"; sourceTree = "<group>"; };
 		89044710CFCCD81045E82677 /* A2IntegrityChecker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2IntegrityChecker.h"; sourceTree = "<group>"; };
@@ -607,6 +618,7 @@
 		D19087ABBB08C796BD40C5B3 /* A2OnDevicePairingSettings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2OnDevicePairingSettings.h"; sourceTree = "<group>"; };
 		5A0B92E61F8B2F3716A72240 /* A2OnDevicePairingViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2OnDevicePairingViewController.h"; sourceTree = "<group>"; };
 		ADE021D57C8E46EE0E06F194 /* A2PairingNotifier.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PairingNotifier.h"; sourceTree = "<group>"; };
+		838C7F8423E85E5E058FD819 /* A2RendererPluginViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererPluginViewController.h"; sourceTree = "<group>"; };
 		A309D45ADA810213043EDE96 /* A2SettingsSections.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsSections.h"; sourceTree = "<group>"; };
 		F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsViewController.h"; sourceTree = "<group>"; };
 		C595542224E314960D0F3C02 /* A2ModListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModListViewController.h"; sourceTree = "<group>"; };
@@ -1129,9 +1141,15 @@
 				40A79BB8E06A88A0FEE25433 /* A2RenderScaleCatalog.m */,
 				47106E1A43667C70F671BED2 /* A2Renderer.m */,
 				72515A7BFB0670C8C454D5D5 /* A2RendererCatalog.m */,
+				8D34430FDEB24984AD0E55DB /* A2RendererImporter.m */,
+				B7393994B61F671185A745FD /* A2RendererLibraryLayout.m */,
+				E79BEBB401EDD0A1A09B4A61 /* A2RendererPlugin.m */,
 				C744196F4F440B96FB2AEF8F /* A2RenderScaleCatalog.h */,
 				12B70B0E6FB31B7E75D61633 /* A2Renderer.h */,
 				AFE13A591BDAAC52AA2CB55D /* A2RendererCatalog.h */,
+				5D1F57A737C10747C284745F /* A2RendererImporter.h */,
+				F4115040F39E483024559030 /* A2RendererLibraryLayout.h */,
+				F9D789402D37A2E55281C611 /* A2RendererPlugin.h */,
 			);
 			path = Renderer;
 			sourceTree = "<group>";
@@ -1399,6 +1417,7 @@
 				C355A13B8154816E9B230718 /* A2OnDevicePairingSettings.m */,
 				7998970398F32EF950F5586A /* A2OnDevicePairingViewController.m */,
 				D8BC5772897E023DFBFB4D08 /* A2PairingNotifier.m */,
+				B53FD56CE6A8FAC76A2445BE /* A2RendererPluginViewController.m */,
 				A05E5FC7A4D468C3B145E7EF /* A2RuntimeSettings.m */,
 				9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */,
 				8A8A69E0C0117AD2228117A1 /* A2BackgroundSettingsViewController.h */,
@@ -1408,6 +1427,7 @@
 				D19087ABBB08C796BD40C5B3 /* A2OnDevicePairingSettings.h */,
 				5A0B92E61F8B2F3716A72240 /* A2OnDevicePairingViewController.h */,
 				ADE021D57C8E46EE0E06F194 /* A2PairingNotifier.h */,
+				838C7F8423E85E5E058FD819 /* A2RendererPluginViewController.h */,
 				A309D45ADA810213043EDE96 /* A2SettingsSections.h */,
 				F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */,
 			);
@@ -1592,6 +1612,9 @@
 				6A6F891D61316F9322AA89DB /* A2RenderScaleCatalog.m in Sources */,
 				8B0D65271C85EAABC46B0226 /* A2Renderer.m in Sources */,
 				FF385466CB276B950E721B7C /* A2RendererCatalog.m in Sources */,
+				01B85F275BBECA53B5E85F73 /* A2RendererImporter.m in Sources */,
+				E1702ED5DBB625CDC1ACD1E2 /* A2RendererLibraryLayout.m in Sources */,
+				A23C776EFCE2C90AC27775E1 /* A2RendererPlugin.m in Sources */,
 				E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */,
 				15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */,
 				20B189CC369DA2AC61DD52DF /* A2IntegrityChecker.m in Sources */,
@@ -1697,6 +1720,7 @@
 				4E8862CE6096E92EC0407A66 /* A2OnDevicePairingSettings.m in Sources */,
 				C5EF3AABAA24EA6D5AB1A374 /* A2OnDevicePairingViewController.m in Sources */,
 				DC9A725659424ECF0E571881 /* A2PairingNotifier.m in Sources */,
+				4F0C55C53DF109102154C739 /* A2RendererPluginViewController.m in Sources */,
 				D8FA542F7EBB121B40454E86 /* A2RuntimeSettings.m in Sources */,
 				1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */,
 				F3A3A971AE05998E6D648440 /* A2ModListViewController.m in Sources */,
@@ -1839,7 +1863,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
-				CURRENT_PROJECT_VERSION = "d1c8d4f";
+				CURRENT_PROJECT_VERSION = "119972e";
 				DEAD_CODE_STRIPPING = "NO";
 				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";
@@ -1885,7 +1909,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
-				CURRENT_PROJECT_VERSION = "d1c8d4f";
+				CURRENT_PROJECT_VERSION = "119972e";
 				DEAD_CODE_STRIPPING = "NO";
 				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";

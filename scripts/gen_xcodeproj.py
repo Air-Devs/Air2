@@ -782,7 +782,10 @@ def main():
     os.makedirs(proj_dir, exist_ok=True)
 
     out = os.path.join(proj_dir, "project.pbxproj")
-    with open(out, "w") as f:
+    # ★newline="\n" 必须显式写★：Windows 上默认的文本模式会把换行翻译成 CRLF，
+    # 于是仓库里是 LF、工作树里是 CRLF ⇒ 每次重生成都变成「整文件改动」，
+    # 真改动被糊在 170KB 的噪音里看不出来（.gitattributes 的 eol=lf 只在提交时归一化）。
+    with open(out, "w", newline="\n") as f:
         f.write(content)
 
     # 回填 scheme 里的 target UUID。
@@ -793,7 +796,8 @@ def main():
         target_uuid = uid("target", PROJECT_NAME)
         s = open(scheme).read()
         s = s.replace("PLACEHOLDER_TARGET_UUID", target_uuid)
-        open(scheme, "w").write(s)
+        with open(scheme, "w", newline="\n") as f:
+            f.write(s)
         print(f"  已回填 scheme target UUID: {target_uuid}")
 
     impl, headers = scan_sources()

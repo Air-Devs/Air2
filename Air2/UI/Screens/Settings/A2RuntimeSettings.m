@@ -50,6 +50,7 @@
 #import "A2Log.h"
 #import "A2Toast.h"
 #import "A2OptionSheet.h"
+#import "A2RendererPluginViewController.h"   // 「导入渲染器…」的去处（导入 / 卸载管理页）
 
 #import <math.h>   // fabs（倍率比较）
 
@@ -105,6 +106,7 @@ static NSString *A2RenderScaleDisplayText(double scale) {
     section.footerText = A2RS(@"runtime.section.footer");
 
     [section addRow:[self rendererRowWithHost:host]];
+    [section addRow:[self rendererImportRowWithHost:host]];
     [section addRow:[self javaRuntimeRowWithHost:host]];
     [section addRow:[self renderScaleRowWithHost:host]];
     return section;
@@ -176,6 +178,32 @@ static NSString *A2RenderScaleDisplayText(double scale) {
         [sheet presentFrom:hostVC];
     };
     return row;
+}
+
+#pragma mark - 渲染器插件（导入 / 卸载）
+
+/// 「导入渲染器…」入口 —— 打开 `A2RendererPluginViewController`。
+///
+/// ★为什么不把导入项塞进上面的渲染器候选表★：启动链只从 `<App>/Frameworks/`
+/// 加载（`Natives/Renderer/a2_renderer.h`），而导入的库装在 Documents 下，
+/// 在签名环境里根本加载不了 —— 列进选择器就是「选了必定失败」的假选项。
+/// 所以这里是**管理入口**，不是第二个「选哪个渲染器」的入口。
++ (A2SettingsRow *)rendererImportRowWithHost:(UIViewController *)host {
+    A2SettingsRow *importRow = [[A2SettingsRow alloc] init];
+    importRow.symbolName = @"square.and.arrow.down";
+    importRow.title = @"导入渲染器…";
+    importRow.subtitle = @"导入 .air2plugin（zip）并管理已装的渲染器插件";
+    importRow.accessory = A2SettingsRowAccessoryDisclosure;
+
+    __weak UIViewController *weakHost = host;
+    importRow.onTap = ^{
+        UIViewController *hostVC = weakHost;
+        if (hostVC == nil) return;
+        A2RendererPluginViewController *vc = [[A2RendererPluginViewController alloc] init];
+        [hostVC.navigationController pushViewController:vc animated:YES];
+        [A2Log log:@"settings: 打开渲染器插件管理页（导入 / 卸载）"];
+    };
+    return importRow;
 }
 
 #pragma mark - Java 运行时
