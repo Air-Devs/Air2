@@ -299,6 +299,19 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
             @"en": @"Off by default. When on: once the JVM is up and its code cache is mapped, the launch pauses and shows \"JIT is ready\"; the game main class only runs after you attach lldb and tap Continue (auto-released after 300 s).",
             @"ja": @"既定はオフ。オンにすると、JVM の生成と code cache の確保が終わった時点で一時停止して「JIT 準備完了」を表示し、lldb でアタッチして「続行」を押すまでゲームのメインクラスを実行しません（300 秒で自動的に再開）。",
         },
+        // ★[A2PROBE]★ GL 断点探针（键 a2jit.probeGL，见 A2JITEnvironment.h）
+        @"jit.probegl.title": @{
+            @"zh-Hans": @"GL 断点探针（KW / ANGLE）",
+            @"zh-Hant": @"GL 中斷點探針（KW / ANGLE）",
+            @"en": @"GL breakpoint probe (KW / ANGLE)",
+            @"ja": @"GL ブレークポイント探針（KW / ANGLE）",
+        },
+        @"jit.probegl.subtitle": @{
+            @"zh-Hans": @"默认关。开着且已接入调试器时，启动时把 KW 与 ANGLE 的 glLoadIdentity 地址交给 JIT 脚本布断点，命中就打印 pc/lr/x0-x3（不用 lldb，也不抢调试器）",
+            @"zh-Hant": @"預設關。開著且已接入偵錯器時，啟動時把 KW 與 ANGLE 的 glLoadIdentity 位址交給 JIT 腳本佈中斷點，命中就印出 pc/lr/x0-x3（不用 lldb，也不搶偵錯器）",
+            @"en": @"Off by default. When on and a debugger is attached, the launch hands the KW and ANGLE glLoadIdentity addresses to the JIT script to set breakpoints; each hit logs pc/lr/x0-x3 (no lldb, no debugger takeover).",
+            @"ja": @"既定はオフ。オンかつデバッガ接続時に、起動時に KW と ANGLE の glLoadIdentity アドレスを JIT スクリプトへ渡してブレークポイントを張り、ヒット時に pc/lr/x0-x3 を出力します（lldb は使わず、デバッガも奪いません）。",
+        },
 
         @"jit.row.next": @{
             @"zh-Hans": @"下一步动作",

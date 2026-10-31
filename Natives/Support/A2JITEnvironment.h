@@ -140,6 +140,33 @@ BOOL a2_jit_send_script_safe(const char *utf8, size_t len);
 /// 无人应答时返回 NO（降级），不致死。
 BOOL a2_jit_set_detach_after_first_br(BOOL detach);
 
+// ============================================================================
+// ★[A2PROBE]★ GL 断点探针 —— 让 StikDebug 脚本按 App 给的地址布 Z0，命中时脚本打寄存器。
+//
+//   要回答的问题：「MC 的 GL11.glLoadIdentity 到底落到了哪个库？」——同一个符号名在
+//   KW 本体与 ANGLE 兼容底里各有一份，函数指针取证（[A2-GL-PTR]）只能看到地址，
+//   看不到**真的被调到**。这里把两个地址交给脚本（`brk #0xf00d`、x16=99），脚本对
+//   每个地址下一发 `Z0,<hex>,4`（软件断点），并在主循环里 pc 命中时发 `g` 取寄存器，
+//   打 `[A2PROBE] HIT pc=… lr=… x0=… x1=…`（★不需要 lldb、不抢调试器★）。
+//
+//   生效条件（缺一不发，默认路径行为不变）：
+//     ① 偏好键 `A2JITProbeGLKey`（= `a2jit.probeGL`）为 YES —— ★默认 NO★；
+//     ② 本进程此刻 CS_DEBUGGED（有调试器 attach，脚本在岗）—— 否则 brk 只会 SIGTRAP；
+//     ③ 每个进程只 arm 一次（未被服务时不记账，允许下次启动重试）。
+// ============================================================================
+
+/// 偏好键：★GL 断点探针★（Boolean，默认 NO）。写入点 = 设置页 JIT 面板；读取点 = 本层。
+FOUNDATION_EXPORT NSString *const A2JITProbeGLKey;
+
+/// ★[A2PROBE]★ 把两个地址交给调试器脚本布断点（`brk #0xf00d`、x16=99）。
+/// @param a KW 侧 `glLoadIdentity` 的地址（ASLR 后实际地址；0 = 没取到）
+/// @param b ANGLE 侧 `glLoadIdentity` 的地址（同上；0 = 没取到）
+/// 开关关 / 没有调试器 / 两个都为 0 ⇒ 只记一行日志后返回（不发作何 brk）。
+/// 未被服务时由 SIGTRAP 安全网接住（不致死）。★注意★：若驻场的是 lldb 一类**没有指派本脚本**
+/// 的调试器，这一发 brk 会被它当普通断点停住（进程等到调试器继续为止）——这是「仅调试用开关」的
+/// 代价，所以默认关、且只关心 StikDebug 脚本在岗的场景。
+void a2_jit_probe_arm(uintptr_t a, uintptr_t b);
+
 /// ★[JIT-DETACH-STIKDEBUG] JIT 就绪后主动请求调试器脱离★（cmd=3 的统一入口）。
 ///
 /// 与 `a2_jit_set_detach_after_first_br` 的区别不在协议，而在**生效条件**：

@@ -51,6 +51,9 @@ jobs:
       - name: 脚本协议单测（node，98 例）
         run: node tests/JIT/jit_script_tests.js
 
+      - name: ★A2PROBE★ GL 断点探针单测（node，cmd 99）
+        run: node tests/JIT/jit_probe_tests.js
+
       - name: Plan / Runtime / Instance 套件（暂不挡构建，日志照打）
         continue-on-error: true
         run: |

@@ -47,6 +47,7 @@
 #import "A2JITSystemToolLauncher.h"
 #import "A2JITEnvironmentProbe.h"
 #import "A2JITEnabler.h"        // [JIT-DETACH-STIKDEBUG] A2JITLauncherEnabledKey（开关写入点用）
+#import "A2JITEnvironment.h"   // ★[A2PROBE]★ A2JITProbeGLKey（GL 断点探针开关的键，写入点 = 本文件）
 #import "A2JITAutoPairingEngineBridge.h"
 // [JIT-AUTOPAIR-3] 配对码来源（可选项表）与设备发起档的 6 位码会话
 #import "A2JITPairingPinSource.h"
@@ -814,6 +815,30 @@ static NSString *A2JITLauncherLabelForSource(NSString *source) {
          isOn ? @"开" : @"关", A2JITDebugHoldAfterJITKey];
     };
     [section addRow:debugHoldRow];
+
+    // ---- ★[A2PROBE]★ 「GL 断点探针」开关（★写入点唯一 = 本段★）----
+    //   紧跟在上面那行后面：同一屏、同类调试开关。
+    //   开着 ⇒ 启动时把「KW 的 glLoadIdentity」与「ANGLE 的 glLoadIdentity」两个地址交给
+    //   StikDebug 脚本（brk #0xf00d x16=99），脚本各下一发 Z0；MC 第一次调到其中之一时脚本打
+    //   `[A2PROBE] HIT pc=… lr=… x0=… x1=…`，回答「到底落到了哪个库」。
+    //   ★关着（默认）⇒ 一个字节都不发★（判据与发点全在 Natives/Support 的
+    //   a2_jit_probe_arm，调用点只有一个：Natives/Renderer/a2_gl_bridge.m）。
+    //   ★还要求本进程有调试器 attach（CS_DEBUGGED）★：没有调试器就没有脚本应答，布点无处受理。
+    BOOL probeGLOn = ([NSUserDefaults.standardUserDefaults objectForKey:A2JITProbeGLKey] != nil) &&
+        [NSUserDefaults.standardUserDefaults boolForKey:A2JITProbeGLKey];
+    A2SettingsRow *probeGLRow = [[A2SettingsRow alloc] init];
+    probeGLRow.symbolName = @"target";
+    probeGLRow.title = [A2JITStrings stringForKey:@"jit.probegl.title"];
+    probeGLRow.subtitle = [A2JITStrings stringForKey:@"jit.probegl.subtitle"];
+    probeGLRow.accessory = A2SettingsRowAccessorySwitch;
+    probeGLRow.on = probeGLOn;
+    probeGLRow.onToggle = ^(BOOL isOn) {
+        [NSUserDefaults.standardUserDefaults setBool:isOn forKey:A2JITProbeGLKey];
+        [NSUserDefaults.standardUserDefaults synchronize];
+        [A2Log criterion:@"[A2PROBE] settings: GL 断点探针 → %@（键 %@；须有调试器 attach 才生效，下次启动游戏生效）",
+         isOn ? @"开" : @"关", A2JITProbeGLKey];
+    };
+    [section addRow:probeGLRow];
 
     A2SettingsRow *nextRow = [[A2SettingsRow alloc] init];
     nextRow.symbolName = @"arrow.right.circle.fill";

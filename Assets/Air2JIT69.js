@@ -24,10 +24,18 @@ void BreakSendJITScript(char* script, size_t len) {
 const CMD_DETACH = 0;
 const CMD_PREPARE_REGION = 1;
 const CMD_NEW_BREAKPOINTS = 2;
+// ★A2PROBE★ cmd 99 = GL 断点探针武装（App 侧 a2_jit_probe_arm 发出）。
+//   入参：x0 = 地址 A（KW 的 glLoadIdentity）、x1 = 地址 B（ANGLE 的 glLoadIdentity）；
+//   两者都是 ASLR 后的实际地址（小端整数），0 = App 没取到该符号。
+//   行为：对每个非 0 地址发一发 `Z0,<hex>,4`；之后主循环里 pc 命中就打印一行寄存器并摘点。
+const CMD_PROBE_GL = 99;
+// ★A2PROBE★ 单次武装最多打印几次命中（超了只摘点不打印，防同一地址刷屏）
+const A2PROBE_HIT_LIMIT = 3;
 const commands = {
     [CMD_DETACH]: JIT26Detach,
     [CMD_PREPARE_REGION]: JIT26PrepareRegion,
-    [CMD_NEW_BREAKPOINTS]: JIT26NewBreakpoints
+    [CMD_NEW_BREAKPOINTS]: JIT26NewBreakpoints,
+    [CMD_PROBE_GL]: JIT26ProbeArmGL
 };
 const legacyCommands = {
     [0x68]: JIT26NewBreakpoints,
@@ -49,6 +57,8 @@ function log_verbose(msg) {
 // To avoid having to re-parse these in each function, we save some registers here
 let tid, x0, x1, x16, pc;
 let detached = false;
+// ★A2PROBE★ 已布点的地址（BigInt；null = 该槽没有点）+ 本次武装已打印的命中次数
+let a2Probe = { a: null, b: null, hits: 0 };
 let pid = get_pid();
 let attachResponse = send_command(`vAttach;${pid.toString(16)}`);
 
@@ -76,7 +86,14 @@ while (!detached) {
     }
     pc = littleEndianHexStringToNumber(pc);
     x16 = littleEndianHexStringToNumber(x16);
-    
+
+    // ★A2PROBE★ 命中我们布的两个 GL 地址 ⇒ 打印寄存器、摘点、继续。
+    //   ★必须在下面「读 pc 指令 / 区分 brk」之前判★：Z0 停下来时 pc 上是调试器塞的 brk #0，
+    //   走后面的分支只会落进「这条 brk 没人认领 ⇒ continue」⇒ 同一地址反复停（死循环）。
+    if (a2ProbeHandleStop()) {
+        continue;
+    }
+
     let instructionResponse = send_command(`m${pc.toString(16)},4`);
     log(`instruction at pc: ${instructionResponse}`);
     let instrU32 = littleEndianHexToU32(instructionResponse);
@@ -201,6 +218,79 @@ function JIT26PrepareRegion(brkResponse) {
 
     let putX0Response = send_command(`P0=${numberToLittleEndianHexString(jitPageAddress)};thread:${tid};`);
     log(`putX0Response = ${putX0Response}`);
+}
+
+// ★A2PROBE★ 命令 99：对 A、B 各发一发 Z0（软件断点，4 字节，arm64 定长指令），
+//   并把这两个地址记进 a2Probe 供主循环比 pc。地址为 0 ⇒ 跳过该槽（App 没取到符号）。
+function JIT26ProbeArmGL(brkResponse) {
+    const hasA = (x0 != 0n);
+    const hasB = (x1 != 0n);
+    const aHex = hasA ? x0.toString(16) : '0';
+    const bHex = hasB ? x1.toString(16) : '0';
+    a2Probe = { a: hasA ? x0 : null, b: hasB ? x1 : null, hits: 0 };
+    if (!hasA && !hasB) {
+        log(`[A2PROBE] armed A=0x0 B=0x0 ⇒ 两个地址都是 0，不下断（App 没取到 glLoadIdentity）`);
+        return;
+    }
+    if (hasA) {
+        log(`[A2PROBE] Z0 A=0x${aHex} => <${send_command(`Z0,${aHex},4`)}>`);
+    }
+    if (hasB) {
+        log(`[A2PROBE] Z0 B=0x${bHex} => <${send_command(`Z0,${bHex},4`)}>`);
+    }
+    log(`[A2PROBE] armed A=0x${aHex} B=0x${bHex}`);
+}
+
+// ★A2PROBE★ 主循环里的命中判定：pc 落在布点地址上 ⇒ 摘点 + 打印寄存器，返回 true（调用方 continue）。
+//   ★先摘点（z0）再继续★：Z0 停在同一地址时若把点留着，下一个 c 立刻又停在同一 pc ⇒ 死循环。
+//   ★不重新下断★：一个地址只报一次；超过 A2PROBE_HIT_LIMIT 次后只摘点、不打印。
+function a2ProbeHandleStop() {
+    if (pc === null) {
+        return false;
+    }
+    const isA = (a2Probe.a !== null && pc === a2Probe.a);
+    const isB = (a2Probe.b !== null && pc === a2Probe.b);
+    if (!isA && !isB) {
+        return false;
+    }
+    const slot = isA ? 'A' : 'B';
+    const addrHex = pc.toString(16);
+    const disarmResponse = send_command(`z0,${addrHex},4`);
+    log_verbose(`[A2PROBE] disarm ${slot}=0x${addrHex} z0=<${disarmResponse}>`);
+    if (a2Probe.hits >= A2PROBE_HIT_LIMIT) {
+        log(`[A2PROBE] HIT ${slot}=0x${addrHex} 已报满 ${A2PROBE_HIT_LIMIT} 次 ⇒ 只摘点不打印`);
+        return true;
+    }
+    a2Probe.hits++;
+    const regs = a2ProbeParseRegisters(send_command(`g`));
+    const h = (v) => (v === null ? '?' : v.toString(16));
+    log(`[A2PROBE] HIT pc=0x${h(regs.pc)} lr=0x${h(regs.lr)} x0=0x${h(regs.x0)} x1=0x${h(regs.x1)} x2=0x${h(regs.x2)} x3=0x${h(regs.x3)}`);
+    return true;
+}
+
+// ★A2PROBE★ 解析 `g` 寄存器包：ARM64 顺序 x0..x28, fp(x29), lr(x30), sp, pc, cpsr；
+//   每个 8 字节、目标字节序（小端）⇒ 偏移(字节)：x0 = 0、lr = 30*8、pc = 32*8（hex 字符 = ×2）。
+//   包短了 / 字段不是 16 位 hex ⇒ 该字段如实给 null（不猜 0）。
+function a2ProbeParseRegisters(gResponse) {
+    const out = { x0: null, x1: null, x2: null, x3: null, lr: null, pc: null };
+    if (typeof gResponse !== 'string') {
+        return out;
+    }
+    const readReg = (index) => {
+        const start = index * 16;
+        if (start + 16 > gResponse.length) {
+            return null;
+        }
+        const chunk = gResponse.substr(start, 16);
+        return /^[0-9a-fA-F]{16}$/.test(chunk) ? littleEndianHexStringToNumber(chunk) : null;
+    };
+    out.x0 = readReg(0);
+    out.x1 = readReg(1);
+    out.x2 = readReg(2);
+    out.x3 = readReg(3);
+    out.lr = readReg(30);
+    out.pc = readReg(32);
+    return out;
 }
 
 // utilities

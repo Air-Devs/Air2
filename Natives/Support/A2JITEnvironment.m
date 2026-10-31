@@ -87,6 +87,16 @@ static void a2_jit_brk_f00d_send_script(char *script, size_t len) {
         "ret");
 }
 
+// brk #0xf00d cmd=99 = ★[A2PROBE]★ 武装 GL 断点探针（脚本侧 commands[99]）。
+//   x16=99；x0=地址 A（KW 的 glLoadIdentity）、x1=地址 B（ANGLE 的），由 ABI 传入。
+//   脚本收到后对每个非 0 地址发一发 `Z0,<hex>,4`，命中时打印 pc/lr/x0-x3 后摘点。
+__attribute__((noinline, optnone, naked))
+static void a2_jit_brk_f00d_probe_gl(uintptr_t a, uintptr_t b) {
+    asm("mov x16, #99 \n"
+        "brk #0xf00d \n"
+        "ret");
+}
+
 // ============================================================================
 // [JIT-NOCRASH] SIGTRAP 安全网 —— 搬运自 utils.m L824–L948。
 //   调试器未就岗时执行 brk ⇒ SIGTRAP ⇒ 进程直接死。这里在调用窗口内布一层
@@ -251,6 +261,67 @@ BOOL a2_jit_send_script_safe(const char *utf8, size_t len) {
     }
     a2_jit_trap_pop(idx, &oldsa);
     return ok;
+}
+
+// ============================================================================
+// ★[A2PROBE]★ GL 断点探针武装（说明见 A2JITEnvironment.h 的同名段）。
+//   本层只做三件事：判开关 → 判「调试器在岗」→ 发一发 cmd=99（安全网内）。
+//   ★地址从哪来★：调用方（Natives/Renderer 的 a2_gl_bridge，唯一一处同时握着 KW 与
+//   ANGLE 两个 dlopen 句柄的地方）dlsym("glLoadIdentity") 后原样传进来；本层不认识 GL。
+// ============================================================================
+NSString *const A2JITProbeGLKey = @"a2jit.probeGL";
+
+/// 开关值（缺键 ⇒ NO，与其它调试开关同口径：不写偏好就等于关）。
+static BOOL a2_jit_probe_gl_enabled(void) {
+    id raw = [NSUserDefaults.standardUserDefaults objectForKey:A2JITProbeGLKey];
+    if (raw == nil) return NO;
+    return [NSUserDefaults.standardUserDefaults boolForKey:A2JITProbeGLKey];
+}
+
+void a2_jit_probe_arm(uintptr_t a, uintptr_t b) {
+    // ① 开关（默认关 ⇒ 一个字节都不发，默认路径行为不变）
+    if (!a2_jit_probe_gl_enabled()) {
+        return;
+    }
+    // ② 只 arm 一次（同一进程重复进入 GL 桥不重复布点；未被服务时下面会清掉这个记账）
+    static BOOL sArmed = NO;
+    if (sArmed) {
+        return;
+    }
+    if (a == 0 && b == 0) {
+        a2_jit_log("[A2PROBE] arm 跳过：A=B=0（KW / ANGLE 都没取到 glLoadIdentity）");
+        return;
+    }
+    // ③ 没有调试器 attach ⇒ brk 只会 SIGTRAP；脚本也不在岗，布点没有受理方。
+    if (!a2_jit_is_debugged()) {
+        a2_jit_log("[A2PROBE] arm 跳过：本进程没有 CS_DEBUGGED（无调试器 attach ⇒ 没有脚本应答）");
+        return;
+    }
+
+    a2_jit_log("[A2PROBE] arm KW=0x%lx ANGLE=0x%lx（brk #0xf00d x16=99 ⇒ 脚本各下一发 Z0）",
+               (unsigned long)a, (unsigned long)b);
+
+    struct sigaction oldsa;
+    sigjmp_buf *env = NULL;
+    int idx = a2_jit_trap_push(&oldsa, &env);
+    if (idx < 0) {
+        a2_jit_log("[A2PROBE] arm 跳过：trap-window 深度超限 -- degrade");
+        return;
+    }
+    sArmed = YES;
+    BOOL serviced = NO;
+    if (sigsetjmp(*env, 1) == 0) {
+        a2_jit_brk_f00d_probe_gl(a, b);   // brk #0xf00d cmd=99
+        serviced = YES;
+    } else {
+        a2_jit_log("[A2PROBE] brk #0xf00d(cmd=99) 未被服务 —— 脚本未指派或调试器不应答（不布点）");
+        sArmed = NO;   // 没被服务 ⇒ 允许下次启动重试一次
+    }
+    a2_jit_trap_pop(idx, &oldsa);
+
+    if (serviced) {
+        a2_jit_log("[A2PROBE] arm 已发出（脚本应打 `[A2PROBE] armed A=0x… B=0x…`，命中打 HIT 行）");
+    }
 }
 
 // ============================================================================

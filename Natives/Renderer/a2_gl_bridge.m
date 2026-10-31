@@ -23,6 +23,7 @@
 #import "a2_gl_bridge.h"
 #import "a2_log.h"
 #import "a2_frame_perf.h"   // ★[FRAME-PERF] 与渲染器无关的帧性能判据（本文件的帧动作每帧记一次）
+#import "A2JITEnvironment.h"   // ★[A2PROBE]★ a2_jit_probe_arm（把 KW/ANGLE 的 glLoadIdentity 交给脚本布断点）
 
 #import <objc/message.h>   // objc_msgSend（动态取 layer 用；不 import UIKit）
 #import <dlfcn.h>
@@ -1083,6 +1084,12 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
             void *angLI = (gGlesHandle != NULL) ? dlsym(gGlesHandle, "glLoadIdentity") : NULL;
             a2_log_f(@"[A2-GL-PTR] glLoadIdentity: KW=%p ANGLE=%p（KW 为 NULL ⇒ LWJGL 必须回落）",
                      kwLI, angLI);
+            // ★[A2PROBE]★ 把这两个地址交给 StikDebug 脚本布 Z0（开关 a2jit.probeGL，默认关）。
+            //   用途：上面这行只说「各自在哪」，探针回答「到底被调到了谁」——脚本在 pc 命中时
+            //   打 `[A2PROBE] HIT pc=… lr=… x0=… x1=…`（不下 lldb、不抢调试器）。
+            //   ★无条件调用一次★：开关 / JIT 就绪 / 只布一次全在 a2_jit_probe_arm 里判，
+            //   开关关着 ⇒ 立刻返回，本层行为与改动前逐字一致。
+            a2_jit_probe_arm((uintptr_t)kwLI, (uintptr_t)angLI);
         }
     }
 

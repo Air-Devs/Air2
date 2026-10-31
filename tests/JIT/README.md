@@ -48,7 +48,13 @@ python3 tests/JIT/run_jit_tests.py
 
 ```sh
 node tests/JIT/jit_script_tests.js      # 基线 98 例，TOTAL pass=98 fail=0
+node tests/JIT/jit_probe_tests.js       # ★A2PROBE★ GL 断点探针（cmd 99），基线 38 例
 ```
+
+`jit_probe_tests.js` 只盯 `x16=99` 这条命令（App 侧 `a2_jit_probe_arm`）：
+对两个地址各发一发 `Z0,<hex>,4`、命中时 `z0` 摘点 + `g` 取寄存器并打
+`[A2PROBE] HIT pc=… lr=… x0=… x1=…`、同一地址不重复下断、打印上限 3 次、
+`g` 包按 ARM64 偏移（x0=0 / lr=30*8 / pc=32*8）解析、没武装时行为不变。
 
 覆盖：停止回复分类（T/W/X/E/空/缺寄存器）、`brk` 指令判定与立即数、续跑包形状
 （★`C<sig>`，不许 `vCont;S`★）、`brk #0x69` 真交付（`_M<size>,rx` + `prepare_memory_region` +
