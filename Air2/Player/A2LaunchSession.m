@@ -734,6 +734,21 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                 //   默认值就是 libGLESv2 → 打到 ANGLE 的 GLES1 状态机 ⇒ SIGBUS）。
                 [jvmOptions addObject:[NSString stringWithFormat:@"-Dorg.lwjgl.opengles.libname=%@", bare]];
                 [A2Log criterion:@"[A2-AGENT] GL 后端：opengl.libname=%@ opengles.libname=%@", bare, bare];
+
+                // ★2026-10-31 对齐老 Air（tree510 egl_bridge.m:317-324）★
+                //   MobileGlues 是「GL on host GLES」那一类 ⇒ 后端类型必须是 DirectGLES；
+                //   不设时 MG 会走默认后端（DirectVulkan）并因缺 Vulkan 上下文而崩在 glGetError。
+                //   同时把 MG 自己的日志指到可导出路径，出问题能直接看它内部初始化到哪一步。
+                if ([bare rangeOfString:@"mobileglues"].location != NSNotFound) {
+                    setenv("MOBILEGL_BACKEND_TYPE", "DirectGLES", 1);
+                    NSString *mgDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+                    NSString *mgLog = [NSString stringWithFormat:@"%@/mobilegl.log", mgDir ?: NSTemporaryDirectory()];
+                    setenv("MOBILEGL_LOG_FILE_PATH", mgLog.UTF8String, 1);
+                    [A2Log criterion:@"[A2-AGENT] MG 后端：MOBILEGL_BACKEND_TYPE=DirectGLES log=%@", mgLog];
+                } else {
+                    unsetenv("MOBILEGL_BACKEND_TYPE");
+                    unsetenv("MOBILEGL_LOG_FILE_PATH");
+                }
             }
         }
     }
