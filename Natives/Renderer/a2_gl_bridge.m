@@ -239,6 +239,86 @@ static void *a2_gl_bridge_renderable_handle(void *nativeView) {
     return nativeView;   // 本来就是 layer（或别的可渲染对象）⇒ 原样使用
 }
 
+/// CGSize 的内存布局（宽/高两个 CGFloat；arm64 上 CGFloat = double）。
+/// ★为什么自己声明★：本层不 import UIKit/QuartzCore（见文件头），而 `setDrawableSize:`
+/// 收的正是 CGSize —— 用同布局的结构体经 objc_msgSend 传过去，不引入框架头。
+typedef struct { double width; double height; } A2GlBridgeLayerSize;
+
+/// 宿主窗口层级（`windowLevel`）——★只用于判据行★：取不到回报 -1，不猜、不补默认值。
+static double a2_gl_bridge_window_level(void *nativeWindow) {
+    if (nativeWindow == NULL) return -1.0;
+    id win = (__bridge id)nativeWindow;
+    SEL levelSel = NSSelectorFromString(@"windowLevel");
+    if (win != nil && [win respondsToSelector:levelSel]) {
+        double (*getLevel)(id, SEL) = (double (*)(id, SEL))objc_msgSend;
+        return getLevel(win, levelSel);
+    }
+    return -1.0;
+}
+
+/// ★把 drawable 的尺寸口径统一到「像素」★ —— 初始化宿主图层的 contentsScale / drawableSize。
+/// 调用点：`a2_gl_bridge_attach` 的 ⑥0b（在两条建面路径之前，只此一处）。
+///
+/// ★为什么必须有★ 真机（1.20.1 + MobileGlues）：本层请求 2622x1206 像素（点 874x402 × scale 3.0），
+///   实现只回报 874x402 —— 正好是点尺寸。原因在宿主图层：实现按 `bounds × contentsScale`
+///   决定 drawable，而 UIWindow 根视图的 contentsScale 仍是 1.0 ⇒ 请求与实得差 3 倍。
+///   这里把 contentsScale（= 像素/点，含渲染倍率）与 drawableSize（= 像素）都设进去，
+///   让「请求值 / 图层口径 / 实现回报」三者同源。
+///
+/// 返回 1 = 图层接受了像素口径（两个入口至少设进去一个）；0 = 宿主只能给点尺寸。
+static int a2_gl_bridge_align_drawable(void *renderable, int wPx, int hPx,
+                                       int wPoints, float contentScale) {
+    if (renderable == NULL || wPx <= 0 || hPx <= 0) return 0;
+    id layer = (__bridge id)renderable;
+
+    // 目标倍率 = 像素 / 点（= 屏幕 scale × 渲染倍率）；点宽缺失时退回宿主给的 contentScale。
+    double targetScale = (wPoints > 0) ? ((double)wPx / (double)wPoints) : (double)contentScale;
+    if (targetScale <= 0.0) targetScale = 1.0;
+
+    BOOL scaleApplied = NO;
+    SEL setScaleSel = NSSelectorFromString(@"setContentsScale:");
+    if ([layer respondsToSelector:setScaleSel]) {
+        void (*sendScale)(id, SEL, double) = (void (*)(id, SEL, double))objc_msgSend;
+        sendScale(layer, setScaleSel, targetScale);
+        scaleApplied = YES;
+    }
+
+    BOOL drawableApplied = NO;
+    SEL setDrawableSel = NSSelectorFromString(@"setDrawableSize:");
+    if ([layer respondsToSelector:setDrawableSel]) {           // CAEAGLLayer 才有；普通 CALayer 没有
+        void (*sendDrawable)(id, SEL, A2GlBridgeLayerSize) =
+            (void (*)(id, SEL, A2GlBridgeLayerSize))objc_msgSend;
+        A2GlBridgeLayerSize want = { (double)wPx, (double)hPx };
+        sendDrawable(layer, setDrawableSel, want);
+        drawableApplied = YES;
+    }
+
+    // ★读回实际值★（不假装设成功）：判据行同时给出「设了什么」与「图层现在是什么」。
+    double backScale = -1.0;
+    SEL scaleSel = NSSelectorFromString(@"contentsScale");
+    if ([layer respondsToSelector:scaleSel]) {
+        double (*getScale)(id, SEL) = (double (*)(id, SEL))objc_msgSend;
+        backScale = getScale(layer, scaleSel);
+    }
+    A2GlBridgeLayerSize backDrawable = { -1.0, -1.0 };
+    SEL drawableSel = NSSelectorFromString(@"drawableSize");
+    if ([layer respondsToSelector:drawableSel]) {
+        A2GlBridgeLayerSize (*getDrawable)(id, SEL) =
+            (A2GlBridgeLayerSize (*)(id, SEL))objc_msgSend;
+        backDrawable = getDrawable(layer, drawableSel);
+    }
+
+    // ★格式约定★：a2_log_f 走 vsnprintf ⇒ 只认 %s，类名必须 .UTF8String（%@ 是 A2Log 的格式）。
+    a2_log_f(@"%s drawable 口径：请求=%dx%d 像素（点宽=%d；目标倍率=%.2f）；图层=%s "
+             @"setContentsScale=%s（读回 %.2f）；setDrawableSize=%s（读回 %.0fx%.0f）",
+             A2GlBridgeJudgementTag, wPx, hPx, wPoints, targetScale,
+             NSStringFromClass([layer class]).UTF8String,
+             scaleApplied ? "已设" : "无此入口", backScale,
+             drawableApplied ? "已设" : "无此入口", backDrawable.width, backDrawable.height);
+
+    return (scaleApplied || drawableApplied) ? 1 : 0;
+}
+
 /// 从 EGL 库取一个**必需**符号；缺则记名并返回 NULL。
 static void *a2_gl_bridge_egl_symbol(void *handle, const char *name, int *missing) {
     void *sym = dlsym(handle, name);
@@ -915,6 +995,37 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         }
     }
 
+    // ---- ⑥0b ★drawable 尺寸口径统一★（真机 1.20.1+MobileGlues：请求 2622x1206 / 实现 874x402）----
+    // 口径：drawable 像素 = 宿主窗口 bounds（点）× screen.scale（渲染倍率已在上层乘进 widthPixels）。
+    // ★三处必须是同一份值★：① 向实现请求的 EGL_WIDTH/EGL_HEIGHT；② 宿主图层的
+    //   contentsScale / drawableSize；③ 本层 viewport/清屏区域（⑧ 的 gWidthPixels/gHeightPixels）。
+    // 若宿主只能给点尺寸（图层不接受像素口径），请求值也一律改用点 —— 绝不「请求 3 倍、实得 1 倍」。
+    int drawableW = host->surface.widthPixels;
+    int drawableH = host->surface.heightPixels;
+    if (drawableW <= 0 || drawableH <= 0) {
+        drawableW = host->surface.widthPoints;
+        drawableH = host->surface.heightPoints;
+        a2_log_f(@"%s 宿主未给像素尺寸 ⇒ 请求值与 drawable 一律改用点尺寸（%dx%d）",
+                 A2GlBridgeJudgementTag, drawableW, drawableH);
+    }
+    if (!a2_gl_bridge_align_drawable(renderable, drawableW, drawableH,
+                                     host->surface.widthPoints, host->surface.contentScaleX)) {
+        // 句柄既不认 contentsScale 也不认 drawableSize（或它根本不是图层）
+        // ⇒ 实现只能按点尺寸建 drawable，请求值跟着改用点，两边保持一致。
+        if (drawableW != host->surface.widthPoints || drawableH != host->surface.heightPoints) {
+            a2_log_f(@"%s ★宿主只能给点尺寸★：请求值由 %dx%d 像素改用 %dx%d 点（两边必须一致）",
+                     A2GlBridgeJudgementTag, drawableW, drawableH,
+                     host->surface.widthPoints, host->surface.heightPoints);
+            drawableW = host->surface.widthPoints;
+            drawableH = host->surface.heightPoints;
+        }
+    }
+    a2_log_f(@"%s drawable 目标=%dx%d 像素；点=%dx%d；scale=%.2f；宿主窗口 level=%.0f",
+             A2GlBridgeJudgementTag, drawableW, drawableH,
+             host->surface.widthPoints, host->surface.heightPoints,
+             (double)host->surface.contentScaleX,
+             a2_gl_bridge_window_level(host->surface.nativeWindow));
+
     // ---- ⑥0 ★NG-GL4ES / KW：surface 先于 context（对齐老 Air 建面顺序）★ ----
     //   老 Air `gl_bridge.m:1838`（eglCreateWindowSurface）在建 context 的 `:1875` **之前**，
     //   且 gl4es 家族传的是 **NULL** 属性（只有 MobileGL 才显式给 EGL_WIDTH/HEIGHT）⇒
@@ -992,15 +1103,15 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     if (!isKrypton) {
         // 先带尺寸建；若实现不接受 EGL_WIDTH/HEIGHT（非核心 EGL 属性）再退到无属性。
         const A2EGLint surfAttribs[] = {
-            A2_EGL_WIDTH,  (A2EGLint)host->surface.widthPixels,
-            A2_EGL_HEIGHT, (A2EGLint)host->surface.heightPixels,
+            A2_EGL_WIDTH,  (A2EGLint)drawableW,
+            A2_EGL_HEIGHT, (A2EGLint)drawableH,
             A2_EGL_NONE
         };
         gSurf = gEglCreateWindowSurface(gDpy, gCfg, (A2EGLNativeWindowType)renderable, surfAttribs);
         if (gSurf == A2_EGL_NO_SURFACE) {
             A2EGLint e1 = gEglGetError ? gEglGetError() : 0;
             a2_log_f(@"%s EGL 建面：带尺寸(%dx%d 像素)失败 eglError=0x%x ⇒ 退到无属性重试",
-                     A2GlBridgeJudgementTag, host->surface.widthPixels, host->surface.heightPixels, (unsigned)e1);
+                     A2GlBridgeJudgementTag, drawableW, drawableH, (unsigned)e1);
             gSurf = gEglCreateWindowSurface(gDpy, gCfg, (A2EGLNativeWindowType)renderable, NULL);
         }
         if (gSurf == A2_EGL_NO_SURFACE) {
@@ -1096,7 +1207,8 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     // ---- ⑥b [FRAME-PERF] 回报实际 drawable 尺寸（可核对：与「请求的缩放后尺寸」是否一致）----
     // 为什么单独查一次：部分实现在 iOS 上按图层的点尺寸 × 缩放决定 drawable，会**忽略**请求尺寸。
     // ★量不到就不声称量到了★：回报为 0 就说明「实现没回报」，不假装等于请求值。
-    // （帧判据行里的 `clear=` 是本层按请求的缩放尺寸显式设进 scissor 的区域 ⇒ 缩放仍生效。）
+    // ★两边必须一致★：实现回报的就是 drawable 的真实像素 ⇒ 一旦与请求不同，以它为准
+    //   （⑧ 的 gWidthPixels/gHeightPixels 改用实际值），否则 viewport/清屏会盖不住或溢出。
     gSurfaceWidthPixels = 0;
     gSurfaceHeightPixels = 0;
     if (gEglQuerySurface != NULL) {
@@ -1104,11 +1216,25 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         if (gEglQuerySurface(gDpy, gSurf, A2_EGL_WIDTH, &qw))  gSurfaceWidthPixels  = (int)qw;
         if (gEglQuerySurface(gDpy, gSurf, A2_EGL_HEIGHT, &qh)) gSurfaceHeightPixels = (int)qh;
     }
-    a2_log_f(@"%s drawable 尺寸核对：请求=%dx%d 像素（已含渲染倍率）；实现回报=%dx%d 像素%s",
+    a2_log_f(@"%s drawable 尺寸核对：请求=%dx%d 像素（点=%dx%d；scale=%.2f；宿主窗口 level=%.0f）；"
+             @"实现回报=%dx%d 像素%s",
              A2GlBridgeJudgementTag,
-             host->surface.widthPixels, host->surface.heightPixels,
+             drawableW, drawableH,
+             host->surface.widthPoints, host->surface.heightPoints,
+             (double)host->surface.contentScaleX,
+             a2_gl_bridge_window_level(host->surface.nativeWindow),
              gSurfaceWidthPixels, gSurfaceHeightPixels,
              (gEglQuerySurface == NULL) ? "（实现未提供查询入口）" : "");
+    if (gSurfaceWidthPixels > 0 && gSurfaceHeightPixels > 0 &&
+        (gSurfaceWidthPixels != drawableW || gSurfaceHeightPixels != drawableH)) {
+        a2_log_f(@"%s ★尺寸不一致★：请求=%dx%d 实际 drawable=%dx%d ⇒ viewport/清屏改用实际像素"
+                 @"（两边必须一致；差 %.2f 倍，宿主图层口径见上面「drawable 口径」那行）",
+                 A2GlBridgeJudgementTag, drawableW, drawableH,
+                 gSurfaceWidthPixels, gSurfaceHeightPixels,
+                 (double)drawableW / (double)gSurfaceWidthPixels);
+        drawableW = gSurfaceWidthPixels;
+        drawableH = gSurfaceHeightPixels;
+    }
 
     // ---- ⑦ 取 GL 函数指针（glClear 必需；优先 eglGetProcAddress，回落 dlsym(GLESv2)）----
     void *pClear = gEglGetProcAddress ? gEglGetProcAddress("glClear") : NULL;
@@ -1150,13 +1276,13 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     // ---- ⑧ 附着并渲染一帧（帧内 glClear 作可用性判据）----
     gAttached = 1;
     gFrameCount = 0;
-    gWidthPixels = host->surface.widthPixels;
-    gHeightPixels = host->surface.heightPixels;
+    gWidthPixels = drawableW;      // ★与请求/图层/实现回报同一份值★（见 ⑥0b / ⑥b）
+    gHeightPixels = drawableH;
     gFrameCb = host->frameCallback;
     gFrameUser = host->frameUser;
 
-    a2_log_f(@"%s 附着完成：后端=%s 已接上宿主表面（帧回调=%s）",
-             A2GlBridgeJudgementTag, rendererName,
+    a2_log_f(@"%s 附着完成：后端=%s 已接上宿主表面（drawable=%dx%d 像素；帧回调=%s）",
+             A2GlBridgeJudgementTag, rendererName, gWidthPixels, gHeightPixels,
              (gFrameCb != NULL) ? "宿主已提供" : "宿主未提供");
     a2_gl_bridge_frame_work();
     return A2GlBridgeOK;

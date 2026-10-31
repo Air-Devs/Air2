@@ -31,9 +31,9 @@ static A2GameControlsView *a2_find_controls(UIView *root) {
 }
 
 /// 当前最顶层的可见窗口（SDL 的窗口通常也是普通 UIWindow）
-/// ★对外★（非 static）：GL 桥取宿主表面用的是**同一份判定** —— 26.3 走 SDL 窗口栈时，
-/// `keyWindow` 是启动器自己的窗口，而真正的画面窗是 SDL 后建的、层级更高的那个
-/// （见 Natives/Input/a2_glfw_window.m 的注释）。两处各写一份必然漂移，所以只留这一份。
+/// ★控件覆盖层专用★：把控件层挂到「所有窗口里最高的那一层」，才不会被后建的画面窗压住。
+/// ★GL 宿主表面不用这个★ —— 层级高 ≠ 在画面上：真机（1.20.1 + MobileGlues）它选中了一个
+/// level=0 的辅助窗，上下文全绿、帧回调连发、屏幕纯黑（见下面的 a2_main_window）。
 UIWindow *a2_top_visible_window(void) {
     UIWindow *top = nil;
     for (UIWindow *w in UIApplication.sharedApplication.windows) {
@@ -41,6 +41,39 @@ UIWindow *a2_top_visible_window(void) {
         if (top == nil || w.windowLevel >= top.windowLevel) top = w;
     }
     return top ?: UIApplication.sharedApplication.keyWindow;
+}
+
+/// ★主窗口★（★GL 宿主表面专用口径★）—— drawable 必须挂在真正被合成到屏幕上的那个窗口上。
+/// 优先级（逐级回落，每一级都如实可查）：
+///   ① 前台活跃 UIWindowScene 的 keyWindow
+///   ② 该 scene 的 windows 里 isKeyWindow 的那一个
+///   ③ 全量窗口里 isKeyWindow 的那一个
+///   ④ 兜底：现有「最顶层可见窗口」（若连 keyWindow 都没有，就只能用它，不假装挑到了主窗口）
+/// ★为什么不是「最顶层可见窗口」★：那个口径按 windowLevel 取高，会选到层级更高但不在
+///   画面栈里的辅助窗（真机日志：level=0、bounds=874x402、实现回报的 drawable 也只有
+///   874x402 ⇒ 帧都画进了被遮住/未上屏的那层）。MC 侧的 GLFW 画面窗本身就是 keyWindow
+///   （Natives/Input/a2_glfw_window.m 复用它并把层级抬到 StatusBar+1），所以主窗口才是它。
+UIWindow *a2_main_window(void) {
+    UIWindowScene *activeScene = nil;
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:[UIWindowScene class]]) continue;
+        if (scene.activationState == UISceneActivationStateForegroundActive) {
+            activeScene = (UIWindowScene *)scene;
+            break;
+        }
+    }
+    // ① 前台活跃 scene 的 keyWindow（`UIWindowScene.keyWindow` 是 iOS 15+ 才有 ⇒ 加版本守卫，
+    //    14.x 落到 ② 的 `isKeyWindow` 扫描 —— 两者语义相同，不是降级替代）
+    if (@available(iOS 15.0, *)) {
+        if (activeScene.keyWindow != nil) return activeScene.keyWindow;
+    }
+    for (UIWindow *w in activeScene.windows) {                        // ②
+        if (w.isKeyWindow) return w;
+    }
+    for (UIWindow *w in UIApplication.sharedApplication.windows) {    // ③
+        if (w.isKeyWindow) return w;
+    }
+    return a2_top_visible_window();                                   // ④
 }
 
 static UIWindow *a2_top_window(void) {

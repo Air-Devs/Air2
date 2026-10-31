@@ -31,59 +31,62 @@
 //   Input 层的中立表面查询面（见 Natives/Input/a2_glfw_window.h）即可（同 [LAUNCH-PLAN-FACTS] 的口径）。
 // ============================================================================
 
-// ★取窗口的判据只有一份★：Natives/Input/a2_controls_overlay.m 的 `a2_top_visible_window()`
-// （控件覆盖层与 GL 桥必须用同一个「最顶层可见窗口」口径，否则 26.3 的 SDL 画面窗
-//  会被 keyWindow 规则漏掉 ⇒ 上下文建得出来、画面在被盖住那层 = 黑屏）。
+// ★取窗口的口径按用途分开，各只有一份实现（都在 Natives/Input/a2_controls_overlay.m）★：
+//   · 控件覆盖层 → `a2_top_visible_window()`：要「最顶层」，否则被后建的画面窗压住；
+//   · GL 宿主表面 → `a2_main_window()`：要「主窗口 / keyWindow」，drawable 必须挂在
+//     真正被合成到屏幕上的窗口上。真机（1.20.1 + MobileGlues）用「最顶层」选中了 level=0
+//     的辅助窗 ⇒ 上下文全绿、帧回调连发、屏幕纯黑。
 extern UIWindow *a2_top_visible_window(void);
+extern UIWindow *a2_main_window(void);      // ★GL 宿主表面专用★（控件覆盖层不要用它）
 
 /// 帧回调计数（★静态★：改绑发生在本次调用返回之后，栈变量会变成悬垂指针）
 static int gA2RunnerFrameCounter = 0;
 
-/// 采集宿主表面（★主线程★：UIKit 查询契约要求）。口径与 +currentRuntimeFacts 一致
-/// （宿主窗口 bounds × screen.scale = 像素），字段类型复用 Natives 的中立描述 `A2GlfwSurface`。
-static A2GlfwSurface A2RunnerHostSurface(void) {
+/// 按**指定窗口**采集宿主表面（★主线程★：UIKit 查询契约要求）。
+/// 口径（★尺寸口径唯一来源★）：点 = 窗口 bounds；像素 = 点 × screen.scale。
+/// 这个像素值同时是 GL 桥向实现请求的 drawable 尺寸，也是它要设进宿主图层
+/// （contentsScale / drawableSize）的值 —— 三处同源，见 a2_gl_bridge.m 的 ⑥0b。
+static A2GlfwSurface A2RunnerSurfaceForWindow(UIWindow *host) {
     A2GlfwSurface out = {0};
-    A2GlfwSurface *s = &out;                       // 用指针进块：块捕获的是 const 副本
+    if (host == nil) return out;
+
+    UIScreen *screen = host.windowScene.screen ?: UIScreen.mainScreen;
+    CGFloat scale = screen.scale;                              // ★与 +currentRuntimeFacts 同口径★
+    CGRect b = host.bounds;
+    UIView *view = host.rootViewController.view ?: (UIView *)host;
+
+    out.nativeView    = (__bridge void *)view;                  // 承载视图（GL 桥会取其 layer）
+    out.nativeWindow  = (__bridge void *)host;
+    out.widthPoints   = (int)lround(b.size.width);
+    out.heightPoints  = (int)lround(b.size.height);
+    out.widthPixels   = (int)lround(b.size.width  * scale);
+    out.heightPixels  = (int)lround(b.size.height * scale);
+    out.contentScaleX = (float)scale;
+    out.contentScaleY = (float)scale;
+    out.pixelFormat   = A2_GLFW_PIXEL_FORMAT_HOST_DEFAULT;
+
+    // ★判据行★：窗口类别 / 层级 / 点尺寸 / scale / 像素尺寸全打出来（真机逐项对得上才算选对了）
+    [A2Log criterion:@"[A2-COMPAT] 宿主表面取窗口=%@ level=%.0f bounds=%.0fx%.0f scale=%.2f"
+     @" ⇒ 点=%dx%d 像素=%dx%d（口径=主窗口 keyWindow）",
+     NSStringFromClass(host.class), (double)host.windowLevel,
+     (double)b.size.width, (double)b.size.height, (double)scale,
+     out.widthPoints, out.heightPoints, out.widthPixels, out.heightPixels];
+    return out;
+}
+
+/// 采集宿主表面（★主线程★：UIKit 查询契约要求）。字段类型复用 Natives 的中立描述 `A2GlfwSurface`。
+/// ★口径=主窗口（keyWindow）★：drawable 必须挂在真被合成到屏幕上的窗口上；
+///   「最顶层可见窗口」会选到层级更高但不在画面栈里的辅助窗（真机 1.20.1 ⇒ 纯黑）。
+static A2GlfwSurface A2RunnerHostSurface(void) {
+    __block A2GlfwSurface out = {0};
     void (^grab)(void) = ^{
-        UIWindowScene *activeScene = nil;
-        for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
-            if ([scene isKindOfClass:UIWindowScene.class] &&
-                scene.activationState == UISceneActivationStateForegroundActive) {
-                activeScene = (UIWindowScene *)scene;
-                break;
-            }
+        UIWindow *host = a2_main_window();
+        if (host == nil) {                                     // 取不到就如实留空，不伪造
+            [A2Log log:@"[A2-COMPAT] ★取不到主窗口★（无前台活跃 scene 的 keyWindow，也没有 isKeyWindow 的窗口）"
+                          @"⇒ 宿主表面为空"];
+            return;
         }
-        // ★宿主表面 = 最顶层可见窗口（与控件覆盖层同一份判定）★
-        //   26.3 起 MC 走 SDL 窗口栈：SDL 的画面窗是**后建的另一个 UIWindow**，
-        //   而 keyWindow 往往还是启动器自己的窗口 ⇒ 只认 keyWindow ＝ 画面落在被遮住的层。
-        UIWindow *host = a2_top_visible_window();
-        if (host == nil) {
-            for (UIWindow *w in activeScene.windows) {
-                if (w.isKeyWindow) { host = w; break; }
-            }
-        }
-        if (host == nil) host = activeScene.windows.firstObject;   // 兜底：同一 scene 内的首个窗口
-        if (host == nil) return;
-
-        [A2Log criterion:@"[A2-COMPAT] 宿主表面取窗口=%@ level=%.0f bounds=%.0fx%.0f"
-         @"（口径=最顶层可见窗口，与控件覆盖层同一份实现）",
-         NSStringFromClass(host.class), (double)host.windowLevel,
-         (double)host.bounds.size.width, (double)host.bounds.size.height];
-
-        UIScreen *screen = (activeScene.screen != nil) ? activeScene.screen : UIScreen.mainScreen;
-        CGFloat scale = screen.scale;                              // ★与 +currentRuntimeFacts 同口径★
-        CGRect b = host.bounds;
-        UIView *view = host.rootViewController.view ?: (UIView *)host;
-
-        s->nativeView    = (__bridge void *)view;                  // 承载视图（GL 桥会取其 layer）
-        s->nativeWindow  = (__bridge void *)host;
-        s->widthPoints   = (int)lround(b.size.width);
-        s->heightPoints  = (int)lround(b.size.height);
-        s->widthPixels   = (int)lround(b.size.width  * scale);
-        s->heightPixels  = (int)lround(b.size.height * scale);
-        s->contentScaleX = (float)scale;
-        s->contentScaleY = (float)scale;
-        s->pixelFormat   = A2_GLFW_PIXEL_FORMAT_HOST_DEFAULT;
+        out = A2RunnerSurfaceForWindow(host);
     };
     if (NSThread.isMainThread) {
         grab();
@@ -137,8 +140,11 @@ static void A2RunnerRebindSurfaceIfTopWindowChanged(UIWindow *attachedWindow,
                                                     attemptsLeft - 1);
             return;
         }
-        A2GlfwSurface s = A2RunnerHostSurface();      // 内部按主线程口径采集（此刻已在主线程）
-        if (s.nativeWindow == NULL || s.nativeWindow == (__bridge void *)attachedWindow) {
+        // ★改绑目标 = 这一轮探到的那个窗口本身（不是重新按主窗口口径挑一遍）★：
+        //   晚出现的画面窗（26.3 SDL）本来就不是 keyWindow，按主窗口口径重挑会挑回原窗口，
+        //   这条相位改绑就白等了。主窗口口径只管初始表面。
+        A2GlfwSurface s = A2RunnerSurfaceForWindow(top);
+        if (s.nativeWindow == NULL) {
             A2RunnerRebindSurfaceIfTopWindowChanged(attachedWindow, rendererDylib, frameworksPath,
                                                     attemptsLeft - 1);
             return;
@@ -149,9 +155,10 @@ static void A2RunnerRebindSurfaceIfTopWindowChanged(UIWindow *attachedWindow,
         host.frameCallback = A2RunnerFrameCallback;
         host.frameUser     = &gA2RunnerFrameCounter;
         int rc = a2_gl_bridge_attach(&host, frameworksPath);
-        [A2Log criterion:@"[A2-COMPAT] %@ SDL 窗口相位：宿主表面改绑 %@ → %@（attach rc=%d）",
+        [A2Log criterion:@"[A2-COMPAT] %@ SDL 窗口相位：宿主表面改绑 %@ → %@ level=%.0f（attach rc=%d）",
          (rc == 0) ? @"✅" : @"⚠️",
-         NSStringFromClass(attachedWindow.class), NSStringFromClass(top.class), rc];
+         NSStringFromClass(attachedWindow.class), NSStringFromClass(top.class),
+         (double)top.windowLevel, rc];
         if (rc != 0) {
             // 改绑失败不推翻已经在跑的启动（旧绑定仍在）⇒ 如实记一行，继续等下一次
             A2RunnerRebindSurfaceIfTopWindowChanged(attachedWindow, rendererDylib, frameworksPath,
