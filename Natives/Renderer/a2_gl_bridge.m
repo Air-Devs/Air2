@@ -1510,6 +1510,12 @@ static void a2_gl_bridge_ensure_game_view_surface(void) {
 
     A2EGLSurface oldSurf = gSurf;
     gSurf = newSurf;                                      // ★此后的 make_current / 帧动作都用新面★
+    // ★2026-10-31 判据★ 改绑成功：把新旧表面与宿主都打出来。
+    //   真机（5070717）：像素采样 R239 G50 B61 说明游戏在画，但屏幕黑 ⇒
+    //   必须确认这一行给出的 newSurf 是否已经从「启动器图层」换到了「CAMetalLayer」。
+    a2_log_f(@"[A2-GLBRIDGE] ★改绑成功★ 旧 surface=%p ⇒ 新 surface=%p（宿主=%p class=%s）",
+             (void *)oldSurf, (void *)newSurf, (void *)eglWant,
+             (eglWant != NULL) ? NSStringFromClass([(__bridge id)eglWant class]).UTF8String : "(null)");
     {
         // ★改绑成功必须留痕★：黑屏排查时要能确认「surface 换没换、换成谁」。
         const char *cls = "?";
