@@ -134,6 +134,41 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
     }
     if (preferred.count == 0) preferred = dirs;   // 没有对口档位 ⇒ 用现有的（并如实提示）
 
+    // ★2026-10-31 26.3 的 LWJGL 档位★
+    //   真机证据（iPhone X / 26.3）：启动卡在 org.lwjgl.sdl.SDLKeyboard$Functions 类初始化。
+    //   26.3 的版本 JSON 按 LWJGL 3.4.3 声明（含 lwjgl-sdl），而 3.4.1 的 classpath 上
+    //   根本没有 org.lwjgl.sdl.*（SDL 模块 3.4.0 才引入）。包内同时带 341/343：
+    //     26.2 → 341（GLFW 路径）
+    //     26.3+ → 343（SDL3 路径）
+    //   其余版本仍沿用「取最大 3.x」的旧口径。
+    NSInteger wantedVer = 0;
+    if (mcMajor >= 26) {
+        wantedVer = (mcMinor >= 3) ? 343 : 341;
+    } else if (mcMajor == 1 && mcMinor >= 13) {
+        wantedVer = 341;
+    }
+    if (wantedVer > 0 && !wantsLWJGL2) {
+        NSString *exact = nil, *above = nil;
+        NSInteger aboveVer = 0;
+        for (NSString *name in preferred) {
+            NSInteger v = A2LwjglVersionNumber(name);
+            if (v == wantedVer) { exact = name; break; }
+            if (v > wantedVer && (above == nil || v < aboveVer)) { above = name; aboveVer = v; }
+        }
+        if (exact) {
+            [A2Log criterion:@"[A2-LWJGL] 档位命中：MC %ld.%ld ⇒ 期望 %ld，选 %@",
+             (long)mcMajor, (long)mcMinor, (long)wantedVer, exact];
+            preferred = [@[exact] mutableCopy];
+        } else if (above) {
+            [A2Log criterion:@"[A2-LWJGL] ⚠ 无 %ld 档位，退到最近的更高档 %@（MC %ld.%ld）",
+             (long)wantedVer, above, (long)mcMajor, (long)mcMinor];
+            preferred = [@[above] mutableCopy];
+        } else {
+            [A2Log criterion:@"[A2-LWJGL] ⚠ 无 %ld 及以上档位 ⇒ 继续用现有最大档（MC %ld.%ld）",
+             (long)wantedVer, (long)mcMajor, (long)mcMinor];
+        }
+    }
+
     [preferred sortUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
         return [@(A2LwjglVersionNumber(a)) compare:@(A2LwjglVersionNumber(b))];
     }];
