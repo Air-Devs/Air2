@@ -34,6 +34,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// iPhone Duo 形态模拟（内屏整屏/分屏/折叠外屏 × 竖横屏）—— 没有真机时验证布局用。
 + (A2SettingsSection *)buildDuoSimSectionWithHost:(UIViewController *)host;
+
+/// 假 EGL 自检（P1 判据）：EGL 1.4 子集 → EAGL，离屏画一个 ES3 三角形并读中心像素。
+/// 点击后跑在后台线程，结果 toast + 运行日志（`grep [A2-EAGL]`）。
++ (A2SettingsSection *)buildEaglSelfCheckSectionWithHost:(UIViewController *)host;
 @end
 
 NS_ASSUME_NONNULL_END

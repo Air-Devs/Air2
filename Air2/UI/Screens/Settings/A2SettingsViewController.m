@@ -145,6 +145,7 @@
     } else if (index == 2) {
         [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildDuoSimSectionWithHost:self]];
+        [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildEaglSelfCheckSectionWithHost:self]];
         [_detailStack addArrangedSubview:[A2OnDevicePairingSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2JITSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2AboutSettings buildWithHost:self]];
