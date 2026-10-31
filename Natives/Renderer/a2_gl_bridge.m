@@ -955,6 +955,25 @@ static void *a2_gl_bridge_metal_layer_for(void *renderable) {
     } else {
         return renderable;
     }
+    // ★可见性核对（2026-10-31 真机）★ 内容在 Metal 层上逐帧更新但屏幕全黑，
+    //   所以这里把「这一层能不能被看见」的几个量一次打全：frame/hidden/opacity/父层/宿主窗口。
+    NSValue *frameVal = [layer valueForKey:@"frame"];
+    NSValue *hostFrameVal = [host valueForKey:@"frame"];
+    NSNumber *hiddenVal = [layer valueForKey:@"hidden"];
+    NSNumber *opacityVal = [layer valueForKey:@"opacity"];
+    id superlayer = [layer valueForKey:@"superlayer"];
+    id hostWindow = [host valueForKey:@"window"];
+    NSNumber *viewHidden = [host valueForKey:@"hidden"];
+    NSNumber *viewAlpha = [host valueForKey:@"alpha"];
+    NSLog(@"[A2-GLBRIDGE] Metal 层可见性：frame=%s hidden=%d opacity=%d 父层=%@ ｜ 宿主 frame=%s hidden=%d alpha=%.2f window=%@",
+          frameVal ? [NSStringFromRect([frameVal rectValue]) UTF8String] : "(nil)",
+          hiddenVal ? hiddenVal.intValue : -1,
+          opacityVal ? opacityVal.intValue : -1,
+          superlayer ? NSStringFromClass([superlayer class]) : @"(nil)",
+          hostFrameVal ? [NSStringFromRect([hostFrameVal rectValue]) UTF8String] : "(nil)",
+          viewHidden ? viewHidden.intValue : -1,
+          viewAlpha ? viewAlpha.doubleValue : -1.0,
+          hostWindow ? NSStringFromClass([hostWindow class]) : @"(nil)");
     NSLog(@"[A2-GLBRIDGE] 为真 EGL 现挂 CAMetalLayer 子层（宿主=%@）", NSStringFromClass([host class]));
     return (__bridge void *)layer;
 }
