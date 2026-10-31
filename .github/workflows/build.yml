@@ -95,6 +95,18 @@ jobs:
           fi
           du -sh Libraries/java_runtimes/java-25-openjdk
           test -f Libraries/java_runtimes/java-25-openjdk/lib/server/libjvm.dylib
+          # ★2026-10-31 补 java-21★：1.20.x 的默认运行时是 java-21；
+          #   以前 CI 只拉 java-25，产物 80MB 看着没问题，但装上去跑 1.20.1 会报
+          #   「选的那档 JRE 没内置」。这里把 java-21 也拉进来（同一 release）。
+          if [ -d Libraries/java_runtimes/java-21-openjdk ]; then
+            echo "java-21 已存在，跳过下载"
+          else
+            mkdir -p /tmp/jre21
+            gh release download jre-assets --pattern 'java21.tgz' --dir /tmp/jre21 --clobber
+            tar xzf /tmp/jre21/java21.tgz -C Libraries/java_runtimes
+          fi
+          du -sh Libraries/java_runtimes/java-21-openjdk
+          test -f Libraries/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib
 
       - name: 重新生成工程文件
         run: python3 scripts/gen_xcodeproj.py
