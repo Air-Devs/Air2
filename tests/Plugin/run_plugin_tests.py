@@ -1,22 +1,24 @@
 #!/usr/bin/env python3
 """
-Air2 tests/Plugin —— ★插件数据层单测运行器★（manifest 校验 + registry 原子读写）。
+Air2 tests/Plugin —— ★插件数据层 + 安装器单测运行器★
 
 做什么：
-  用 clang 把 Air2/Core/Plugin 下的【真实实现】
-    A2PluginManifest.m  （manifest.json 解析 / 校验 / 权限集规范串）
-    A2PluginRegistry.m  （registry.json 原子读写 / approvedHashes 淘汰 / 损坏不覆写）
-  与 tests/Plugin/plugin_data_tests.m 一起编译成 macOS 可执行文件并运行，
-  逐例输出 PASS/FAIL 与末尾计数。
+  用 clang 把 Air2/Core 下的【真实实现】与 tests/Plugin 下的用例编成两个 macOS
+  可执行文件并运行，逐例输出 PASS/FAIL 与末尾计数：
+
+  ① plugin_data_tests
+       A2PluginManifest.m  （manifest.json 解析 / 校验 / 权限集规范串）
+       A2PluginRegistry.m  （registry.json 原子读写 / approvedHashes 淘汰 / 损坏不覆写）
+  ② plugin_installer_tests
+       A2PluginInstaller.m          （安装 / 卸载 / 回退 / 版本规则）
+       A2PluginPackageExtractor.m   （中央目录预检 / 解压 / 完整性 / 摘要）
+       A2ZipReader.m                （条目元数据 / 流式解压 / 本地头核对）
+       A2PluginManifest.m、A2PluginRegistry.m、A2Log.m
 
 为什么是【真编译 + 真运行】而不是源码扫描：
-  「什么情况拒装、错误码对不对」「写盘后重读是否一致」「approvedHashes 第 6 个
-  进来时最旧的是不是被丢掉」「损坏的 registry.json 会不会被覆盖」都是**行为**。
-  源码扫描只能证明「文字在文件里」，只有把这两个类真跑一遍才能证明「门在那儿」。
-
-为什么这些类只依赖 Foundation：
-  它们不读磁盘日志、不碰 UIKit —— registry 用 POSIX open/fsync/rename 做原子写，
-  在 macOS 上同样成立，所以本测试可以在 Mac 上直接编、直接跑。
+  「拒装」的每一条理由都必须是可执行的绿或红。zip 炸弹、穿越条目、符号链接、
+  同版本换包、降级 —— 这些都是**行为**，源码扫描只能证明「文字在文件里」，
+  只有把真实实现跑一遍才能证明门在那儿。
 
 用法：
     python3 tests/Plugin/run_plugin_tests.py
@@ -34,15 +36,34 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(os.path.dirname(HERE))          # 仓根
 
 PLUGIN_DIR = os.path.join(ROOT, "Air2", "Core", "Plugin")
+ADDONS_DIR = os.path.join(ROOT, "Air2", "Core", "Addons")
+UTILS_DIR = os.path.join(ROOT, "Air2", "Utils")
 
-# 被测的【真实】源文件（只用 Foundation + POSIX ⇒ 能在 macOS 上直接编、直接跑）。
-SOURCES = [
-    os.path.join(PLUGIN_DIR, "A2PluginManifest.m"),
-    os.path.join(PLUGIN_DIR, "A2PluginRegistry.m"),
-    os.path.join(HERE, "plugin_data_tests.m"),
+MANIFEST_SRC = os.path.join(PLUGIN_DIR, "A2PluginManifest.m")
+REGISTRY_SRC = os.path.join(PLUGIN_DIR, "A2PluginRegistry.m")
+EXTRACTOR_SRC = os.path.join(PLUGIN_DIR, "A2PluginPackageExtractor.m")
+INSTALLER_SRC = os.path.join(PLUGIN_DIR, "A2PluginInstaller.m")
+ZIP_READER_SRC = os.path.join(ADDONS_DIR, "A2ZipReader.m")
+LOG_SRC = os.path.join(UTILS_DIR, "A2Log.m")
+
+# 每个目标 = 一个可执行文件（用例各自用独立临时目录，互不污染）
+TARGETS = [
+    {
+        "name": "plugin_data_tests",
+        "test": os.path.join(HERE, "plugin_data_tests.m"),
+        "sources": [MANIFEST_SRC, REGISTRY_SRC],
+        "libraries": [],
+    },
+    {
+        "name": "plugin_installer_tests",
+        "test": os.path.join(HERE, "plugin_installer_tests.m"),
+        "sources": [MANIFEST_SRC, REGISTRY_SRC, EXTRACTOR_SRC, INSTALLER_SRC,
+                    ZIP_READER_SRC, LOG_SRC],
+        "libraries": ["-lz"],       # A2ZipReader 的 deflate 走 zlib
+    },
 ]
 
-INCLUDE_DIRS = [PLUGIN_DIR]
+INCLUDE_DIRS = [PLUGIN_DIR, ADDONS_DIR, UTILS_DIR]
 
 
 def find_clang():
@@ -60,11 +81,21 @@ def find_clang():
     return None
 
 
+def build_command(clang, binary, sources, libraries):
+    includes = []
+    for inc in INCLUDE_DIRS:
+        includes += ["-I", inc]
+    return ([clang, "-fobjc-arc", "-Wall", "-Wno-unused-parameter"] + includes +
+            ["-framework", "Foundation", "-framework", "CoreFoundation"] +
+            libraries + ["-o", binary] + sources)
+
+
 def main():
-    for src in SOURCES:
-        if not os.path.exists(src):
-            print("缺少源文件: %s" % src)
-            return 1
+    for target in TARGETS:
+        for src in target["sources"] + [target["test"]]:
+            if not os.path.exists(src):
+                print("缺少源文件: %s" % src)
+                return 1
 
     clang = find_clang()
     if not clang:
@@ -74,37 +105,44 @@ def main():
     print("clang = %s" % clang)
 
     tmpdir = tempfile.mkdtemp(prefix="a2plugin_tests_")
-    binary = os.path.join(tmpdir, "plugin_data_tests")
+    total_passed = 0
+    total_failed = 0
 
-    includes = []
-    for inc in INCLUDE_DIRS:
-        includes += ["-I", inc]
-    cmd = [clang, "-fobjc-arc", "-Wall", "-Wno-unused-parameter"] + includes + \
-          ["-framework", "Foundation", "-framework", "CoreFoundation",
-           "-o", binary] + SOURCES
-    print("compile: clang -fobjc-arc -I Air2/Core/Plugin ... -o plugin_data_tests")
-    compile_result = subprocess.run(cmd, capture_output=True, text=True)
-    if compile_result.stderr.strip():
-        print("--- clang 输出 ---")
-        print(compile_result.stderr.strip())
-    if compile_result.returncode != 0:
-        print("!! 编译失败（rc=%d）" % compile_result.returncode)
-        return 1
+    for target in TARGETS:
+        name = target["name"]
+        binary = os.path.join(tmpdir, name)
+        cmd = build_command(clang, binary, target["sources"] + [target["test"]],
+                            target["libraries"])
+        print("\n=== %s ===" % name)
+        print("compile: clang -fobjc-arc ... %s -o %s" %
+              (" ".join(target["libraries"]), name))
+        compile_result = subprocess.run(cmd, capture_output=True, text=True)
+        if compile_result.stderr.strip():
+            print("--- clang 输出 ---")
+            print(compile_result.stderr.strip())
+        if compile_result.returncode != 0:
+            print("!! 编译失败（rc=%d）" % compile_result.returncode)
+            return 1
 
-    print("run: %s\n" % binary)
-    run = subprocess.run([binary], capture_output=True, text=True)
-    out = run.stdout + run.stderr
-    sys.stdout.write(out)
+        run = subprocess.run([binary], capture_output=True, text=True)
+        out = run.stdout + run.stderr
+        sys.stdout.write(out)
 
-    passed = sum(1 for ln in out.splitlines() if ln.startswith("PASS"))
-    failed = sum(1 for ln in out.splitlines() if ln.startswith("FAIL"))
-    print("\n[runner] 解析结果：PASS=%d FAIL=%d 合计=%d" % (passed, failed, passed + failed))
+        passed = sum(1 for ln in out.splitlines() if ln.startswith("PASS"))
+        failed = sum(1 for ln in out.splitlines() if ln.startswith("FAIL"))
+        total_passed += passed
+        total_failed += failed
+        print("[runner] %s：PASS=%d FAIL=%d 合计=%d" %
+              (name, passed, failed, passed + failed))
 
-    if failed or run.returncode != 0:
-        return 1
-    if passed == 0:
-        print("[runner] 未解析到任何用例，视为失败")
-        return 1
+        if failed or run.returncode != 0:
+            print("[runner] %s 有失败用例" % name)
+            return 1
+        if passed == 0:
+            print("[runner] %s 未解析到任何用例，视为失败" % name)
+            return 1
+
+    print("\n[runner] 合计：PASS=%d FAIL=%d" % (total_passed, total_failed))
     print("[runner] 全部通过 ✓")
     return 0
 

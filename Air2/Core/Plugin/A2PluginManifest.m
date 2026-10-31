@@ -135,6 +135,20 @@ static NSSet<NSString *> *A2SupportedPlatforms(void) {
 
 #pragma mark - 错误
 
+NSError *A2PluginErrorMake(A2PluginError code, NSString *_Nullable field,
+                           NSString *format, ...) {
+    va_list args;
+    va_start(args, format);
+    NSString *message = [[NSString alloc] initWithFormat:format arguments:args];
+    va_end(args);
+
+    NSMutableDictionary *userInfo = [NSMutableDictionary dictionary];
+    userInfo[NSLocalizedDescriptionKey] = message ?: @"插件安装校验失败";
+    userInfo[A2PluginErrorCodeKey] = A2PluginErrorCodeString(code);
+    if (field.length) userInfo[A2PluginErrorFieldKey] = field;
+    return [NSError errorWithDomain:A2PluginErrorDomain code:code userInfo:userInfo];
+}
+
 static BOOL A2Fail(NSError **error, A2PluginError code, NSString *_Nullable field,
                    NSString *format, ...) NS_FORMAT_FUNCTION(4, 5);
 
@@ -145,12 +159,7 @@ static BOOL A2Fail(NSError **error, A2PluginError code, NSString *_Nullable fiel
     va_start(args, format);
     NSString *message = [[NSString alloc] initWithFormat:format arguments:args];
     va_end(args);
-
-    NSMutableDictionary *userInfo = [NSMutableDictionary dictionary];
-    userInfo[NSLocalizedDescriptionKey] = message ?: @"manifest 校验失败";
-    userInfo[A2PluginErrorCodeKey] = A2PluginErrorCodeString(code);
-    if (field.length) userInfo[A2PluginErrorFieldKey] = field;
-    *error = [NSError errorWithDomain:A2PluginErrorDomain code:code userInfo:userInfo];
+    *error = A2PluginErrorMake(code, field, @"%@", message ?: @"manifest 校验失败");
     return NO;
 }
 
@@ -167,6 +176,15 @@ NSString *A2PluginErrorCodeString(A2PluginError code) {
         case A2PluginErrorPlatform: return @"E_PLATFORM";
         case A2PluginErrorJsonPerm: return @"E_JSON_PERM";
         case A2PluginErrorLegacySignature: return @"E_LEGACY_SIGNATURE";
+        case A2PluginErrorZipSlip: return @"E_ZIP_SLIP";
+        case A2PluginErrorLink: return @"E_LINK";
+        case A2PluginErrorDowngrade: return @"E_DOWNGRADE";
+        case A2PluginErrorSameVersionDifferentContent: return @"E_SAME_VERSION_DIFFERENT_CONTENT";
+        case A2PluginErrorFileSetMismatch: return @"E_FILE_SET_MISMATCH";
+        case A2PluginErrorHashMismatch: return @"E_HASH_MISMATCH";
+        case A2PluginErrorIO: return @"E_IO";
+        case A2PluginErrorNoPreviousVersion: return @"E_NO_PREVIOUS";
+        case A2PluginErrorBuiltin: return @"E_BUILTIN";
     }
     return @"E_FIELD";
 }
@@ -265,6 +283,16 @@ static BOOL A2IsDigitsSegment(NSString *segment) {
     return YES;
 }
 
+/// 全是数字（允许前导零 —— 预发布标识里 `1.0.0-01` 的段比较要用原始数字）。
+static BOOL A2IsAllDigits(NSString *segment) {
+    if (![segment isKindOfClass:NSString.class] || segment.length == 0) return NO;
+    for (NSUInteger i = 0; i < segment.length; i++) {
+        unichar c = [segment characterAtIndex:i];
+        if (c < '0' || c > '9') return NO;
+    }
+    return YES;
+}
+
 static BOOL A2IsPlainSemver(NSString *version) {
     if (![version isKindOfClass:NSString.class] || version.length == 0) return NO;
     NSArray<NSString *> *parts = [version componentsSeparatedByString:@"."];
@@ -290,6 +318,62 @@ BOOL A2PluginIsValidVersion(NSString *version) {
         }
     }
     return A2IsPlainSemver(core);
+}
+
+/// 预发布标识的比较：按 `.` 分段；两边都是数字段就按数值比，否则按字典序；
+/// 数字段的优先级**低于**非数字段（semver 11.4.3：1.0.0-1 < 1.0.0-alpha）。
+static NSInteger A2ComparePrerelease(NSString *a, NSString *b) {
+    NSArray<NSString *> *segmentsA = [a componentsSeparatedByString:@"."];
+    NSArray<NSString *> *segmentsB = [b componentsSeparatedByString:@"."];
+    NSUInteger common = MIN(segmentsA.count, segmentsB.count);
+    for (NSUInteger i = 0; i < common; i++) {
+        NSString *segmentA = segmentsA[i];
+        NSString *segmentB = segmentsB[i];
+        BOOL numericA = A2IsAllDigits(segmentA);
+        BOOL numericB = A2IsAllDigits(segmentB);
+        if (numericA && numericB) {
+            NSInteger valueA = segmentA.integerValue;
+            NSInteger valueB = segmentB.integerValue;
+            if (valueA != valueB) return valueA < valueB ? -1 : 1;
+            continue;
+        }
+        if (numericA != numericB) return numericA ? -1 : 1;
+        NSComparisonResult result = [segmentA compare:segmentB];
+        if (result != NSOrderedSame) return result == NSOrderedAscending ? -1 : 1;
+    }
+    if (segmentsA.count == segmentsB.count) return 0;
+    return segmentsA.count < segmentsB.count ? -1 : 1;
+}
+
+NSInteger A2PluginCompareVersions(NSString *a, NSString *b) {
+    if (!A2PluginIsValidVersion(a) || !A2PluginIsValidVersion(b)) return 0;
+
+    NSString *coreA = a, *preA = nil;
+    NSString *coreB = b, *preB = nil;
+    NSRange dashA = [a rangeOfString:@"-"];
+    if (dashA.location != NSNotFound) {
+        coreA = [a substringToIndex:dashA.location];
+        preA = [a substringFromIndex:dashA.location + 1];
+    }
+    NSRange dashB = [b rangeOfString:@"-"];
+    if (dashB.location != NSNotFound) {
+        coreB = [b substringToIndex:dashB.location];
+        preB = [b substringFromIndex:dashB.location + 1];
+    }
+
+    NSArray<NSString *> *partsA = [coreA componentsSeparatedByString:@"."];
+    NSArray<NSString *> *partsB = [coreB componentsSeparatedByString:@"."];
+    for (NSUInteger i = 0; i < 3; i++) {
+        NSInteger valueA = i < partsA.count ? partsA[i].integerValue : 0;
+        NSInteger valueB = i < partsB.count ? partsB[i].integerValue : 0;
+        if (valueA != valueB) return valueA < valueB ? -1 : 1;
+    }
+
+    // 主版本相同：按 semver，有预发布标识的**小于**正式版（1.0.0-beta < 1.0.0）。
+    if (!preA && !preB) return 0;
+    if (!preA) return 1;
+    if (!preB) return -1;
+    return A2ComparePrerelease(preA, preB);
 }
 
 /// 依赖的版本约束：`x.y.z` / `=x.y.z` / `>=x.y.z` / `^x.y.z` / `~x.y.z`。
@@ -349,18 +433,32 @@ static BOOL A2IsEscapingPath(NSString *path) {
     return NO;
 }
 
-/// 包内相对路径的检查，按「哪个环节不通过」返回对应错误码，便于测试与文案分档。
-static A2PluginError A2CheckPackagePath(NSString *path, NSUInteger maxLength) {
-    if (![path isKindOfClass:NSString.class] || path.length == 0) return A2PluginErrorField;
-    if (A2IsEscapingPath(path)) return A2PluginErrorPath;
-    if (path.length > maxLength) return A2PluginErrorSize;
-    if ([path hasPrefix:@"."]) return A2PluginErrorField;
+/// 包内相对路径的判定，安装器（zip 中央目录预检）与 manifest 校验共用这一份实现。
+/// 长度用 `.length` 判：字符集只放行 ASCII，所以字符数恒等于 UTF-8 字节数。
+A2PluginPathVerdict A2PluginInspectPackagePath(NSString *path, NSUInteger maxLength) {
+    if (![path isKindOfClass:NSString.class] || path.length == 0) {
+        return A2PluginPathVerdictIllegalCharacters;
+    }
+    if (A2IsEscapingPath(path)) return A2PluginPathVerdictEscaping;
+    if (path.length > maxLength) return A2PluginPathVerdictTooLong;
+    if ([path hasPrefix:@"."]) return A2PluginPathVerdictIllegalCharacters;
     for (NSUInteger i = 0; i < path.length; i++) {
         unichar c = [path characterAtIndex:i];
         BOOL allowed = A2IsAlnum(c) || c == '.' || c == '_' || c == '/' || c == '-';
-        if (!allowed) return A2PluginErrorField;
+        if (!allowed) return A2PluginPathVerdictIllegalCharacters;
     }
-    return A2PluginErrorNone;
+    return A2PluginPathVerdictOK;
+}
+
+/// 包内相对路径的检查，按「哪个环节不通过」返回对应错误码，便于测试与文案分档。
+static A2PluginError A2CheckPackagePath(NSString *path, NSUInteger maxLength) {
+    switch (A2PluginInspectPackagePath(path, maxLength)) {
+        case A2PluginPathVerdictOK: return A2PluginErrorNone;
+        case A2PluginPathVerdictEscaping: return A2PluginErrorPath;
+        case A2PluginPathVerdictTooLong: return A2PluginErrorSize;
+        case A2PluginPathVerdictIllegalCharacters: return A2PluginErrorField;
+    }
+    return A2PluginErrorField;
 }
 
 /// 整棵树里第一个「往外跑」的字符串；没有则返回 nil。
@@ -458,8 +556,12 @@ static BOOL A2AllKeysAllowed(NSDictionary *dict, NSSet<NSString *> *allowed, NSS
 A2PluginLimits A2PluginDefaultLimits(void) {
     A2PluginLimits limits;
     limits.maxPackageBytes = 64ULL * 1024ULL * 1024ULL;
+    limits.maxExtractedBytes = 256ULL * 1024ULL * 1024ULL;
     limits.maxFileCount = 4096;
+    limits.maxSingleFileBytes = 32ULL * 1024ULL * 1024ULL;
     limits.maxPathLength = 255;
+    limits.maxPathDepth = 8;
+    limits.maxCompressionRatio = 100;
     return limits;
 }
 

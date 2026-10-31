@@ -67,6 +67,7 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 | `Download/` | 下载引擎：分片、断点续传、镜像回退、速度自适应 |
 | `Addons/` | Mod / 资源包 / 光影 / 整合包的识别、依赖解析、安装 |
 | `Renderer/` | 渲染后端抽象与注册表（Metal / kopper / VirGL / GL4ES…） |
+| `Plugin/` | 插件系统数据层与安装器：`manifest.json` 解析校验、`registry.json` 原子读写、`.air2plugin` 包的解压安全校验、安装 / 卸载 / 回退 |
 | `Path/` | 沙盒路径规划，所有路径只在此处拼装 |
 | `Settings/` | 设置项注册表、类型安全的读写、默认值、迁移 |
 

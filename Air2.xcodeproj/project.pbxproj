@@ -51,7 +51,9 @@
 		B084543A044A1B44B18F5627 /* A2GameFiles.m in Sources */ = {isa = PBXBuildFile; fileRef = D0693B31AD2EAB6A0328732E /* A2GameFiles.m */; };
 		F06A34B3124B9296AC65A46C /* A2GamePathManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCADCE8C9342A268838450 /* A2GamePathManager.m */; };
 		6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */ = {isa = PBXBuildFile; fileRef = 074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */; };
+		2A2E158B7145BA06D0A28EA8 /* A2PluginInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 364D3051311E9C6D67AC9FFF /* A2PluginInstaller.m */; };
 		D5A33360D4CF86BF573DED2F /* A2PluginManifest.m in Sources */ = {isa = PBXBuildFile; fileRef = 38654BB9DEF1608809486624 /* A2PluginManifest.m */; };
+		93B7D56DED4EF5D63C188772 /* A2PluginPackageExtractor.m in Sources */ = {isa = PBXBuildFile; fileRef = C391E2103F9EF35FEB6B0AD7 /* A2PluginPackageExtractor.m */; };
 		794BF5DF54F19D3E45F5ACCB /* A2PluginRegistry.m in Sources */ = {isa = PBXBuildFile; fileRef = 718A158197315CB0CEC49DA3 /* A2PluginRegistry.m */; };
 		8B0D65271C85EAABC46B0226 /* A2Renderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 47106E1A43667C70F671BED2 /* A2Renderer.m */; };
 		01B85F275BBECA53B5E85F73 /* A2RendererImporter.m in Sources */ = {isa = PBXBuildFile; fileRef = 8D34430FDEB24984AD0E55DB /* A2RendererImporter.m */; };
@@ -263,7 +265,9 @@
 		D0693B31AD2EAB6A0328732E /* A2GameFiles.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameFiles.m"; sourceTree = "<group>"; };
 		9ACCADCE8C9342A268838450 /* A2GamePathManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GamePathManager.m"; sourceTree = "<group>"; };
 		074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionIsolation.m"; sourceTree = "<group>"; };
+		364D3051311E9C6D67AC9FFF /* A2PluginInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PluginInstaller.m"; sourceTree = "<group>"; };
 		38654BB9DEF1608809486624 /* A2PluginManifest.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PluginManifest.m"; sourceTree = "<group>"; };
+		C391E2103F9EF35FEB6B0AD7 /* A2PluginPackageExtractor.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PluginPackageExtractor.m"; sourceTree = "<group>"; };
 		718A158197315CB0CEC49DA3 /* A2PluginRegistry.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PluginRegistry.m"; sourceTree = "<group>"; };
 		47106E1A43667C70F671BED2 /* A2Renderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Renderer.m"; sourceTree = "<group>"; };
 		8D34430FDEB24984AD0E55DB /* A2RendererImporter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererImporter.m"; sourceTree = "<group>"; };
@@ -468,7 +472,9 @@
 		0B3D6D1B16A31DBED39334EE /* A2GameFiles.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameFiles.h"; sourceTree = "<group>"; };
 		9F5359EDDF63525C251F80DF /* A2GamePathManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GamePathManager.h"; sourceTree = "<group>"; };
 		CDB8C000E2777EB953C462DD /* A2VersionIsolation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionIsolation.h"; sourceTree = "<group>"; };
+		54B30EFEA74AB62E6C6966C5 /* A2PluginInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PluginInstaller.h"; sourceTree = "<group>"; };
 		481F3992227C044178AEBB2F /* A2PluginManifest.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PluginManifest.h"; sourceTree = "<group>"; };
+		E6C43134812C3D401F6E76C7 /* A2PluginPackageExtractor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PluginPackageExtractor.h"; sourceTree = "<group>"; };
 		17F395E44983FEF3ABEB83A8 /* A2PluginRegistry.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PluginRegistry.h"; sourceTree = "<group>"; };
 		12B70B0E6FB31B7E75D61633 /* A2Renderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Renderer.h"; sourceTree = "<group>"; };
 		5D1F57A737C10747C284745F /* A2RendererImporter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererImporter.h"; sourceTree = "<group>"; };
@@ -889,9 +895,13 @@
 		7DA4B1EE6B030C46C0EACB63 /* Plugin */ = {
 			isa = PBXGroup;
 			children = (
+				364D3051311E9C6D67AC9FFF /* A2PluginInstaller.m */,
 				38654BB9DEF1608809486624 /* A2PluginManifest.m */,
+				C391E2103F9EF35FEB6B0AD7 /* A2PluginPackageExtractor.m */,
 				718A158197315CB0CEC49DA3 /* A2PluginRegistry.m */,
+				54B30EFEA74AB62E6C6966C5 /* A2PluginInstaller.h */,
 				481F3992227C044178AEBB2F /* A2PluginManifest.h */,
+				E6C43134812C3D401F6E76C7 /* A2PluginPackageExtractor.h */,
 				17F395E44983FEF3ABEB83A8 /* A2PluginRegistry.h */,
 			);
 			path = Plugin;
@@ -1512,7 +1522,9 @@
 				B084543A044A1B44B18F5627 /* A2GameFiles.m in Sources */,
 				F06A34B3124B9296AC65A46C /* A2GamePathManager.m in Sources */,
 				6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */,
+				2A2E158B7145BA06D0A28EA8 /* A2PluginInstaller.m in Sources */,
 				D5A33360D4CF86BF573DED2F /* A2PluginManifest.m in Sources */,
+				93B7D56DED4EF5D63C188772 /* A2PluginPackageExtractor.m in Sources */,
 				794BF5DF54F19D3E45F5ACCB /* A2PluginRegistry.m in Sources */,
 				8B0D65271C85EAABC46B0226 /* A2Renderer.m in Sources */,
 				01B85F275BBECA53B5E85F73 /* A2RendererImporter.m in Sources */,

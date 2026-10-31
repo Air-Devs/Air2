@@ -98,10 +98,49 @@ typedef NS_ENUM(NSInteger, A2PluginError) {
     /// 包根出现了已移除的签名文件（`AIR2SIG.json`）。
     /// 文档码：`E_LEGACY_SIGNATURE`。
     A2PluginErrorLegacySignature,
+
+    // ---- 以下为安装器（zip 层与版本规则）新增 ----
+
+    /// zip 条目路径会落到包目录之外（`..` 段 / 绝对路径 / 盘符 / 反斜杠），
+    /// 或中央目录与本地文件头声明的名字不一致。
+    /// 文档码：`E_PATH_ESCAPE`。
+    A2PluginErrorZipSlip,
+    /// 包内出现符号链接 / 硬链接条目（zip 的外部属性位标记）。
+    /// 文档码：`E_PATH_ESCAPE`（「包里有符号链接」那一行）。
+    A2PluginErrorLink,
+    /// 装的是低于已装版本的包，且未开开发者模式。
+    /// 文档码：`E_DOWNGRADE`。
+    A2PluginErrorDowngrade,
+    /// 同 id 同版本但内容摘要不同 —— 包被换过。
+    /// 文档码：`E_SAME_VERSION_DIFFERENT_CONTENT`。
+    A2PluginErrorSameVersionDifferentContent,
+    /// `manifest.files` 与包内实际文件集合不一致。
+    /// 文档码：`E_FILE_SET_MISMATCH`。
+    A2PluginErrorFileSetMismatch,
+    /// 包内某个文件的 SHA-256 / 字节数与 `manifest.files` 声明不符。
+    /// 文档码：`E_HASH_MISMATCH`。
+    A2PluginErrorHashMismatch,
+    /// 宿主侧 IO 失败：建目录 / 换目录 / 删目录 / 写注册表。
+    /// 文档码：无对应行（不是包的问题，是宿主的磁盘或权限问题）。
+    A2PluginErrorIO,
+    /// 没有可回退的上一版（未安装，或上一版目录已不在）。
+    /// 文档码：无对应行（宿主状态，不是包的问题）。
+    A2PluginErrorNoPreviousVersion,
+    /// 该插件随 App 打包，不允许卸载。
+    /// 文档码：无对应行（宿主策略，不是包的问题）。
+    A2PluginErrorBuiltin,
 };
 
 /// 错误码的字符串形式（`E_FORMAT` / `E_FIELD` / …）。
 FOUNDATION_EXPORT NSString *A2PluginErrorCodeString(A2PluginError code);
+
+/// 构造一条安装期错误：域 + `E_*` 机器码 + 可选字段路径 + 一句话原因。
+/// 校验层、解包层、安装器共用这一处构造 —— 管理页只认这一套 userInfo，
+/// 各处各拼一遍的话，早晚有一个地方漏掉 `A2PluginErrorCodeKey`，失败就变成没有码的弹窗。
+/// @param field 出错的字段路径（如 `files[3].path`），没有具体字段时传 nil
+FOUNDATION_EXPORT NSError *A2PluginErrorMake(A2PluginError code,
+                                             NSString *_Nullable field,
+                                             NSString *format, ...) NS_FORMAT_FUNCTION(3, 4);
 
 #pragma mark - 权限风险级
 
@@ -132,18 +171,60 @@ FOUNDATION_EXPORT BOOL A2PluginIsValidIdentifier(NSString *identifier);
 /// 插件版本是否合法：`x.y.z` 或 `x.y.z-<prerelease>`（不允许 01.0.0）。
 FOUNDATION_EXPORT BOOL A2PluginIsValidVersion(NSString *version);
 
+/// 按语义化版本比较两个合法版本：`a < b` 返回负数，相等返回 0，`a > b` 返回正数
+/// （与 `strcmp` 同约定，便于直接当比较器用）。
+/// 判定「降级安装」只有这一处口径 —— 字符串比大小会把 `1.10.0` 判得比 `1.9.0` 小。
+/// 传入不合法的版本返回 0（调用方在解析阶段已经拒过非法版本）。
+FOUNDATION_EXPORT NSInteger A2PluginCompareVersions(NSString *a, NSString *b);
+
+#pragma mark - 路径
+
+/// 包内相对路径的判定结果。安装器与 manifest 校验共用这一处规则 ——
+/// 两边各写一套的后果是「zip 放行了、manifest 拒了」这种只有用户才会遇到的怪状态。
+typedef NS_ENUM(NSInteger, A2PluginPathVerdict) {
+    A2PluginPathVerdictOK = 0,
+    /// 会跑到包目录之外：含 `..`、以 `/` 开头、盘符形式（`C:`）、反斜杠、控制字符。
+    A2PluginPathVerdictEscaping,
+    /// 超过长度上限。
+    A2PluginPathVerdictTooLong,
+    /// 字符集外（只允许字母数字 `.` `_` `-` `/`），或以 `.` 开头（隐藏文件）。
+    A2PluginPathVerdictIllegalCharacters,
+};
+
+/// 判定一条包内相对路径。
+/// @param path 不带前导 `/` 的包内路径；目录条目请先去掉尾随 `/`
+/// @param maxLength 路径长度上限（字节数按 UTF-8 算，与 `PLUGIN-SYSTEM.md` 3.3 一致）
+FOUNDATION_EXPORT A2PluginPathVerdict A2PluginInspectPackagePath(NSString *path,
+                                                                NSUInteger maxLength);
+
 #pragma mark - 上限
 
 /// 安装期上限。由安装器传入（它才知道包体与条目数），本层只提供判定入口。
 /// 取值就是 `docs/PLUGIN-SYSTEM.md` 3.3「硬性上限」表对外承诺的数字
-/// （包 64 MB / 文件数 4096 / 路径 255 字节）—— 文档是唯一口径，代码不另立更严或有别的值。
+/// —— 文档是唯一口径，代码不另立更严或有别的值。
+///
+/// 一行对应 3.3 的一行：
+///   maxPackageBytes       包文件大小        64 MB
+///   maxExtractedBytes     解压后总大小     256 MB   （zip 层用）
+///   maxFileCount          文件数           4096
+///   maxSingleFileBytes    单文件解压后大小  32 MB   （zip 层用）
+///   maxPathLength         路径长度         255 字节
+///   maxPathDepth          路径深度         8 层    （zip 层用）
+///   maxCompressionRatio   单文件压缩比     100:1   （zip 层用）
+///
+/// 用 `A2PluginDefaultLimits()` 填，不要自己逐个摆字段：漏填的 0 会被当成
+/// 「上限为零」，那时所有包都会被拒，而错误信息看起来像是包的问题。
 typedef struct A2PluginLimits {
     unsigned long long maxPackageBytes;
+    unsigned long long maxExtractedBytes;
     NSUInteger maxFileCount;
+    unsigned long long maxSingleFileBytes;
     NSUInteger maxPathLength;
+    NSUInteger maxPathDepth;
+    NSUInteger maxCompressionRatio;
 } A2PluginLimits;
 
-/// 默认上限（64 MB / 4096 文件 / 255 字节路径）。
+/// 默认上限（就是 3.3 那张表的数字：64 MB / 256 MB / 4096 / 32 MB / 255 / 8 / 100）。
 FOUNDATION_EXPORT A2PluginLimits A2PluginDefaultLimits(void);
 
 #pragma mark - 依赖
