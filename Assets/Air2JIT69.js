@@ -147,6 +147,15 @@ while (!detached) {
         command(brkResponse);
     } else {
         log(`Skipping breakpoint: brk immediate 0x${brkImmediate.toString(16)} was not handled by this script. You could add it by evaluating legacyCommands[0x${brkImmediate.toString(16)}] = yourFunction;`);
+        // ★2026-10-31：未知 brk 不再一律放行★
+        //   真机：`brk #0xb001`（libsystem 在 pthread_exit 里检测到 pthread 结构损坏时发的）
+        //   原本走 continue ⇒ 立刻再撞同一条 ⇒ 控制台无限刷「0xb001 not handled」。
+        //   这里把 0xb001（以及任何 0xb0xx 家族）视为致命，停住不放行，保留现场。
+        if (brkImmediate >= 0xb000 && brkImmediate <= 0xb0ff) {
+            log(`[A2PROBE] FATAL brk=0x${brkImmediate.toString(16)} pc=0x${pc.toString(16)} ⇒ 停止放行（系统库致命断点，不再 continue）`);
+            detached = true;
+            break;
+        }
         continue;
     }
 }
