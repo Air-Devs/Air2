@@ -921,22 +921,8 @@ static int a2_gl_bridge_backend_is_host_egl(const char *rendererName) {
 /// ★实现约束（踩过）★：这里**不能**用裸 objc_msgSend 传结构体（CGRect）——
 ///   clang 对那写法会直接崩且不给诊断，整个 target 编译失败。改用 KVC/NSValue 与
 ///   performSelector:，全程只传对象。
-/// ★只有游戏视图才允许被“加工”★（挂 CAMetalLayer / 抬窗口层级）。
-/// 真机回归（13d24cd，Ubuntu 构建包）：进入启动器主页时左侧整块黑、按钮文字被截断，
-/// 原因就是 attach 阶段把【启动器窗口根视图】当宿主：给它挂了一层全屏 CAMetalLayer
-/// 子层（盖住主页），并把窗口层级抬到 1001。这里按类名精确判定，非游戏视图一律跳过。
-static int a2_gl_bridge_is_game_view(void *view) {
-    if (view == NULL) return 0;
-    @try {
-        id obj = (__bridge id)view;
-        NSString *cls = NSStringFromClass([obj class]);
-        return [cls isEqualToString:@"A2GlfwView"] ? 1 : 0;
-    } @catch (__unused NSException *e) { return 0; }
-}
-
 static void *a2_gl_bridge_metal_layer_for(void *renderable) {
     if (renderable == NULL) return NULL;
-    if (!a2_gl_bridge_is_game_view(renderable)) return renderable;   // ★非游戏视图不加工★
     id host = (__bridge id)renderable;
     if (host == nil) return renderable;
     Class metalLayerCls = NSClassFromString(@"CAMetalLayer");
@@ -1418,7 +1404,6 @@ static A2GlBridgeRect a2_gl_bridge_view_bounds(void *view) {
 /// 这里把 windowLevel 抬到 UIWindowLevelStatusBar+1（1001），并在抬前后各记一行。
 static void a2_gl_bridge_raise_host_window(void *view) {
     if (view == NULL) return;
-    if (!a2_gl_bridge_is_game_view(view)) return;   // ★启动器自己的窗口不抬层★
     SEL winSel = NSSelectorFromString(@"window");
     SEL levelSel = NSSelectorFromString(@"windowLevel");
     SEL setLevelSel = NSSelectorFromString(@"setWindowLevel:");
