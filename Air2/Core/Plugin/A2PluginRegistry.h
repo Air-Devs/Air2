@@ -135,6 +135,14 @@ FOUNDATION_EXPORT const NSInteger A2PluginRegistryFormatVersion;
 /// 用户开关。
 @property (nonatomic, assign, getter=isEnabled) BOOL enabled;
 
+/// 连续「启动后没走到首帧」的次数（P1 第⑤块：boot marker 累计）。
+/// 启动成功跨过首帧时归零；旧 registry 缺这个字段 ⇒ 读成 0。
+@property (nonatomic, assign) NSInteger failureCount;
+
+/// 宿主自动停用时写下的可读原因；用户手动停用 / 从未被停用时为 nil。
+/// 旧 registry 缺这个字段 ⇒ 读成 nil。
+@property (nonatomic, copy, nullable) NSString *lastAutoDisabledReason;
+
 /// 首次安装时间（升级不改）。
 @property (nonatomic, copy) NSString *installedAt;
 

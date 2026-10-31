@@ -14,6 +14,9 @@ Air2 tests/Plugin —— ★插件数据层 + 安装器单测运行器★
        A2PluginPackageExtractor.m   （中央目录预检 / 解压 / 完整性 / 摘要）
        A2ZipReader.m                （条目元数据 / 流式解压 / 本地头核对）
        A2PluginManifest.m、A2PluginRegistry.m、A2Log.m
+  ③ plugin_boot_guard_tests
+       A2PluginBootGuard.m          （boot marker / 连续 3 次未跨首帧自动停用）
+       A2PluginRegistry.m、A2PluginManifest.m
 
 为什么是【真编译 + 真运行】而不是源码扫描：
   「拒装」的每一条理由都必须是可执行的绿或红。zip 炸弹、穿越条目、符号链接、
@@ -50,6 +53,9 @@ LAUNCH_RISK_SRC = os.path.join(PLUGIN_DIR, "A2PluginLaunchChainRisk.m")
 # 权限目录（A2PluginPermissionInfoForId）—— A2PluginLaunchChainRisk 用它取 shortName。
 PERMISSION_STORE_SRC = os.path.join(PLUGIN_DIR, "A2PluginPermissionStore.m")
 LOG_SRC = os.path.join(UTILS_DIR, "A2Log.m")
+# ★2026-10-31★ 第⑤块：启动看门狗（boot marker / failureCount / 自动停用）。
+# 它自己的用例在 plugin_boot_guard_tests，因此必须单独编进那个目标。
+BOOT_GUARD_SRC = os.path.join(PLUGIN_DIR, "A2PluginBootGuard.m")
 
 # 每个目标 = 一个可执行文件（用例各自用独立临时目录，互不污染）
 TARGETS = [
@@ -65,6 +71,15 @@ TARGETS = [
         "sources": [MANIFEST_SRC, REGISTRY_SRC, EXTRACTOR_SRC, INSTALLER_SRC,
                     ZIP_READER_SRC, LAUNCH_RISK_SRC, PERMISSION_STORE_SRC, LOG_SRC],
         "libraries": ["-lz"],       # A2ZipReader 的 deflate 走 zlib
+    },
+    {
+        # 第⑤块：boot marker + 连续 3 次未跨首帧自动停用。
+        # 注册表要一起编（failureCount / lastAutoDisabledReason 落在 entry 上），
+        # manifest 提供 A2PluginIsValidIdentifier（registry 的写前校验用它）。
+        "name": "plugin_boot_guard_tests",
+        "test": os.path.join(HERE, "plugin_boot_guard_tests.m"),
+        "sources": [BOOT_GUARD_SRC, REGISTRY_SRC, MANIFEST_SRC],
+        "libraries": [],
     },
 ]
 

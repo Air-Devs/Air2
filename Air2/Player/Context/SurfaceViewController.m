@@ -33,6 +33,7 @@
 #import "PLProfiles.h"
 #import "SurfaceViewController.h"
 #import "A2Logger.h"
+#import "A2PluginBootGuard.h"
 #import "A2Account.h"
 #import "A2TouchTransport.h"
 #import "A2ControlRenderer.h"
@@ -2019,6 +2020,12 @@ static int A2RequiredJavaVersionForMCVersion(NSString *verName) {
 
 /// 首帧渲染通知回调：淡出并移除启动遮罩层
 - (void)onFirstFrameRendered {
+    // ★P1 第⑤块★ 首帧到达 = 这次启动成功跨过了启动链：把所有插件的失败计数
+    // 清零并删掉 boot marker（下一个启动周期从零开始记）。
+    // 放在方法最前面：后面全是动画与遮罩，任何早退都不该让「启动成功」这件事丢失。
+    // 返回值只在单测里断言；这里失败也不影响画面，最多下次多记一次失败。
+    (void)[A2PluginBootGuard markFirstFrameReached];
+
     // ★ [LAUNCH-PROGRESS] 首帧渲染 = 启动完成，先把阶段推到 Completed。
     // 首帧渲染 = 启动完成。用 A2 的遮罩自己收尾
     // （A2LaunchSplashView.finishAndDismissWithCompletion:）。

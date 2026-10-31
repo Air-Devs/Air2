@@ -627,6 +627,74 @@ static void testRegistry(void) {
     NSError *versionError = nil;
     ok(![versionRegistry loadWithError:&versionError], @"旧结构版本的注册表被拒");
     eqInt(versionError.code, A2PluginRegistryErrorFormat, @"版本不符给 Format");
+
+    // 13) ★第⑤块★ failureCount / lastAutoDisabledReason 落盘往返
+    NSString *guardDirectory = TempDirectory();
+    A2PluginRegistry *guardRegistry =
+        [[A2PluginRegistry alloc] initWithPluginsDirectory:guardDirectory];
+    (void)[guardRegistry loadWithError:NULL];
+    A2PluginRegistryEntry *guarded = MakeEntry(@"top.example.guarded", @"1.0.0");
+    guarded.failureCount = 2;
+    ok([guardRegistry upsertEntry:guarded error:NULL], @"带 failureCount 的条目能写");
+    A2PluginRegistry *guardReload =
+        [[A2PluginRegistry alloc] initWithPluginsDirectory:guardDirectory];
+    ok([guardReload loadWithError:NULL], @"带 failureCount 的注册表能读");
+    eqInt([guardReload entryForPluginId:@"top.example.guarded"].failureCount, 2,
+          @"failureCount 读回来了");
+    ok([guardReload entryForPluginId:@"top.example.guarded"].lastAutoDisabledReason == nil,
+       @"没被自动停用过的条目没有停用原因");
+
+    A2PluginRegistryEntry *reasonEntry = [guardReload entryForPluginId:@"top.example.guarded"];
+    reasonEntry.failureCount = 3;
+    reasonEntry.enabled = NO;
+    reasonEntry.lastAutoDisabledReason = @"连续 3 次启动都没有进入游戏画面，已自动停用";
+    ok([guardReload upsertEntry:reasonEntry error:NULL], @"带停用原因的条目能写");
+    A2PluginRegistry *reasonReload =
+        [[A2PluginRegistry alloc] initWithPluginsDirectory:guardDirectory];
+    ok([reasonReload loadWithError:NULL], @"带停用原因的注册表能读");
+    A2PluginRegistryEntry *guardedReloaded = [reasonReload entryForPluginId:@"top.example.guarded"];
+    eqInt(guardedReloaded.failureCount, 3, @"自动停用后 failureCount 保留（供诊断）");
+    ok(!guardedReloaded.isEnabled, @"自动停用后 enabled = NO");
+    eqStr(guardedReloaded.lastAutoDisabledReason, @"连续 3 次启动都没有进入游戏画面，已自动停用",
+          @"lastAutoDisabledReason 读回来了");
+
+    // 14) 旧注册表（没有第⑤块的两个字段）必须照常读，按 0 / nil 处理
+    NSString *legacyDirectory = TempDirectory();
+    A2PluginRegistry *legacyRegistry =
+        [[A2PluginRegistry alloc] initWithPluginsDirectory:legacyDirectory];
+    NSString *legacyJSON = [NSString stringWithFormat:
+        @"{\"formatVersion\":3,\"seq\":7,\"userSeq\":2,\"plugins\":[{"
+         @"\"id\":\"top.example.legacy\",\"version\":\"1.0.0\","
+         @"\"packageHash\":\"sha256:%@\","
+         @"\"source\":{\"kind\":\"local-import\",\"installedAt\":\"2026-10-31T10:00:00Z\"},"
+         @"\"permissionsGranted\":[],\"criticalGrants\":[],\"permissionSet\":\"\","
+         @"\"approvedHashes\":[],\"grantRevision\":0,\"enabled\":true,"
+         @"\"installedAt\":\"2026-10-31T10:00:00Z\","
+         @"\"updatedAt\":\"2026-10-31T10:00:00Z\"}]}", HashChar('c')];
+    [JSONData(legacyJSON) writeToFile:legacyRegistry.registryPath atomically:YES];
+    ok([legacyRegistry loadWithError:NULL], @"旧格式（无 failureCount）注册表能读（向后兼容）");
+    A2PluginRegistryEntry *legacy = [legacyRegistry entryForPluginId:@"top.example.legacy"];
+    eqInt(legacy.failureCount, 0, @"旧格式缺 failureCount ⇒ 读成 0");
+    ok(legacy.lastAutoDisabledReason == nil, @"旧格式缺 lastAutoDisabledReason ⇒ 读成 nil");
+    ok(legacy.isEnabled, @"旧格式条目的 enabled 不受影响");
+
+    // 旧表读进来再写出去：新字段补上（failureCount=0），不能写坏
+    ok([legacyRegistry saveWithError:NULL], @"旧格式表能整份写回");
+    A2PluginRegistry *legacyReload =
+        [[A2PluginRegistry alloc] initWithPluginsDirectory:legacyDirectory];
+    ok([legacyReload loadWithError:NULL], @"写回后仍能读");
+    ok([[NSString stringWithContentsOfFile:legacyRegistry.registryPath
+                                  encoding:NSUTF8StringEncoding
+                                     error:NULL] containsString:@"failureCount"],
+       @"写回时补上了 failureCount 字段");
+
+    // 15) failureCount 为负 ⇒ 写前校验拒（与 grantRevision 同一条纪律）
+    A2PluginRegistryEntry *negative = MakeEntry(@"top.example.negative", @"1.0.0");
+    negative.failureCount = -1;
+    NSError *negativeError = nil;
+    ok(![negative validateWithError:&negativeError], @"failureCount 为负 ⇒ 写前校验拒");
+    eqInt(negativeError.code, A2PluginRegistryErrorInvalidEntry,
+          @"failureCount 为负的错误码是 InvalidEntry");
 }
 
 #pragma mark - main

@@ -34,6 +34,7 @@
 #import "A2TaskLogOutput.h"
 #import "A2InstallProgressDialog.h"
 #import "A2GameLaunchCoordinator.h"
+#import "A2PluginBootGuard.h"
 #import "ios_uikit_bridge.h"
 #import "A2JREManager.h"
 #import "A2VersionMetadata.h"
@@ -920,6 +921,12 @@
             [jvm didMoveToParentViewController:self];
             self.jvmScreen = jvm;
         }
+
+        // ★P1 第⑤块★ 记一次「启动开始」：从这里到首帧之间进程无论怎么死，
+        // boot marker 都留在磁盘上，下一次启动据此给可疑插件累积失败次数。
+        // 放在拉起 JVM 之前、而不是点按钮的那一刻：前置检查失败（没登录、版本不完整）
+        // 不是插件的锅，不该记在它头上。
+        [A2PluginBootGuard markLaunchStarted];
 
         [A2JITLauncher gatedByJITInViewController:self onReady:^{
             UIKit_launchMinecraftSurfaceVC(window, finalMeta);

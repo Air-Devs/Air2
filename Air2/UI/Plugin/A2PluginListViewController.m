@@ -33,6 +33,7 @@
 #import "A2PluginListViewController.h"
 
 #import "A2Dialog.h"
+#import "A2PluginBootGuard.h"
 #import "A2PluginInstaller.h"
 #import "A2PluginLaunchChainConfirm.h"
 #import "A2PluginManifest.h"
@@ -226,6 +227,10 @@ static void A2PluginConfirmUninstall(UIViewController *presenter,
 @property (nonatomic, strong) A2PluginInstaller *installer;
 @property (nonatomic, strong) A2PluginPermissionStore *store;
 
+/// ★P1 第⑤块★ 进页面时结算出来的「因连续启动失败被自动停用」的条目。
+/// 只是提示素材：某个插件是否仍然停用，一律以 reload 时读到的注册表为准。
+@property (nonatomic, copy) NSArray<A2PluginRegistryEntry *> *autoDisabledEntries;
+
 /// 安装结束（主线程）：报结果 / 重画 / 进授权页。
 /// 安装跑在后台队列上（会改启动链的插件要在闸门里等 10 次确认），所以收尾单列一个方法。
 - (void)finishImportWithResult:(nullable A2PluginInstallResult *)result
@@ -265,6 +270,11 @@ static void A2PluginConfirmUninstall(UIViewController *presenter,
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.pageTitle = @"插件";
+    // ★P1 第⑤块★ 插件页是用户唯一能自救的地方：进来先把上一次启动留下的账
+    // 结算掉（第 1、2 次只累加；第 3 次在这里把插件停用），再把结果做成首屏提示。
+    // 只在 viewDidLoad 结算一次：viewWillAppear 会反复来，重复结算虽然幂等，
+    // 但没必要每次都读盘写盘。
+    self.autoDisabledEntries = [A2PluginBootGuard evaluatePreviousLaunch];
     [self reload];
 }
 
@@ -293,6 +303,13 @@ static void A2PluginConfirmUninstall(UIViewController *presenter,
     if (entries.count == 0) {
         [self addSection:[self emptySection]];
         return;
+    }
+
+    // ★P1 第⑤块★ 自动停用的提示放最上面：用户进这一页多半就是来找
+    // 「为什么游戏起不来」，答案不该藏在列表末尾。
+    NSArray<A2PluginRegistryEntry *> *autoDisabled = [self currentlyAutoDisabledEntries];
+    if (autoDisabled.count > 0) {
+        [self addSection:[self autoDisableSectionWithEntries:autoDisabled]];
     }
 
     A2SettingsSection *listSection = [[A2SettingsSection alloc] initWithTitle:@"已安装"];
@@ -356,6 +373,42 @@ static void A2PluginConfirmUninstall(UIViewController *presenter,
         [self presentPluginPicker];
     };
     [section addRow:row];
+    return section;
+}
+
+#pragma mark 启动保护提示（P1 第⑤块）
+
+/// 结算结果里**现在仍然停用**的那些（用户可能刚在详情页手动打开了）。
+- (NSArray<A2PluginRegistryEntry *> *)currentlyAutoDisabledEntries {
+    NSMutableArray<A2PluginRegistryEntry *> *result = [NSMutableArray array];
+    for (A2PluginRegistryEntry *recorded in self.autoDisabledEntries) {
+        A2PluginRegistryEntry *current = [self.registry entryForPluginId:recorded.pluginId];
+        if (current && !current.isEnabled) [result addObject:current];
+    }
+    return result;
+}
+
+/// 一行提示：哪些插件被自动停用了、为什么。
+- (A2SettingsSection *)autoDisableSectionWithEntries:
+        (NSArray<A2PluginRegistryEntry *> *)entries {
+    A2SettingsSection *section = [[A2SettingsSection alloc] initWithTitle:@"启动保护"];
+    section.footerText = [NSString stringWithFormat:
+        @"这些插件连续 %ld 次启动都没有进入游戏画面，宿主已先把它们停用，好让游戏能起来。"
+         @"确认是插件的问题就保持停用；想再试一次，回详情页手动打开即可。",
+        (long)A2PluginBootGuardAutoDisableThreshold];
+
+    for (A2PluginRegistryEntry *entry in entries) {
+        A2PluginManifest *manifest = [self.installer installedManifestForPluginId:entry.pluginId
+                                                                           error:NULL];
+        A2SettingsRow *row = [[A2SettingsRow alloc] init];
+        row.symbolName = @"exclamationmark.triangle.fill";
+        row.title = [NSString stringWithFormat:@"已自动停用：%@",
+                     manifest.name.length ? manifest.name : entry.pluginId];
+        row.subtitle = entry.lastAutoDisabledReason.length ? entry.lastAutoDisabledReason
+                                                           : @"启动多次失败";
+        row.accessory = A2SettingsRowAccessoryNone;
+        [section addRow:row];
+    }
     return section;
 }
 

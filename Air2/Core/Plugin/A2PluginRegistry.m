@@ -231,6 +231,9 @@ static BOOL A2AtomicWriteData(NSString *path, NSData *data, NSError **error) {
         _approvedHashes = @[];
         _grantRevision = 0;
         _enabled = YES;
+        // 第⑤块：新条目从来没有失败过，也没有被谁自动停用过。
+        _failureCount = 0;
+        _lastAutoDisabledReason = nil;
         _installedAt = @"";
         _updatedAt = @"";
     }
@@ -286,6 +289,10 @@ static BOOL A2AtomicWriteData(NSString *path, NSData *data, NSError **error) {
     if (self.grantRevision < 0) {
         return A2RegistryFail(error, A2PluginRegistryErrorInvalidEntry, @"grantRevision",
                               @"grantRevision 不能为负");
+    }
+    if (self.failureCount < 0) {
+        return A2RegistryFail(error, A2PluginRegistryErrorInvalidEntry, @"failureCount",
+                              @"failureCount 不能为负");
     }
     if (self.approvedHashes.count > A2PluginRegistryMaxApprovedHashes) {
         return A2RegistryFail(error, A2PluginRegistryErrorInvalidEntry, @"approvedHashes",
@@ -392,6 +399,18 @@ static BOOL A2AtomicWriteData(NSString *path, NSData *data, NSError **error) {
         entry.enabled = [(NSNumber *)enabled boolValue];
     }
 
+    // 第⑤块的字段：旧表里没有它们（= 这个功能上线前写的表），按 0 / nil 读，
+    // 不报「结构不符」—— 否则用户升级一次 App 就变成「注册表损坏」。
+    id failureCount = dictionary[@"failureCount"];
+    if ([failureCount isKindOfClass:NSNumber.class]) {
+        entry.failureCount = MAX((NSInteger)0, [(NSNumber *)failureCount integerValue]);
+    }
+    id autoDisabledReason = dictionary[@"lastAutoDisabledReason"];
+    if ([autoDisabledReason isKindOfClass:NSString.class] &&
+        [(NSString *)autoDisabledReason length] > 0) {
+        entry.lastAutoDisabledReason = autoDisabledReason;
+    }
+
     id installedAt = dictionary[@"installedAt"];
     entry.installedAt = [installedAt isKindOfClass:NSString.class] ? installedAt : @"";
     id updatedAt = dictionary[@"updatedAt"];
@@ -414,7 +433,7 @@ static BOOL A2AtomicWriteData(NSString *path, NSData *data, NSError **error) {
     source[@"installedAt"] = self.sourceInstalledAt.length ? self.sourceInstalledAt
                                                            : (self.installedAt ?: @"");
 
-    return @{
+    NSMutableDictionary<NSString *, id> *representation = [@{
         @"id": self.pluginId ?: @"",
         @"version": self.version ?: @"",
         @"packageHash": self.packageHash ?: @"",
@@ -425,9 +444,16 @@ static BOOL A2AtomicWriteData(NSString *path, NSData *data, NSError **error) {
         @"approvedHashes": self.approvedHashes ?: @[],
         @"grantRevision": @(self.grantRevision),
         @"enabled": @(self.enabled),
+        // 第⑤块：计数总是写（0 也有人读）；原因只在真的被自动停用过时写，
+        // 免得给每个正常插件挂一个空字符串。
+        @"failureCount": @(self.failureCount),
         @"installedAt": self.installedAt ?: @"",
         @"updatedAt": self.updatedAt ?: @"",
-    };
+    } mutableCopy];
+    if (self.lastAutoDisabledReason.length) {
+        representation[@"lastAutoDisabledReason"] = self.lastAutoDisabledReason;
+    }
+    return representation;
 }
 
 @end
