@@ -951,8 +951,8 @@ static void a2_gl_bridge_force_layer_visible(void *viewPtr, void *layerPtr) {
         @try { winBounds = [win valueForKey:@"bounds"]; } @catch (__unused NSException *e) {}
         id superview = nil;
         @try { superview = [view valueForKey:@"superview"]; } @catch (__unused NSException *e) {}
-        a2_log_f("[A2-GLBRIDGE] 图层可见性核对：view=%s inWindow=%d frame=%s hidden=%s alpha=%s ｜ "
-                 "layer=%s frame=%s hidden=%s opacity=%s z=%s",
+        a2_log_f(@"[A2-GLBRIDGE] 图层可见性核对：view=%s inWindow=%d frame=%s hidden=%s alpha=%s ｜ "
+                 @"layer=%s frame=%s hidden=%s opacity=%s z=%s",
                  view ? [NSStringFromClass([view class]) UTF8String] : "(nil)", (win != nil),
                  vframe ? [[vframe description] UTF8String] : "(nil)",
                  vhidden ? [[vhidden description] UTF8String] : "(nil)",
@@ -962,7 +962,7 @@ static void a2_gl_bridge_force_layer_visible(void *viewPtr, void *layerPtr) {
                  lhidden ? [[lhidden description] UTF8String] : "(nil)",
                  lopacity ? [[lopacity description] UTF8String] : "(nil)",
                  [[[layer valueForKey:@"zPosition"] description] UTF8String]);
-        a2_log_f("[A2-GLBRIDGE] ★窗口状态★ window=%s hidden=%s level=%s isKey=%s alpha=%s bounds=%s ｜ superview=%s",
+        a2_log_f(@"[A2-GLBRIDGE] ★窗口状态★ window=%s hidden=%s level=%s isKey=%s alpha=%s bounds=%s ｜ superview=%s",
                  win ? [NSStringFromClass([win class]) UTF8String] : "(nil)",
                  winHidden ? [[winHidden description] UTF8String] : "(nil)",
                  winLevel ? [[winLevel description] UTF8String] : "(nil)",
