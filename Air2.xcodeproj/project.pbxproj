@@ -66,6 +66,7 @@
 		2BC4E80EA8F83E9426E4BA2E /* A2VersionInfo.m in Sources */ = {isa = PBXBuildFile; fileRef = 3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */; };
 		7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 643B820206971C227F265607 /* A2VersionManager.m */; };
 		D564819D85268AE02EC0DEC2 /* A2VersionMetadata.m in Sources */ = {isa = PBXBuildFile; fileRef = B6A0FA8BE05E152AF38E328F /* A2VersionMetadata.m */; };
+		60A025E41FE3479CD77EF84B /* A2JITLauncher.m in Sources */ = {isa = PBXBuildFile; fileRef = 5E9E31598CF62220724EE0CC /* A2JITLauncher.m */; };
 		1EAA4088A23E5288FE47CD4B /* AmeLaunchProgress.m in Sources */ = {isa = PBXBuildFile; fileRef = FFB0E2399504AE38B12CDCF6 /* AmeLaunchProgress.m */; };
 		33F561A7EA802A8ACA46A4C8 /* GameSurfaceView.m in Sources */ = {isa = PBXBuildFile; fileRef = 622E3DB2F220A0CD6E0943DF /* GameSurfaceView.m */; };
 		AF347EF95CBD682B91081DB5 /* JavaLauncher.m in Sources */ = {isa = PBXBuildFile; fileRef = 05531083602CC4CC9ADFF035 /* JavaLauncher.m */; };
@@ -275,6 +276,7 @@
 		3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionInfo.m"; sourceTree = "<group>"; };
 		643B820206971C227F265607 /* A2VersionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionManager.m"; sourceTree = "<group>"; };
 		B6A0FA8BE05E152AF38E328F /* A2VersionMetadata.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionMetadata.m"; sourceTree = "<group>"; };
+		5E9E31598CF62220724EE0CC /* A2JITLauncher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITLauncher.m"; sourceTree = "<group>"; };
 		FFB0E2399504AE38B12CDCF6 /* AmeLaunchProgress.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "AmeLaunchProgress.m"; sourceTree = "<group>"; };
 		622E3DB2F220A0CD6E0943DF /* GameSurfaceView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "GameSurfaceView.m"; sourceTree = "<group>"; };
 		05531083602CC4CC9ADFF035 /* JavaLauncher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "JavaLauncher.m"; sourceTree = "<group>"; };
@@ -477,6 +479,7 @@
 		CE5120FF6E52910A07272F53 /* A2VersionInfo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionInfo.h"; sourceTree = "<group>"; };
 		8566CA5C1C5F50A603ACC370 /* A2VersionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionManager.h"; sourceTree = "<group>"; };
 		F7DDE888061764C56E9A6BCF /* A2VersionMetadata.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionMetadata.h"; sourceTree = "<group>"; };
+		CA4B959CCE02765457E1D8E1 /* A2JITLauncher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITLauncher.h"; sourceTree = "<group>"; };
 		51994BE7CF4A796D8B8D6AF2 /* AmeLaunchProgress.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "AmeLaunchProgress.h"; sourceTree = "<group>"; };
 		709C4E0074FDBB9EC85649C8 /* GameSurfaceView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "GameSurfaceView.h"; sourceTree = "<group>"; };
 		8DAD8D49D4E965AEB8763685 /* JavaLauncher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "JavaLauncher.h"; sourceTree = "<group>"; };
@@ -933,6 +936,7 @@
 		86E5F88D8B0C6AD482705BD3 /* Context */ = {
 			isa = PBXGroup;
 			children = (
+				5E9E31598CF62220724EE0CC /* A2JITLauncher.m */,
 				FFB0E2399504AE38B12CDCF6 /* AmeLaunchProgress.m */,
 				622E3DB2F220A0CD6E0943DF /* GameSurfaceView.m */,
 				05531083602CC4CC9ADFF035 /* JavaLauncher.m */,
@@ -946,6 +950,7 @@
 				3379819526378EE72414030C /* environ_globals.m */,
 				A3D0C5C637E9FA2B3F32F1BD /* main_hook.m */,
 				6A5BAE11D028A2905E1791FC /* utils.m */,
+				CA4B959CCE02765457E1D8E1 /* A2JITLauncher.h */,
 				51994BE7CF4A796D8B8D6AF2 /* AmeLaunchProgress.h */,
 				709C4E0074FDBB9EC85649C8 /* GameSurfaceView.h */,
 				8DAD8D49D4E965AEB8763685 /* JavaLauncher.h */,
@@ -1503,6 +1508,7 @@
 				2BC4E80EA8F83E9426E4BA2E /* A2VersionInfo.m in Sources */,
 				7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */,
 				D564819D85268AE02EC0DEC2 /* A2VersionMetadata.m in Sources */,
+				60A025E41FE3479CD77EF84B /* A2JITLauncher.m in Sources */,
 				1EAA4088A23E5288FE47CD4B /* AmeLaunchProgress.m in Sources */,
 				33F561A7EA802A8ACA46A4C8 /* GameSurfaceView.m in Sources */,
 				AF347EF95CBD682B91081DB5 /* JavaLauncher.m in Sources */,

@@ -1871,6 +1871,25 @@ static int A2RequiredJavaVersionForMCVersion(NSString *verName) {
                message:[NSString stringWithFormat:
                         @"[2] 准备调用 launchJVM（账号=%@ 尺寸=%dx%d Java>=%d）",
                         accountId, windowWidth, windowHeight, minVersion]];
+        // ---- 遮罩自动移除 ----
+        // 原本要等 egl_bridge 的「首帧已渲染」回调才撤遮罩。
+        // 但那条链路依赖渲染器正确起来；一旦渲染器有问题，遮罩就永远盖着 ——
+        // 用户看到的就是「黑屏、什么都不动」。
+        // 给 8 秒，到点无论首帧有没有来都撤掉，把真实画面暴露出来。
+        {
+            __weak typeof(self) weakSelf = self;
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                __strong typeof(weakSelf) self = weakSelf;
+                if (!self) return;
+                if (self.launchOverlayView && !self.launchOverlayDismissed) {
+                    [A2Logger warning:@"Boot"
+                              message:@"8s 内未收到首帧，强制移除启动遮罩（渲染器可能没起来）"];
+                    [self dismissLaunchOverlayOnError];
+                }
+            });
+        }
+
         int launchResult = launchJVM(accountId, self.metadata, windowWidth, windowHeight, minVersion);
         [A2Logger info:@"GameLaunch"
                message:[NSString stringWithFormat:@"[3] launchJVM 返回 %d", launchResult]];

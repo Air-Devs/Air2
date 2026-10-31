@@ -37,6 +37,7 @@
 #import "ios_uikit_bridge.h"
 #import "A2JREManager.h"
 #import "A2VersionMetadata.h"
+#import "A2JITLauncher.h"
 #import "A2Logger.h"
 #import "A2DownloadTask.h"
 #import "A2DownloadTaskCenter.h"
@@ -900,6 +901,11 @@
         [self.launchCard dismissAfterDelay:1.0];
         self.launchCard = nil;
 
+        // ---- JIT 门禁（必须在拉起 SurfaceViewController 之前）----
+        // HotSpot 没有 JIT 时退化为解释器，MC 26.3 会「卡死」而不是慢。
+        // Air1 在 LauncherRightPanelViewController:1406 用的就是这个门禁。
+        NSDictionary *finalMeta = [metadata copy];
+
         // 检查通过 → 直接切到 JVMScreen（ZL2 也是这样，没有额外过渡）
         {
             __strong typeof(weakSelf) self = weakSelf;
@@ -915,7 +921,9 @@
             self.jvmScreen = jvm;
         }
 
-        UIKit_launchMinecraftSurfaceVC(window, metadata);
+        [A2JITLauncher gatedByJITInViewController:self onReady:^{
+            UIKit_launchMinecraftSurfaceVC(window, finalMeta);
+        }];
         });   // dispatch_async(main)
     }];
 }
