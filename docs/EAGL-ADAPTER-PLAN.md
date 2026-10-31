@@ -134,7 +134,7 @@ A2GLHostKind { A2GLHostEGL_ANGLE, A2GLHostEAGL }
 | 步骤 | 产出 | 判据 | 状态 |
 |---|---|---|---|
 | P0-1 | `tools/eagl_probe/` 独立探针 | 建 `EAGLContext(api=3)`；`glGetString(GL_VERSION)` 返回 `OpenGL ES 3.x`；present 300 帧不崩 | ✅ **已通过（2026-10-31 真机）** |
-| P0-2 | `a2_eagl_getprocaddress` | 抽 20 个 GLES3 入口全部非 NULL | ⏳ 未做（需扩展清单探针） |
+| P0-2 | `a2_eagl_getprocaddress` | 抽 20 个 GLES3 入口全部非 NULL | ✅ **已通过（2026-10-31 真机，20/20）** |
 | P0-3 | 绘制面 | renderbuffer 实际尺寸 == 请求像素尺寸；Retina 缩放正确 | ✅ **已通过（2026-10-31 真机）** |
 
 **P0-1 不过 ⇒ 整案停止**（回到 ANGLE 路线）。
@@ -151,6 +151,35 @@ drawable    2732x2048（与请求一致 ⇒ P0-3 尺寸/缩放判据通过）
 ```
 结论：EAGL + 系统 GLES3 在本代 iOS 上可用，ES3 上下文与完整帧循环成立 ⇒ 假 EGL（EGL → EAGL 转发）路线继续推进。
 **尚未覆盖**：扩展面（GL_EXTENSIONS 条数与清单）与上限（GL_MAX_TEXTURE_SIZE / GL_MAX_RENDERBUFFER_SIZE / GL_MAX_VERTEX_ATTRIBS）——这是 P0-2 与 P2 的前置，必须补测。
+
+#### P0-2 实测记录（2026-10-31 真机，EAGLProbe P0-2 版）
+```
+GL_NUM_EXTENSIONS = 19
+GLES3 入口         ok=20 missing=0（glGenBuffers/BindBuffer/BufferData/GenTextures/TexImage2D/
+                   GenFramebuffers/BindFramebuffer/FramebufferTexture2D/GenRenderbuffers/
+                   RenderbufferStorage/CreateShader/CompileShader/CreateProgram/LinkProgram/
+                   UseProgram/UniformMatrix4fv/VertexAttribPointer/DrawElements/DrawArrays/GetStringi）
+上限               maxTexture=16384 maxRenderbuffer=16384 maxVertexAttribs=16 maxTexUnits=32 maxSamples=4
+性能               300 帧 115.05 fps / 平均 8.69 ms（2732x2048）
+
+扩展全表（19）
+  GL_OES_standard_derivatives, GL_KHR_texture_compression_astc_ldr, GL_EXT_color_buffer_half_float,
+  GL_EXT_debug_label, GL_EXT_debug_marker, GL_EXT_pvrtc_sRGB, GL_EXT_read_format_bgra,
+  GL_EXT_separate_shader_objects, GL_EXT_shader_framebuffer_fetch, GL_EXT_shader_texture_lod,
+  GL_EXT_shadow_samplers, GL_EXT_texture_filter_anisotropic, GL_APPLE_clip_distance,
+  GL_APPLE_color_buffer_packed_float, GL_APPLE_copy_texture_levels, GL_APPLE_rgb_422,
+  GL_APPLE_texture_format_BGRA8888, GL_IMG_read_format, GL_IMG_texture_compression_pvrtc
+缺失但常被问到的：KHR_debug, OES_texture_float_linear, EXT_texture_storage, EXT_sRGB,
+  EXT_multisampled_render_to_texture, EXT_disjoint_timer_query
+```
+
+#### 能力缺口清单（对照 MobileGlues，2026-10-31 修正）
+- MG 最低要求 **GLES 3.0**（README 原文），3.1/3.2 特性由它自己的能力门控降级：
+  `config/settings.cpp:605-606` 的 `has_es31` / `has_es32`、`gl/enable.cpp:203`、`gl/drawing.cpp:318`（间接绘制仍为 TODO）。
+  ⇒ **ES3.0 上可运行**，走兼容路径（SSBO / indirect draw / compute 不启用，性能有折扣）。
+- 需要在 P2 逐条实测的缺口：`KHR_debug`（调试输出缺失）、`OES_texture_float_linear`（浮点纹理线性过滤，
+  光影/后处理可能受影响）、`EXT_texture_storage`（不可变纹理，性能）、`EXT_sRGB`、多重采样 RT。
+
 
 #### 顺带记录：探针在编译期暴露的两个原版缺陷（已修）
 1 `CALayer.autoresizingMask` / `kCALayerWidthSizable` 在 iOS SDK 里是 **unavailable**（macOS API）⇒ 原版直接编不过，已删（改由 `viewDidLayoutSubviews` 同步 frame）。

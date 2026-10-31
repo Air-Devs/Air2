@@ -19,6 +19,7 @@
 		AB17E2917848DAC7334D207F /* A2JITEnvironmentProbe.m in Sources */ = {isa = PBXBuildFile; fileRef = DF50AF123A46B36A8F8C89D7 /* A2JITEnvironmentProbe.m */; };
 		768731EB7CD0D70B5FA03F9E /* A2JITScriptDelivery.m in Sources */ = {isa = PBXBuildFile; fileRef = 42A3BF0AB426C24441E0475E /* A2JITScriptDelivery.m */; };
 		77C1F515D878100839384AB7 /* A2LaunchRunner.m in Sources */ = {isa = PBXBuildFile; fileRef = A2DF857328899585D7893258 /* A2LaunchRunner.m */; };
+		27A0BDD495A6A52A16C46362 /* A2TLSPskTunnelBridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 99538E7FC86025ACCA3E8577 /* A2TLSPskTunnelBridge.m */; };
 		434831579F14E55A1DF7A0D1 /* A2Account.m in Sources */ = {isa = PBXBuildFile; fileRef = 88C69537AF21F68A7B1456D3 /* A2Account.m */; };
 		0B32EEA9A11A39AA5D315041 /* A2AccountManager.m in Sources */ = {isa = PBXBuildFile; fileRef = FBBBB4EFA2B5334A45EA3C4E /* A2AccountManager.m */; };
 		3352C680504CA3F9AB6CFD26 /* A2MicrosoftAuth.m in Sources */ = {isa = PBXBuildFile; fileRef = BA94035A25A574575C224EC9 /* A2MicrosoftAuth.m */; };
@@ -60,6 +61,7 @@
 		FF385466CB276B950E721B7C /* A2RendererCatalog.m in Sources */ = {isa = PBXBuildFile; fileRef = 72515A7BFB0670C8C454D5D5 /* A2RendererCatalog.m */; };
 		E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */ = {isa = PBXBuildFile; fileRef = 035FB3CC4FE4018F44632AD5 /* A2Settings.m */; };
 		15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */; };
+		20B189CC369DA2AC61DD52DF /* A2IntegrityChecker.m in Sources */ = {isa = PBXBuildFile; fileRef = FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */; };
 		69E4078A9BBA717618BEF69E /* A2JavaRuntimeCatalog.m in Sources */ = {isa = PBXBuildFile; fileRef = 79706EF079387A7398D3E866 /* A2JavaRuntimeCatalog.m */; };
 		970910CB19492FF1AC6D192A /* A2LaunchPlan.m in Sources */ = {isa = PBXBuildFile; fileRef = 98AE8E84D74EE0826BB85D6F /* A2LaunchPlan.m */; };
 		246481F7D39951D830C33752 /* A2LegacyAssetsMapper.m in Sources */ = {isa = PBXBuildFile; fileRef = B71E332B773C92BFE4C94ED1 /* A2LegacyAssetsMapper.m */; };
@@ -159,6 +161,8 @@
 		C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB44E450592838BA6F7B061 /* A2GameSettings.m */; };
 		9BE8F5D901DBF1D45147781D /* A2JITSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 0F44B4D1AF1E26050C08BDB7 /* A2JITSettings.m */; };
 		A507CF0C4C57920AE991430B /* A2MemorySettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 2A080D1149ADB6AC6557E2D1 /* A2MemorySettings.m */; };
+		4E8862CE6096E92EC0407A66 /* A2OnDevicePairingSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = C355A13B8154816E9B230718 /* A2OnDevicePairingSettings.m */; };
+		C5EF3AABAA24EA6D5AB1A374 /* A2OnDevicePairingViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 7998970398F32EF950F5586A /* A2OnDevicePairingViewController.m */; };
 		DC9A725659424ECF0E571881 /* A2PairingNotifier.m in Sources */ = {isa = PBXBuildFile; fileRef = D8BC5772897E023DFBFB4D08 /* A2PairingNotifier.m */; };
 		D8FA542F7EBB121B40454E86 /* A2RuntimeSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = A05E5FC7A4D468C3B145E7EF /* A2RuntimeSettings.m */; };
 		1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */; };
@@ -189,14 +193,19 @@
 		AE3F7DCB7FAF64BF1D4EA3D9 /* a2_vmloader.m in Sources */ = {isa = PBXBuildFile; fileRef = 953C92615BB82B8F2A760D70 /* a2_vmloader.m */; };
 		76E4E21227BBCB64926C28DD /* A2ControlLayoutIO.m in Sources */ = {isa = PBXBuildFile; fileRef = 89007127877F1C02BD278415 /* A2ControlLayoutIO.m */; };
 		DCC09D3FB74B620E1FF29049 /* A2GameControlsView.m in Sources */ = {isa = PBXBuildFile; fileRef = 49C423A1E98F23EA857D3F73 /* A2GameControlsView.m */; };
+		920A2D2957D697E609338C49 /* a2_controls_overlay.m in Sources */ = {isa = PBXBuildFile; fileRef = 4C2B21C1754762AA4B5EAA5B /* a2_controls_overlay.m */; };
 		0B3139358246F0181C9482EA /* a2_glfw_input.m in Sources */ = {isa = PBXBuildFile; fileRef = 933A49FD4221830D268A7AB8 /* a2_glfw_input.m */; };
 		34AA6CBDDC0541DFCC1C1BBA /* a2_glfw_overlay_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = DCA5F028E64087F787F6C202 /* a2_glfw_overlay_bridge.m */; };
 		1E2CAC326914A1EF62970368 /* a2_glfw_window.m in Sources */ = {isa = PBXBuildFile; fileRef = 64F303C8C293FF2E9265B15F /* a2_glfw_window.m */; };
+		171F0C37829FF68D692CBB50 /* a2_sdl_input.m in Sources */ = {isa = PBXBuildFile; fileRef = 8E93C7E55E06F51CB6F80339 /* a2_sdl_input.m */; };
 		CC74379E78799DC547F9DD00 /* a2_own_glfw_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = FA722481A91882EF6F53A567 /* a2_own_glfw_bridge.m */; };
 		F1DC313E49C6664F7C5536CD /* a2_frame_perf.m in Sources */ = {isa = PBXBuildFile; fileRef = 502EDC10EBE1532B70995126 /* a2_frame_perf.m */; };
 		9C3F95924BF96FCEFE9A2D98 /* a2_gl_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 7122630510302DEFFCBDA6B8 /* a2_gl_bridge.m */; };
+		83A71DE266683FC940CCC327 /* a2_gl_error_shim.m in Sources */ = {isa = PBXBuildFile; fileRef = 12F62323CC0C06DCD7AB2208 /* a2_gl_error_shim.m */; };
 		E60B81CEF174962114DA466F /* a2_renderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 76FB869ECFD07C22D9C0F43B /* a2_renderer.m */; };
+		57972BDDED3886180B1367D9 /* A2JITEnabler.m in Sources */ = {isa = PBXBuildFile; fileRef = 1C7A04D357334D0924D1E1AD /* A2JITEnabler.m */; };
 		E04C097645AD3CC6F4684CE5 /* A2JITEnvironment.m in Sources */ = {isa = PBXBuildFile; fileRef = A651CCF3099E12483ECACD39 /* A2JITEnvironment.m */; };
+		6205684F66AC401AFFD011DD /* A2LegacyJITGate.m in Sources */ = {isa = PBXBuildFile; fileRef = 17E69AE8630320F493B33C59 /* A2LegacyJITGate.m */; };
 		64A34223B7AA99D70C1B8233 /* UIKit+hook.m in Sources */ = {isa = PBXBuildFile; fileRef = 1E8D565EEE899288910F94F0 /* UIKit+hook.m */; };
 		1D913BEEB8A68298A90F9D9A /* a2_local_network_probe.m in Sources */ = {isa = PBXBuildFile; fileRef = 71C614E0C47355171FDA6CD1 /* a2_local_network_probe.m */; };
 		6CF98CDCF8BDE70CD592CD7E /* a2_log.m in Sources */ = {isa = PBXBuildFile; fileRef = C8C11BDFE3957C1F2DD76E10 /* a2_log.m */; };
@@ -215,9 +224,11 @@
 		BCFA6A08AE7E19583E7842EA /* a2_rppairing_srp.m in Sources */ = {isa = PBXBuildFile; fileRef = CB8B91449CF1FC489DA86CBC /* a2_rppairing_srp.m */; };
 		072BE91496C49D3121A7E288 /* a2_rppairing_verify.m in Sources */ = {isa = PBXBuildFile; fileRef = 6DB059C24F4995B6CD32CFC3 /* a2_rppairing_verify.m */; };
 		5E6D2E22D7E3C8631CBE7CFF /* a2_tlspsk_mbedtls.m in Sources */ = {isa = PBXBuildFile; fileRef = 497444A01DBBFD2FAACE0D50 /* a2_tlspsk_mbedtls.m */; };
+		8552188822A2341797282F6A /* a2_tlspsk_selftest.m in Sources */ = {isa = PBXBuildFile; fileRef = 20D6AF42A4B7091410BD7A0D /* a2_tlspsk_selftest.m */; };
 		E3CF259BD6AAF19109CDA83D /* a2_tlspsk_tunnel.m in Sources */ = {isa = PBXBuildFile; fileRef = 407ECB99D6941017E615F9DA /* a2_tlspsk_tunnel.m */; };
 		A3C3C2B92C1CA71DC14A22CA /* Air2JIT69.js in Resources */ = {isa = PBXBuildFile; fileRef = 01747E5D28ABCC003A3BB764 /* Air2JIT69.js */; };
 		10F53072F43F29F29959EB83 /* Air2JIT69Ext.js in Resources */ = {isa = PBXBuildFile; fileRef = 25A5657A047421168D9B0E49 /* Air2JIT69Ext.js */; };
+		FC6E8A547C179CC55A247D57 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F6B4BAFE39547DFF98D20300 /* Images.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -235,6 +246,7 @@
 		DF50AF123A46B36A8F8C89D7 /* A2JITEnvironmentProbe.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITEnvironmentProbe.m"; sourceTree = "<group>"; };
 		42A3BF0AB426C24441E0475E /* A2JITScriptDelivery.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITScriptDelivery.m"; sourceTree = "<group>"; };
 		A2DF857328899585D7893258 /* A2LaunchRunner.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchRunner.m"; sourceTree = "<group>"; };
+		99538E7FC86025ACCA3E8577 /* A2TLSPskTunnelBridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TLSPskTunnelBridge.m"; sourceTree = "<group>"; };
 		88C69537AF21F68A7B1456D3 /* A2Account.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Account.m"; sourceTree = "<group>"; };
 		FBBBB4EFA2B5334A45EA3C4E /* A2AccountManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountManager.m"; sourceTree = "<group>"; };
 		BA94035A25A574575C224EC9 /* A2MicrosoftAuth.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MicrosoftAuth.m"; sourceTree = "<group>"; };
@@ -276,6 +288,7 @@
 		72515A7BFB0670C8C454D5D5 /* A2RendererCatalog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererCatalog.m"; sourceTree = "<group>"; };
 		035FB3CC4FE4018F44632AD5 /* A2Settings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Settings.m"; sourceTree = "<group>"; };
 		044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameInstaller.m"; sourceTree = "<group>"; };
+		FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2IntegrityChecker.m"; sourceTree = "<group>"; };
 		79706EF079387A7398D3E866 /* A2JavaRuntimeCatalog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JavaRuntimeCatalog.m"; sourceTree = "<group>"; };
 		98AE8E84D74EE0826BB85D6F /* A2LaunchPlan.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchPlan.m"; sourceTree = "<group>"; };
 		B71E332B773C92BFE4C94ED1 /* A2LegacyAssetsMapper.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LegacyAssetsMapper.m"; sourceTree = "<group>"; };
@@ -375,6 +388,8 @@
 		0FB44E450592838BA6F7B061 /* A2GameSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameSettings.m"; sourceTree = "<group>"; };
 		0F44B4D1AF1E26050C08BDB7 /* A2JITSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITSettings.m"; sourceTree = "<group>"; };
 		2A080D1149ADB6AC6557E2D1 /* A2MemorySettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MemorySettings.m"; sourceTree = "<group>"; };
+		C355A13B8154816E9B230718 /* A2OnDevicePairingSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2OnDevicePairingSettings.m"; sourceTree = "<group>"; };
+		7998970398F32EF950F5586A /* A2OnDevicePairingViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2OnDevicePairingViewController.m"; sourceTree = "<group>"; };
 		D8BC5772897E023DFBFB4D08 /* A2PairingNotifier.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PairingNotifier.m"; sourceTree = "<group>"; };
 		A05E5FC7A4D468C3B145E7EF /* A2RuntimeSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RuntimeSettings.m"; sourceTree = "<group>"; };
 		9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsViewController.m"; sourceTree = "<group>"; };
@@ -405,14 +420,19 @@
 		953C92615BB82B8F2A760D70 /* a2_vmloader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_vmloader.m"; sourceTree = "<group>"; };
 		89007127877F1C02BD278415 /* A2ControlLayoutIO.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlLayoutIO.m"; sourceTree = "<group>"; };
 		49C423A1E98F23EA857D3F73 /* A2GameControlsView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameControlsView.m"; sourceTree = "<group>"; };
+		4C2B21C1754762AA4B5EAA5B /* a2_controls_overlay.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_controls_overlay.m"; sourceTree = "<group>"; };
 		933A49FD4221830D268A7AB8 /* a2_glfw_input.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_glfw_input.m"; sourceTree = "<group>"; };
 		DCA5F028E64087F787F6C202 /* a2_glfw_overlay_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_glfw_overlay_bridge.m"; sourceTree = "<group>"; };
 		64F303C8C293FF2E9265B15F /* a2_glfw_window.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_glfw_window.m"; sourceTree = "<group>"; };
+		8E93C7E55E06F51CB6F80339 /* a2_sdl_input.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_sdl_input.m"; sourceTree = "<group>"; };
 		FA722481A91882EF6F53A567 /* a2_own_glfw_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_own_glfw_bridge.m"; sourceTree = "<group>"; };
 		502EDC10EBE1532B70995126 /* a2_frame_perf.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_frame_perf.m"; sourceTree = "<group>"; };
 		7122630510302DEFFCBDA6B8 /* a2_gl_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_gl_bridge.m"; sourceTree = "<group>"; };
+		12F62323CC0C06DCD7AB2208 /* a2_gl_error_shim.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_gl_error_shim.m"; sourceTree = "<group>"; };
 		76FB869ECFD07C22D9C0F43B /* a2_renderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_renderer.m"; sourceTree = "<group>"; };
+		1C7A04D357334D0924D1E1AD /* A2JITEnabler.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITEnabler.m"; sourceTree = "<group>"; };
 		A651CCF3099E12483ECACD39 /* A2JITEnvironment.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITEnvironment.m"; sourceTree = "<group>"; };
+		17E69AE8630320F493B33C59 /* A2LegacyJITGate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LegacyJITGate.m"; sourceTree = "<group>"; };
 		1E8D565EEE899288910F94F0 /* UIKit+hook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "UIKit+hook.m"; sourceTree = "<group>"; };
 		71C614E0C47355171FDA6CD1 /* a2_local_network_probe.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_local_network_probe.m"; sourceTree = "<group>"; };
 		C8C11BDFE3957C1F2DD76E10 /* a2_log.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_log.m"; sourceTree = "<group>"; };
@@ -431,6 +451,7 @@
 		CB8B91449CF1FC489DA86CBC /* a2_rppairing_srp.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_srp.m"; sourceTree = "<group>"; };
 		6DB059C24F4995B6CD32CFC3 /* a2_rppairing_verify.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_rppairing_verify.m"; sourceTree = "<group>"; };
 		497444A01DBBFD2FAACE0D50 /* a2_tlspsk_mbedtls.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_tlspsk_mbedtls.m"; sourceTree = "<group>"; };
+		20D6AF42A4B7091410BD7A0D /* a2_tlspsk_selftest.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_tlspsk_selftest.m"; sourceTree = "<group>"; };
 		407ECB99D6941017E615F9DA /* a2_tlspsk_tunnel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_tlspsk_tunnel.m"; sourceTree = "<group>"; };
 		52E0A8862124FBDB57E8C690 /* A2AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AppDelegate.h"; sourceTree = "<group>"; };
 		6A39662C0840C98AB5D33038 /* A2CrashGuard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CrashGuard.h"; sourceTree = "<group>"; };
@@ -443,6 +464,7 @@
 		67DCD48F239FE7B9F8C521E0 /* A2JITEnvironmentProbe.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITEnvironmentProbe.h"; sourceTree = "<group>"; };
 		373F200AB94E8626303F806D /* A2JITScriptDelivery.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITScriptDelivery.h"; sourceTree = "<group>"; };
 		7CE9A75DE3ED2F95404A57BC /* A2LaunchRunner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchRunner.h"; sourceTree = "<group>"; };
+		75FA9594A65F6E4B5D16FD11 /* A2TLSPskTunnelBridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TLSPskTunnelBridge.h"; sourceTree = "<group>"; };
 		748747C748D79B3DAEEDB5CF /* A2Account.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Account.h"; sourceTree = "<group>"; };
 		1EB22C948F38C8AEC14F9AB3 /* A2AccountManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountManager.h"; sourceTree = "<group>"; };
 		845233208F5ECAED2A1B1D6B /* A2MicrosoftAuth.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MicrosoftAuth.h"; sourceTree = "<group>"; };
@@ -484,6 +506,7 @@
 		AFE13A591BDAAC52AA2CB55D /* A2RendererCatalog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererCatalog.h"; sourceTree = "<group>"; };
 		8D9149596220C9F4F49C460D /* A2Settings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Settings.h"; sourceTree = "<group>"; };
 		8407C36C2C93136130B9F07E /* A2GameInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameInstaller.h"; sourceTree = "<group>"; };
+		89044710CFCCD81045E82677 /* A2IntegrityChecker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2IntegrityChecker.h"; sourceTree = "<group>"; };
 		61395365CA4DC5300DD285CD /* A2JavaRuntimeCatalog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JavaRuntimeCatalog.h"; sourceTree = "<group>"; };
 		8DA9989C588663F6BC05F128 /* A2LaunchPlan.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchPlan.h"; sourceTree = "<group>"; };
 		C1CD2A27C98BEB215E2AE04B /* A2LegacyAssetsMapper.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LegacyAssetsMapper.h"; sourceTree = "<group>"; };
@@ -581,6 +604,8 @@
 		137E26C858B461DBC6F3AB93 /* A2ColorThemeDialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorThemeDialog.h"; sourceTree = "<group>"; };
 		771440E60B41FEEC3286C32C /* A2ControlsEditorViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlsEditorViewController.h"; sourceTree = "<group>"; };
 		9CE1BE0BB775D12731066330 /* A2DiagnosticsSettings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DiagnosticsSettings.h"; sourceTree = "<group>"; };
+		D19087ABBB08C796BD40C5B3 /* A2OnDevicePairingSettings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2OnDevicePairingSettings.h"; sourceTree = "<group>"; };
+		5A0B92E61F8B2F3716A72240 /* A2OnDevicePairingViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2OnDevicePairingViewController.h"; sourceTree = "<group>"; };
 		ADE021D57C8E46EE0E06F194 /* A2PairingNotifier.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PairingNotifier.h"; sourceTree = "<group>"; };
 		A309D45ADA810213043EDE96 /* A2SettingsSections.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsSections.h"; sourceTree = "<group>"; };
 		F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsViewController.h"; sourceTree = "<group>"; };
@@ -612,11 +637,16 @@
 		57EC1B6D16AA10F6067C10C9 /* A2ControlLayoutIO.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlLayoutIO.h"; sourceTree = "<group>"; };
 		B64B29D97F9B5C019647A01F /* A2GameControlsView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameControlsView.h"; sourceTree = "<group>"; };
 		BC1BFCD3931CF2B23F207B8F /* a2_glfw_input.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_glfw_input.h"; sourceTree = "<group>"; };
+		408CE7916D149CDF4725C142 /* a2_glfw_trace.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_glfw_trace.h"; sourceTree = "<group>"; };
 		7098596D5BC01E0C70FA57C8 /* a2_glfw_window.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_glfw_window.h"; sourceTree = "<group>"; };
+		438CB429F256BAD24C3CA637 /* a2_sdl_input.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_sdl_input.h"; sourceTree = "<group>"; };
 		2D5EE38B9E92A558A8A68E9A /* a2_frame_perf.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_frame_perf.h"; sourceTree = "<group>"; };
 		81BAC4932618C2728A52D6F9 /* a2_gl_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_gl_bridge.h"; sourceTree = "<group>"; };
+		3FA709F9E3005CF9079E5D8F /* a2_gl_error_shim.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_gl_error_shim.h"; sourceTree = "<group>"; };
 		17A733F4890B4DE82120E806 /* a2_renderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_renderer.h"; sourceTree = "<group>"; };
+		4081FC794A431FB512010C2F /* A2JITEnabler.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITEnabler.h"; sourceTree = "<group>"; };
 		99A22A8A368208284945EF9E /* A2JITEnvironment.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITEnvironment.h"; sourceTree = "<group>"; };
+		ED91123D82787E1A085EC926 /* A2LegacyJITGate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LegacyJITGate.h"; sourceTree = "<group>"; };
 		79E2BBD2EFDC35F97EB8D2C4 /* UIKit+hook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UIKit+hook.h"; sourceTree = "<group>"; };
 		CC91372A62D2A0C0A56B17C2 /* a2_local_network_probe.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_local_network_probe.h"; sourceTree = "<group>"; };
 		385B60A0F03909DA9353A26C /* a2_log.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_log.h"; sourceTree = "<group>"; };
@@ -635,10 +665,12 @@
 		67DB864B3937EC9666BF3926 /* a2_rppairing_srp.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_srp.h"; sourceTree = "<group>"; };
 		019E9238E2D1750A6A7D9686 /* a2_rppairing_verify.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_rppairing_verify.h"; sourceTree = "<group>"; };
 		C52AE90AEBDB81EA09AD9E93 /* a2_tlspsk_mbedtls.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_tlspsk_mbedtls.h"; sourceTree = "<group>"; };
+		E36D5345B16AE80D7C5160D0 /* a2_tlspsk_selftest.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_tlspsk_selftest.h"; sourceTree = "<group>"; };
 		6979441440A7FA3BCE8069E0 /* a2_tlspsk_tunnel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_tlspsk_tunnel.h"; sourceTree = "<group>"; };
 		FE8E7FD5EC13EBBEDE03587C /* jni.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "jni.h"; sourceTree = "<group>"; };
 		01747E5D28ABCC003A3BB764 /* Air2JIT69.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "Assets/Air2JIT69.js"; sourceTree = "<group>"; };
 		25A5657A047421168D9B0E49 /* Air2JIT69Ext.js */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.javascript; path = "Assets/Air2JIT69Ext.js"; sourceTree = "<group>"; };
+		F6B4BAFE39547DFF98D20300 /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets/Images.xcassets"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -729,11 +761,13 @@
 				DF50AF123A46B36A8F8C89D7 /* A2JITEnvironmentProbe.m */,
 				42A3BF0AB426C24441E0475E /* A2JITScriptDelivery.m */,
 				A2DF857328899585D7893258 /* A2LaunchRunner.m */,
+				99538E7FC86025ACCA3E8577 /* A2TLSPskTunnelBridge.m */,
 				02A33E6F66321118391D8A93 /* A2JITAutoPairingEngineBridge.h */,
 				3946F6140208D57A0D52A27A /* A2JITDDIDeviceBridge.h */,
 				67DCD48F239FE7B9F8C521E0 /* A2JITEnvironmentProbe.h */,
 				373F200AB94E8626303F806D /* A2JITScriptDelivery.h */,
 				7CE9A75DE3ED2F95404A57BC /* A2LaunchRunner.h */,
+				75FA9594A65F6E4B5D16FD11 /* A2TLSPskTunnelBridge.h */,
 			);
 			path = Bridge;
 			sourceTree = "<group>";
@@ -874,13 +908,17 @@
 			children = (
 				89007127877F1C02BD278415 /* A2ControlLayoutIO.m */,
 				49C423A1E98F23EA857D3F73 /* A2GameControlsView.m */,
+				4C2B21C1754762AA4B5EAA5B /* a2_controls_overlay.m */,
 				933A49FD4221830D268A7AB8 /* a2_glfw_input.m */,
 				DCA5F028E64087F787F6C202 /* a2_glfw_overlay_bridge.m */,
 				64F303C8C293FF2E9265B15F /* a2_glfw_window.m */,
+				8E93C7E55E06F51CB6F80339 /* a2_sdl_input.m */,
 				57EC1B6D16AA10F6067C10C9 /* A2ControlLayoutIO.h */,
 				B64B29D97F9B5C019647A01F /* A2GameControlsView.h */,
 				BC1BFCD3931CF2B23F207B8F /* a2_glfw_input.h */,
+				408CE7916D149CDF4725C142 /* a2_glfw_trace.h */,
 				7098596D5BC01E0C70FA57C8 /* a2_glfw_window.h */,
+				438CB429F256BAD24C3CA637 /* a2_sdl_input.h */,
 			);
 			path = Input;
 			sourceTree = "<group>";
@@ -900,9 +938,11 @@
 			children = (
 				502EDC10EBE1532B70995126 /* a2_frame_perf.m */,
 				7122630510302DEFFCBDA6B8 /* a2_gl_bridge.m */,
+				12F62323CC0C06DCD7AB2208 /* a2_gl_error_shim.m */,
 				76FB869ECFD07C22D9C0F43B /* a2_renderer.m */,
 				2D5EE38B9E92A558A8A68E9A /* a2_frame_perf.h */,
 				81BAC4932618C2728A52D6F9 /* a2_gl_bridge.h */,
+				3FA709F9E3005CF9079E5D8F /* a2_gl_error_shim.h */,
 				17A733F4890B4DE82120E806 /* a2_renderer.h */,
 			);
 			path = Renderer;
@@ -912,7 +952,9 @@
 		8AC85CEF5CC0C56F1EA3EB49 /* Support */ = {
 			isa = PBXGroup;
 			children = (
+				1C7A04D357334D0924D1E1AD /* A2JITEnabler.m */,
 				A651CCF3099E12483ECACD39 /* A2JITEnvironment.m */,
+				17E69AE8630320F493B33C59 /* A2LegacyJITGate.m */,
 				1E8D565EEE899288910F94F0 /* UIKit+hook.m */,
 				71C614E0C47355171FDA6CD1 /* a2_local_network_probe.m */,
 				C8C11BDFE3957C1F2DD76E10 /* a2_log.m */,
@@ -931,8 +973,11 @@
 				CB8B91449CF1FC489DA86CBC /* a2_rppairing_srp.m */,
 				6DB059C24F4995B6CD32CFC3 /* a2_rppairing_verify.m */,
 				497444A01DBBFD2FAACE0D50 /* a2_tlspsk_mbedtls.m */,
+				20D6AF42A4B7091410BD7A0D /* a2_tlspsk_selftest.m */,
 				407ECB99D6941017E615F9DA /* a2_tlspsk_tunnel.m */,
+				4081FC794A431FB512010C2F /* A2JITEnabler.h */,
 				99A22A8A368208284945EF9E /* A2JITEnvironment.h */,
+				ED91123D82787E1A085EC926 /* A2LegacyJITGate.h */,
 				79E2BBD2EFDC35F97EB8D2C4 /* UIKit+hook.h */,
 				CC91372A62D2A0C0A56B17C2 /* a2_local_network_probe.h */,
 				385B60A0F03909DA9353A26C /* a2_log.h */,
@@ -951,6 +996,7 @@
 				67DB864B3937EC9666BF3926 /* a2_rppairing_srp.h */,
 				019E9238E2D1750A6A7D9686 /* a2_rppairing_verify.h */,
 				C52AE90AEBDB81EA09AD9E93 /* a2_tlspsk_mbedtls.h */,
+				E36D5345B16AE80D7C5160D0 /* a2_tlspsk_selftest.h */,
 				6979441440A7FA3BCE8069E0 /* a2_tlspsk_tunnel.h */,
 			);
 			path = Support;
@@ -1105,6 +1151,7 @@
 			isa = PBXGroup;
 			children = (
 				044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */,
+				FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */,
 				79706EF079387A7398D3E866 /* A2JavaRuntimeCatalog.m */,
 				98AE8E84D74EE0826BB85D6F /* A2LaunchPlan.m */,
 				B71E332B773C92BFE4C94ED1 /* A2LegacyAssetsMapper.m */,
@@ -1113,6 +1160,7 @@
 				3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */,
 				643B820206971C227F265607 /* A2VersionManager.m */,
 				8407C36C2C93136130B9F07E /* A2GameInstaller.h */,
+				89044710CFCCD81045E82677 /* A2IntegrityChecker.h */,
 				61395365CA4DC5300DD285CD /* A2JavaRuntimeCatalog.h */,
 				8DA9989C588663F6BC05F128 /* A2LaunchPlan.h */,
 				C1CD2A27C98BEB215E2AE04B /* A2LegacyAssetsMapper.h */,
@@ -1348,6 +1396,8 @@
 				0FB44E450592838BA6F7B061 /* A2GameSettings.m */,
 				0F44B4D1AF1E26050C08BDB7 /* A2JITSettings.m */,
 				2A080D1149ADB6AC6557E2D1 /* A2MemorySettings.m */,
+				C355A13B8154816E9B230718 /* A2OnDevicePairingSettings.m */,
+				7998970398F32EF950F5586A /* A2OnDevicePairingViewController.m */,
 				D8BC5772897E023DFBFB4D08 /* A2PairingNotifier.m */,
 				A05E5FC7A4D468C3B145E7EF /* A2RuntimeSettings.m */,
 				9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */,
@@ -1355,6 +1405,8 @@
 				137E26C858B461DBC6F3AB93 /* A2ColorThemeDialog.h */,
 				771440E60B41FEEC3286C32C /* A2ControlsEditorViewController.h */,
 				9CE1BE0BB775D12731066330 /* A2DiagnosticsSettings.h */,
+				D19087ABBB08C796BD40C5B3 /* A2OnDevicePairingSettings.h */,
+				5A0B92E61F8B2F3716A72240 /* A2OnDevicePairingViewController.h */,
 				ADE021D57C8E46EE0E06F194 /* A2PairingNotifier.h */,
 				A309D45ADA810213043EDE96 /* A2SettingsSections.h */,
 				F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */,
@@ -1443,6 +1495,7 @@
 			files = (
 				A3C3C2B92C1CA71DC14A22CA /* Air2JIT69.js in Resources */,
 				10F53072F43F29F29959EB83 /* Air2JIT69Ext.js in Resources */,
+				FC6E8A547C179CC55A247D57 /* Images.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -1478,7 +1531,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "set -e\nAPP=\"$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH\"\nLIB=\"$SRCROOT/Libraries\"\nmkdir -p \"$APP/Frameworks\" \"$APP/libs\" \"$APP/java_runtimes\"\nfor f in \"$LIB\"/Renderers/*.dylib \"$LIB\"/Frameworks/lib*; do\n  [ -f \"$f\" ] || continue\n  cp -f \"$f\" \"$APP/Frameworks/\"\ndone\nfor d in \"$LIB\"/Frameworks/*.framework; do\n  [ -d \"$d\" ] || continue\n  rm -rf \"$APP/Frameworks/$(basename \"$d\")\"\n  cp -R \"$d\" \"$APP/Frameworks/$(basename \"$d\")\"\ndone\nfor d in \"$LIB\"/Jars/lwjgl-*; do\n  [ -d \"$d\" ] || continue\n  mkdir -p \"$APP/libs/$(basename \"$d\")\"\n  cp -f \"$d\"/*.jar \"$APP/libs/$(basename \"$d\")/\"\ndone\nif [ -d \"$LIB/Agent\" ]; then\n  for f in \"$LIB\"/Agent/*.jar; do\n    [ -f \"$f\" ] || continue\n    cp -f \"$f\" \"$APP/libs/\"\n  done\nfi\nif [ -d \"$LIB/java_runtimes\" ]; then\n  for r in \"$LIB\"/java_runtimes/*; do\n    [ -d \"$r\" ] || continue\n    rm -rf \"$APP/java_runtimes/$(basename \"$r\")\"\n    cp -R \"$r\" \"$APP/java_runtimes/$(basename \"$r\")\"\n  done\nelse\n  echo \"warning: Libraries/java_runtimes 缺失 —— 先跑 scripts/stage_runtime.sh 再出包\" >&2\nfi\necho \"note: runtime bundle -> $APP/{Frameworks,libs,java_runtimes}\"\n";
+			shellScript = "set -e\nAPP=\"$BUILT_PRODUCTS_DIR/$CONTENTS_FOLDER_PATH\"\nLIB=\"$SRCROOT/Libraries\"\nmkdir -p \"$APP/Frameworks\" \"$APP/libs\" \"$APP/java_runtimes\"\nfor f in \"$LIB\"/Renderers/*.dylib \"$LIB\"/Frameworks/lib*; do\n  [ -f \"$f\" ] || continue\n  cp -f \"$f\" \"$APP/Frameworks/\"\ndone\nfor d in \"$LIB\"/Frameworks/*.framework; do\n  [ -d \"$d\" ] || continue\n  rm -rf \"$APP/Frameworks/$(basename \"$d\")\"\n  cp -R \"$d\" \"$APP/Frameworks/$(basename \"$d\")\"\ndone\nif [ -f \"Assets/Air2JIT69.js\" ]; then cp -f \"Assets/Air2JIT69.js\" \"$APP\"/UniversalJIT26.js; cp -f \"Assets/Air2JIT69.js\" \"$APP\"/universal.js; fi\nif [ -f \"Assets/Air2JIT69Ext.js\" ]; then cp -f \"Assets/Air2JIT69Ext.js\" \"$APP\"/UniversalJIT26Extension.js; fi\ncp -f \"Air2/Assets/AppIcons\"/*.png \"$APP\"/ 2>/dev/null || true\nfor d in \"$LIB\"/Jars/lwjgl-*; do\n  [ -d \"$d\" ] || continue\n  mkdir -p \"$APP/libs/$(basename \"$d\")\"\n  cp -f \"$d\"/*.jar \"$APP/libs/$(basename \"$d\")/\"\ndone\nif [ -d \"$LIB/Agent\" ]; then\n  for f in \"$LIB\"/Agent/*.jar; do\n    [ -f \"$f\" ] || continue\n    cp -f \"$f\" \"$APP/libs/\"\n  done\nfi\nif [ -d \"$LIB/java_runtimes\" ]; then\n  for r in \"$LIB\"/java_runtimes/*; do\n    [ -d \"$r\" ] || continue\n    rm -rf \"$APP/java_runtimes/$(basename \"$r\")\"\n    cp -R \"$r\" \"$APP/java_runtimes/$(basename \"$r\")\"\n  done\nelse\n  echo \"warning: Libraries/java_runtimes 缺失 —— 先跑 scripts/stage_runtime.sh 再出包\" >&2\nfi\necho \"note: runtime bundle -> $APP/{Frameworks,libs,java_runtimes}\"\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
@@ -1499,6 +1552,7 @@
 				AB17E2917848DAC7334D207F /* A2JITEnvironmentProbe.m in Sources */,
 				768731EB7CD0D70B5FA03F9E /* A2JITScriptDelivery.m in Sources */,
 				77C1F515D878100839384AB7 /* A2LaunchRunner.m in Sources */,
+				27A0BDD495A6A52A16C46362 /* A2TLSPskTunnelBridge.m in Sources */,
 				434831579F14E55A1DF7A0D1 /* A2Account.m in Sources */,
 				0B32EEA9A11A39AA5D315041 /* A2AccountManager.m in Sources */,
 				3352C680504CA3F9AB6CFD26 /* A2MicrosoftAuth.m in Sources */,
@@ -1540,6 +1594,7 @@
 				FF385466CB276B950E721B7C /* A2RendererCatalog.m in Sources */,
 				E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */,
 				15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */,
+				20B189CC369DA2AC61DD52DF /* A2IntegrityChecker.m in Sources */,
 				69E4078A9BBA717618BEF69E /* A2JavaRuntimeCatalog.m in Sources */,
 				970910CB19492FF1AC6D192A /* A2LaunchPlan.m in Sources */,
 				246481F7D39951D830C33752 /* A2LegacyAssetsMapper.m in Sources */,
@@ -1639,6 +1694,8 @@
 				C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */,
 				9BE8F5D901DBF1D45147781D /* A2JITSettings.m in Sources */,
 				A507CF0C4C57920AE991430B /* A2MemorySettings.m in Sources */,
+				4E8862CE6096E92EC0407A66 /* A2OnDevicePairingSettings.m in Sources */,
+				C5EF3AABAA24EA6D5AB1A374 /* A2OnDevicePairingViewController.m in Sources */,
 				DC9A725659424ECF0E571881 /* A2PairingNotifier.m in Sources */,
 				D8FA542F7EBB121B40454E86 /* A2RuntimeSettings.m in Sources */,
 				1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */,
@@ -1669,14 +1726,19 @@
 				AE3F7DCB7FAF64BF1D4EA3D9 /* a2_vmloader.m in Sources */,
 				76E4E21227BBCB64926C28DD /* A2ControlLayoutIO.m in Sources */,
 				DCC09D3FB74B620E1FF29049 /* A2GameControlsView.m in Sources */,
+				920A2D2957D697E609338C49 /* a2_controls_overlay.m in Sources */,
 				0B3139358246F0181C9482EA /* a2_glfw_input.m in Sources */,
 				34AA6CBDDC0541DFCC1C1BBA /* a2_glfw_overlay_bridge.m in Sources */,
 				1E2CAC326914A1EF62970368 /* a2_glfw_window.m in Sources */,
+				171F0C37829FF68D692CBB50 /* a2_sdl_input.m in Sources */,
 				CC74379E78799DC547F9DD00 /* a2_own_glfw_bridge.m in Sources */,
 				F1DC313E49C6664F7C5536CD /* a2_frame_perf.m in Sources */,
 				9C3F95924BF96FCEFE9A2D98 /* a2_gl_bridge.m in Sources */,
+				83A71DE266683FC940CCC327 /* a2_gl_error_shim.m in Sources */,
 				E60B81CEF174962114DA466F /* a2_renderer.m in Sources */,
+				57972BDDED3886180B1367D9 /* A2JITEnabler.m in Sources */,
 				E04C097645AD3CC6F4684CE5 /* A2JITEnvironment.m in Sources */,
+				6205684F66AC401AFFD011DD /* A2LegacyJITGate.m in Sources */,
 				64A34223B7AA99D70C1B8233 /* UIKit+hook.m in Sources */,
 				1D913BEEB8A68298A90F9D9A /* a2_local_network_probe.m in Sources */,
 				6CF98CDCF8BDE70CD592CD7E /* a2_log.m in Sources */,
@@ -1695,6 +1757,7 @@
 				BCFA6A08AE7E19583E7842EA /* a2_rppairing_srp.m in Sources */,
 				072BE91496C49D3121A7E288 /* a2_rppairing_verify.m in Sources */,
 				5E6D2E22D7E3C8631CBE7CFF /* a2_tlspsk_mbedtls.m in Sources */,
+				8552188822A2341797282F6A /* a2_tlspsk_selftest.m in Sources */,
 				E3CF259BD6AAF19109CDA83D /* a2_tlspsk_tunnel.m in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -1776,7 +1839,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
-				CURRENT_PROJECT_VERSION = "1";
+				CURRENT_PROJECT_VERSION = "4824bc5";
 				DEAD_CODE_STRIPPING = "NO";
 				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";
@@ -1822,7 +1885,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
-				CURRENT_PROJECT_VERSION = "1";
+				CURRENT_PROJECT_VERSION = "4824bc5";
 				DEAD_CODE_STRIPPING = "NO";
 				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";
