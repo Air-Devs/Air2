@@ -134,21 +134,64 @@ static const NSInteger kA2LegacyHeapCapMB = 192;
                         minor:(NSInteger *)outMinor {
     if (versionID.length == 0) return NO;
 
-    static NSRegularExpression *anchored = nil;
-    static NSRegularExpression *anywhere = nil;
+    static NSRegularExpression *legacyOneX = nil;   // ① 1.x 谱系短路
+    static NSRegularExpression *yearMajor = nil;    // ② 年份制主版本
+    static NSRegularExpression *anchored = nil;     // ③ 纯数字形态（"1.20.1" / "26.3"）
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
+        // ★对齐老 Air JavaLauncher.m:1052-1075（Task98）★
+        //   旧实现只按 "(\d+).(\d+)" 找第一个匹配，对带前缀的 id 完全失明：
+        //     "fabric-loader-0.19.5-26.3-e4ecd7db" → 命中 "0.19" ⇒ major=0 ⇒
+        //     判成非现代版本 ⇒ 选错 LWJGL 档位 ⇒ 该档位没有 lwjgl-sdl.jar ⇒
+        //     NoClassDefFoundError: org/lwjgl/sdl/SDL（"Loading library SDL" 崩溃）。
+        legacyOneX = [NSRegularExpression regularExpressionWithPattern:@"(?:^|[-_])1\\.\\d"
+                                                              options:0 error:nil];
+        // 年份制："26.3"→26、"26w14a"→26、"25w45a"→25；
+        //   [-_] 锚定 + 后随 [.w] ⇒ 排除 loader 版本段（0.19）与十六进制哈希段（e4ec…）。
+        yearMajor = [NSRegularExpression regularExpressionWithPattern:@"(?:^|[-_])(\\d{2})(?=[.w])"
+                                                             options:0 error:nil];
         anchored = [NSRegularExpression regularExpressionWithPattern:@"^(\\d{1,2})\\.(\\d{1,3})"
-                                                             options:0 error:nil];
-        anywhere = [NSRegularExpression regularExpressionWithPattern:@"(?:^|[-_])(\\d{1,2})\\.(\\d{1,3})(?=[-_.]|$)"
-                                                             options:0 error:nil];
+                                                            options:0 error:nil];
     });
 
     NSRange full = NSMakeRange(0, versionID.length);
-    NSTextCheckingResult *match = [anchored firstMatchInString:versionID options:0 range:full];
-    if (match == nil) {
-        match = [anywhere firstMatchInString:versionID options:0 range:full];
+
+    // ① 1.x 谱系短路：命中 "1.<digits>" ⇒ 直接按 1.x 解（"1.20.1-forge-47.3.0" 的 47 不会被当年份）
+    if ([legacyOneX firstMatchInString:versionID options:0 range:full] != nil) {
+        NSRegularExpression *oneXMinor =
+            [NSRegularExpression regularExpressionWithPattern:@"(?:^|[-_])1\\.(\\d{1,3})"
+                                                     options:0 error:nil];
+        NSTextCheckingResult *m = [oneXMinor firstMatchInString:versionID options:0 range:full];
+        if (m && m.numberOfRanges >= 2) {
+            if (outMajor) *outMajor = 1;
+            if (outMinor) *outMinor = [[versionID substringWithRange:[m rangeAtIndex:1]] integerValue];
+            return YES;
+        }
     }
+
+    // ② 年份制主版本（26.x / 26w14a / 25w45a）
+    NSTextCheckingResult *ym = [yearMajor firstMatchInString:versionID options:0 range:full];
+    if (ym && ym.numberOfRanges >= 2) {
+        NSInteger major = [[versionID substringWithRange:[ym rangeAtIndex:1]] integerValue];
+        // 次版本号：紧跟 ".<digits>" 才有（"26w14a" 没有），没有则给 0。
+        NSInteger minor = 0;
+        NSUInteger after = NSMaxRange([ym rangeAtIndex:1]);
+        if (after < versionID.length && [versionID characterAtIndex:after] == '.') {
+            NSRegularExpression *minorRe =
+                [NSRegularExpression regularExpressionWithPattern:@"\\.(\\d{1,3})" options:0 error:nil];
+            NSTextCheckingResult *mm = [minorRe firstMatchInString:versionID options:0
+                                                             range:NSMakeRange(after, versionID.length - after)];
+            if (mm && mm.numberOfRanges >= 2) {
+                minor = [[versionID substringWithRange:[mm rangeAtIndex:1]] integerValue];
+            }
+        }
+        if (outMajor) *outMajor = major;
+        if (outMinor) *outMinor = minor;
+        return YES;
+    }
+
+    // ③ 纯数字形态兜底（"1.20.1" 已在 ① 命中，这里主要是 "0.19" 这类不应被当 MC 版本的输入）
+    NSTextCheckingResult *match = [anchored firstMatchInString:versionID options:0 range:full];
     if (match == nil || match.numberOfRanges < 3) return NO;
 
     NSInteger major = [[versionID substringWithRange:[match rangeAtIndex:1]] integerValue];
