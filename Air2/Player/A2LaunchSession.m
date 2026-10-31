@@ -713,9 +713,21 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
     {
         NSString *rendererID = renderer.identifier ?: @"";
         BOOL wantsMetalAgent = [rendererID.lowercaseString containsString:@"metallum"];
-        if (wantsMetalAgent) {
+
+        // ★2026-10-31 真机 crash report 证据（1.20.1 + MG，包 7f91f1d）★
+        //   崩在「Initializing game」：
+        //     NoClassDefFoundError: com.sun.jna.Native  ← oshi.hardware.platform.mac.MacCentralProcessor
+        //     UnsatisfiedLinkError: JNA 解出的 dylib “incompatible platform (have 'macOS', need 'iOS')”
+        //   ⇒ MC 用 oshi 探硬件 → oshi 走 JNA → JNA 从 jar 解出 macOS 二进制 → iOS dlopen 失败。
+        //   ⇒ **patchjna_agent.jar 必须对所有渲染器无条件注入**，不能只给 Metal 那条路。
+        {
             NSString *libs = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"libs"];
             [jvmOptions addObject:[NSString stringWithFormat:@"-javaagent:%@/patchjna_agent.jar=", libs]];
+            [A2Log criterion:@"[A2-AGENT] 注入 patchjna_agent.jar（所有渲染器；修 oshi/JNA 在 iOS 上 dlopen macOS 库）"];
+        }
+
+        if (wantsMetalAgent) {
+            NSString *libs = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"libs"];
             [jvmOptions addObject:[NSString stringWithFormat:@"-javaagent:%@/metallum_agent.jar=", libs]];
             [jvmOptions addObject:[NSString stringWithFormat:@"-Dmetallum.mc.version=%@", version.name]];
             // ★2026-10-18 真机证据★ 光注入 jar 不够：metallum agent 只认环境变量
