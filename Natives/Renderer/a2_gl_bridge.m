@@ -944,8 +944,8 @@ static void a2_gl_bridge_force_layer_visible(void *viewPtr, void *layerPtr) {
         a2_log_f(@"[A2-GLBRIDGE] 图层可见性核对：view=%@ inWindow=%d frame=%@ hidden=%@ alpha=%@ ｜ "
                  @"layer=%@ frame=%@ hidden=%@ opacity=%@ z=%@",
                  NSStringFromClass([view class]), (win != nil),
-                 NSStringFromCGRect([vframe CGRectValue]), vhidden, valpha,
-                 NSStringFromClass([layer class]), NSStringFromCGRect([lframe CGRectValue]),
+                 [vframe description], vhidden, valpha,
+                 NSStringFromClass([layer class]), [lframe description],
                  lhidden, lopacity, [layer valueForKey:@"zPosition"]);
         [layer setValue:@NO forKey:@"hidden"];
         [layer setValue:@1 forKey:@"opacity"];
