@@ -29,6 +29,7 @@
 #import <objc/message.h>   // objc_msgSend（动态取 layer 用；不 import UIKit）
 #import <dlfcn.h>
 #include <unistd.h>       // usleep（首次 make_current 等宿主视图就绪的有界等待）
+#include <time.h>         // clock_gettime(CLOCK_MONOTONIC)（MG 引导的耗时判据）
 #include <string.h>
 #include <stdint.h>
 #include <mach-o/dyld.h>  // _dyld_image_count / _dyld_get_image_header（④a2 interpose 的目标镜像）
@@ -160,6 +161,19 @@ static int         gMgEglEntriesGot   = 0;    // MG 真身里 dlsym 到的 egl* 
 static int         gMgEglEntriesTotal = 0;    // 清单总数（`kMgEglEntryNames`，13）
 static const char *gMgEglFirstMissing = NULL; // MG 缺的第一个入口名（门面回退 ANGLE 时点名用；指向静态字面量）
 
+/// ★MG 引导 `mg_init_gles`★（老 Air 同款；见 `tree510/Natives/ctxbridges/gl_bridge.m:1215/1381/1534`）。
+///   · 上游原型 `void mg_init_gles(void)`：内部做 **caps 检测**（glGetString / glGetIntegerv …）
+///     ⇒ ★必须在真实上下文生效之后调用★（老 Air 是在 `gl_make_current` 里、`eglMakeCurrent`
+///     成功之后调，同文件 :1203-1206 的注释就是这个约束）；
+///   · 真机 lastlog-108（1.20.1 + MG，包 96e8e14）：本桥附着 rc=0、帧回调在跑，游戏日志却停在
+///     `Backend library: LWJGL version 3.4.1-snapshot` 之后 ⇒ LWJGL 的 `GL.createCapabilities`
+///     卡死 —— 我们从未调它 ⇒ MG 内部那套状态（当门面用的函数表 / caps）一直是空的；
+///   · 符号在 MG 加载后 dlsym（`a2_gl_bridge_load_mg_init_symbol`，唯一产地），
+///     调用在「上下文成为 current」的两处（attach ⑥ / `a2_gl_bridge_make_current` 成功之后）。
+typedef void (*A2PFN_mg_init_gles)(void);
+static A2PFN_mg_init_gles gMgInitGles     = NULL;   // MG 本体里的 `mg_init_gles`
+static int                gMgInitGlesDone = 0;      // 0 = 未调过；1 = 已调过（★幂等：整个进程只引导一次★）
+
 static void *gEglHandle  = NULL;
 static void *gGlesHandle = NULL;
 static void *gRendererHandle = NULL;   // 后端本体（compat 底 = libgl4es_114.dylib）
@@ -252,6 +266,10 @@ static void a2_gl_bridge_teardown(void) {
     gMgEglEntriesGot = 0;                    // ★探测结果同理★：不留上一轮的数字（否则判据行会报别的后端/上一轮的入口数）
     gMgEglEntriesTotal = 0;
     gMgEglFirstMissing = NULL;
+    // ★MG 引导状态随镜像一起复位★：teardown 已 dlclose MG 本体 ⇒ 下次 attach 是新镜像，必须重新
+    //   dlsym 并重新引导（与 `gKryptonInitedHandle` 同一口径：不留上一轮的「已初始化」结论）。
+    gMgInitGles = NULL;
+    gMgInitGlesDone = 0;
 
     gDpy = A2_EGL_NO_DISPLAY; gCfg = NULL;
     gCtx = A2_EGL_NO_CONTEXT; gSurf = A2_EGL_NO_SURFACE;
@@ -1215,6 +1233,70 @@ static void *a2_gl_bridge_gles_getprocaddress(const char *name) {
     return sym;
 }
 
+// ============================================================================
+//  ★MG 引导：`mg_init_gles`（老 Air 同款）★
+// ============================================================================
+// 老 Air `Natives/ctxbridges/gl_bridge.m`：`ame_mg_init_gles` 在 :1215 声明、:1381 dlsym、
+//   :1534/1559 在 **gl_make_current 里、真实上下文生效之后** 调用；:1203-1206 的注释点明原因：
+//   `mg_init_gles()` 内部做 caps 检测 ⇒ 必须「有当前上下文」才有正确结果。
+// 本层补上同一步（方案 A 下 MG 只是门面，但它那套状态仍要初始化，否则 LWJGL 的
+//   `GL.createCapabilities` 拿不到 caps ⇒ 卡死）。★缺符号 / 调用异常一律只记日志、不阻断启动★。
+
+/// ★取 MG 的 `mg_init_gles`（唯一产地）★ 调用点：`a2_gl_bridge_attach` 的 ④（后端本体加载之后，一次）。
+/// 幂等：已取到或句柄为空 ⇒ 直接返回（不重复 dlsym）。
+static void a2_gl_bridge_load_mg_init_symbol(void) {
+    if (gMgInitGles != NULL || gRendererHandle == NULL) return;
+    gMgInitGles = (A2PFN_mg_init_gles)dlsym(gRendererHandle, "mg_init_gles");
+    a2_log_f(@"[A2-GLBRIDGE] MG 引导符号 mg_init_gles=%p（%s）", (void *)gMgInitGles,
+             (gMgInitGles != NULL) ? "已取得 ⇒ 上下文生效后调用"
+                                   : "★缺符号★ ⇒ 不能引导（不阻断启动）");
+}
+
+/// ★在真实上下文生效之后调一次 `mg_init_gles`★
+/// 调用点（两处，都是「上下文刚成为 current」的那一点）：
+///   ① `a2_gl_bridge_attach` 的 ⑥（`eglMakeCurrent` 成功、`EGL 就绪` 之后）；
+///   ② `a2_gl_bridge_make_current`（首次 `glfwMakeContextCurrent`，含其中那次表面重绑成功之后）。
+/// @param why 调用点说明（进日志，真机据此区分是哪一处先到的）。
+/// ★幂等★：`gMgInitGlesDone` 先置位再调用 ⇒ 之后每次 makeCurrent 都是空操作，绝不重入。
+/// ★不阻断★：非 MG 后端 / 缺符号 / 已调用过 ⇒ 直接返回；`mg_init_gles` 无返回值，
+///   失败只能靠后续日志（`Backend library:` 之后是否有输出）判读。
+static void a2_gl_bridge_mg_init_gles_if_needed(const char *why) {
+    if (!a2_gl_bridge_is_mobileglues()) return;   // 只有 MG 有这一步（其它后端的初始化见 ⑥a）
+    if (gMgInitGlesDone) return;
+    if (gMgInitGles == NULL) {
+        gMgInitGlesDone = 1;   // 缺符号 ⇒ 只报一次（否则每次 makeCurrent 都刷屏）
+        a2_log_f(@"[A2-GLBRIDGE] MG 缺 mg_init_gles 符号 ⇒ 不能引导（%s）",
+                 (why != NULL) ? why : "未注明调用点");
+        return;
+    }
+
+    // ★调用前后对照归属★：`glTexImage2D` 在 flat namespace 的归属若被 MG 引导改变，额外打一行（下面）。
+    void *mgGlTexImage2D = (gRendererHandle != NULL) ? dlsym(gRendererHandle, "glTexImage2D") : NULL;
+    void *addrBefore = NULL;
+    A2GlBridgeSymbolOwner ownerBefore = a2_gl_bridge_symbol_owner("glTexImage2D", &addrBefore);
+
+    gMgInitGlesDone = 1;       // ★先置位★：即便 init 内部抛异常也不重入（幂等由本标志承担）
+    struct timespec t0, t1;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+    gMgInitGles();
+    clock_gettime(CLOCK_MONOTONIC, &t1);
+    const double ms = (double)(t1.tv_sec - t0.tv_sec) * 1000.0 +
+                      (double)(t1.tv_nsec - t0.tv_nsec) / 1e6;
+
+    a2_log_criterion(@"[A2-GLBRIDGE] MG mg_init_gles 已调用（真实上下文已在场）— %s",
+                     (why != NULL) ? why : "未注明调用点");
+    a2_log_f(@"[A2-GLBRIDGE] mg_init_gles 耗时 %.2f ms", ms);
+
+    void *addrAfter = NULL;
+    A2GlBridgeSymbolOwner ownerAfter = a2_gl_bridge_symbol_owner("glTexImage2D", &addrAfter);
+    if (ownerAfter != ownerBefore) {
+        a2_log_f(@"[A2-GLBRIDGE] MG 引导后 glTexImage2D 归属变化：%s ⇒ %s（before=%p after=%p）",
+                 a2_gl_bridge_owner_label(ownerBefore), a2_gl_bridge_owner_label(ownerAfter),
+                 addrBefore, addrAfter);
+        (void)a2_gl_bridge_log_owner("glTexImage2D", mgGlTexImage2D);   // 复用归属核对行（flat=… 归属=…（MG=…））
+    }
+}
+
 /// ★显式初始化 NG-GL4ES / KW★ —— 必须在**游戏 context 成为 current 之后**调用（见 attach ⑥a）。
 /// 上游原型是 `void initialize_gl4es(void)`（无返回值），所以这里的 rc 只回答「调用成没成」：
 ///   0  = 已调用（本轮；或同一镜像此前已初始化过）
@@ -1493,6 +1575,10 @@ int a2_gl_bridge_make_current(void) {
     a2_gl_bridge_ensure_game_view_surface();
     A2EGLBoolean ok = gEglMakeCurrent(gDpy, gSurf, gSurf, gCtx);
     a2_log_f(@"[A2-GLBRIDGE] makeCurrent -> %s", ok ? "OK" : "FAILED");
+    // ★MG 引导★：上下文刚在**本线程**成为 current（上面那一步若做过首次重绑，此时绑的就是游戏视图）
+    //   ⇒ 与老 Air 同一时点调一次 `mg_init_gles`（内部 caps 检测必须有当前上下文）。
+    //   幂等：`gMgInitGlesDone` 置位后这里就是空操作；★失败只记日志，不影响返回值★。
+    if (ok) a2_gl_bridge_mg_init_gles_if_needed("首次 make_current（glfwMakeContextCurrent）成功");
     return ok ? 0 : -2;
 }
 
@@ -1753,6 +1839,12 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     if (!a2_gl_bridge_open_renderer(rendererPath.UTF8String)) {
         a2_gl_bridge_teardown();
         return A2GlBridgeErrLoadFailed;
+    }
+    // ---- ④b ★MG 引导符号 `mg_init_gles`★（MG 加载之后一次；真正调用在上下文生效之后）----
+    //   两处 dlopen 都走完了才取：③0 先加载 MG（非宿主 EGL 后端），④ 再幂等补一次（宿主 EGL 后端）。
+    //   ★只取符号，不在这里调★ —— 它内部做 caps 检测，必须等 `eglMakeCurrent` 成功（见 ⑥ / make_current）。
+    if (a2BackendIsMG) {
+        a2_gl_bridge_load_mg_init_symbol();
     }
     // ★两层判据行 / 兼容底判据行 都放在 ④a3·④a4 之后★：归属核对可能把门面从 MG 退回 ANGLE，
     //   这两行必须报**定稿后**的事实（否则会印「门面=MG」而实际建面用的是 ANGLE）。
@@ -2073,6 +2165,12 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     a2_log_f(@"%s EGL 就绪：display=%p config=%p context=%p surface=%p（%dx%d 像素；像素格式=%d）",
              A2GlBridgeJudgementTag, (void *)gDpy, (void *)gCfg, (void *)gCtx, (void *)gSurf,
              host->surface.widthPixels, host->surface.heightPixels, host->surface.pixelFormat);
+
+    // ---- ⑥c ★MG 引导★：`eglMakeCurrent` 成功 ⇒ 真实上下文已在场 ⇒ 调一次 `mg_init_gles` ----
+    //   老 Air 同款（`gl_bridge.m:1534`：在 gl_make_current 里、makeCurrent 之后）；幂等、不阻断。
+    //   ★为什么必须在这里★：`mg_init_gles` 内部做 caps 检测，没有当前上下文时拿到的 caps 是空的
+    //   ⇒ 真机 lastlog-108 的表现就是 LWJGL `GL.createCapabilities` 卡死（日志停在 `Backend library:`）。
+    a2_gl_bridge_mg_init_gles_if_needed("attach ⑥ eglMakeCurrent 成功");
 
     // ---- ⑥a ★NG-GL4ES / KW：makeCurrent 之后注册解析器 → 再显式初始化（NO_INIT_CONSTRUCTOR）★ ----
     //   顺序就是老 Air 的契约：`gl4es_family_boot.m:79-83` 先 `set_getprocaddress(resolver)`、
