@@ -124,7 +124,10 @@ while (!detached) {
         // ★2026-10-31 去重放行★：同一 (信号,pc) 只打一次，其余静默但继续放行 ⇒ 不刷屏、游戏能跑。
         a2StopLogOnce('sig:' + signum + ':' + pc.toString(16),
                       `[A2PROBE] STOP sig=0x${signum} pc=0x${pc.toString(16)}（同位置后续静默）`);
-        send_command(`vCont;S${signum}:${tid}`);
+        // ★2026-10-31 根因修复★ `vCont;S<sig>` 是【单步】（debugserver case 'S' ⇒ eStateStepping），
+        //   每停一次只前进一条指令 ⇒ 满屏 'Skipping: instruction was not a brk'，一次启动可刷几万条。
+        //   正确做法是 `C<sig>`（带信号继续执行）。来源：tests/JIT/jit_script_tests.js 文件头判据①。
+        send_command(`C${signum}`);
         continue;
     }
     

@@ -32,6 +32,32 @@
     [sheet presentFrom:self];
 }
 
+- (void)a2_exportToFile {
+    NSArray *controls = [self.controls a2_exportControls];
+    id json = [A2ControlLayoutIO exportControls:controls format:A2ControlLayoutFormatA2 name:@"默认"];
+    NSData *data = [NSJSONSerialization dataWithJSONObject:json
+                                                   options:NSJSONWritingPrettyPrinted
+                                                     error:NULL];
+    if (data.length == 0) {
+        [A2Toast show:@"导出失败" inView:self.view];
+        return;
+    }
+    NSString *name = [NSString stringWithFormat:@"air2-controls-%@.json",
+                      [NSDateFormatter localizedStringFromDate:NSDate.date
+                                                     dateStyle:NSDateFormatterShortStyle
+                                                     timeStyle:NSDateFormatterShortStyle]];
+    name = [name stringByReplacingOccurrencesOfString:@"/" withString:@"-"];
+    NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:name];
+    [data writeToFile:path atomically:YES];
+
+    UIActivityViewController *vc = [[UIActivityViewController alloc] initWithActivityItems:@[[NSURL fileURLWithPath:path]]
+                                                                     applicationActivities:nil];
+    vc.popoverPresentationController.sourceView = self.view;
+    vc.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds),
+                                                             CGRectGetMaxY(self.view.bounds) - 60, 1, 1);
+    [self presentViewController:vc animated:YES completion:nil];
+}
+
 #pragma mark - 导入（剪贴板 / 文件）
 
 - (void)a2_importTapped {
