@@ -202,7 +202,6 @@
 		42F22AA3DDC80F095974BD19 /* a2_eagl_egl.m in Sources */ = {isa = PBXBuildFile; fileRef = 0C0E0DBF412925F2120D5B72 /* a2_eagl_egl.m */; };
 		F1DC313E49C6664F7C5536CD /* a2_frame_perf.m in Sources */ = {isa = PBXBuildFile; fileRef = 502EDC10EBE1532B70995126 /* a2_frame_perf.m */; };
 		9C3F95924BF96FCEFE9A2D98 /* a2_gl_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 7122630510302DEFFCBDA6B8 /* a2_gl_bridge.m */; };
-		83A71DE266683FC940CCC327 /* a2_gl_error_shim.m in Sources */ = {isa = PBXBuildFile; fileRef = 12F62323CC0C06DCD7AB2208 /* a2_gl_error_shim.m */; };
 		E60B81CEF174962114DA466F /* a2_renderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 76FB869ECFD07C22D9C0F43B /* a2_renderer.m */; };
 		57972BDDED3886180B1367D9 /* A2JITEnabler.m in Sources */ = {isa = PBXBuildFile; fileRef = 1C7A04D357334D0924D1E1AD /* A2JITEnabler.m */; };
 		E04C097645AD3CC6F4684CE5 /* A2JITEnvironment.m in Sources */ = {isa = PBXBuildFile; fileRef = A651CCF3099E12483ECACD39 /* A2JITEnvironment.m */; };
@@ -430,7 +429,6 @@
 		0C0E0DBF412925F2120D5B72 /* a2_eagl_egl.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_eagl_egl.m"; sourceTree = "<group>"; };
 		502EDC10EBE1532B70995126 /* a2_frame_perf.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_frame_perf.m"; sourceTree = "<group>"; };
 		7122630510302DEFFCBDA6B8 /* a2_gl_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_gl_bridge.m"; sourceTree = "<group>"; };
-		12F62323CC0C06DCD7AB2208 /* a2_gl_error_shim.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_gl_error_shim.m"; sourceTree = "<group>"; };
 		76FB869ECFD07C22D9C0F43B /* a2_renderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_renderer.m"; sourceTree = "<group>"; };
 		1C7A04D357334D0924D1E1AD /* A2JITEnabler.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITEnabler.m"; sourceTree = "<group>"; };
 		A651CCF3099E12483ECACD39 /* A2JITEnvironment.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITEnvironment.m"; sourceTree = "<group>"; };
@@ -645,7 +643,6 @@
 		D5167F3BAFE3C0EB46EB263B /* a2_eagl_egl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_eagl_egl.h"; sourceTree = "<group>"; };
 		2D5EE38B9E92A558A8A68E9A /* a2_frame_perf.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_frame_perf.h"; sourceTree = "<group>"; };
 		81BAC4932618C2728A52D6F9 /* a2_gl_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_gl_bridge.h"; sourceTree = "<group>"; };
-		3FA709F9E3005CF9079E5D8F /* a2_gl_error_shim.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_gl_error_shim.h"; sourceTree = "<group>"; };
 		17A733F4890B4DE82120E806 /* a2_renderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_renderer.h"; sourceTree = "<group>"; };
 		4081FC794A431FB512010C2F /* A2JITEnabler.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITEnabler.h"; sourceTree = "<group>"; };
 		99A22A8A368208284945EF9E /* A2JITEnvironment.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITEnvironment.h"; sourceTree = "<group>"; };
@@ -942,12 +939,10 @@
 				0C0E0DBF412925F2120D5B72 /* a2_eagl_egl.m */,
 				502EDC10EBE1532B70995126 /* a2_frame_perf.m */,
 				7122630510302DEFFCBDA6B8 /* a2_gl_bridge.m */,
-				12F62323CC0C06DCD7AB2208 /* a2_gl_error_shim.m */,
 				76FB869ECFD07C22D9C0F43B /* a2_renderer.m */,
 				D5167F3BAFE3C0EB46EB263B /* a2_eagl_egl.h */,
 				2D5EE38B9E92A558A8A68E9A /* a2_frame_perf.h */,
 				81BAC4932618C2728A52D6F9 /* a2_gl_bridge.h */,
-				3FA709F9E3005CF9079E5D8F /* a2_gl_error_shim.h */,
 				17A733F4890B4DE82120E806 /* a2_renderer.h */,
 			);
 			path = Renderer;
@@ -1740,7 +1735,6 @@
 				42F22AA3DDC80F095974BD19 /* a2_eagl_egl.m in Sources */,
 				F1DC313E49C6664F7C5536CD /* a2_frame_perf.m in Sources */,
 				9C3F95924BF96FCEFE9A2D98 /* a2_gl_bridge.m in Sources */,
-				83A71DE266683FC940CCC327 /* a2_gl_error_shim.m in Sources */,
 				E60B81CEF174962114DA466F /* a2_renderer.m in Sources */,
 				57972BDDED3886180B1367D9 /* A2JITEnabler.m in Sources */,
 				E04C097645AD3CC6F4684CE5 /* A2JITEnvironment.m in Sources */,
@@ -1845,7 +1839,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
-				CURRENT_PROJECT_VERSION = "91336e0";
+				CURRENT_PROJECT_VERSION = "d1c8d4f";
 				DEAD_CODE_STRIPPING = "NO";
 				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";
@@ -1891,7 +1885,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
-				CURRENT_PROJECT_VERSION = "91336e0";
+				CURRENT_PROJECT_VERSION = "d1c8d4f";
 				DEAD_CODE_STRIPPING = "NO";
 				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";

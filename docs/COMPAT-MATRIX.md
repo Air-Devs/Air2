@@ -70,7 +70,7 @@
 | 版本档位 | metallum | mobileglues | gl4es_114 | nggl4es | MoltenVK | tinygl4angle |
 |---|---|---|---|---|---|---|
 | **26.3** | ✅ 默认档；类集 `classes263`(69) 与包内 java-25 匹配。⚠️ 控件走 SDL 覆盖层（`A2LaunchSession.m:631-635`），**控件位置/可见性待真机** | ❌ **黑屏**：SDL 后建窗口盖住 GL 桥的宿主表面（`A2LaunchRunner.m:36-76` vs `a2_glfw_window.m:677-681`） | ❌ 双重：①黑屏同左 ②GL 能力不足（MC 26 要 GL 4.x，gl4es 到 2.1） | ❌ ①黑屏同左 ②GL 能力不足 | ❌ 见 §5-①（`libname=MoltenVK`，桥白名单不含它） | ❌ ①黑屏同左 ②ANGLE 只报 ES 语义 |
-| **26.2** | ✅ 唯一真机验证过的组合（`docs/DEPENDENCIES.md:276` 主推） | ⚠️ 已知 `glGetError` SIGSEGV 已被两道兜住：桥内跳过（`a2_gl_bridge.m:264-265`）+ 二进制改写为 `return 0`（`a2_gl_error_shim.m:27-49`）；条件 = shim 的 `mprotect(RWX)` 成功（需 JIT） | ❌ **GL 版本不足**：MC 26 要求 GL 3.2+/4.x，gl4es 报 GL 2.1 ⇒ `GL.createCapabilities` 抛 "Unsupported GL version" → 失败页 | ⚠️ 条件：nggl4es 实测报 GL ≥ 3.2 才能接（`[待真机]`） | ❌ §5-① | ❌ ES 语义（同上） |
+| **26.2** | ✅ 唯一真机验证过的组合（`docs/DEPENDENCIES.md:276` 主推） | ⚠️ 已知 `glGetError` SIGBUS（真机 `libmobileglues.dylib+0x3e4e4`）：曾用「把 `glGetError` 改写为 `return 0`」的 shim 绕，真机证明**无效**（改写后 SIGBUS 仍落在同一地址，且还原页保护失败 `errno=13`）⇒ 该 shim 已整条移除，**目前无兜底** | ❌ **GL 版本不足**：MC 26 要求 GL 3.2+/4.x，gl4es 报 GL 2.1 ⇒ `GL.createCapabilities` 抛 "Unsupported GL version" → 失败页 | ⚠️ 条件：nggl4es 实测报 GL ≥ 3.2 才能接（`[待真机]`） | ❌ §5-① | ❌ ES 语义（同上） |
 | **26.1** | ⚠️ 类集 `classes261` **存在**（69，需 java-25 ✓），但 `A2LaunchSession.m:556` 只把 26.2/26.3 当「支持」，26.1 会打「未验证」告警后仍注入 ⇒ 真机结论未知 | ✅ 默认档（`A2LaunchSession.m:83-86`） | ❌ GL 版本不足 | ⚠️ 同 26.2 | ❌ §5-① | ❌ ES 语义 |
 | **1.21.x** | ❌ 除 **1.21.11**（`classes12111`，需 JRE≥21）外**无类集** ⇒ agent 一个类都 define 不上（`A2LaunchPlan.m:529-531` 注释里的真机形态：有声音没画面）→ 回落 `GlDevice` → 黑屏/闪退 | ✅ 默认档；GL 4.x 能力足够 | ❌ GL 版本不足（1.21 要 3.2 core） | ⚠️ 同 26.2 | ❌ §5-① | ❌ ES 语义 |
 | **1.20.x** | ❌ 无类集（同上） | ✅ | ❌ | ⚠️ | ❌ | ❌ |
@@ -275,9 +275,9 @@
   控件位置只做了「2 秒重挂」（`a2_controls_overlay.m:72`），实际是否跟手未验证；
 - **26.3 × EGL 系的黑屏**：因果链（表面绑到被遮窗口）是静态读出来的，但「是否真的黑」
   要以 `[A2-GLBRIDGE] EGL 就绪` + `[FRAME] clear=` 行与截图对照确认；
-- **MobileGlues 的 `glGetError` shim 是否真的装上**（`mprotect(RWX)` 在无 JIT 时失败）：
-  失败时桥内还有一道跳过（`a2_gl_bridge.m:264-265`），但 MC 自己调 `glGetError` 仍会崩 ⇒
-  需看日志里有没有 `[A2-MG-SHIM] 已把 … 改写为 return 0`。
+- **MobileGlues 的 `glGetError` SIGBUS 根因未明**：曾经的「二进制改写为 `return 0`」shim 已在真机证伪
+  （改写后同一地址仍崩、页保护还原 `errno=13`）并整条移除 ⇒ 现在**没有任何兜底**；要么查清
+  `libmobileglues.dylib` 里那一下的根因，要么换后端/换版本。
 
 ---
 

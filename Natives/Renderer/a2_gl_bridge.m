@@ -23,7 +23,6 @@
 #import "a2_gl_bridge.h"
 #import "a2_log.h"
 #import "a2_frame_perf.h"   // ★[FRAME-PERF] 与渲染器无关的帧性能判据（本文件的帧动作每帧记一次）
-#import "a2_gl_error_shim.h"  // ★MG 的 glGetError 保护★（④a 安装；JIT 后由 Bridge 重试）
 #import "A2JITEnvironment.h"   // ★[A2PROBE]★ a2_jit_probe_arm（把 KW/ANGLE 的 glLoadIdentity 交给脚本布断点）
 
 #import <objc/message.h>   // objc_msgSend（动态取 layer 用；不 import UIKit）
@@ -351,7 +350,7 @@ static int a2_gl_bridge_is_krypton(void) {
 }
 
 /// 当前后端是否 = ★MobileGlues★（唯一判据来源：dylib 名子串 `mobileglues`）。
-/// ★两处共用，不许各自写字面量★：① 依赖库的加载旗标（② 与 ④）；② glGetError 保护 shim 的安装条件。
+/// ★两处共用，不许各自写字面量★：① 依赖库的加载旗标（② 与 ④）；② MG 的符号归属核对（④a2）。
 static int a2_gl_bridge_is_mobileglues(void) {
     return (gBackendName[0] != '\0' && strstr(gBackendName, "mobileglues") != NULL);
 }
@@ -892,7 +891,7 @@ static void a2_gl_bridge_frame_work(void) {
     // ★2026-10-18 真机证据★ 渲染器 = MobileGlues 时 glGetError 会打进它尚未初始化的
     //   跳转表 ⇒ pc=0x0 SIGSEGV（libmobileglues.dylib+0x3e4f8 glGetError+0x14）。
     //   这句只为打判据行，不值得为它崩，所以该后端下跳过（其余后端照旧）。
-    //   ★判据与 ④a 的 shim 安装共用同一来源★（a2_gl_bridge_is_mobileglues），不各写一份字面量。
+    //   ★判据来源只有一处★（a2_gl_bridge_is_mobileglues），不各写一份字面量。
     BOOL backendIsMG = (a2_gl_bridge_is_mobileglues() != 0);
     if (gGLGetError != NULL && !backendIsMG) glErr = gGLGetError();
 
@@ -1086,28 +1085,7 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
              A2GlBridgeJudgementTag, eglPath.UTF8String, gEglHandle,
              glesPath.UTF8String, gGlesHandle, rendererName, gRendererHandle);
 
-    // ---- ④a ★MobileGlues 的 glGetError 保护 shim★（该后端必装，不看任何别的条件）----
-    //   真机（1.20.1 + MG 2.0.16 + java-21，lastlog-101）：JVM 建成功、表面 2622x1206 也对，
-    //   随后 `SIGBUS at pc=0x125b8e4e4 [libmobileglues.dylib+0x3e4e4] glGetError+0x0`。
-    //   ⇒ 加载成功即安装；此刻 JIT 还没就绪（代码页 mprotect 会 EACCES=13），
-    //     失败由 shim 记待办，JIT 就绪后 `a2_gl_error_shim_retry_pending()` 再装一次。
-    //   ★结论行由 shim 自己打（[A2-MG-SHIM] …），本处只再打一行汇总，便于一眼定位后端。★
     if (a2BackendIsMG) {
-        // ★2026-10-31 临时开关（默认关）★
-        //   真机 lastlog.old-10：shim 把 glGetError 改成 `ret` 后，SIGBUS 依旧落在**同一个地址**
-        //   （pc==被改写的 sym），且「还原页保护(RX) 失败 errno=13」⇒ 页面被留在 RWX。
-        //   怀疑对已签名 dylib 的代码页做 mprotect 后执行会触发 SIGBUS（页被改坏）。
-        //   ⇒ 默认关闭，先验「不加补丁」的 MG 原始行为；需要时置 YES 打开。
-        const BOOL shimEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"a2jit.mgErrorShim"];
-        if (shimEnabled) {
-            const A2GlErrorShimResult shimRC = a2_gl_error_shim_install_for_handle(gRendererHandle);
-            a2_log_f(@"%s MG glGetError shim：rc=%d（0=已改写 / 1=记待办等 JIT / 2=库里无该符号）handle=%p",
-                     A2GlBridgeJudgementTag, (int)shimRC, gRendererHandle);
-        } else {
-            a2_log_f(@"%s MG glGetError shim：★已禁用★（键 a2jit.mgErrorShim=NO）⇒ 不改写代码页，验原始行为",
-                     A2GlBridgeJudgementTag);
-        }
-
         // ---- ④a2 ★符号归属核对★（MG 自己要报 SYMBOL THEFT 的那件事，我们自己也取一份证据）----
         //   真机 lastlog-101：`[MG] SYMBOL THEFT … the application is calling someone else`。
         //   本行直接回答「flat namespace 里这个 gl* 归谁」—— 与 MG 自己的报错互为旁证，
