@@ -165,9 +165,9 @@
     json[@"libraries"] = libs;
 
     // ---- 5~7) 生成 arguments.jvm_processed ----
-    id jvmArgs = json[@"arguments"][@"jvm"];
-    if (![jvmArgs isKindOfClass:NSArray.class]) {
-        [A2Logger log:@"VersionMeta" message:@"版本 JSON 无 arguments.jvm，跳过"];
+    id rawJvmArgs = json[@"arguments"][@"jvm"];
+    if (![rawJvmArgs isKindOfClass:NSArray.class]) {
+        [A2Logger info:@"VersionMeta" message:@"版本 JSON 无 arguments.jvm，跳过"];
         return;
     }
 
@@ -188,6 +188,7 @@
     NSMutableArray *processed = [NSMutableArray array];
     NSInteger skip = 0;
 
+    NSArray *jvmArgs = (NSArray *)rawJvmArgs;
     for (id raw in jvmArgs) {
         NSArray<NSString *> *flat = [self flattenJvmArg:raw];
         for (NSString *arg in flat) {
