@@ -337,7 +337,7 @@
 
 ## ADR-014：实验性启动链（MG / EAGL / KW）启动前须逐次通过 10 次免责确认，且不缓存「已同意」
 
-- **状态**：已接受
+- **状态**：★已撤销（2026-10-31，同日内撤销）★ —— 见文末「撤销记录」
 - **日期**：2026-10-31
 - **背景**：`libmobileglues.dylib`（MG）、`libeagl.dylib`（宿主假 EGL + MG）、`libnggl4es_kw.dylib`（KW）
   三条链路仍在调试期：真机上出现过宿主函数表为空（`eglGetDisplay is not available`）、
@@ -361,3 +361,20 @@
 - **落地**：`Air2/Core/Renderer/A2RendererCatalog.[hm]`（判据 + `A2RendererMobileGluesDylibName`）、
   `Air2/Player/A2LaunchAlertPresenter.[hm]`（10 次确认与宿主查找）、`Air2/Player/A2LaunchSession.m`（确认门）、
   `tests/Runtime/runtime_selection_tests.m`（判据覆盖 MG/EAGL/KW，排除 metallum/gl4es）。
+
+### 撤销记录（2026-10-31）
+
+- **为什么撤**：用户澄清这段 10 次确认**不是给「选渲染器」用的**。真正会改坏启动链、
+  需要用户逐次确认责任边界的是**第三方插件**（自己写的、会改启动参数 / 类路径 / 注入 agent 的那种）。
+  把确认挂在渲染器上 ⇒ 附带伤害：常用渲染器（EAGL 已是默认）每次启动都要点 10 次，
+  而真正该被追问的「插件改启动链」反而只弹一次页。
+- **撤销内容**：
+  1. `A2LaunchSession.m` 的确认门整段删除 —— 启动流程回到「点启动 ⇒ 完整性核对 ⇒ 后台链（①→②→③）⇒ 建 VM」；
+  2. `A2LaunchAlertPresenter` 里那套 10 次确认实现（含 `[A2-EXPERIMENTAL] confirm` 日志）整体删除，
+     文件只保留 `+topViewController`（启动失败页仍要用，且插件安装侧的确认窗同样需要宿主查找）；
+  3. `+[A2RendererCatalog isExperimentalLaunchChainIdentifier:]` 保留为纯判据（候选表自检 / 将来复用），
+     ★不再有任何启动侧调用点，也不影响启动流程★。
+- **迁去哪**：插件 tree（`feat/plugin-p1`）的安装流程 —— 判据 `A2PluginLaunchChainRisk`
+  （manifest 申请了 `launch.args` / `launch.gameArgs` / `launch.classpath` / `launch.env.code` /
+  `java.agent` / `native.code` 任一项 ⇒ 会改启动链），弹窗 `A2PluginLaunchChainConfirm`
+  （安装器写完校验、**写 registry 之前**逐次弹 10 次；任一次取消 ⇒ 安装终止、清暂存、不写 registry）。

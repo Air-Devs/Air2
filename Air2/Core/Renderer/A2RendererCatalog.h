@@ -97,14 +97,18 @@ extern NSString *const A2RendererHostEGLDylibName;
 /// `+bundleDiagnosisForCandidate:` 的宿主 EGL 判据、`+isExperimentalLaunchChainIdentifier:`。
 extern NSString *const A2RendererMobileGluesDylibName;
 
-/// ★是否属于「实验性启动链」★（判定 = 渲染器标识；供启动侧决定是否弹免责确认）。
+/// ★是否属于「实验性启动链」★（判定 = 渲染器标识；纯判据，无副作用）。
 ///
 /// 实验性启动链 = 2026-10 起新接、仍在调试的三条：
 ///   · `libmobileglues.dylib` —— MG（GL on 宿主 GLES，DirectGLES 后端）
 ///   · `libeagl.dylib`        —— 宿主假 EGL → CAEAGLLayer 上屏，GL 层仍是 MG
 ///   · `libnggl4es_kw.dylib`  —— NG-GL4ES / KW（`NO_INIT_CONSTRUCTOR` 变体）
-/// ★metallum / 内置 gl4es 不属于本判据★（它们是既有链路，不提示）。
-/// ★调用点★：`Air2/Player/A2LaunchSession.m`（解析出渲染器之后、建 VM 之前的确认门）。
+/// ★metallum / 内置 gl4es 不属于本判据★。
+///
+/// ★当前没有任何启动侧调用点★（ADR-014 撤销记录）：渲染器侧的「启动前 10 次免责确认」
+/// 已整体撤销 —— 用户澄清那段确认属于「安装会改启动链的插件」，与选哪个渲染器无关。
+/// 本判据保留为候选表自检 / 将来的诊断提示用，★绝不再参与启动流程★。
+/// ★不要把它重新接回启动链★：接回去 = 每次点启动都要点 10 次，而真正该追问的插件反而被放过。
 + (BOOL)isExperimentalLaunchChainIdentifier:(NSString *)identifier;
 
 /// 全部候选（★稳定顺序★：主推 → 兼容底 → 实验）。

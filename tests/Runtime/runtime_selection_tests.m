@@ -148,7 +148,8 @@ static void testRendererCatalog(void) {
     eqInt([A2RendererCatalog tierForIdentifier:@"lib-不存在.dylib"],
           A2RendererTierExperimental, @"★没登记的标识不猜成主推★");
 
-    // ★实验性启动链的判据★（启动侧据此弹 10 次免责确认；metallum / 内置 gl4es 不弹）
+    // ★实验性启动链的判据★（纯判据：★启动侧已不再据此弹确认★，见 ADR-014 撤销记录；
+    //   断言保留是为了钉住「这三条属于实验链、metallum/gl4es 不属于」的语义不变）
     eqStr(A2RendererMobileGluesDylibName, @"libmobileglues.dylib", @"MG 标识常量 = dylib 文件名");
     ok([A2RendererCatalog isExperimentalLaunchChainIdentifier:@"libmobileglues.dylib"],
        @"MG 属于实验性启动链");

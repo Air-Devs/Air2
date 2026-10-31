@@ -91,7 +91,8 @@ NSString *const A2RendererMobileGluesDylibName = @"libmobileglues.dylib";
 }
 
 + (BOOL)isExperimentalLaunchChainIdentifier:(NSString *)identifier {
-    // ★2026-10 起新接的三条链路 = 实验性启动链★（用户在启动时要点 10 次免责确认）：
+    // ★2026-10 起新接的三条链路 = 实验性启动链★（纯判据：★启动流程不再消费它★，
+    //   渲染器侧的 10 次免责确认已按 ADR-014 撤销记录整体撤销）：
     //   · MG     —— glGetError 曾崩在宿主函数表为空（见 A2LaunchSession 的 MG_DIRECTORY_PATH 段），
     //               现在靠 DirectGLES 后端跑，仍在真机验证期；
     //   · EAGL   —— EGL 那一半是本二进制的假 EGL，GL 层仍是 MG，同样的验证期；

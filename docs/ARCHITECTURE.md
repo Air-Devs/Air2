@@ -372,7 +372,7 @@ JRE 缺失时该阶段**只告警不失败**（同树多任务并行时不让别
 | `Air2/Core/Version/A2LaunchPlan.[hm]` | Core | ★计划产出方★：版本 JSON（`inheritsFrom` 合并、`rules` 子集求值、`arguments` 占位符替换、`libraries` → 显式 jar 列表）+ 账号取值 → 计划对象与 JSON；另出 VM 级选项与程序参数 |
 | `Air2/Bridge/A2LaunchRunner.[hm]` | **Bridge** | ★唯一调用 `a2_launch_jvm_with_argv` 的地方★：组 margv（`<java> [选项] -cp <cp> <A2Entry> --plan <json>`）、用 R4 单点拼 classpath、转发开关 `a2_launch_runtime_enabled` |
 | `Air2/Player/A2LaunchSession.[hm]` | Player | 一次启动的编排：解析目录/账号（Core）→ 产出计划（Core）→ 组命令行（Bridge）→ 建 VM；★开关默认关★，关时零副作用 |
-| `Air2/Player/A2LaunchAlertPresenter.[hm]` | Player | 启动链的确认弹窗呈现（UIAlertController · alert 样式）+ 顶层宿主查找；实验性启动链（MG / EAGL / KW）的 ★10 次免责确认★（每个启动请求都从 1 重新弹，不缓存同意）；判据只有一处 = `+[A2RendererCatalog isExperimentalLaunchChainIdentifier:]` |
+| `Air2/Player/A2LaunchAlertPresenter.[hm]` | Player | 顶层宿主查找（key window 根 → 沿 presentedViewController 下钻）的唯一实现：启动失败页用它，插件安装侧的确认窗也可复用。★不含任何确认门★ —— 10 次免责确认已迁到「安装会改启动链的插件」（插件 tree 的 `A2PluginLaunchChainRisk` / `A2PluginLaunchChainConfirm`，见 ADR-014 撤销记录） |
 
 **与既有实现的边界**：本组**不新建任何启动语义** —— 主类名、classpath 形态、
 资源注入、回退门、严格门、`[VS-GAP]` 校验一律沿用 `Natives/Context/a2_launch.[hm]` 的既有契约。

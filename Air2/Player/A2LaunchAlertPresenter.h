@@ -19,21 +19,23 @@
 //
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
-//  Player —— 启动链「要用户读完才放行」的确认弹窗呈现（UIAlertController · alert 样式）。
+//  Player —— 启动链里「找一个能承载模态的宿主控制器」的唯一实现。
 //
-//  职责边界：
-//    · 本类只做「弹窗 + 用户逐次确认」的交互，不解析渲染器、不写计划、不建 VM
-//      （取值在 A2LaunchSession，计划在 Core）；
-//    · 「哪些渲染器属于实验性启动链」的判据在 Core 的
-//      `+[A2RendererCatalog isExperimentalLaunchChainIdentifier:]`，本类只消费结论。
+//  ## ★已弃用：启动侧的 10 次免责确认★（撤销于 2026-10-31）
+//
+//  本类此前（e6a21f7）带着「实验性启动链（MG / EAGL / KW）逐次弹 10 次免责确认」的实现。
+//  用户澄清那段确认**不是给选渲染器用的**：真正需要 10 次确认的是
+//  「安装一个会修改启动链的插件」⇒ 10 次确认整体迁到插件侧安装流程
+//  （`A2PluginLaunchChainRisk` 判定 + `A2PluginLaunchChainConfirm` 弹窗）。
+//
+//  所以本类**只保留** `+topViewController`：
+//    · 启动失败页要宿主 —— 删掉它就得在 `A2LaunchSession` 里再手写一份
+//      「key window → 沿 presentedViewController 下钻」，两份拷贝迟早不一致；
+//    · 插件安装侧的 10 次确认同样需要宿主查找，下一个弹窗类可以直接复用。
+//  ★启动链里不再有任何确认门★：点启动 ⇒ 完整性核对 → 后台链（①→②→③）→ 建 VM。
 //
 //  ★为什么用 alert 而不是 ActionSheet★：`scripts/check_no_glass.py` 判据 E 规定
-//    Air2/ 内不得出现 `UIAlertControllerStyleActionSheet`（系统半透明材质、不跟主题）；
-//    alert 样式是「危险操作确认」的合法形态（与启动失败页同一口径）。
-//
-//  ★调用点★：
-//    · `Air2/Player/A2LaunchSession.m`  — 实验性启动链的 10 次免责确认门 + 失败页的宿主查找
-//
+//    Air2/ 内不得出现 `UIAlertControllerStyleActionSheet`（系统半透明材质、不跟主题）。
 
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
@@ -45,18 +47,6 @@ NS_ASSUME_NONNULL_BEGIN
 /// 可承载模态的顶层控制器（key window 根 → 沿 presentedViewController 逐层下钻）。
 /// 无可用窗口 / 根控制器为空 ⇒ nil（调用方须按「呈现不了」处理，不许静默当成已确认）。
 + (nullable UIViewController *)topViewController;
-
-/// ★实验性启动链（MG / EAGL / KW）的 10 次免责确认★。
-///
-/// · 逐个弹、点了才弹下一个（★不阻塞主线程、不用 sleep★）；
-/// · 非实验性渲染器（metallum / 内置 gl4es）⇒ 直接以 `proceed = YES` 回调，不打扰用户；
-/// · `proceed == NO` 表示用户在任意一次点了「取消」（启动侧据此终止，且不建 VM）；
-/// · completion 在**主线程**回调。
-///
-/// ★每次调用都从头弹满 10 次★：本类不记录、不缓存「已同意」，同一会话内重复启动
-/// 也要重新走完 10 次（用户明令，不要为了「体验」加记住状态）。
-+ (void)confirmExperimentalChainForRendererIdentifier:(NSString *)rendererIdentifier
-                                           completion:(nullable void (^)(BOOL proceed))completion;
 
 @end
 
