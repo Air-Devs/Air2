@@ -741,6 +741,19 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
             [jvmOptions addObject:@"-Djna.debug_load.jna=true"];
             [A2Log criterion:@"[JNA-INBUNDLE] libjnidispatch bundle=%@ path=%@（nosys/noclasspath/nounpack 全开）",
              jnaInBundle ? @"present" : @"MISSING", jnaLib];
+
+            // ★2026-10-31 真机 crash report：MC 1.20.1 在「Initializing game」阶段走 macOS AppKit：
+            //   ca.weblite.objc.RuntimeUtils.<clinit> → System.load(tmp/libjcocoa*.dylib) → dlopen 失败
+            //   ← Client.sendProxy ← ehg.a(44) ← ehn.a(154) ← enn.<init> ← Main.main
+            // iOS 没有 AppKit、也没有 iOS 版 libjcocoa ⇒ 这段对我们必然是死代码。
+            // patchios_agent 只把 ehg.a(J)V 改成 { return; }，ehg 的另一个 a(InputStream) 不动。
+            NSString *iosAgent = [libs stringByAppendingPathComponent:@"patchios_agent.jar"];
+            if ([[NSFileManager defaultManager] fileExistsAtPath:iosAgent]) {
+                [jvmOptions addObject:[NSString stringWithFormat:@"-javaagent:%@", iosAgent]];
+                [A2Log criterion:@"[A2-IOS-AGENT] 注入 patchios_agent.jar（置空 ehg.a(J)V：跳过 macOS AppKit 菜单）"];
+            } else {
+                [A2Log criterion:@"[A2-IOS-AGENT] 缺 patchios_agent.jar ⇒ 不注入（1.20.1 会在 Initializing game 崩）"];
+            }
         }
 
         if (wantsMetalAgent) {
