@@ -955,6 +955,43 @@ static void *a2_gl_bridge_metal_layer_for(void *renderable) {
     } else {
         return renderable;
     }
+    // ★宿主层是否真在窗口里（2026-10-31 真机）★
+    //   CALayer 的 delegate 就是拥有它的 view；若那个 view 的 window 为 nil，
+    //   说明这层根本不在任何窗口上 ⇒ 画得再对也不会被合成（现象：hidden=0 opacity=1 却全黑）。
+    //   此时把 Metal 层改挂到 keyWindow 的根层，保证它进入合成树。
+    id lyDelegate = [host valueForKey:@"delegate"];
+    id lyWindow = nil;
+    @try { lyWindow = [lyDelegate valueForKey:@"window"]; } @catch (__unused NSException *e) { lyWindow = nil; }
+    NSLog(@"[A2-GLBRIDGE] 宿主归属：layer 的 delegate=%@ window=%@",
+          lyDelegate ? NSStringFromClass([lyDelegate class]) : @"(nil)",
+          lyWindow ? NSStringFromClass([lyWindow class]) : @"(nil)");
+    if (lyWindow == nil && lyDelegate != nil) {
+        Class appCls = NSClassFromString(@"UIApplication");
+        id app = nil;
+        if (appCls != Nil) {
+            SEL sharedSel = sel_registerName("sharedApplication");
+            if ([appCls respondsToSelector:sharedSel]) app = [appCls performSelector:sharedSel];
+        }
+        id keyWin = nil;
+        @try { keyWin = [app valueForKey:@"keyWindow"]; } @catch (__unused NSException *e) { keyWin = nil; }
+        id winLayer = nil;
+        @try { winLayer = [keyWin valueForKey:@"layer"]; } @catch (__unused NSException *e) { winLayer = nil; }
+        if (winLayer != nil) {
+            SEL removeSel = sel_registerName("removeFromSuperlayer");
+            if ([layer respondsToSelector:removeSel]) [layer performSelector:removeSel];
+            NSValue *winBounds = nil;
+            @try { winBounds = [keyWin valueForKey:@"bounds"]; } @catch (__unused NSException *e) { winBounds = nil; }
+            if (winBounds != nil) [layer setValue:winBounds forKey:@"frame"];
+            if ([winLayer respondsToSelector:addSel]) {
+                [winLayer performSelector:addSel withObject:layer];
+                NSLog(@"[A2-GLBRIDGE] ★宿主层不在窗口内 ⇒ 改挂 keyWindow 根层★ window=%@ layer=%@ frame=%@",
+                      keyWin ? NSStringFromClass([keyWin class]) : @"(nil)",
+                      winLayer ? NSStringFromClass([winLayer class]) : @"(nil)",
+                      winBounds ? [[winBounds description] UTF8String] : "(nil)");
+            }
+        }
+    }
+
     // ★可见性核对（2026-10-31 真机）★ 内容在 Metal 层上逐帧更新但屏幕全黑，
     //   所以这里把「这一层能不能被看见」的几个量一次打全：frame/hidden/opacity/父层/宿主窗口。
     NSValue *frameVal = [layer valueForKey:@"frame"];
