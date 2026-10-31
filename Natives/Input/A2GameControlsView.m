@@ -1693,6 +1693,24 @@ static int a2_touchSeen = 0;
 /// ★iPhone Duo★ 折叠/展开、Split View 都会改 bounds ⇒ 不能只在构建时排一次。
 /// 尺寸变化 >1pt 就按新宽度重排（自定义布局按比例缩放）。
 - (void)layoutSubviews {
+    // ★2026-10-31 真机崩溃（lastlog-113，1.20.1 + MG）★
+    //   NSInternalInconsistencyException: Modifications to the layout engine must not be
+    //   performed from a background thread（日志里紧跟 [RT] [A2-CTRL-LAYOUT] 那几行）
+    //   ⇒ 布局是在建窗/渲染线程被触发的。UIKit 只允许主线程改布局引擎，
+    //     所以必须在【调用 super 之前】挡掉非主线程：直接 return，把重排甩回主队列。
+    //   不能在后台上调 super.layoutSubviews —— 那一步本身就会抛。
+    if (!NSThread.isMainThread) {
+        static BOOL a2OffMainLogged = NO;
+        if (!a2OffMainLogged) {
+            a2OffMainLogged = YES;
+            a2_log_f(@"[A2-CTRL-LAYOUT] layoutSubviews 在后台线程被触发 ⇒ 已跳回主线程重排"
+                     @"（避免 layout engine 主线程限制）");
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [self setNeedsLayout];
+        });
+        return;
+    }
     [super layoutSubviews];
     static CGSize a2Last = {0, 0};
     CGSize s = self.bounds.size;
