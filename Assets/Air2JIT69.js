@@ -57,6 +57,20 @@ function log_verbose(msg) {
 // To avoid having to re-parse these in each function, we save some registers here
 let tid, x0, x1, x16, pc;
 let detached = false;
+// ★停点日志去重（2026-10-31）★
+//   真机上同一处崩溃会被反复停/继续，一次启动能刷几万条，把人烦死。
+//   这里按 (信号|brk, pc) 去重：**同一个位置只打一次**，其余静默，但继续放行 ⇒ 游戏仍能跑。
+const a2StopSeen = new Set();
+const A2_STOP_LOG_MAX = 20;   // 全局上限，超了就完全静默，避免新位置也能刷
+let a2StopLogCount = 0;
+function a2StopLogOnce(key, msg) {
+    if (a2StopSeen.has(key)) return false;
+    a2StopSeen.add(key);
+    if (a2StopLogCount >= A2_STOP_LOG_MAX) return false;
+    a2StopLogCount++;
+    log(msg + (a2StopSeen.size > 1 ? '' : ''));
+    return true;
+}
 // ★A2PROBE★ 已布点的地址（BigInt；null = 该槽没有点）+ 本次武装已打印的命中次数
 let a2Probe = { a: null, b: null, hits: 0 };
 let pid = get_pid();
@@ -107,12 +121,11 @@ while (!detached) {
             log(`Failed to extract signal number: ${signum}`);
             continue;
         }
-        // ★2026-10-31 收紧★ 用户口径：**只要不是 JIT 协议里的 brk，一律不给 continue**。
-        //   原因：真机上各种异常停（SIGSEGV/SIGBUS/系统 brk）被一律放行后，同一处故障被
-        //   反复「继续 → 再停」，控制台无限刷且看不到现场。现在全部停住保留现场。
-        log(`[A2PROBE] HOLD sig=0x${signum} pc=0x${pc.toString(16)} ⇒ 非 JIT 协议停点，保持停止不放行`);
-        detached = true;
-        break;
+        // ★2026-10-31 去重放行★：同一 (信号,pc) 只打一次，其余静默但继续放行 ⇒ 不刷屏、游戏能跑。
+        a2StopLogOnce('sig:' + signum + ':' + pc.toString(16),
+                      `[A2PROBE] STOP sig=0x${signum} pc=0x${pc.toString(16)}（同位置后续静默）`);
+        send_command(`vCont;S${signum}:${tid}`);
+        continue;
     }
     
     let brkImmediate = extractBrkImmediate(instrU32);
@@ -140,10 +153,10 @@ while (!detached) {
         command(brkResponse);
     } else {
         log(`Skipping breakpoint: brk immediate 0x${brkImmediate.toString(16)} was not handled by this script. You could add it by evaluating legacyCommands[0x${brkImmediate.toString(16)}] = yourFunction;`);
-        // ★2026-10-31 收紧★ 未知 brk 一律不 continue（含 0xb001 = pthread 结构损坏）。
-        log(`[A2PROBE] HOLD brk=0x${brkImmediate.toString(16)} pc=0x${pc.toString(16)} ⇒ 非 JIT 协议 brk，保持停止不放行`);
-        detached = true;
-        break;
+        // ★2026-10-31 去重放行★：同一 (brk,pc) 只打一次，其余静默，继续放行。
+        a2StopLogOnce('brk:' + brkImmediate.toString(16) + ':' + pc.toString(16),
+                      `[A2PROBE] STOP brk=0x${brkImmediate.toString(16)} pc=0x${pc.toString(16)}（同位置后续静默）`);
+        continue;
     }
 }
 
