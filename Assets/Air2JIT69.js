@@ -107,19 +107,12 @@ while (!detached) {
             log(`Failed to extract signal number: ${signum}`);
             continue;
         }
-        // ★2026-10-31：致命信号不再放行★
-        //   真机现象：进程真崩（SIGSEGV=0x0b / SIGBUS=0x0a）时，脚本原本一律 vCont 放行，
-        //   于是同一处崩溃被反复「继续 → 再崩 → 再继续」，StikDebug 控制台无限刷信号。
-        //   这里对致命信号**停住不放行**，让人能直接看到现场（进程保持停止）。
-        const fatalSigs = ['0b', '0a', '04', '06', '05'];  // SEGV / BUS / ILL / ABRT / TRAP
-        if (fatalSigs.indexOf(String(signum).toLowerCase()) >= 0) {
-            log(`[A2PROBE] FATAL sig=0x${signum} pc=0x${pc.toString(16)} ⇒ 停止放行（保留现场，不再 continue）`);
-            detached = true;   // 跳出主循环，进程保持 stopped
-            break;
-        }
-        log(`Continuing with signal 0x${signum}`);
-        send_command(`vCont;S${signum}:${tid}`);
-        continue;
+        // ★2026-10-31 收紧★ 用户口径：**只要不是 JIT 协议里的 brk，一律不给 continue**。
+        //   原因：真机上各种异常停（SIGSEGV/SIGBUS/系统 brk）被一律放行后，同一处故障被
+        //   反复「继续 → 再停」，控制台无限刷且看不到现场。现在全部停住保留现场。
+        log(`[A2PROBE] HOLD sig=0x${signum} pc=0x${pc.toString(16)} ⇒ 非 JIT 协议停点，保持停止不放行`);
+        detached = true;
+        break;
     }
     
     let brkImmediate = extractBrkImmediate(instrU32);
@@ -147,16 +140,10 @@ while (!detached) {
         command(brkResponse);
     } else {
         log(`Skipping breakpoint: brk immediate 0x${brkImmediate.toString(16)} was not handled by this script. You could add it by evaluating legacyCommands[0x${brkImmediate.toString(16)}] = yourFunction;`);
-        // ★2026-10-31：未知 brk 不再一律放行★
-        //   真机：`brk #0xb001`（libsystem 在 pthread_exit 里检测到 pthread 结构损坏时发的）
-        //   原本走 continue ⇒ 立刻再撞同一条 ⇒ 控制台无限刷「0xb001 not handled」。
-        //   这里把 0xb001（以及任何 0xb0xx 家族）视为致命，停住不放行，保留现场。
-        if (brkImmediate >= 0xb000 && brkImmediate <= 0xb0ff) {
-            log(`[A2PROBE] FATAL brk=0x${brkImmediate.toString(16)} pc=0x${pc.toString(16)} ⇒ 停止放行（系统库致命断点，不再 continue）`);
-            detached = true;
-            break;
-        }
-        continue;
+        // ★2026-10-31 收紧★ 未知 brk 一律不 continue（含 0xb001 = pthread 结构损坏）。
+        log(`[A2PROBE] HOLD brk=0x${brkImmediate.toString(16)} pc=0x${pc.toString(16)} ⇒ 非 JIT 协议 brk，保持停止不放行`);
+        detached = true;
+        break;
     }
 }
 
