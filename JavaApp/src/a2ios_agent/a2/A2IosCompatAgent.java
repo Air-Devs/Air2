@@ -27,7 +27,8 @@ public final class A2IosCompatAgent implements ClassFileTransformer {
 
     private static final String TARGET_CLASS = "ehg";
     private static final String TARGET_METHOD = "a";
-    private static final String TARGET_DESC = "(J)V";
+    /** 两个目标：菜单（long）与应用图标（InputStream）——都是 macOS AppKit 专属。 */
+    private static final String[] TARGET_DESCS = { "(J)V", "(Ljava/io/InputStream;)V" };
 
     public static void premain(String args, Instrumentation inst) {
         inst.addTransformer(new A2IosCompatAgent());
@@ -47,7 +48,13 @@ public final class A2IosCompatAgent implements ClassFileTransformer {
                 public MethodVisitor visitMethod(int access, String name, String descriptor,
                                                  String signature, String[] exceptions) {
                     MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
-                    if (!TARGET_METHOD.equals(name) || !TARGET_DESC.equals(descriptor)) {
+                    boolean wanted = false;
+                    if (TARGET_METHOD.equals(name)) {
+                        for (String d : TARGET_DESCS) {
+                            if (d.equals(descriptor)) { wanted = true; break; }
+                        }
+                    }
+                    if (!wanted) {
                         return mv;
                     }
                     hit[0] = true;
