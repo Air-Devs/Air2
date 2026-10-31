@@ -34,6 +34,16 @@ extern const char *const A2RendererMetalDylibName;
 /// 取值与老线 `runtime_native/Natives/utils.h` 的 `RENDERER_NAME_GL4ES` 逐字相同（同一份血统）。
 extern const char *const A2RendererCompatDylibName;
 
+/// ★宿主 EGL 后端（系统 GLES 3.0 / EAGL）★ 的标识 = `libeagl.dylib`。
+///
+/// ★它不是包内的库★：EGL 那一半（假 EGL 1.4 子集 → EAGLContext/CAEAGLLayer）
+/// 就编在本二进制里（`Natives/Renderer/a2_eagl_egl.m`），GL 层是 MobileGlues。
+/// 与 Core 的 `A2RendererHostEGLDylibName`（`Air2/Core/Renderer/A2RendererCatalog.h`）
+/// 逐字相同 —— Natives 不认识 Core、Core 也反向依赖不了本层，所以是**同一份字面量的两处声明**
+/// （与 `A2GlBridgeKryptonDylibName` 同一做法；`tests/Runtime` 有「两处必须一致」的断言）。
+/// 取值即 `A2SelectedRendererPrefKey` 存进 NSUserDefaults 的值。
+extern const char *const A2RendererHostEAGLDylibName;
+
 /// 显式选择并加载指定渲染后端（`<frameworksPath>/<dylibName>`）。
 ///
 /// ★调用点唯一★：`Air2/Bridge/A2LaunchRunner.m` 的 `+launchWithPlanPath:…`。

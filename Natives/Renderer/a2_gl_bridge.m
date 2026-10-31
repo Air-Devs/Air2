@@ -24,6 +24,7 @@
 #import "a2_log.h"
 #import "a2_frame_perf.h"   // ★[FRAME-PERF] 与渲染器无关的帧性能判据（本文件的帧动作每帧记一次）
 #import "A2JITEnvironment.h"   // ★[A2PROBE]★ a2_jit_probe_arm（把 KW/ANGLE 的 glLoadIdentity 交给脚本布断点）
+#import "a2_eagl_egl.h"        // ★宿主 EGL 后端★：A2FakeEglWindowSize（上屏建面的实参）
 
 #import <objc/message.h>   // objc_msgSend（动态取 layer 用；不 import UIKit）
 #import <dlfcn.h>
@@ -84,6 +85,7 @@ typedef A2EGLBoolean  (*A2PFN_eglDestroySurface)(A2EGLDisplay, A2EGLSurface);
 typedef A2EGLBoolean  (*A2PFN_eglDestroyContext)(A2EGLDisplay, A2EGLContext);
 typedef A2EGLBoolean  (*A2PFN_eglTerminate)(A2EGLDisplay);
 typedef A2EGLBoolean  (*A2PFN_eglQuerySurface)(A2EGLDisplay, A2EGLSurface, A2EGLint, A2EGLint *);
+typedef A2EGLBoolean  (*A2PFN_eglGetConfigAttrib)(A2EGLDisplay, A2EGLConfig, A2EGLint, A2EGLint *);
 
 typedef void      (*A2PFN_glClear)(uint32_t);
 typedef void      (*A2PFN_glClearColor)(float, float, float, float);
@@ -137,6 +139,19 @@ typedef void      (*A2PFN_set_getprocaddress)(void *(*)(const char *));
 /// 当前后端的 dylib 名（attach 时记录；帧回调据此跳过危险调用）。
 static char gBackendName[96] = {0};
 
+/// ★宿主 EGL 后端★（`libeagl.dylib`）：EGL 由本二进制提供（假 EGL → EAGL），GL 层是 MobileGlues。
+/// 建面/上下文版本/库来源都据此分叉；attach 时置位，teardown 清零。
+static int   gHostEgl = 0;
+
+/// ★建面用的 EGL 入口从哪来★（★全项目只有两个值、一个产地★：attach 的 MG 探测；teardown 复位）。
+typedef enum {
+    A2GlBridgeEglSourceAngle = 0,   ///< 非 MG 自带 —— ANGLE 兼容底（`Frameworks/libEGL.framework/libEGL`）或宿主假 EGL（主镜像）
+    A2GlBridgeEglSourceMG    = 1,   ///< 渲染器自带 —— `libmobileglues.dylib` 自己导出整套 `egl*`
+} A2GlBridgeEglSource;
+
+/// 当前 EGL 源（见 `A2GlBridgeEglSource`）。★只经 `a2_gl_bridge_egl_source()` 读，不在别处判★。
+static A2GlBridgeEglSource gEglSource = A2GlBridgeEglSourceAngle;
+
 static void *gEglHandle  = NULL;
 static void *gGlesHandle = NULL;
 static void *gRendererHandle = NULL;   // 后端本体（compat 底 = libgl4es_114.dylib）
@@ -160,6 +175,7 @@ static A2PFN_eglDestroySurface    gEglDestroySurface = NULL;
 static A2PFN_eglDestroyContext    gEglDestroyContext = NULL;
 static A2PFN_eglTerminate         gEglTerminate = NULL;
 static A2PFN_eglQuerySurface      gEglQuerySurface = NULL;
+static A2PFN_eglGetConfigAttrib   gEglGetConfigAttrib = NULL;   // 只用于把「选定配置的位深」打进判据行
 
 static A2PFN_glClear      gGLClear = NULL;
 static A2PFN_glClearColor gGLClearColor = NULL;
@@ -211,13 +227,19 @@ static void a2_gl_bridge_teardown(void) {
     if (gEglTerminate != NULL && gDpy != A2_EGL_NO_DISPLAY) {
         gEglTerminate(gDpy);
     }
+    // ★MG 自带 EGL 时 gEglHandle/gGlesHandle 就是后端本体句柄（别名）★：先记下来，
+    //   下面只 dlclose 真身一次，避免对同一镜像重复 dlclose（引用计数会被多减一次）。
+    void *rendererHandleBefore = gRendererHandle;
     if (gRendererHandle != NULL) {
         dlclose(gRendererHandle);
         gRendererHandle = NULL;
         gKryptonInitedHandle = NULL;   // 镜像已关 ⇒ 下次 attach 必须重新初始化
     }
-    if (gGlesHandle != NULL)     { dlclose(gGlesHandle);     gGlesHandle = NULL; }
-    if (gEglHandle != NULL)      { dlclose(gEglHandle);      gEglHandle = NULL; }
+    if (gGlesHandle != NULL)     { if (gGlesHandle != rendererHandleBefore) dlclose(gGlesHandle); gGlesHandle = NULL; }
+    // ★宿主 EGL 后端的 gEglHandle 是 dlopen(NULL)（主镜像句柄）★：不能 dlclose（那会试图卸载主二进制）。
+    if (gEglHandle != NULL)      { if (!gHostEgl && gEglHandle != rendererHandleBefore) dlclose(gEglHandle); gEglHandle = NULL; }
+    gHostEgl = 0;
+    gEglSource = A2GlBridgeEglSourceAngle;   // ★EGL 源随句柄一起释放★：下次 attach 必须重新判（不留上一轮的结论）
 
     gDpy = A2_EGL_NO_DISPLAY; gCfg = NULL;
     gCtx = A2_EGL_NO_CONTEXT; gSurf = A2_EGL_NO_SURFACE;
@@ -226,6 +248,7 @@ static void a2_gl_bridge_teardown(void) {
     gEglMakeCurrent = NULL; gEglSwapBuffers = NULL; gEglGetError = NULL;
     gEglGetProcAddress = NULL; gEglDestroySurface = NULL; gEglDestroyContext = NULL;
     gEglTerminate = NULL; gEglQuerySurface = NULL;
+    gEglGetConfigAttrib = NULL;
     gGLClear = NULL; gGLClearColor = NULL; gGLGetError = NULL;
     gGLViewport = NULL; gGLScissor = NULL; gGLEnable = NULL; gGLDisable = NULL; gGLGetIntegerv = NULL;
     gAttached = 0; gFrameCount = 0;
@@ -343,6 +366,82 @@ static void *a2_gl_bridge_egl_symbol(void *handle, const char *name, int *missin
     return sym;
 }
 
+// ---- ★EGL 源：MG 自带 / ANGLE 兼容底★（见 `A2GlBridgeEglSource`）----
+
+/// ★EGL 源唯一判据★ —— 所有取 `egl*` 函数指针的地方都先问它，**不另写第二套判断**。
+static A2GlBridgeEglSource a2_gl_bridge_egl_source(void) {
+    return gEglSource;
+}
+
+/// ★EGL 入口句柄的唯一产地★：按 `a2_gl_bridge_egl_source()` 决定从哪个镜像解析 `egl*`。
+///   · MG 源 ⇒ 渲染器自己的句柄（MG 导出的 `egl*`，与它内部那套 GL 状态同源）；
+///   · 其余   ⇒ `gEglHandle`（ANGLE 兼容底，或宿主 EGL 后端的主镜像假 EGL）。
+static void *a2_gl_bridge_egl_entry_handle(void) {
+    return (a2_gl_bridge_egl_source() == A2GlBridgeEglSourceMG) ? gRendererHandle : gEglHandle;
+}
+
+/// ★MG 自带 EGL 的入口清单★（13 个；缺任何一个都不认「MG 自带」）。
+/// 为什么要求整表而不是只要建面那 7 个：半套 EGL（能建上下文、不能换页/销毁/取 proc）
+/// 会把崩点从「建不出面（有清晰日志）」挪到「跑起来之后（真机 SIGBUS）」，比直接回退更难定位。
+static const char *const kMgEglEntryNames[] = {
+    "eglGetDisplay", "eglInitialize", "eglChooseConfig", "eglGetConfigAttrib",
+    "eglCreateContext", "eglCreateWindowSurface", "eglMakeCurrent", "eglSwapBuffers",
+    "eglDestroySurface", "eglDestroyContext", "eglTerminate", "eglGetError",
+    "eglGetProcAddress",
+    NULL
+};
+
+/// ★MG 自带 EGL 探测★（`gEglSource` 的唯一写点；返回值 = 是否采用 MG 自带 EGL）。
+///
+/// 依据①（做法对齐）：老 Air `Natives/ctxbridges/egl_bridge.m:260-285` 的 `dlsym_EGL()` 就是先到
+///   **渲染器自己的句柄**里 dlsym 整套 `egl*`，取不到才回退兼容底。
+/// 依据②（真机症状同向）：MG 2.0.16 自己导出 eglGetDisplay/eglInitialize/eglCreateContext/
+///   eglMakeCurrent/eglGetProcAddress，而本桥用 ANGLE 的 libEGL 建上下文、只把 MG 当 GL 库
+///   ⇒ 两套运行时不同源：MG 崩在 `[libmobileglues.dylib+0x3e4e4] glGetError`（SIGBUS），
+///   它自己还报 `SYMBOL THEFT …`（flat namespace 里的 gl* 归 ANGLE 不归它）。
+static int a2_gl_bridge_use_own_egl(void) {
+    // ★宿主 EGL 后端（libeagl.dylib）**不得**采用 MG 自带 EGL★：那一条链的 EGL 层就是本二进制里的
+    //   假 EGL（CAEAGLLayer 上屏的唯一实现）。若让 `egl*` 归 MG，`eglCreateWindowSurface` 就不再
+    //   走本层的假 EGL ⇒ 上屏链断（画面出不来，且日志只看到 MG 自己的 EGL）。
+    //   ⇒ 这条判据优先级最高，与 gHostEgl 绑定（attach ①b 置位）。
+    if (gHostEgl) {
+        gEglSource = A2GlBridgeEglSourceAngle;
+        a2_log_criterion(@"[A2-GLBRIDGE] EGL 源=宿主假 EGL（libeagl.dylib 必须由本层接管 egl*）");
+        return 0;
+    }
+    if (gRendererHandle == NULL) return 0;
+    int got = 0, total = 0;
+    const char *firstMissing = NULL;
+    for (int i = 0; kMgEglEntryNames[i] != NULL; i++) {
+        total++;
+        if (dlsym(gRendererHandle, kMgEglEntryNames[i]) != NULL) got++;
+        else if (firstMissing == NULL) firstMissing = kMgEglEntryNames[i];
+    }
+    if (firstMissing != NULL) {
+        gEglSource = A2GlBridgeEglSourceAngle;
+        a2_log_criterion(@"[A2-GLBRIDGE] EGL 源=ANGLE（MG 缺入口：%s）", firstMissing);
+        return 0;
+    }
+    gEglSource = A2GlBridgeEglSourceMG;
+    a2_log_criterion(@"[A2-GLBRIDGE] EGL 源=MG（渲染器自带，%d/%d 入口）", got, total);
+    return 1;
+}
+
+/// 加载后端本体（EGL/GL 层的镜像）：RTLD_GLOBAL 让 MC 后续能直接解析到它的 GL 符号。
+/// ★两处调用，同一个动作★：① MG 先加载 —— 要问它要 EGL 入口（③0）；② 普通顺序里最后加载（④）。
+/// 已加载则直接成功（MG 探测失败后回退 ANGLE 的顺序里不重复 dlopen）。
+static int a2_gl_bridge_open_renderer(const char *rendererPath) {
+    if (gRendererHandle != NULL) return 1;
+    gRendererHandle = dlopen(rendererPath, RTLD_LAZY | RTLD_GLOBAL);
+    if (gRendererHandle == NULL) {
+        const char *err = dlerror();
+        a2_log_f(@"%s ★阻断★：后端本体 dlopen 失败 %s（%s）",
+                 A2GlBridgeJudgementTag, rendererPath, err ? err : "(dlerror 无输出)");
+        return 0;
+    }
+    return 1;
+}
+
 /// 当前后端是否 = ★NG-GL4ES / KW★（那一支需要宿主「注册解析器 + 显式初始化」）。
 /// ★精确比较，不做模糊匹配★：`libnggl4es.dylib`（老的那支，自带 constructor）不能命中。
 static int a2_gl_bridge_is_krypton(void) {
@@ -354,6 +453,26 @@ static int a2_gl_bridge_is_krypton(void) {
 static int a2_gl_bridge_is_mobileglues(void) {
     return (gBackendName[0] != '\0' && strstr(gBackendName, "mobileglues") != NULL);
 }
+
+/// 已选后端是否 = ★宿主 EGL 后端★（`libeagl.dylib`：EGL 由本二进制提供，GL 层 = MobileGlues）。
+/// ★精确比较★：其它后端名里不会出现这个标识，模糊匹配只会误伤。
+static int a2_gl_bridge_backend_is_host_egl(const char *rendererName) {
+    return (rendererName != NULL && rendererName[0] != '\0' &&
+            strcmp(rendererName, A2RendererHostEAGLDylibName) == 0);
+}
+
+/// ★建面用的 native window 实参★（★唯一产地★，attach 与改绑两处共用）。
+///   · 普通后端：EGL 实现自己认识图层，直接把图层指针当 native window；
+///   · 宿主 EGL 后端：包成 `A2FakeEglWindowSize{宽, 高, 图层}` —— 假 EGL 据此走
+///     CAEAGLLayer + `-presentRenderbuffer:`（上屏），而不再是离屏 FBO。
+/// `box == NULL` ⇒ 普通后端。★box 必须活到 eglCreateWindowSurface 返回之后★（调用方栈变量即可）。
+static A2EGLNativeWindowType a2_gl_bridge_window_arg(A2FakeEglWindowSize *box, void *renderable) {
+    if (box != NULL) return (A2EGLNativeWindowType)box;
+    return (A2EGLNativeWindowType)renderable;
+}
+
+/// 宿主 EGL 后端的 GL 层 dylib 名（★MG 当 GL 层，见 [A2-RENDERER] 的选型说明★）。
+static const char *const A2GlBridgeHostEglLayerDylib = "libmobileglues.dylib";
 
 /// 交给 gl4es 的 GLES 入口解析器 —— 它在 `-DNOEGL` 下**唯一**的入口来源。
 /// 顺序固定：已 RTLD_GLOBAL 的 GLESv2（ANGLE）→ EGL → eglGetProcAddress。
@@ -787,10 +906,19 @@ static void a2_gl_bridge_ensure_game_view_surface(void) {
     }
 
     // ---- ② 先建新面、再切、最后销毁旧面（任何一步失败都保留旧面）----
+    // ★宿主 EGL 后端：同样要包成 A2FakeEglWindowSize（上屏）★ —— 与 attach ⑥1 共用同一个实参产地。
+    A2FakeEglWindowSize hostWinBox = { 0, 0, NULL };
+    A2FakeEglWindowSize *hostWinBoxPtr = NULL;
+    if (gHostEgl) {
+        hostWinBox.width  = (A2EGLint)gWidthPixels;
+        hostWinBox.height = (A2EGLint)gHeightPixels;
+        hostWinBox.layer  = want;
+        hostWinBoxPtr = &hostWinBox;
+    }
     A2EGLSurface newSurf = A2_EGL_NO_SURFACE;
     if (a2_gl_bridge_is_krypton()) {
         // KW 家族在 attach 里就是「NULL 属性」（对齐老 Air 建面顺序）⇒ 这里保持一致。
-        newSurf = gEglCreateWindowSurface(gDpy, gCfg, (A2EGLNativeWindowType)want, NULL);
+        newSurf = gEglCreateWindowSurface(gDpy, gCfg, a2_gl_bridge_window_arg(hostWinBoxPtr, want), NULL);
     } else {
         const A2EGLint surfAttribs[] = {
             A2_EGL_WIDTH,  (A2EGLint)gWidthPixels,
@@ -798,10 +926,12 @@ static void a2_gl_bridge_ensure_game_view_surface(void) {
             A2_EGL_NONE
         };
         if (gWidthPixels > 0 && gHeightPixels > 0) {
-            newSurf = gEglCreateWindowSurface(gDpy, gCfg, (A2EGLNativeWindowType)want, surfAttribs);
+            newSurf = gEglCreateWindowSurface(gDpy, gCfg,
+                                              a2_gl_bridge_window_arg(hostWinBoxPtr, want), surfAttribs);
         }
         if (newSurf == A2_EGL_NO_SURFACE) {               // 实现不认 EGL_WIDTH/HEIGHT ⇒ 退到无属性
-            newSurf = gEglCreateWindowSurface(gDpy, gCfg, (A2EGLNativeWindowType)want, NULL);
+            newSurf = gEglCreateWindowSurface(gDpy, gCfg,
+                                              a2_gl_bridge_window_arg(hostWinBoxPtr, want), NULL);
         }
     }
     if (newSurf == A2_EGL_NO_SURFACE) {
@@ -963,6 +1093,7 @@ int a2_gl_bridge_backend_is_egl(const char *rendererName) {
         "libnggl4es.dylib",
         "libnggl4es_kw.dylib",       // NG-GL4ES / KW（≤1.12.2 默认；宿主必须显式 initialize_gl4es）
         "libtinygl4angle.dylib",
+        "libeagl.dylib",             // 宿主 EGL（系统 GLES 3.0 / EAGL；1.17+ 临时默认）
     };
     for (size_t i = 0; i < sizeof(kEglBackends) / sizeof(kEglBackends[0]); i++) {
         if (kEglBackends[i] != NULL && strcmp(rendererName, kEglBackends[i]) == 0) return 1;
@@ -988,12 +1119,37 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
                  (rendererName != NULL && rendererName[0] != '\0') ? rendererName : "(未选/空)");
         return A2GlBridgeSkipped;
     }
-    a2_log_f(@"%s 后端判定：selected=%s ⇒ EGL/GL 系，本桥负责建面", A2GlBridgeJudgementTag, rendererName);
+    a2_log_f(@"[A2-GLBRIDGE] 后端判定：selected=%s ⇒ EGL/GL 系，本桥负责建面", rendererName);
+
+    // ---- ①b ★宿主 EGL 后端（libeagl.dylib）★：EGL 层是本二进制的假 EGL，GL 层是 MobileGlues ----
+    //   · EGL 句柄 = `dlopen(NULL)`（主镜像；`egl*` 已在主二进制里，flat namespace 第一位）
+    //     ⇒ 建面用的 EGL 就是「假 EGL → EAGLContext/CAEAGLLayer」，不是 ANGLE；
+    //   · GL 层 = MobileGlues（下方 `glLayerName`）⇒ `gBackendName` 记的是 **GL 层**，
+    //     MG 的 RTLD_LOCAL / 符号归属核对等判据全都照旧命中（不另写一套 MG 判据）。
+    const int hostEglBackend = a2_gl_bridge_backend_is_host_egl(rendererName);
+    const char *glLayerName = hostEglBackend ? A2GlBridgeHostEglLayerDylib : rendererName;
+    if (hostEglBackend) {
+        gHostEgl = 1;
+        snprintf(gBackendName, sizeof(gBackendName), "%s", glLayerName);
+        a2_log_f(@"[A2-GLBRIDGE] ★宿主 EGL 后端★ chosen=%s ⇒ EGL=本二进制（假 EGL → CAEAGLLayer 上屏，"
+                 @"不 dlopen ANGLE 的 libEGL）；GL 层=%s",
+                 rendererName, glLayerName);
+    }
+
+    // ★「后端是不是 MG」的唯一判据★（`a2_gl_bridge_is_mobileglues()` 判 `gBackendName`）。
+    //   在这里取的原因：①b 可能把 gBackendName 改写成 GL 层名（宿主 EGL 后端的 GL 层也是 MG），
+    //   判据必须读**定稿后**的名字；③0（问 MG 要 EGL）与 ④（依赖旗标）共用这一份，不各写一遍。
+    const BOOL a2BackendIsMG = (a2_gl_bridge_is_mobileglues() != 0);
 
     // ---- 重入：先彻底清掉上一次（不留半成品）----
     if (gAttached) {
-        a2_log_f(@"%s 已附着 ⇒ 先释放上一次的 EGL/GL 资源再重建", A2GlBridgeJudgementTag);
+        a2_log_f(@"[A2-GLBRIDGE] 已附着 ⇒ 先释放上一次的 EGL/GL 资源再重建");
         a2_gl_bridge_teardown();
+    }
+    // ★teardown 会把 gHostEgl 清零★（它本身也要靠这个标志决定「主镜像句柄不能 dlclose」）
+    //   ⇒ 清完之后按本次判定重新置位，后续建房/改绑/帧动作才认得出宿主 EGL 后端。
+    if (hostEglBackend) {
+        gHostEgl = 1;
     }
 
     // ---- ② 原生窗口句柄 ----
@@ -1013,14 +1169,45 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
                  A2GlBridgeJudgementTag);
         return A2GlBridgeErrMissingLib;
     }
-    NSString *eglPath      = [frameworksPath stringByAppendingPathComponent:
-                              [NSString stringWithUTF8String:A2GlBridgeEglLibraryRelPath]];
-    NSString *glesPath     = [frameworksPath stringByAppendingPathComponent:
-                              [NSString stringWithUTF8String:A2GlBridgeGlesLibraryRelPath]];
+    NSString *eglPath      = hostEglBackend
+        ? nil   // 宿主 EGL 后端没有包内 EGL：`egl*` 就在主二进制里（见 ①b）
+        : [frameworksPath stringByAppendingPathComponent:
+           [NSString stringWithUTF8String:A2GlBridgeEglLibraryRelPath]];
+    // ★GLES 兼容底的两种形态★：
+    //   · 普通后端 = ANGLE 的 libGLESv2（随包在 Frameworks/libGLESv2.framework/）；
+    //   · 宿主 EGL 后端 = **系统 OpenGLES**（假 EGL 的 EAGL 上下文就建在它上面，
+    //     `glClear`/`glViewport` 等帧动作也必须打同一份实现）。
+    NSString *glesPath     = hostEglBackend
+        ? @"/System/Library/Frameworks/OpenGLES.framework/OpenGLES"
+        : [frameworksPath stringByAppendingPathComponent:
+           [NSString stringWithUTF8String:A2GlBridgeGlesLibraryRelPath]];
     NSString *rendererPath = [frameworksPath stringByAppendingPathComponent:
-                              [NSString stringWithUTF8String:rendererName]];
+                              [NSString stringWithUTF8String:glLayerName]];
 
-    NSArray<NSString *> *needed = @[ eglPath, glesPath, rendererPath ];
+    // ---- ③0 ★MG：先加载本体、问它要 EGL★ ----
+    //   真机证据（1.20.1 + MG 2.0.16）：本桥用 ANGLE 的 libEGL 建上下文、只把 MG 当 GL 库，
+    //   MG 随即在 `[libmobileglues.dylib+0x3e4e4] glGetError` SIGBUS，并自报
+    //   `SYMBOL THEFT: flat namespace resolves glTexImage2D/glDrawArrays … to ANGLE 地址`。
+    //   老 Air 的做法（`Natives/ctxbridges/egl_bridge.m:260-285`）是**先到渲染器自己的句柄**
+    //   里 dlsym 整套 `egl*`，取不到才回退兼容底 ⇒ 这里对齐。
+    //   ★必须在「包内 ANGLE 兼容底存在性检查」之前★：MG 自带 EGL 时，包里那两份 ANGLE 库
+    //   不该被要求、更不该被 dlopen（多一个 gl* 导出者就是把符号抢走的那个原因）。
+    //   ★与宿主 EGL 后端互斥★：libeagl.dylib 的 EGL 是主二进制的假 EGL（①b），不走这条路。
+    if (a2BackendIsMG && !hostEglBackend) {
+        if (!a2_gl_bridge_open_renderer(rendererPath.UTF8String)) {
+            a2_gl_bridge_teardown();
+            return A2GlBridgeErrLoadFailed;
+        }
+        a2_gl_bridge_use_own_egl();   // 成功 ⇒ gEglSource=MG；失败 ⇒ 仍 ANGLE（日志点明缺哪个入口）
+    }
+    const BOOL eglFromMG = (a2_gl_bridge_egl_source() == A2GlBridgeEglSourceMG);
+
+    NSMutableArray<NSString *> *needed = [NSMutableArray array];
+    if (!eglFromMG) {                    // MG 自带 EGL ⇒ ANGLE 的 libEGL / libGLESv2 都不再要求
+        if (eglPath != nil) [needed addObject:eglPath];   // EGL 那一份只在普通后端上要求
+        [needed addObject:glesPath];
+    }
+    [needed addObject:rendererPath];
     for (NSString *p in needed) {
         BOOL isDir = NO;
         if (![NSFileManager.defaultManager fileExistsAtPath:p isDirectory:&isDir] || isDir) {
@@ -1045,7 +1232,6 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     // ★KW 沿用原来的模糊判定★（`strstr`）：`libnggl4es.dylib`（老的那支）与
     //   `libnggl4es_kw.dylib` 都按 KW 处理 —— 这是 lastlog-84 起的行为，不在本单里改口径。
     const BOOL a2BackendIsKW = (strstr(rendererName, "krypton") != NULL) || (strstr(rendererName, "nggl4es") != NULL);
-    const BOOL a2BackendIsMG = a2_gl_bridge_is_mobileglues();
     const BOOL a2DepFlagsLocal = (a2BackendIsKW || a2BackendIsMG);
     const int a2GlDepFlags = RTLD_LAZY | (a2DepFlagsLocal ? RTLD_LOCAL : RTLD_GLOBAL);
     a2_log_f(@"[A2-GLBRIDGE] 依赖加载旗标：%s（后端=%s）",
@@ -1056,34 +1242,46 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
                                : "MG 自己导出整套 gl*（真机 SYMBOL THEFT 即此因）");
     }
 
-    gEglHandle      = dlopen(eglPath.UTF8String,      a2GlDepFlags);
-    if (gEglHandle == NULL) {
-        const char *err = dlerror();
-        a2_log_f(@"%s ★阻断★：EGL 兼容底 dlopen 失败 %s（%s）",
-                 A2GlBridgeJudgementTag, eglPath.UTF8String, err ? err : "(dlerror 无输出)");
-        a2_gl_bridge_teardown();
-        return A2GlBridgeErrLoadFailed;
+    if (eglFromMG) {
+        // ★MG 自带 EGL：EGL 与 GL 都出自 MG 自己 ⇒ 不加载 ANGLE 兼容底★ ——
+        //   少两个 gl* 导出者（SYMBOL THEFT 的直接成因），也少两次 dlopen。
+        //   两个句柄直接指向后端本体（★别名★；teardown 靠指针比较只 dlclose 真身一次）。
+        gEglHandle  = gRendererHandle;
+        gGlesHandle = gRendererHandle;
+        a2_log_criterion(@"[A2-GLBRIDGE] ★跳过 ANGLE 兼容底★：不 dlopen libEGL/libGLESv2"
+                         @"（EGL+GL 入口全由 %s 提供）", glLayerName);
+    } else {
+        // ★宿主 EGL 后端★：EGL 入口在主二进制里 ⇒ `dlopen(NULL)` 拿主镜像句柄，
+        //   dlsym 出来的就是本层自己的 `egl*`（flat namespace 第一位也是它）。
+        gEglHandle      = hostEglBackend ? dlopen(NULL, RTLD_LAZY)
+                                         : dlopen(eglPath.UTF8String, a2GlDepFlags);
+        if (gEglHandle == NULL) {
+            const char *err = dlerror();
+            a2_log_f(@"[A2-GLBRIDGE] ★阻断★：EGL 兼容底 dlopen 失败 %s（%s）",
+                     hostEglBackend ? "(main image)" : eglPath.UTF8String, err ? err : "(dlerror 无输出)");
+            a2_gl_bridge_teardown();
+            return A2GlBridgeErrLoadFailed;
+        }
+        gGlesHandle     = dlopen(glesPath.UTF8String,     a2GlDepFlags);
+        if (gGlesHandle == NULL) {
+            const char *err = dlerror();
+            a2_log_f(@"%s ★阻断★：GLESv2 兼容底 dlopen 失败 %s（%s）",
+                     A2GlBridgeJudgementTag, glesPath.UTF8String, err ? err : "(dlerror 无输出)");
+            a2_gl_bridge_teardown();
+            return A2GlBridgeErrLoadFailed;
+        }
+        // 后端本体（compat 底 = libgl4es_114.dylib）：RTLD_GLOBAL 让 MC 后续能直接解析到它的 GL 符号。
+        // ★MG 探测失败的这条路上本体已经加载过★（③0）⇒ 由 a2_gl_bridge_open_renderer 幂等处理。
+        if (!a2_gl_bridge_open_renderer(rendererPath.UTF8String)) {
+            a2_gl_bridge_teardown();
+            return A2GlBridgeErrLoadFailed;
+        }
     }
-    gGlesHandle     = dlopen(glesPath.UTF8String,     a2GlDepFlags);
-    if (gGlesHandle == NULL) {
-        const char *err = dlerror();
-        a2_log_f(@"%s ★阻断★：GLESv2 兼容底 dlopen 失败 %s（%s）",
-                 A2GlBridgeJudgementTag, glesPath.UTF8String, err ? err : "(dlerror 无输出)");
-        a2_gl_bridge_teardown();
-        return A2GlBridgeErrLoadFailed;
-    }
-    // 后端本体（compat 底 = libgl4es_114.dylib）：RTLD_GLOBAL 让 MC 后续能直接解析到它的 GL 符号。
-    gRendererHandle = dlopen(rendererPath.UTF8String, RTLD_LAZY | RTLD_GLOBAL);
-    if (gRendererHandle == NULL) {
-        const char *err = dlerror();
-        a2_log_f(@"%s ★阻断★：后端本体 dlopen 失败 %s（%s）",
-                 A2GlBridgeJudgementTag, rendererPath.UTF8String, err ? err : "(dlerror 无输出)");
-        a2_gl_bridge_teardown();
-        return A2GlBridgeErrLoadFailed;
-    }
-    a2_log_f(@"%s 已加载兼容底：EGL=%s handle=%p；GLESv2=%s handle=%p；后端=%s handle=%p",
-             A2GlBridgeJudgementTag, eglPath.UTF8String, gEglHandle,
-             glesPath.UTF8String, gGlesHandle, rendererName, gRendererHandle);
+    a2_log_f(@"[A2-GLBRIDGE] 已加载兼容底：EGL=%s handle=%p；GLESv2=%s handle=%p；后端(GL 层)=%s handle=%p",
+             eglFromMG ? "(MG 自带 egl*)"
+                       : (hostEglBackend ? "(main image 假 EGL)" : eglPath.UTF8String), gEglHandle,
+             eglFromMG ? "(MG 自带，无 ANGLE GLESv2)" : glesPath.UTF8String, gGlesHandle,
+             glLayerName, gRendererHandle);
 
     if (a2BackendIsMG) {
         // ---- ④a2 ★符号归属核对★（MG 自己要报 SYMBOL THEFT 的那件事，我们自己也取一份证据）----
@@ -1114,27 +1312,32 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     }
 
     // ---- ⑤ 取 EGL 函数指针表（必需符号缺一即判加载失败）----
+    // ★来源由 `a2_gl_bridge_egl_source()` 唯一决定★（MG 自带 ⇒ MG 句柄；否则 ⇒ ANGLE / 假 EGL 句柄）：
+    //   句柄只从 `a2_gl_bridge_egl_entry_handle()` 取一份，下面所有 `egl*` 都从它解析，不各写判断。
+    void *eglEntryHandle = a2_gl_bridge_egl_entry_handle();
     int missing = 0;
-    gEglGetDisplay          = (A2PFN_eglGetDisplay)a2_gl_bridge_egl_symbol(gEglHandle, "eglGetDisplay", &missing);
-    gEglInitialize          = (A2PFN_eglInitialize)a2_gl_bridge_egl_symbol(gEglHandle, "eglInitialize", &missing);
-    gEglChooseConfig        = (A2PFN_eglChooseConfig)a2_gl_bridge_egl_symbol(gEglHandle, "eglChooseConfig", &missing);
-    gEglCreateContext       = (A2PFN_eglCreateContext)a2_gl_bridge_egl_symbol(gEglHandle, "eglCreateContext", &missing);
-    gEglCreateWindowSurface = (A2PFN_eglCreateWindowSurface)a2_gl_bridge_egl_symbol(gEglHandle, "eglCreateWindowSurface", &missing);
-    gEglMakeCurrent         = (A2PFN_eglMakeCurrent)a2_gl_bridge_egl_symbol(gEglHandle, "eglMakeCurrent", &missing);
-    gEglGetError            = (A2PFN_eglGetError)a2_gl_bridge_egl_symbol(gEglHandle, "eglGetError", &missing);
+    gEglGetDisplay          = (A2PFN_eglGetDisplay)a2_gl_bridge_egl_symbol(eglEntryHandle, "eglGetDisplay", &missing);
+    gEglInitialize          = (A2PFN_eglInitialize)a2_gl_bridge_egl_symbol(eglEntryHandle, "eglInitialize", &missing);
+    gEglChooseConfig        = (A2PFN_eglChooseConfig)a2_gl_bridge_egl_symbol(eglEntryHandle, "eglChooseConfig", &missing);
+    gEglCreateContext       = (A2PFN_eglCreateContext)a2_gl_bridge_egl_symbol(eglEntryHandle, "eglCreateContext", &missing);
+    gEglCreateWindowSurface = (A2PFN_eglCreateWindowSurface)a2_gl_bridge_egl_symbol(eglEntryHandle, "eglCreateWindowSurface", &missing);
+    gEglMakeCurrent         = (A2PFN_eglMakeCurrent)a2_gl_bridge_egl_symbol(eglEntryHandle, "eglMakeCurrent", &missing);
+    gEglGetError            = (A2PFN_eglGetError)a2_gl_bridge_egl_symbol(eglEntryHandle, "eglGetError", &missing);
     if (missing) {
         a2_log_f(@"%s ★阻断★：EGL 函数指针表不全（见上一行点名的符号）", A2GlBridgeJudgementTag);
         a2_gl_bridge_teardown();
         return A2GlBridgeErrLoadFailed;
     }
     // 可选符号（缺了只影响能力，不影响建面主路径）：各自失败即静默留空，不打"阻断"。
-    gEglBindAPI           = (A2PFN_eglBindAPI)dlsym(gEglHandle, "eglBindAPI");
-    gEglSwapBuffers       = (A2PFN_eglSwapBuffers)dlsym(gEglHandle, "eglSwapBuffers");
-    gEglGetProcAddress    = (A2PFN_eglGetProcAddress)dlsym(gEglHandle, "eglGetProcAddress");
-    gEglDestroySurface    = (A2PFN_eglDestroySurface)dlsym(gEglHandle, "eglDestroySurface");
-    gEglDestroyContext    = (A2PFN_eglDestroyContext)dlsym(gEglHandle, "eglDestroyContext");
-    gEglTerminate         = (A2PFN_eglTerminate)dlsym(gEglHandle, "eglTerminate");
-    gEglQuerySurface      = (A2PFN_eglQuerySurface)dlsym(gEglHandle, "eglQuerySurface");
+    // `eglGetConfigAttrib` 只用来把「选定配置的位深」打进判据行（⑥ 之后），缺了不影响建面 ⇒ 同样宽容。
+    gEglGetConfigAttrib   = (A2PFN_eglGetConfigAttrib)a2_gl_bridge_egl_symbol(eglEntryHandle, "eglGetConfigAttrib", NULL);
+    gEglBindAPI           = (A2PFN_eglBindAPI)dlsym(eglEntryHandle, "eglBindAPI");
+    gEglSwapBuffers       = (A2PFN_eglSwapBuffers)dlsym(eglEntryHandle, "eglSwapBuffers");
+    gEglGetProcAddress    = (A2PFN_eglGetProcAddress)dlsym(eglEntryHandle, "eglGetProcAddress");
+    gEglDestroySurface    = (A2PFN_eglDestroySurface)dlsym(eglEntryHandle, "eglDestroySurface");
+    gEglDestroyContext    = (A2PFN_eglDestroyContext)dlsym(eglEntryHandle, "eglDestroyContext");
+    gEglTerminate         = (A2PFN_eglTerminate)dlsym(eglEntryHandle, "eglTerminate");
+    gEglQuerySurface      = (A2PFN_eglQuerySurface)dlsym(eglEntryHandle, "eglQuerySurface");
 
     // ---- ⑥ 建 EGL display / config / context / surface ----
     gDpy = gEglGetDisplay(A2_EGL_DEFAULT_DISPLAY);
@@ -1195,6 +1398,15 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
                      A2GlBridgeJudgementTag, (unsigned)(gEglGetError ? gEglGetError() : 0));
             a2_gl_bridge_teardown();
             return A2GlBridgeErrEgl;
+        }
+        // ★判据：选定配置的 Alpha/Depth 位深★ —— 证明建面用的确实是「请求的那份配置」，
+        //   也是「EGL 表到底从哪个镜像取的」这条结论的旁证（MG 自带 EGL 时同样出这一行）。
+        if (gEglGetConfigAttrib != NULL) {
+            A2EGLint alphaBits = -1, depthBits = -1;
+            gEglGetConfigAttrib(gDpy, gCfg, A2_EGL_ALPHA_SIZE, &alphaBits);
+            gEglGetConfigAttrib(gDpy, gCfg, A2_EGL_DEPTH_SIZE, &depthBits);
+            a2_log_criterion(@"[A2-GLBRIDGE] 选定 EGL config：alpha=%d depth=%d（请求 8/24）",
+                             (int)alphaBits, (int)depthBits);
         }
     }
 
@@ -1275,11 +1487,14 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
             a2_log_f(@"[A2-GL-BRIDGE] KW 上下文模式=%s（键 A2KWContextMode；0=ES3 1=ES1 2=ES2）",
                      (kwMode == 1) ? "ES1" : ((kwMode == 2) ? "ES2" : "ES3"));
         }
-        const A2EGLint wantVersion = isKrypton ? (kwMode == 1 ? 1 : (kwMode == 2 ? 2 : 3)) : 2;
+        // ★宿主 EGL 后端只认 ES3★：假 EGL 的 `eglCreateContext` 明确拒绝 version≠3
+        //   （不做 ES2 降级，见 a2_eagl_egl.m）；它的 EAGLContext 也只按 ES3 建。
+        const A2EGLint wantVersion = isKrypton ? (kwMode == 1 ? 1 : (kwMode == 2 ? 2 : 3))
+                                               : (hostEglBackend ? 3 : 2);
         A2EGLint gotVersion = wantVersion;   // ★实际拿到的版本★（回退时为 fbVersion，日志按它记，不假装）
         const A2EGLint ctxAttribs[] = { A2_EGL_CONTEXT_CLIENT_VERSION, wantVersion, A2_EGL_NONE };
         gCtx = gEglCreateContext(gDpy, gCfg, A2_EGL_NO_CONTEXT, ctxAttribs);
-        if (gCtx == A2_EGL_NO_CONTEXT && wantVersion != 2) {
+        if (isKrypton && gCtx == A2_EGL_NO_CONTEXT && wantVersion != 2) {
             // ES1 被拒时**退到基线 ES3**（而不是 ES2）：KW 是 DEFAULT_ES=3 编的，ES2 是它没测过的
             // 第三态 ⇒ 退 ES2 会让 A/B 比不出东西；退 ES3 才等于「回到 A 包现状」。
             const A2EGLint fbVersion = (wantVersion == 1) ? 3 : 2;
@@ -1304,18 +1519,31 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
 
     // ---- ⑥1 其余后端：surface（KW 已在 ⑥0 建过，属性为 NULL）----
     if (!isKrypton) {
+        // ★宿主 EGL 后端★：native window 必须是 `A2FakeEglWindowSize{宽, 高, 图层}` ——
+        //   假 EGL 据此把 CAEAGLLayer 当 drawable（上屏）；普通后端仍就传图层指针。
+        //   ★box 是栈变量★，eglCreateWindowSurface 内部会同步读走（不存指针）。
+        A2FakeEglWindowSize hostWinBox = { 0, 0, NULL };
+        A2FakeEglWindowSize *hostWinBoxPtr = NULL;
+        if (hostEglBackend) {
+            hostWinBox.width  = (A2EGLint)drawableW;
+            hostWinBox.height = (A2EGLint)drawableH;
+            hostWinBox.layer  = renderable;
+            hostWinBoxPtr = &hostWinBox;
+        }
         // 先带尺寸建；若实现不接受 EGL_WIDTH/HEIGHT（非核心 EGL 属性）再退到无属性。
         const A2EGLint surfAttribs[] = {
             A2_EGL_WIDTH,  (A2EGLint)drawableW,
             A2_EGL_HEIGHT, (A2EGLint)drawableH,
             A2_EGL_NONE
         };
-        gSurf = gEglCreateWindowSurface(gDpy, gCfg, (A2EGLNativeWindowType)renderable, surfAttribs);
+        gSurf = gEglCreateWindowSurface(gDpy, gCfg,
+                                        a2_gl_bridge_window_arg(hostWinBoxPtr, renderable), surfAttribs);
         if (gSurf == A2_EGL_NO_SURFACE) {
             A2EGLint e1 = gEglGetError ? gEglGetError() : 0;
-            a2_log_f(@"%s EGL 建面：带尺寸(%dx%d 像素)失败 eglError=0x%x ⇒ 退到无属性重试",
-                     A2GlBridgeJudgementTag, drawableW, drawableH, (unsigned)e1);
-            gSurf = gEglCreateWindowSurface(gDpy, gCfg, (A2EGLNativeWindowType)renderable, NULL);
+            a2_log_f(@"[A2-GLBRIDGE] EGL 建面：带尺寸(%dx%d 像素)失败 eglError=0x%x ⇒ 退到无属性重试",
+                     drawableW, drawableH, (unsigned)e1);
+            gSurf = gEglCreateWindowSurface(gDpy, gCfg,
+                                            a2_gl_bridge_window_arg(hostWinBoxPtr, renderable), NULL);
         }
         if (gSurf == A2_EGL_NO_SURFACE) {
             a2_log_f(@"%s ★阻断★：EGL 建面失败：eglCreateWindowSurface 返回 NO_SURFACE（eglError=0x%x；句柄=%p 像素格式=%d）",

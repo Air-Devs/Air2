@@ -24,9 +24,10 @@
 @implementation A2RendererCatalog
 
 NSString *const A2RendererNGGL4ESKWDylibName = @"libnggl4es_kw.dylib";
+NSString *const A2RendererHostEGLDylibName  = @"libeagl.dylib";
 
 + (NSArray<A2Renderer *> *)allCandidates {
-    // ★顺序即 UI 顺序★：主推 → 兼容底 → 实验（未内置）。
+    // ★顺序即 UI 顺序★：主推（按默认优先级） → 兼容底 → 实验（未内置）。
     static NSArray<A2Renderer *> *candidates = nil;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
@@ -34,6 +35,14 @@ NSString *const A2RendererNGGL4ESKWDylibName = @"libnggl4es_kw.dylib";
             [[A2Renderer alloc] initWithIdentifier:@"libmetallum.dylib"
                                        displayName:@"Metal (metallum)"
                                          dylibName:@"libmetallum.dylib"
+                                             notes:@"recommended"],
+            // ★系统 GLES 3.0（EAGL）★ —— 1.17+ 的**临时默认项**（2026-10-31 决定）：
+            //   EGL = 本二进制里的假 EGL（宿主提供），GL 层 = MobileGlues。
+            //   ★不是包内的 dylib★：标识只是「选择了哪条链路」的稳定值，
+            //   包内存在性由 +bundleDiagnosisForCandidate: 落到 GL 层上判（见那里的说明）。
+            [[A2Renderer alloc] initWithIdentifier:A2RendererHostEGLDylibName
+                                       displayName:@"系统 GLES 3.0 (EAGL)"
+                                         dylibName:A2RendererHostEGLDylibName
                                              notes:@"recommended"],
             [[A2Renderer alloc] initWithIdentifier:@"libgl4es_114.dylib"
                                        displayName:@"GL4ES"
@@ -119,6 +128,11 @@ NSString *const A2RendererNGGL4ESKWDylibName = @"libnggl4es_kw.dylib";
     if (identifier.length == 0) return A2RendererGLClassNotGL;
     NSString *lower = identifier.lowercaseString;
 
+    // ★宿主 EGL 后端（系统 GLES 3.0 / EAGL）★：对 MC 而言它是「GL 3.2+」档 ——
+    //   宿主那一侧只有 ES 3.0，但 GL 层是 MobileGlues（对外报 GL 4.5）⇒ 归「现代」
+    //   这一档（固定管线/非 GL 两档都不适用）。显式列出，不靠下面那条兜底默认。
+    if ([identifier isEqualToString:A2RendererHostEGLDylibName]) return A2RendererGLClassModern;
+
     // MoltenVK = Vulkan ICD：导出 vkGetInstanceProcAddr 一族，**没有 EGL、也没有 gl\***。
     // 把它当 GL 库下发 ⇒ LWJGL 取 gl* 符号必失败（闪退）；它也永远不可能进 EGL 白名单。
     if ([lower containsString:@"moltenvk"]) return A2RendererGLClassNotGL;
@@ -155,6 +169,18 @@ NSString *const A2RendererNGGL4ESKWDylibName = @"libnggl4es_kw.dylib";
     if (candidate == nil || frameworksPath.length == 0) return @"包内未解析出 Frameworks 路径";
     NSString *name = candidate.dylibName ?: candidate.identifier;
     if (name.length == 0) return @"候选没有 dylib 文件名";
+
+    // ★宿主 EGL 后端★：EGL 那一半在本二进制里（没有、也不需要 `Frameworks/libeagl.dylib` 这个文件），
+    //   但它的 **GL 层是 MobileGlues** —— 少了 GL 层照样跑不起来。
+    //   ⇒ 判据落在 GL 层候选上（同一套「文件在 + 能 dlopen」口径，不另造一套），
+    //     原因串前面加一句「宿主 EGL 的 GL 层不可用」，让阻断文案说清缺的是哪一半。
+    if ([candidate.identifier isEqualToString:A2RendererHostEGLDylibName]) {
+        A2Renderer *glLayer = [self candidateForIdentifier:@"libmobileglues.dylib"];
+        if (glLayer == nil) return @"宿主 EGL 的 GL 层候选未登记";
+        NSString *why = [self bundleDiagnosisForCandidate:glLayer frameworksPath:frameworksPath];
+        return why ? [@"宿主 EGL 的 GL 层不可用：" stringByAppendingString:why] : nil;
+    }
+
     NSString *path = [frameworksPath stringByAppendingPathComponent:name];
 
     BOOL isDir = NO;

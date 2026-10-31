@@ -43,6 +43,7 @@
 
 #import <Foundation/Foundation.h>
 #import <dlfcn.h>
+#import <objc/message.h>     // objc_msgSend（取/设宿主图层的 bounds / contentsScale；不 import QuartzCore）
 #import <string.h>
 #import <stdlib.h>
 #import <time.h>
@@ -61,8 +62,10 @@
 - (instancetype)initWithAPI:(NSUInteger)api;
 - (instancetype)initWithAPI:(NSUInteger)api sharegroup:(id)sharegroup;
 - (id)sharegroup;
-// `-presentRenderbuffer:`（P2 真接到屏幕上才需要）故意不在这里声明：P1 只有离屏面，
-// 声明一个没人调的方法等于给后来者一个「这层能呈现」的错觉。
+/// ★上屏的两个入口（P2）★：颜色 renderbuffer 由 EAGL 按 drawable（CAEAGLLayer）建，
+/// 交换 = `-presentRenderbuffer:`。★离屏面不调它们★，所以「离屏路径的语义」一字未变。
+- (BOOL)renderbufferStorage:(NSUInteger)target fromDrawable:(id<NSObject>)drawable;
+- (BOOL)presentRenderbuffer:(NSUInteger)target;
 @end
 
 /// `EAGLContext` 的**类方法**（`+setCurrentContext:` / `+currentContext`）。
@@ -113,6 +116,10 @@ typedef long          A2GLsizeiptr;
 #define A2GL_UNSIGNED_BYTE             0x1401
 #define A2GL_VERSION                   0x1F02
 #define A2GL_RENDERER                  0x1F01
+// ★上屏（P2）用★：颜色 renderbuffer 由 `-renderbufferStorage:fromDrawable:` 建好之后，
+// 它的真实尺寸只能从这两个 GL 查询里读（图层点数×scale 不一定等于实现回报）。
+#define A2GL_RENDERBUFFER_WIDTH        0x8D42
+#define A2GL_RENDERBUFFER_HEIGHT       0x8D43
 
 // ===========================================================================
 //  进程级状态
@@ -161,7 +168,17 @@ static __thread void  *tlsCurrentRead;           ///<   下面的注册表持有
 @property (nonatomic, assign) EGLint swapInterval;
 @property (nonatomic, assign) NSUInteger swapFrames;
 @property (nonatomic, assign) double lastSwapMs;
+/// ★上屏（P2）★：CAEAGLLayer（离屏面 = nil）。有它 ⇒ 颜色 renderbuffer 由 EAGL 按它建，
+/// swap = presentRenderbuffer:；没有 ⇒ 离屏 FBO，swap 只 flush（P1 原行为）。
+@property (nonatomic, strong) id drawableLayer;
+/// 这块 CAEAGLLayer 是本层挂上去的（⇒ 销毁时摘掉；宿主自己的图层不摘）。
+@property (nonatomic, assign) BOOL ownsDrawableLayer;
 @end
+
+/// 上屏面？（`layer` 给了且拿到了 drawable）—— 唯一的判据是 `drawableLayer != nil`。
+static BOOL a2_fe_surface_is_onscreen(A2FakeEglSurface *s) {
+    return s != nil && s.drawableLayer != nil;
+}
 
 static A2FakeEglDisplay *gDisplay;                ///< display 单例（eglGetDisplay 的返回值）
 static A2FakeEglConfig  *gConfig;                 ///< 唯一 config（能力固定，见 -valueForAttribute:out:）
@@ -203,6 +220,134 @@ static A2FakeEglContext *a2_fe_context_of(EGLContext ctx) {
 
 static A2FakeEglSurface *a2_fe_surface_of(EGLSurface surf) {
     return surf == EGL_NO_SURFACE ? nil : a2_fe_lookup(gSurfaces, (void *)surf);
+}
+
+// ===========================================================================
+//  宿主图层的最小面（★不 import QuartzCore/UIKit★ —— 同 a2_gl_bridge.m 的取舍）
+// ---------------------------------------------------------------------------
+//  上屏只需要图层的五件事：bounds（点） / contentsScale（像素每点） / 设 frame /
+//  挂子层 / 摘子层。CAEAGLLayer 本身是 CALayer 的子类 ⇒ 用 NSClassFromString 拿类 +
+//  objc_msgSend 发消息，一个框架头都不引（否则本文件会把 QuartzCore 变成链接期依赖，
+//  与文件头「不 import OpenGLES 头」同一条理由）。
+//  ★CGRect 用同布局结构体传入传出★：arm64 上 CGFloat = double，四字段顺序固定
+//  （与 a2_gl_bridge.m 的 A2GlBridgeRect 同一手法）。
+// ===========================================================================
+typedef struct { double x, y, width, height; } A2FeRect;
+
+/// 取 bounds（取不到 / 宿主不是图层 ⇒ 全 0，不猜）。
+static A2FeRect a2_fe_layer_bounds(id layer) {
+    A2FeRect r = { 0.0, 0.0, 0.0, 0.0 };
+    if (layer == nil) return r;
+    SEL sel = NSSelectorFromString(@"bounds");
+    if (![layer respondsToSelector:sel]) return r;
+    return ((A2FeRect (*)(id, SEL))objc_msgSend)(layer, sel);
+}
+
+/// 取 contentsScale（取不到 ⇒ 0：调用方据此判「宿主没给像素口径」）。
+static double a2_fe_layer_contents_scale(id layer) {
+    if (layer == nil) return 0.0;
+    SEL sel = NSSelectorFromString(@"contentsScale");
+    if (![layer respondsToSelector:sel]) return 0.0;
+    return ((double (*)(id, SEL))objc_msgSend)(layer, sel);
+}
+
+static void a2_fe_layer_set_frame(id layer, A2FeRect frame) {
+    if (layer == nil) return;
+    SEL sel = NSSelectorFromString(@"setFrame:");
+    if (![layer respondsToSelector:sel]) return;
+    ((void (*)(id, SEL, A2FeRect))objc_msgSend)(layer, sel, frame);
+}
+
+static void a2_fe_layer_set_contents_scale(id layer, double scale) {
+    if (layer == nil || scale <= 0.0) return;
+    SEL sel = NSSelectorFromString(@"setContentsScale:");
+    if (![layer respondsToSelector:sel]) return;
+    ((void (*)(id, SEL, double))objc_msgSend)(layer, sel, scale);
+}
+
+static void a2_fe_layer_set_opaque(id layer, BOOL opaque) {
+    if (layer == nil) return;
+    SEL sel = NSSelectorFromString(@"setOpaque:");
+    if (![layer respondsToSelector:sel]) return;
+    ((void (*)(id, SEL, BOOL))objc_msgSend)(layer, sel, opaque);
+}
+
+/// 把 sub 挂到 host 上（host 不是图层 / 不接受子层 ⇒ 静默不挂：调用方会发现「画不出」）。
+static void a2_fe_layer_attach_sublayer(id host, id sub) {
+    if (host == nil || sub == nil) return;
+    SEL sel = NSSelectorFromString(@"addSublayer:");
+    if (![host respondsToSelector:sel]) {
+        a2_log_f(@"[A2-FAKEEGL] ★上屏不可用★：宿主对象不接受子层（不是 CALayer 形态）");
+        return;
+    }
+    ((void (*)(id, SEL, id))objc_msgSend)(host, sel, sub);
+}
+
+static void a2_fe_layer_detach(id layer) {
+    if (layer == nil) return;
+    SEL sel = NSSelectorFromString(@"removeFromSuperlayer");
+    if (![layer respondsToSelector:sel]) return;
+    ((void (*)(id, SEL))objc_msgSend)(layer, sel);
+}
+
+/// 上屏面的 drawable（★唯一产地★）：
+///   · 宿主自己就是 CAEAGLLayer ⇒ 直接用它（生命周期归宿主，本层不摘）；
+///   · 宿主是 CALayer/UIView ⇒ 新挂一块 CAEAGLLayer 上去（frame/contentsScale 抄宿主，
+///     bounds 还没布局时按调用方给的像素尺寸反推），`*outOwned = YES` 由本层持有并销毁。
+/// 返回 nil ⇒ 上屏做不到（没有 CAEAGLLayer 类 / 宿主不是图层）—— 调用方报 EGL_BAD_NATIVE_WINDOW。
+static id a2_fe_drawable_layer_new(void *hostOrView, EGLint wantW, EGLint wantH, BOOL *outOwned) {
+    if (outOwned != NULL) *outOwned = NO;
+    if (hostOrView == NULL) return nil;
+    id host = (__bridge id)hostOrView;
+
+    // 宿主给的是视图 ⇒ 取其图层（与 a2_gl_bridge.m 的 a2_gl_bridge_renderable_handle 同口径）。
+    SEL layerSel = NSSelectorFromString(@"layer");
+    if ([host respondsToSelector:layerSel]) {
+        id l = ((id (*)(id, SEL))objc_msgSend)(host, layerSel);
+        if (l != nil) host = l;
+    }
+
+    Class layerClass = NSClassFromString(@"CAEAGLLayer");
+    if (layerClass == Nil) {
+        a2_log_f(@"[A2-FAKEEGL] ★上屏不可用★：进程里没有 CAEAGLLayer 类（OpenGLES.framework 未加载）");
+        return nil;
+    }
+    double hostScale = a2_fe_layer_contents_scale(host);   // 0 = 宿主没给
+
+    if ([host isKindOfClass:layerClass]) {
+        // 宿主自己就是 CAEAGLLayer：只补 contentsScale（没给就 1.0 = 点当像素），不改它的 frame。
+        if (hostScale <= 0.0) a2_fe_layer_set_contents_scale(host, 1.0);
+        return host;
+    }
+
+    id drawable = ((id (*)(id, SEL))objc_msgSend)((id)layerClass, NSSelectorFromString(@"layer"));
+    if (drawable == nil) {
+        a2_log_f(@"[A2-FAKEEGL] ★上屏不可用★：CAEAGLLayer +layer 返回 nil");
+        return nil;
+    }
+    double scale = (hostScale > 0.0) ? hostScale : 1.0;
+    A2FeRect bounds = a2_fe_layer_bounds(host);
+    if (bounds.width <= 0.0 || bounds.height <= 0.0) {
+        // 宿主还没布局（bounds 全 0）：用调用方给的像素尺寸反推点尺寸（不猜 0 尺寸）。
+        if (wantW > 0 && wantH > 0) {
+            bounds.x = 0.0;
+            bounds.y = 0.0;
+            bounds.width  = (double)wantW / scale;
+            bounds.height = (double)wantH / scale;
+        }
+    }
+    a2_fe_layer_set_frame(drawable, bounds);
+    a2_fe_layer_set_contents_scale(drawable, scale);
+    a2_fe_layer_set_opaque(drawable, YES);
+    a2_fe_layer_attach_sublayer(host, drawable);
+
+    a2_log_f(@"[A2-FAKEEGL] 上屏 drawable 就绪：CAEAGLLayer 挂在宿主 %s 上，"
+             @"frame=%.1fx%.1f 点 × scale=%.2f ⇒ %.0fx%.0f 像素",
+             NSStringFromClass([host class]).UTF8String,
+             bounds.width, bounds.height, scale,
+             bounds.width * scale, bounds.height * scale);
+    if (outOwned != NULL) *outOwned = YES;
+    return drawable;
 }
 
 // ===========================================================================
@@ -389,7 +534,8 @@ static void *a2_fe_unowned(const char *name) {
 // ===========================================================================
 /// 删掉 surface 在**当前 current context** 里的 GL 对象（调用方必须保证 context 还是 current，
 /// 否则 GL 删除调用落在别的上下文里 / 无上下文，只会静默失败或误删）。
-static void a2_fe_surface_detach(A2FakeEglSurface *s) {
+/// 只碰 GL 对象，不动图层（上屏面的 drawable 归 surface 生命周期管，见 a2_fe_surface_detach）。
+static void a2_fe_surface_release_gl(A2FakeEglSurface *s) {
     if (!s.attached) return;
     if (s.framebuffer != 0) {
         A2GLuint fbo = s.framebuffer;
@@ -410,8 +556,71 @@ static void a2_fe_surface_detach(A2FakeEglSurface *s) {
     s.ownerContext = NULL;
 }
 
+/// 只摘本层自己挂的 CAEAGLLayer（★不碰 GL 对象★）。用于「这张面已经不是 current」的销毁路径：
+/// GL 对象随属主 context 一起消失，但图层必须当场摘掉，否则屏幕上会留一块死像素。
+static void a2_fe_surface_release_owned_layer(A2FakeEglSurface *s) {
+    if (s.ownsDrawableLayer) {
+        a2_fe_layer_detach(s.drawableLayer);   // 宿主自己的图层不摘（所有权不在本层）
+        a2_log_f(@"[A2-FAKEEGL] 上屏 drawable 已从宿主图层摘除");
+    }
+    s.drawableLayer = nil;
+    s.ownsDrawableLayer = NO;
+}
+
+/// 彻底销毁一张面：先释放 GL 对象（须在当前 context 里调），再摘掉本层自己挂的 CAEAGLLayer。
+static void a2_fe_surface_detach(A2FakeEglSurface *s) {
+    a2_fe_surface_release_gl(s);
+    a2_fe_surface_release_owned_layer(s);
+}
+
+/// ★上屏面的颜色附着★：由 `EAGLContext -renderbufferStorage:fromDrawable:` 按 CAEAGLLayer 建
+/// （★这是唯一能把画面送上屏幕的建法★ —— 自己 `glRenderbufferStorage` 建的 renderbuffer
+/// 没有可呈现的 backing）。建完立刻把**实现回报的** drawable 尺寸读回来写进 surface：
+/// 图层的点数×scale 只是期望值，真实像素以 `GL_RENDERBUFFER_WIDTH/HEIGHT` 为准（不猜）。
+/// 调用点：`a2_fe_surface_attach`（首次 attach 与尺寸变化后的重建都走它）。
+static BOOL a2_fe_surface_color_from_drawable(A2FakeEglSurface *s, A2FakeEglContext *ctx,
+                                              A2GLuint *outRenderbuffer) {
+    if (outRenderbuffer == NULL) return NO;
+    id eagl = ctx.eaglContext;
+    if (eagl == nil) {
+        a2_log_f(@"[A2-FAKEEGL] ★上屏失败★：context 没有 EAGLContext");
+        return NO;
+    }
+    A2GLuint rb = 0;
+    A2_GL(void (*)(A2GLsizei, A2GLuint *), "glGenRenderbuffers")(1, &rb);
+    A2_GL(void (*)(A2GLenum, A2GLuint), "glBindRenderbuffer")(A2GL_RENDERBUFFER, rb);
+
+    BOOL ok = [(id<A2EAGLContextFace>)eagl renderbufferStorage:A2GL_RENDERBUFFER
+                                                   fromDrawable:(id<NSObject>)s.drawableLayer];
+    if (!ok) {
+        a2_log_f(@"[A2-FAKEEGL] ★上屏失败★：-renderbufferStorage:fromDrawable: 返回 NO"
+                 @"（drawable=%p，期望 %dx%d）", (__bridge void *)s.drawableLayer, s.width, s.height);
+        if (rb != 0) A2_GL(void (*)(A2GLsizei, const A2GLuint *), "glDeleteRenderbuffers")(1, &rb);
+        return NO;
+    }
+
+    A2GLint dw = 0, dh = 0;
+    A2_GL(void (*)(A2GLenum, A2GLenum, A2GLint *), "glGetRenderbufferParameteriv")(
+        A2GL_RENDERBUFFER, A2GL_RENDERBUFFER_WIDTH, &dw);
+    A2_GL(void (*)(A2GLenum, A2GLenum, A2GLint *), "glGetRenderbufferParameteriv")(
+        A2GL_RENDERBUFFER, A2GL_RENDERBUFFER_HEIGHT, &dh);
+    if (dw > 0 && dh > 0) {
+        s.width = dw;
+        s.height = dh;
+    } else {
+        // 实现没回报尺寸（不该发生）：沿用期望值，并在日志里如实说明「这是期望不是实测」。
+        a2_log_f(@"[A2-FAKEEGL] ⚠️ 上屏 drawable 尺寸查询为 0 ⇒ 沿用期望值 %dx%d（未实测）",
+                 s.width, s.height);
+    }
+    *outRenderbuffer = rb;
+    return YES;
+}
+
 /// 在 ctx 里把 surface 建好并绑成当前 framebuffer。调用方必须已把 ctx 设为 current。
+/// ★两条路径只有「颜色附着由谁给」这一处分叉★：离屏 = `glRenderbufferStorage`（本层自建），
+///   上屏 = `-renderbufferStorage:fromDrawable:`（EAGL 按 CAEAGLLayer 建，可 present）。
 static BOOL a2_fe_surface_attach(A2FakeEglSurface *s, A2FakeEglContext *ctx) {
+    const BOOL onscreen = a2_fe_surface_is_onscreen(s);
     if (s.attached && s.ownerContext == (__bridge void *)ctx) {
         // 已在本 context 里建过 ⇒ 只重新绑定（EGL 允许反复 makeCurrent）。
         A2_GL(void (*)(A2GLenum, A2GLuint), "glBindFramebuffer")(A2GL_FRAMEBUFFER, s.framebuffer);
@@ -434,14 +643,23 @@ static BOOL a2_fe_surface_attach(A2FakeEglSurface *s, A2FakeEglContext *ctx) {
     A2_GL(void (*)(A2GLsizei, A2GLuint *), "glGenFramebuffers")(1, &fbo);
     A2_GL(void (*)(A2GLenum, A2GLuint), "glBindFramebuffer")(A2GL_FRAMEBUFFER, fbo);
 
-    A2_GL(void (*)(A2GLsizei, A2GLuint *), "glGenRenderbuffers")(1, &color);
-    A2_GL(void (*)(A2GLenum, A2GLuint), "glBindRenderbuffer")(A2GL_RENDERBUFFER, color);
-    A2_GL(void (*)(A2GLenum, A2GLenum, A2GLsizei, A2GLsizei), "glRenderbufferStorage")(
-        A2GL_RENDERBUFFER, A2GL_RGBA8, s.width, s.height);
+    if (onscreen) {
+        if (!a2_fe_surface_color_from_drawable(s, ctx, &color)) {
+            if (fbo) A2_GL(void (*)(A2GLsizei, const A2GLuint *), "glDeleteFramebuffers")(1, &fbo);
+            return NO;
+        }
+    } else {
+        A2_GL(void (*)(A2GLsizei, A2GLuint *), "glGenRenderbuffers")(1, &color);
+        A2_GL(void (*)(A2GLenum, A2GLuint), "glBindRenderbuffer")(A2GL_RENDERBUFFER, color);
+        A2_GL(void (*)(A2GLenum, A2GLenum, A2GLsizei, A2GLsizei), "glRenderbufferStorage")(
+            A2GL_RENDERBUFFER, A2GL_RGBA8, s.width, s.height);
+    }
     A2_GL(void (*)(A2GLenum, A2GLenum, A2GLenum, A2GLuint), "glFramebufferRenderbuffer")(
         A2GL_FRAMEBUFFER, A2GL_COLOR_ATTACHMENT0, A2GL_RENDERBUFFER, color);
 
     // 深度/模板：config 报的是 D24S8，一次打包成 GL_DEPTH24_STENCIL8 同时挂两个 attachment。
+    // ★尺寸用 s.width/height★：上屏面此时已被 `-renderbufferStorage:fromDrawable:` 改成
+    //   实现回报的真实像素（两者不一致会让深度面比颜色面小 → FBO 不完整）。
     A2GLint depthBits = 0, stencilBits = 0;
     [gConfig valueForAttribute:EGL_DEPTH_SIZE out:&depthBits];
     [gConfig valueForAttribute:EGL_STENCIL_SIZE out:&stencilBits];
@@ -458,7 +676,8 @@ static BOOL a2_fe_surface_attach(A2FakeEglSurface *s, A2FakeEglContext *ctx) {
 
     A2GLenum status = A2_GL(A2GLenum (*)(A2GLenum), "glCheckFramebufferStatus")(A2GL_FRAMEBUFFER);
     if (status != A2GL_FRAMEBUFFER_COMPLETE) {
-        a2_log_f(@"[A2-FAKEEGL] FBO 不完整 status=0x%04x（%dx%d）", status, s.width, s.height);
+        a2_log_f(@"[A2-FAKEEGL] FBO 不完整 status=0x%04x（%dx%d%s）", status, s.width, s.height,
+                 onscreen ? "，上屏" : "，离屏");
         if (fbo)   { A2_GL(void (*)(A2GLsizei, const A2GLuint *), "glDeleteFramebuffers")(1, &fbo); }
         if (color) { A2_GL(void (*)(A2GLsizei, const A2GLuint *), "glDeleteRenderbuffers")(1, &color); }
         if (depth) { A2_GL(void (*)(A2GLsizei, const A2GLuint *), "glDeleteRenderbuffers")(1, &depth); }
@@ -472,7 +691,36 @@ static BOOL a2_fe_surface_attach(A2FakeEglSurface *s, A2FakeEglContext *ctx) {
     s.ownerContext = (__bridge void *)ctx;
     A2_GL(void (*)(A2GLenum, A2GLuint), "glBindFramebuffer")(A2GL_FRAMEBUFFER, fbo);
     A2_GL(void (*)(A2GLint, A2GLint, A2GLsizei, A2GLsizei), "glViewport")(0, 0, s.width, s.height);
+    if (onscreen) {
+        a2_log_f(@"[A2-FAKEEGL] 上屏面已附着：drawable=%p %dx%d 像素（FBO=%u 颜色 RB=%u 深度 RB=%u）",
+                 (__bridge void *)s.drawableLayer, s.width, s.height,
+                 fbo, color, depth);
+    }
     return YES;
+}
+
+/// 上屏面的尺寸跟随：图层的 bounds×contentsScale 变了（旋转 / 分屏 / 窗口缩放）⇒
+/// 颜色 renderbuffer 重新按 drawable 建（EAGL 的机制就是**再调一次**
+/// `-renderbufferStorage:fromDrawable:`），深度面与 FBO 跟着重建。
+/// ★每帧只读两个图层属性★：尺寸没变 ⇒ 一个 GL 调用都不发（不在热路径上加开销）。
+/// 调用点：`eglSwapBuffers`（上屏面，present 之前）。
+static void a2_fe_surface_sync_drawable(A2FakeEglSurface *s, A2FakeEglContext *ctx) {
+    if (!a2_fe_surface_is_onscreen(s) || ctx == nil) return;
+    A2FeRect b = a2_fe_layer_bounds(s.drawableLayer);
+    double scale = a2_fe_layer_contents_scale(s.drawableLayer);
+    if (b.width <= 0.0 || b.height <= 0.0 || scale <= 0.0) return;   // 图层没布局 / 没给口径 ⇒ 不动
+    EGLint w = (EGLint)(b.width * scale + 0.5);
+    EGLint h = (EGLint)(b.height * scale + 0.5);
+    if (w == s.width && h == s.height) return;
+
+    a2_log_f(@"[A2-FAKEEGL] 上屏面尺寸变化 %dx%d -> %dx%d（按 drawable 重建）",
+             s.width, s.height, w, h);
+    s.width = w;
+    s.height = h;
+    a2_fe_surface_release_gl(s);                 // 旧 GL 对象属于本 context（swap 时必为 current）
+    if (!a2_fe_surface_attach(s, ctx)) {
+        a2_log_f(@"[A2-FAKEEGL] ★上屏面重建失败★（%dx%d）—— 本帧不再 present", w, h);
+    }
 }
 
 // ===========================================================================
@@ -529,6 +777,8 @@ EGLBoolean eglTerminate(EGLDisplay dpy) {
         if ((tlsCurrentDraw == (__bridge void *)s || tlsCurrentRead == (__bridge void *)s) &&
             tlsCurrentContext != NULL) {
             a2_fe_surface_detach(s);
+        } else {
+            a2_fe_surface_release_owned_layer(s);   // 上屏面：图层必须摘，GL 对象随 context 消失
         }
         [gSurfaces removeObject:s];
     }
@@ -731,23 +981,47 @@ EGLBoolean eglGetConfigAttrib(EGLDisplay dpy, EGLConfig config, EGLint attribute
     return EGL_TRUE;
 }
 
-/// surface 创建的唯一实现处（window / pbuffer 只是尺寸来源不同）。
-static EGLSurface a2_fe_surface_new(EGLint width, EGLint height, BOOL pbuffer) {
-    if (width <= 0 || height <= 0 || width > A2_FAKEEGL_MAX_SURFACE_DIM ||
+/// surface 创建的唯一实现处（window / pbuffer 只是尺寸来源不同；window 再按 `layer`
+/// 分「离屏」与「上屏」两态 —— 上屏的 drawable 在这里就挂好，真正建 renderbuffer 在 attach）。
+static EGLSurface a2_fe_surface_new(EGLint width, EGLint height, BOOL pbuffer, void *layer) {
+    // ★上屏面允许宽高为 0★（尺寸来自宿主图层；attach 时以实现回报的可测值为准）；
+    //   离屏面必须给正尺寸（本层不从窗口系统取尺寸，猜一个是不诚实）。
+    const BOOL onscreen = (layer != NULL) && !pbuffer;
+    if (width < 0 || height < 0 || width > A2_FAKEEGL_MAX_SURFACE_DIM ||
         height > A2_FAKEEGL_MAX_SURFACE_DIM) {
         a2_fe_set_error(EGL_BAD_PARAMETER);
         a2_log_f(@"[A2-FAKEEGL] surface 尺寸非法 %dx%d（上限 %d）",
                  width, height, A2_FAKEEGL_MAX_SURFACE_DIM);
         return EGL_NO_SURFACE;
     }
+    if (!onscreen && (width <= 0 || height <= 0)) {
+        a2_fe_set_error(EGL_BAD_PARAMETER);
+        a2_log_f(@"[A2-FAKEEGL] 离屏 surface 必须给正尺寸（得到 %dx%d）", width, height);
+        return EGL_NO_SURFACE;
+    }
+
     A2FakeEglSurface *s = [[A2FakeEglSurface alloc] init];
     s.width = width;
     s.height = height;
     s.pbuffer = pbuffer;
     s.swapInterval = 0;
+    if (onscreen) {
+        BOOL owned = NO;
+        id drawable = a2_fe_drawable_layer_new(layer, width, height, &owned);
+        if (drawable == nil) {
+            // 拿不到可呈现的 drawable ⇒ 如实报 EGL_BAD_NATIVE_WINDOW（不悄悄退回离屏）。
+            a2_fe_set_error(EGL_BAD_NATIVE_WINDOW);
+            a2_log_f(@"[A2-FAKEEGL] eglCreateWindowSurface ★失败★：宿主图层给不出 CAEAGLLayer（layer=%p）", layer);
+            return EGL_NO_SURFACE;
+        }
+        s.drawableLayer = drawable;
+        s.ownsDrawableLayer = owned;
+    }
     [gSurfaces addObject:s];
-    a2_log_f(@"[A2-FAKEEGL] surface 创建 %s %dx%d（离屏 renderbuffer+FBO，attach 在 makeCurrent 时）",
-             pbuffer ? "pbuffer" : "window", width, height);
+    a2_log_f(@"[A2-FAKEEGL] surface 创建 %s %dx%d（%s；attach 在 makeCurrent 时）",
+             pbuffer ? "pbuffer" : "window", width, height,
+             onscreen ? "上屏 CAEAGLLayer + presentRenderbuffer"
+                      : "离屏 renderbuffer+FBO，swap 只 flush");
     return (EGLSurface)(__bridge void *)s;
 }
 
@@ -777,6 +1051,7 @@ EGLSurface eglCreateWindowSurface(EGLDisplay dpy, EGLConfig config,
     const A2FakeEglWindowSize *size = (const A2FakeEglWindowSize *)win;
     EGLint width = size->width;
     EGLint height = size->height;
+    void *layer = size->layer;
     if (attrib_list != NULL) {
         for (int i = 0; attrib_list[i] != EGL_NONE; i += 2) {
             switch (attrib_list[i]) {
@@ -790,7 +1065,7 @@ EGLSurface eglCreateWindowSurface(EGLDisplay dpy, EGLConfig config,
             }
         }
     }
-    return a2_fe_surface_new(width, height, NO);
+    return a2_fe_surface_new(width, height, NO, layer);
 }
 
 EGLSurface eglCreatePbufferSurface(EGLDisplay dpy, EGLConfig config, const EGLint *attrib_list) {
@@ -839,7 +1114,7 @@ EGLSurface eglCreatePbufferSurface(EGLDisplay dpy, EGLConfig config, const EGLin
         a2_fe_set_error(EGL_BAD_ATTRIBUTE);
         return EGL_NO_SURFACE;
     }
-    return a2_fe_surface_new(width, height, YES);
+    return a2_fe_surface_new(width, height, YES, NULL);
 }
 
 EGLBoolean eglDestroySurface(EGLDisplay dpy, EGLSurface surface) {
@@ -855,6 +1130,7 @@ EGLBoolean eglDestroySurface(EGLDisplay dpy, EGLSurface surface) {
     }
     // GL 对象只在「它正被 current」时能删（删除调用要落在属主 context 上）；
     // 其余情形随 context 销毁一并释放（EAGL 的 renderbuffer 属于 context）。
+    // ★图层例外★：不管是不是 current，本层自己挂的 CAEAGLLayer 都要当场摘掉。
     if (tlsCurrentDraw == (__bridge void *)s || tlsCurrentRead == (__bridge void *)s) {
         a2_fe_surface_detach(s);
         tlsCurrentDraw = tlsCurrentRead = NULL;
@@ -862,6 +1138,8 @@ EGLBoolean eglDestroySurface(EGLDisplay dpy, EGLSurface surface) {
             // 只解绑 surface，context 仍是 current（EGL 允许 context 无 surface 时 current）。
             A2_GL(void (*)(A2GLenum, A2GLuint), "glBindFramebuffer")(A2GL_FRAMEBUFFER, 0);
         }
+    } else {
+        a2_fe_surface_release_owned_layer(s);
     }
     [gSurfaces removeObject:s];
     a2_log_f(@"[A2-FAKEEGL] surface 销毁 %dx%d", s.width, s.height);
@@ -1084,9 +1362,35 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
 
     struct timespec t0, t1;
     clock_gettime(CLOCK_MONOTONIC, &t0);
-    // 离屏面没有 CALayer 可呈现：flush 是「这一帧确实提交给驱动」的可判据动作。
-    // （P1 不做 CAEAGLLayer 呈现；P2 真接到屏幕时在这里加 presentRenderbuffer:。）
-    A2_GL(void (*)(void), "glFlush")();
+    // ★两条路径的唯一分叉★
+    //   · 离屏面：没有 CALayer 可呈现 ⇒ flush 是「这一帧确实提交给驱动」的可判据动作；
+    //   · 上屏面：先把尺寸跟随（旋转/缩放后 drawable 变了就重建），再
+    //     `-presentRenderbuffer:`（★这就是「上屏」本身★）。present 失败如实报错，不假装成功。
+    BOOL presented = NO;
+    if (a2_fe_surface_is_onscreen(s)) {
+        A2FakeEglContext *ctx = a2_fe_context_of((EGLContext)tlsCurrentContext);
+        a2_fe_surface_sync_drawable(s, ctx);       // 尺寸变了 ⇒ 重建（不变则零开销）
+        if (!s.attached) {                          // 重建失败 ⇒ 本帧没有可呈现的面
+            clock_gettime(CLOCK_MONOTONIC, &t1);
+            s.lastSwapMs = (t1.tv_sec - t0.tv_sec) * 1000.0 + (t1.tv_nsec - t0.tv_nsec) / 1e6;
+            a2_fe_set_error(EGL_BAD_SURFACE);
+            a2_log_f(@"[A2-FAKEEGL] ★上屏失败★：surface 未附着（重建失败），本帧不 present");
+            return EGL_FALSE;
+        }
+        A2_GL(void (*)(A2GLenum, A2GLuint), "glBindRenderbuffer")(A2GL_RENDERBUFFER,
+                                                                s.colorRenderbuffer);
+        presented = [(id<A2EAGLContextFace>)ctx.eaglContext presentRenderbuffer:A2GL_RENDERBUFFER];
+        if (!presented) {
+            clock_gettime(CLOCK_MONOTONIC, &t1);
+            s.lastSwapMs = (t1.tv_sec - t0.tv_sec) * 1000.0 + (t1.tv_nsec - t0.tv_nsec) / 1e6;
+            a2_fe_set_error(EGL_BAD_SURFACE);
+            a2_log_f(@"[A2-FAKEEGL] ★上屏失败★：-presentRenderbuffer: 返回 NO（drawable=%p %dx%d）",
+                     (__bridge void *)s.drawableLayer, s.width, s.height);
+            return EGL_FALSE;
+        }
+    } else {
+        A2_GL(void (*)(void), "glFlush")();
+    }
     clock_gettime(CLOCK_MONOTONIC, &t1);
 
     s.swapFrames++;
@@ -1094,9 +1398,11 @@ EGLBoolean eglSwapBuffers(EGLDisplay dpy, EGLSurface surface) {
     s.lastSwapMs = (t1.tv_sec - t0.tv_sec) * 1000.0 + (t1.tv_nsec - t0.tv_nsec) / 1e6;
     // 每帧都打会淹掉日志：前 3 帧 + 之后每 300 帧一行（与 [FRAME] 的采样节奏一致）。
     if (s.swapFrames <= 3 || s.swapFrames % 300 == 0) {
-        a2_log_f(@"[A2-FAKEEGL] swap frame=%lu ms=%.3f（%s %dx%d interval=%d total=%lu）",
-                 (unsigned long)s.swapFrames, s.lastSwapMs, s.pbuffer ? "pbuffer" : "window",
-                 s.width, s.height, (int)s.swapInterval, (unsigned long)gSwapCount);
+        a2_log_f(@"[A2-FAKEEGL] swap frame=%lu ms=%.3f（%s %dx%d interval=%d total=%lu %s）",
+                 (unsigned long)s.swapFrames, s.lastSwapMs,
+                 s.pbuffer ? "pbuffer" : (a2_fe_surface_is_onscreen(s) ? "上屏" : "window"),
+                 s.width, s.height, (int)s.swapInterval, (unsigned long)gSwapCount,
+                 presented ? "present=ok" : "flush");
     }
     return EGL_TRUE;
 }

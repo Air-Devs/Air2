@@ -77,6 +77,19 @@ typedef NS_ENUM(NSInteger, A2RendererGLClass) {
 /// 而清单登记在本类 ⇒ 三处必须同一份字面量（否则改一处忘一处就是石山）。
 extern NSString *const A2RendererNGGL4ESKWDylibName;
 
+/// ★宿主 EGL 后端（系统 GLES 3.0 / EAGL）的标识★ = `libeagl.dylib`。
+///
+/// 它**不是**一个包内的 dylib：整层 EGL（`Natives/Renderer/a2_eagl_egl.m` 的假 EGL 1.4 子集）
+/// 就编在主二进制里，`eglCreateWindowSurface` 落到 CAEAGLLayer + `presentRenderbuffer:`。
+/// 标识的后半段（`mobileglues` = GL 层）说明它怎么接：
+///   · EGL 层 = 本二进制（宿主提供）⇒ 不需要 `Frameworks/libeagl.dylib` 这个文件；
+///   · GL 层 = MobileGlues（`-Dorg.lwjgl.opengl.libname=mobileglues`），由它把 MC 的 GL 3.2+
+///     调用翻译到宿主的 GLES 3.0 上。
+/// ⇒ `+isBundled:` 对它判的是「GL 层在不在」（见实现里的说明），不判这个不存在的文件。
+/// ★为什么常量放 Core★：默认值（Player 的 `A2DefaultRendererForVersion`）、候选表、
+/// 阻断判据三处必须同一份字面量（同 `A2RendererNGGL4ESKWDylibName` 的理由）。
+extern NSString *const A2RendererHostEGLDylibName;
+
 /// 全部候选（★稳定顺序★：主推 → 兼容底 → 实验）。
 /// 每一项的 `identifier` = dylib 文件名，`displayName` = 技术名（回退用），`dylibName` = 同名。
 + (NSArray<A2Renderer *> *)allCandidates;

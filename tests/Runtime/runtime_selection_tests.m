@@ -128,9 +128,15 @@ static void testRendererCatalog(void) {
     // ★主推 / 兼容底 各一个，且顺序稳定★
     eqStr([A2RendererCatalog defaultCandidate].identifier, @"libmetallum.dylib",
           @"默认（主推）＝自研 Metal");
-    eqStr(all[1].identifier, @"libgl4es_114.dylib", @"第二项＝兼容底 GL4ES");
+    // ★系统 GLES 3.0（EAGL）★：1.17+ 的临时默认项，排在主推之后（标识只是「选哪条链路」）
+    eqStr(all[1].identifier, @"libeagl.dylib", @"第二项＝系统 GLES 3.0（EAGL，宿主 EGL）");
+    eqStr(all[2].identifier, @"libgl4es_114.dylib", @"第三项＝兼容底 GL4ES");
     eqInt([A2RendererCatalog tierForIdentifier:@"libmetallum.dylib"],
           A2RendererTierRecommended, @"metallum 档位 = 主推");
+    eqInt([A2RendererCatalog tierForIdentifier:@"libeagl.dylib"],
+          A2RendererTierRecommended, @"★EAGL 档位 = 主推（1.17+ 默认）★");
+    eqStr([A2RendererCatalog nameLocalizationKeyForIdentifier:@"libeagl.dylib"],
+          @"runtime.renderer.eagl", @"EAGL 文案 key");
     eqInt([A2RendererCatalog tierForIdentifier:@"libgl4es_114.dylib"],
           A2RendererTierCompat, @"gl4es 档位 = 兼容底");
     eqInt([A2RendererCatalog tierForIdentifier:@"libmobileglues.dylib"],
@@ -179,6 +185,31 @@ static void testRendererCatalog(void) {
     ok([A2RendererCatalog bundleDiagnosisForCandidate:
         [A2RendererCatalog candidateForIdentifier:@"libmetallum.dylib"] frameworksPath:fw] == nil,
        @"已内置 ⇒ 诊断为空");
+
+    // ★宿主 EGL 后端（libeagl.dylib）的判据★：包内**不该**有这个文件（EGL 编在主二进制里），
+    //   「内置」= 它的 GL 层（MobileGlues）在。判据落在 GL 层上，不另造一套。
+    {
+        A2Renderer *hostEgl = [A2RendererCatalog candidateForIdentifier:@"libeagl.dylib"];
+        ok(hostEgl != nil, @"★宿主 EGL 后端已登记进候选表★");
+        ok(![NSFileManager.defaultManager fileExistsAtPath:
+             [fw stringByAppendingPathComponent:@"libeagl.dylib"]],
+           @"★包内没有 libeagl.dylib（设计如此：EGL 在主二进制里）★");
+        ok(![A2RendererCatalog isBundled:hostEgl frameworksPath:fw],
+           @"★GL 层（mobileglues）不在 ⇒ 宿主 EGL 判未内置★");
+        NSString *hostWhy = [A2RendererCatalog bundleDiagnosisForCandidate:hostEgl frameworksPath:fw];
+        ok([hostWhy containsString:@"GL 层"], @"★未内置原因点名缺的是 GL 层（不是 libeagl.dylib）★");
+        // ★换一个全新的假 Frameworks 目录再测「GL 层在」★：判据按路径缓存（包内件只读），
+        //   同一路径上的第一次否定结论会被缓存 —— 换目录才是干净的第二次判据。
+        NSString *fwWithMG = FakeFrameworks(@[ @"libgl4es_114.dylib" ]);
+        LinkFakeDylib(fwWithMG, @"libmobileglues.dylib");
+        ok([A2RendererCatalog isBundled:hostEgl frameworksPath:fwWithMG],
+           @"★GL 层在且能 dlopen ⇒ 宿主 EGL 判已内置（不要求包内 libeagl.dylib）★");
+        eqInt([A2RendererCatalog glClassForIdentifier:@"libeagl.dylib"],
+              A2RendererGLClassModern,
+              @"★EAGL 的 GL 能力档 = 现代（GL 层 MG 对外报 GL 4.5）★");
+        [[NSFileManager defaultManager] removeItemAtPath:
+         [fwWithMG stringByDeletingLastPathComponent] error:NULL];
+    }
 
     // 登记进既有注册表（不另起一套解析）：解析结果与选择一致；不允许回落时不瞎给
     A2Renderers *reg = [A2Renderers shared];
@@ -424,6 +455,23 @@ static void testWiring(void) {
     ok([session containsString:@"[A2-JRE] chosen="], @"★判据行 [A2-JRE] chosen=★");
     ok([session containsString:@"rendererDylib:renderer.identifier"],
        @"★选中的渲染器被传给 Bridge（不是只在 UI 里存着）★");
+
+    // ★宿主 EGL 后端（libeagl.dylib）的接线★：默认值 + GL 层映射 + 两处字面量一致
+    ok([session containsString:@"if (major == 1 && minor >= 17) return A2RendererHostEGLDylibName;"],
+       @"★1.17+ 的默认渲染器 = 宿主 EGL 后端（libeagl.dylib）★");
+    ok([session containsString:@"hostEGLBackend ? @\"mobileglues\""],
+       @"★选它时下发的 GL 库名是 mobileglues（EGL 由本二进制的假 EGL 提供）★");
+    {
+        NSString *catalogSrc = [NSString stringWithContentsOfFile:
+                                RepoPath(@"Air2/Core/Renderer/A2RendererCatalog.m")
+                                                           encoding:NSUTF8StringEncoding error:NULL];
+        NSString *rendererSrc = [NSString stringWithContentsOfFile:
+                                 RepoPath(@"Natives/Renderer/a2_renderer.m")
+                                                            encoding:NSUTF8StringEncoding error:NULL];
+        ok([catalogSrc containsString:@"\"libeagl.dylib\""] &&
+           [rendererSrc containsString:@"\"libeagl.dylib\""],
+           @"★同一字面量在 Core（候选表）与 Natives（加载判据）两处一致★");
+    }
     ok([session containsString:@"isUsableJavaHome"], @"★选中的 JRE 走可用性判据（未内置即阻断）★");
 
     NSString *runner = [NSString stringWithContentsOfFile:

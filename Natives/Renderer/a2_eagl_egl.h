@@ -19,8 +19,13 @@
 //    · `a2_eagl_egl_selftest()` —— 设置页「假 EGL 自检」一行
 //      （Air2/UI/Screens/Settings/A2DiagnosticsSettings.m）点击即调；这是 P1 的判据入口
 //      （离屏编译着色器 + 画一帧 + glReadPixels 取中心像素）。
-//    · `a2_eagl_egl_engage()` —— 由自检先调（自检即接管）；P2 的宿主选择在确认要把渲染器
-//      的 EGL 调用路由到本层时调。★接管之前本层对外的 egl* 一律「转给进程里真正的 EGL」★。
+//    · `a2_eagl_egl_engage()` —— 两个调用点：
+//      ① `a2_eagl_egl_selftest()`（自检即接管）；
+//      ② `a2_renderer_load_named()` 选中宿主 EGL 后端（`libeagl.dylib`）时 ——
+//         宣告「本进程的 EGL 归本层」，之后的 egl* 一律走本层。
+//      ★接管之前本层对外的 egl* 一律「转给进程里真正的 EGL」★。
+//    · `eglCreateWindowSurface` 的上屏形态 —— `a2_gl_bridge.m` 建面处：宿主 EGL 后端下
+//      传 `A2FakeEglWindowSize{w, h, 宿主图层}`，EGL 层就是本层（不 dlopen 别的 EGL）。
 //
 //  ★未接管时为什么要让路（本层唯一碰 flat namespace 的地方）★
 //    本模块把 `eglXxx` 这些**EGL 规范名**定义进了主二进制。主二进制在 dyld 的 flat lookup
@@ -34,7 +39,11 @@
 //    · 不做多重采样 / 交换间隔扩展的假实现：SURFACE 请求 SAMPLES>0 直接「没有匹配 config」；
 //    · 不模拟多个 config / 多个 window surface 的差异：只有 1 个 config，能力固定；
 //    · 不做 ES2 降级：RENDERABLE_TYPE 不含 ES 位 ⇒ 显式 0 个 config（不静默降级）；
-//    · 不做 CAEAGLLayer 呈现：P1 只要离屏 ⇒ `eglSwapBuffers` = `glFlush` + 帧计数。
+//    · 不做多重窗口系统适配：window surface 只认「宿主图层」一种原生窗口
+//      （见下方 A2FakeEglWindowSize）；离屏 ⇒ 自建 renderbuffer + FBO，
+//      上屏 ⇒ CAEAGLLayer + `-presentRenderbuffer:`（★两条路径都在同一份 attach 逻辑里★，
+//      差别只在颜色 renderbuffer 由谁给：`glRenderbufferStorage` 还是
+//      `-renderbufferStorage:fromDrawable:`）。
 //
 //  ★类型与常量的来历★
 //    iOS SDK 没有 EGL 头（`<EGL/egl.h>` 不存在），所以类型/常量在这里按 **EGL 1.4 规范**
@@ -197,18 +206,33 @@ extern "C" {
 #endif
 
 // ===========================================================================
-//  本层自定义：原生窗口句柄的尺寸契约
+//  上屏（P2）：原生窗口 = 宿主图层
 // ---------------------------------------------------------------------------
-//  EGL 的 window surface 尺寸来自**真实原生窗口**；本层没有窗口（离屏即可），
-//  所以约定的 native window 就是一个「宽高像素」结构体指针：
-//      A2FakeEglWindowSize size = { 1280, 720 };
-//      eglCreateWindowSurface(dpy, cfg, &size, NULL);
-//  传 NULL ⇒ EGL_BAD_NATIVE_WINDOW（本层不猜尺寸、不给默认值）。
-//  宽高必须 > 0 且 ≤ EGL_MAX_PBUFFER_DIM（16384，系统 GLES3 的 renderbuffer 上限）。
+//  EGL 的 window surface 尺寸来自**真实原生窗口**。本层有两种窗口形态，靠
+//  结构体里的 `layer` 字段区分（★同一个结构体，不改名、不另造平行类型★）：
+//
+//  ① 离屏（P1 原行为）：`layer = NULL` ⇒ 宽高必须给出；本层自建 renderbuffer + FBO，
+//     `eglSwapBuffers` = `glFlush`（不上屏）。
+//  ② 上屏（P2）：`layer = 宿主图层指针`（CALayer / UIView / 已经是 CAEAGLLayer 都行）
+//     ⇒ 本层把它的（或挂在它上面的一块）CAEAGLLayer 作为 drawable，
+//     颜色 renderbuffer 由 `EAGLContext -renderbufferStorage:fromDrawable:` 建，
+//     `eglSwapBuffers` = `-presentRenderbuffer:`（★真正上屏★）。
+//     此时宽高只作**创建前的初始提示**：真正的 drawable 尺寸以实现回报的
+//     `GL_RENDERBUFFER_WIDTH/HEIGHT` 为准（`eglQuerySurface` 如实报它）。
+//
+//      A2FakeEglWindowSize win = { 0, 0, hostLayer };
+//      eglCreateWindowSurface(dpy, cfg, &win, NULL);
+//
+//  传 NULL 指针 ⇒ EGL_BAD_NATIVE_WINDOW（本层不猜尺寸、不给默认值）。
+//  宽高必须 > 0 且 ≤ EGL_MAX_PBUFFER_DIM（16384，系统 GLES3 的 renderbuffer 上限）；
+//  上屏形态下宽高给 0 也接受（尺寸来自图层）。
 // ===========================================================================
 typedef struct {
     EGLint width;
     EGLint height;
+    /// 宿主图层（见上）；NULL = 离屏。只借指针，不接管所有权（本层自己建的
+    /// CAEAGLLayer 由本层持有并在 surface 销毁时摘掉）。
+    void *layer;
 } A2FakeEglWindowSize;
 
 #define A2_FAKEEGL_MAX_SURFACE_DIM      16384

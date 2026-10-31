@@ -198,6 +198,14 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2Runti
             @"en": @"MobileGlues (libmobileglues.dylib)",
             @"ja": @"MobileGlues（libmobileglues.dylib）",
         },
+        // ★系统 GLES 3.0（EAGL）★ —— 1.17+ 的临时默认项：EGL 由本层（假 EGL → EAGL）提供，
+        //   GL 层是 MobileGlues。标识里的 dylib 名只是选择键（包内没有这个文件）。
+        @"runtime.renderer.eagl": @{
+            @"zh-Hans": @"系统 GLES 3.0（EAGL · 假 EGL）",
+            @"zh-Hant": @"系統 GLES 3.0（EAGL · 假 EGL）",
+            @"en": @"System GLES 3.0 (EAGL · host EGL)",
+            @"ja": @"システム GLES 3.0（EAGL · ホスト EGL）",
+        },
         @"runtime.renderer.nggl4es": @{
             @"zh-Hans": @"NG-GL4ES（libnggl4es.dylib）",
             @"zh-Hant": @"NG-GL4ES（libnggl4es.dylib）",

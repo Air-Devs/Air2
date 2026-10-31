@@ -12,17 +12,32 @@
 // ============================================================================
 #import "a2_renderer.h"
 #import "a2_log.h"
+#import "a2_eagl_egl.h"   // ★宿主 EGL 后端★：选到它时由本层接管进程里的 egl*
 
 #include <dlfcn.h>
+#include <string.h>   // strcmp（宿主 EGL 后端的精确比较）
 
-const char *const A2RendererMetalDylibName  = "libmetallum.dylib";
-const char *const A2RendererCompatDylibName = "libgl4es_114.dylib";
+const char *const A2RendererMetalDylibName   = "libmetallum.dylib";
+const char *const A2RendererCompatDylibName  = "libgl4es_114.dylib";
+const char *const A2RendererHostEAGLDylibName = "libeagl.dylib";
 
 int a2_renderer_load_named(NSString *dylibName, NSString *frameworksPath) {
     // 空名 ⇒ 主推（上层没给就是「没选」，按主推走；判据行由 A2LaunchSession 打明来源）。
     NSString *name = (dylibName.length > 0)
         ? dylibName
         : [NSString stringWithUTF8String:A2RendererMetalDylibName];
+
+    // ★宿主 EGL 后端（系统 GLES 3.0 / EAGL）★：没有包内 dylib 可 dlopen —— 这一层的 EGL
+    //   就编在主二进制里。这里做的是「宣告接管 + 如实记一行」，返回 0（= 已就绪），
+    //   ★不是「跳过加载」★：`a2_eagl_egl_engage()` 之后本进程的 egl* 才真的走本层
+    //   （之前一律让路给真 EGL）；GL 层（MobileGlues）由 GL 桥按同一标识加载。
+    if (strcmp(name.UTF8String, A2RendererHostEAGLDylibName) == 0) {
+        a2_eagl_egl_engage();
+        a2_log_f(@"[A2-RENDERER] 已选择宿主 EGL 后端：%s（EGL=本二进制假 EGL，engaged=%d；"
+                 @"包内无此 dylib 是设计如此，GL 层由 GL 桥加载）",
+                 name.UTF8String, (int)a2_eagl_egl_is_engaged());
+        return 0;
+    }
 
     if (frameworksPath.length == 0) {
         a2_log_f(@"[A2-RENDERER] 渲染后端未选择：frameworksPath 为空（上层未解析出 <App>/Frameworks）");

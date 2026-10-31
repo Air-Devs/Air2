@@ -78,13 +78,18 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
 
 /// ★默认渲染器按版本推导★（用户/实例显式选择永远优先）
 ///   26.2 / 26.3 → metallum（当前唯一验证过的 Metal 面）
-///   26.1 及其它 1.13+ → MobileGlues（GL3.2+ 需要它）
+///   26.1 及其它 26.x → MobileGlues（GL3.2+ 需要它）
+///   ★1.17 – 1.21.x → 系统 GLES 3.0（EAGL，`libeagl.dylib`）★ —— 2026-10-31 决定：
+///     临时改成宿主自带后端（EGL = 本二进制的假 EGL → CAEAGLLayer 上屏，GL 层 = MobileGlues）；
+///     MobileGlues 仍作为可选项保留（设置 → 运行环境 → 渲染器）。
+///   1.13 – 1.16 → MobileGlues（该段还没在 EAGL 链路上验过）
 ///   1.12 及更早 → NG-GL4ES / KW（GL1.x/2.x 固定管线；不可用时由调用点回退 gl4es）
 static NSString *A2DefaultRendererForVersion(NSInteger major, NSInteger minor) {
     if (major >= 26) {
         if (major == 26 && (minor == 2 || minor == 3)) return @"libmetallum.dylib";
         return @"libmobileglues.dylib";
     }
+    if (major == 1 && minor >= 17) return A2RendererHostEGLDylibName;
     if (major == 1 && minor >= 13) return @"libmobileglues.dylib";
     if (major == 1 && minor <= 12) return A2RendererNGGL4ESKWDylibName;
     return @"libgl4es_114.dylib";   // 远古轨道（classic/Alpha/Beta，major=0）仍走老线兼容底
@@ -724,7 +729,11 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
             unsetenv("AMETHYST_METAL");   // 非 Metal ⇒ 确保 agent 不会误开渲染 patch
             // LWJGL 的 GL 库名跟渲染器走（lib 前缀与 .dylib 后缀都要去掉）：
             //   libgl4es_114.dylib → gl4es_114；libnggl4es.dylib → nggl4es …
-            NSString *bare = rendererID;
+            // ★宿主 EGL 后端（libeagl.dylib）★：EGL 那一半在我们自己的二进制里（假 EGL → EAGL），
+            //   所以这里下发的是 **GL 层**的名字（MobileGlues = GL 3.2+ 翻译到宿主 GLES 3.0）；
+            //   不把 `eagl` 写成 libname（包内没有、也不该有 libeagl.dylib 这个库）。
+            const BOOL hostEGLBackend = [rendererID isEqualToString:A2RendererHostEGLDylibName];
+            NSString *bare = hostEGLBackend ? @"mobileglues" : rendererID;
             if ([bare hasPrefix:@"lib"]) bare = [bare substringFromIndex:3];
             if ([bare hasSuffix:@".dylib"]) bare = [bare substringToIndex:bare.length - 6];
             if (bare.length > 0) {
@@ -734,6 +743,11 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                 //   默认值就是 libGLESv2 → 打到 ANGLE 的 GLES1 状态机 ⇒ SIGBUS）。
                 [jvmOptions addObject:[NSString stringWithFormat:@"-Dorg.lwjgl.opengles.libname=%@", bare]];
                 [A2Log criterion:@"[A2-AGENT] GL 后端：opengl.libname=%@ opengles.libname=%@", bare, bare];
+                if (hostEGLBackend) {
+                    // ★判据行★：一眼看出「EGL 是谁、GL 是谁」（真机 grep 这一行）。
+                    [A2Log criterion:@"[A2-RENDERER] 宿主 EGL 后端：EGL=本二进制假 EGL（a2_eagl_egl → CAEAGLLayer 上屏）"
+                     @" GL 层=%@（渲染器标识 %@）", bare, rendererID];
+                }
 
                 // ★2026-10-31 对齐老 Air（tree510 egl_bridge.m:317-324）★
                 //   MobileGlues 是「GL on host GLES」那一类 ⇒ 后端类型必须是 DirectGLES；
