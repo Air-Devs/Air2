@@ -134,6 +134,41 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
     }
     if (preferred.count == 0) preferred = dirs;   // 没有对口档位 ⇒ 用现有的（并如实提示）
 
+    // ★2026-10-31 26.3 的 LWJGL 档位★
+    //   真机证据（iPhone X / 26.3）：启动卡在 org.lwjgl.sdl.SDLKeyboard$Functions 类初始化。
+    //   26.3 的版本 JSON 按 LWJGL 3.4.3 声明（含 lwjgl-sdl），而 3.4.1 的 classpath 上
+    //   根本没有 org.lwjgl.sdl.*（SDL 模块 3.4.0 才引入）。包内同时带 341/343：
+    //     26.2 → 341（GLFW 路径）
+    //     26.3+ → 343（SDL3 路径）
+    //   其余版本仍沿用「取最大 3.x」的旧口径。
+    NSInteger wantedVer = 0;
+    if (mcMajor >= 26) {
+        wantedVer = (mcMinor >= 3) ? 343 : 341;
+    } else if (mcMajor == 1 && mcMinor >= 13) {
+        wantedVer = 341;
+    }
+    if (wantedVer > 0 && !wantsLWJGL2) {
+        NSString *exact = nil, *above = nil;
+        NSInteger aboveVer = 0;
+        for (NSString *name in preferred) {
+            NSInteger v = A2LwjglVersionNumber(name);
+            if (v == wantedVer) { exact = name; break; }
+            if (v > wantedVer && (above == nil || v < aboveVer)) { above = name; aboveVer = v; }
+        }
+        if (exact) {
+            [A2Log criterion:@"[A2-LWJGL] 档位命中：MC %ld.%ld ⇒ 期望 %ld，选 %@",
+             (long)mcMajor, (long)mcMinor, (long)wantedVer, exact];
+            preferred = [@[exact] mutableCopy];
+        } else if (above) {
+            [A2Log criterion:@"[A2-LWJGL] ⚠ 无 %ld 档位，退到最近的更高档 %@（MC %ld.%ld）",
+             (long)wantedVer, above, (long)mcMajor, (long)mcMinor];
+            preferred = [@[above] mutableCopy];
+        } else {
+            [A2Log criterion:@"[A2-LWJGL] ⚠ 无 %ld 及以上档位 ⇒ 继续用现有最大档（MC %ld.%ld）",
+             (long)wantedVer, (long)mcMajor, (long)mcMinor];
+        }
+    }
+
     [preferred sortUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
         return [@(A2LwjglVersionNumber(a)) compare:@(A2LwjglVersionNumber(b))];
     }];
@@ -405,6 +440,47 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                                                              NSUserDomainMask, YES) firstObject];
     NSString *tmpDir = NSTemporaryDirectory();
     NSString *planPath = [gameDir stringByAppendingPathComponent:@"air2-launch-plan.json"];
+
+    // ★2026-10-31 真机「黑屏 + 无声」根因之一★
+    //   日志：`[A2-GLFW] 焦点变化 window=1 focused=0`；options.txt 里 `pauseOnLostFocus:true`。
+    //   MC 在窗口失焦时会暂停整个游戏循环 ⇒ 既不出帧（黑屏），也不出声（sound engine 已 started 但 paused）。
+    //   我们的 GLFW 宿主窗口本来就没有系统焦点概念（UIWindow 背后是游戏视图），
+    //   所以这里在启动前把 MC 自己的选项改成不因失焦暂停。只动这一个键，其余原样保留。
+    {
+        NSString *optPath = [gameDir stringByAppendingPathComponent:@"options.txt"];
+        NSMutableString *txt = nil;
+        if ([[NSFileManager defaultManager] fileExistsAtPath:optPath]) {
+            txt = [NSMutableString stringWithContentsOfFile:optPath
+                                                   encoding:NSUTF8StringEncoding
+                                                      error:NULL];
+        }
+        if (txt == nil) txt = [NSMutableString string];
+        NSString *key = @"pauseOnLostFocus:";
+        BOOL touched = NO;
+        if ([txt rangeOfString:key].location != NSNotFound) {
+            NSRegularExpression *re =
+                [NSRegularExpression regularExpressionWithPattern:@"(?m)^pauseOnLostFocus:.*$"
+                                                          options:0 error:nil];
+            NSRange all = NSMakeRange(0, txt.length);
+            if ([re numberOfMatchesInString:txt options:0 range:all] > 0) {
+                [re replaceMatchesInString:txt options:0 range:all
+                                withTemplate:@"pauseOnLostFocus:false"];
+                touched = YES;
+            }
+        } else {
+            if (txt.length > 0 && ![txt hasSuffix:@"\n"]) [txt appendString:@"\n"];
+            [txt appendString:@"pauseOnLostFocus:false\n"];
+            touched = YES;
+        }
+        if (touched) {
+            NSError *wErr = nil;
+            if ([txt writeToFile:optPath atomically:YES encoding:NSUTF8StringEncoding error:&wErr]) {
+                [A2Log criterion:@"[A2-OPTIONS] pauseOnLostFocus 已置 false（避免失焦暂停 ⇒ 黑屏/无声）path=%@", optPath];
+            } else {
+                [A2Log log:@"[A2-OPTIONS] 写 options.txt 失败（不阻断启动）：%@", wErr.localizedDescription];
+            }
+        }
+    }
 
     if (![NSFileManager.defaultManager fileExistsAtPath:entryJar]) {
         finish(NO, 0, [NSString stringWithFormat:@"包内缺启动核心 %@", A2LaunchJavaEntryJarName]);
@@ -741,6 +817,19 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
             [jvmOptions addObject:@"-Djna.debug_load.jna=true"];
             [A2Log criterion:@"[JNA-INBUNDLE] libjnidispatch bundle=%@ path=%@（nosys/noclasspath/nounpack 全开）",
              jnaInBundle ? @"present" : @"MISSING", jnaLib];
+
+            // ★2026-10-31 真机 crash report：MC 1.20.1 在「Initializing game」阶段走 macOS AppKit：
+            //   ca.weblite.objc.RuntimeUtils.<clinit> → System.load(tmp/libjcocoa*.dylib) → dlopen 失败
+            //   ← Client.sendProxy ← ehg.a(44) ← ehn.a(154) ← enn.<init> ← Main.main
+            // iOS 没有 AppKit、也没有 iOS 版 libjcocoa ⇒ 这段对我们必然是死代码。
+            // patchios_agent 只把 ehg.a(J)V 改成 { return; }，ehg 的另一个 a(InputStream) 不动。
+            NSString *iosAgent = [libs stringByAppendingPathComponent:@"patchios_agent.jar"];
+            if ([[NSFileManager defaultManager] fileExistsAtPath:iosAgent]) {
+                [jvmOptions addObject:[NSString stringWithFormat:@"-javaagent:%@", iosAgent]];
+                [A2Log criterion:@"[A2-IOS-AGENT] 注入 patchios_agent.jar（置空 ehg.a(J)V：跳过 macOS AppKit 菜单）"];
+            } else {
+                [A2Log criterion:@"[A2-IOS-AGENT] 缺 patchios_agent.jar ⇒ 不注入（1.20.1 会在 Initializing game 崩）"];
+            }
         }
 
         if (wantsMetalAgent) {

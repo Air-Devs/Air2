@@ -619,13 +619,19 @@ A2_GLFW_ENTRY void pojavSwapBuffers(jlong window) {
         a2_log_f(@"[A2-GLFW-TRACE] enter glfwSwapBuffers tid=%llu window=%lld n=%lu",
                  trTid, (long long) window, n);
     }
+    // ★2026-10-31 黑屏真凶★ 这里才是 MC 每帧真正走的呈现入口（真机日志里
+    //   [A2-GLFW-TRACE] enter glfwSwapBuffers 就是它打的），而它此前只计数、
+    //   从不提交 ⇒ 游戏画完的帧没人 swap 上屏，屏幕上只剩预览清屏的纯黑。
+    //   交给 GL 桥把当前 EGL 表面 swap 上屏（桥未附着时无操作，不改任何状态）。
+    extern void a2_gl_bridge_swap_buffers(void);
+    a2_gl_bridge_swap_buffers();
     pthread_mutex_lock(&gLock);
     gSwapCount++;
     long sn = gSwapCount;
     pthread_mutex_unlock(&gLock);
     if (sn == 1) {
         a2_log_f(@"[A2-GLFW-PEER] pojavSwapBuffers 首次调用 window=%ld"
-                 "（本层只保留 ABI 入口；呈现属渲染器）", (long) window);
+                 "（已接 GL 桥：eglSwapBuffers 提交上屏）", (long) window);
     }
     long long ms = a2_glfw_tr_ms(trT0);
     if (n <= 20 || ms >= 100) {
