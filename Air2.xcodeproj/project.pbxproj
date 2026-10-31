@@ -54,6 +54,7 @@
 		2A2E158B7145BA06D0A28EA8 /* A2PluginInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 364D3051311E9C6D67AC9FFF /* A2PluginInstaller.m */; };
 		D5A33360D4CF86BF573DED2F /* A2PluginManifest.m in Sources */ = {isa = PBXBuildFile; fileRef = 38654BB9DEF1608809486624 /* A2PluginManifest.m */; };
 		93B7D56DED4EF5D63C188772 /* A2PluginPackageExtractor.m in Sources */ = {isa = PBXBuildFile; fileRef = C391E2103F9EF35FEB6B0AD7 /* A2PluginPackageExtractor.m */; };
+		F041812E684A726906DA5DFA /* A2PluginPermissionStore.m in Sources */ = {isa = PBXBuildFile; fileRef = DE34BC67D6C39B99713103F3 /* A2PluginPermissionStore.m */; };
 		794BF5DF54F19D3E45F5ACCB /* A2PluginRegistry.m in Sources */ = {isa = PBXBuildFile; fileRef = 718A158197315CB0CEC49DA3 /* A2PluginRegistry.m */; };
 		8B0D65271C85EAABC46B0226 /* A2Renderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 47106E1A43667C70F671BED2 /* A2Renderer.m */; };
 		01B85F275BBECA53B5E85F73 /* A2RendererImporter.m in Sources */ = {isa = PBXBuildFile; fileRef = 8D34430FDEB24984AD0E55DB /* A2RendererImporter.m */; };
@@ -165,6 +166,8 @@
 		FD82F8F78F3C230BEBAE1F4B /* A2TextField.m in Sources */ = {isa = PBXBuildFile; fileRef = B498358055FFAD0453CC27C7 /* A2TextField.m */; };
 		5A0A0E6AE2BBFCAD8A947CA9 /* A2Toast.m in Sources */ = {isa = PBXBuildFile; fileRef = F3C972A56B473038ED5074FD /* A2Toast.m */; };
 		46BEB683A03C405C1E74C0B2 /* A2VersionCard.m in Sources */ = {isa = PBXBuildFile; fileRef = DCF1F61258EDBCB81698B32B /* A2VersionCard.m */; };
+		69B050006C721F65AC2315AD /* A2PluginCriticalConfirmFlow.m in Sources */ = {isa = PBXBuildFile; fileRef = A6274C74E88528285ABDA035 /* A2PluginCriticalConfirmFlow.m */; };
+		A3D7DE3AE8F36DD1C2F3037D /* A2PluginPermissionSheet.m in Sources */ = {isa = PBXBuildFile; fileRef = B00FCC47D562C0BD0A1A6C14 /* A2PluginPermissionSheet.m */; };
 		5440FDEA95986768641FF753 /* A2BaseViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */; };
 		DB69EBBFE2FB627A405DED59 /* A2LicenseViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6068960D14B3D649188A52E4 /* A2LicenseViewController.m */; };
 		4C2284D92DC7DE09B59CDBCF /* A2LogViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 86AF40E277EDF77B1E20CBC1 /* A2LogViewController.m */; };
@@ -268,6 +271,7 @@
 		364D3051311E9C6D67AC9FFF /* A2PluginInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PluginInstaller.m"; sourceTree = "<group>"; };
 		38654BB9DEF1608809486624 /* A2PluginManifest.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PluginManifest.m"; sourceTree = "<group>"; };
 		C391E2103F9EF35FEB6B0AD7 /* A2PluginPackageExtractor.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PluginPackageExtractor.m"; sourceTree = "<group>"; };
+		DE34BC67D6C39B99713103F3 /* A2PluginPermissionStore.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PluginPermissionStore.m"; sourceTree = "<group>"; };
 		718A158197315CB0CEC49DA3 /* A2PluginRegistry.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PluginRegistry.m"; sourceTree = "<group>"; };
 		47106E1A43667C70F671BED2 /* A2Renderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Renderer.m"; sourceTree = "<group>"; };
 		8D34430FDEB24984AD0E55DB /* A2RendererImporter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererImporter.m"; sourceTree = "<group>"; };
@@ -379,6 +383,8 @@
 		B498358055FFAD0453CC27C7 /* A2TextField.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TextField.m"; sourceTree = "<group>"; };
 		F3C972A56B473038ED5074FD /* A2Toast.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Toast.m"; sourceTree = "<group>"; };
 		DCF1F61258EDBCB81698B32B /* A2VersionCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionCard.m"; sourceTree = "<group>"; };
+		A6274C74E88528285ABDA035 /* A2PluginCriticalConfirmFlow.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PluginCriticalConfirmFlow.m"; sourceTree = "<group>"; };
+		B00FCC47D562C0BD0A1A6C14 /* A2PluginPermissionSheet.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PluginPermissionSheet.m"; sourceTree = "<group>"; };
 		BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BaseViewController.m"; sourceTree = "<group>"; };
 		6068960D14B3D649188A52E4 /* A2LicenseViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LicenseViewController.m"; sourceTree = "<group>"; };
 		86AF40E277EDF77B1E20CBC1 /* A2LogViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LogViewController.m"; sourceTree = "<group>"; };
@@ -475,6 +481,7 @@
 		54B30EFEA74AB62E6C6966C5 /* A2PluginInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PluginInstaller.h"; sourceTree = "<group>"; };
 		481F3992227C044178AEBB2F /* A2PluginManifest.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PluginManifest.h"; sourceTree = "<group>"; };
 		E6C43134812C3D401F6E76C7 /* A2PluginPackageExtractor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PluginPackageExtractor.h"; sourceTree = "<group>"; };
+		54440C648FA239C8D955CF23 /* A2PluginPermissionStore.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PluginPermissionStore.h"; sourceTree = "<group>"; };
 		17F395E44983FEF3ABEB83A8 /* A2PluginRegistry.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PluginRegistry.h"; sourceTree = "<group>"; };
 		12B70B0E6FB31B7E75D61633 /* A2Renderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Renderer.h"; sourceTree = "<group>"; };
 		5D1F57A737C10747C284745F /* A2RendererImporter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererImporter.h"; sourceTree = "<group>"; };
@@ -581,6 +588,8 @@
 		46EB509F1EF9D56C1DD81B78 /* A2TextField.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TextField.h"; sourceTree = "<group>"; };
 		DBF31C9D8FD1524E6BEB2D62 /* A2Toast.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Toast.h"; sourceTree = "<group>"; };
 		88C9076497160DA45470EFB1 /* A2VersionCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionCard.h"; sourceTree = "<group>"; };
+		C23E370A81246F8355FF184F /* A2PluginCriticalConfirmFlow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PluginCriticalConfirmFlow.h"; sourceTree = "<group>"; };
+		4CB07C9CB2B0A052F6FEA48A /* A2PluginPermissionSheet.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PluginPermissionSheet.h"; sourceTree = "<group>"; };
 		346D941B767D969728343CD3 /* A2BaseViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BaseViewController.h"; sourceTree = "<group>"; };
 		95928851A19F7FC341B8F44F /* A2LicenseViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LicenseViewController.h"; sourceTree = "<group>"; };
 		884EEE8EC370C704A2B76DD9 /* A2LogViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LogViewController.h"; sourceTree = "<group>"; };
@@ -730,6 +739,7 @@
 			isa = PBXGroup;
 			children = (
 				8B89578D010E17535991475E /* Components */,
+				601CB497110465EE63212EB6 /* Plugin */,
 				E4F1D82CF180792A5EDFE454 /* Screens */,
 				ED89BE603E6F0B8503DCD530 /* Theme */,
 			);
@@ -898,10 +908,12 @@
 				364D3051311E9C6D67AC9FFF /* A2PluginInstaller.m */,
 				38654BB9DEF1608809486624 /* A2PluginManifest.m */,
 				C391E2103F9EF35FEB6B0AD7 /* A2PluginPackageExtractor.m */,
+				DE34BC67D6C39B99713103F3 /* A2PluginPermissionStore.m */,
 				718A158197315CB0CEC49DA3 /* A2PluginRegistry.m */,
 				54B30EFEA74AB62E6C6966C5 /* A2PluginInstaller.h */,
 				481F3992227C044178AEBB2F /* A2PluginManifest.h */,
 				E6C43134812C3D401F6E76C7 /* A2PluginPackageExtractor.h */,
+				54440C648FA239C8D955CF23 /* A2PluginPermissionStore.h */,
 				17F395E44983FEF3ABEB83A8 /* A2PluginRegistry.h */,
 			);
 			path = Plugin;
@@ -1199,6 +1211,18 @@
 				88C9076497160DA45470EFB1 /* A2VersionCard.h */,
 			);
 			path = Components;
+			sourceTree = "<group>";
+		};
+
+		601CB497110465EE63212EB6 /* Plugin */ = {
+			isa = PBXGroup;
+			children = (
+				A6274C74E88528285ABDA035 /* A2PluginCriticalConfirmFlow.m */,
+				B00FCC47D562C0BD0A1A6C14 /* A2PluginPermissionSheet.m */,
+				C23E370A81246F8355FF184F /* A2PluginCriticalConfirmFlow.h */,
+				4CB07C9CB2B0A052F6FEA48A /* A2PluginPermissionSheet.h */,
+			);
+			path = Plugin;
 			sourceTree = "<group>";
 		};
 
@@ -1525,6 +1549,7 @@
 				2A2E158B7145BA06D0A28EA8 /* A2PluginInstaller.m in Sources */,
 				D5A33360D4CF86BF573DED2F /* A2PluginManifest.m in Sources */,
 				93B7D56DED4EF5D63C188772 /* A2PluginPackageExtractor.m in Sources */,
+				F041812E684A726906DA5DFA /* A2PluginPermissionStore.m in Sources */,
 				794BF5DF54F19D3E45F5ACCB /* A2PluginRegistry.m in Sources */,
 				8B0D65271C85EAABC46B0226 /* A2Renderer.m in Sources */,
 				01B85F275BBECA53B5E85F73 /* A2RendererImporter.m in Sources */,
@@ -1636,6 +1661,8 @@
 				FD82F8F78F3C230BEBAE1F4B /* A2TextField.m in Sources */,
 				5A0A0E6AE2BBFCAD8A947CA9 /* A2Toast.m in Sources */,
 				46BEB683A03C405C1E74C0B2 /* A2VersionCard.m in Sources */,
+				69B050006C721F65AC2315AD /* A2PluginCriticalConfirmFlow.m in Sources */,
+				A3D7DE3AE8F36DD1C2F3037D /* A2PluginPermissionSheet.m in Sources */,
 				5440FDEA95986768641FF753 /* A2BaseViewController.m in Sources */,
 				DB69EBBFE2FB627A405DED59 /* A2LicenseViewController.m in Sources */,
 				4C2284D92DC7DE09B59CDBCF /* A2LogViewController.m in Sources */,
