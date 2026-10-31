@@ -1754,6 +1754,18 @@ static int A2RequiredJavaVersionForMCVersion(NSString *verName) {
 
 - (void)launchMinecraft {
     [A2Logger info:@"GameLaunch" message:@"[1] launchMinecraft 开始"];
+
+    // ★ JIT 状态 —— 没有 JIT 时 HotSpot 用解释器跑 MC，表现就是「卡死」
+    //   Air1 在启动前会 invokeAfterJITEnabled: 等待就绪，我们还没有这条链路，
+    //   先把实际状态打出来，避免继续盲改。
+    {
+        BOOL jit = isJITEnabled(NO);
+        BOOL jitNoCS = isJITEnabled(YES);
+        [A2Logger info:@"GameLaunch" message:[NSString stringWithFormat:
+            @"     JIT: isJITEnabled(false)=%d isJITEnabled(true)=%d ——— %@",
+            jit, jitNoCS,
+            jit ? @"JIT 可用" : @"⚠️ 无 JIT，JVM 将用解释器运行，极慢/卡死"]];
+    }
     {
         // 把渲染器的实际取值打出来 —— 之前 nil 导致所有分支都不匹配
         NSString *r = [PLProfiles resolveKeyForCurrentProfile:@"renderer"];
