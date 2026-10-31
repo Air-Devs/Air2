@@ -23,6 +23,7 @@
 #import "a2_gl_bridge.h"
 #import "a2_log.h"
 #import "a2_frame_perf.h"   // ★[FRAME-PERF] 与渲染器无关的帧性能判据（本文件的帧动作每帧记一次）
+#import "a2_gl_error_shim.h"  // ★MG 的 glGetError 保护★（④a 安装；JIT 后由 Bridge 重试）
 #import "A2JITEnvironment.h"   // ★[A2PROBE]★ a2_jit_probe_arm（把 KW/ANGLE 的 glLoadIdentity 交给脚本布断点）
 
 #import <objc/message.h>   // objc_msgSend（动态取 layer 用；不 import UIKit）
@@ -347,6 +348,12 @@ static void *a2_gl_bridge_egl_symbol(void *handle, const char *name, int *missin
 /// ★精确比较，不做模糊匹配★：`libnggl4es.dylib`（老的那支，自带 constructor）不能命中。
 static int a2_gl_bridge_is_krypton(void) {
     return (gBackendName[0] != '\0' && strcmp(gBackendName, A2GlBridgeKryptonDylibName) == 0);
+}
+
+/// 当前后端是否 = ★MobileGlues★（唯一判据来源：dylib 名子串 `mobileglues`）。
+/// ★两处共用，不许各自写字面量★：① 依赖库的加载旗标（② 与 ④）；② glGetError 保护 shim 的安装条件。
+static int a2_gl_bridge_is_mobileglues(void) {
+    return (gBackendName[0] != '\0' && strstr(gBackendName, "mobileglues") != NULL);
 }
 
 /// 交给 gl4es 的 GLES 入口解析器 —— 它在 `-DNOEGL` 下**唯一**的入口来源。
@@ -885,7 +892,8 @@ static void a2_gl_bridge_frame_work(void) {
     // ★2026-10-18 真机证据★ 渲染器 = MobileGlues 时 glGetError 会打进它尚未初始化的
     //   跳转表 ⇒ pc=0x0 SIGSEGV（libmobileglues.dylib+0x3e4f8 glGetError+0x14）。
     //   这句只为打判据行，不值得为它崩，所以该后端下跳过（其余后端照旧）。
-    BOOL backendIsMG = (strstr(gBackendName, "mobileglues") != NULL);
+    //   ★判据与 ④a 的 shim 安装共用同一来源★（a2_gl_bridge_is_mobileglues），不各写一份字面量。
+    BOOL backendIsMG = (a2_gl_bridge_is_mobileglues() != 0);
     if (gGLGetError != NULL && !backendIsMG) glErr = gGLGetError();
 
     // ---- ③ 记进帧性能判据（中立数值；draw=1 = 本帧一次清屏；shaderNew=0 = 本层不建着色器/管线）----
@@ -1023,14 +1031,32 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         }
     }
 
-    // ---- ④ dlopen（RTLD_LAZY|RTLD_GLOBAL：与 a2_renderer 同款旗标；符号对后续库可见）----
+    // ---- ④ dlopen（EGL/GLES 兼容底的旗标按后端定：见下；后端本体恒 RTLD_GLOBAL）----
     // ★KW 时用 RTLD_LOCAL★（真机 lastlog-84）：ANGLE 的 libGLESv2 若以 GLOBAL 加载，
     //   它导出的 GLES1 入口（glLoadMatrixf 等）会被 MC/LWJGL 的 dlsym(RTLD_DEFAULT) 抢先命中，
     //   从而绕过 KW 自带 FPE，直接崩在 ANGLE 的 GLES1State（未初始化）。⇒ 只让 KW 自己全局可见。
+    // ★MG 时同样 LOCAL★（真机 lastlog-101）：MG 2.0.16 加载后自己取证报
+    //   `[MG] SYMBOL THEFT: flat namespace resolves glFramebufferTexture2D/glTexImage2D/glDrawArrays
+    //    to 0x12669a…, this layer's export is 0x125b6… -- the application is calling someone else`
+    //   —— 那些 0x12669a… 全在 ANGLE(libGLESv2) 的映像里（MG 自己的导出在 0x125b6…/0x125b8…），
+    //   就是我们以 RTLD_GLOBAL 加载的兼容底把 gl* 抢进了 flat namespace。
+    //   ⇒ MG 后端下 EGL/GLES 一律 RTLD_LOCAL：flat namespace 里只剩 MG 自己的 gl* 导出。
+    //   MG 要 ES 驱动入口时不靠 flat namespace（它自己按 handle 解析 / 走 eglGetProcAddress），
+    //   兼容底仍由本桥按句柄 dlsym 使用 ⇒ 改 LOCAL 不影响建面。
+    // ★KW 沿用原来的模糊判定★（`strstr`）：`libnggl4es.dylib`（老的那支）与
+    //   `libnggl4es_kw.dylib` 都按 KW 处理 —— 这是 lastlog-84 起的行为，不在本单里改口径。
     const BOOL a2BackendIsKW = (strstr(rendererName, "krypton") != NULL) || (strstr(rendererName, "nggl4es") != NULL);
-    const int a2GlDepFlags = RTLD_LAZY | (a2BackendIsKW ? RTLD_LOCAL : RTLD_GLOBAL);
-    a2_log_f(@"[A2-GL-BRIDGE] 依赖加载旗标：%s（%s）", a2BackendIsKW ? "RTLD_LOCAL" : "RTLD_GLOBAL",
-             a2BackendIsKW ? "KW：避免 ANGLE 的 GLES1 入口被全局抢先" : "非 KW：保持原行为");
+    const BOOL a2BackendIsMG = a2_gl_bridge_is_mobileglues();
+    const BOOL a2DepFlagsLocal = (a2BackendIsKW || a2BackendIsMG);
+    const int a2GlDepFlags = RTLD_LAZY | (a2DepFlagsLocal ? RTLD_LOCAL : RTLD_GLOBAL);
+    a2_log_f(@"[A2-GLBRIDGE] 依赖加载旗标：%s（后端=%s）",
+             a2DepFlagsLocal ? "RTLD_LOCAL" : "RTLD_GLOBAL", gBackendName);
+    if (a2DepFlagsLocal) {
+        a2_log_f(@"[A2-GLBRIDGE] 旗标理由：%s ⇒ 不让兼容底的 gl* 进 flat namespace（防符号被抢）",
+                 a2BackendIsKW ? "KW 要自己的 GLES1 入口生效"
+                               : "MG 自己导出整套 gl*（真机 SYMBOL THEFT 即此因）");
+    }
+
     gEglHandle      = dlopen(eglPath.UTF8String,      a2GlDepFlags);
     if (gEglHandle == NULL) {
         const char *err = dlerror();
@@ -1049,13 +1075,6 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     }
     // 后端本体（compat 底 = libgl4es_114.dylib）：RTLD_GLOBAL 让 MC 后续能直接解析到它的 GL 符号。
     gRendererHandle = dlopen(rendererPath.UTF8String, RTLD_LAZY | RTLD_GLOBAL);
-    // ★MobileGlues★ 它的 glGetError 在跳转表就绪前被调用会 SIGSEGV
-    //   （真机: libmobileglues.dylib glGetError+24 → libjvm os::abort ⇒ "黑屏"）。
-    //   加载成功后把该函数改写为 return 0（诊断用接口，恒 0 不影响渲染正确性）。
-    if (gRendererHandle != NULL && strstr(gBackendName, "mobileglues") != NULL) {
-        extern void a2_gl_error_shim_install_for_handle(void *handle);
-        a2_gl_error_shim_install_for_handle(gRendererHandle);
-    }
     if (gRendererHandle == NULL) {
         const char *err = dlerror();
         a2_log_f(@"%s ★阻断★：后端本体 dlopen 失败 %s（%s）",
@@ -1066,6 +1085,30 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     a2_log_f(@"%s 已加载兼容底：EGL=%s handle=%p；GLESv2=%s handle=%p；后端=%s handle=%p",
              A2GlBridgeJudgementTag, eglPath.UTF8String, gEglHandle,
              glesPath.UTF8String, gGlesHandle, rendererName, gRendererHandle);
+
+    // ---- ④a ★MobileGlues 的 glGetError 保护 shim★（该后端必装，不看任何别的条件）----
+    //   真机（1.20.1 + MG 2.0.16 + java-21，lastlog-101）：JVM 建成功、表面 2622x1206 也对，
+    //   随后 `SIGBUS at pc=0x125b8e4e4 [libmobileglues.dylib+0x3e4e4] glGetError+0x0`。
+    //   ⇒ 加载成功即安装；此刻 JIT 还没就绪（代码页 mprotect 会 EACCES=13），
+    //     失败由 shim 记待办，JIT 就绪后 `a2_gl_error_shim_retry_pending()` 再装一次。
+    //   ★结论行由 shim 自己打（[A2-MG-SHIM] …），本处只再打一行汇总，便于一眼定位后端。★
+    if (a2BackendIsMG) {
+        const A2GlErrorShimResult shimRC = a2_gl_error_shim_install_for_handle(gRendererHandle);
+        a2_log_f(@"%s MG glGetError shim：rc=%d（0=已改写 / 1=记待办等 JIT / 2=库里无该符号）handle=%p",
+                 A2GlBridgeJudgementTag, (int)shimRC, gRendererHandle);
+
+        // ---- ④a2 ★符号归属核对★（MG 自己要报 SYMBOL THEFT 的那件事，我们自己也取一份证据）----
+        //   真机 lastlog-101：`[MG] SYMBOL THEFT … the application is calling someone else`。
+        //   本行直接回答「flat namespace 里这个 gl* 归谁」—— 与 MG 自己的报错互为旁证，
+        //   也用来验证 ④ 的 RTLD_LOCAL 到底有没有把 ANGLE 的导出挡在全局命名空间外。
+        void *ownSym  = dlsym(gRendererHandle, "glTexImage2D");
+        void *flatSym = dlsym(RTLD_DEFAULT, "glTexImage2D");
+        a2_log_f(@"%s 符号归属核对：glTexImage2D 后端导出=%p / flat=%p ⇒ %s",
+                 A2GlBridgeJudgementTag, ownSym, flatSym,
+                 (ownSym != NULL && flatSym == ownSym)
+                     ? "归 MG 自己（未被抢）"
+                     : "★被别的库抢走★（flat namespace 里还有别的导出者：查是否有库以 GLOBAL 抢先加载）");
+    }
 
     // ---- ④b ★NG-GL4ES / KW：gl4es 血统的运行时开关（无条件，对齐老 Air）★ ----
     //   老 Air 在 JavaLauncher 里**无条件全局**设这两个（`Natives/JavaLauncher.m:469` / `:472`）：

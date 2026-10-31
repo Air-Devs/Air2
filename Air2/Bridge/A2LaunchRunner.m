@@ -21,6 +21,8 @@
 #import "a2_renderer.h"        // Natives/Renderer —— 渲染后端「选 + 加载」入口（见 docs/ARCHITECTURE.md [RENDER-WIRE]）
 #import "a2_gl_bridge.h"       // Natives/Renderer —— ★GL 桥★：让选中后端真的拿到 surface 并建出 GL 上下文（[GL-BRIDGE]）
 #import "a2_frame_perf.h"      // Natives/Renderer —— ★[FRAME-PERF] 与渲染器无关的帧性能判据★
+#import "a2_gl_error_shim.h"    // Natives/Renderer —— ★MG 的 glGetError 延迟补丁（JIT 就绪后重试）★
+#import "A2JITEnvironment.h"    // Natives/Support —— ★判据行里的 verifiedRegion 取证（只读）★
 
 // ============================================================================
 //  ★[GL-BRIDGE] 宿主表面采集 + 帧回调★（本文件的私有件；调用点见 +launchWithPlanPath:）
@@ -171,6 +173,26 @@ static void A2RunnerRebindSurfaceIfTopWindowChanged(UIWindow *attachedWindow,
 
 + (BOOL)runtimeChainEnabled {
     return a2_launch_runtime_enabled() ? YES : NO;
+}
+
++ (void)retryJITGatedGLPatches {
+    // ★判据行★：JIT 就绪这一刻「我们看得到的取证 + 重试结论」同处一行 —— 真机一眼判成败。
+    //   verifiedRegion 是本层能拿到的唯一 JIT 区判据（Natives/Support 的既有口径）；
+    //   ★注意★：本线（老闸门 A2LegacyJITGate 放行）下它可能是 NULL（真机 lastlog-101 即如此，
+    //   JIT 大区由 libjvm 建 VM 时自己向调试器讨）⇒ 这行如实打，不拿它当「能否重试」的前提。
+    //
+    // ★相位说明（别把 rc=2 当故障）★：本线里 `a2_gl_bridge_attach` 是在 `+launchWithPlanPath:`
+    //   内部才发生的（本方法在它之前被调）⇒ 首次启动时这里通常还没有待办（rc=2）。
+    //   真正让补丁落地的是：attach 时的首次安装 + shim 自己的有界看门狗（JIT 区一出现即装上）。
+    //   本方法仍是必要的：① 这次启动里若 attach 早于本调用（改绑 / 二次启动），它立即补装；
+    //   ② 它是「JIT 已就绪」的显式声明点，判据行由此打出。
+    void *verified = [A2JITEnvironment verifiedRegion];
+    const size_t verifiedBytes = [A2JITEnvironment verifiedRegionBytes];
+    // ★真调 Natives★（逐字转发，语义一字不改）：无待办 / 已生效 ⇒ 内部直接返回。
+    const A2GlErrorShimResult rc = a2_gl_error_shim_retry_pending();
+    [A2Log criterion:@"[A2-GLBRIDGE] JIT 就绪后补丁重试：verifiedRegion=%p(%lu 字节) MG glGetError shim rc=%d"
+     @"（0=已生效 / 1=仍待办 / 2=无待办或该后端不适用；首启常见 2，安装发生在随后的 attach）",
+     verified, (unsigned long)verifiedBytes, (int)rc];
 }
 
 + (A2LaunchRuntimeFacts *)currentRuntimeFacts {

@@ -883,6 +883,11 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                                                           reasonText:gateWhy ?: @"JIT 已就绪 ⇒ 走带 JIT 的启动参数路径"
                                                             evidence:lastEvidence]];
                 [A2Log log:@"[A2-LAUNCH] ③ 建 VM 开始（可能要 10~60 秒；若之后没有“建 VM 返回”行 ⇒ 卡在建 VM）"];
+                // ★JIT 现在就绪了 ⇒ 重试「需要可写代码页」的延迟补丁★（真机 lastlog-101：
+                //   MG 的 glGetError 在 attach 时改不动 → shim 记了待办）。放在闸门放行之后、
+                //   建 VM 之前：此刻 JIT 区已验证，mprotect(RWX) 才有机会成功；失败也只是少一条
+                //   诊断接口的保护，绝不拦启动（Bridge 内部如实打 [A2-MG-SHIM] 行）。
+                [A2LaunchRunner retryJITGatedGLPatches];
                 // ★区域验收快照（建 VM 前）★：拿到的是 64MB 还是一页/没有，一眼可见。
                 //   拿不到不是错误（iOS 26+ 的区由 libjvm 建 VM 时自己发 brk #0x69 取）。
                 [A2JITEnabler logRegionSnapshot:@"before-vm"];

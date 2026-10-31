@@ -103,6 +103,19 @@ NS_ASSUME_NONNULL_BEGIN
             rendererDylib:(nullable NSString *)rendererDylib
               renderScale:(double)renderScale;
 
+/// ★JIT 就绪后重试「需要可写代码页」的延迟补丁★（当前只有一处：MG 的 glGetError shim）。
+///
+/// 为什么必须有：`a2_gl_bridge_attach` 在**建 VM 之前**就把后端 dlopen 好了，此刻进程里
+/// 还没有可写的代码页（iOS 26 禁 `mprotect(RWX)` ⇒ `EACCES=13`）⇒ shim 只能记「待办」。
+/// JIT 一经闸门验证（`openLegacyGateBeforeVMBuild` 放行）即可重试 —— 那正是本方法的调用时机。
+///
+/// ★调用点只有一处★：`Air2/Player/A2LaunchSession.m` 的 `createJVM`（闸门放行之后、调
+/// `+launchWithPlanPath:` 之前）。幂等：无待办 / 已生效 ⇒ 不改写任何代码页，但**固定打一行
+/// 判据**（`[A2-GLBRIDGE] JIT 就绪后补丁重试：verifiedRegion=… rc=…`），供真机一眼判相位。
+/// 为什么经 Bridge 而不是 Player 直连：分层规定 App → UI → Player → Core → **Bridge** → Natives，
+/// Bridge 是唯一与 Natives 相邻的层（docs/ARCHITECTURE.md §依赖方向）。
++ (void)retryJITGatedGLPatches;
+
 @end
 
 NS_ASSUME_NONNULL_END
