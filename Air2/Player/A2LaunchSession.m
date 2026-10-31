@@ -724,6 +724,23 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
             NSString *libs = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"libs"];
             [jvmOptions addObject:[NSString stringWithFormat:@"-javaagent:%@/patchjna_agent.jar=", libs]];
             [A2Log criterion:@"[A2-AGENT] 注入 patchjna_agent.jar（所有渲染器；修 oshi/JNA 在 iOS 上 dlopen macOS 库）"];
+
+            // ★2026-10-31 老 Air 正解（JavaLauncher.m:2027-2090 [JNA-INBUNDLE]）★
+            //   真机 lastlog-110 证明 patchjna agent 不足以阻止 JNA 从 jar 解出 macOS 镜像：
+            //     NoClassDefFoundError: com.sun.jna.Native
+            //     UnsatisfiedLinkError: jnaNNN.tmp ... incompatible platform (have 'macOS', need 'iOS')
+            //   老 Air 的做法是：包内自带 iOS 的 libjnidispatch.jnilib（我们包里已有），
+            //   并把 JNA 的三条回退全部关掉，强制它只从包内加载。
+            NSString *jnaFW = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"Frameworks"];
+            NSString *jnaLib = [jnaFW stringByAppendingPathComponent:@"libjnidispatch.jnilib"];
+            BOOL jnaInBundle = [[NSFileManager defaultManager] fileExistsAtPath:jnaLib];
+            [jvmOptions addObject:[NSString stringWithFormat:@"-Djna.boot.library.path=%@", jnaFW]];
+            [jvmOptions addObject:@"-Djna.nosys=true"];      // 不查系统库路径
+            [jvmOptions addObject:@"-Djna.noclasspath=true"];// 真正阻止从 jar 解包
+            [jvmOptions addObject:@"-Djna.nounpack=true"];   // 文档同义词
+            [jvmOptions addObject:@"-Djna.debug_load.jna=true"];
+            [A2Log criterion:@"[JNA-INBUNDLE] libjnidispatch bundle=%@ path=%@（nosys/noclasspath/nounpack 全开）",
+             jnaInBundle ? @"present" : @"MISSING", jnaLib];
         }
 
         if (wantsMetalAgent) {
