@@ -9,6 +9,11 @@
 > **v2 变更（2026-10-31）**：不再有官方签名 / 信任等级。Air2 不验证作者身份；
 > 安装时由用户逐项授权，critical 权限要连续三次、每次等 5 秒。
 > 你不需要生成 `AIR2SIG.json`，也不能把它放进包里（会被拒装）。
+>
+> **v3 变更（2026-10-31）**：critical 授权**绑定权限集，不绑定包哈希** —— 你更新内容但
+> `permissions` 不变时，用户不会再被问一遍；只有新增 / 变更 critical 或 `major` 跨版本才重确认。
+> 新增第五节「JSON 插件能做到什么 / 做不到什么」，授权页权限改为按后果分 5 组折叠展示。
+> 摘要见 `P0-V3-CHANGELOG.md`。
 
 ---
 
@@ -151,6 +156,12 @@ critical 默认关闭，用户必须逐项走三次 5 秒确认。没有「签�
 
 `type: json` 只能申请 `version.decorate` / `download.source` / `version.filter` /
 `ui.contribute` / `ui.override`（没有运行时，其它权限给了也用不上 —— schema 会直接拒）。
+能力边界见第五节。
+
+**授权绑定的是权限，不是包字节**：更新内容时只要 `permissions` 不变、`major` 不变，用户的
+critical 授权继续有效，**不会**再弹三次确认；只有新增 / 变更 critical 或 `major` 变化才重确认。
+所以**不要**为了让用户「再看一眼」特意加一个权限或抬 `major` —— 那只会造成授权疲劳，
+也不会带来任何额外的安全收益。
 
 **降级要求**：每个权限都可能被用户关掉。你的插件必须在 `onLoad` / `render` 里判断
 `typeof air2.xxx === "undefined"`，然后：
@@ -211,7 +222,7 @@ v3（页面 / 覆盖）见 `PLUGIN-PAGE.md`：
 - `mode: "dynamic"` 只能用于 `type: "js"`；纯 JSON 插件只能用 `mode: "static"`（`root` 或 `source`）。
 - 纯 JSON 插件没有运行时 state，静态页面的绑定只会得到空值；文案请用 `{ "text": ... }` 字面量。
   JS 插件仍可在 `onPageOpen` / `setState` 里给静态页面 state。
-- 需要按数据渲染、响应点击的页面，必须写 JS 插件，见第六节。
+- 需要按数据渲染、响应点击的页面，必须写 JS 插件，见第七节。
 
 ### 3.5 `contributes`（数据层）
 
@@ -312,7 +323,53 @@ v3（页面 / 覆盖）见 `PLUGIN-PAGE.md`：
 
 ---
 
-## 五、示例 2：JS 插件（最小可用）
+## 五、JSON 插件能做到什么 / 做不到什么
+
+`type: json` 是给「不想写代码也要交付插件」的人准备的。它的边界是**静态**：
+宿主只读 JSON 文件，不做任何计算、不执行任何东西。
+
+### 5.1 能做到
+
+| 能做到 | 怎么做到 | 阶段 |
+|---|---|---|
+| 静态展示：图标、标题、副标题、徽标、主题色、组件布局 | `ui.slots`（叶子组件）/ `ui.theme` / `pages/*.json` 的静态树 | P2（页面 P3b） |
+| 声明式动作：关页面、打开本插件另一个页面、回到宿主原列表、重试、复制文本 | 页面节点上的 `action`，只能用 `host.*`（`host.close` / `host.openPage` / `host.showOriginal` / `host.retry` / `host.copy`） | P3b |
+| 静态过滤：按**固定字符串规则**隐藏 / 置顶版本 | `contributes.versionFilter` 的 `hidePatterns` / `pinPatterns`（各 ≤ 32 条字符串模式） | P4 |
+| 版本显示装饰：名字、副标题、徽标、图标 | `version.decorate` | P2 |
+| 追加下载镜像候选（静态 URL 模板） | `download.source` | P4 |
+| 多语言文案 | `locales/<lang>.json` | P2 |
+| 固定文案与固定值 | 组件里的字面量 `{ "text": "…" }`、`value` | P2 |
+
+### 5.2 做不到
+
+| 做不到 | 为什么 | 需要什么 |
+|---|---|---|
+| 动态计算（拼字符串、算百分比、求和、格式化日期） | 没有表达式求值器；JSON 里没有运算节点 | `type: js`（P3a） |
+| 循环 / 按数据展开列表 | 组件树是静态写死的，没有循环节点 | `type: js` + `render`（P3b） |
+| 异步（网络请求、等回调、定时器） | 没有执行环境，JSON 不能持有回调 | `type: js`（P3a） |
+| 状态机（多步流程、记住上次点击、撤销） | 变量在页面里，JSON 没有可变状态 | `type: js`（P3a） |
+| 按数据条件显隐 | `visibleWhen` 读的是 binding，纯 JSON 页面的 binding 恒为空值，条件永远按「不满足」处理 | `type: js`（P3a/P3b） |
+| 读取宿主/游戏数据并显示 | 纯 JSON 没有运行时，`binding` 只会得到 `null`（`PLUGIN-PAGE.md` 第二节） | `type: js` |
+| 读写文件、改启动参数、注入 agent、发网络请求 | 这些是 API 调用，不是声明 | `type: js` + 对应权限（多为 critical） |
+| HTML / 内联脚本 / WebView / 远程图片 | 硬禁，不是权限问题 | 不存在（P5 的 `ui.web` 也只是宿主控制的 WebView） |
+
+### 5.3 怎么选中了错类型
+
+**一句话判据**：如果你在 JSON 里「想办法算点什么」、「想办法让它按数据变」，这个插件就不该是 `json`。
+
+- 症状 1：写了一大堆只有文案不同的静态页面，想模拟「按状态显示不同内容」→ 该用 `js` + `render`。
+- 症状 2：想把 `version.list` 里的字段引用到组件上 → 纯 JSON 页面的 binding 是空值，看不到数据。
+- 症状 3：想在按钮里做「先检查再执行」→ 没有回调，只能声明 `host.*` 动作。
+
+正确的拆法是「静态部分留 JSON、计算放 JS」：`type: js` 的插件也能用
+`mode: "static"` 的页面，把布局写成 JSON，只在需要算的地方调 `air2.page.setState`。
+
+> `type: json` 申请运行时权限（`launch.*` / `files.*` / `network.http` / `java.agent` / `native.module`）
+> 会被 schema **直接拒装**，不是「装了之后没效果」。
+
+---
+
+## 六、示例 2：JS 插件（最小可用）
 
 启动时设置内存调优，并把自己启动过的次数写进私有存储。
 
@@ -380,7 +437,7 @@ definePlugin({
 
 ---
 
-## 六、示例 3：v3 动态页面
+## 七、示例 3：v3 动态页面
 
 一个「下载器」页面：显示列表、按钮点击后更新状态。动态页面必须 `type: "js"`；
 纯 JSON 插件做不了这一节。
@@ -462,7 +519,7 @@ definePlugin({
 
 ---
 
-## 七、导出整合包（mrpack / zip）
+## 八、导出整合包（mrpack / zip）
 
 P4 起，插件可以用 `air2.files` + `air2.archive` 做整合包导出。典型流程：
 
@@ -517,24 +574,48 @@ air2.files.export(zip, { suggestedName: "MyPack.zip", mime: "application/zip" })
 
 ---
 
-## 八、授权：用户会看到什么
+## 九、授权：用户会看到什么
 
 这一节决定你的插件「装得上但没人敢用」还是「用户愿意授权」。
 
-### 8.1 低 / 中权限
+### 9.1 低 / 中权限
 
 - 安装页默认**开启**，逐条列出，用户可以关掉。
 - 升级时沿用；新增的低/中权限会在更新页列出并默认开启。
 - 你不需要做任何额外事，但**要在 `description` 里写清楚为什么需要**。
 
-### 8.2 critical 权限
+### 9.2 critical 权限
 
 - 默认**关闭**；用户必须逐项点「授权」，连续三次提示框，每次等 5 秒才能继续。
 - 第 1 次讲「能做什么」；第 2 次讲「可能造成什么危害」；第 3 次最终确认。
-- 授权绑定 `(pluginId, packageHash, permissionId)`：**包一变就失效**，升级后要重新确认。
+- 授权绑定 `(pluginId, permissionId)`，**不绑定包哈希**：内容更新（`packageHash` 变）但
+  `permissions` 不变 → **不重确认**，更新页只显示「内容已更新，权限未变」。
+- 只有这几种情况会重新弹三次：**新增 critical**（只弹新增项）、**中风险升为 critical**、
+  **`major` 跨版本**（全部 critical 重弹，无论权限集是否变化）。
+- **缩小权限集是安全的**：删掉一个 critical，宿主自动撤销该授权、不弹窗；用户不会因此重审。
 - 用户拒绝某个 critical 权限时，插件仍然安装；你必须降级运行，不能崩。
 
-### 8.3 作者该做的
+### 9.3 权限会怎么分组显示
+
+安装页不会把你申请的 24 项权限平铺成一列，而是按**后果**归为 5 组，**默认折叠**：
+
+| 组标题（用户看到的） | 收纳的权限 |
+|---|---|
+| **改游戏文件** —— 能修改游戏内容（等同直接装 mod，可执行代码） | `files.game.write.content`、`files.game.write.config`、`version.patch` |
+| **联网** —— 能把数据发到网上 / 从网上下载东西 | `network.http`、`download.source`、`download.fetch`、`ui.web` |
+| **读你的数据** —— 能查看你的游戏文件与配置 | `files.game.read`、`files.export` |
+| **启动参数** —— 能改游戏如何启动（可注入代码） | `launch.args`、`launch.gameArgs`、`launch.classpath`、`launch.libraryPath`、`launch.env`、`launch.env.code`、`launch.properties`、`launch.tuning`、`java.agent`、`native.module` |
+| **改界面** —— 能改启动器看起来的样子 | `ui.contribute`、`ui.override`、`version.decorate`、`version.filter`、`instance.guard` |
+
+对你的影响：
+
+1. **组标题不写你的插件名，也不写权限 id**，写后果。所以你的 `description` 不要重复
+   「需要启动参数权限」，而要写「为什么要改启动参数」。
+2. **组内逐条仍显示人话后果**（`PLUGIN-SECURITY.md` 第九节），用户点开就能看到具体到每条的能力。
+3. **多申请一项 = 多一条可见条目**，还可能把你的插件从「低危组」拖进「含高危」的组。少申请就是更好的说明。
+4. 分组只是展示，**不会**因此给你「整组授权」的便利；用户仍然逐项确认。
+
+### 9.3 作者该做的
 
 1. **最小权限**：能不用 critical 就不用。比如「改配置」用 `files.game.write.config`，
    不要为了省事申请 `files.game.write.content`。
@@ -543,7 +624,7 @@ air2.files.export(zip, { suggestedName: "MyPack.zip", mime: "application/zip" })
 4. **不要伪装官方**：`name` / `author` / 图标不要冒充 Air2 官方；安装页会标「作者自述」。
 5. **发布哈希**：在发布页写 `packageHash`，用户导入后可以对照。
 
-### 8.4 没有签名
+### 9.4 没有签名
 
 - 不要生成 `AIR2SIG.json`；它会被拒装。
 - 没有「签名后 critical 自动可授」这回事；每个用户、每个包哈希都要自己确认。
@@ -552,7 +633,7 @@ air2.files.export(zip, { suggestedName: "MyPack.zip", mime: "application/zip" })
 
 ---
 
-## 九、打包
+## 十、打包
 
 ```bash
 cd myplugin
@@ -578,7 +659,7 @@ jsonschema.validate(m, s); print('manifest ok')
 
 ---
 
-## 十、调试
+## 十一、调试
 
 | 手段 | 说明 |
 |---|---|
@@ -593,7 +674,7 @@ jsonschema.validate(m, s); print('manifest ok')
 
 ---
 
-## 十一、常见拒装原因
+## 十二、常见拒装原因
 
 | code | 原因 | 怎么修 |
 |---|---|---|
@@ -620,7 +701,7 @@ jsonschema.validate(m, s); print('manifest ok')
 
 ---
 
-## 十二、发布
+## 十三、发布
 
 1. 源码仓库 + 可复现构建脚本（用户/审计者能自己打出同一个 `packageHash`）。
 2. 权限最小化说明：每一项申请都要写「为什么必需」。

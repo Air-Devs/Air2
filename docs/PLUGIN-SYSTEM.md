@@ -10,6 +10,11 @@
 > **v2 变更（2026-10-31）**：取消官方签名与信任等级，改为安装时逐项授权；
 > critical 权限三次 5 秒确认；新增 v3 页面模型与 1～10 号插件所需扩展点。
 > 改动摘要见 `P0-V2-CHANGELOG.md`。
+>
+> **v3 变更（2026-10-31）**：critical 授权从「绑定包哈希」改为「绑定权限集 + 哈希白名单」
+> （registry 新增 `approvedHashes`，最多 5 个）；registry 新增取证用的 `source` 来源字段；
+> P1 增加最小崩溃闭环（连续 3 次未跨过首帧即自动停用）；安装页权限按 5 个后果组折叠展示。
+> 决策见 ADR-024，改动摘要见 `P0-V3-CHANGELOG.md`。
 
 ---
 
@@ -248,7 +253,7 @@ hello.air2plugin
 |---|---|
 | 同 `id` 同 `version`，`packageHash` 相同 | 视为重装：直接成功（幂等），不重新弹授权 |
 | 同 `id` 同 `version`，`packageHash` 不同 | **拒装**（`E_SAME_VERSION_DIFFERENT_CONTENT`，「同版本内容不同，可能是被替换的包」） |
-| 同 `id` 高版本 | 升级：旧目录改名 `<oldVersion>` 保留，装新版本，成功后 registry 记 `previousVersion`；低/中权限沿用，critical 因 `packageHash` 变化全部重新确认 |
+| 同 `id` 高版本 | 升级：旧目录改名 `<oldVersion>` 保留，装新版本，成功后 registry 记 `previousVersion`；低/中权限沿用；critical **按权限集沿用**：权限集不变且非 `major` → 不重确认（更新页提示「内容已更新，权限未变」），新增 / 变更 critical 或 `major` 变化 → 重走三次确认，权限集缩小 → 自动撤销多余项、不弹窗（`PLUGIN-SECURITY.md` 3.4） |
 | 同 `id` 低版本 | **默认拒装**（`E_DOWNGRADE`），文案「默认不允许降级安装」。开发者模式可放行；放行后 UI 标「降级」并要求额外确认 |
 | 不同 `id` | 独立安装 |
 
@@ -258,8 +263,10 @@ hello.air2plugin
 
 回退：管理页的「回退到上一版」= 把 registry 的 `activeVersion` 指回 `previousVersion`，
 目录已存在，所以是瞬时的，不需要重新安装。回退**不受降级拒装规则限制**（这是本地已有版本，
-不是新装一个低版本包）。回退后 critical 授权仍绑定 `packageHash`，若旧包的哈希没有对应授权，
-需要重新走三次确认。
+不是新装一个低版本包）。回退后 critical 授权按 `(pluginId, permissionId)` 继续有效（**不因回退重确认**），
+旧包哈希追加进 `approvedHashes`；只有目标版本的权限集与已授权集不同才按
+`PLUGIN-SECURITY.md` 3.4 判定 —— 旧版本多要的 critical 项**不授予、不弹窗**，管理页标「未授权」，
+用户可去「重新审查权限」逐项授权；`major` 不同则整组重确认。
 
 ### 4.6 卸载
 
@@ -353,20 +360,26 @@ Phase A 生成加载序列，排序键为三元组：
       "activeVersion": "1.0.0",
       "previousVersion": "0.9.0",
       "packageHash": "sha256:…",
+      "approvedHashes": [
+        "sha256:9f2c0d…",
+        "sha256:1a77be…",
+        "sha256:c40e13…"
+      ],
       "source": {
-        "kind": "file",
-        "displayName": "从文件导入",
-        "importedAt": "2026-10-31T10:00:00Z"
+        "kind": "local-import",
+        "sourceDetail": "hello.air2plugin",
+        "installedAt": "2026-10-31T10:00:00Z"
       },
       "enabled": true,
       "permissionsGranted": ["version.decorate", "files.game.write.config"],
+      "permissionSet": "files.game.write.config:medium\nlaunch.args:critical\nversion.decorate:low",
       "criticalGrants": [
         {
           "permissionId": "launch.args",
-          "packageHash": "sha256:…",
           "grantedAt": "2026-10-31T10:02:00Z",
           "method": "three-step",
-          "hostVersion": "0.1.0"
+          "hostVersion": "0.1.0",
+          "majorVersion": 1
         }
       ],
       "grantRevision": 2,
@@ -391,11 +404,14 @@ Phase A 生成加载序列，排序键为三元组：
 | `userSeq` | **用户配置序号**：用户装/卸/开关插件或改授权时 +1；宿主**自动**禁用插件时**不** +1。崩溃归因比较的就是它（见 `PLUGIN-SECURITY.md` 6.1） |
 | `activeVersion` | 当前生效版本目录名 |
 | `previousVersion` | 上一版目录名，用于回退；没有则为 `null` |
-| `packageHash` | 全量内容摘要（定义见 `PLUGIN-SECURITY.md` 第五节），是 critical 授权的绑定键 |
-| `source` | 来源记录：`kind` 为 `file` / `url` / `dev`；`displayName` 给管理页显示；**不是**信任标记 |
+| `packageHash` | 全量内容摘要（定义见 `PLUGIN-SECURITY.md` 第五节）；用于完整性校验、重装幂等判定与展示，**不是**授权绑定键 |
+| `approvedHashes` | **用户同意过的内容版本白名单**：`sha256` 数组，新值前插、最多保留最近 **5** 个。只记录「用户在哪些内容上点过同意」，**不参与授权判定**、不授予任何能力（ADR-024） |
+| `source` | 来源事实记录（取证最低线）：`kind` 为 `local-import` / `url` / `share-sheet` / `dev-dir`；`sourceDetail` 为域名或文件名（可空）；`installedAt` 为本次安装时间。管理页按事实文本展示，**不做好坏判断、不挂任何徽标** |
+| `permissionSet` | 上一版 manifest 的**规范化权限集**（`id:risk` 按 id 排序、`\n` 连接）。用途：升级时不必保留旧目录即可判定「权限集是否变了」 |
+| `installedAt` | 首次安装时间（升级不改）；本次安装时间记在 `source.installedAt` |
 | `enabled` | 用户开关 |
 | `permissionsGranted` | 用户实际授予的低/中权限（**可能少于** manifest 申请集） |
-| `criticalGrants` | critical 权限的逐项授权记录；每项绑定 `packageHash`；**不放在** `permissionsGranted` 里，避免两种生命周期混在一起 |
+| `criticalGrants` | critical 权限的逐项授权记录，主键 `(pluginId, permissionId)`；每项记 `grantedAt` / `method` / `hostVersion` / `majorVersion`，**不记也不比对** `packageHash`（包内容变化不使授权失效）；**不放在** `permissionsGranted` 里，避免两种生命周期混在一起 |
 | `grantRevision` | 授权变更序号；插件加载时用它判断「能力面是否变过」 |
 | `lastReviewAt` | 用户最后一次打开安装详情页 / 重新审查权限的时间 |
 | `suspectCount` | 连续可疑失败次数，成功到 `stable` 清零（规则见 `PLUGIN-SECURITY.md` 6.3） |
@@ -408,8 +424,12 @@ Phase A 生成加载序列，排序键为三元组：
 - 每次写都是全量重写 + 原子替换（文件很小，不做增量）。
 - 写前校验：
   - `permissionsGranted` 里只能有**低/中**权限，且必须 ⊆ manifest 申请集；
-  - `criticalGrants[].permissionId` 必须 ⊆ manifest 申请集，且每项的 `packageHash`
-    必须等于当前 `packageHash`（不等 → 该项视为失效，写前剔除并记诊断）；
+  - `criticalGrants[].permissionId` 必须 ⊆ manifest 申请集；manifest 不再申请的项写前移除并记诊断；
+    **不得**按 `packageHash` 剔除任何 critical 授权项（授权绑定权限集，不绑定包字节）；
+  - `permissionSet` 必须等于当前 `activeVersion` 的 manifest 规范化权限集（不等 → 拒绝写，记 `invalid`）；
+  - `approvedHashes` 最多 5 项，每项为 64 位小写 hex（`sha256:` 前缀可选），超出截断最旧；
+    它不参与任何授权判定，缺失或损坏不影响授权有效；
+  - `source.kind` ∈ {`local-import`, `url`, `share-sheet`, `dev-dir`}，`source.installedAt` 不得为空；
   - `activeVersion` 目录存在；
   - `packageHash` 与磁盘一致（不一致 → 拒绝写，记 `tampered`）。
 - 任何一次「授予 / 撤销 / 审查」都让 `grantRevision + 1`、`userSeq + 1`。
@@ -423,10 +443,16 @@ Phase A 生成加载序列，排序键为三元组：
 v2 → v3 的迁移要点：
 
 - 丢弃 `trustLevel` / `signerFingerprint` / `grantBinding`（这些字段在 v2 注册表里可能存在）；
-- 把 `permissionsGranted` 里的 critical 项拆到 `criticalGrants`，`packageHash` 用当前值；
+- 把 `permissionsGranted` 里的 critical 项拆到 `criticalGrants`，`majorVersion` 用当前 manifest 的主版本号
+  （不写 `packageHash`：v3 的授权不绑定包哈希）；
   无法判断原授权来源的，标 `method:"migrated"`，并在管理页提示「请重新审查」；
 - 新增 `source` / `grantRevision` / `lastReviewAt`，缺省值分别为
-  `{kind:"file",displayName:"旧版安装"}` / `0` / `installedAt`。
+  `{kind:"local-import",sourceDetail:"旧版安装",installedAt:<原 installedAt>}` / `0` / `installedAt`；
+  旧 `kind` 映射：`file → local-import`、`url → url`、`dev → dev-dir`，旧 `displayName` 并入 `sourceDetail`；
+- 新增 `approvedHashes`：有任一迁移来的 critical 授权时为 `[当前 packageHash]`，否则为 `[]`；
+- 新增 `permissionSet`：按当前 `activeVersion` 的 manifest 重算写入；
+- critical 授权**不再**校验 `packageHash`：迁移时即使哈希对不上也保留授权（v2 的「哈希变即失效」
+  在 v3 取消），只在管理页标「迁移自旧版本，建议重新审查」。
 
 ---
 
@@ -435,8 +461,8 @@ v2 → v3 的迁移要点：
 | 里程碑 | 内容 | 验收口径 |
 |---|---|---|
 | **P0** | 文档：本文 + API + 安全 + 页面 + 兼容 + 作者指南 + `plugin.schema.json` + ADR-014～023 | 文档之间无矛盾；schema 能校验两个最小示例 |
-| **P1** | 安装器 / 注册表 / 权限存储 / 最小管理页 / **三步授权** / **boot marker** | 能装、能启停、能卸载、能看原因；critical 三步 5 秒可测；崩溃计数只记录不自动禁用；不动 UI 渲染、不动旧渲染器 |
-| **P2** | 注册表化 UI + slot + `ui.contribute` + 导入预览 + 崩溃自动禁用 | JSON 插件能往 slot 塞组件；低/中默认授权可关；连续 2 次 boot 失败禁用最近启用插件 |
+| **P1** | 安装器 / 注册表 / 权限存储 / 最小管理页 / **三步授权** / **boot marker** / **来源记录 + `approvedHashes` + `permissionSet`** / **最小崩溃闭环** | 能装、能启停、能卸载、能看原因；critical 三步 5 秒可测；权限集不变的更新**不**重确认；连续 3 次死在首帧前 → 自动停用最近启用的插件并提示；不动 UI 渲染、不动旧渲染器 |
+| **P2** | 注册表化 UI + slot + `ui.contribute` + 导入预览 + **完整安全模式** | JSON 插件能往 slot 塞组件；低/中默认授权可关；第 3 次失败进安全模式禁 L2，再失败禁 L1；逐插件诊断页 + 逐个恢复 |
 | **P3a** | **JSCore 运行时 + API 面**（launch / files / storage / instance / crypto） | JS 插件能跑 `onLoad`/`onBoot`；未授权 API 在对象上不存在；插件串行队列与预算可测 |
 | **P3b** | **v3 页面模型** + `ui.override` + `launch.overlay` | 静态 / 动态页面能渲染、能交互动；页面横幅强制；无 HTML / 远端图片 / 密码框 |
 | **P4** | 下载源候选 + 版本过滤器 + 文件读/导出 + 整合包导出（mrpack / zip）+ 开发模式 | 过滤器能按规则隐藏版本；`files.game.read` 只读且无账号面；导出走系统分享面板；开发模式不污染正式注册表 |
@@ -467,7 +493,11 @@ v2 → v3 的迁移要点：
 | 术语 | 含义 |
 |---|---|
 | 包 / package | 一个 `.air2plugin` 文件 |
-| packageHash | 全量内容摘要（清单规范化后的 SHA-256），critical 授权的绑定键 |
+| packageHash | 全量内容摘要（清单规范化后的 SHA-256）；用于完整性与展示，**不是**授权绑定键 |
+| 权限集 | manifest `permissions` 规范化后的集合（`id:risk` 排序拼接）；critical 授权的绑定对象 |
+| approvedHashes | 用户同意过的内容版本白名单（最多 5 个哈希），只取证、不授权 |
+| 来源 / source | 安装来源的事实记录（本地导入 / 网址 / 分享面板 / 开发目录），不做信任判断 |
+| major | 插件自身语义化版本的主版本号；跨 major 升级视为「可能换了一套东西」，critical 全部重确认 |
 | slot | 宿主 UI 里预留的、可被插件放组件的语义位置 |
 | 组件 / component | 语义组件名（如 `button.primary`），不是平台控件类名 |
 | 能力注入 | 未授权的 API 在插件对象上**不存在**，加载期一次性决定 |

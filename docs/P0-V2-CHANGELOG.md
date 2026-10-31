@@ -2,6 +2,10 @@
 
 > 这份文件是给开发者开工 P1 前的**交接说明**。它不替代任何契约文档；
 > 有冲突时以 `PLUGIN-SECURITY.md` / `PLUGIN-SYSTEM.md` / `plugin.schema.json` 为准。
+>
+> **已被 v3 修订（2026-10-31）**：本文件的「critical 按 `packageHash` 绑定、哈希变即重确认」
+> 与「P1 只写 marker + 计数、不自动禁用」两条已失效，以 `P0-V3-CHANGELOG.md` /
+> `PLUGIN-SECURITY.md` 3.4 与 6.4 为准。其余内容仍然有效。
 
 ---
 
