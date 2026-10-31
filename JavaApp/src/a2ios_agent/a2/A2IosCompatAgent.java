@@ -33,22 +33,6 @@ public final class A2IosCompatAgent implements ClassFileTransformer {
     /** MC 的 macOS 朗读器实现（规则 B）。 */
     private static final String NARRATORMAC_CLASS = "com/mojang/text2speech/NarratorMac";
 
-    /**
-     * 规则 B 的落地：让 NarratorMac 加载失败。
-     *
-     * 真机证据（lastlog-114，1.20.1 + MG）：
-     *   UnsatisfiedLinkError: tmp/libjcocoa… ← NarratorMac.<init>
-     *   ← Narrator.getNarrator ← enf.<init> ← enn.<init> ← Main.main
-     *
-     * 为什么不用改字节码：javap 已证 Narrator.getNarrator() 的整段实现被
-     *   `Exception table: from 0 to 84 target 85 Class java/lang/Throwable`
-     * 包住，catch 里打日志并 `return Narrator.EMPTY`。
-     * ⇒ 只要让 NarratorMac 这个类加载不出来，MC 自己就降级成空朗读器，
-     *   不需要我们改任何方法体（也就没有 ASM 改写失败的风险）。
-     */
-    private static void failNarratorMac() {
-        throw new NoClassDefFoundError("A2iOS: NarratorMac 已禁用（iOS 无 macOS 朗读器 libjcocoa）");
-    }
 
     public static void premain(String args, Instrumentation inst) {
         inst.addTransformer(new A2IosCompatAgent());
@@ -59,11 +43,15 @@ public final class A2IosCompatAgent implements ClassFileTransformer {
         if (className == null) {
             return null;
         }
-        // 规则 B：MC 的 macOS 朗读器 ⇒ 让这个类加载失败，MC 自己降级为 Narrator.EMPTY。
+        // 规则 B：MC 的 macOS 朗读器 ⇒ 让这个类【定义失败】，MC 自己降级为 Narrator.EMPTY。
+        //   真机证据（lastlog-115，24f842e）：上一版用「transform 里抛异常」——日志打了，
+        //   但 JVM 把 transformer 的异常吞掉，类照样加载 ⇒ NarratorMac.<init> 仍旧跑到
+        //   NSObject → Client.sendPointer → RuntimeUtils.<clinit> → libjcocoa 崩。
+        //   ⇒ 改法：返回非法 class 字节，让 define 阶段抛 ClassFormatError（Error 也是 Throwable，
+        //     Narrator.getNarrator 的 catch(Throwable) 会捕获并 return Narrator.EMPTY）。
         if (NARRATORMAC_CLASS.equals(className)) {
-            System.out.println("[A2IOS-AGENT] NarratorMac 已禁用 ⇒ MC 自动降级为空朗读器");
-            failNarratorMac();
-            return null;   // 不会到达
+            System.out.println("[A2IOS-AGENT] NarratorMac 已禁用（返回非法字节使其定义失败）⇒ MC 自动降级为空朗读器");
+            return new byte[] { (byte) 0xCA, (byte) 0xFE, (byte) 0xBA, (byte) 0xBE };
         }
         // 规则 A：ehg 的两个 macOS AppKit 方法置空。
         if (!TARGET_CLASS.equals(className)) {
