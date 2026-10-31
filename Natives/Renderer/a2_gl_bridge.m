@@ -912,37 +912,6 @@ static int a2_gl_bridge_backend_is_host_egl(const char *rendererName) {
 ///   · 宿主 EGL 后端：包成 `A2FakeEglWindowSize{宽, 高, 图层}` —— 假 EGL 据此走
 ///     CAEAGLLayer + `-presentRenderbuffer:`（上屏），而不再是离屏 FBO。
 /// `box == NULL` ⇒ 普通后端。★box 必须活到 eglCreateWindowSurface 返回之后★（调用方栈变量即可）。
-/// ★给真 EGL（ANGLE/Metal）准备一个它能认的图层★
-///   真机证据（0eead9a）：交给 ANGLE 的是 CALayer ⇒ eglCreateWindowSurface 带属性
-///   报 EGL_BAD_ATTRIBUTE(0x3004)、退回无属性返回 surface=0x1（假表面），
-///   随后每帧采样中心像素恒为 R0 G0 B0 A0 —— 游戏根本没往这块表面画。
-///   ANGLE 的 Metal 后端只认 CAMetalLayer，所以这里若宿主图层不是 CAMetalLayer，
-///   就挂一层 CAMetalLayer 子层并返回它（走 ObjC 运行时，本文件仍不 import QuartzCore）。
-static void *a2_gl_bridge_metal_layer_for(void *renderable) {
-    if (renderable == NULL) return NULL;
-    id host = (__bridge id)renderable;
-    if (host == nil) return renderable;
-    Class metalLayerCls = objc_getClass("CAMetalLayer");
-    if (metalLayerCls == Nil) return renderable;                    // 没有 Metal ⇒ 原样返回
-    if ([host isKindOfClass:metalLayerCls]) return renderable;      // 已经是 ⇒ 直接用
-    // 已有子层就直接复用（避免每帧 attach 叠层）
-    for (id sub in [(id)host sublayers]) {
-        if ([sub isKindOfClass:metalLayerCls]) return (__bridge void *)sub;
-    }
-    id layer = ((id (*)(id, SEL))objc_msgSend)(((id (*)(id, SEL))objc_msgSend)((id)metalLayerCls, sel_registerName("alloc")),
-                                              sel_registerName("init"));
-    if (layer == nil) return renderable;
-    CGRect bounds = ((CGRect (*)(id, SEL))objc_msgSend)(host, sel_registerName("bounds"));
-    double scale = ((double (*)(id, SEL))objc_msgSend)(host, sel_registerName("contentsScale"));
-    if (scale <= 0.0) scale = 1.0;
-    ((void (*)(id, SEL, CGRect))objc_msgSend)(layer, sel_registerName("setFrame:"), bounds);
-    ((void (*)(id, SEL, double))objc_msgSend)(layer, sel_registerName("setContentsScale:"), scale);
-    ((void (*)(id, SEL, id))objc_msgSend)(host, sel_registerName("addSublayer:"), layer);
-    NSLog(@"[A2-GLBRIDGE] 为真 EGL 现挂 CAMetalLayer 子层 %.0fx%.0f@%.2f（宿主=%@）",
-          bounds.size.width, bounds.size.height, scale, NSStringFromClass([host class]));
-    return (__bridge void *)layer;
-}
-
 static A2EGLNativeWindowType a2_gl_bridge_window_arg(A2FakeEglWindowSize *box, void *renderable) {
     if (box != NULL) return (A2EGLNativeWindowType)box;
     return (A2EGLNativeWindowType)renderable;
@@ -1456,12 +1425,10 @@ static void a2_gl_bridge_ensure_game_view_surface(void) {
         hostWinBox.layer  = want;
         hostWinBoxPtr = &hostWinBox;
     }
-    // 真 EGL（ANGLE）只认 CAMetalLayer ⇒ 改绑时同样换层（假 EGL 不换）
-    void *eglWant = gHostEgl ? want : a2_gl_bridge_metal_layer_for(want);
     A2EGLSurface newSurf = A2_EGL_NO_SURFACE;
     if (a2_gl_bridge_is_krypton()) {
         // KW 家族在 attach 里就是「NULL 属性」（对齐老 Air 建面顺序）⇒ 这里保持一致。
-        newSurf = gEglCreateWindowSurface(gDpy, gCfg, a2_gl_bridge_window_arg(hostWinBoxPtr, eglWant), NULL);
+        newSurf = gEglCreateWindowSurface(gDpy, gCfg, a2_gl_bridge_window_arg(hostWinBoxPtr, want), NULL);
     } else {
         const A2EGLint surfAttribs[] = {
             A2_EGL_WIDTH,  (A2EGLint)gWidthPixels,
@@ -1470,7 +1437,7 @@ static void a2_gl_bridge_ensure_game_view_surface(void) {
         };
         if (gWidthPixels > 0 && gHeightPixels > 0) {
             newSurf = gEglCreateWindowSurface(gDpy, gCfg,
-                                              a2_gl_bridge_window_arg(hostWinBoxPtr, eglWant), surfAttribs);
+                                              a2_gl_bridge_window_arg(hostWinBoxPtr, want), surfAttribs);
         }
         if (newSurf == A2_EGL_NO_SURFACE) {               // 实现不认 EGL_WIDTH/HEIGHT ⇒ 退到无属性
             newSurf = gEglCreateWindowSurface(gDpy, gCfg,
@@ -1519,13 +1486,8 @@ static void a2_gl_bridge_ensure_game_view_surface(void) {
 /// ★为什么清成透明 (0,0,0,0) 而不是实色★：宿主表面当前是承载游戏的宿主窗口，
 /// 实色清屏会让 UI 整块变黑（可见破坏）；透明清屏同样能证明「上下文可用」，
 /// 且视觉上通常无变化 —— 证据由 scissor 读回 + 判据行 + glGetError 承担。
-/// ★游戏是否已开始自己提交帧★（a2_gl_bridge_swap_buffers 被调用过）。
-/// 一旦为真，预览用的「清屏+swap」循环必须让路，否则会把游戏画好的帧擦成纯黑。
-static int gGamePresented = 0;
-
 static void a2_gl_bridge_frame_work(void) {
     if (!gAttached) return;
-    if (gGamePresented) return;   // 游戏在画 ⇒ 本层不再清屏/呈现
 
     // ★首次 make_current 的表面改绑★（游戏页盖在黑底上 ⇒ 必须改挂到 GLFW 宿主视图）
     a2_gl_bridge_ensure_game_view_surface();
@@ -1618,34 +1580,6 @@ int a2_gl_bridge_make_current(void) {
     //   幂等：`gMgInitGlesDone` 置位后这里就是空操作；★失败只记日志，不影响返回值★。
     if (ok) a2_gl_bridge_mg_init_gles_if_needed("首次 make_current（glfwMakeContextCurrent）成功");
     return ok ? 0 : -2;
-}
-
-/// ★供 glfwSwapBuffers 调用★：只做「把当前表面 swap 上屏」，不碰 viewport/scissor、
-/// 不清屏、不改上下文绑定 —— 内容由游戏自己画，我们只负责提交。
-void a2_gl_bridge_swap_buffers(void) {
-    if (!gAttached) return;
-    if (gEglSwapBuffers != NULL && gDpy != NULL && gSurf != NULL) {
-        // ★2026-10-31 黑屏判定★ 提交前读中心 1 个像素（每 60 次打一行）：
-        //   非 0/0/0 ⇒ 画面确实在画，问题在「呈现到图层」；
-        //   恒 0/0/0 ⇒ 根本没画，问题在「渲染/上下文」。
-        //   只用 GLES2 就有的 glReadPixels，不需要 FBO/扩展。
-        static unsigned long a2_pxProbeN = 0;
-        if ((++a2_pxProbeN % 60) == 1) {
-            typedef void (*A2PFN_glReadPixels)(int, int, int, int, unsigned, unsigned, void *);
-            A2PFN_glReadPixels rp = (A2PFN_glReadPixels)dlsym(RTLD_DEFAULT, "glReadPixels");
-            if (rp != NULL && gWidthPixels > 2 && gHeightPixels > 2) {
-                unsigned char px[4] = { 0, 0, 0, 0 };
-                rp(gWidthPixels / 2, gHeightPixels / 2, 1, 1, 0x1908 /*GL_RGBA*/, 0x1401 /*GL_UNSIGNED_BYTE*/, px);
-                a2_log_f(@"[A2-GLBRIDGE] 采样中心像素 #%lu = R%u G%u B%u A%u（全 0 ⇒ 没画；非 0 ⇒ 画了没上屏）",
-                         a2_pxProbeN, px[0], px[1], px[2], px[3]);
-            }
-        }
-        if (!gGamePresented) {
-            gGamePresented = 1;   // 第一次由游戏提交 ⇒ 停掉预览清屏循环
-            a2_log_f(@"[A2-GLBRIDGE] 游戏已开始提交帧 ⇒ 预览清屏循环让路（首次 glfwSwapBuffers）");
-        }
-        gEglSwapBuffers(gDpy, gSurf);
-    }
 }
 
 void a2_gl_bridge_present_frame(void) {
@@ -2203,17 +2137,14 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
             A2_EGL_HEIGHT, (A2EGLint)drawableH,
             A2_EGL_NONE
         };
-        // ★真 EGL（ANGLE）只认 CAMetalLayer★：宿主图层是普通 CALayer 时现挂一层再交给它；
-        //   假 EGL（hostEglBackend）走自己的 A2FakeEglWindowSize 契约，不改。
-        void *eglRenderable = hostEglBackend ? renderable : a2_gl_bridge_metal_layer_for(renderable);
         gSurf = gEglCreateWindowSurface(gDpy, gCfg,
-                                        a2_gl_bridge_window_arg(hostWinBoxPtr, eglRenderable), surfAttribs);
+                                        a2_gl_bridge_window_arg(hostWinBoxPtr, renderable), surfAttribs);
         if (gSurf == A2_EGL_NO_SURFACE) {
             A2EGLint e1 = gEglGetError ? gEglGetError() : 0;
             a2_log_f(@"[A2-GLBRIDGE] EGL 建面：带尺寸(%dx%d 像素)失败 eglError=0x%x ⇒ 退到无属性重试",
                      drawableW, drawableH, (unsigned)e1);
             gSurf = gEglCreateWindowSurface(gDpy, gCfg,
-                                            a2_gl_bridge_window_arg(hostWinBoxPtr, eglRenderable), NULL);
+                                            a2_gl_bridge_window_arg(hostWinBoxPtr, renderable), NULL);
         }
         if (gSurf == A2_EGL_NO_SURFACE) {
             a2_log_f(@"%s ★阻断★：EGL 建面失败：eglCreateWindowSurface 返回 NO_SURFACE（eglError=0x%x；句柄=%p 像素格式=%d）",
@@ -2221,23 +2152,6 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
                      renderable, host->surface.pixelFormat);
             a2_gl_bridge_teardown();
             return A2GlBridgeErrEgl;
-        }
-        // ★2026-10-31 黑屏诊断（6616cae 真机：swap 已提交但屏幕全黑）★
-        //   记录「交给 eglCreateWindowSurface 的到底是什么」：
-        //   hostEglBackend=1 ⇒ A2FakeEglWindowSize{宽,高,图层}（假 EGL 契约）；
-        //   hostEglBackend=0 ⇒ 图层/视图指针本身（真 EGL，如 ANGLE 方案 A）。
-        {
-            const char *cls = "(null)";
-            if (renderable != NULL) {
-                @try {
-                    id obj = (__bridge id)renderable;
-                    cls = NSStringFromClass([obj class]).UTF8String;
-                } @catch (__unused NSException *e) {
-                    cls = "(not-an-objc-object)";
-                }
-            }
-            a2_log_f(@"[A2-GLBRIDGE] EGL 建面成功：surface=%p hostEglBackend=%d renderable=%p class=%s drawable=%dx%d 像素",
-                     (void *)gSurf, hostEglBackend ? 1 : 0, renderable, cls, drawableW, drawableH);
         }
     }
 
