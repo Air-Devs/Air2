@@ -189,6 +189,11 @@ static void A2RunnerRebindSurfaceIfTopWindowChanged(UIWindow *attachedWindow,
     void *verified = [A2JITEnvironment verifiedRegion];
     const size_t verifiedBytes = [A2JITEnvironment verifiedRegionBytes];
     // ★真调 Natives★（逐字转发，语义一字不改）：无待办 / 已生效 ⇒ 内部直接返回。
+    // ★同上：shim 默认关闭时不做 JIT 后重试（键 a2jit.mgErrorShim 与 ④a 同一处判据）★
+    if (![[NSUserDefaults standardUserDefaults] boolForKey:@"a2jit.mgErrorShim"]) {
+        [A2Log criterion:@"[A2-GLBRIDGE] JIT 就绪后补丁重试：★跳过★（a2jit.mgErrorShim=NO，verifyRegion=%p）", verified];
+        return;
+    }
     const A2GlErrorShimResult rc = a2_gl_error_shim_retry_pending();
     [A2Log criterion:@"[A2-GLBRIDGE] JIT 就绪后补丁重试：verifiedRegion=%p(%lu 字节) MG glGetError shim rc=%d"
      @"（0=已生效 / 1=仍待办 / 2=无待办或该后端不适用；首启常见 2，安装发生在随后的 attach）",

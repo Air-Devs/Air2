@@ -1093,9 +1093,20 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     //     失败由 shim 记待办，JIT 就绪后 `a2_gl_error_shim_retry_pending()` 再装一次。
     //   ★结论行由 shim 自己打（[A2-MG-SHIM] …），本处只再打一行汇总，便于一眼定位后端。★
     if (a2BackendIsMG) {
-        const A2GlErrorShimResult shimRC = a2_gl_error_shim_install_for_handle(gRendererHandle);
-        a2_log_f(@"%s MG glGetError shim：rc=%d（0=已改写 / 1=记待办等 JIT / 2=库里无该符号）handle=%p",
-                 A2GlBridgeJudgementTag, (int)shimRC, gRendererHandle);
+        // ★2026-10-31 临时开关（默认关）★
+        //   真机 lastlog.old-10：shim 把 glGetError 改成 `ret` 后，SIGBUS 依旧落在**同一个地址**
+        //   （pc==被改写的 sym），且「还原页保护(RX) 失败 errno=13」⇒ 页面被留在 RWX。
+        //   怀疑对已签名 dylib 的代码页做 mprotect 后执行会触发 SIGBUS（页被改坏）。
+        //   ⇒ 默认关闭，先验「不加补丁」的 MG 原始行为；需要时置 YES 打开。
+        const BOOL shimEnabled = [[NSUserDefaults standardUserDefaults] boolForKey:@"a2jit.mgErrorShim"];
+        if (shimEnabled) {
+            const A2GlErrorShimResult shimRC = a2_gl_error_shim_install_for_handle(gRendererHandle);
+            a2_log_f(@"%s MG glGetError shim：rc=%d（0=已改写 / 1=记待办等 JIT / 2=库里无该符号）handle=%p",
+                     A2GlBridgeJudgementTag, (int)shimRC, gRendererHandle);
+        } else {
+            a2_log_f(@"%s MG glGetError shim：★已禁用★（键 a2jit.mgErrorShim=NO）⇒ 不改写代码页，验原始行为",
+                     A2GlBridgeJudgementTag);
+        }
 
         // ---- ④a2 ★符号归属核对★（MG 自己要报 SYMBOL THEFT 的那件事，我们自己也取一份证据）----
         //   真机 lastlog-101：`[MG] SYMBOL THEFT … the application is calling someone else`。
