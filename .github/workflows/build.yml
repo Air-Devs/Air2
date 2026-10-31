@@ -86,27 +86,22 @@ jobs:
         run: |
           set -e
           mkdir -p Libraries/java_runtimes
-          if [ -d Libraries/java_runtimes/java-25-openjdk ]; then
-            echo "JRE 已存在，跳过下载"
-          else
-            mkdir -p /tmp/jre
-            gh release download jre-assets --pattern 'java25.tgz' --dir /tmp/jre --clobber
-            tar xzf /tmp/jre/java25.tgz -C Libraries/java_runtimes
-          fi
-          du -sh Libraries/java_runtimes/java-25-openjdk
-          test -f Libraries/java_runtimes/java-25-openjdk/lib/server/libjvm.dylib
-          # ★2026-10-31 补 java-21★：1.20.x 的默认运行时是 java-21；
-          #   以前 CI 只拉 java-25，产物 80MB 看着没问题，但装上去跑 1.20.1 会报
-          #   「选的那档 JRE 没内置」。这里把 java-21 也拉进来（同一 release）。
-          if [ -d Libraries/java_runtimes/java-21-openjdk ]; then
-            echo "java-21 已存在，跳过下载"
-          else
-            mkdir -p /tmp/jre21
-            gh release download jre-assets --pattern 'java21.tgz' --dir /tmp/jre21 --clobber
-            tar xzf /tmp/jre21/java21.tgz -C Libraries/java_runtimes
-          fi
-          du -sh Libraries/java_runtimes/java-21-openjdk
-          test -f Libraries/java_runtimes/java-21-openjdk/lib/server/libjvm.dylib
+          # ★完整 JRE（2026-10-31）★ 四档全内置：java-8 / 17 / 21 / 25。
+          #   以前只拉 java25 ⇒ CI 产物 ~80MB，但 1.20.x 默认运行时是 java-21、老版本要 8/17，
+          #   装上直接报「该档 JRE 未内置」。这里循环补齐，缺任一档立即失败（不静默降级成瘦包）。
+          for spec in "java8.tgz:java-8-openjdk" "java17.tgz:java-17-openjdk"                       "java21.tgz:java-21-openjdk" "java25.tgz:java-25-openjdk"; do
+            tgz="${spec%%:*}"
+            dir="${spec##*:}"
+            if [ -d "Libraries/java_runtimes/$dir" ]; then
+              echo "$dir 已存在，跳过下载"
+            else
+              mkdir -p /tmp/jre_get
+              gh release download jre-assets --pattern "$tgz" --dir /tmp/jre_get --clobber
+              tar xzf "/tmp/jre_get/$tgz" -C Libraries/java_runtimes
+            fi
+            du -sh "Libraries/java_runtimes/$dir"
+            test -f "Libraries/java_runtimes/$dir/lib/server/libjvm.dylib"
+          done
 
       - name: 重新生成工程文件
         run: python3 scripts/gen_xcodeproj.py
