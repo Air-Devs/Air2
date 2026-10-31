@@ -69,6 +69,16 @@ static NSError *ZipError(A2ZipReaderError code, NSString *reason) {
 #pragma mark - 条目元数据
 
 @interface A2ZipEntryInfo ()
+// 公开头只读、解析器内部可写：中央目录解析时就地把 9 个字段填满。
+@property (nonatomic, copy) NSString *name;
+@property (nonatomic, assign) uint16_t compressionMethod;
+@property (nonatomic, assign) unsigned long long compressedSize;
+@property (nonatomic, assign) unsigned long long uncompressedSize;
+@property (nonatomic, assign) uint16_t generalPurposeBitFlag;
+@property (nonatomic, assign) uint16_t versionMadeBy;
+@property (nonatomic, assign) uint32_t externalAttributes;
+@property (nonatomic, assign) BOOL isDirectory;
+@property (nonatomic, assign) BOOL isSymbolicLink;
 /// 本地文件头的偏移（只有解析器与解压核心用）。
 @property (nonatomic, assign) uint32_t localHeaderOffset;
 /// 名字的原始字节：解压时用它核对「本地头是不是同一个名字」。

@@ -471,8 +471,11 @@ static NSString *A2SHA256HexOfFile(NSString *path) {
     for (NSString *relative in enumerator) {
         NSDictionary<NSFileAttributeKey, id> *attributes =
             [enumerator fileAttributes];
-        if (![attributes[NSFileType] isEqualToString:NSFileTypeRegular]) {
-            [enumerator skipDescendants];
+        NSString *type = attributes[NSFileType];
+        if (![type isEqualToString:NSFileTypeRegular]) {
+            // 真正的目录要照常进去（插件包按 <dir>/<file> 组织）；
+            // 只有目录以外的东西（符号链接等）才剪枝，不跟进去。
+            if (![type isEqualToString:NSFileTypeDirectory]) [enumerator skipDescendants];
             continue;
         }
         [paths addObject:relative];

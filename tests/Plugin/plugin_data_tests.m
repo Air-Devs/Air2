@@ -516,8 +516,10 @@ static void testRegistry(void) {
           @"重读后 criticalGrants 的 method 一致");
     eqInt(restored.criticalGrants.firstObject.majorVersion, 1,
           @"重读后 criticalGrants 的 majorVersion 一致");
+    // approvedHashes 存的是**规范化后**的主体（去 `sha256:` 前缀、小写），
+    // 与 noteApprovedHash: 的判重口径一致；packageHash 才带前缀。
     eqStr(restored.approvedHashes.firstObject,
-          [@"sha256:" stringByAppendingString:HashChar('a')],
+          HashChar('a'),
           @"重读后 approvedHashes 一致");
 
     // 3) 再写一次 seq 继续递增
