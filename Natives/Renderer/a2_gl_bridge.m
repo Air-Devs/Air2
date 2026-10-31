@@ -1510,6 +1510,16 @@ static void a2_gl_bridge_ensure_game_view_surface(void) {
 
     A2EGLSurface oldSurf = gSurf;
     gSurf = newSurf;                                      // ★此后的 make_current / 帧动作都用新面★
+    {
+        // ★改绑成功必须留痕★：黑屏排查时要能确认「surface 换没换、换成谁」。
+        const char *cls = "?";
+        if (eglWant != NULL) {
+            @try { cls = NSStringFromClass([(__bridge id)eglWant class]).UTF8String; }
+            @catch (__unused NSException *e) { cls = "(not-objc)"; }
+        }
+        a2_log_f(@"[A2-GLBRIDGE] 改绑成功：新 surface=%p（旧=%p）renderable=%p class=%s drawable=%dx%d 像素",
+                 (void *)newSurf, (void *)oldSurf, eglWant, cls, gWidthPixels, gHeightPixels);
+    }
     gBoundRenderable = want;
     if (gEglDestroySurface != NULL && oldSurf != A2_EGL_NO_SURFACE) {
         gEglDestroySurface(gDpy, oldSurf);                // 旧的（启动器图层）面此时已不是当前面
