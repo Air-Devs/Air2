@@ -32,6 +32,7 @@
 //
 
 #import "A2ResourceSearchViewController.h"
+#import "A2NavigationController.h"
 #import "A2ContentSource.h"
 #import "A2CurseForgeAPI.h"
 #import "A2DownloadFavorites.h"

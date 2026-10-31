@@ -4,6 +4,7 @@
 //
 
 #import "A2ControlsEditorViewController.h"
+#import "A2OptionSheet.h"
 #import "A2GameControlsView.h"
 #import "A2ControlLayoutIO.h"
 #import "A2Log.h"
@@ -21,64 +22,27 @@
 #pragma mark - 导出（剪贴板 / 文件）
 
 - (void)a2_exportTapped {
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"导出控件"
-                                                                  message:nil
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
     __weak typeof(self) weakSelf = self;
-    [sheet addAction:[UIAlertAction actionWithTitle:@"复制到剪贴板" style:UIAlertActionStyleDefault
-                                            handler:^(UIAlertAction *a) { [weakSelf exportToClipboard]; }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"导出到文件（.json）" style:UIAlertActionStyleDefault
-                                            handler:^(UIAlertAction *a) { [weakSelf a2_exportToFile]; }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    sheet.popoverPresentationController.sourceView = self.view;
-    sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds),
-                                                               CGRectGetMaxY(self.view.bounds) - 60, 1, 1);
-    [self presentViewController:sheet animated:YES completion:nil];
+    // ★CI 规则：二级界面禁用系统 ActionSheet，统一 A2OptionSheet（见 docs/DECISIONS.md ADR-010）
+    A2OptionSheet *sheet = [A2OptionSheet sheetWithTitle:@"导出控件" message:nil];
+    [sheet addOptionWithTitle:@"复制到剪贴板" selected:NO destructive:NO
+                      handler:^{ [weakSelf exportToClipboard]; }];
+    [sheet addOptionWithTitle:@"导出到文件（.json）" selected:NO destructive:NO
+                      handler:^{ [weakSelf a2_exportToFile]; }];
+    [sheet presentFrom:self];
 }
-
-- (void)a2_exportToFile {
-    NSArray *controls = [self.controls a2_exportControls];
-    id json = [A2ControlLayoutIO exportControls:controls format:A2ControlLayoutFormatA2 name:@"默认"];
-    NSData *data = [NSJSONSerialization dataWithJSONObject:json
-                                                   options:NSJSONWritingPrettyPrinted
-                                                     error:NULL];
-    if (data.length == 0) {
-        [A2Toast show:@"导出失败" inView:self.view];
-        return;
-    }
-    NSString *name = [NSString stringWithFormat:@"air2-controls-%@.json",
-                      [NSDateFormatter localizedStringFromDate:NSDate.date
-                                                     dateStyle:NSDateFormatterShortStyle
-                                                     timeStyle:NSDateFormatterShortStyle]];
-    name = [name stringByReplacingOccurrencesOfString:@"/" withString:@"-"];
-    NSString *path = [NSTemporaryDirectory() stringByAppendingPathComponent:name];
-    [data writeToFile:path atomically:YES];
-
-    UIActivityViewController *vc = [[UIActivityViewController alloc] initWithActivityItems:@[[NSURL fileURLWithPath:path]]
-                                                                     applicationActivities:nil];
-    vc.popoverPresentationController.sourceView = self.view;
-    vc.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds),
-                                                             CGRectGetMaxY(self.view.bounds) - 60, 1, 1);
-    [self presentViewController:vc animated:YES completion:nil];
-}
-
 
 #pragma mark - 导入（剪贴板 / 文件）
 
 - (void)a2_importTapped {
-    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"导入控件"
-                                                                  message:nil
-                                                           preferredStyle:UIAlertControllerStyleActionSheet];
     __weak typeof(self) weakSelf = self;
-    [sheet addAction:[UIAlertAction actionWithTitle:@"从剪贴板" style:UIAlertActionStyleDefault
-                                            handler:^(UIAlertAction *a) { [weakSelf importFromClipboard]; }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"从文件（.json / .txt）" style:UIAlertActionStyleDefault
-                                            handler:^(UIAlertAction *a) { [weakSelf a2_pickImportFile]; }]];
-    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    sheet.popoverPresentationController.sourceView = self.view;
-    sheet.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds),
-                                                               CGRectGetMaxY(self.view.bounds) - 60, 1, 1);
-    [self presentViewController:sheet animated:YES completion:nil];
+    // ★CI 规则：二级界面禁用系统 ActionSheet，统一 A2OptionSheet（见 docs/DECISIONS.md ADR-010）
+    A2OptionSheet *sheet = [A2OptionSheet sheetWithTitle:@"导入控件" message:nil];
+    [sheet addOptionWithTitle:@"从剪贴板" selected:NO destructive:NO
+                      handler:^{ [weakSelf importFromClipboard]; }];
+    [sheet addOptionWithTitle:@"从文件（.json / .txt）" selected:NO destructive:NO
+                      handler:^{ [weakSelf a2_pickImportFile]; }];
+    [sheet presentFrom:self];
 }
 
 - (void)a2_pickImportFile {

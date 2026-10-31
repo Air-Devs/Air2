@@ -14,6 +14,7 @@
 //
 
 #import "A2CrashReportViewController.h"
+#import "A2AppDelegate.h"
 
 #import "A2Log.h"
 
