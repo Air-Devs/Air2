@@ -22,6 +22,18 @@
 //
 //  下载任务列表 —— 进行中 / 已完成两组，行内可暂停、继续、重试、取消。
 //
+//  展示口径（参照 ZalithLauncher2 任务行的信息层次，视觉按本仓 MD3 重做）：
+//    · 每个任务一行：阶段（准备 / 下载 / 校验 / 完成）+ 百分比 + 进度条 +
+//      已下/总量 + 平滑速度 + 剩余时间；
+//    · 两个以上任务同时进行时，表格上方多一张「总进度」卡：
+//      字节加权的总进度条 + 总速度 + 总剩余时间 —— 单任务时不重复展示；
+//    · 总大小未知（chunked）时进度条切不确定态，只显示已下字节与速度，
+//      不编一个假百分比，也不给剩余时间。
+//
+//  速度不在引擎里做平滑：引擎每秒报一次真实吞吐（块状采样），
+//  这里用 A2DownloadSpeedMeter 对最近 3 秒做滑动平均，只影响「看起来稳不稳」，
+//  下载逻辑一行未改。
+//
 //  数据全部来自 A2DownloadTaskCenter：订阅 A2DownloadTasksDidChangeNotification，
 //  进度通知很频繁（中心已做节流），所以刷新分两条路：
 //    · 任务集合的「结构」（顺序 + taskID）没变 —— 只就地重配可见行，不动整表，
@@ -38,7 +50,9 @@
 #import "A2DownloadTask.h"
 #import "A2ContentSource.h"
 #import "A2GlassCard.h"
-#import "A2ProgressBar.h"
+#import "A2DownloadProgressRow.h"
+#import "A2DownloadSpeedMeter.h"
+#import "A2DownloadProgressFormatter.h"
 #import "A2RemoteImageView.h"
 #import "A2ResourceBadge.h"
 #import "A2Typography.h"
@@ -69,10 +83,20 @@ typedef NS_ENUM(NSInteger, A2DownloadRowAction) {
 
 #pragma mark - 文案与配色
 
-/// 引擎态 → 状态文案。
-static NSString *A2DownloadStateText(A2DownloadState state) {
-    switch (state) {
-        case A2DownloadStateRunning:   return @"进行中";
+/// 任务 → 当前阶段文字。
+///
+/// 阶段只能从「引擎暴露给 UI 的事实」里推，不编造：
+///   · 还没有任何字节落地 → 准备中；
+///   · 已知总量且字节已下齐、但完成回调未到 → 校验中（引擎此刻在算 SHA1）；
+///   · 其余进行中 → 下载中。
+/// 「解压」不在这里：解压属于安装器（安装进度页的 7 阶段清单），
+/// 下载引擎只负责把文件落到磁盘。
+static NSString *A2DownloadStageText(A2DownloadTask *task) {
+    switch (task.state) {
+        case A2DownloadStateRunning:
+            if (task.totalBytes > 0 && task.downloadedBytes >= task.totalBytes) return @"校验中";
+            if (task.downloadedBytes <= 0) return @"准备中";
+            return @"下载中";
         case A2DownloadStatePaused:    return @"已暂停";
         case A2DownloadStateCompleted: return @"已完成";
         case A2DownloadStateFailed:    return @"失败";
@@ -81,16 +105,51 @@ static NSString *A2DownloadStateText(A2DownloadState state) {
     return @"";
 }
 
-/// 引擎态 → 状态文案的强调色。
-static UIColor *A2DownloadStateColor(A2DownloadState state, A2ColorScheme *scheme) {
+/// 引擎态 → 进度块色调（具体色值由进度块按语义角色解析）。
+static A2DownloadProgressTone A2DownloadProgressToneForState(A2DownloadState state) {
     switch (state) {
-        case A2DownloadStateRunning:   return scheme.cPrimary;
-        case A2DownloadStatePaused:    return scheme.cWarning;
-        case A2DownloadStateCompleted: return scheme.cSuccess;
-        case A2DownloadStateFailed:    return scheme.cError;
-        case A2DownloadStateCancelled: return scheme.cOnSurfaceVariant;
+        case A2DownloadStateRunning:   return A2DownloadProgressToneActive;
+        case A2DownloadStateCompleted: return A2DownloadProgressToneSuccess;
+        case A2DownloadStateFailed:    return A2DownloadProgressToneError;
+        case A2DownloadStatePaused:
+        case A2DownloadStateCancelled: return A2DownloadProgressToneNeutral;
     }
-    return scheme.cOnSurfaceVariant;
+    return A2DownloadProgressToneNeutral;
+}
+
+/// 单个任务的一行文字化结果：进度块只吃字符串，这里统一算出四个字段。
+static void A2DownloadApplyTaskToProgressRow(A2DownloadProgressRow *row,
+                                             A2DownloadTask *task,
+                                             double smoothedSpeed) {
+    BOOL hasKnownTotal = (task.totalBytes > 0);
+    BOOL running = (task.state == A2DownloadStateRunning) && smoothedSpeed > 0;
+
+    row.stageText = A2DownloadStageText(task);
+    row.showsPercent = hasKnownTotal;
+
+    if (hasKnownTotal) {
+        row.detailText = [NSString stringWithFormat:@"%@ / %@",
+                          [A2DownloadProgressFormatter bytesText:task.downloadedBytes],
+                          [A2DownloadProgressFormatter bytesText:task.totalBytes]];
+        row.remainingText = running
+            ? [A2DownloadProgressFormatter remainingTextWithBytes:(task.totalBytes - task.downloadedBytes)
+                                                            speed:smoothedSpeed]
+            : nil;
+    } else {
+        // 总大小未知：只报已下字节，不报百分比、不报剩余时间。
+        row.detailText = [NSString stringWithFormat:@"已下载 %@",
+                          [A2DownloadProgressFormatter bytesText:task.downloadedBytes]];
+        row.remainingText = nil;
+    }
+
+    row.speedText = running
+        ? [A2DownloadProgressFormatter speedText:smoothedSpeed]
+        : nil;
+
+    // 不做动画：任务页 100ms 就刷新一次，逐帧弹簧只会让填充块一直在追目标，
+    // 看起来反而「发黏」；进度本身每步变化很小，直接落位更干净（动效克制）。
+    [row setProgress:(CGFloat)task.progress animated:NO];
+    [row applyTone:A2DownloadProgressToneForState(task.state)];
 }
 
 /// 两个任务列表的「结构」是否一致：长度相同且逐项 taskID 相同。
@@ -104,19 +163,6 @@ static BOOL A2DownloadTaskListSameStructure(NSArray<A2DownloadTask *> *a,
     return YES;
 }
 
-/// 字节数 → 人类可读文本。
-static NSString *A2DownloadFormatBytes(int64_t bytes) {
-    if (bytes <= 0) return @"0 B";
-    double value = (double)bytes;
-    NSInteger unit = 0;
-    while (value >= 1024.0 && unit < 3) {
-        value /= 1024.0;
-        unit += 1;
-    }
-    if (unit == 0) return [NSString stringWithFormat:@"%lld B", bytes];
-    NSArray<NSString *> *names = @[@"B", @"KB", @"MB", @"GB"];
-    return [NSString stringWithFormat:@"%.1f %@", value, names[(NSUInteger)unit]];
-}
 
 /// 弹性占位：吸收水平方向的富余空间，用来把两侧内容顶到两端。
 static UIView *A2DownloadFlexibleSpacer(void) {
@@ -153,7 +199,9 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
 
 @interface A2DownloadTaskCell : UITableViewCell
 @property (nonatomic, weak, nullable) id<A2DownloadTaskCellDelegate> delegate;
-- (void)configureWithTask:(A2DownloadTask *)task;
+/// 配置一行。smoothedSpeed 是展示层滑动平均后的速度（bytes/s），
+/// 非运行中的任务传 0 —— 速度与剩余时间会自动隐藏。
+- (void)configureWithTask:(A2DownloadTask *)task smoothedSpeed:(double)smoothedSpeed;
 - (void)applyTheme;
 @end
 
@@ -163,10 +211,9 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
 @property (nonatomic, strong) A2ClassBadge *classBadge;
 @property (nonatomic, strong) UILabel *versionLabel;
 @property (nonatomic, strong) UILabel *titleLabel;
-@property (nonatomic, strong) UILabel *statusLabel;
 @property (nonatomic, strong) UILabel *subtitleLabel;
 @property (nonatomic, strong) UILabel *errorLabel;
-@property (nonatomic, strong) A2ProgressBar *bar;
+@property (nonatomic, strong) A2DownloadProgressRow *progressRow;
 @property (nonatomic, strong) UIStackView *actionRow;
 @property (nonatomic, strong) UIButton *toggleButton;
 @property (nonatomic, strong) UIButton *retryButton;
@@ -226,13 +273,10 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
     metaRow.spacing = A2SpaceS;
     metaRow.alignment = UIStackViewAlignmentCenter;
 
-    self.statusLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    self.statusLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    self.statusLabel.font = [A2Typography caption];
-    self.statusLabel.numberOfLines = 1;
-
+    // 标题单独占一行；状态（准备/下载/校验…）由下面的进度块统一承载，
+    // 不在标题右侧再放一个「进行中」—— 同一件事说两遍。
     UIStackView *titleRow = [[UIStackView alloc] initWithArrangedSubviews:
-                             @[self.titleLabel, A2DownloadFlexibleSpacer(), self.statusLabel]];
+                             @[self.titleLabel, A2DownloadFlexibleSpacer()]];
     titleRow.translatesAutoresizingMaskIntoConstraints = NO;
     titleRow.axis = UILayoutConstraintAxisHorizontal;
     titleRow.spacing = A2SpaceS;
@@ -244,8 +288,8 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
     self.subtitleLabel.numberOfLines = 1;
     self.subtitleLabel.lineBreakMode = NSLineBreakByTruncatingTail;
 
-    self.bar = [[A2ProgressBar alloc] initWithFrame:CGRectZero];
-    self.bar.translatesAutoresizingMaskIntoConstraints = NO;
+    // 进度块：阶段 + 百分比 / 进度条 / 已下总量 + 速度 + 剩余时间。
+    self.progressRow = [[A2DownloadProgressRow alloc] initWithFrame:CGRectZero];
 
     self.errorLabel = [[UILabel alloc] initWithFrame:CGRectZero];
     self.errorLabel.translatesAutoresizingMaskIntoConstraints = NO;
@@ -270,7 +314,7 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
     self.actionRow.alignment = UIStackViewAlignmentCenter;
 
     UIStackView *contentStack = [[UIStackView alloc] initWithArrangedSubviews:
-                                 @[titleRow, metaRow, self.subtitleLabel, self.bar,
+                                 @[titleRow, metaRow, self.subtitleLabel, self.progressRow,
                                    self.errorLabel, self.actionRow]];
     contentStack.translatesAutoresizingMaskIntoConstraints = NO;
     contentStack.axis = UILayoutConstraintAxisVertical;
@@ -324,13 +368,12 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
 
 #pragma mark - 配置
 
-- (void)configureWithTask:(A2DownloadTask *)task {
+- (void)configureWithTask:(A2DownloadTask *)task smoothedSpeed:(double)smoothedSpeed {
     self.taskID = task.taskID;
     self.rowState = task.state;
     self.rowProgress = (CGFloat)task.progress;
 
     self.titleLabel.text = task.title.length ? task.title : task.taskID;
-    self.statusLabel.text = A2DownloadStateText(task.state);
     self.subtitleLabel.text = task.subtitle;
     self.subtitleLabel.hidden = (task.subtitle.length == 0);
 
@@ -353,16 +396,10 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
     self.errorLabel.text = task.errorMessage;
     self.errorLabel.hidden = !showsError;
 
-    // 进度：总大小已知时展示「已下 / 总量」，否则只留进度条本体。
-    if (task.totalBytes > 0) {
-        self.bar.detailText = [NSString stringWithFormat:@"%@ / %@",
-                               A2DownloadFormatBytes(task.downloadedBytes),
-                               A2DownloadFormatBytes(task.totalBytes)];
-    } else {
-        self.bar.detailText = nil;
-    }
-    self.bar.speedText = task.speedText;
-    [self.bar setProgress:self.rowProgress animated:NO];
+    // 进度块：百分比 / 已下总量 / 平滑速度 / 剩余时间。
+    // 阶段文字与色调都在 A2DownloadApplyTaskToProgressRow 里统一算，
+    // 单任务行与「总进度」卡因此不会出现两种口径。
+    A2DownloadApplyTaskToProgressRow(self.progressRow, task, smoothedSpeed);
 
     // 按钮矩阵：Running/Paused → 暂停或继续 + 取消；Failed/Cancelled → 重试；Completed → 无。
     BOOL active = (task.state == A2DownloadStateRunning || task.state == A2DownloadStatePaused);
@@ -380,8 +417,9 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
 
 - (void)layoutSubviews {
     [super layoutSubviews];
-    // 进度条的填充宽度按自身 bounds 计算；首帧布局完成后再补一次，避免配置时宽度还是 0。
-    [self.bar setProgress:self.rowProgress animated:NO];
+    // 首帧布局完成后再补一次进度：配置时进度块的宽度还是 0，
+    // 填充比例要按最终宽度重算才不会停在 0。
+    [self.progressRow setProgress:self.rowProgress animated:NO];
 }
 
 #pragma mark - 交互
@@ -423,9 +461,8 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
     self.subtitleLabel.textColor = t.cOnSurfaceVariant;
     self.versionLabel.textColor = t.cOnSurfaceVariant;
     self.errorLabel.textColor = t.cError;
-    self.statusLabel.textColor = A2DownloadStateColor(self.rowState, t);
     [self.iconView applyTheme];
-    [self.bar applyTheme];
+    [self.progressRow applyTheme];
 
     // 主操作（暂停/继续、重试）用主色实心；取消是次要操作，用中性容器色。
     for (UIButton *button in @[self.toggleButton, self.retryButton]) {
@@ -447,6 +484,21 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
 @property (nonatomic, strong) UIButton *clearButton;
 @property (nonatomic, strong) NSArray<A2DownloadTask *> *activeTasks;
 @property (nonatomic, strong) NSArray<A2DownloadTask *> *finishedTasks;
+
+/// 「总进度」卡：两个以上任务同时进行时出现在表格上方（字节加权）。
+/// 单个任务时行内已经把话说全了，这张卡不出现 —— 不做重复信息。
+@property (nonatomic, strong) A2GlassCard *summaryCard;
+@property (nonatomic, strong) UILabel *summaryTitleLabel;
+@property (nonatomic, strong) A2DownloadProgressRow *summaryRow;
+/// taskID → 展示层滑动平均测速器（下载逻辑不参与，只平滑显示）。
+@property (nonatomic, strong) NSMutableDictionary<NSString *, A2DownloadSpeedMeter *> *speedMeters;
+/// taskID → 本次刷新的平滑速度（bytes/s）。
+/// 一次刷新只采一次样，单任务行与总进度卡都读这份结果 —— 采样顺序与可见性都不影响数字。
+@property (nonatomic, strong) NSDictionary<NSString *, NSNumber *> *smoothedSpeeds;
+/// 表格上边依附谁：卡片可见 → 卡片；不可见 → 内容区顶部。
+/// 隐藏视图仍占约束位，所以用两条互斥约束切换，而不是只藏卡片。
+@property (nonatomic, strong) NSLayoutConstraint *tableTopToSummary;
+@property (nonatomic, strong) NSLayoutConstraint *tableTopToContent;
 @end
 
 @implementation A2DownloadTasksViewController
@@ -459,7 +511,9 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
 
     self.activeTasks = @[];
     self.finishedTasks = @[];
+    self.speedMeters = [NSMutableDictionary dictionary];
 
+    [self setupSummaryCard];
     [self setupTable];
     [self setupEmptyLabel];
     [self setupClearButton];
@@ -482,6 +536,48 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
 
 #pragma mark - 布局
 
+/// 「总进度」卡。只在多任务时显示，内容与单任务行同一套词、同一套字号。
+- (void)setupSummaryCard {
+    self.summaryCard = [[A2GlassCard alloc] initWithFrame:CGRectZero];
+    self.summaryCard.translatesAutoresizingMaskIntoConstraints = NO;
+    self.summaryCard.cornerRadius = A2RadiusL;
+    self.summaryCard.elevation = A2CardElevationLow;
+    self.summaryCard.contentInsets = UIEdgeInsetsMake(A2SpaceM, A2SpaceM, A2SpaceM, A2SpaceM);
+    self.summaryCard.hidden = YES;
+
+    self.summaryTitleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    self.summaryTitleLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    self.summaryTitleLabel.font = [A2Typography titleCard];
+    self.summaryTitleLabel.text = @"总进度";
+
+    self.summaryRow = [[A2DownloadProgressRow alloc] initWithFrame:CGRectZero];
+
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:
+                          @[self.summaryTitleLabel, self.summaryRow]];
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = A2SpaceS;
+    stack.alignment = UIStackViewAlignmentFill;
+
+    [self.summaryCard.contentView addSubview:stack];
+    [NSLayoutConstraint activateConstraints:@[
+        [stack.topAnchor constraintEqualToAnchor:self.summaryCard.contentView.topAnchor],
+        [stack.bottomAnchor constraintEqualToAnchor:self.summaryCard.contentView.bottomAnchor],
+        [stack.leadingAnchor constraintEqualToAnchor:self.summaryCard.contentView.leadingAnchor],
+        [stack.trailingAnchor constraintEqualToAnchor:self.summaryCard.contentView.trailingAnchor],
+    ]];
+
+    [self.plainContentView addSubview:self.summaryCard];
+    [NSLayoutConstraint activateConstraints:@[
+        [self.summaryCard.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor
+                                                  constant:A2SpaceM],
+        [self.summaryCard.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
+                                                     constant:A2PageMargin],
+        [self.summaryCard.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
+                                                      constant:-A2PageMargin],
+    ]];
+}
+
 - (void)setupTable {
     self.tableView = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStylePlain];
     self.tableView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -490,13 +586,19 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
     self.tableView.backgroundColor = UIColor.clearColor;
     self.tableView.separatorStyle = UITableViewCellSeparatorStyleNone;
     self.tableView.rowHeight = UITableViewAutomaticDimension;
-    self.tableView.estimatedRowHeight = 108;
+    self.tableView.estimatedRowHeight = 128;
     self.tableView.contentInset = UIEdgeInsetsMake(A2SpaceS, 0, A2SpaceXXL, 0);
     [self.tableView registerClass:A2DownloadTaskCell.class forCellReuseIdentifier:kDownloadTaskCellID];
     [self.plainContentView addSubview:self.tableView];
 
+    self.tableTopToContent = [self.tableView.topAnchor
+                              constraintEqualToAnchor:self.plainContentView.topAnchor];
+    self.tableTopToSummary = [self.tableView.topAnchor
+                              constraintEqualToAnchor:self.summaryCard.bottomAnchor
+                                           constant:A2SpaceM];
+    self.tableTopToContent.active = YES;
+
     [NSLayoutConstraint activateConstraints:@[
-        [self.tableView.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
         [self.tableView.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
                                                      constant:A2PageMargin],
         [self.tableView.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
@@ -562,13 +664,126 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
     self.activeTasks = active;
     self.finishedTasks = finished;
 
+    [self pruneSpeedMeters];
+
+    NSMutableArray<A2DownloadTask *> *all = [NSMutableArray arrayWithArray:active];
+    [all addObjectsFromArray:finished];
+    self.smoothedSpeeds = [self sampleSpeedsForTasks:all];
+
     if (structureSame) {
         [self refreshVisibleCells];
     } else {
         [self.tableView reloadData];
     }
+    [self updateSummaryWithActiveTasks:active];
     [self updateEmptyState];
     [self updateClearButton];
+}
+
+#pragma mark - 速度平滑
+
+/// 一次刷新里给每个任务采一次样（活跃的写窗口，其余清零并返回 0）。
+- (NSDictionary<NSString *, NSNumber *> *)sampleSpeedsForTasks:(NSArray<A2DownloadTask *> *)tasks {
+    NSTimeInterval now = NSProcessInfo.processInfo.systemUptime;
+    NSMutableDictionary<NSString *, NSNumber *> *result = [NSMutableDictionary dictionary];
+    for (A2DownloadTask *task in tasks) {
+        result[task.taskID] = @([self smoothedSpeedForTask:task at:now]);
+    }
+    return result;
+}
+
+/// 某任务本次刷新的平滑速度（没有记录时按 0 处理）。
+- (double)smoothedSpeedForTaskID:(NSString *)taskID {
+    return [self.smoothedSpeeds[taskID] doubleValue];
+}
+
+/// 取（或建）某任务的展示测速器，写入本次采样并返回平滑速度（bytes/s）。
+///
+/// 只有运行中的任务参与采样：暂停 / 结束的任务清空窗口，恢复下载时从干净窗口
+/// 重新测，不会把「暂停前的高速度」带进恢复后的第一次显示。
+- (double)smoothedSpeedForTask:(A2DownloadTask *)task at:(NSTimeInterval)now {
+    if (task.state != A2DownloadStateRunning) {
+        [self.speedMeters[task.taskID] reset];
+        return 0;
+    }
+    A2DownloadSpeedMeter *meter = self.speedMeters[task.taskID];
+    if (!meter) {
+        meter = [[A2DownloadSpeedMeter alloc] initWithWindow:3.0];
+        self.speedMeters[task.taskID] = meter;
+    }
+    return [meter addSample:task.speed at:now];
+}
+
+/// 任务被移除（取消 / 清空）后，它的测速器也要跟着消失 —— 否则一直在字典里攒着。
+- (void)pruneSpeedMeters {
+    NSMutableSet<NSString *> *alive = [NSMutableSet set];
+    for (A2DownloadTask *task in self.activeTasks) {
+        [alive addObject:task.taskID];
+    }
+    for (NSString *taskID in self.speedMeters.allKeys) {
+        if (![alive containsObject:taskID]) {
+            [self.speedMeters removeObjectForKey:taskID];
+        }
+    }
+}
+
+#pragma mark - 总进度
+
+/// 刷新「总进度」卡（字节加权）。
+///
+/// 加权口径：每个任务的 totalBytes 相加作分母、downloadedBytes 相加作分子；
+/// 总大小未知（chunked）的任务只贡献已下字节（它有下载量、但没有可信分母），
+/// 全部任务都未知总量时才退化成不确定态。
+- (void)updateSummaryWithActiveTasks:(NSArray<A2DownloadTask *> *)tasks {
+    // 单任务时行内已经把所有字段说全了：总进度卡只是重复信息。
+    BOOL shows = (tasks.count >= 2);
+    self.summaryCard.hidden = !shows;
+    self.tableTopToSummary.active = shows;
+    self.tableTopToContent.active = !shows;
+    if (!shows) return;
+
+    int64_t downloaded = 0;
+    int64_t total = 0;
+    BOOL hasKnownTotal = NO;
+    double aggregateSpeed = 0;
+    NSUInteger runningCount = 0;
+
+    for (A2DownloadTask *task in tasks) {
+        downloaded += MAX((int64_t)0, task.downloadedBytes);
+        if (task.totalBytes > 0) {
+            total += task.totalBytes;
+            hasKnownTotal = YES;
+        }
+        aggregateSpeed += [self smoothedSpeedForTaskID:task.taskID];
+        if (task.state == A2DownloadStateRunning) runningCount += 1;
+    }
+
+    BOOL allPaused = (runningCount == 0);
+    double progress = (hasKnownTotal && total > 0) ? (double)downloaded / (double)total : 0;
+
+    self.summaryTitleLabel.text = allPaused ? @"总进度 · 已全部暂停" : @"总进度";
+    self.summaryRow.stageText = [NSString stringWithFormat:@"%lu 个任务",
+                                 (unsigned long)tasks.count];
+    self.summaryRow.showsPercent = hasKnownTotal;
+    if (hasKnownTotal) {
+        self.summaryRow.detailText = [NSString stringWithFormat:@"已下 %@ / %@",
+                                      [A2DownloadProgressFormatter bytesText:downloaded],
+                                      [A2DownloadProgressFormatter bytesText:total]];
+        self.summaryRow.remainingText = allPaused
+            ? nil
+            : [A2DownloadProgressFormatter remainingTextWithBytes:(total - downloaded)
+                                                            speed:aggregateSpeed];
+    } else {
+        self.summaryRow.detailText = [NSString stringWithFormat:@"已下载 %@",
+                                      [A2DownloadProgressFormatter bytesText:downloaded]];
+        self.summaryRow.remainingText = nil;
+    }
+    self.summaryRow.speedText = allPaused
+        ? nil
+        : [A2DownloadProgressFormatter speedText:aggregateSpeed];
+    [self.summaryRow setProgress:(CGFloat)progress animated:NO];
+    [self.summaryRow applyTone:(allPaused ? A2DownloadProgressToneNeutral
+                                          : A2DownloadProgressToneActive)];
 }
 
 /// 只重配可见行，进度跳动时不整表 reload。
@@ -578,7 +793,8 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
         if (!task) continue;
         UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:indexPath];
         if ([cell isKindOfClass:A2DownloadTaskCell.class]) {
-            [(A2DownloadTaskCell *)cell configureWithTask:task];
+            [(A2DownloadTaskCell *)cell configureWithTask:task
+                                            smoothedSpeed:[self smoothedSpeedForTaskID:task.taskID]];
         }
     }
 }
@@ -621,7 +837,9 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
         [tableView dequeueReusableCellWithIdentifier:kDownloadTaskCellID forIndexPath:indexPath];
     cell.delegate = self;
     A2DownloadTask *task = [self taskAtIndexPath:indexPath];
-    if (task) [cell configureWithTask:task];
+    if (task) {
+        [cell configureWithTask:task smoothedSpeed:[self smoothedSpeedForTaskID:task.taskID]];
+    }
     return cell;
 }
 
@@ -686,6 +904,9 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
     [super applyTheme];
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
     self.emptyLabel.textColor = t.cOnSurfaceVariant;
+    self.summaryTitleLabel.textColor = t.cOnSurface;
+    [self.summaryCard applyTheme];
+    [self.summaryRow applyTheme];
 
     for (NSIndexPath *indexPath in self.tableView.indexPathsForVisibleRows) {
         UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:indexPath];
