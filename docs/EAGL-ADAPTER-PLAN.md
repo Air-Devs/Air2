@@ -190,6 +190,21 @@ GLES3 入口         ok=20 missing=0（glGenBuffers/BindBuffer/BufferData/GenTex
 - 实现 §2.1 十个函数 + 错误码
 - 判据：一个纯 GLES3 三角形通过「假 EGL」画出来（不需要渲染器）
 
+**状态：✅ 已通过（2026-10-31 真机，独立 demo `EGL2EAGLDemo`）**
+```
+eglInitialize 1.4 → eglChooseConfig n=1 → eglCreateContext(ES3) ok
+→ eglCreateWindowSurface 375x812 → eglMakeCurrent ok
+→ eglGetProcAddress: GL 入口缺 0/16（全部可解析）
+→ frames=120 drawable=375x812 glError=0x0000 EGL error=0x3000(SUCCESS)
+→ 屏幕渲染出旋转三角形
+```
+实现要点（demo 已验证的形状，P1 正式实现照此落地）：
+- 上层只调 EGL 接口（`eglGetDisplay/Initialize/ChooseConfig/CreateContext/CreateWindowSurface/MakeCurrent/SwapBuffers/GetProcAddress/GetError`）
+- 底层 EAGL：`EAGLContext(ES3)` + `CAEAGLLayer` + `renderbufferStorage:fromDrawable:` + `presentRenderbuffer`
+- `eglGetError` 读后清零；`eglGetProcAddress` 先查本模块导出表再 `dlsym(RTLD_DEFAULT)`
+- 编译坑（已踩）：iOS 无 `PFNGL*` typedef；`EGL_BAD_ALLOC`/`EGL_BAD_NATIVE_WINDOW`/`EGL_DRAW`/`EGL_READ` 需自定义；宏不能当三元表达式用
+
+
 ### P2（1–2 周）接 1.17+ 渲染器（MobileGlues）
 - 把 MG 的 EGL 调用路由到假 EGL；MG 用 `a2_eagl_getprocaddress` 取 GLES 入口
 - 判据：MC 1.17.1 能过 `GL caps init`、打出 `GL version OpenGL ES 3.0`
