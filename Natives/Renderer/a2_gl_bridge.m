@@ -1592,6 +1592,21 @@ int a2_gl_bridge_make_current(void) {
 void a2_gl_bridge_swap_buffers(void) {
     if (!gAttached) return;
     if (gEglSwapBuffers != NULL && gDpy != NULL && gSurf != NULL) {
+        // ★2026-10-31 黑屏判定★ 提交前读中心 1 个像素（每 60 次打一行）：
+        //   非 0/0/0 ⇒ 画面确实在画，问题在「呈现到图层」；
+        //   恒 0/0/0 ⇒ 根本没画，问题在「渲染/上下文」。
+        //   只用 GLES2 就有的 glReadPixels，不需要 FBO/扩展。
+        static unsigned long a2_pxProbeN = 0;
+        if ((++a2_pxProbeN % 60) == 1) {
+            typedef void (*A2PFN_glReadPixels)(int, int, int, int, unsigned, unsigned, void *);
+            A2PFN_glReadPixels rp = (A2PFN_glReadPixels)dlsym(RTLD_DEFAULT, "glReadPixels");
+            if (rp != NULL && gWidthPixels > 2 && gHeightPixels > 2) {
+                unsigned char px[4] = { 0, 0, 0, 0 };
+                rp(gWidthPixels / 2, gHeightPixels / 2, 1, 1, 0x1908 /*GL_RGBA*/, 0x1401 /*GL_UNSIGNED_BYTE*/, px);
+                a2_log_f(@"[A2-GLBRIDGE] 采样中心像素 #%lu = R%u G%u B%u A%u（全 0 ⇒ 没画；非 0 ⇒ 画了没上屏）",
+                         a2_pxProbeN, px[0], px[1], px[2], px[3]);
+            }
+        }
         if (!gGamePresented) {
             gGamePresented = 1;   // 第一次由游戏提交 ⇒ 停掉预览清屏循环
             a2_log_f(@"[A2-GLBRIDGE] 游戏已开始提交帧 ⇒ 预览清屏循环让路（首次 glfwSwapBuffers）");
