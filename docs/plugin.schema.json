@@ -1,0 +1,414 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://air-devs.top/schema/air2-plugin-manifest-v2.json",
+  "title": "Air2 Plugin Manifest (formatVersion 2)",
+  "description": "Air2 插件包根 manifest.json 的机器可读契约。additionalProperties 全为 false：写错字段名会在安装期被拒绝，不会被静默忽略。权限 id 的枚举与 docs/PLUGIN-SECURITY.md 第二节的权限目录逐项对应；native.module / ui.web 属 P5 能力，formatVersion 2 的包申请它们必须在安装期按「版本不符」拒装。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatVersion",
+    "id",
+    "name",
+    "version",
+    "type",
+    "air2",
+    "platforms",
+    "files"
+  ],
+  "properties": {
+    "formatVersion": {
+      "description": "包格式版本。当前唯一受支持的值是 2，其它值一律拒装。",
+      "const": 2
+    },
+    "id": {
+      "description": "全局唯一插件 id，建议反向域名。小写字母/数字/点/下划线/连字符，至少两段。",
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(\\.[a-z0-9][a-z0-9_-]*)+$"
+    },
+    "name": {
+      "description": "展示名（未本地化时的回退值）。",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "version": {
+      "description": "插件自身版本，语义化版本。",
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$"
+    },
+    "type": {
+      "description": "json = 只有声明；js = 声明 + entry.js。native 属 P5，formatVersion 2 不接受。",
+      "enum": ["json", "js"]
+    },
+    "description": {
+      "description": "一句话说明，管理页展示。",
+      "type": "string",
+      "maxLength": 512
+    },
+    "author": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "url": { "type": "string", "maxLength": 256, "pattern": "^https?://" },
+        "fingerprint": {
+          "description": "作者自报的签名者指纹（sha256:...）。仅供展示，信任判定只看包内 AIR2SIG.json 与宿主白名单。",
+          "type": "string",
+          "maxLength": 80,
+          "pattern": "^sha256:[a-f0-9]{64}$"
+        }
+      }
+    },
+    "homepage": {
+      "type": "string",
+      "maxLength": 256,
+      "pattern": "^https?://"
+    },
+    "license": {
+      "description": "SPDX 标识符，或 FreeText:<自由文本>。",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "air2": {
+      "description": "对宿主的要求（声明）。运行时同名的 air2.host 是宿主给的只读视图，两者不是同一个东西。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host"],
+      "properties": {
+        "host": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["apiVersion"],
+          "properties": {
+            "apiVersion": {
+              "description": "插件使用的宿主 API 主版本。v1 只允许 1。",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1
+            },
+            "minHostVersion": {
+              "description": "宿主版本下限（含），语义化版本。",
+              "type": "string",
+              "maxLength": 32,
+              "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+            },
+            "maxHostVersion": {
+              "description": "宿主版本上限（含）。只用于已确认不兼容的场景，正常运行不要填。",
+              "type": "string",
+              "maxLength": 32,
+              "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+            }
+          }
+        }
+      }
+    },
+    "platforms": {
+      "description": "目标平台。不含当前平台即拒装，不做静默降级。common 不是合法值。",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": { "enum": ["ios", "android", "desktop"] }
+    },
+    "permissions": {
+      "description": "申请的权限。用户实际授予的集合可能更小；未授予的 API 在运行时不注入。",
+      "type": "array",
+      "maxItems": 17,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "launch.tuning",
+          "launch.properties",
+          "launch.args",
+          "launch.env",
+          "launch.env.code",
+          "launch.classpath",
+          "launch.libraryPath",
+          "java.agent",
+          "files.game.write.config",
+          "files.game.write.content",
+          "version.decorate",
+          "version.patch",
+          "network.http",
+          "download.source",
+          "version.filter",
+          "native.module",
+          "ui.web"
+        ]
+      }
+    },
+    "depends": {
+      "description": "依赖的其它插件。安装期解析：缺失、版本不符、循环依赖一律拒装。",
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "version"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 128,
+            "pattern": "^[a-z0-9]+(\\.[a-z0-9][a-z0-9_-]*)+$"
+          },
+          "version": {
+            "description": "版本约束：>=x.y.z / ^x.y.z / ~x.y.z / x.y.z（精确）。不支持复合范围。",
+            "type": "string",
+            "maxLength": 32,
+            "pattern": "^(\\^|~|>=|=)?(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+          }
+        }
+      }
+    },
+    "entry": {
+      "description": "type=js 时必填：入口脚本在包内的相对路径。",
+      "type": "string",
+      "maxLength": 255,
+      "pattern": "^(?!\\.)(?!.*\\.\\.)[A-Za-z0-9._/-]+$"
+    },
+    "ui": {
+      "description": "声明式 UI 贡献。纯 JSON 插件的能力面主要在这里。",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "priority": {
+          "description": "加载顺序权重，越小越先。相同则按层、再按 pluginId 字典序。",
+          "type": "integer",
+          "minimum": -1000,
+          "maximum": 1000,
+          "default": 0
+        },
+        "slots": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["slot", "component"],
+            "properties": {
+              "slot": {
+                "enum": [
+                  "home.toolbar.action",
+                  "home.card.badge",
+                  "versions.list.badge",
+                  "version.detail.header",
+                  "settings.section",
+                  "versions.list.page"
+                ]
+              },
+              "component": {
+                "enum": [
+                  "text.label",
+                  "text.caption",
+                  "button.primary",
+                  "button.secondary",
+                  "switch.toggle",
+                  "list.row",
+                  "badge.status",
+                  "icon.glyph",
+                  "divider",
+                  "spacer"
+                ]
+              },
+              "icon": {
+                "description": "语义图标 ID（不是图片路径）。未识别的 ID 由宿主渲染 info 图标，不拒载。",
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z]+(\\.[a-z][a-z0-9_]*)+$"
+              },
+              "label": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["i18n"],
+                    "properties": {
+                      "i18n": { "type": "string", "minLength": 1, "maxLength": 128 }
+                    }
+                  },
+                  {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "required": ["text"],
+                    "properties": {
+                      "text": { "type": "string", "minLength": 1, "maxLength": 128 }
+                    }
+                  }
+                ]
+              },
+              "priority": {
+                "type": "integer",
+                "minimum": -1000,
+                "maximum": 1000,
+                "default": 0
+              }
+            }
+          }
+        },
+        "theme": {
+          "description": "主题 token 覆盖（L1）。未知 token 由宿主忽略并记诊断，不拒载。",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tokens": {
+              "type": "object",
+              "minProperties": 1,
+              "maxProperties": 64,
+              "propertyNames": { "pattern": "^[a-z]+(\\.[a-z][a-z0-9]*)+$" },
+              "additionalProperties": {
+                "type": "string",
+                "maxLength": 32
+              }
+            }
+          }
+        }
+      }
+    },
+    "contributes": {
+      "description": "数据层（L0）贡献。versionDecorate 需 version.decorate；downloadSources 需 download.source（P4）；versionFilter 需 version.filter（P4）。",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "versionDecorate": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "titleTemplate": { "type": "string", "maxLength": 64 },
+            "subtitleTemplate": { "type": "string", "maxLength": 64 },
+            "badge": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["i18n"],
+                  "properties": { "i18n": { "type": "string", "maxLength": 128 } }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": ["text"],
+                  "properties": { "text": { "type": "string", "maxLength": 32 } }
+                }
+              ]
+            },
+            "icon": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z]+(\\.[a-z][a-z0-9_]*)+$"
+            }
+          }
+        },
+        "downloadSources": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "urlTemplate"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+              "urlTemplate": {
+                "type": "string",
+                "minLength": 8,
+                "maxLength": 512,
+                "pattern": "^https://"
+              },
+              "priority": { "type": "integer", "minimum": 0, "maximum": 100, "default": 50 }
+            }
+          }
+        },
+        "versionFilter": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "hidePatterns": {
+              "type": "array",
+              "maxItems": 32,
+              "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+            },
+            "pinPatterns": {
+              "type": "array",
+              "maxItems": 32,
+              "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+            }
+          }
+        }
+      }
+    },
+    "locales": {
+      "description": "BCP-47 语言标记 → locales 目录下 JSON 文件的包内路径。回退顺序见 docs/PLUGIN-COMPAT.md 第四节。",
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": { "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$" },
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 255,
+        "pattern": "^(?!\\.)(?!.*\\.\\.)[A-Za-z0-9._/-]+$"
+      }
+    },
+    "files": {
+      "description": "包内除 manifest.json 与 AIR2SIG.json 外所有文件的完整清单。与实际文件集合必须双向相等：多一个或少一个都拒装。",
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 4096,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "size"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "pattern": "^(?!\\.)(?!.*\\.\\.)(?!/)[A-Za-z0-9._/-]+$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 33554432
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "type": { "const": "js" } },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["entry"]
+      },
+      "else": {
+        "not": { "required": ["entry"] }
+      }
+    },
+    {
+      "if": {
+        "properties": { "type": { "const": "json" } },
+        "required": ["type"]
+      },
+      "then": {
+        "properties": {
+          "permissions": {
+            "items": {
+              "enum": ["version.decorate", "download.source", "version.filter"]
+            }
+          }
+        }
+      }
+    }
+  ]
+}
