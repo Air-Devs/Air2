@@ -1681,10 +1681,20 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     [needed addObject:rendererPath];
     for (NSString *p in needed) {
         BOOL isDir = NO;
+        // ★系统框架绝对路径不走「包内内置」校验★（2026-10-31 回归修复）
+        //   真机 lastlog：GL 宿主改成系统 OpenGLES 后，这里把
+        //   `/System/Library/Frameworks/OpenGLES.framework/OpenGLES` 当成「包里没有的库」直接阻断
+        //   ⇒ 附着 rc=-1 ⇒ ★阻断启动★ ⇒ 建 VM rc=-12。
+        //   绝对路径（/System 或 /usr/lib）由系统提供，不属于包内资源，只校验存在性。
+        const BOOL isSystemPath = [p hasPrefix:@"/System/"] || [p hasPrefix:@"/usr/lib/"];
         if (![NSFileManager.defaultManager fileExistsAtPath:p isDirectory:&isDir] || isDir) {
-            a2_log_f(@"%s ★阻断★：包内缺该后端所需的库 %s（未内置）⇒ 不静默回退到默认渲染器",
-                     A2GlBridgeJudgementTag, p.UTF8String);
+            a2_log_f(@"%s ★阻断★：%s 不可用（%s）⇒ 不静默回退到默认渲染器",
+                     A2GlBridgeJudgementTag, p.UTF8String,
+                     isSystemPath ? "系统框架缺失" : "包内缺该后端所需的库（未内置）");
             return A2GlBridgeErrMissingLib;
+        }
+        if (isSystemPath) {
+            a2_log_f(@"[A2-GLBRIDGE] 系统库校验通过：%s（不参与包内内置检查）", p.UTF8String);
         }
     }
 
