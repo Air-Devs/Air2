@@ -1644,6 +1644,23 @@ void a2_gl_bridge_swap_buffers(void) {
         //   非 0/0/0 ⇒ 画面确实在画，问题在「呈现到图层」；
         //   恒 0/0/0 ⇒ 根本没画，问题在「渲染/上下文」。
         //   只用 GLES2 就有的 glReadPixels，不需要 FBO/扩展。
+        // ★上下文归属判据（每 60 次一行）★：MC 是否真的在【我们的】上下文/表面上画。
+        //   真机 ede2f52：surface=0x1（假）且像素恒 0 ⇒ 有可能 MC 用的是另一个 context。
+        static unsigned long a2_ctxProbeN = 0;
+        if ((++a2_ctxProbeN % 60) == 1) {
+            typedef void *(*A2PFN_eglGetCurrentContext)(void);
+            typedef void *(*A2PFN_eglGetCurrentSurface)(int);
+            A2PFN_eglGetCurrentContext curCtxFn =
+                (A2PFN_eglGetCurrentContext)dlsym(RTLD_DEFAULT, "eglGetCurrentContext");
+            A2PFN_eglGetCurrentSurface curSurfFn =
+                (A2PFN_eglGetCurrentSurface)dlsym(RTLD_DEFAULT, "eglGetCurrentSurface");
+            void *curCtx = curCtxFn ? curCtxFn() : NULL;
+            void *curSurf = curSurfFn ? curSurfFn(0x305A /*EGL_READ*/) : NULL;
+            a2_log_f(@"[A2-GLBRIDGE] 上下文归属 #%lu：当前 ctx=%p surf=%p ｜ 本层 gCtx=%p gSurf=%p %s",
+                     a2_ctxProbeN, curCtx, curSurf, (void *)gCtx, (void *)gSurf,
+                     (curCtx == (void *)gCtx) ? "（同一上下文 ⇒ 画在本层表面）"
+                                              : "（★不同上下文 ⇒ MC 画在别处★）");
+        }
         static unsigned long a2_pxProbeN = 0;
         if ((++a2_pxProbeN % 60) == 1) {
             typedef void (*A2PFN_glReadPixels)(int, int, int, int, unsigned, unsigned, void *);
