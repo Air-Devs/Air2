@@ -903,22 +903,8 @@ static int a2_gl_bridge_is_mobileglues(void) {
 /// 已选后端是否 = ★宿主 EGL 后端★（`libeagl.dylib`：EGL 由本二进制提供，GL 层 = MobileGlues）。
 /// ★精确比较★：其它后端名里不会出现这个标识，模糊匹配只会误伤。
 static int a2_gl_bridge_backend_is_host_egl(const char *rendererName) {
-    if (rendererName == NULL || rendererName[0] == '\0') return 0;
-    if (strcmp(rendererName, A2RendererHostEAGLDylibName) == 0) return 1;
-    // ★2026-10-31 真机证据（8b4b504 + 1.20.1 + MG）★
-    //   MG 走「方案 A（EGL/GL 双宿主 ANGLE）」时，交给 eglCreateWindowSurface 的是
-    //   CALayer（日志：class=CALayer）；带属性那次 EGL_BAD_ATTRIBUTE(0x3004)，
-    //   回退无属性拿到 surface=0x1（假句柄）⇒ 画完没人显示 ⇒ 黑屏。
-    //   ⇒ 改为：MG 也走「宿主假 EGL」——EGL 由本二进制的 a2_eagl_egl 提供
-    //     （CAEAGLLayer + presentRenderbuffer，独立 demo 已验证能上屏），
-    //     GL 层仍是 MG（它从系统 OpenGLES 取入口）。
-    //   回滚开关：启动前 export A2_MG_KEEP_ANGLE=1 即恢复方案 A。
-    if (strcmp(rendererName, "libmobileglues.dylib") == 0) {
-        const char *keep = getenv("A2_MG_KEEP_ANGLE");
-        if (keep != NULL && keep[0] == '1') return 0;
-        return 1;
-    }
-    return 0;
+    return (rendererName != NULL && rendererName[0] != '\0' &&
+            strcmp(rendererName, A2RendererHostEAGLDylibName) == 0);
 }
 
 /// ★建面用的 native window 实参★（★唯一产地★，attach 与改绑两处共用）。
