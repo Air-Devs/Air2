@@ -27,6 +27,9 @@
 #import <stdlib.h>            // getenv（JB_ROOT_PATH）
 #import <string.h>
 #import <sys/sysctl.h>        // KERN_PROC / KERN_PROC_PID：调试器侧证据（见 ①'' JIT 来源认定）
+#import <mach/mach.h>         // [A2JIT-DEBUG-HOLD] 扫地址空间：code cache（RWX 映射）取证
+#import <mach/vm_map.h>
+#import <mach/vm_region.h>
 
 #import "A2JITEnvironment.h"   // 区域验收快照（logRegionSnapshot，仅日志）
 #import "A2LegacyJITGate.h"    // ★唯一判据 = 老 Air（tree510）那套，原样移植★
@@ -418,6 +421,136 @@ BOOL a2jit_detach_selfmmap_armed(void) {
     if (!on) return NO;
     // ② 来源：★只问 a2jit_preferred_source()★，不在这里再读一遍 a2jit.preferredSource
     return a2jit_preferred_source() == A2JITPreferredSourceStikDebug;
+}
+
+#pragma mark - [A2JIT-DEBUG-HOLD] 调试暂停（VM 建好 / JIT 区到手 / 尚未派发 game main）
+
+//  ★为什么拦在「VM 建好之后」而不是「JIT 到手之后」★
+//    用户要拦的是「JVM 自己已经把 code cache 那块可执行内存要到手」这一刻 —— 此时 lldb
+//    附加进来才是对一个真的 JVM 调试（类已加载、code cache 已存在），而不是对空进程。
+//    ⇒ 调用点在 a2_launch.m 的 `[RT-P1] R2 VM ready` 之后、`a2_run_main` 派发之前。
+//  ★开关关着 / JIT 区没到手 / 没有可展示的窗口 ⇒ 一行不动地走原逻辑★（不多等 1 毫秒）。
+
+NSString *const A2JITDebugHoldAfterJITKey = @"a2jit.debugHoldAfterJIT";
+
+/// 本进程地址空间里「可执行且可写」的映射总字节数。
+/// 判据用途：libjvm 的 code cache 就是一块 RWX（或 RWX 上限、RX 现场）的可执行映射
+/// （iOS 26+ 由调试器经 brk #0x69 交付给 libjvm）；dyld / App 映像这类**文件后备**的
+/// 可执行映射只有 R-X，不计入 ⇒ 这个数 >0 才说明「JVM 真要到了那块可执行内存」。
+static size_t a2jit_jit_capable_mapped_bytes(void) {
+    const unsigned int kRWX = VM_PROT_READ | VM_PROT_WRITE | VM_PROT_EXECUTE;
+    const unsigned int kWX  = VM_PROT_WRITE | VM_PROT_EXECUTE;
+    vm_address_t addr = 0;
+    size_t total = 0;
+    // 上界只是防御死循环（真机进程区域数在数千量级）；撞上界就按已统计值返回。
+    for (int guard = 0; guard < 100000; guard++) {
+        vm_size_t size = 0;
+        vm_region_basic_info_data_64_t info;
+        memset(&info, 0, sizeof(info));
+        mach_msg_type_number_t count = VM_REGION_BASIC_INFO_COUNT_64;
+        mach_port_t obj = MACH_PORT_NULL;
+        kern_return_t kr = vm_region_64(mach_task_self(), &addr, &size,
+                                        VM_REGION_BASIC_INFO_64,
+                                        (vm_region_info_t)&info, &count, &obj);
+        if (obj != MACH_PORT_NULL) mach_port_deallocate(mach_task_self(), obj);
+        if (kr != KERN_SUCCESS || size == 0) break;
+        // 现场已 RWX ⇒ 一定是 JIT 页；上限含 W+X ⇒ 可被 mprotect 成 JIT 页（两种都算）。
+        BOOL rwxNow = (((unsigned int)info.protection & kRWX) == kRWX);
+        BOOL wxMax  = (((unsigned int)info.max_protection & kWX) == kWX);
+        if (rwxNow || wxMax) {
+            total += (size_t)size;
+        }
+        addr += (vm_address_t)size;
+    }
+    return total;
+}
+
+/// 提示要挂在哪个视图上：当前最上层 VC（与「等待 JIT」窗同一个取法，不另造一份）。
+/// ★只在主线程调用★。
+static UIViewController *_Nullable a2jit_top_view_controller(void) {
+    UIViewController *top = UIWindow.mainWindow.rootViewController;
+    while (top.presentedViewController != nil) top = top.presentedViewController;
+    return top;
+}
+
+BOOL a2jit_debug_hold_before_main(void) {
+    // ① 开关：缺键当 NO（默认关 ⇒ 不拦、不打多余日志，行为与改动前一字不差）。
+    id raw = [NSUserDefaults.standardUserDefaults objectForKey:A2JITDebugHoldAfterJITKey];
+    BOOL on = (raw == nil) ? NO
+                           : [NSUserDefaults.standardUserDefaults boolForKey:A2JITDebugHoldAfterJITKey];
+    if (!on) return NO;
+
+    // ② 前提：JIT 可执行区已到手（libjvm 的 code cache）。没拿到就别停在这儿 ——
+    //    停在这里也没人能「附加后继续」，而且「VM 建好但 code cache 没拿到」本来就该按原逻辑走。
+    void *verified = [A2JITEnvironment verifiedRegion];
+    size_t jitCapableBytes = a2jit_jit_capable_mapped_bytes();
+    BOOL regionReady = (verified != NULL) || (jitCapableBytes >= (size_t)(1u << 20));   // ≥1 MB
+    a2_jit_log("[A2JIT] debug-hold: 取证 verifiedRegion=%p jit-capable=%zu 字节 regionVerdict=%ld ⇒ %s",
+               verified, jitCapableBytes, (long)[A2JITEnvironment lastRegionVerdict],
+               regionReady ? "拦" : "不拦");
+    if (!regionReady) {
+        a2_jit_log("[A2JIT] debug-hold: 跳过（JIT 可执行区未到手 ⇒ 按原逻辑继续）");
+        return NO;
+    }
+
+    // ③ 没有可展示的窗口 ⇒ 停了也只能干等 300s（没人能点「继续」）：直接放行。
+    __block BOOL hasHost = NO;
+    if (NSThread.isMainThread) {
+        hasHost = (a2jit_top_view_controller() != nil);
+    } else {
+        dispatch_semaphore_t probe = dispatch_semaphore_create(0);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            hasHost = (a2jit_top_view_controller() != nil);
+            dispatch_semaphore_signal(probe);
+        });
+        dispatch_semaphore_wait(probe, dispatch_time(DISPATCH_TIME_NOW, (int64_t)(5 * NSEC_PER_SEC)));
+    }
+    if (!hasHost) {
+        a2_jit_log("[A2JIT] debug-hold: 跳过（没有可展示的窗口，停了也没人能点继续）");
+        return NO;
+    }
+
+    a2_jit_log("[A2JIT] debug-hold: 已拦下，等待附加后继续（超时 300s）");
+
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    __block BOOL userContinued = NO;
+    __block UIAlertController *shownAlert = nil;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIViewController *top = a2jit_top_view_controller();
+        if (top == nil) {
+            // 窗口在「探测 → 起弹窗」之间没了（罕见）⇒ 立刻放行，不白等 300s。
+            dispatch_semaphore_signal(sem);
+            return;
+        }
+        UIAlertController *alert =
+            [UIAlertController alertControllerWithTitle:@"JIT 已就绪"
+                                              message:@"可以附加调试器了，附加完成后点继续"
+                                       preferredStyle:UIAlertControllerStyleAlert];
+        [alert addAction:[UIAlertAction actionWithTitle:@"继续"
+                                                 style:UIAlertActionStyleDefault
+                                               handler:^(UIAlertAction *action) {
+            (void)action;
+            userContinued = YES;
+            dispatch_semaphore_signal(sem);
+        }]];
+        shownAlert = alert;
+        // ★animated:NO★ 这里等的是「提示已落屏」本身，不是动画。
+        [top presentViewController:alert animated:NO completion:nil];
+    });
+
+    // ★本线程（启动线程）阻塞在这里★：300s 无人点「继续」⇒ 自动放行，绝不无限等。
+    long wr = dispatch_semaphore_wait(sem,
+        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(300 * NSEC_PER_SEC)));
+    BOOL byUser = (wr == 0) && userContinued;
+    if (!byUser && shownAlert != nil) {
+        // 超时放行 ⇒ 把那条已经没人等的提示收掉（否则它会一直盖在游戏画面上）。
+        UIAlertController *alert = shownAlert;
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [alert dismissViewControllerAnimated:NO completion:nil];
+        });
+    }
+    a2_jit_log("[A2JIT] debug-hold: 放行（原因=%s）", byUser ? "用户继续" : "超时");
+    return byUser;
 }
 
 /// 每次决策一行：`[JIT-SRC] preferred=<值> ⇒ <命中/失败原因>`。

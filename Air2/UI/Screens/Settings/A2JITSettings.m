@@ -793,6 +793,28 @@ static NSString *A2JITLauncherLabelForSource(NSString *source) {
     };
     [section addRow:launcherArmRow];
 
+    // ---- [A2JIT-DEBUG-HOLD] 「调试暂停（JIT 就绪后）」开关（★写入点唯一 = 本段★）----
+    //   紧跟在上面那行后面：同一处能力、同一屏。
+    //   开着 ⇒ 启动链在【VM 已建好 + libjvm 的 code cache 已到手、还没派发 game main】那一点停住，
+    //   弹「JIT 已就绪」，等用户 lldb 附加完点「继续」才跑游戏主类（300 秒无人点自动放行）。
+    //   ★关着（默认）⇒ 启动链一个字节都不变★（判据与提示在 Natives/Support 的
+    //   a2jit_debug_hold_before_main，调用点只有一个：Natives/Context/a2_launch.m）。
+    BOOL debugHoldOn = ([NSUserDefaults.standardUserDefaults objectForKey:A2JITDebugHoldAfterJITKey] != nil) &&
+        [NSUserDefaults.standardUserDefaults boolForKey:A2JITDebugHoldAfterJITKey];
+    A2SettingsRow *debugHoldRow = [[A2SettingsRow alloc] init];
+    debugHoldRow.symbolName = @"pause.circle.fill";
+    debugHoldRow.title = [A2JITStrings stringForKey:@"jit.debughold.title"];
+    debugHoldRow.subtitle = [A2JITStrings stringForKey:@"jit.debughold.subtitle"];
+    debugHoldRow.accessory = A2SettingsRowAccessorySwitch;
+    debugHoldRow.on = debugHoldOn;
+    debugHoldRow.onToggle = ^(BOOL isOn) {
+        [NSUserDefaults.standardUserDefaults setBool:isOn forKey:A2JITDebugHoldAfterJITKey];
+        [NSUserDefaults.standardUserDefaults synchronize];
+        [A2Log criterion:@"[A2JIT] settings: 调试暂停 → %@（键 %@；下次启动游戏生效）",
+         isOn ? @"开" : @"关", A2JITDebugHoldAfterJITKey];
+    };
+    [section addRow:debugHoldRow];
+
     A2SettingsRow *nextRow = [[A2SettingsRow alloc] init];
     nextRow.symbolName = @"arrow.right.circle.fill";
     nextRow.title = [A2JITStrings stringForKey:@"jit.row.next"];

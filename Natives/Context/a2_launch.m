@@ -21,6 +21,10 @@
 #import "a2_vmloader.h"       // R2
 #import "a2_jli_entry.h"      // ★[JLI-LAUNCH] argv 组装/回退判定（纯逻辑）
 #import "a2_jli_launch.h"     // ★[JLI-LAUNCH] dlopen(libjli) + JLI_Launch（默认入口）
+// ★[A2JIT-DEBUG-HOLD] 调试暂停钩子（Natives/Support：弹提示 + 有界等待，默认关）。
+//   放在这里而不是本层自己写 UI：本层是「启动编排」，弹窗/窗口取法归 Support（与
+//   「等待 JIT」窗同一个实现），且开关键的定义也只有 Support 一处。
+#import "A2JITEnabler.h"
 
 #include <stdlib.h>
 #include <limits.h>
@@ -556,6 +560,14 @@ int a2_launch_jvm_with_argv(int argc, const char *const argv[], A2LaunchInput in
     }
 
     // ---- 阶段7：派发主类 main ----
+    // ★[A2JIT-DEBUG-HOLD] 调试暂停（默认关，键 a2jit.debugHoldAfterJIT）★
+    //   位置 = 用户要的那一刻：「VM 已建好（R2 返回 0）+ libjvm 的 code cache 已到手，
+    //   但还没派发 game main」——此前的建 VM / 参数 / 闰门一切照旧，此刻才停住等 lldb 附加，
+    //   点「继续」后才真正跑游戏主类（MC 启动 / GL 初始化）。
+    //   ★开关关 / JIT 区未到手 / 无窗口 ⇒ 本调用立即返回 NO，下面的派发一字不改★；
+    //   最长 300s 无人点「继续」自动放行（判据行见 a2jit_debug_hold_before_main 内部）。
+    (void)a2jit_debug_hold_before_main();
+
     // ★2026-10-18 真机行为修正★
     //   MC 的 main 是【不会返回】的（它一直跑到游戏退出）。旧实现同步调用它 ⇒
     //   启动完成回调永远不触发 ⇒ 启动器一直转圈。

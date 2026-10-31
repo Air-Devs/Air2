@@ -286,6 +286,19 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2JITSt
             @"en": @"Only applies when the launcher source is StikDebug: ask the debugger to detach as soon as JIT is ready, and fall back to the app's own mmap if it refuses",
             @"ja": @"取得元が StikDebug のときのみ適用：JIT を取得したらデバッガにデタッチを要求し、拒否されたらプロセス自身の mmap で代替します",
         },
+        // [A2JIT-DEBUG-HOLD] 调试暂停（键 a2jit.debugHoldAfterJIT，见 A2JITEnabler.h）
+        @"jit.debughold.title": @{
+            @"zh-Hans": @"调试暂停（JIT 就绪后）",
+            @"zh-Hant": @"偵錯暫停（JIT 就緒後）",
+            @"en": @"Debug pause (once JIT is ready)",
+            @"ja": @"デバッグ一時停止（JIT 準備後）",
+        },
+        @"jit.debughold.subtitle": @{
+            @"zh-Hans": @"默认关。开着时：JVM 建好、code cache 到手后先停住并提示「JIT 已就绪」，等 lldb 附加完点「继续」才跑游戏主类（300 秒无人点自动放行）",
+            @"zh-Hant": @"預設關。開著時：JVM 建好、code cache 到手後先停住並提示「JIT 已就緒」，等 lldb 附加完點「繼續」才跑遊戲主類（300 秒無人點自動放行）",
+            @"en": @"Off by default. When on: once the JVM is up and its code cache is mapped, the launch pauses and shows \"JIT is ready\"; the game main class only runs after you attach lldb and tap Continue (auto-released after 300 s).",
+            @"ja": @"既定はオフ。オンにすると、JVM の生成と code cache の確保が終わった時点で一時停止して「JIT 準備完了」を表示し、lldb でアタッチして「続行」を押すまでゲームのメインクラスを実行しません（300 秒で自動的に再開）。",
+        },
 
         @"jit.row.next": @{
             @"zh-Hans": @"下一步动作",

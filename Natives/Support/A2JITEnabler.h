@@ -97,6 +97,24 @@ FOUNDATION_EXPORT NSString *const A2JITLauncherEnabledKey;
 /// 为 NO 时调用方必须完全按旧行为走（不发 cmd=3、不 mmap），只留一行「跳过」日志。
 BOOL a2jit_detach_selfmmap_armed(void);
 
+#pragma mark - [A2JIT-DEBUG-HOLD] 调试暂停（VM 建好 / JIT 区到手 / 派发 game main 之前）
+
+/// 「调试暂停」开关的存储键（★写入点唯一 = 设置页「运行环境 › JIT」那一行开关★）。
+///
+/// 语义：开着时，启动链在【JNI_CreateJavaVM 已成功 + libjvm 的 code cache（可执行区）
+/// 已到手 + 还没派发 game main】这一点停住 —— 主线程弹「JIT 已就绪」，后台启动线程等
+/// 用户用 lldb 附加完点「继续」才放行（最长 300s 自动放行）。★默认关（缺键当 NO）★。
+FOUNDATION_EXPORT NSString *const A2JITDebugHoldAfterJITKey;
+
+/// 启动链的「调试暂停」钩子。★调用点只有一个★：`Natives/Context/a2_launch.m` 里
+/// `[RT-P1] R2 VM ready` 之后、`a2_run_main` 派发之前。
+///
+/// @return YES = 确实拦下过、并由用户点「继续」放行；
+///         NO  = 没拦（开关关 / JIT 可执行区未到手 / 没有可展示的窗口 / 超时自动放行）。
+/// ★拦下与放行各打一行 `[A2JIT] debug-hold:` 判据行★（本函数自己打，调用方不重复记）。
+/// 线程：可在任意线程调用；弹窗派到主线程，等待发生在本线程（有界 300s）。
+BOOL a2jit_debug_hold_before_main(void);
+
 /**
  * A2JITEnabler —— 启动前的 JIT 判据 + 申请 + 有界等待。
  *
