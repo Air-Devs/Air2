@@ -133,6 +133,19 @@ void a2_glfw_window_destroy(long window);
 int   a2_glfw_window_is_focused(long window);
 int   a2_glfw_window_surface(long window, A2GlfwSurface *out);
 
+/// ★游戏宿主视图的稳定访问（不需要窗口句柄）★ —— 返回**最近创建**的窗口的宿主视图
+/// （iOS 上为 UIView*；所有权归本层，调用方只读不改）。
+///
+/// ★为什么需要它★ 渲染桥（`Natives/Renderer/a2_gl_bridge.m`）只认表面、不认识 GLFW 窗口句柄：
+///   它在 JVM 启动前附着到启动器根视图，而游戏页是本层稍后建出的全屏宿主视图 —— 桥要在
+///   「首次 make_current」时把自己的 surface 改挂到这张视图上，就必须能不带句柄拿到它。
+///   与 `a2_glfw_window_surface()` 给的是同一个 `hostView`（同一份状态，不另存一份）。
+///
+/// ★调用点★ `Natives/Renderer/a2_gl_bridge.m` 的 `a2_gl_bridge_ensure_game_view_surface`
+///   （attach 之后第一次 make_current；以及其后的重试），以及本层测试。
+/// 无就绪窗口（视图尚未在主队列建出）时返回 NULL。
+void *a2_glfw_window_game_view(void);
+
 /// JVM 创建方回填 JavaVM（发布 UIView 地址给 metallum 时要用）。
 void  a2_glfw_window_set_java_vm(void *vm);
 

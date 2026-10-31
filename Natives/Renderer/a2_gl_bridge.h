@@ -122,6 +122,12 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath);
 void a2_gl_bridge_present_frame(void);
 
 /// 把已有 EGL 上下文设为调用线程的 current（GLFW 的 MakeContextCurrent 用）。
+///
+/// ★首次调用会顺带把表面改绑到 GLFW 游戏宿主视图★：attach 发生在 JVM 启动前（挂的是启动器
+///   根视图的图层），而游戏页是 GLFW 层稍后盖上去的全屏宿主视图。若不改绑，画面被游戏页的
+///   黑底整块盖住（有上下文、有帧、屏幕仍黑）。改绑只做一次、只在「当前绑定图层 ≠ 宿主视图
+///   图层」时做，失败只打警告不阻断（继续用原表面）。
+/// 调用点：`Natives/OwnGlfw/a2_own_glfw_bridge.m` 的 nMakeContextCurrent。
 int a2_gl_bridge_make_current(void);
 
 #endif /* A2_GL_BRIDGE_H */

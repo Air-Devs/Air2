@@ -27,6 +27,7 @@
 
 #import <objc/message.h>   // objc_msgSend（动态取 layer 用；不 import UIKit）
 #import <dlfcn.h>
+#include <unistd.h>       // usleep（首次 make_current 等宿主视图就绪的有界等待）
 #include <string.h>
 #include <stdint.h>
 
@@ -182,6 +183,15 @@ static void *gFrameUser = NULL;
 /// 已经显式 `initialize_gl4es()` 过的镜像（gl4es 内部只认第一次初始化 ⇒ 重入 attach 时不重复调）。
 static void *gKryptonInitedHandle = NULL;
 
+// ---- ★首次 make_current 的表面改绑状态★（见 a2_gl_bridge_ensure_game_view_surface）----
+/// 0 = 还没做过（每次 make_current 都会尝试）；1 = 已完成（含「本来就绑在同一图层」）；
+/// 2 = 已放弃（改绑失败 ⇒ 只打警告，后续 make_current 不再动）。
+static int   gRebindState = 0;
+/// 「宿主视图还没就绪」这条提示只打一次（视图在主队列异步建出，make_current 会反复进来）。
+static int   gRebindWaitLogged = 0;
+/// 当前 EGL 表面绑着的**可渲染句柄**（图层）—— 改绑前用它判「是不是已经绑在 GLFW 宿主视图上」。
+static void *gBoundRenderable = NULL;
+
 // ============================================================================
 //  内部：清理 / 归一化句柄 / 取符号 / 帧动作
 // ============================================================================
@@ -222,6 +232,9 @@ static void a2_gl_bridge_teardown(void) {
     gFrameCb = NULL; gFrameUser = NULL;
     gWidthPixels = 0; gHeightPixels = 0;
     gSurfaceWidthPixels = 0; gSurfaceHeightPixels = 0;
+    gBoundRenderable = NULL;          // 表面已销毁 ⇒ 不再有「绑着的图层」
+    gRebindState = 0;                 // 下次 attach 后允许再改绑一次
+    gRebindWaitLogged = 0;
 }
 
 /// 把宿主的「承载视图」归一化成 EGL 期望的可渲染句柄（layer）。
@@ -664,6 +677,158 @@ static int a2_gl_bridge_krypton_initialize(void) {
     return 0;
 }
 
+// ============================================================================
+//  ★首次 make_current：把桥表面改绑到 GLFW 游戏宿主视图★
+// ============================================================================
+// 真因（真机实证，上一单）：本桥在 JVM 启动前附着到**启动器根视图**的图层；而游戏页是
+//   `Natives/Input/a2_glfw_window.m` 用「全屏 modal + 黑底 gameRoot」盖上去的 `A2GlfwView`
+//   ⇒ 桥照常出帧，画面却被那层黑底整块盖住（有上下文、有帧、屏幕上仍是黑的）。
+// 修法：游戏真的开始用这份上下文时（Java 侧 `glfwMakeContextCurrent` → `a2_gl_bridge_make_current`），
+//   若当前绑定图层**不是** GLFW 宿主视图的图层，就把 EGL 的 window surface 改挂到该视图的图层上。
+//
+// ★不另写渲染路径★：改挂只用 attach 里同一批 EGL 入口（eglCreateWindowSurface / eglMakeCurrent /
+//   eglDestroySurface）；context、config、drawable 像素口径全不动。
+// ★幂等★：`gRebindState` 为 1/2 时直接返回 ⇒ 后续 make_current 不再碰表面。
+// ★不阻断★：任何一步失败只打警告，并**保留原表面**继续跑（旧绑定仍在，最多还是被黑底盖住）。
+//
+// 调用点（两处，都是「把上下文设为当前」的那一点）：
+//   ① `a2_gl_bridge_make_current`（GLFW 的 MakeContextCurrent）；
+//   ② `a2_gl_bridge_frame_work`（帧回调借上下文之前）—— 视图由主队列异步建出，首次 make_current
+//      可能早于视图就绪；两个入口共用同一份状态，先到先改绑、之后就再也不动。
+// ★视图时序★：MC 建窗后**只调一次** MakeContextCurrent，而视图是异步建的 ⇒ 非主线程上第一次进来
+//   时会做一次**有界等待**（≤500ms）等视图就绪；主线程上不等（视图就在主队列上建）。
+
+/// CGRect 的内存布局（4 个 CGFloat；arm64 上 CGFloat = double）。
+/// ★为什么自己声明★：同 `A2GlBridgeLayerSize` —— 本层不 import UIKit/QuartzCore。
+typedef struct { double x, y, width, height; } A2GlBridgeRect;
+
+/// 取视图的 bounds（取不到回全 0，不猜）。
+static A2GlBridgeRect a2_gl_bridge_view_bounds(void *view) {
+    A2GlBridgeRect r = { 0.0, 0.0, 0.0, 0.0 };
+    if (view == NULL) return r;
+    id obj = (__bridge id)view;
+    SEL sel = NSSelectorFromString(@"bounds");
+    if (obj != nil && [obj respondsToSelector:sel]) {
+        A2GlBridgeRect (*getBounds)(id, SEL) = (A2GlBridgeRect (*)(id, SEL))objc_msgSend;
+        r = getBounds(obj, sel);
+    }
+    return r;
+}
+
+/// 视图所在的窗口（只用于判据行的 windowLevel；取不到回 NULL）。
+static void *a2_gl_bridge_view_window(void *view) {
+    if (view == NULL) return NULL;
+    id obj = (__bridge id)view;
+    SEL sel = NSSelectorFromString(@"window");
+    if (obj == nil || ![obj respondsToSelector:sel]) return NULL;
+    id (*sendWindow)(id, SEL) = (id (*)(id, SEL))objc_msgSend;
+    id win = sendWindow(obj, sel);
+    return (__bridge void *)win;
+}
+
+/// 见上：首次 make_current 时把表面改挂到 GLFW 宿主视图（只做一次）。
+static void a2_gl_bridge_ensure_game_view_surface(void) {
+    if (gRebindState != 0) return;                        // 已成 / 已放弃 ⇒ 不再动表面
+    if (!gAttached || gEglCreateWindowSurface == NULL || gEglMakeCurrent == NULL ||
+        gDpy == A2_EGL_NO_DISPLAY || gCfg == NULL || gCtx == A2_EGL_NO_CONTEXT) {
+        return;                                           // 未附着 / 入口不全：不参与（attach 自会报）
+    }
+
+    void *gameView = a2_glfw_window_game_view();
+    if (gameView == NULL && ![NSThread isMainThread]) {
+        // ★有界等待（只在非主线程做）★
+        //   宿主视图由主队列**异步**建出（a2_glfw_window.m 的建窗 UIKit 段），而 MC 在建窗后
+        //   只调一次 `glfwMakeContextCurrent` ⇒ 这一次如果视图还没好，可能就再没有第二次机会。
+        //   这里最多等 500ms（100 × 5ms）只等「视图就绪」这一刻；到点仍没有 ⇒ 照常先返回、
+        //   继续用原表面（不阻断启动），并留给后续 make_current 再试。
+        //   ★主线程上不等★：视图正是在主队列上建的，主线程等自己只会白等（还会拖慢启动）。
+        for (int i = 0; i < 100 && gameView == NULL; i++) {
+            usleep(5 * 1000);
+            gameView = a2_glfw_window_game_view();
+        }
+    }
+    if (gameView == NULL) {
+        // ★不置 gRebindState★：留给下一次 make_current 再试；提示只打一次，避免每帧刷日志。
+        if (!gRebindWaitLogged) {
+            gRebindWaitLogged = 1;
+            a2_log_f(@"[A2-GLBRIDGE] 首次 makeCurrent：GLFW 宿主视图尚未就绪（视图在主队列异步创建）"
+                     @"⇒ 本次仍用现有表面，下次 makeCurrent 再改绑");
+        }
+        return;
+    }
+    gRebindWaitLogged = 1;
+
+    void *want = a2_gl_bridge_renderable_handle(gameView);
+    if (want == NULL) {
+        a2_log_f(@"[A2-GLBRIDGE] ★警告★：改绑跳过 —— GLFW 宿主视图取不到可渲染图层（view=%p）；继续用原表面",
+                 gameView);
+        gRebindState = 2;
+        return;
+    }
+    if (want == gBoundRenderable) {                       // 已经绑在同一图层上
+        gRebindState = 1;
+        a2_log_f(@"[A2-GLBRIDGE] 首次 makeCurrent：当前绑定图层就是 GLFW 宿主视图（renderable=%p）⇒ 不改绑",
+                 want);
+        return;
+    }
+
+    // ---- ① 图层口径对齐（与 attach ⑥0b 同一套口径；只对**新**图层做）----
+    A2GlBridgeRect b = a2_gl_bridge_view_bounds(gameView);
+    int ptsW = (int) (b.width + 0.5);
+    if (gWidthPixels > 0 && gHeightPixels > 0) {
+        a2_gl_bridge_align_drawable(want, gWidthPixels, gHeightPixels, ptsW,
+                                    (ptsW > 0) ? ((double) gWidthPixels / (double) ptsW) : 1.0);
+    }
+
+    // ---- ② 先建新面、再切、最后销毁旧面（任何一步失败都保留旧面）----
+    A2EGLSurface newSurf = A2_EGL_NO_SURFACE;
+    if (a2_gl_bridge_is_krypton()) {
+        // KW 家族在 attach 里就是「NULL 属性」（对齐老 Air 建面顺序）⇒ 这里保持一致。
+        newSurf = gEglCreateWindowSurface(gDpy, gCfg, (A2EGLNativeWindowType)want, NULL);
+    } else {
+        const A2EGLint surfAttribs[] = {
+            A2_EGL_WIDTH,  (A2EGLint)gWidthPixels,
+            A2_EGL_HEIGHT, (A2EGLint)gHeightPixels,
+            A2_EGL_NONE
+        };
+        if (gWidthPixels > 0 && gHeightPixels > 0) {
+            newSurf = gEglCreateWindowSurface(gDpy, gCfg, (A2EGLNativeWindowType)want, surfAttribs);
+        }
+        if (newSurf == A2_EGL_NO_SURFACE) {               // 实现不认 EGL_WIDTH/HEIGHT ⇒ 退到无属性
+            newSurf = gEglCreateWindowSurface(gDpy, gCfg, (A2EGLNativeWindowType)want, NULL);
+        }
+    }
+    if (newSurf == A2_EGL_NO_SURFACE) {
+        a2_log_f(@"[A2-GLBRIDGE] ★警告★：改绑失败 —— eglCreateWindowSurface(GLFW 宿主视图) 返回 NO_SURFACE"
+                 @"（eglError=0x%x；句柄=%p）⇒ 继续用原表面，不阻断启动",
+                 (unsigned) (gEglGetError ? gEglGetError() : 0), want);
+        gRebindState = 2;
+        return;
+    }
+    if (!gEglMakeCurrent(gDpy, newSurf, newSurf, gCtx)) {
+        a2_log_f(@"[A2-GLBRIDGE] ★警告★：改绑失败 —— 新表面 eglMakeCurrent 返回 false（eglError=0x%x；"
+                 @"surface=%p）⇒ 销毁新面，继续用原表面，不阻断启动",
+                 (unsigned) (gEglGetError ? gEglGetError() : 0), (void *)newSurf);
+        if (gEglDestroySurface != NULL) gEglDestroySurface(gDpy, newSurf);
+        gRebindState = 2;
+        return;
+    }
+
+    A2EGLSurface oldSurf = gSurf;
+    gSurf = newSurf;                                      // ★此后的 make_current / 帧动作都用新面★
+    gBoundRenderable = want;
+    if (gEglDestroySurface != NULL && oldSurf != A2_EGL_NO_SURFACE) {
+        gEglDestroySurface(gDpy, oldSurf);                // 旧的（启动器图层）面此时已不是当前面
+    }
+    gRebindState = 1;
+
+    // ★判据行（真机 grep 这一行即可确认改绑生效）★
+    a2_log_f(@"[A2-GLBRIDGE] ★重绑到 GLFW 宿主视图★ view=%s level=%.0f bounds=%.0fx%.0f（首次 make_current）",
+             NSStringFromClass([(__bridge id) gameView class]).UTF8String,
+             a2_gl_bridge_window_level(a2_gl_bridge_view_window(gameView)),
+             b.width, b.height);
+}
+
 /// ★帧回调体★：本层每帧做一次可判据的可用性动作，并按**当前渲染倍率的 drawable 像素尺寸**
 /// 清屏/呈现（[FRAME-PERF]）。调用点：`a2_gl_bridge_attach`（附着后立即渲染一帧）与
 /// `a2_gl_bridge_present_frame`（启动链的基线帧循环）。
@@ -677,6 +842,9 @@ static int a2_gl_bridge_krypton_initialize(void) {
 /// 且视觉上通常无变化 —— 证据由 scissor 读回 + 判据行 + glGetError 承担。
 static void a2_gl_bridge_frame_work(void) {
     if (!gAttached) return;
+
+    // ★首次 make_current 的表面改绑★（游戏页盖在黑底上 ⇒ 必须改挂到 GLFW 宿主视图）
+    a2_gl_bridge_ensure_game_view_surface();
 
     // ★2026-10-18 真机证据★ EGL 上下文同一时刻只能绑在【一个】线程上。
     //   我们过去在附着时 eglMakeCurrent 后一直占着它 ⇒ MC 渲染线程调
@@ -756,6 +924,8 @@ int a2_gl_bridge_make_current(void) {
         a2_log_f(@"[A2-GLBRIDGE] makeCurrent 跳过：display/context 未就绪");
         return -1;
     }
+    // ★首次 make_current：若还绑在启动器图层上，先把表面改挂到 GLFW 宿主视图★（只做一次）
+    a2_gl_bridge_ensure_game_view_surface();
     A2EGLBoolean ok = gEglMakeCurrent(gDpy, gSurf, gSurf, gCtx);
     a2_log_f(@"[A2-GLBRIDGE] makeCurrent -> %s", ok ? "OK" : "FAILED");
     return ok ? 0 : -2;
@@ -828,6 +998,7 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
                  host->surface.widthPixels, host->surface.heightPixels);
         return A2GlBridgeErrNoSurface;
     }
+    gBoundRenderable = renderable;   // ★本面绑着的图层★（首次 make_current 据此判要不要改挂到游戏宿主视图）
 
     // ---- ③ 库路径（三段：EGL 兼容底 / GLES 兼容底 / 后端本体），逐个查存在 ----
     if (frameworksPath.length == 0) {

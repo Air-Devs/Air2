@@ -9,7 +9,9 @@
 //  ★渲染器解耦（本层硬约束）★
 //    本文件不 include 任何图形后端头，源码里不出现任何后端专有名（机器判据见
 //    scripts/verify_ownglfw_native.py）。渲染器要接进来时，只用 a2_glfw_window_surface() 拿到
-//    A2GlfwSurface（原生视图句柄 + 尺寸 + 缩放），自己决定挂什么 layer。
+//    A2GlfwSurface（原生视图句柄 + 尺寸 + 缩放），自己决定挂什么 layer；
+//    需要「不带窗口句柄」拿到游戏宿主视图时用 a2_glfw_window_game_view()（GL 桥首次
+//    make_current 改绑表面用的就是它）。
 //
 //  ★线程模型（关键，写在最前）★
 //    · MC 从 **Java 线程**调用 glfwCreateWindow / glfwPollEvents；
@@ -800,4 +802,21 @@ int a2_glfw_window_surface(long window, A2GlfwSurface *out) {
     out->pixelFormat   = A2_GLFW_PIXEL_FORMAT_HOST_DEFAULT;
     pthread_mutex_unlock(&gWindowLock);
     return (out->nativeView != NULL) ? 1 : 0;
+}
+
+// ★游戏宿主视图的稳定访问（无句柄）★ —— 见 a2_glfw_window.h 的契约说明。
+// 取法：gHosts 尾部（最近创建）里第一个已就绪的 hostView；与 a2_glfw_window_surface()
+// 读的是**同一个** h.hostView（本层不另存一份副本，避免两处状态不一致）。
+void *a2_glfw_window_game_view(void) {
+    void *view = NULL;
+    pthread_mutex_lock(&gWindowLock);
+    for (NSInteger i = (NSInteger) gHosts.count - 1; i >= 0; i--) {
+        A2GlfwHost *h = gHosts[(NSUInteger) i];
+        if (h.hostView != nil) {
+            view = (__bridge void *) h.hostView;
+            break;
+        }
+    }
+    pthread_mutex_unlock(&gWindowLock);
+    return view;
 }
