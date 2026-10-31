@@ -171,7 +171,8 @@ function JIT26NewBreakpoints(brkResponse) {
     if (res.ok) {
         log('Script succeeded:', res.value);
     } else {
-        log('Script failed:', res.name, res.message);
+        // ★明确打出错误名与消息（以前只打 name/message 两个参数，真机上显示不出内容）★
+        log('[A2SCRIPT] failed: ' + (res.name || 'Error') + ': ' + (res.message || '(no message)'));
         log(res.stack);
     }
 }
