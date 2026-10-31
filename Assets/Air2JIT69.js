@@ -142,6 +142,14 @@ while (!detached) {
 }
 
 function JIT26Detach() {
+    // ★[A2PROBE] 探针模式禁用 detach★
+    //   真机实证（2026-10-31）：Z0 断点是调试器侧状态，StikDebug 一 detach 就被撤掉并还原原指令
+    //   ⇒ 黑屏期间永远不会有 [A2PROBE] HIT。所以只要探针已 armed，就把 detach 忽略掉，让它一直附着。
+    //   未 arm（普通用户路径）行为不变：照常 D 并跳出主循环。
+    if (typeof a2Probe !== 'undefined' && a2Probe && (a2Probe.a || a2Probe.b)) {
+        log(`[A2PROBE] detach ignored (probe armed A=0x${(a2Probe.a||0).toString(16)} B=0x${(a2Probe.b||0).toString(16)})`);
+        return;
+    }
     let detachResponse = send_command(`D`);
     log_verbose(`detachResponse = ${detachResponse}`);
     detached = true;
