@@ -36,6 +36,7 @@
 #import "A2GameLaunchCoordinator.h"
 #import "ios_uikit_bridge.h"
 #import "A2JREManager.h"
+#import "A2VersionMetadata.h"
 #import "A2Logger.h"
 #import "A2DownloadTask.h"
 #import "A2DownloadTaskCenter.h"
@@ -844,29 +845,39 @@
         // 启动方式与 Air1 一致：把 metadata 交给 UIKit bridge，
         // 它会把根 VC 换成 SurfaceViewController（游戏画面宿主），
         // 那个类的 viewDidLoad 里才真正 launchJVM。
+        // ---- 构造 launchTarget（核心）----
+        //
+        // Air1 的 launchTarget 是「已为 iOS 调整过的完整版本 JSON」，
+        // 由 MinecraftResourceDownloadTask + tweakVersionJson 生成。
+        // Air2 之前只传了 5 个手工拼的键 —— arguments.jvm_processed 为空、
+        // JNA 未降级、client jar 未进 libraries，PojavLauncher 拿到的东西
+        // 根本起不了 MC。
+        //
+        // 现在走 A2VersionMetadata（等价于 Air1 那两层）。
+        NSMutableDictionary *metadata =
+            [[A2VersionMetadata launchTargetForVersion:current.name
+                                             gameHome:A2VersionManager.shared.gameHome]
+             mutableCopy];
+        if (!metadata) {
+            [A2Logger error:@"Launch"
+                   message:[NSString stringWithFormat:@"无法构造 launchTarget：%@", current.name]];
+            [self.launchCard finishWithState:A2TaskCardStateFailed message:@"版本文件损坏"];
+            [self.launchCard dismissAfterDelay:3.0];
+            self.launchCard = nil;
+            return;
+        }
+
         A2Account *account = A2AccountManager.shared.currentAccount;
-        NSMutableDictionary *metadata = [NSMutableDictionary dictionary];
         metadata[@"accountId"] = account.profileID.length ? account.profileID
                                                           : (account.username ?: @"Player");
-        metadata[@"versionName"] = current.name;
-        metadata[@"gameHome"] = A2VersionManager.shared.gameHome;
 
         NSString *mc = current.versionInfo.minecraftVersion ?: current.name;
         A2JRE *jre = [A2JREManager.shared jreForVersionName:current.name mcVersion:mc];
         if (jre.path.length) metadata[@"javaHome"] = jre.path;
-
-        // ⚠️ 必须带 javaVersion —— SurfaceViewController 用它决定 minVersion：
-        //     int minVersion = metadata[@"javaVersion"][@"majorVersion"]
-        //     if (minVersion == 0) minVersion = 8;   // 默认 Java 8！
-        //
-        // 之前没传这个键 → minVersion 永远是 8，
-        // 而 MC 26.3 要 Java 25 → 用错误版本参数启动 → 卡死/黑屏。
         if (jre.majorVersion > 0) {
             metadata[@"javaVersion"] = @{ @"majorVersion": @(jre.majorVersion) };
         }
-
-        // launchJVM 还会读 metadata[@"id"] 做版本判断
-        metadata[@"id"] = current.name;
+        metadata[@"versionName"] = current.name;
 
         [A2Logger info:@"Launch"
                message:[NSString stringWithFormat:

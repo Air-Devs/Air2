@@ -2642,32 +2642,49 @@ int launchJVM(NSString *accountId, id launchTarget, int width, int height, int m
     //   (egl_bridge 的 PojavFirstFrameRendered 会把阶段推到「完成」并撤遮罩)。
     AmeLaunchProgressSetStage(AmeLaunchStageWaitingFirstFrame);
 
-    // ---- 还原信号处置（对照 ZL2 的 jre_launcher.c:launchJVM）----
+    // ---- 复位信号处理器为 SIG_DFL（关键！）----
     //
-    // ZL2 在调 JLI_Launch 之前把 SIGHUP..NSIG 全部重置：SIGSEGV 设 IGN，
-    // 其余设 DFL。原因是 dalvik/JVM 接管信号之前，宿主进程里挂的
-    // handler 会干扰 JVM 自己的 fatal error 流程。
+    // 依据团队另一份能正常启动 26.2 的实现（Natives/Context/a2_vmloader.m）：
     //
-    // 我们的做法略有不同 —— 保留崩溃捕获（否则黑屏时一点日志都没有），
-    // 只处理 JVM 明确不喜欢的几个：
-    //   · SIGPIPE  → IGN：Java 的 socket/pipe 写入失败靠 errno，
-    //                不该因 SIGPIPE 直接杀进程
-    //   · SIGSYS / SIGTRAP → DFL：JVM 的 safepoint / 断言依赖默认行为
-    //   · 其余保持不动（A2CrashHandler 带 SA_RESETHAND，触发一次就恢复 DFL）
+    //   HotSpot 要用 SIGSEGV 做【隐式空指针检查】和【安全点轮询】，
+    //   SIGBUS/SIGILL/SIGFPE 用于 JIT 代码异常路径。
+    //   启动器进程里挂着的崩溃兜底 handler 占着这些信号，
+    //   JVM 建 VM 时就会停在那儿不动 —— 表现就是「黑屏、卡住、无日志」。
     //
-    // 这条差异是 ZL2 与我们在「启动后立刻黑屏无日志」上的已知分界点之一，
-    // 先把明显不兼容的几个改掉，再观察日志。
+    // 所以必须在 dlopen/建 VM 之前把它们全部还给系统。
+    // 代价：JVM 启动之后我们不再捕获原生崩溃（但 A2CrashHandler 的
+    // 日志已经由磁盘缓冲同步落盘，之前发生的都会保留）。
+    signal(SIGSEGV, SIG_DFL);
+    signal(SIGBUS,  SIG_DFL);
+    signal(SIGILL,  SIG_DFL);
+    signal(SIGFPE,  SIG_DFL);
+    signal(SIGPIPE, SIG_DFL);
+    signal(SIGTRAP, SIG_DFL);
+
+    [A2Logger info:@"launchJVM"
+           message:@"[5/6] 信号已复位为 SIG_DFL（SEGV/BUS/ILL/FPE/PIPE/TRAP）"];
+
+    // ---- INTERNAL_JLI_PATH（libjli 靠它定位自身，否则会推出错的 java.home）----
+    // iOS 上主可执行文件是 Air2.app/Air2，libjli 自己去推会得到错误路径。
     {
-        struct sigaction ign, dfl;
-        memset(&ign, 0, sizeof(ign));
-        memset(&dfl, 0, sizeof(dfl));
-        ign.sa_handler = SIG_IGN;
-        dfl.sa_handler = SIG_DFL;
-        sigemptyset(&ign.sa_mask);
-        sigemptyset(&dfl.sa_mask);
-        sigaction(SIGPIPE, &ign, NULL);
-        sigaction(SIGSYS,  &dfl, NULL);
-        sigaction(SIGTRAP, &dfl, NULL);
+        NSString *jliPath = nil;
+        NSString *jh = javaHome;
+        NSArray<NSString *> *cands = @[
+            [jh stringByAppendingPathComponent:@"lib/libjli.dylib"],
+            [jh stringByAppendingPathComponent:@"lib/server/libjli.dylib"],
+            [jh stringByAppendingPathComponent:@"jre/lib/libjli.dylib"],
+        ];
+        for (NSString *c in cands) {
+            if ([NSFileManager.defaultManager fileExistsAtPath:c]) { jliPath = c; break; }
+        }
+        if (jliPath.length > 0) {
+            setenv("INTERNAL_JLI_PATH", jliPath.UTF8String, 1);
+            [A2Logger info:@"launchJVM"
+                   message:[NSString stringWithFormat:@"[6/6] INTERNAL_JLI_PATH=%@", jliPath]];
+        } else {
+            [A2Logger warning:@"launchJVM"
+                      message:@"libjli.dylib 未找到，INTERNAL_JLI_PATH 未设置"];
+        }
     }
 
     return pJLI_Launch(++margc, margv,
