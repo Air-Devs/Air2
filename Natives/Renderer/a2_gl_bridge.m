@@ -921,6 +921,44 @@ static int a2_gl_bridge_backend_is_host_egl(const char *rendererName) {
 /// ★实现约束（踩过）★：这里**不能**用裸 objc_msgSend 传结构体（CGRect）——
 ///   clang 对那写法会直接崩且不给诊断，整个 target 编译失败。改用 KVC/NSValue 与
 ///   performSelector:，全程只传对象。
+/// ★图层可见性核对 + 强制可见★（真机 8d9f052：class=CAMetalLayer、像素逐帧变化，但屏幕全黑）
+/// 到这一步渲染已无嫌疑，只剩「这个层没被合成」。这里把决定性状态打出来并强制修正：
+///   view 是否在窗口里 / view.hidden / view.alpha / layer.hidden / layer.opacity /
+///   layer.frame / zPosition / 父层类名
+/// 修正：hidden=NO、opacity=1、zPosition=1000，并把 view 提到窗口子视图最前。
+static void a2_gl_bridge_force_layer_visible(void *viewPtr, void *layerPtr) {
+    if (layerPtr == NULL) return;
+    id layer = (__bridge id)layerPtr;
+    id view  = (__bridge id)viewPtr;
+    @try {
+        id win = nil;
+        if (view != nil && [view respondsToSelector:NSSelectorFromString(@"window")]) {
+            win = [view performSelector:NSSelectorFromString(@"window")];
+        }
+        NSValue *vframe = [view valueForKey:@"frame"];
+        NSNumber *vhidden = [view valueForKey:@"hidden"];
+        NSNumber *valpha  = [view valueForKey:@"alpha"];
+        NSValue *lframe = [layer valueForKey:@"frame"];
+        NSNumber *lhidden = [layer valueForKey:@"hidden"];
+        NSNumber *lopacity = [layer valueForKey:@"opacity"];
+        a2_log_f(@"[A2-GLBRIDGE] 图层可见性核对：view=%@ inWindow=%d frame=%@ hidden=%@ alpha=%@ ｜ "
+                 @"layer=%@ frame=%@ hidden=%@ opacity=%@ z=%@",
+                 NSStringFromClass([view class]), (win != nil),
+                 NSStringFromCGRect([vframe CGRectValue]), vhidden, valpha,
+                 NSStringFromClass([layer class]), NSStringFromCGRect([lframe CGRectValue]),
+                 lhidden, lopacity, [layer valueForKey:@"zPosition"]);
+        [layer setValue:@NO forKey:@"hidden"];
+        [layer setValue:@1 forKey:@"opacity"];
+        [layer setValue:@1000 forKey:@"zPosition"];
+        if (win != nil && [win respondsToSelector:NSSelectorFromString(@"bringSubviewToFront:")]) {
+            [win performSelector:NSSelectorFromString(@"bringSubviewToFront:") withObject:view];
+        }
+        a2_log_f(@"[A2-GLBRIDGE] 已强制图层可见（hidden=NO opacity=1 z=1000，view 提到最前）");
+    } @catch (__unused NSException *e) {
+        a2_log_f(@"[A2-GLBRIDGE] 图层可见性核对失败：%@", e.reason);
+    }
+}
+
 static void *a2_gl_bridge_metal_layer_for(void *renderable) {
     if (renderable == NULL) return NULL;
     id host = (__bridge id)renderable;
@@ -1592,6 +1630,7 @@ static void a2_gl_bridge_ensure_game_view_surface(void) {
     //   真机（5070717）：像素采样 R239 G50 B61 说明游戏在画，但屏幕黑 ⇒
     //   必须确认这一行给出的 newSurf 是否已经从「启动器图层」换到了「CAMetalLayer」。
     a2_gl_bridge_raise_host_window(want);   // ★层级核对★ level<0 时抬到可见层（否则画了也黑）
+    a2_gl_bridge_force_layer_visible(want, eglWant);   // ★可见性核对 + 强制可见★
     a2_log_f(@"[A2-GLBRIDGE] ★改绑成功★ 旧 surface=%p ⇒ 新 surface=%p（宿主=%p class=%s）",
              (void *)oldSurf, (void *)newSurf, (void *)eglWant,
              (eglWant != NULL) ? NSStringFromClass([(__bridge id)eglWant class]).UTF8String : "(null)");
