@@ -278,9 +278,13 @@
 - **MobileGlues 的 `glGetError` SIGBUS**：曾经的「二进制改写为 `return 0`」shim 已在真机证伪
   （改写后同一地址仍崩、页保护还原 `errno=13`）并整条移除。现有修法：MG 后端下 EGL 入口改从
   **渲染器自己的句柄**解析（唯一判据 `a2_gl_bridge_egl_source()`；做法对齐老 Air
-  `Natives/ctxbridges/egl_bridge.m:260-285`），并按同一结论**不加载 ANGLE 的 libEGL/libGLESv2**
-  ⇒ 判据行是 `[A2-GLBRIDGE] EGL 源=MG（渲染器自带，13/13 入口）` + `[A2-GLBRIDGE] ★跳过 ANGLE 兼容底★`；
-  若退回 `[A2-GLBRIDGE] EGL 源=ANGLE（MG 缺入口：…）`，该行点名的入口就是「MG 这套 EGL 不完整」
+  `Natives/ctxbridges/egl_bridge.m:260-285`）；★但这套 `egl*` 只是「门面」★ —— 真机 lastlog-104
+  证实只留门面会换来 MG 自己报 `EGL entry point eglGetDisplay is not available in the backend library`
+  并 SIGSEGV 循环 ⇒ 现在**两层都在**：门面 = MG 的 `egl*`（我们自己的 EGL 调用优先走它），
+  宿主 = ANGLE 的 libEGL/libGLESv2（以 `RTLD_GLOBAL` 加载，供 MG 的门面落地；加载顺序恒为
+  MG 先、ANGLE 后，flat namespace 里 `gl*` 仍归 MG）。判据行是
+  `[A2-GLBRIDGE] EGL 门面=MG（13/13 入口，句柄=…）；宿主=ANGLE（libEGL/libGLESv2 已 RTLD_GLOBAL）`；
+  若退回 `[A2-GLBRIDGE] EGL 门面=ANGLE（MG 缺 …）`，该行点名的入口就是「MG 这套 EGL 不完整」
   的落点（也是下一条根因线索）。
 
 ---

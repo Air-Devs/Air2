@@ -152,6 +152,12 @@ typedef enum {
 /// 当前 EGL 源（见 `A2GlBridgeEglSource`）。★只经 `a2_gl_bridge_egl_source()` 读，不在别处判★。
 static A2GlBridgeEglSource gEglSource = A2GlBridgeEglSourceAngle;
 
+/// ★MG 自带 EGL 的探测结果★（`a2_gl_bridge_use_own_egl()` 是唯一写点，teardown 复位）。
+/// 只服务于「两层判据行」（EGL 门面 / 宿主），不参与任何控制流判断（控制流只读 `gEglSource`）。
+static int         gMgEglEntriesGot   = 0;    // MG 真身里 dlsym 到的 egl* 入口数（应 = 清单总数）
+static int         gMgEglEntriesTotal = 0;    // 清单总数（`kMgEglEntryNames`，13）
+static const char *gMgEglFirstMissing = NULL; // MG 缺的第一个入口名（门面回退 ANGLE 时点名用；指向静态字面量）
+
 static void *gEglHandle  = NULL;
 static void *gGlesHandle = NULL;
 static void *gRendererHandle = NULL;   // 后端本体（compat 底 = libgl4es_114.dylib）
@@ -227,8 +233,9 @@ static void a2_gl_bridge_teardown(void) {
     if (gEglTerminate != NULL && gDpy != A2_EGL_NO_DISPLAY) {
         gEglTerminate(gDpy);
     }
-    // ★MG 自带 EGL 时 gEglHandle/gGlesHandle 就是后端本体句柄（别名）★：先记下来，
-    //   下面只 dlclose 真身一次，避免对同一镜像重复 dlclose（引用计数会被多减一次）。
+    // ★句柄各自独立★（MG 门面下也不再有别名）：gEglHandle/gGlesHandle = ANGLE 的两份，
+    //   gRendererHandle = 后端本体。仍保留「与本体同一镜像就不重复 dlclose」的比较 ——
+    //   那是对同一镜像 dlopen 两次时引用计数的保险（别多减一次）。
     void *rendererHandleBefore = gRendererHandle;
     if (gRendererHandle != NULL) {
         dlclose(gRendererHandle);
@@ -240,6 +247,9 @@ static void a2_gl_bridge_teardown(void) {
     if (gEglHandle != NULL)      { if (!gHostEgl && gEglHandle != rendererHandleBefore) dlclose(gEglHandle); gEglHandle = NULL; }
     gHostEgl = 0;
     gEglSource = A2GlBridgeEglSourceAngle;   // ★EGL 源随句柄一起释放★：下次 attach 必须重新判（不留上一轮的结论）
+    gMgEglEntriesGot = 0;                    // ★探测结果同理★：不留上一轮的数字（否则判据行会报别的后端/上一轮的入口数）
+    gMgEglEntriesTotal = 0;
+    gMgEglFirstMissing = NULL;
 
     gDpy = A2_EGL_NO_DISPLAY; gCfg = NULL;
     gCtx = A2_EGL_NO_CONTEXT; gSurf = A2_EGL_NO_SURFACE;
@@ -380,6 +390,22 @@ static void *a2_gl_bridge_egl_entry_handle(void) {
     return (a2_gl_bridge_egl_source() == A2GlBridgeEglSourceMG) ? gRendererHandle : gEglHandle;
 }
 
+/// ★GL 入口的唯一取法★（调用点：attach ⑦ / ⑦b 的 8 个帧动作入口）。
+///   顺序：① 门面的 `eglGetProcAddress`（句柄同 `a2_gl_bridge_egl_entry_handle()`）；
+///        ② 同一个门面句柄上 `dlsym`；③ 最后才退到宿主 GLESv2（ANGLE / 系统 OpenGLES）。
+/// ★为什么必须先从门面取★：MG 当门面时，`gl*` 必须来自 MG（与它内部那套 GL 状态同源）；
+///   直接拿宿主 ANGLE 的 `gl*` 会让「MC 的调用」与「MG 的状态」分离 —— 真机 SYMBOL THEFT
+///   （`the application is calling someone else`）与随后 SIGBUS 就是这件事。
+/// ★不另写判定★：门面是谁完全由 `a2_gl_bridge_egl_entry_handle()` 决定，这里不判后端名。
+static void *a2_gl_bridge_gl_symbol(const char *name) {
+    if (name == NULL) return NULL;
+    void *facade = a2_gl_bridge_egl_entry_handle();
+    void *sym = (gEglGetProcAddress != NULL) ? gEglGetProcAddress(name) : NULL;
+    if (sym == NULL && facade != NULL) sym = dlsym(facade, name);
+    if (sym == NULL && gGlesHandle != NULL && gGlesHandle != facade) sym = dlsym(gGlesHandle, name);
+    return sym;
+}
+
 /// ★MG 自带 EGL 的入口清单★（13 个；缺任何一个都不认「MG 自带」）。
 /// 为什么要求整表而不是只要建面那 7 个：半套 EGL（能建上下文、不能换页/销毁/取 proc）
 /// 会把崩点从「建不出面（有清晰日志）」挪到「跑起来之后（真机 SIGBUS）」，比直接回退更难定位。
@@ -391,7 +417,14 @@ static const char *const kMgEglEntryNames[] = {
     NULL
 };
 
-/// ★MG 自带 EGL 探测★（`gEglSource` 的唯一写点；返回值 = 是否采用 MG 自带 EGL）。
+/// ★MG 自带 EGL 探测★（`gEglSource` 的唯一判定写点；返回值 = 是否采用 MG 自带 EGL 当**门面**）。
+///
+/// ★两层栈的口径★：MG 导出的整套 `egl*` 只是**门面**（façade），它自己不建宿主 ——
+///   真机 lastlog-104：只把 MG 当 EGL 源、并把 ANGLE 跳过之后，MG 自己报
+///   `EGL entry point eglGetDisplay is not available in the backend library`，随后 SIGSEGV 循环。
+///   ⇒ 本层同时加载 ANGLE（`libEGL`/`libGLESv2`，RTLD_GLOBAL）当**宿主**，MG 的门面才有落地实现；
+///   而我们自己的 `egl*` 调用仍优先走门面（本函数的结论），见 `a2_gl_bridge_egl_entry_handle()`。
+///   ⇒ 本函数只回答「门面是谁」，宿主恒为 ANGLE（`gHostEgl` 那条宿主假 EGL 分支除外）。
 ///
 /// 依据①（做法对齐）：老 Air `Natives/ctxbridges/egl_bridge.m:260-285` 的 `dlsym_EGL()` 就是先到
 ///   **渲染器自己的句柄**里 dlsym 整套 `egl*`，取不到才回退兼容底。
@@ -406,7 +439,7 @@ static int a2_gl_bridge_use_own_egl(void) {
     //   ⇒ 这条判据优先级最高，与 gHostEgl 绑定（attach ①b 置位）。
     if (gHostEgl) {
         gEglSource = A2GlBridgeEglSourceAngle;
-        a2_log_criterion(@"[A2-GLBRIDGE] EGL 源=宿主假 EGL（libeagl.dylib 必须由本层接管 egl*）");
+        a2_log_criterion(@"[A2-GLBRIDGE] EGL 门面=主镜像假 EGL（libeagl.dylib 必须由本层接管 egl*）；宿主=本二进制（CAEAGLLayer）");
         return 0;
     }
     if (gRendererHandle == NULL) return 0;
@@ -417,19 +450,42 @@ static int a2_gl_bridge_use_own_egl(void) {
         if (dlsym(gRendererHandle, kMgEglEntryNames[i]) != NULL) got++;
         else if (firstMissing == NULL) firstMissing = kMgEglEntryNames[i];
     }
+    // ★探测结果存档★（只给两层判据行用；控制流仍然只读 `gEglSource`）
+    gMgEglEntriesGot   = got;
+    gMgEglEntriesTotal = total;
+    gMgEglFirstMissing = firstMissing;
     if (firstMissing != NULL) {
         gEglSource = A2GlBridgeEglSourceAngle;
-        a2_log_criterion(@"[A2-GLBRIDGE] EGL 源=ANGLE（MG 缺入口：%s）", firstMissing);
+        a2_log_criterion(@"[A2-GLBRIDGE] MG 自带 EGL 不全：缺入口 %s（%d/%d）⇒ 门面回退 ANGLE",
+                         firstMissing, got, total);
         return 0;
     }
     gEglSource = A2GlBridgeEglSourceMG;
-    a2_log_criterion(@"[A2-GLBRIDGE] EGL 源=MG（渲染器自带，%d/%d 入口）", got, total);
+    a2_log_criterion(@"[A2-GLBRIDGE] MG 自带 EGL 齐备：%d/%d 入口 ⇒ 采用 MG 当门面（宿主 ANGLE 由 ④ 加载，两层都在）",
+                     got, total);
     return 1;
 }
 
+/// ★两层判据行（EGL 门面 / 宿主）★ —— 真机 grep 这一行即可判读「egl* 是谁的、宿主是谁」。
+/// 调用点：`a2_gl_bridge_attach` 的 ④ 之后**一次**（此时门面句柄与 ANGLE 宿主句柄都已落地，
+/// 也只有这时才能同时报出「门面入口数」与「宿主已 RTLD_GLOBAL」）。
+/// ★只报事实★：门面=MG 时点明入口数与自己那份句柄；门面=ANGLE 时点名 MG 缺的那一个入口。
+static void a2_gl_bridge_log_egl_layers(void) {
+    if (a2_gl_bridge_egl_source() == A2GlBridgeEglSourceMG) {
+        a2_log_criterion(@"[A2-GLBRIDGE] EGL 门面=MG（%d/%d 入口，句柄=%p）；"
+                         @"宿主=ANGLE（libEGL/libGLESv2 已 RTLD_GLOBAL）",
+                         gMgEglEntriesGot, gMgEglEntriesTotal, gRendererHandle);
+    } else {
+        a2_log_criterion(@"[A2-GLBRIDGE] EGL 门面=ANGLE（MG 缺 %s）；"
+                         @"宿主=ANGLE（libEGL/libGLESv2 已 RTLD_GLOBAL）",
+                         (gMgEglFirstMissing != NULL) ? gMgEglFirstMissing : "整套入口（未探测）");
+    }
+}
+
 /// 加载后端本体（EGL/GL 层的镜像）：RTLD_GLOBAL 让 MC 后续能直接解析到它的 GL 符号。
-/// ★两处调用，同一个动作★：① MG 先加载 —— 要问它要 EGL 入口（③0）；② 普通顺序里最后加载（④）。
-/// 已加载则直接成功（MG 探测失败后回退 ANGLE 的顺序里不重复 dlopen）。
+/// ★两处调用，同一个动作★：① MG 先加载 —— 要问它要 EGL 门面入口（③0，顺序是契约）；
+/// ② ④ 里再补一次（其余后端在这里才真正加载；MG 已加载 ⇒ 幂等直接成功）。
+/// 已加载则直接成功（不会重复 dlopen）。
 static int a2_gl_bridge_open_renderer(const char *rendererPath) {
     if (gRendererHandle != NULL) return 1;
     gRendererHandle = dlopen(rendererPath, RTLD_LAZY | RTLD_GLOBAL);
@@ -1190,8 +1246,12 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     //   `SYMBOL THEFT: flat namespace resolves glTexImage2D/glDrawArrays … to ANGLE 地址`。
     //   老 Air 的做法（`Natives/ctxbridges/egl_bridge.m:260-285`）是**先到渲染器自己的句柄**
     //   里 dlsym 整套 `egl*`，取不到才回退兼容底 ⇒ 这里对齐。
-    //   ★必须在「包内 ANGLE 兼容底存在性检查」之前★：MG 自带 EGL 时，包里那两份 ANGLE 库
-    //   不该被要求、更不该被 dlopen（多一个 gl* 导出者就是把符号抢走的那个原因）。
+    //   ★顺序：MG 先、ANGLE 后（★这一条不许反转★）★ —— flat namespace 与 `RTLD_NEXT` 都只往
+    //   **更晚加载**的镜像里找符号：MG 先加载 ⇒ 它的 `gl*` 在 dlsym(RTLD_DEFAULT) 里排第一（不被
+    //   ANGLE 抢）；ANGLE 后加载 ⇒ MG 的门面按 `RTLD_NEXT`/全局空间能找到宿主 `eglGetDisplay`。
+    //   ★ANGLE 兼容底照旧要求并加载（真机 lastlog-104）★：跳过 ANGLE 后 MG 自己报
+    //   `EGL entry point eglGetDisplay is not available in the backend library` 并 SIGSEGV 循环
+    //   —— 它只导出**门面**，宿主（backend library）必须另有其人 ⇒ ANGLE 就是那个宿主。
     //   ★与宿主 EGL 后端互斥★：libeagl.dylib 的 EGL 是主二进制的假 EGL（①b）。这里排除它只为
     //   **保住加载顺序**（宿主 EGL 后端的本体仍按 ④ 的常规顺序最后加载）；「MG 的 egl* 能不能用」
     //   这件事本身由 `a2_gl_bridge_use_own_egl()` 内部那条 `gHostEgl` 判据说话 —— 不在这里另判。
@@ -1200,15 +1260,15 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
             a2_gl_bridge_teardown();
             return A2GlBridgeErrLoadFailed;
         }
-        a2_gl_bridge_use_own_egl();   // 成功 ⇒ gEglSource=MG；失败 ⇒ 仍 ANGLE（日志点明缺哪个入口）
+        a2_gl_bridge_use_own_egl();   // 门面=MG / 回退 ANGLE（日志点明缺哪个入口）；宿主恒 ANGLE
     }
     const BOOL eglFromMG = (a2_gl_bridge_egl_source() == A2GlBridgeEglSourceMG);
 
+    // ★三层都要求存在★：门面（MG 或 ANGLE 自带）恒需要后端本体；ANGLE 的 libEGL/libGLESv2
+    //   在 MG 门面下**仍是必需**（它们是宿主，缺了 MG 的门面无处落地）。
     NSMutableArray<NSString *> *needed = [NSMutableArray array];
-    if (!eglFromMG) {                    // MG 自带 EGL ⇒ ANGLE 的 libEGL / libGLESv2 都不再要求
-        if (eglPath != nil) [needed addObject:eglPath];   // EGL 那一份只在普通后端上要求
-        [needed addObject:glesPath];
-    }
+    if (eglPath != nil) [needed addObject:eglPath];   // 宿主 EGL 后端没有包内 EGL（`egl*` 在主镜像里）
+    [needed addObject:glesPath];
     [needed addObject:rendererPath];
     for (NSString *p in needed) {
         BOOL isDir = NO;
@@ -1219,77 +1279,72 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         }
     }
 
-    // ---- ④ dlopen（EGL/GLES 兼容底的旗标按后端定：见下；后端本体恒 RTLD_GLOBAL）----
+    // ---- ④ dlopen（★两层栈：门面 + 宿主★；EGL/GLES 兼容底的旗标按后端定：见下；后端本体恒 RTLD_GLOBAL）----
     // ★KW 时用 RTLD_LOCAL★（真机 lastlog-84）：ANGLE 的 libGLESv2 若以 GLOBAL 加载，
     //   它导出的 GLES1 入口（glLoadMatrixf 等）会被 MC/LWJGL 的 dlsym(RTLD_DEFAULT) 抢先命中，
     //   从而绕过 KW 自带 FPE，直接崩在 ANGLE 的 GLES1State（未初始化）。⇒ 只让 KW 自己全局可见。
-    // ★MG 时同样 LOCAL★（真机 lastlog-101）：MG 2.0.16 加载后自己取证报
-    //   `[MG] SYMBOL THEFT: flat namespace resolves glFramebufferTexture2D/glTexImage2D/glDrawArrays
-    //    to 0x12669a…, this layer's export is 0x125b6… -- the application is calling someone else`
-    //   —— 那些 0x12669a… 全在 ANGLE(libGLESv2) 的映像里（MG 自己的导出在 0x125b6…/0x125b8…），
-    //   就是我们以 RTLD_GLOBAL 加载的兼容底把 gl* 抢进了 flat namespace。
-    //   ⇒ MG 后端下 EGL/GLES 一律 RTLD_LOCAL：flat namespace 里只剩 MG 自己的 gl* 导出。
-    //   MG 要 ES 驱动入口时不靠 flat namespace（它自己按 handle 解析 / 走 eglGetProcAddress），
-    //   兼容底仍由本桥按句柄 dlsym 使用 ⇒ 改 LOCAL 不影响建面。
+    // ★MG 时改为 RTLD_GLOBAL★（真机 lastlog-104 的修因）：MG 那套 `egl*` 只是**门面**，它要落到
+    //   **宿主 EGL**（backend library）才真正工作；宿主 = ANGLE 的 libEGL/libGLESv2 ⇒ 必须以
+    //   RTLD_GLOBAL 进 flat namespace，MG 才解析得到 `eglGetDisplay`/`eglGetProcAddress`。
+    //   ★lastlog-101 的 SYMBOL THEFT 不因此复发★：MG 在 ③0 就先加载（GLOBAL），ANGLE 后加载
+    //   ⇒ `dlsym(RTLD_DEFAULT)` 先命中 MG 自己的 `gl*` 导出；ANGLE 只负责 egl* 与 MG 的宿主后端。
     // ★KW 沿用原来的模糊判定★（`strstr`）：`libnggl4es.dylib`（老的那支）与
     //   `libnggl4es_kw.dylib` 都按 KW 处理 —— 这是 lastlog-84 起的行为，不在本单里改口径。
     const BOOL a2BackendIsKW = (strstr(rendererName, "krypton") != NULL) || (strstr(rendererName, "nggl4es") != NULL);
-    const BOOL a2DepFlagsLocal = (a2BackendIsKW || a2BackendIsMG);
+    const BOOL a2DepFlagsLocal = a2BackendIsKW;   // ★只剩 KW 用 LOCAL★：MG 必须 GLOBAL（宿主 EGL 在 ANGLE 里）
     const int a2GlDepFlags = RTLD_LAZY | (a2DepFlagsLocal ? RTLD_LOCAL : RTLD_GLOBAL);
     a2_log_f(@"[A2-GLBRIDGE] 依赖加载旗标：%s（后端=%s）",
              a2DepFlagsLocal ? "RTLD_LOCAL" : "RTLD_GLOBAL", gBackendName);
     if (a2DepFlagsLocal) {
-        a2_log_f(@"[A2-GLBRIDGE] 旗标理由：%s ⇒ 不让兼容底的 gl* 进 flat namespace（防符号被抢）",
-                 a2BackendIsKW ? "KW 要自己的 GLES1 入口生效"
-                               : "MG 自己导出整套 gl*（真机 SYMBOL THEFT 即此因）");
+        a2_log_f(@"[A2-GLBRIDGE] 旗标理由：KW 要自己的 GLES1 入口生效 ⇒ 不让兼容底的 gl* 进 flat namespace（防符号被抢）");
     }
 
-    if (eglFromMG) {
-        // ★MG 自带 EGL：EGL 与 GL 都出自 MG 自己 ⇒ 不加载 ANGLE 兼容底★ ——
-        //   少两个 gl* 导出者（SYMBOL THEFT 的直接成因），也少两次 dlopen。
-        //   两个句柄直接指向后端本体（★别名★；teardown 靠指针比较只 dlclose 真身一次）。
-        gEglHandle  = gRendererHandle;
-        gGlesHandle = gRendererHandle;
-        a2_log_criterion(@"[A2-GLBRIDGE] ★跳过 ANGLE 兼容底★：不 dlopen libEGL/libGLESv2"
-                         @"（EGL+GL 入口全由 %s 提供）", glLayerName);
-    } else {
-        // ★宿主 EGL 后端★：EGL 入口在主二进制里 ⇒ `dlopen(NULL)` 拿主镜像句柄，
-        //   dlsym 出来的就是本层自己的 `egl*`（flat namespace 第一位也是它）。
-        gEglHandle      = hostEglBackend ? dlopen(NULL, RTLD_LAZY)
-                                         : dlopen(eglPath.UTF8String, a2GlDepFlags);
-        if (gEglHandle == NULL) {
-            const char *err = dlerror();
-            a2_log_f(@"[A2-GLBRIDGE] ★阻断★：EGL 兼容底 dlopen 失败 %s（%s）",
-                     hostEglBackend ? "(main image)" : eglPath.UTF8String, err ? err : "(dlerror 无输出)");
-            a2_gl_bridge_teardown();
-            return A2GlBridgeErrLoadFailed;
-        }
-        gGlesHandle     = dlopen(glesPath.UTF8String,     a2GlDepFlags);
-        if (gGlesHandle == NULL) {
-            const char *err = dlerror();
-            a2_log_f(@"%s ★阻断★：GLESv2 兼容底 dlopen 失败 %s（%s）",
-                     A2GlBridgeJudgementTag, glesPath.UTF8String, err ? err : "(dlerror 无输出)");
-            a2_gl_bridge_teardown();
-            return A2GlBridgeErrLoadFailed;
-        }
-        // 后端本体（compat 底 = libgl4es_114.dylib）：RTLD_GLOBAL 让 MC 后续能直接解析到它的 GL 符号。
-        // ★MG 探测失败的这条路上本体已经加载过★（③0）⇒ 由 a2_gl_bridge_open_renderer 幂等处理。
-        if (!a2_gl_bridge_open_renderer(rendererPath.UTF8String)) {
-            a2_gl_bridge_teardown();
-            return A2GlBridgeErrLoadFailed;
-        }
+    // ★EGL 那一份★：宿主 EGL 后端 = 主镜像（`dlopen(NULL)`，不能 dlclose）；
+    //   其余（含 MG 门面）= ANGLE 的 libEGL。★MG 门面下这个句柄是「宿主」，不是门面★ ——
+    //   门面句柄由 `a2_gl_bridge_egl_entry_handle()` 给（= MG 本体），两者不混用。
+    gEglHandle      = hostEglBackend ? dlopen(NULL, RTLD_LAZY)
+                                     : dlopen(eglPath.UTF8String, a2GlDepFlags);
+    if (gEglHandle == NULL) {
+        const char *err = dlerror();
+        a2_log_f(@"[A2-GLBRIDGE] ★阻断★：EGL 兼容底 dlopen 失败 %s（%s）",
+                 hostEglBackend ? "(main image)" : eglPath.UTF8String, err ? err : "(dlerror 无输出)");
+        a2_gl_bridge_teardown();
+        return A2GlBridgeErrLoadFailed;
     }
-    a2_log_f(@"[A2-GLBRIDGE] 已加载兼容底：EGL=%s handle=%p；GLESv2=%s handle=%p；后端(GL 层)=%s handle=%p",
-             eglFromMG ? "(MG 自带 egl*)"
-                       : (hostEglBackend ? "(main image 假 EGL)" : eglPath.UTF8String), gEglHandle,
-             eglFromMG ? "(MG 自带，无 ANGLE GLESv2)" : glesPath.UTF8String, gGlesHandle,
+    gGlesHandle     = dlopen(glesPath.UTF8String,     a2GlDepFlags);
+    if (gGlesHandle == NULL) {
+        const char *err = dlerror();
+        a2_log_f(@"%s ★阻断★：GLESv2 兼容底 dlopen 失败 %s（%s）",
+                 A2GlBridgeJudgementTag, glesPath.UTF8String, err ? err : "(dlerror 无输出)");
+        a2_gl_bridge_teardown();
+        return A2GlBridgeErrLoadFailed;
+    }
+    // 后端本体（GL 层 = MG / compat 底 / KW …）：RTLD_GLOBAL 让 MC 后续能直接解析到它的 GL 符号。
+    // ★MG 已在 ③0 加载过★（顺序必须是 MG 先），这里由 a2_gl_bridge_open_renderer 幂等返回成功。
+    if (!a2_gl_bridge_open_renderer(rendererPath.UTF8String)) {
+        a2_gl_bridge_teardown();
+        return A2GlBridgeErrLoadFailed;
+    }
+    // ★两层判据行★（MG 后端专有）：到这里门面句柄与 ANGLE 宿主句柄都已落地，一行答完「谁当门面、谁当宿主」。
+    if (a2BackendIsMG && !hostEglBackend) {
+        a2_gl_bridge_log_egl_layers();
+    }
+    a2_log_f(@"[A2-GLBRIDGE] 已加载兼容底：EGL 门面=%s handle=%p；EGL 宿主=%s handle=%p；"
+             @"GLESv2=%s handle=%p；后端(GL 层)=%s handle=%p",
+             eglFromMG ? "MG 自带 egl*" : (hostEglBackend ? "主镜像假 EGL" : "ANGLE"),
+             a2_gl_bridge_egl_entry_handle(),
+             hostEglBackend ? "本二进制（假 EGL 自带宿主）" : "ANGLE libEGL",
+             gEglHandle,
+             glesPath.UTF8String, gGlesHandle,
              glLayerName, gRendererHandle);
 
     if (a2BackendIsMG) {
         // ---- ④a2 ★符号归属核对★（MG 自己要报 SYMBOL THEFT 的那件事，我们自己也取一份证据）----
         //   真机 lastlog-101：`[MG] SYMBOL THEFT … the application is calling someone else`。
-        //   本行直接回答「flat namespace 里这个 gl* 归谁」—— 与 MG 自己的报错互为旁证，
-        //   也用来验证 ④ 的 RTLD_LOCAL 到底有没有把 ANGLE 的导出挡在全局命名空间外。
+        //   本行直接回答「flat namespace 里这个 gl* 归谁」—— 与 MG 自己的报错互为旁证。
+        //   ★两层栈下这一行的预期仍是「归 MG」★：MG 在 ③0 先加载（GLOBAL）、ANGLE 在 ④ 后加载
+        //   ⇒ 先到先得，ANGLE 的 gl* 只可能在 MG 缺这个导出时才露头。若这里报「被抢走」，
+        //   说明加载顺序被改动过（③0 必须先于 ④）。
         void *ownSym  = dlsym(gRendererHandle, "glTexImage2D");
         void *flatSym = dlsym(RTLD_DEFAULT, "glTexImage2D");
         a2_log_f(@"%s 符号归属核对：glTexImage2D 后端导出=%p / flat=%p ⇒ %s",
@@ -1669,13 +1724,10 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         drawableH = gSurfaceHeightPixels;
     }
 
-    // ---- ⑦ 取 GL 函数指针（glClear 必需；优先 eglGetProcAddress，回落 dlsym(GLESv2)）----
-    void *pClear = gEglGetProcAddress ? gEglGetProcAddress("glClear") : NULL;
-    void *pClearColor = gEglGetProcAddress ? gEglGetProcAddress("glClearColor") : NULL;
-    void *pGetError = gEglGetProcAddress ? gEglGetProcAddress("glGetError") : NULL;
-    if (pClear == NULL)      pClear      = dlsym(gGlesHandle, "glClear");
-    if (pClearColor == NULL) pClearColor = dlsym(gGlesHandle, "glClearColor");
-    if (pGetError == NULL)   pGetError   = dlsym(gGlesHandle, "glGetError");
+    // ---- ⑦ 取 GL 函数指针（glClear 必需；★先门面、后宿主★，见 a2_gl_bridge_gl_symbol）----
+    void *pClear      = a2_gl_bridge_gl_symbol("glClear");
+    void *pClearColor = a2_gl_bridge_gl_symbol("glClearColor");
+    void *pGetError   = a2_gl_bridge_gl_symbol("glGetError");
 
     if (pClear == NULL) {
         a2_log_f(@"%s ★阻断★：取不到 GL 入口 glClear（eglGetProcAddress 与 dlsym(GLESv2) 都失败）⇒ 上下文不可判据",
@@ -1690,16 +1742,11 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     // ---- ⑦b [FRAME-PERF] 取「按缩放尺寸清屏」所需的可选入口 ----
     // 缺了不影响建面/清屏主路径：viewport/scissor 退化为「清整个 drawable」，
     // scissor 读回缺失时判据行如实点明「实现无读回，报请求值」。
-    void *pViewport  = gEglGetProcAddress ? gEglGetProcAddress("glViewport") : NULL;
-    void *pScissor   = gEglGetProcAddress ? gEglGetProcAddress("glScissor") : NULL;
-    void *pEnable    = gEglGetProcAddress ? gEglGetProcAddress("glEnable") : NULL;
-    void *pDisable   = gEglGetProcAddress ? gEglGetProcAddress("glDisable") : NULL;
-    void *pGetInt    = gEglGetProcAddress ? gEglGetProcAddress("glGetIntegerv") : NULL;
-    if (pViewport == NULL) pViewport = dlsym(gGlesHandle, "glViewport");
-    if (pScissor  == NULL) pScissor  = dlsym(gGlesHandle, "glScissor");
-    if (pEnable   == NULL) pEnable   = dlsym(gGlesHandle, "glEnable");
-    if (pDisable  == NULL) pDisable  = dlsym(gGlesHandle, "glDisable");
-    if (pGetInt   == NULL) pGetInt   = dlsym(gGlesHandle, "glGetIntegerv");
+    void *pViewport  = a2_gl_bridge_gl_symbol("glViewport");
+    void *pScissor   = a2_gl_bridge_gl_symbol("glScissor");
+    void *pEnable    = a2_gl_bridge_gl_symbol("glEnable");
+    void *pDisable   = a2_gl_bridge_gl_symbol("glDisable");
+    void *pGetInt    = a2_gl_bridge_gl_symbol("glGetIntegerv");
     gGLViewport    = (A2PFN_glViewport)pViewport;
     gGLScissor     = (A2PFN_glScissor)pScissor;
     gGLEnable      = (A2PFN_glEnable)pEnable;
