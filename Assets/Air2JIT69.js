@@ -107,6 +107,16 @@ while (!detached) {
             log(`Failed to extract signal number: ${signum}`);
             continue;
         }
+        // ★2026-10-31：致命信号不再放行★
+        //   真机现象：进程真崩（SIGSEGV=0x0b / SIGBUS=0x0a）时，脚本原本一律 vCont 放行，
+        //   于是同一处崩溃被反复「继续 → 再崩 → 再继续」，StikDebug 控制台无限刷信号。
+        //   这里对致命信号**停住不放行**，让人能直接看到现场（进程保持停止）。
+        const fatalSigs = ['0b', '0a', '04', '06', '05'];  // SEGV / BUS / ILL / ABRT / TRAP
+        if (fatalSigs.indexOf(String(signum).toLowerCase()) >= 0) {
+            log(`[A2PROBE] FATAL sig=0x${signum} pc=0x${pc.toString(16)} ⇒ 停止放行（保留现场，不再 continue）`);
+            detached = true;   // 跳出主循环，进程保持 stopped
+            break;
+        }
         log(`Continuing with signal 0x${signum}`);
         send_command(`vCont;S${signum}:${tid}`);
         continue;
