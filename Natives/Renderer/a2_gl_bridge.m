@@ -1192,7 +1192,9 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     //   里 dlsym 整套 `egl*`，取不到才回退兼容底 ⇒ 这里对齐。
     //   ★必须在「包内 ANGLE 兼容底存在性检查」之前★：MG 自带 EGL 时，包里那两份 ANGLE 库
     //   不该被要求、更不该被 dlopen（多一个 gl* 导出者就是把符号抢走的那个原因）。
-    //   ★与宿主 EGL 后端互斥★：libeagl.dylib 的 EGL 是主二进制的假 EGL（①b），不走这条路。
+    //   ★与宿主 EGL 后端互斥★：libeagl.dylib 的 EGL 是主二进制的假 EGL（①b）。这里排除它只为
+    //   **保住加载顺序**（宿主 EGL 后端的本体仍按 ④ 的常规顺序最后加载）；「MG 的 egl* 能不能用」
+    //   这件事本身由 `a2_gl_bridge_use_own_egl()` 内部那条 `gHostEgl` 判据说话 —— 不在这里另判。
     if (a2BackendIsMG && !hostEglBackend) {
         if (!a2_gl_bridge_open_renderer(rendererPath.UTF8String)) {
             a2_gl_bridge_teardown();

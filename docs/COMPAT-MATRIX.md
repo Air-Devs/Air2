@@ -275,9 +275,13 @@
   控件位置只做了「2 秒重挂」（`a2_controls_overlay.m:72`），实际是否跟手未验证；
 - **26.3 × EGL 系的黑屏**：因果链（表面绑到被遮窗口）是静态读出来的，但「是否真的黑」
   要以 `[A2-GLBRIDGE] EGL 就绪` + `[FRAME] clear=` 行与截图对照确认；
-- **MobileGlues 的 `glGetError` SIGBUS 根因未明**：曾经的「二进制改写为 `return 0`」shim 已在真机证伪
-  （改写后同一地址仍崩、页保护还原 `errno=13`）并整条移除 ⇒ 现在**没有任何兜底**；要么查清
-  `libmobileglues.dylib` 里那一下的根因，要么换后端/换版本。
+- **MobileGlues 的 `glGetError` SIGBUS**：曾经的「二进制改写为 `return 0`」shim 已在真机证伪
+  （改写后同一地址仍崩、页保护还原 `errno=13`）并整条移除。现有修法：MG 后端下 EGL 入口改从
+  **渲染器自己的句柄**解析（唯一判据 `a2_gl_bridge_egl_source()`；做法对齐老 Air
+  `Natives/ctxbridges/egl_bridge.m:260-285`），并按同一结论**不加载 ANGLE 的 libEGL/libGLESv2**
+  ⇒ 判据行是 `[A2-GLBRIDGE] EGL 源=MG（渲染器自带，13/13 入口）` + `[A2-GLBRIDGE] ★跳过 ANGLE 兼容底★`；
+  若退回 `[A2-GLBRIDGE] EGL 源=ANGLE（MG 缺入口：…）`，该行点名的入口就是「MG 这套 EGL 不完整」
+  的落点（也是下一条根因线索）。
 
 ---
 
