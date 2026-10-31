@@ -152,8 +152,9 @@ while (!detached) {
         const command = legacyCommands[brkImmediate];
         command(brkResponse);
     } else {
-        log(`Skipping breakpoint: brk immediate 0x${brkImmediate.toString(16)} was not handled by this script. You could add it by evaluating legacyCommands[0x${brkImmediate.toString(16)}] = yourFunction;`);
-        // ★2026-10-31 去重放行★：同一 (brk,pc) 只打一次，其余静默，继续放行。
+        // ★2026-10-31★ 原「Skipping breakpoint … You could add it by evaluating …」每停都打，
+        //   真机一次启动能刷几万条（截图实证：0xb001 反复出现）。改为与 STOP 同一套去重。
+        //   注意：这句不再输出原文，避免误导（不是「没实现」，而是重复同一处停点）。
         a2StopLogOnce('brk:' + brkImmediate.toString(16) + ':' + pc.toString(16),
                       `[A2PROBE] STOP brk=0x${brkImmediate.toString(16)} pc=0x${pc.toString(16)}（同位置后续静默）`);
         continue;
