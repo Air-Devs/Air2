@@ -941,12 +941,35 @@ static void a2_gl_bridge_force_layer_visible(void *viewPtr, void *layerPtr) {
         NSValue *lframe = [layer valueForKey:@"frame"];
         NSNumber *lhidden = [layer valueForKey:@"hidden"];
         NSNumber *lopacity = [layer valueForKey:@"opacity"];
-        a2_log_f(@"[A2-GLBRIDGE] 图层可见性核对：view=%@ inWindow=%d frame=%@ hidden=%@ alpha=%@ ｜ "
-                 @"layer=%@ frame=%@ hidden=%@ opacity=%@ z=%@",
-                 NSStringFromClass([view class]), (win != nil),
-                 [vframe description], vhidden, valpha,
-                 NSStringFromClass([layer class]), [lframe description],
-                 lhidden, lopacity, [layer valueForKey:@"zPosition"]);
+        // ★窗口链判据★（a2_log_f 不支持 %@，全部用 %s）
+        NSNumber *winHidden = nil, *winLevel = nil, *winKey = nil, *winAlpha = nil;
+        NSValue *winBounds = nil;
+        @try { winHidden = [win valueForKey:@"hidden"]; } @catch (__unused NSException *e) {}
+        @try { winLevel  = [win valueForKey:@"windowLevel"]; } @catch (__unused NSException *e) {}
+        @try { winKey    = [win valueForKey:@"isKeyWindow"]; } @catch (__unused NSException *e) {}
+        @try { winAlpha  = [win valueForKey:@"alpha"]; } @catch (__unused NSException *e) {}
+        @try { winBounds = [win valueForKey:@"bounds"]; } @catch (__unused NSException *e) {}
+        id superview = nil;
+        @try { superview = [view valueForKey:@"superview"]; } @catch (__unused NSException *e) {}
+        a2_log_f("[A2-GLBRIDGE] 图层可见性核对：view=%s inWindow=%d frame=%s hidden=%s alpha=%s ｜ "
+                 "layer=%s frame=%s hidden=%s opacity=%s z=%s",
+                 view ? [NSStringFromClass([view class]) UTF8String] : "(nil)", (win != nil),
+                 vframe ? [[vframe description] UTF8String] : "(nil)",
+                 vhidden ? [[vhidden description] UTF8String] : "(nil)",
+                 valpha ? [[valpha description] UTF8String] : "(nil)",
+                 NSStringFromClass([layer class]).UTF8String,
+                 lframe ? [[lframe description] UTF8String] : "(nil)",
+                 lhidden ? [[lhidden description] UTF8String] : "(nil)",
+                 lopacity ? [[lopacity description] UTF8String] : "(nil)",
+                 [[[layer valueForKey:@"zPosition"] description] UTF8String]);
+        a2_log_f("[A2-GLBRIDGE] ★窗口状态★ window=%s hidden=%s level=%s isKey=%s alpha=%s bounds=%s ｜ superview=%s",
+                 win ? [NSStringFromClass([win class]) UTF8String] : "(nil)",
+                 winHidden ? [[winHidden description] UTF8String] : "(nil)",
+                 winLevel ? [[winLevel description] UTF8String] : "(nil)",
+                 winKey ? [[winKey description] UTF8String] : "(nil)",
+                 winAlpha ? [[winAlpha description] UTF8String] : "(nil)",
+                 winBounds ? [[winBounds description] UTF8String] : "(nil)",
+                 superview ? [NSStringFromClass([superview class]) UTF8String] : "(nil)");
         [layer setValue:@NO forKey:@"hidden"];
         [layer setValue:@1 forKey:@"opacity"];
         [layer setValue:@1000 forKey:@"zPosition"];
