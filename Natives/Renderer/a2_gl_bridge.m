@@ -1620,31 +1620,30 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     //   MG 认成 backend library，flat namespace 的 `glTexImage2D` 就落到它，而它**没有 EGL**
     //   ⇒ MG 报 `EGL entry point eglGetDisplay is not available in the backend library` 并失败。
     //   ★唯一判据是 hostEglBackend★（= EAGL 后端），不在这里另写「后端名是不是 MG」的判断。
-    const BOOL glesFromSystemGles = (hostEglBackend != 0);
+    //   ★2026-10-31 订正（真机 lastlog-107）★：MG 的 **DirectGLES 后端要的宿主就是系统 OpenGLES**。
+    //   上一版为了「防符号被抢」主动不加载系统 GLES，结果把 MG 的宿主拆了 —— 它的宿主函数表全空，
+    //   一调 `glGetError` 就 `pc=0x0` 崩（`libmobileglues+0x3e4f8 glGetError+0x14`）。
+    //   ⇒ MG 后端恢复加载系统 OpenGLES 作为 **GL 宿主**；EGL 宿主仍是 ANGLE 的 libEGL。
+    //     即：EGL=ANGLE、GL=系统 OpenGLES、门面=MG。
+    const BOOL glesFromSystemGles = (hostEglBackend != 0) || a2BackendIsMG;
     NSString *glesPath     = glesFromSystemGles
         ? @"/System/Library/Frameworks/OpenGLES.framework/OpenGLES"
         : [frameworksPath stringByAppendingPathComponent:
            [NSString stringWithUTF8String:A2GlBridgeGlesLibraryRelPath]];
     NSString *rendererPath = [frameworksPath stringByAppendingPathComponent:
                               [NSString stringWithUTF8String:glLayerName]];
-    a2_log_f(@"[A2-GLBRIDGE] GLES 兼容底=%s（%s）%s",
+    a2_log_f(@"[A2-GLBRIDGE] GLES 兼容底=%s（%s）",
              glesFromSystemGles ? "系统 OpenGLES" : "ANGLE libGLESv2",
-             glesFromSystemGles ? "宿主 EGL / EAGL 后端上屏链" : "MG 及其它后端的宿主 GL 层",
-             (a2BackendIsMG && !hostEglBackend)
-                 ? "；MG 后端不加载系统 GLES（防它被 MG 认成 backend library）"
-                 : "");
+             glesFromSystemGles ? "MG 的 DirectGLES 宿主 / EAGL 上屏链" : "其它后端的宿主 GL 层");
+    if (a2BackendIsMG && !hostEglBackend) {
+        a2_log_criterion(@"[A2-GLBRIDGE] MG 后端：GL 宿主=系统 OpenGLES（DirectGLES 必需）；EGL 宿主=ANGLE libEGL");
+    }
     // ★判据行（真机 grep 这一行即可确认「假 EGL 层没有提前把系统 OpenGLES 带进进程」）★：
     //   MG 后端下系统的 OpenGLES.framework 一旦被任何一路 dlopen 进来，MG 就会把它当 backend
     //   library（而它没有 EGL）⇒ 报 `EGL entry point eglGetDisplay is not available…`。
     //   本层两条保证：① 本文件只在宿主 EGL 后端（libeagl.dylib）里加载系统 GLES；
     //                ② 假 EGL 层（a2_eagl_egl.m）在 engage 之前不 dlopen OpenGLES、不查 EAGLContext。
-    if (a2BackendIsMG && !hostEglBackend) {
-        // ★格式★：判据行走 ObjC 格式（initWithFormat）⇒ 布尔/中文一律 `%@`（NSString）。
-        //   曾经用 `%s` 传 UTF-8 中文字面量，真机打成 `ÊòØ`（字节按非 UTF-8 解码），已改。
-        a2_log_criterion(@"[A2-GLBRIDGE] MG 后端：未加载系统 OpenGLES（EAGL 未 engage=%@；"
-                         @"本层只加载 ANGLE libGLESv2）",
-                         a2_eagl_egl_is_engaged() ? @"否，已 engage" : @"是");
-    }
+    // （原「MG 后端：未加载系统 OpenGLES」判据行已删除 —— 见上面的订正：MG 需要系统 GLES 当宿主）
 
     // ---- ③0 ★MG：ANGLE 先行、MG 后行★ ----
     //   ★顺序（lastlog-105 的修因，★不许再反转★）★：
