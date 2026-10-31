@@ -42,6 +42,7 @@
 #include "a2_glfw_window.h"
 #include "a2_glfw_trace.h"
 #include "a2_log.h"
+#include "a2_gl_bridge.h"   // ★nSwapBuffers 用 a2_gl_bridge_swap_buffers（把游戏帧提交上屏）★
 
 #define A2_OWN_GLFW_JAVA_CLASS     "org/lwjgl/glfw/GLFW"
 #define A2_OWN_GLFW_JAVA_METHOD    "a2OwnGlfwDispatch"
@@ -235,7 +236,11 @@ JNIEXPORT void JNICALL Java_org_lwjgl_glfw_GLFW_nSwapBuffers
   (JNIEnv* env, jclass cls, jlong window) {
     (void) env;
     (void) cls;
-    // ★刻意空实现★：呈现是渲染器的事（本层与渲染后端解耦）。
+    // ★2026-10-31 真机黑屏根因★ 这里原本是空实现 ⇒ MC 每帧画完没人 swap，
+    //   画面上只有预览清屏造成的纯黑（日志里 atlas 建完、声音引擎正常、进程存活）。
+    //   ⇒ 交给 GL 桥把当前 EGL 表面 swap 上屏；桥未附着时本函数自然无操作。
+    //   渲染器仍是「谁的上下文谁画」——本层只提交，不改状态、不清屏。
+    a2_gl_bridge_swap_buffers();
     // ★[A2-GLFW-TRACE]★ 每帧都调 ⇒ 只打前 20 次（超过 100ms 的慢调用另计，不受限）。
     static unsigned long trSwapN = 0;
     unsigned long n = ++trSwapN;

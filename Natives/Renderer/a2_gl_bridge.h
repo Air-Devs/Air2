@@ -120,6 +120,11 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath);
 ///
 /// ★调用点唯一★：`Air2/Bridge/A2LaunchRunner.m` 的 `+launchWithPlanPath:…`（基线帧循环）。
 void a2_gl_bridge_present_frame(void);
+/// ★呈现一次当前 EGL 表面★（把当前上下文里画好的内容 swap 上屏）。
+/// 调用点：Natives/OwnGlfw/a2_own_glfw_bridge.m 的 nSwapBuffers（MC 每帧都会调）。
+/// 真机证据（6d4398c + 1.20.1 + MG）：nSwapBuffers 之前是空实现 ⇒ 游戏帧从未上屏，
+/// 屏幕上只有我们预览清屏造成的纯黑，而日志里 atlas/资源加载全部正常。
+void a2_gl_bridge_swap_buffers(void);
 
 /// 把已有 EGL 上下文设为调用线程的 current（GLFW 的 MakeContextCurrent 用）。
 ///

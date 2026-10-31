@@ -1486,8 +1486,13 @@ static void a2_gl_bridge_ensure_game_view_surface(void) {
 /// ★为什么清成透明 (0,0,0,0) 而不是实色★：宿主表面当前是承载游戏的宿主窗口，
 /// 实色清屏会让 UI 整块变黑（可见破坏）；透明清屏同样能证明「上下文可用」，
 /// 且视觉上通常无变化 —— 证据由 scissor 读回 + 判据行 + glGetError 承担。
+/// ★游戏是否已开始自己提交帧★（a2_gl_bridge_swap_buffers 被调用过）。
+/// 一旦为真，预览用的「清屏+swap」循环必须让路，否则会把游戏画好的帧擦成纯黑。
+static int gGamePresented = 0;
+
 static void a2_gl_bridge_frame_work(void) {
     if (!gAttached) return;
+    if (gGamePresented) return;   // 游戏在画 ⇒ 本层不再清屏/呈现
 
     // ★首次 make_current 的表面改绑★（游戏页盖在黑底上 ⇒ 必须改挂到 GLFW 宿主视图）
     a2_gl_bridge_ensure_game_view_surface();
@@ -1580,6 +1585,19 @@ int a2_gl_bridge_make_current(void) {
     //   幂等：`gMgInitGlesDone` 置位后这里就是空操作；★失败只记日志，不影响返回值★。
     if (ok) a2_gl_bridge_mg_init_gles_if_needed("首次 make_current（glfwMakeContextCurrent）成功");
     return ok ? 0 : -2;
+}
+
+/// ★供 glfwSwapBuffers 调用★：只做「把当前表面 swap 上屏」，不碰 viewport/scissor、
+/// 不清屏、不改上下文绑定 —— 内容由游戏自己画，我们只负责提交。
+void a2_gl_bridge_swap_buffers(void) {
+    if (!gAttached) return;
+    if (gEglSwapBuffers != NULL && gDpy != NULL && gSurf != NULL) {
+        if (!gGamePresented) {
+            gGamePresented = 1;   // 第一次由游戏提交 ⇒ 停掉预览清屏循环
+            a2_log_f(@"[A2-GLBRIDGE] 游戏已开始提交帧 ⇒ 预览清屏循环让路（首次 glfwSwapBuffers）");
+        }
+        gEglSwapBuffers(gDpy, gSurf);
+    }
 }
 
 void a2_gl_bridge_present_frame(void) {
