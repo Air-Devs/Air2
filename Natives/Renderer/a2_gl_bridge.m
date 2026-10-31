@@ -31,6 +31,8 @@
 #include <unistd.h>       // usleep（首次 make_current 等宿主视图就绪的有界等待）
 #include <string.h>
 #include <stdint.h>
+#include <mach-o/dyld.h>  // _dyld_image_count / _dyld_get_image_header（④a2 interpose 的目标镜像）
+#include <mach-o/loader.h>   // struct mach_header（dyld_dynamic_interpose 的第一个实参）
 
 // ---------------------------------------------------------------------------
 // 常量（判据锚点 / 库相对路径）
@@ -500,7 +502,7 @@ static void a2_gl_bridge_log_egl_layers(void) {
     } else {
         a2_log_criterion(@"[A2-GLBRIDGE] EGL 门面=ANGLE（MG 缺 %s）；"
                          @"宿主=ANGLE（libEGL/libGLESv2 已 RTLD_GLOBAL）",
-                         (gMgEglFirstMissing != NULL) ? gMgEglFirstMissing : "整套入口（未探测）");
+                         (gMgEglFirstMissing != NULL) ? gMgEglFirstMissing : "(no entry probed)");
     }
 }
 
@@ -529,8 +531,10 @@ static int a2_gl_bridge_open_renderer(const char *rendererPath) {
 //  ⇒ flat 那枚地址落在 **dyld 共享缓存**（系统 OpenGLES），不是 ANGLE。MG 把「抢到 glTexImage2D 的
 //    那个镜像」当成 backend library，而系统 GLES 没有 EGL ⇒ MG 初始化失败；本桥随后继续用空指针
 //    ⇒ SIGSEGV（`a2_gl_bridge_attach + 2860`）。
-//  ⇒ 修法两条：① ANGLE 的 libEGL/libGLESv2 ★必须在 MG 本体之前★ 以 RTLD_GLOBAL 进 flat namespace；
-//              ② MG 后端 ★不 dlopen 系统 OpenGLES★（系统 GLES 只留给宿主 EGL / EAGL 后端）。
+//  ⇒ 修法三条：① ANGLE 的 libEGL/libGLESv2 ★必须在 MG 本体之前★ 以 RTLD_GLOBAL 进 flat namespace；
+//              ② MG 后端 ★不 dlopen 系统 OpenGLES★（系统 GLES 只留给宿主 EGL / EAGL 后端）；
+//              ③ 已解析的 `gl*` 抢不回来（lastlog-11：系统 GLES 在 dyld 共享缓存里，任何 dlopen 顺序
+//                 都改不动它）⇒ 用 **dyld 动态 interpose** 把 `gl*` 改指 MG 自己的导出（见 ④a2）。
 //  ⇒ 加载完再用 `dladdr()` 逐符号核对归属 —— 不走「指针相等」那套：它只能回答「同不同源」，
 //    答不了「归哪个镜像」（lastlog-105 正是这两者分家）。
 
@@ -608,6 +612,16 @@ static const char *a2_gl_bridge_owner_label(A2GlBridgeSymbolOwner owner) {
     return "无符号";
 }
 
+/// 该归属是否「可用」（★判据只有一条：不是系统 GLES★）。
+///   · MG 后端下 flat 的 `egl*` 归 MG 是常态（MG 自带那套 `egl*` 就是门面）；
+///   · `gl*` 归 MG 是 ④a2 interpose 的**目标态**（MG 自己的导出，没有符号被抢的问题）；
+///   · 归 ANGLE 同样可用（ANGLE 是宿主，`gl*` 走它也能建面）。
+/// ★唯一不可用的是系统 OpenGLES★：它没有 EGL ⇒ MG 会自报
+///   `EGL entry point eglGetDisplay is not available in the backend library`（真机 lastlog-105 / 11）。
+static int a2_gl_bridge_owner_usable(A2GlBridgeSymbolOwner owner) {
+    return (owner == A2GlBridgeSymbolOwnerAngle || owner == A2GlBridgeSymbolOwnerMG);
+}
+
 /// 核对**一行**（调用点：`a2_gl_bridge_verify_angle_ownership` 的两行）。格式固定、便于 grep：
 ///   `[A2-GLBRIDGE] 归属核对 <符号> flat=0x… 归属=ANGLE|系统GLES|其它`
 ///   `[A2-GLBRIDGE] 归属核对 <符号> flat=0x… 归属=…（MG=0x…）`   ← 传了 MG 自带导出时才带括号
@@ -651,22 +665,24 @@ static void a2_gl_bridge_reassert_angle_global(NSString *eglPath, NSString *gles
 }
 
 /// ★两行归属核对 + 一次重试★（调用点：`a2_gl_bridge_attach` 的 ④a3，MG 后端**一次**）。
-/// 期望：MG 后端下 flat namespace 的 `eglGetDisplay` 与 `glTexImage2D` 都归 **ANGLE**
-///   （ANGLE 在 MG 之前 RTLD_GLOBAL 进全局表；MG 自己的 `gl*` 只是门面，不该再抢 flat）。
-/// 归属不是 ANGLE ⇒ 重试一次（`a2_gl_bridge_reassert_angle_global`）；仍不对 ⇒ 打 `★归属仍不对★`。
+/// 判据：flat namespace 的 `eglGetDisplay` 与 `glTexImage2D` **都不落在系统 GLES** 上
+///   （见 `a2_gl_bridge_owner_usable`：ANGLE / MG 都可用）。历史口径「必须归 ANGLE」已废：
+///   真机 lastlog-11 里 `eglGetDisplay` 归 MG 是常态（MG 自带 egl* 就是门面），
+///   而 `gl*` 归 MG 正是 ④a2 interpose 想要的结果 —— 用「必须 ANGLE」会把刚抢回来的状态再否掉。
+/// 归属不可用 ⇒ 重试一次（`a2_gl_bridge_reassert_angle_global`）；仍不可用 ⇒ 打 `★归属仍不对★`。
 ///
-/// @return 1 = 归属已对（ANGLE）；0 = 仍不对（调用方据此**退回 ANGLE 建面**，见 attach ④a4）。
-///   ★返回值只回答「MG 门面能不能用」★：归属不对时 MG 的 `egl*` 必然拿不到 backend library
-///   （真机 iOS 16.7：`归属=系统GLES` ⇒ MG 自报 `EGL entry point eglGetDisplay is not available
-///   in the backend library`），继续在它上面建面只会拿到空指针 ⇒ 崩。
+/// @return 1 = 归属可用（MG 门面可以拿来建面）；0 = 仍不可用（调用方据此**退回 ANGLE 建面**，见 attach ④a4）。
+///   ★返回值只回答「MG 门面能不能用」★：`glTexImage2D` 落在系统 GLES 时 MG 的 `egl*` 必然拿不到
+///   backend library（真机 iOS 16.7：`归属=系统GLES` ⇒ MG 自报 `EGL entry point eglGetDisplay is not
+///   available in the backend library`），继续在它上面建面只会拿到空指针 ⇒ 崩。
 static int a2_gl_bridge_verify_angle_ownership(NSString *eglPath, NSString *glesPath) {
-    // MG 自己的 `glTexImage2D` 导出（对照项，不参与判定）：flat 与它不同 ≠ 一定是问题，
-    // 但把两枚地址并排放进同一行，才能一眼看出「MG 是不是把自己的导出丢了」。
+    // MG 自己的 `glTexImage2D` 导出（对照项，不参与判定）：flat 与它相同 ⇒ 说明 ④a2 的 interpose 生效了。
     void *mgGlTexImage2D = (gRendererHandle != NULL) ? dlsym(gRendererHandle, "glTexImage2D") : NULL;
     A2GlBridgeSymbolOwner eglOwner = a2_gl_bridge_log_owner("eglGetDisplay", NULL);
     A2GlBridgeSymbolOwner glOwner  = a2_gl_bridge_log_owner("glTexImage2D", mgGlTexImage2D);
-    if (eglOwner == A2GlBridgeSymbolOwnerAngle && glOwner == A2GlBridgeSymbolOwnerAngle) {
-        a2_log_criterion(@"[A2-GLBRIDGE] 归属核对结论：flat namespace 归 ANGLE（门面=MG / 宿主=ANGLE）");
+    if (a2_gl_bridge_owner_usable(eglOwner) && a2_gl_bridge_owner_usable(glOwner)) {
+        a2_log_criterion(@"[A2-GLBRIDGE] 归属核对结论：EGL=%s / GL=%s（★都不是系统 GLES★）⇒ 门面=MG 可用（宿主=ANGLE）",
+                         a2_gl_bridge_owner_label(eglOwner), a2_gl_bridge_owner_label(glOwner));
         return 1;
     }
     a2_log_f(@"[A2-GLBRIDGE] 归属不对（eglGetDisplay=%s / glTexImage2D=%s）⇒ 重试一次",
@@ -674,14 +690,184 @@ static int a2_gl_bridge_verify_angle_ownership(NSString *eglPath, NSString *gles
     a2_gl_bridge_reassert_angle_global(eglPath, glesPath);
     A2GlBridgeSymbolOwner eglOwnerRetry = a2_gl_bridge_log_owner("eglGetDisplay", NULL);
     A2GlBridgeSymbolOwner glOwnerRetry  = a2_gl_bridge_log_owner("glTexImage2D", mgGlTexImage2D);
-    if (eglOwnerRetry == A2GlBridgeSymbolOwnerAngle && glOwnerRetry == A2GlBridgeSymbolOwnerAngle) {
-        a2_log_criterion(@"[A2-GLBRIDGE] 归属核对结论（重试后）：flat namespace 归 ANGLE");
+    if (a2_gl_bridge_owner_usable(eglOwnerRetry) && a2_gl_bridge_owner_usable(glOwnerRetry)) {
+        a2_log_criterion(@"[A2-GLBRIDGE] 归属核对结论（重试后）：EGL=%s / GL=%s（★都不是系统 GLES★）",
+                         a2_gl_bridge_owner_label(eglOwnerRetry), a2_gl_bridge_owner_label(glOwnerRetry));
         return 1;
     }
     a2_log_f(@"[A2-GLBRIDGE] ★归属仍不对★ eglGetDisplay=%s / glTexImage2D=%s ⇒ 不阻断启动，"
              @"但 MG 门面不再用来建面（见下一行「退回 ANGLE 建面」）",
              a2_gl_bridge_owner_label(eglOwnerRetry), a2_gl_bridge_owner_label(glOwnerRetry));
     return 0;
+}
+
+// ---------------------------------------------------------------------------
+//  ★dyld 动态 interpose：把 flat namespace 里的 `gl*` 抢回 MG★（attach ④a2）
+// ---------------------------------------------------------------------------
+//  真机 lastlog-11（1.20.1 + MG + java-21，包 cd148e2）：
+//    `归属核对 eglGetDisplay flat=0x12a50decc 归属=MG`
+//    `归属核对 glTexImage2D flat=0x26a9eacf4 归属=系统GLES（MG=0x12a4d9a84）`
+//    `★归属仍不对★ ⇒ ★退回 ANGLE 建面★`（存活 96s 不崩，但屏上无画面）
+//  ⇒ `0x26a9eacf4` 落在 **dyld 共享缓存**里的 `OpenGLES.framework`：共享缓存早于任何 dylib 映射，
+//    flat namespace 里它永远排在前面 ⇒「先加载 ANGLE」（③0）与「dlclose 系统 GLES」
+//    （`a2_gl_bridge_reassert_angle_global` ①）都改不动已解析的绑定 —— 两次实测无效。
+//  ⇒ 还剩一条能改绑定的手段：dyld 的动态 interpose（libdyld 导出、私有头 `dyld_priv.h` 口径：
+//    `{replacement, replacee}` 元组表 + 目标镜像的 mach_header ⇒「Update all bindings on specified image」）。
+//    本层用它把 `gl*` 的解析结果/绑定点改指 MG **自己的导出**。
+//  ★符号只在私有头里、公开 SDK 不声明★ ⇒ 一律 `dlsym` 取函数指针；取不到就如实打日志、保持原回退。
+
+/// 一条 interpose 元组（= `dyld_priv.h` 的 `struct dyld_interpose_tuple`；本层不 import 私有头，
+/// 只按它公开的字段顺序自声明，属事实性 ABI 约定）。
+typedef struct {
+    const void *replacement;   ///< 新实现：MG 自己的导出（`dlsym(gRendererHandle, …)`）
+    const void *replacee;      ///< 被替换的旧实现：当前 flat namespace 里那枚（= 系统 GLES）
+} A2GlBridgeInterposeTuple;
+
+/// `dyld_dynamic_interpose` 的函数原型（★私有符号★，见 https://…/dyld_priv.h，不链接、只 dlsym）。
+typedef void (*A2PFN_dyld_dynamic_interpose)(const struct mach_header *mh,
+                                             const A2GlBridgeInterposeTuple *array,
+                                             size_t count);
+
+/// ★参与 interpose 的 GL 入口清单★：MG 后端建面/绘制主路径上的 `gl*`（顺序即日志顺序）。
+/// 只放**MG 自己导出**的入口：`replacement` 取不到就跳过（见 `a2_gl_bridge_interpose_gl_to_mg` 的计数）。
+/// ★不加 `egl*`★：MG 的 `egl*` 只是门面，宿主是 ANGLE，把 `egl*` 也改指 MG 会绕开宿主。
+static const char *const kMgInterposeEntryNames[] = {
+    "glTexImage2D", "glDrawArrays", "glDrawElements",
+    "glGenTextures", "glBindTexture", "glTexParameteri",
+    "glGenBuffers", "glBindBuffer", "glBufferData",
+    "glCreateShader", "glShaderSource", "glCompileShader",
+    "glCreateProgram", "glAttachShader", "glLinkProgram", "glUseProgram",
+    "glGetUniformLocation", "glGetAttribLocation", "glUniformMatrix4fv",
+    "glVertexAttribPointer", "glEnableVertexAttribArray",
+    "glGenFramebuffers", "glBindFramebuffer", "glFramebufferTexture2D",
+    "glGenRenderbuffers", "glBindRenderbuffer", "glRenderbufferStorage",
+    "glViewport", "glScissor", "glEnable", "glDisable",
+    "glClear", "glClearColor", "glReadPixels", "glGetError",
+    "glGetIntegerv", "glGetString", "glPixelStorei",
+    "glBlendFunc", "glDepthFunc", "glCullFace",
+    "glDeleteTextures", "glDeleteBuffers", "glDeleteShader", "glDeleteProgram",
+    NULL
+};
+
+/// ★元组表存活期★：dyld 只保存指向这张表的**指针**（`dyld_priv.h` 未承诺拷贝）⇒ 必须静态存储，
+/// 不能放栈上。表长 = 清单长度（含 NULL 结尾项，多出的那格不用）。
+static A2GlBridgeInterposeTuple gMgInterposeTuples[
+    sizeof(kMgInterposeEntryNames) / sizeof(kMgInterposeEntryNames[0])];
+
+/// interpose 的安装状态（★幂等★：attach 重试时不重复装第二遍）。
+/// 0 = 未尝试；1 = 已装且归属已翻转；2 = 不可用 / 装上了但归属没翻转（两种情况都走 ④a4 的原回退）。
+static int gMgInterposeState = 0;
+
+/// 取 `dyld_dynamic_interpose` 函数指针（★私有符号：公开 SDK 不声明、也不能链接★）。
+/// 两路：① `dlsym(RTLD_DEFAULT)`（libdyld 常驻，flat 查找就能命中）；
+///       ② 已加载的 libdyld 句柄（`RTLD_NOLOAD` 只取句柄、不触发加载），句柄由紧跟的 `dlclose` 配平。
+/// @return NULL = 该系统的 libdyld 没导出这个符号（调用方据此走原回退）。
+static A2PFN_dyld_dynamic_interpose a2_gl_bridge_resolve_dyld_interpose(void) {
+    void *sym = dlsym(RTLD_DEFAULT, "dyld_dynamic_interpose");
+    if (sym == NULL) {
+        void *dyldHandle = dlopen("/usr/lib/libdyld.dylib", RTLD_LAZY | RTLD_NOLOAD);
+        if (dyldHandle != NULL) {
+            sym = dlsym(dyldHandle, "dyld_dynamic_interpose");
+            dlclose(dyldHandle);   // ★配平 NOLOAD 的引用★（libdyld 常驻，不会真被卸）
+        }
+    }
+    return (A2PFN_dyld_dynamic_interpose)sym;
+}
+
+/// MG 镜像的 `mach_header`（★唯一取法：任一 MG 导出的地址 → `dladdr` 的 `dli_fbase`★；
+/// 与 Chromium / 老 Air 在 `dyld_dynamic_interpose` 上的取法一致，不去扫 `_dyld_get_image_header` 猜名字）。
+/// @return NULL = MG 未加载或没有可用导出（调用方据此放弃 interpose）。
+static const struct mach_header *a2_gl_bridge_mg_image_header(void) {
+    if (gRendererHandle == NULL) return NULL;
+    void *anyExport = dlsym(gRendererHandle, "glTexImage2D");
+    if (anyExport == NULL) return NULL;
+    Dl_info info;
+    memset(&info, 0, sizeof(info));
+    if (dladdr(anyExport, &info) == 0 || info.dli_fbase == NULL) return NULL;
+    return (const struct mach_header *)info.dli_fbase;
+}
+
+/// 该镜像是否参与 interpose（★只改「本进程自己加载的镜像」★）：
+///   · 跳过 dyld 共享缓存（`/System/`、`/usr/lib/`）：那里的页是**跨进程共享**的，改绑定点不安全，
+///     而且系统 OpenGLES 正是我们要顶掉的那一份；
+///   · 跳过 ANGLE 两份（宿主）：它们内部必须调自己的实现，改指 MG 才是真错乱。
+static int a2_gl_bridge_image_interposable(const char *path) {
+    if (path == NULL || path[0] == '\0') return 0;
+    if (strncmp(path, "/System/", 8) == 0) return 0;
+    if (strncmp(path, "/usr/lib/", 9) == 0) return 0;
+    if (strstr(path, "libEGL.framework") != NULL || strstr(path, "libGLESv2.framework") != NULL) return 0;
+    return 1;
+}
+
+/// ★安装 `gl*` → MG 的动态 interpose★（调用点：`a2_gl_bridge_attach` 的 ④a2，MG 后端**一次**）。
+/// 做两件事（对齐 dyld 的两种生效路径，哪条能通都算成功）：
+///   ① 建元组表 `{replacement=MG 导出, replacee=当前 flat 那枚}` ⇒ 之后 flat 查找（dlsym）能命中 MG；
+///   ② 逐个「本进程自己加载的镜像」调 `dyld_dynamic_interpose` ⇒ 已解析的绑定点改指 MG
+///      （dyld 口径是逐镜像改，不是全局；共享缓存/ANGLE 见 `a2_gl_bridge_image_interposable`）。
+/// ★失败即回退，不阻断、不崩★：取不到函数指针 / 取不到 MG 的 mach_header / 元组表为空 ⇒ 打
+///   `★interpose 不可用★`；装上了但 flat 归属没翻转 ⇒ 打「已装但归属未翻转」。两种都保持
+///   attach ④a4 的「退回 ANGLE 建面」。★幂等★：装过就不再装。
+static void a2_gl_bridge_interpose_gl_to_mg(void) {
+    if (gMgInterposeState != 0) return;
+    gMgInterposeState = 2;   // ★先按「没成」记账★：下面任何一步失败都落在这条，成功才改 1
+
+    A2PFN_dyld_dynamic_interpose interpose = a2_gl_bridge_resolve_dyld_interpose();
+    if (interpose == NULL) {
+        a2_log_criterion(@"[A2-GLBRIDGE] ★interpose 不可用★ 取不到 dyld_dynamic_interpose"
+                         @"（RTLD_DEFAULT 与 libdyld 句柄都试过）⇒ 保持「退回 ANGLE 建面」，不崩");
+        return;
+    }
+    const struct mach_header *mgHeader = a2_gl_bridge_mg_image_header();
+    if (mgHeader == NULL) {
+        a2_log_criterion(@"[A2-GLBRIDGE] ★interpose 不可用★ 取不到 MG 的 mach_header"
+                         @"（dlsym/dladdr 都拿不到 MG 导出）⇒ 保持「退回 ANGLE 建面」，不崩");
+        return;
+    }
+
+    // ---- 元组表：MG 有该导出、且与 flat 那枚不同源才收（同源 = 已经指向 MG，收了也是空转）----
+    size_t count = 0, skipped = 0;
+    const int namesTotal = (int)(sizeof(kMgInterposeEntryNames) / sizeof(kMgInterposeEntryNames[0])) - 1;
+    for (int i = 0; i < namesTotal; i++) {
+        void *replacement = dlsym(gRendererHandle, kMgInterposeEntryNames[i]);
+        void *replacee    = dlsym(RTLD_DEFAULT,    kMgInterposeEntryNames[i]);
+        if (replacement == NULL || replacee == NULL || replacement == replacee) { skipped++; continue; }
+        gMgInterposeTuples[count].replacement = replacement;
+        gMgInterposeTuples[count].replacee    = replacee;
+        count++;
+    }
+    if (count == 0) {
+        a2_log_criterion(@"[A2-GLBRIDGE] ★interpose 不可用★ 元组表为空（清单 %d 条全被跳过："
+                         @"MG 无该导出或已与 flat 同源）⇒ 保持「退回 ANGLE 建面」，不崩", namesTotal);
+        return;
+    }
+    a2_log_f(@"[A2-GLBRIDGE] interpose 表：%d 条（清单 %d 条 / 跳过 %d 条）；MG mach_header=%p",
+             (int)count, namesTotal, (int)skipped, (const void *)mgHeader);
+
+    // ---- 逐镜像安装（★快照式遍历★：attach 在启动链单线程段内，遍历期间不会有新镜像加载）----
+    int images = 0;
+    const uint32_t total = _dyld_image_count();
+    for (uint32_t i = 0; i < total; i++) {
+        const struct mach_header *hdr = _dyld_get_image_header(i);
+        if (hdr == NULL) continue;
+        if (!a2_gl_bridge_image_interposable(_dyld_get_image_name(i))) continue;
+        interpose(hdr, gMgInterposeTuples, count);
+        images++;
+    }
+    a2_log_f(@"[A2-GLBRIDGE] interpose 已安装：%d 条元组 × %d 个镜像（共 %u 个镜像，其余因共享缓存/ANGLE 跳过）",
+             (int)count, images, (unsigned)total);
+
+    // ---- 生效判据：flat 里 `glTexImage2D` 是否已归 MG（唯一可判据的事实；不猜）----
+    void *flat = NULL;
+    A2GlBridgeSymbolOwner owner = a2_gl_bridge_symbol_owner("glTexImage2D", &flat);
+    if (owner == A2GlBridgeSymbolOwnerMG) {
+        gMgInterposeState = 1;
+        a2_log_criterion(@"[A2-GLBRIDGE] interpose 生效：glTexImage2D flat=%p 归属=MG（%d 个入口）",
+                         flat, (int)count);
+        return;
+    }
+    a2_log_criterion(@"[A2-GLBRIDGE] interpose 已装但归属未翻转：glTexImage2D flat=%p 归属=%s（%d 个入口）"
+                     @"⇒ 保持「退回 ANGLE 建面」，不崩",
+                     flat, a2_gl_bridge_owner_label(owner), (int)count);
 }
 
 /// 当前后端是否 = ★NG-GL4ES / KW★（那一支需要宿主「注册解析器 + 显式初始化」）。
@@ -1453,9 +1639,11 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     //   本层两条保证：① 本文件只在宿主 EGL 后端（libeagl.dylib）里加载系统 GLES；
     //                ② 假 EGL 层（a2_eagl_egl.m）在 engage 之前不 dlopen OpenGLES、不查 EAGLContext。
     if (a2BackendIsMG && !hostEglBackend) {
-        a2_log_criterion(@"[A2-GLBRIDGE] MG 后端：未加载系统 OpenGLES（EAGL 未 engage=%s；"
+        // ★格式★：判据行走 ObjC 格式（initWithFormat）⇒ 布尔/中文一律 `%@`（NSString）。
+        //   曾经用 `%s` 传 UTF-8 中文字面量，真机打成 `ÊòØ`（字节按非 UTF-8 解码），已改。
+        a2_log_criterion(@"[A2-GLBRIDGE] MG 后端：未加载系统 OpenGLES（EAGL 未 engage=%@；"
                          @"本层只加载 ANGLE libGLESv2）",
-                         a2_eagl_egl_is_engaged() ? "否，已 engage" : "是");
+                         a2_eagl_egl_is_engaged() ? @"否，已 engage" : @"是");
     }
 
     // ---- ③0 ★MG：ANGLE 先行、MG 后行★ ----
@@ -1558,6 +1746,14 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     // ★两层判据行 / 兼容底判据行 都放在 ④a3·④a4 之后★：归属核对可能把门面从 MG 退回 ANGLE，
     //   这两行必须报**定稿后**的事实（否则会印「门面=MG」而实际建面用的是 ANGLE）。
     if (a2BackendIsMG && !hostEglBackend) {
+        // ---- ④a2 ★dyld 动态 interpose：把 gl* 抢回 MG★（MG 后端专有）----
+        //   真机 lastlog-11：flat 的 `glTexImage2D` 落在 **dyld 共享缓存**里的系统 OpenGLES 上，
+        //   而共享缓存永远排在 dylib 之前 ⇒「ANGLE 先行」（③0）与「dlclose 系统 GLES」
+        //   （① 的 reassert）都改不动它（两次实测无效）。这里换成 dyld 的 interpose 改绑定：
+        //   `gl*` 改指 MG 自己的导出 ⇒ MG 不再是「符号被偷」的那一方。
+        //   ★装不上 / 装了没翻转都不阻断★：④a3 仍是唯一否决点，④a4 照旧「退回 ANGLE 建面」。
+        a2_gl_bridge_interpose_gl_to_mg();
+
         // ---- ④a3 ★归属核对（dladdr）★（MG 后端专有）----
         //   取代旧的「后端导出指针 == flat 指针」比法：那个比法只能回答「同不同源」，
         //   而且在 ANGLE 先加载后必然报「被抢走」（false alarm）—— 它答不了「归哪个镜像」。
