@@ -966,11 +966,11 @@ static void *a2_gl_bridge_metal_layer_for(void *renderable) {
     NSNumber *viewHidden = [host valueForKey:@"hidden"];
     NSNumber *viewAlpha = [host valueForKey:@"alpha"];
     NSLog(@"[A2-GLBRIDGE] Metal 层可见性：frame=%s hidden=%d opacity=%d 父层=%@ ｜ 宿主 frame=%s hidden=%d alpha=%.2f window=%@",
-          frameVal ? [NSStringFromRect([frameVal rectValue]) UTF8String] : "(nil)",
+          frameVal ? [[frameVal description] UTF8String] : "(nil)",
           hiddenVal ? hiddenVal.intValue : -1,
           opacityVal ? opacityVal.intValue : -1,
           superlayer ? NSStringFromClass([superlayer class]) : @"(nil)",
-          hostFrameVal ? [NSStringFromRect([hostFrameVal rectValue]) UTF8String] : "(nil)",
+          hostFrameVal ? [[hostFrameVal description] UTF8String] : "(nil)",
           viewHidden ? viewHidden.intValue : -1,
           viewAlpha ? viewAlpha.doubleValue : -1.0,
           hostWindow ? NSStringFromClass([hostWindow class]) : @"(nil)");
