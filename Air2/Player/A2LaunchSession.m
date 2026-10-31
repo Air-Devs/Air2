@@ -758,10 +758,25 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                     NSString *mgDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
                     NSString *mgLog = [NSString stringWithFormat:@"%@/mobilegl.log", mgDir ?: NSTemporaryDirectory()];
                     setenv("MOBILEGL_LOG_FILE_PATH", mgLog.UTF8String, 1);
-                    [A2Log criterion:@"[A2-AGENT] MG 后端：MOBILEGL_BACKEND_TYPE=DirectGLES log=%@", mgLog];
+
+                    // ★2026-10-31 真机 lastlog-106 证据★
+                    //   MG 崩溃 `glGetError+0x14 pc=0x0`，根因是它自己的宿主函数表为空：
+                    //   `EGL entry point eglGetDisplay is not available in the backend library`。
+                    //   MG 二进制里带 `MG_DIRECTORY_PATH` / `MG_DIR_PATH` 两个目录变量 —— 指向
+                    //   App 的 Frameworks（内含 libEGL.framework / libGLESv2.framework），
+                    //   让 MG 自己按名字加载 ANGLE 当宿主，不再依赖 flat namespace（dyld 共享缓存抢不过）。
+                    NSString *fwDir = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"Frameworks"];
+                    if (fwDir.length) {
+                        setenv("MG_DIRECTORY_PATH", fwDir.UTF8String, 1);
+                        setenv("MG_DIR_PATH", fwDir.UTF8String, 1);
+                    }
+                    [A2Log criterion:@"[A2-AGENT] MG 后端：MOBILEGL_BACKEND_TYPE=DirectGLES log=%@ dir=%@",
+                     mgLog, fwDir ?: @"(nil)"];
                 } else {
                     unsetenv("MOBILEGL_BACKEND_TYPE");
                     unsetenv("MOBILEGL_LOG_FILE_PATH");
+                    unsetenv("MG_DIRECTORY_PATH");
+                    unsetenv("MG_DIR_PATH");
                 }
             }
         }
