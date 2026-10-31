@@ -441,6 +441,47 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
     NSString *tmpDir = NSTemporaryDirectory();
     NSString *planPath = [gameDir stringByAppendingPathComponent:@"air2-launch-plan.json"];
 
+    // ★2026-10-31 真机「黑屏 + 无声」根因之一★
+    //   日志：`[A2-GLFW] 焦点变化 window=1 focused=0`；options.txt 里 `pauseOnLostFocus:true`。
+    //   MC 在窗口失焦时会暂停整个游戏循环 ⇒ 既不出帧（黑屏），也不出声（sound engine 已 started 但 paused）。
+    //   我们的 GLFW 宿主窗口本来就没有系统焦点概念（UIWindow 背后是游戏视图），
+    //   所以这里在启动前把 MC 自己的选项改成不因失焦暂停。只动这一个键，其余原样保留。
+    {
+        NSString *optPath = [gameDir stringByAppendingPathComponent:@"options.txt"];
+        NSMutableString *txt = nil;
+        if ([[NSFileManager defaultManager] fileExistsAtPath:optPath]) {
+            txt = [NSMutableString stringWithContentsOfFile:optPath
+                                                   encoding:NSUTF8StringEncoding
+                                                      error:NULL];
+        }
+        if (txt == nil) txt = [NSMutableString string];
+        NSString *key = @"pauseOnLostFocus:";
+        BOOL touched = NO;
+        if ([txt rangeOfString:key].location != NSNotFound) {
+            NSRegularExpression *re =
+                [NSRegularExpression regularExpressionWithPattern:@"(?m)^pauseOnLostFocus:.*$"
+                                                          options:0 error:nil];
+            NSRange all = NSMakeRange(0, txt.length);
+            if ([re numberOfMatchesInString:txt options:0 range:all] > 0) {
+                [re replaceMatchesInString:txt options:0 range:all
+                                withTemplate:@"pauseOnLostFocus:false"];
+                touched = YES;
+            }
+        } else {
+            if (txt.length > 0 && ![txt hasSuffix:@"\n"]) [txt appendString:@"\n"];
+            [txt appendString:@"pauseOnLostFocus:false\n"];
+            touched = YES;
+        }
+        if (touched) {
+            NSError *wErr = nil;
+            if ([txt writeToFile:optPath atomically:YES encoding:NSUTF8StringEncoding error:&wErr]) {
+                [A2Log criterion:@"[A2-OPTIONS] pauseOnLostFocus 已置 false（避免失焦暂停 ⇒ 黑屏/无声）path=%@", optPath];
+            } else {
+                [A2Log log:@"[A2-OPTIONS] 写 options.txt 失败（不阻断启动）：%@", wErr.localizedDescription];
+            }
+        }
+    }
+
     if (![NSFileManager.defaultManager fileExistsAtPath:entryJar]) {
         finish(NO, 0, [NSString stringWithFormat:@"包内缺启动核心 %@", A2LaunchJavaEntryJarName]);
         return;
