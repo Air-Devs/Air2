@@ -211,6 +211,15 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
         [a2Session setActive:YES error:&a2AudioErr];
         [A2Log criterion:@"[A2-AUDIO] 会话激活 category=playback active=YES err=%@",
          a2AudioErr.localizedDescription ?: @"(none)"];
+
+        // ★2026-11-01 无声音★ 设备初始化成功（CoreAudio Default）但没有任何输出，
+        //   需要 openal-soft 自己的日志才能判断是后端没出音还是源没播放。
+        //   ALSOFT_LOGLEVEL=3（debug）+ 日志落 Documents，随 lastlog 一起导出。
+        NSString *alDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+        NSString *alLog = [NSString stringWithFormat:@"%@/openal.log", alDir ?: NSTemporaryDirectory()];
+        setenv("ALSOFT_LOGLEVEL", "3", 1);
+        setenv("ALSOFT_LOGFILE", alLog.UTF8String, 1);
+        [A2Log criterion:@"[A2-AUDIO] openal 日志已开启 path=%@", alLog];
     }
 
     void (^finish)(BOOL, NSInteger, NSString *) = ^(BOOL started, NSInteger rc, NSString *message) {

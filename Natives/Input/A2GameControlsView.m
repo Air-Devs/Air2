@@ -1514,7 +1514,9 @@ static int a2_touchSeen = 0;
     if (first == -1) { a2_glfw_input_post_mouse_button(_window, 0, 1); a2_glfw_input_post_mouse_button(_window, 0, 0); return; }
     if (first == -2) { a2_glfw_input_post_mouse_button(_window, 1, 1); a2_glfw_input_post_mouse_button(_window, 1, 0); return; }
 
-    a2_log_f(@"[A2-CONTROLS] 按键合成 cid=%@ keys=%@ window=%ld", cid, codes, _window);
+    a2_log_f(@"[A2-CONTROLS] 按键合成 cid=%s keys=%s window=%ld",
+             cid ? cid.UTF8String : "(nil)",
+             [[codes description] UTF8String] ?: "(nil)", (long)_window);
     // ★组合键 = 锁存式★ 对应 Minecraft「按住 F3 + 单点 F4」的用法：
     //   第 1 次点 → F3 按下并保持；之后每点一次 → 只点一下 F4；长按 → 松开 F3。
     NSNumber *modifier = codes.firstObject;
