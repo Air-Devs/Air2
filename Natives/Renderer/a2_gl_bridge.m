@@ -1010,6 +1010,16 @@ static void *a2_gl_bridge_metal_layer_for(void *renderable) {
     if (scale <= 0.0) scale = 1.0;
     [layer setValue:@(scale) forKey:@"contentsScale"];
 
+    // ★2026-11-01 黑屏根因（对齐老 Air Task52）★ 新建的 CAMetalLayer 只设 frame 不够：
+    //   老 Air 明确维护「drawableSize == surface 像素尺寸」这一不变量
+    //   （tree510/Natives/ctxbridges/gl_bridge.m:572-576/863）。
+    //   我们此前没设 ⇒ drawableSize 恒 0 ⇒ ANGLE 的交换链没有可呈现目标，
+    //   于是 eglSwapBuffers 返回 EGL_SUCCESS 却什么都上不了屏。
+    if (gWidthPixels > 0 && gHeightPixels > 0) {
+        a2_gl_bridge_align_drawable((__bridge void *)layer, gWidthPixels, gHeightPixels,
+                                    0, (float)scale);
+    }
+
     SEL addSel = sel_registerName("addSublayer:");
     if ([host respondsToSelector:addSel]) {
         [host performSelector:addSel withObject:layer];
