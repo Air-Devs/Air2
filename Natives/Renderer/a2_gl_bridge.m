@@ -1016,6 +1016,49 @@ static void *a2_gl_bridge_metal_layer_for(void *renderable) {
     } else {
         return renderable;
     }
+    // ★宿主视图所在窗口的状态 + 必要时搬到 keyWindow★
+    //   真机 481d8ce：delegate=A2GlfwView 且 window=UIWindow，但画面全黑 ⇒
+    //   说明视图在某个窗口里却不是"正在显示的那个窗口"（隐藏/非 key/层级被压）。
+    {
+        id dv = [host valueForKey:@"delegate"];          // CALayer.delegate 就是拥有它的 view
+        id dw = nil;
+        @try { dw = [dv valueForKey:@"window"]; } @catch (__unused NSException *e) { dw = nil; }
+        if (dv != nil && dw != nil) {
+            NSNumber *wh = [dw valueForKey:@"hidden"];
+            NSNumber *wl = [dw valueForKey:@"windowLevel"];
+            NSNumber *wk = [dw valueForKey:@"isKeyWindow"];
+            NSValue  *wb = [dw valueForKey:@"bounds"];
+            a2_log_f(@"[A2-GLBRIDGE] ★游戏窗口状态★ window=%s hidden=%s level=%s isKey=%s bounds=%s",
+                     [NSStringFromClass([dw class]) UTF8String],
+                     wh ? [[wh description] UTF8String] : "(nil)",
+                     wl ? [[wl description] UTF8String] : "(nil)",
+                     wk ? [[wk description] UTF8String] : "(nil)",
+                     wb ? [[wb description] UTF8String] : "(nil)");
+            // 不是 key 或隐藏 ⇒ 搬到 keyWindow（真正在屏上的那个窗口）
+            Class appCls = NSClassFromString(@"UIApplication");
+            id app = nil;
+            if (appCls != Nil) {
+                SEL sh = sel_registerName("sharedApplication");
+                if ([appCls respondsToSelector:sh]) app = [appCls performSelector:sh];
+            }
+            id keyWin = nil;
+            @try { keyWin = [app valueForKey:@"keyWindow"]; } @catch (__unused NSException *e) {}
+            BOOL needMove = (keyWin != nil) && (keyWin != dw) &&
+                            (wk == nil || wk.boolValue == NO || (wh != nil && wh.boolValue));
+            if (needMove) {
+                NSValue *kb = [keyWin valueForKey:@"bounds"];
+                if (kb != nil) [dv setValue:kb forKey:@"frame"];
+                SEL addSub = sel_registerName("addSubview:");
+                if ([keyWin respondsToSelector:addSub]) {
+                    [keyWin performSelector:addSub withObject:dv];
+                    a2_log_f(@"[A2-GLBRIDGE] ★游戏视图已搬入 keyWindow★ key=%s bounds=%s",
+                             [NSStringFromClass([keyWin class]) UTF8String],
+                             kb ? [[kb description] UTF8String] : "(nil)");
+                }
+            }
+        }
+    }
+
     // ★宿主层是否真在窗口里（2026-10-31 真机）★
     //   CALayer 的 delegate 就是拥有它的 view；若那个 view 的 window 为 nil，
     //   说明这层根本不在任何窗口上 ⇒ 画得再对也不会被合成（现象：hidden=0 opacity=1 却全黑）。
