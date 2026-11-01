@@ -35,6 +35,96 @@
 #import "A2CrashReportViewController.h"
 #import "A2PairingKeepAlive.h"   // [PAIRWIRE-KEEPALIVE] 配对期间保活
 #import "A2RendererImporter.h"  // 导入的渲染器插件：启动时扫一遍（见 docs/RENDERER_PLUGIN_SPEC.md）
+#import "A2LaunchOverlay.h"     // 启动遮罩：游戏异常退出时先收掉它（崩溃页要看得见）
+#import "A2LaunchAlertPresenter.h"   // 宿主查找的唯一实现（+topViewController）
+#import "A2VersionManager.h"    // A2Version.gameDirectory：crash-reports 落在实例目录下
+
+#pragma mark - 游戏异常退出（崩溃遮罩）
+
+/// native 广播名。发出点只有一处：Natives/Context/a2_launch.m 的「主类 main 返回」
+/// （JVM 已建好 + 主类已派发之后才可能走到）。用户信息：@"code" → NSNumber（退出码）。
+static NSString *const A2GameExitedNotificationName = @"A2GameExitedNotification";
+
+/// 最新一份崩溃报告（<实例游戏目录>/crash-reports 下修改时间最新的 .txt）；没有则 nil。
+/// 目录口径取 A2Version.gameDirectory（版本隔离在这里生效，与启动链同一处取值）。
+static NSString *A2NewestCrashReportPath(void) {
+    NSString *gameDir = A2VersionManager.shared.currentVersion.gameDirectory
+                        ?: A2VersionManager.shared.gameHome;
+    if (gameDir.length == 0) return nil;
+
+    NSString *dir = [gameDir stringByAppendingPathComponent:@"crash-reports"];
+    NSArray<NSString *> *names = [NSFileManager.defaultManager contentsOfDirectoryAtPath:dir
+                                                                                   error:NULL];
+    NSString *best = nil;
+    NSDate *bestDate = nil;
+    for (NSString *name in names) {
+        if (![name.pathExtension isEqualToString:@"txt"]) continue;   // 只认文本报告
+        NSString *full = [dir stringByAppendingPathComponent:name];
+        NSDate *mtime = [NSFileManager.defaultManager attributesOfItemAtPath:full
+                                                                      error:NULL][NSFileModificationDate];
+        if (mtime == nil) continue;
+        if (bestDate == nil || [mtime compare:bestDate] == NSOrderedDescending) {
+            best = full;
+            bestDate = mtime;
+        }
+    }
+    return best;
+}
+
+/// 游戏退出（主类 main 返回）⇒ 按退出码分流。★必须主线程★（要动 UIKit / Auto Layout）。
+///   0  ⇒ 用户主动退出：收起游戏页回启动器 —— 不出遮罩、不写 [A2-CRASH-UI]（正常退出不受影响）。
+///   ≠0 ⇒ ★崩溃遮罩★：标题「游戏崩溃了」+ 退出码 + 崩溃报告路径 + 「重启启动器」「返回启动器」。
+/// 与既有启动失败页（A2LaunchSession 的 a2_presentLaunchFailure…）不重叠：那条路只在
+/// 「VM 没起来」时走，本函数只在「VM 起来之后 main 返回」时走。
+static void A2HandleGameExited(NSInteger code) {
+    if (![NSThread isMainThread]) {
+        dispatch_async(dispatch_get_main_queue(), ^{ A2HandleGameExited(code); });
+        return;
+    }
+    // ★宿主查找复用唯一实现★：`A2LaunchAlertPresenter +topViewController`（场景感知的
+    //   key window → 沿 presentedViewController 逐层下钻）。本文件不留第二份拷贝。
+    UIViewController *top = [A2LaunchAlertPresenter topViewController];
+    if (top == nil) {
+        [A2Log criterion:@"[A2-CRASH-UI] 游戏退出但没有可用宿主（exitCode=%ld，不出遮罩）", (long)code];
+        return;
+    }
+    // 收起用「启动器根 VC」：从它 dismiss 一次，游戏页（它呈现的那一页）+ 其上的页面一起消失。
+    UIViewController *root = top;
+    while (root.presentingViewController != nil) root = root.presentingViewController;
+
+    if (code == 0) {
+        [A2Log log:@"[A2-LAUNCH] 游戏正常退出（exitCode=0）⇒ 回到启动器"];
+        [A2LaunchOverlay hide];
+        [root dismissViewControllerAnimated:YES completion:nil];
+        return;
+    }
+
+    NSString *reportPath = A2NewestCrashReportPath();
+    [A2Log criterion:@"[A2-CRASH-UI] 游戏异常退出 exitCode=%ld 报告=%@",
+     (long)code, reportPath ?: @"(无)"];
+
+    // 正文：有崩溃报告就读它（截尾 4000 字）；没有就看本次会话日志的尾巴。
+    NSString *text = nil;
+    if (reportPath.length) {
+        text = [NSString stringWithContentsOfFile:reportPath
+                                          encoding:NSUTF8StringEncoding
+                                             error:NULL];
+    }
+    if (text.length == 0) {
+        text = [NSString stringWithContentsOfFile:A2Log.currentLogPath
+                                          encoding:NSUTF8StringEncoding
+                                             error:NULL];
+    }
+    if (text.length > 4000) text = [text substringFromIndex:text.length - 4000];
+
+    [A2LaunchOverlay hide];   // 启动遮罩（若还在）先收，崩溃页要看得见
+    A2CrashReportViewController *vc =
+        [[A2CrashReportViewController alloc] initWithGameExitCode:code
+                                                       reportPath:reportPath
+                                                           report:text];
+    vc.modalPresentationStyle = UIModalPresentationFullScreen;
+    [top presentViewController:vc animated:YES completion:nil];   // 呈在最上层（游戏页之上）
+}
 
 @implementation A2AppDelegate
 
@@ -144,6 +234,17 @@ didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *
         }
         [@"" writeToFile:marker atomically:YES encoding:NSUTF8StringEncoding error:NULL];
     }
+
+    // ★游戏异常退出 ⇒ 崩溃遮罩（照老 Air 的 PLCrashView：不闪退，给一张可读的崩溃页）★
+    //   唯一信号源 = Natives/Context/a2_launch.m「主类 main 返回」那一处：
+    //   VM 已建好 + 主类已派发之后 main 才可能返回 ⇒ 这是「游戏跑起来之后退出」的唯一判据。
+    //   观察者与 App 同寿（AppDelegate 不销毁），故不保存 token（与上方 JIT 广播同一写法）。
+    [NSNotificationCenter.defaultCenter addObserverForName:A2GameExitedNotificationName
+                                                    object:nil
+                                                     queue:[NSOperationQueue mainQueue]
+                                                usingBlock:^(NSNotification *note) {
+        A2HandleGameExited([note.userInfo[@"code"] integerValue]);
+    }];
 
     // ★导入的渲染器插件：启动时扫一遍★
     //   为什么在启动时扫：插件目录是用户可见的（Documents），可能被文件 App 改动过；

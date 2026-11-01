@@ -21,6 +21,9 @@
 #import "a2_vmloader.h"       // R2
 #import "a2_jli_entry.h"      // ★[JLI-LAUNCH] argv 组装/回退判定（纯逻辑）
 #import "a2_jli_launch.h"     // ★[JLI-LAUNCH] dlopen(libjli) + JLI_Launch（默认入口）
+// ★[A2-EXIT-GUARD] 进程级退出拦截：游戏运行期非 0 退出（System.exit(-1)/abort）不真退，
+//   改为广播 A2GameExitedNotification ⇒ App 层弹崩溃遮罩。本文件只负责置/清运行标记。
+#import "a2_exit_guard.h"
 // ★[A2JIT-DEBUG-HOLD] 调试暂停钩子（Natives/Support：弹提示 + 有界等待，默认关）。
 //   放在这里而不是本层自己写 UI：本层是「启动编排」，弹窗/窗口取法归 Support（与
 //   「等待 JIT」窗同一个实现），且开关键的定义也只有 Support 一处。
@@ -596,8 +599,31 @@ int a2_launch_jvm_with_argv(int argc, const char *const argv[], A2LaunchInput in
                 a2_log_fatal(@"[RT-P1] main 派发线程 AttachCurrentThread 失败");
                 return;
             }
+            // ★[A2-EXIT-GUARD] 运行标记置 1（唯一写点）★
+            //   区间 = 「主类 main 即将被调用」→「它返回」。此区间内 exit/_exit/abort 的
+            //   非 0 退出由 Natives/Context/a2_exit_guard.m 拦下（不真退、广播同一 notification），
+            //   区间外（启动链本身、退出后的收尾）一律原样转调原函数 —— 行为一字不变。
+            gA2GameRunning = 1;
             int mrc2 = a2_run_main(tenv, mainCls, pargs);
+            gA2GameRunning = 0;
             a2_log_f(@"[RT-P1] 主类 main 返回 rc=%d（后台线程；MC 正常运行时不会走到这里）", mrc2);
+            // ★[A2-CRASH-UI] 游戏退出的唯一通知点★
+            //   走到这里的含义是确定的：VM 已建好（上面的 R2 rc=0 已判过）+ 主类 main 已派发，
+            //   现在 main 返回了 ⇒ 游戏真的结束了一次。rc 语义（a2_run_main）：
+            //     0   = main 正常返回（用户主动退出游戏）
+            //     -7  = main 抛了未捕获异常（异常结束）
+            //   本层不做 UI 判断（Natives 不认识 UIKit 的上层策略）——只把「退出码」广播出去，
+            //   由 App 层（A2AppDelegate 的同名观察者）决定：0 ⇒ 回启动器；非 0 ⇒ 崩溃遮罩。
+            //   ★启动阶段失败不经过这里★（参数/classpath/建 VM 的失败都在上方各自 return），
+            //   所以不会与既有 A2LaunchFailure 失败页重复。
+            //   通知名唯一定义在 a2_exit_guard.h / .m（本处与退出拦截共用同一个字面量：
+            //   两个发出点、一个名字，App 层不必区分是谁发的）。
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [NSNotificationCenter.defaultCenter
+                    postNotificationName:a2_exit_guard_exited_notification_name
+                                  object:nil
+                                userInfo:@{ @"code": @(mrc2) }];
+            });
         });
     }
     a2_log_line(@"[RT-P1] 主类 main 已派发到后台线程 ⇒ 启动器可以收转圈");
