@@ -1034,6 +1034,24 @@ static void *a2_gl_bridge_metal_layer_for(void *renderable) {
                      wl ? [[wl description] UTF8String] : "(nil)",
                      wk ? [[wk description] UTF8String] : "(nil)",
                      wb ? [[wb description] UTF8String] : "(nil)");
+            // ★层序判据（2026-11-01）★ swap 已 rc=1/err=0x3000（提交成功）但屏幕仍黑，
+            //   而窗口正常 ⇒ 只剩"被同窗口其它视图盖住"。这里把子视图序打出来并提到最前。
+            NSArray *subs = nil;
+            @try { subs = [dw valueForKey:@"subviews"]; } @catch (__unused NSException *e) {}
+            NSUInteger idx = (subs != nil) ? [subs indexOfObject:dv] : NSNotFound;
+            a2_log_f(@"[A2-GLBRIDGE] ★层序★ 子视图数=%lu 游戏视图位置=%ld（0=最底，末尾=最顶）",
+                     (unsigned long)(subs ? subs.count : 0),
+                     (long)((idx == NSNotFound) ? -1 : (long)idx));
+            SEL toFront = sel_registerName("bringSubviewToFront:");
+            if ([dw respondsToSelector:toFront]) {
+                [dw performSelector:toFront withObject:dv];
+                NSArray *subs2 = [dw valueForKey:@"subviews"];
+                NSUInteger idx2 = (subs2 != nil) ? [subs2 indexOfObject:dv] : NSNotFound;
+                a2_log_f(@"[A2-GLBRIDGE] ★游戏视图已提到最前★ 新位置=%ld / 共%lu",
+                         (long)((idx2 == NSNotFound) ? -1 : (long)idx2),
+                         (unsigned long)(subs2 ? subs2.count : 0));
+            }
+
             // 不是 key 或隐藏 ⇒ 搬到 keyWindow（真正在屏上的那个窗口）
             Class appCls = NSClassFromString(@"UIApplication");
             id app = nil;
