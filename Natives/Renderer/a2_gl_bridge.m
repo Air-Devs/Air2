@@ -2110,11 +2110,16 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         //   SFPEW 只翻译固定管线调用，翻完仍要落回用户选的那个后端 —— 否则渲染链就换人了。
         //   ★只有该 dylib 真的在包内才这么传★；不在（或没有 Frameworks 路径）⇒ 传 nil，
         //   由 `a2_sfpew_host_load_compat` 退到包内 ANGLE（与独立档位同一个后端，仍不落空）。
+        // ★2026-11-01 真机证据（lastlog.old-13）★ 兼容层的 SFPEW_EGL 必须指向
+        //   「建 display/config/context 的那个 EGL」，也就是包内 ANGLE 的 libEGL；
+        //   之前指向渲染器自己的 dylib（libmobileglues）⇒ SFPEW 的 eglMakeCurrent
+        //   把 ANGLE 的 display/context 交给另一套 EGL ⇒ 返回 false（eglError=0x3000）
+        //   ⇒ GL 桥 rc=-4 ⇒ 启动链误报 -12。
         NSString *sfpewBackendPath = nil;
-        if (frameworksPath.length > 0 && glLayerName != NULL) {
-            NSString *candidate = [frameworksPath stringByAppendingPathComponent:
-                                   [NSString stringWithUTF8String:glLayerName]];
-            if ([NSFileManager.defaultManager fileExistsAtPath:candidate]) sfpewBackendPath = candidate;
+        if (frameworksPath.length > 0) {
+            NSString *angleEgl = [frameworksPath stringByAppendingPathComponent:
+                                  [NSString stringWithUTF8String:A2GlBridgeEglLibraryRelPath]];
+            if ([NSFileManager.defaultManager fileExistsAtPath:angleEgl]) sfpewBackendPath = angleEgl;
         }
         int sfpewCompatRC = a2_sfpew_host_load_compat(frameworksPath, sfpewBackendPath);
         if (sfpewCompatRC == 0) {

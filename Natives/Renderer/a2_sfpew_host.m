@@ -47,8 +47,18 @@ static A2SFPEWeglSwapBuffers     gSfpewSwapBuffers    = NULL;
 /// 读点只有两个：本文件的 `a2_sfpew_host_compat_layer_enabled`，以及 GL 桥 ①d 的那个判据。
 static int                       gSfpewCompatLayer    = 0;
 
+/// ★延迟加载（2026-11-01 真机证据：1.16.5 + SFPEW 时 JNI_CreateJavaVM rc=-12）★
+///   attach 阶段在建 VM 之前 dlopen 6.5MB 的 SFPEW（含 libc++）会挤掉 libjvm 的
+///   64MB debug JIT 映射 ⇒ ENOMEM。⇒ 这里只"登记待载"，第一次真正解析 GL 符号
+///   （发生在 VM 建好之后）才 dlopen。
+static int                       gSfpewPending        = 0;   // 1 = 已登记，尚未加载
+static int                       gSfpewPendingFailed  = 0;   // 1 = 尝试过且失败，不再重试
+static int                       gSfpewPendingCompat  = 0;
+static NSString                 *gSfpewPendingFrameworks = nil;
+static NSString                 *gSfpewPendingBackendPath = nil;
+
 /// 加载实现（两个公开入口共用）：`backendEglPath` 空 ⇒ 包内 ANGLE（独立档位口径）。
-static int a2_sfpew_host_load_impl(NSString *frameworksPath, NSString *backendEglPath, int compat);
+static int a2_sfpew_host_perform_load(NSString *frameworksPath, NSString *backendEglPath, int compat);
 
 // ---------------------------------------------------------------------------
 //  导出符号计数（只为判据行服务：证明「真的加载了、导出面还是那一套」）
@@ -201,6 +211,37 @@ void a2_sfpew_host_set_compat_layer(int enabled) {
     gSfpewCompatLayer = (enabled != 0) ? 1 : 0;
 }
 
+/// 登记待载（不 dlopen）：真正加载推迟到 `a2_sfpew_host_ensure_loaded`。
+static int a2_sfpew_host_load_impl(NSString *frameworksPath, NSString *backendEglPath, int compat) {
+    if (gSfpewHandle != NULL) return 0;                 // 已加载 ⇒ 幂等
+    if (gSfpewPendingFailed) return -2;                 // 试过且失败 ⇒ 不反复重试
+    if (frameworksPath.length == 0) {
+        a2_log_criterion(@"[A2-SFPEW] ★阻断★：frameworksPath 为空 ⇒ 定位不到 %s",
+                         A2SFPEWHostDylibName);
+        return -1;
+    }
+    gSfpewPendingFrameworks   = [frameworksPath copy];
+    gSfpewPendingBackendPath  = [backendEglPath copy];
+    gSfpewPendingCompat       = compat;
+    gSfpewPending             = 1;
+    a2_log_criterion(@"[A2-SFPEW] 延迟加载已登记（role=%s）⇒ 首次解析 GL 符号时才 dlopen（避开建 VM 前的地址空间竞争）",
+                     compat ? "兼容层" : "档位");
+    return 0;
+}
+
+/// 首次使用时真正 dlopen；失败只记一次，不反复重试、不阻断。
+static void a2_sfpew_host_ensure_loaded(void) {
+    if (gSfpewHandle != NULL) return;
+    if (!gSfpewPending || gSfpewPendingFailed) return;
+    int rc = a2_sfpew_host_perform_load(gSfpewPendingFrameworks, gSfpewPendingBackendPath,
+                                        gSfpewPendingCompat);
+    gSfpewPending = 0;
+    if (rc != 0) {
+        gSfpewPendingFailed = 1;
+        a2_log_criterion(@"[A2-SFPEW] 延迟加载失败 rc=%d ⇒ 本次启动按原渲染路径继续", rc);
+    }
+}
+
 int a2_sfpew_host_load(NSString *frameworksPath) {
     return a2_sfpew_host_load_impl(frameworksPath, nil, 0);
 }
@@ -209,7 +250,7 @@ int a2_sfpew_host_load_compat(NSString *frameworksPath, NSString *backendDylibPa
     return a2_sfpew_host_load_impl(frameworksPath, backendDylibPath, 1);
 }
 
-static int a2_sfpew_host_load_impl(NSString *frameworksPath, NSString *backendEglPath, int compat) {
+static int a2_sfpew_host_perform_load(NSString *frameworksPath, NSString *backendEglPath, int compat) {
     // 判据行统一带角色词：真机 grep `[A2-SFPEW]` 后一眼分清是「档位」还是「兼容层」。
     NSString *role = compat ? @"兼容层" : @"档位";
     if (gSfpewHandle != NULL) {
@@ -278,10 +319,12 @@ static int a2_sfpew_host_load_impl(NSString *frameworksPath, NSString *backendEg
 }
 
 void *a2_sfpew_host_handle(void) {
+    a2_sfpew_host_ensure_loaded();
     return gSfpewHandle;
 }
 
 void *a2_sfpew_host_getprocaddress(const char *name) {
+    a2_sfpew_host_ensure_loaded();
     if (name == NULL || gSfpewHandle == NULL) return NULL;
     void *symbol = (gSfpewGetProcAddress != NULL) ? gSfpewGetProcAddress(name) : NULL;
     if (symbol == NULL) symbol = dlsym(gSfpewHandle, name);
@@ -289,11 +332,13 @@ void *a2_sfpew_host_getprocaddress(const char *name) {
 }
 
 unsigned int a2_sfpew_host_egl_make_current(void *dpy, void *draw, void *read, void *ctx) {
+    a2_sfpew_host_ensure_loaded();
     if (gSfpewMakeCurrent == NULL) return 0;
     return gSfpewMakeCurrent(dpy, draw, read, ctx);
 }
 
 unsigned int a2_sfpew_host_egl_swap_buffers(void *dpy, void *surf) {
+    a2_sfpew_host_ensure_loaded();
     if (gSfpewSwapBuffers == NULL) return 0;
     return gSfpewSwapBuffers(dpy, surf);
 }
