@@ -21,6 +21,7 @@
 #import "a2_renderer.h"        // Natives/Renderer —— 渲染后端「选 + 加载」入口（见 docs/ARCHITECTURE.md [RENDER-WIRE]）
 #import "a2_gl_bridge.h"       // Natives/Renderer —— ★GL 桥★：让选中后端真的拿到 surface 并建出 GL 上下文（[GL-BRIDGE]）
 #import "a2_frame_perf.h"      // Natives/Renderer —— ★[FRAME-PERF] 与渲染器无关的帧性能判据★
+#import "a2_sfpew_host.h"      // Natives/Renderer —— ★[A2-SFPEW] 兼容层开关的下发点★（本层只转交，不判闸门）
 
 // ============================================================================
 //  ★[GL-BRIDGE] 宿主表面采集 + 帧回调★（本文件的私有件；调用点见 +launchWithPlanPath:）
@@ -338,11 +339,22 @@ static void A2RunnerRebindSurfaceIfTopWindowChanged(UIWindow *attachedWindow,
                  lwjglDir:(NSString *)lwjglDir
            frameworksPath:(nullable NSString *)frameworksPath
             rendererDylib:(nullable NSString *)rendererDylib
-              renderScale:(double)renderScale {
+              renderScale:(double)renderScale
+             sfpewCompat:(BOOL)sfpewCompat {
     if (planPath.length == 0 || javaHome.length == 0) {
         [A2Log log:@"[A2-LAUNCH] 组命令行失败：planPath/javaHome 为空"];
         return -8;
     }
+
+    // ---- ★[A2-SFPEW] 兼容层开关下发给 Natives（GL 桥 ①d 读它）★ ----
+    // 为什么是「下发」而不是在这里判：闸门（渲染器自带 FPE / FPE 模组 / 已选独立档位）全在 Player，
+    //   本层按 rendererDylib、renderScale 同一约定只转交；★关（默认）⇒ 只写一个 0★，
+    //   Natives 侧不加载 SFPEW、不写 SFPEW_EGL、GL 解析顺序原样（见 a2_sfpew_host.m）。
+    // ★MG 不受影响★：这一行只动 SFPEW 的开关位，MG 的 env（MOBILEGL_* / MG_DIR*）一个字不碰。
+    a2_sfpew_host_set_compat_layer(sfpewCompat ? 1 : 0);
+    [A2Log log:@"[A2-SFPEW] 兼容层开关已下发 GL 桥：compat=%d（渲染器=%@）",
+     sfpewCompat ? 1 : 0,
+     rendererDylib.length ? rendererDylib : @"(未选)"];
 
     // ---- ★[RENDER-WIRE]/[RENDER-SEL] 显式选择 + 加载用户选中的渲染后端★ ----
     // 为什么在这里：Bridge 是唯一与 Natives 相邻的层（同 [LAUNCH-PLAN] 决策 2）；

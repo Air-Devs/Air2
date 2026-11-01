@@ -13,6 +13,7 @@
 #import "a2_renderer.h"
 #import "a2_log.h"
 #import "a2_eagl_egl.h"   // ★宿主 EGL 后端★：选到它时由本层接管进程里的 egl*
+#import "a2_sfpew_host.h" // ★[A2-SFPEW] 固定管线档位★：本层只校验存在，加载归 GL 桥（RTLD_LOCAL）
 
 #include <dlfcn.h>
 #include <string.h>   // strcmp（宿主 EGL 后端的精确比较）
@@ -51,6 +52,16 @@ int a2_renderer_load_named(NSString *dylibName, NSString *frameworksPath) {
         a2_log_f(@"[A2-RENDERER] 渲染后端未内置：包内缺 %s（期望 %s）⇒ 阻断启动",
                  name.UTF8String, path.UTF8String);
         return -1;
+    }
+
+    // ★[A2-SFPEW] 固定管线档位：★本层不 dlopen★ —— 上游接入契约要求 `dlopen(RTLD_LOCAL)`，且
+    //   加载点唯一 = `a2_sfpew_host_load`（`a2_gl_bridge_attach` 的 ①c，在建 EGL 面之前）。
+    //   本函数恒用 RTLD_GLOBAL ⇒ 会把它的 567 个 `gl*` 推进 flat namespace，和兼容底的解析抢符号
+    //   （契约②明确禁止）。文件存在性已由上面那条判据兜住（缺件仍按未内置阻断）。
+    if (strcmp(name.UTF8String, A2SFPEWHostDylibName) == 0) {
+        a2_log_f(@"[A2-RENDERER] 已选择 SFPEW 档位：%s（本层不 dlopen —— 由 GL 桥以 RTLD_LOCAL 加载）",
+                 path.UTF8String);
+        return 0;
     }
 
     // RTLD_GLOBAL：与老链一致（渲染器符号需对后续 dlopen 的库可见）。

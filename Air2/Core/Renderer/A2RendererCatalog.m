@@ -26,6 +26,7 @@
 NSString *const A2RendererNGGL4ESKWDylibName = @"libnggl4es_kw.dylib";
 NSString *const A2RendererHostEGLDylibName  = @"libeagl.dylib";
 NSString *const A2RendererMobileGluesDylibName = @"libmobileglues.dylib";
+NSString *const A2RendererSFPEWDylibName = @"libSimpleFPEWrapper.dylib";
 
 + (NSArray<A2Renderer *> *)allCandidates {
     // ★顺序即 UI 顺序★：主推（按默认优先级） → 兼容底 → 实验（未内置）。
@@ -71,6 +72,14 @@ NSString *const A2RendererMobileGluesDylibName = @"libmobileglues.dylib";
             [[A2Renderer alloc] initWithIdentifier:@"libtinygl4angle.dylib"
                                        displayName:@"ANGLE (tinygl4)"
                                          dylibName:@"libtinygl4angle.dylib"
+                                             notes:@"experimental"],
+            // ★SFPEW（SimpleFPEWrapper）★ —— 固定管线模拟层（glBegin/矩阵栈/光照 → GLSL）。
+            //   ★默认关★：不进任何默认映射，只有用户在实例/设置里显式选它、且 MC ≤1.16 才启用
+            //   （判据在 `A2LaunchSession.m` 的 `A2DefaultRendererForVersion`）。
+            //   ★不加进 isExperimentalLaunchChainIdentifier★：这一档不触发任何免责确认/额外门禁。
+            [[A2Renderer alloc] initWithIdentifier:A2RendererSFPEWDylibName
+                                       displayName:@"SFPEW (fixed pipeline)"
+                                         dylibName:A2RendererSFPEWDylibName
                                              notes:@"experimental"],
         ];
     });
@@ -201,6 +210,15 @@ NSString *const A2RendererMobileGluesDylibName = @"libmobileglues.dylib";
     BOOL isDir = NO;
     if (![NSFileManager.defaultManager fileExistsAtPath:path isDirectory:&isDir] || isDir) {
         return [NSString stringWithFormat:@"包内缺 Frameworks/%@", name];
+    }
+
+    // ★SFPEW：只判文件存在，★不做 dlopen 探测★★
+    //   理由（上游接入契约②）：它只能以 `RTLD_LOCAL` 加载、且不能靠静态构造函数初始化 ——
+    //   而下面那条探测恒用 `RTLD_LAZY | RTLD_GLOBAL`：设置页每展开一次就会把它的 567 个 `gl*`
+    //   推进 flat namespace 并跑一遍构造函数。能不能用由启动侧 `a2_sfpew_host_load` 判
+    //   （失败即阻断，并给出 dlerror 原文）。
+    if ([candidate.identifier isEqualToString:A2RendererSFPEWDylibName]) {
+        return nil;
     }
 
     // ★判据与真正的加载处同一口径★（a2_renderer_load_named 用 RTLD_LAZY|RTLD_GLOBAL）：

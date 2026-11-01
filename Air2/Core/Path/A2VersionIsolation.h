@@ -95,6 +95,13 @@ FOUNDATION_EXPORT NSString *A2VersionFolderDisplayName(A2VersionFolder folder);
 
 // ---- 版本级覆盖项 ----
 @property (nonatomic, copy, nullable) NSString *renderer;
+/// ★[A2-SFPEW] 「SFPEW 兼容层」开关★（实例级，★默认 NO★）。
+/// 语义：在**当前选中的渲染器之上**叠一层固定管线模拟层（SFPEW），启动时让 GL 解析先问它；
+/// 只对「自身没有固定管线」的渲染器生效（gl4es / NG-GL4ES / KW / 自研 GL2 层一律不叠加），
+/// 且该实例 mods 里已启用 angelica / actinium 时自动不启用（判定全在 A2LaunchSession，
+/// 本属性只存用户的选择 —— ★判定不改写它★）。
+/// 落盘键：`sfpewCompatLayer`（`{版本目录}/.air_version/config.json`）。
+@property (nonatomic, assign) BOOL sfpewCompatLayer;
 @property (nonatomic, copy, nullable) NSString *driver;
 @property (nonatomic, copy, nullable) NSString *javaRuntime;
 @property (nonatomic, copy, nullable) NSString *jvmArgs;

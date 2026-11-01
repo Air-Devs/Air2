@@ -219,6 +219,13 @@ static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *A2Runti
             @"en": @"NG-GL4ES / KW (libnggl4es_kw.dylib)",
             @"ja": @"NG-GL4ES / KW（libnggl4es_kw.dylib）",
         },
+        // ★SFPEW（SimpleFPEWrapper）★ —— ≤1.16 的固定管线模拟层（★默认关，须用户显式选★）
+        @"runtime.renderer.simplefpewrapper": @{
+            @"zh-Hans": @"SFPEW（固定管线 · ≤1.16）",
+            @"zh-Hant": @"SFPEW（固定管線 · ≤1.16）",
+            @"en": @"SFPEW (fixed pipeline · ≤1.16)",
+            @"ja": @"SFPEW（固定機能パイプライン · ≤1.16）",
+        },
         @"runtime.renderer.moltenvk": @{
             @"zh-Hans": @"MoltenVK（libMoltenVK.dylib）",
             @"zh-Hant": @"MoltenVK（libMoltenVK.dylib）",

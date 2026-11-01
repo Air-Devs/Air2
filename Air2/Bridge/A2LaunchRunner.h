@@ -85,6 +85,10 @@ NS_ASSUME_NONNULL_BEGIN
 ///        1.0 = 原生像素）。★只作用于**表面像素**（drawable）★：逻辑尺寸（点）不变，
 ///        drawable 像素 = 表面像素 × 倍率 ⇒ 这是「分辨率缩放」落到桥上的那一处。
 ///        ★由 Player 解析好传入，Bridge 不读偏好★；<=0 或 >1 按 1.0 处理（不猜中间值）。
+/// @param sfpewCompat ★[A2-SFPEW] 兼容层开关★（实例级；默认 NO）。★由 Player 解析好传入★
+///        （三重闸门都在 Player：渲染器自带固定管线 / FPE 模组 / 已选独立档位）——
+///        Bridge 只把它下发成 Natives 的开关位；★NO 时 Natives 不加载 SFPEW、不写 env★。
+///        本层不读偏好、不判闸门（与 rendererDylib / renderScale 同一约定）。
 /// @return `a2_launch_jvm_with_argv` 的返回码（0 成功；负值见 a2_launch.h 契约）；
 ///         ★-10 = 所选渲染后端未内置/加载失败 ⇒ 未进 VM，如实阻断（不静默回退）★；
 ///         ★-12 = 所选渲染后端是 EGL/GL 系但未能建出 GL 上下文（缺库/无表面/EGL 失败）
@@ -101,7 +105,8 @@ NS_ASSUME_NONNULL_BEGIN
                  lwjglDir:(NSString *)lwjglDir
            frameworksPath:(nullable NSString *)frameworksPath
             rendererDylib:(nullable NSString *)rendererDylib
-              renderScale:(double)renderScale;
+              renderScale:(double)renderScale
+             sfpewCompat:(BOOL)sfpewCompat;
 
 @end
 

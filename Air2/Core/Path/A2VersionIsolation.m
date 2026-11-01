@@ -115,6 +115,7 @@ static NSString *A2SettingStateToString(A2SettingState state) {
     c.pinned = self.pinned;
     c.ramAllocation = self.ramAllocation;
     c.renderer = self.renderer;
+    c.sfpewCompatLayer = self.sfpewCompatLayer;
     c.driver = self.driver;
     c.javaRuntime = self.javaRuntime;
     c.jvmArgs = self.jvmArgs;
@@ -133,6 +134,7 @@ static NSString *A2SettingStateToString(A2SettingState state) {
     iso.pinned = [dict[@"pinned"] boolValue];
     iso.ramAllocation = [dict[@"ramAllocation"] integerValue] ?: -1;
     iso.renderer = [dict[@"renderer"] isKindOfClass:NSString.class] ? dict[@"renderer"] : nil;
+    iso.sfpewCompatLayer = [dict[@"sfpewCompatLayer"] boolValue];
     iso.driver = [dict[@"driver"] isKindOfClass:NSString.class] ? dict[@"driver"] : nil;
     iso.javaRuntime = [dict[@"javaRuntime"] isKindOfClass:NSString.class] ? dict[@"javaRuntime"] : nil;
     iso.jvmArgs = [dict[@"jvmArgs"] isKindOfClass:NSString.class] ? dict[@"jvmArgs"] : nil;
@@ -149,6 +151,8 @@ static NSString *A2SettingStateToString(A2SettingState state) {
     d[@"pinned"] = @(self.pinned);
     d[@"ramAllocation"] = @(self.ramAllocation);
     if (self.renderer)        d[@"renderer"]        = self.renderer;
+    // ★默认关 ⇒ 只在开的时候落盘★（config.json 不因这个功能出现无关的 false 行）。
+    if (self.sfpewCompatLayer) d[@"sfpewCompatLayer"] = @YES;
     if (self.driver)          d[@"driver"]          = self.driver;
     if (self.javaRuntime)     d[@"javaRuntime"]     = self.javaRuntime;
     if (self.jvmArgs)         d[@"jvmArgs"]         = self.jvmArgs;

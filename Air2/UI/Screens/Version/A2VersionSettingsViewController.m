@@ -30,7 +30,7 @@
 //  版本的启动配置仍存在 {版本目录}/.air_version/config.json。
 //
 //  ★关闭交互★（本页是「单个版本」的唯一入口，从主页齿轮与版本列表齿轮两处进）：
-//    · 本页能改的四项（Java 运行时 / 渲染器 / JVM 参数 / 游戏参数 / 跳过完整性检查）
+//    · 本页能改的六项（Java 运行时 / 渲染器 / SFPEW 兼容层 / JVM 参数 / 游戏参数 / 跳过完整性检查）
 //      先改在内存里的 isolation 对象上，页面自己判断「和打开时比有没有变」；
 //      一改动右上角的「保存」就亮起、标题卡下出现「有未保存的修改」提示。
 //    · 点返回（左上箭头）关页时，若有未保存修改 → 弹仓内 A2OptionSheet：
@@ -78,10 +78,12 @@
 @property (nonatomic, strong) UIButton *saveButton;
 @property (nonatomic, strong) UILabel *dirtyLabel;
 
-/// 「启动配置」四行 + 完整性开关：放弃修改后要把它们按 isolation 的值刷回去。
+/// 「启动配置」五行 + 两个开关：放弃修改后要把它们按 isolation 的值刷回去。
 /// 只存引用，不缓存值 —— 值永远从 isolation 读，避免两处状态打架。
 @property (nonatomic, strong) A2SettingsRow *javaRuntimeRow;
 @property (nonatomic, strong) A2SettingsRow *rendererRow;
+/// ★[A2-SFPEW] 兼容层开关行★（默认关；按实例保存）
+@property (nonatomic, strong) A2SettingsRow *sfpewCompatRow;
 @property (nonatomic, strong) A2SettingsRow *jvmRow;
 @property (nonatomic, strong) A2SettingsRow *gameArgsRow;
 @property (nonatomic, strong) A2SettingsRow *integrityRow;
@@ -153,6 +155,7 @@
     return @{
         @"javaRuntime": iso.javaRuntime ?: @"",
         @"renderer": iso.renderer ?: @"",
+        @"sfpewCompatLayer": @(iso.sfpewCompatLayer),
         @"jvmArgs": iso.jvmArgs ?: @"",
         @"gameArgs": iso.gameArgs ?: @"",
         @"skipGameIntegrityCheck": @(iso.skipGameIntegrityCheck),
@@ -250,12 +253,14 @@
     A2VersionIsolation *iso = _version.isolation;
     NSString *javaRuntime = snapshot[@"javaRuntime"];
     NSString *renderer = snapshot[@"renderer"];
+    NSNumber *sfpewCompat = snapshot[@"sfpewCompatLayer"];
     NSString *jvmArgs = snapshot[@"jvmArgs"];
     NSString *gameArgs = snapshot[@"gameArgs"];
     NSNumber *skipIntegrity = snapshot[@"skipGameIntegrityCheck"];
 
     iso.javaRuntime = javaRuntime.length ? javaRuntime : nil;
     iso.renderer = renderer.length ? renderer : nil;
+    iso.sfpewCompatLayer = sfpewCompat.boolValue;
     iso.jvmArgs = jvmArgs.length ? jvmArgs : nil;
     iso.gameArgs = gameArgs.length ? gameArgs : nil;
     iso.skipGameIntegrityCheck = (A2SettingState)skipIntegrity.integerValue;
@@ -270,6 +275,7 @@
     A2VersionIsolation *iso = _version.isolation;
     _javaRuntimeRow.valueText = iso.javaRuntime.length ? iso.javaRuntime : @"跟随全局";
     _rendererRow.valueText = [self rendererDisplayNameForIdentifier:iso.renderer];
+    _sfpewCompatRow.on = iso.sfpewCompatLayer;
     _jvmRow.valueText = iso.jvmArgs.length ? iso.jvmArgs : @"跟随全局";
     _gameArgsRow.valueText = iso.gameArgs.length ? iso.gameArgs : @"跟随全局";
     _integrityRow.on = (iso.skipGameIntegrityCheck == A2SettingStateEnable);
@@ -539,6 +545,26 @@
         [sheet presentFrom:weakSelf];
     };
     [section addRow:rendererRow];
+
+    // ---- ★[A2-SFPEW] 兼容层开关（默认关；按实例保存）----
+    //   ★不是渲染器档位★：它叠在**上面选中的渲染器**之上，让 GL 解析先问 SFPEW（老版本固定管线）。
+    //   三重闸门的判定在启动侧（A2LaunchSession）：渲染器自带固定管线 / 已启用 FPE 模组 / 已选独立档位
+    //   ⇒ 本行只负责存用户的选择，不在这里判断「会不会生效」（也不替用户改回去）。
+    A2SettingsRow *sfpewCompatRow = [[A2SettingsRow alloc] init];
+    self.sfpewCompatRow = sfpewCompatRow;
+    sfpewCompatRow.symbolName = @"square.stack.3d.up";
+    sfpewCompatRow.title = @"SFPEW 兼容层（老版本固定管线，实验）";
+    sfpewCompatRow.subtitle = @"叠在所选渲染器之上；gl4es/KW/GL2 与已装 angelica/actinium 时自动不生效";
+    sfpewCompatRow.accessory = A2SettingsRowAccessorySwitch;
+    sfpewCompatRow.on = iso.sfpewCompatLayer;
+    sfpewCompatRow.onToggle = ^(BOOL isOn) {
+        __weak typeof(self) weakSelf = self;
+        weakSelf.version.isolation.sfpewCompatLayer = isOn;
+        [weakSelf markConfigEdited];
+        [A2Log log:@"[A2-SFPEW] 实例 %@ 的兼容层开关改为 %@（保存后生效）",
+         weakSelf.version.name, isOn ? @"开" : @"关"];
+    };
+    [section addRow:sfpewCompatRow];
 
     A2SettingsRow *jvmRow = [[A2SettingsRow alloc] init];
     self.jvmRow = jvmRow;

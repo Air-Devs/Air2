@@ -36,6 +36,8 @@
 #import "A2LegacyJITGate.h"            // Natives/Support —— JIT 闸门的唯一实现（判据→申请→等待）
 #import "a2_gl2_shim.h"             // Natives/Renderer —— ★[A2-GL2] 自研固定管线档位判据（默认关）★
 #import "A2LegacyAssetsMapper.h"    // Core/Version —— 远古资源映射（virtual / map_to_resources）
+#import "A2ModScanner.h"            // Core/Addons —— ★[A2-SFPEW] 兼容层的 FPE 模组检测（读 mods 目录的 mod id）★
+#import "A2LocalMod.h"              // Core/Addons —— 同上（modID / isEnabled）
 #import "A2PluginBootGuard.h"       // ★插件 P1 第⑤块★ 启动看门狗（marker 写在建 VM 之前、首帧到了才清）
 #import "A2Log.h"
 
@@ -81,6 +83,66 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
     return nil;
 }
 
+/// ★[A2-SFPEW] 兼容层：这台渲染器自己就带固定管线 ⇒ 禁止叠加★
+///   叠两层翻译器（SFPEW 的 `glBegin`→GLSL 再喂给 gl4es/KW 的 FPE）会互相打架，
+///   与 ZL2「FPE 家族声明 supportsSfpewByDefault = false」是同一条约束。
+/// ★判据只认标识（纯字符串，不碰文件 / 不 dlopen）★：
+///   · `libgl4es_114.dylib` / `libnggl4es.dylib` / `libnggl4es_kw.dylib` —— gl4es 与 NG-GL4ES / KW；
+///   · 自研 GL2 层（`a2_gl2_shim`，环境变量 `A2_GL2_SHIM=1` 时生效）—— 它本身就是固定管线实现，
+///     且不体现为渲染器标识 ⇒ 单独判一次。
+/// ★故意不在此列（无自带 FPE，可叠加）★：`libmobileglues.dylib`（core-profile 翻译）、
+///   `libmetallum.dylib`（Metal）、`libeagl.dylib`（EGL 是本二进制的假 EGL，GL 层是 MG）、
+///   `libtinygl4angle.dylib`（A2LegacyProfile 的静态判据写明「ANGLE 只提供 ES/GL3+ 语义，没有固定管线」）、
+///   `libMoltenVK.dylib`（Vulkan）、`libSimpleFPEWrapper.dylib`（它自己就是 SFPEW，另有一条判断）。
+///
+/// @return 命中的「自带 FPE」的名字（渲染器标识，或自研 GL2 层名）；nil = 可以叠加
+static NSString *A2LaunchFixedPipelineOwnerForRenderer(NSString *rendererID) {
+    static NSSet<NSString *> *ownFixedPipeline = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        ownFixedPipeline = [NSSet setWithObjects:
+                            @"libgl4es_114.dylib",     // 老线 GL4ES（glBegin 家族自带 FPE）
+                            @"libnggl4es.dylib",       // NG-GL4ES
+                            @"libnggl4es_kw.dylib",    // NG-GL4ES / KW（Krypton Wrapper）
+                            nil];
+    });
+    if (rendererID.length > 0 && [ownFixedPipeline containsObject:rendererID]) return rendererID;
+    if (a2_gl2_shim_enabled()) return @"A2_GL2_SHIM（自研 GL2 固定管线层）";
+    return nil;
+}
+
+/// ★[A2-SFPEW] 兼容层：该实例已启用的 FPE 模拟模组（mod id = `angelica` / `actinium`）★
+/// 名单与判定口径同 ZL2 `detectFpeEmulatorMods`：只看**已启用**（无 `.disabled` 后缀）的模组。
+/// ★只在开关打开时调用★：扫一遍 mods 目录要读每个 jar 的元数据，默认关的实例一分钱不花。
+/// @return 命中的第一个 mod id；nil = 没命中 / 没有 mods 目录 / 扫描失败（失败已记日志，不猜）
+static NSString *A2LaunchDetectFpeEmulatorMod(NSString *gameDir) {
+    if (gameDir.length == 0) return nil;
+    NSString *modsDir = [gameDir stringByAppendingPathComponent:@"mods"];
+    BOOL isDir = NO;
+    if (![NSFileManager.defaultManager fileExistsAtPath:modsDir isDirectory:&isDir] || !isDir) {
+        [A2Log log:@"[A2-SFPEW] 兼容层：该实例没有 mods 目录（%@）⇒ 不做 FPE 模组检测", modsDir];
+        return nil;
+    }
+    NSError *scanError = nil;
+    A2ModScanner *scanner = [[A2ModScanner alloc] initWithModsDirectory:modsDir error:&scanError];
+    if (scanner == nil) {
+        [A2Log log:@"[A2-SFPEW] 兼容层：mods 目录不可读（%@；%@）⇒ 不做 FPE 模组检测",
+         modsDir, scanError.localizedDescription ?: @"原因未知"];
+        return nil;
+    }
+    NSArray<A2LocalMod *> *mods = [scanner scanMods:&scanError];
+    if (mods == nil) {
+        [A2Log log:@"[A2-SFPEW] 兼容层：mods 扫描失败（%@）⇒ 不做 FPE 模组检测",
+         scanError.localizedDescription ?: @"原因未知"];
+        return nil;
+    }
+    NSSet<NSString *> *fpeModIDs = [NSSet setWithObjects:@"angelica", @"actinium", nil];
+    for (A2LocalMod *mod in mods) {
+        if (mod.isEnabled && [fpeModIDs containsObject:mod.modID]) return mod.modID;
+    }
+    return nil;
+}
+
 /// ★默认渲染器按版本推导★（用户/实例显式选择永远优先）
 ///   26.2 / 26.3 → metallum（当前唯一验证过的 Metal 面）
 ///   26.1 及其它 26.x → MobileGlues（GL3.2+ 需要它）
@@ -89,7 +151,22 @@ static NSString *A2LaunchFirstSubdirectory(NSString *parent, NSString *prefix) {
 ///     MobileGlues 仍作为可选项保留（设置 → 运行环境 → 渲染器）。
 ///   1.13 – 1.16 → MobileGlues（该段还没在 EAGL 链路上验过）
 ///   1.12 及更早 → NG-GL4ES / KW（GL1.x/2.x 固定管线；不可用时由调用点回退 gl4es）
-static NSString *A2DefaultRendererForVersion(NSInteger major, NSInteger minor) {
+///
+/// ★[A2-SFPEW] 完全隔离的档位（★默认关★）★
+///   只有两个条件同时成立才会改变返回值：① 该实例**显式选了** SFPEW（`instanceRenderer`）；
+///   ② MC ≤ 1.16。其它任何组合（含没选、以及 1.17+/26.x）都走下面**一字未改**的既有映射。
+///   ★为什么把「实例里选了什么」作为参数传进来、而不在这里读 NSUserDefaults★：
+///     默认推导必须是纯函数（同一对 (major, minor) + 同一份实例设置 ⇒ 同一结果），
+///     读取点仍然只有调用方那一处（唯一真相源）。
+static NSString *A2DefaultRendererForVersion(NSInteger major, NSInteger minor,
+                                             NSString *instanceRenderer) {
+    // ★SFPEW 档位（默认关）★：`glBegin`/矩阵栈/光照这批固定管线调用 → GLSL。
+    //   ★只管 ≤1.16★：1.13–1.16 与 1.12 及以下都是固定管线为主的老版本；1.17+ 一律不接
+    //   （它们的现代 GL 3.2+ 路径由既有渲染器负责，本档位不许沾边）。
+    if (major == 1 && minor <= 16 &&
+        [instanceRenderer isEqualToString:A2RendererSFPEWDylibName]) {
+        return A2RendererSFPEWDylibName;
+    }
     if (major >= 26) {
         if (major == 26 && (minor == 2 || minor == 3)) return @"libmetallum.dylib";
         return @"libmobileglues.dylib";
@@ -401,11 +478,31 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
     NSString *selRenderer = instanceRenderer.length
         ? instanceRenderer
         : [NSUserDefaults.standardUserDefaults stringForKey:A2SelectedRendererPrefKey];
+    // ★[A2-SFPEW] 越界即忽略（★唯一拦截点★）★
+    //   SFPEW 只接 MC ≤1.16（固定管线）。选它但版本越界（1.17+/26.x）⇒ 这次启动**完全当没选过**：
+    //   两个来源都清空，落到下面既有映射；★不改任何别的后端的选择语义★。
+    //   这样「用户之前选过 SFPEW、又去启动 1.20.1」不会因为一次历史选择而改变 1.20.1 的链路。
+    if ([selRenderer isEqualToString:A2RendererSFPEWDylibName] &&
+        !(a2McMajor == 1 && a2McMinor <= 16)) {
+        [A2Log criterion:@"[A2-SFPEW] ⛔ 档位不适用：MC %ld.%ld 超出 ≤1.16 范围 ⇒ 忽略该选择，"
+         @"按默认映射继续（SFPEW 只接固定管线老版本，1.17+ 路径不受影响）",
+         (long)a2McMajor, (long)a2McMinor];
+        instanceRenderer = nil;
+        selRenderer = nil;
+    }
     BOOL rendererFromUser = (selRenderer.length > 0);
-    NSString *autoRendererID = A2DefaultRendererForVersion(a2McMajor, a2McMinor);
+    NSString *autoRendererID = A2DefaultRendererForVersion(a2McMajor, a2McMinor, instanceRenderer);
     A2Renderer *renderer = [A2RendererCatalog candidateForIdentifier:selRenderer ?: @""]
         ?: [A2RendererCatalog candidateForIdentifier:autoRendererID]
         ?: [A2RendererCatalog defaultCandidate];
+
+    // ★[A2-SFPEW] ★隔离档位启用★（唯一的启用判据行）★
+    //   走到这里 ⇒ 版本闸门已过（上面的越界拦截）+ 选择来源已定（实例/全局）。
+    //   ★这一行只在本档位命中时出现★：不选它时整段代码一行日志都不打（不影响其它版本的日志证据）。
+    if ([renderer.identifier isEqualToString:A2RendererSFPEWDylibName]) {
+        [A2Log criterion:@"[A2-SFPEW] ★隔离档位启用★ MC %ld.%ld ⇒ 走 SFPEW（不影响其它版本）",
+         (long)a2McMajor, (long)a2McMinor];
+    }
 
     // ★默认推导的回退（只对「没人显式选过」生效）★
     //   ≤1.12 的默认项是 NG-GL4ES / KW；它不在包内（或文件在但 dlopen 不起来）⇒ 退到同一家族
@@ -449,6 +546,45 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                         name, renderer.identifier],
                        why]);
         return;
+    }
+
+    // ========================================================================
+    // ★[A2-SFPEW] 兼容层（默认关；按实例保存；本块只判「这一次启动用不用」）★
+    // ------------------------------------------------------------------------
+    // 语义对齐 ZL2 `isSfpewEnabledFor`：开关打开 ≠ 一定生效，先过三道闸门（逐条都在日志里留证）：
+    //   ① 渲染器自己带固定管线（gl4es / NG-GL4ES / KW / 自研 GL2 层）⇒ ★禁止叠加★
+    //      （两层翻译器互相打架；名单见 A2LaunchFixedPipelineOwnerForRenderer）；
+    //   ② 该实例 mods 里已有 FPE 模拟模组（angelica / actinium）⇒ 关掉避免冲突；
+    //   ③ 已选 SFPEW 独立档位 ⇒ 不叠第二层（那会把同一份 SFPEW 装两遍）。
+    // ★开关值本身一字不改★：闸门只决定「本次启动是否生效」，用户勾了什么就还存什么。
+    // ★关（默认）⇒ 一行「与之前一致」+ 一个纯 BOOL，启动参数与 GL 解析全部原样★。
+    // ========================================================================
+    BOOL sfpewCompat = NO;
+    if (!version.isolation.sfpewCompatLayer) {
+        // ★默认路径★：开关关着 ⇒ 只留一行证词，下面所有启动参数与 GL 解析原样。
+        [A2Log criterion:@"[A2-SFPEW] 兼容层开关=关 ⇒ 与之前一致"];
+    } else if ([renderer.identifier isEqualToString:A2RendererSFPEWDylibName]) {
+        // ★已选独立档位★：渲染器本身就是 SFPEW，再叠一层就是把同一份实现装两遍。
+        [A2Log criterion:@"[A2-SFPEW] 兼容层开关=开（实例=%@，渲染器=%@）⇒ 已选 SFPEW 独立档位，不叠加兼容层",
+         version.name, renderer.identifier];
+    } else {
+        // ★两道闸门并列判定、各打一行★：任一命中都强制不生效，但两条都要留证 ——
+        //   写成 if/else 会让「渲染器自带 FPE」把「已装 FPE 模组」这条原因整段盖掉，
+        //   真机上只能看到一半原因，正是最难定位的那种日志。
+        NSString *fixedPipelineOwner = A2LaunchFixedPipelineOwnerForRenderer(renderer.identifier);
+        if (fixedPipelineOwner.length > 0) {
+            [A2Log criterion:@"[A2-SFPEW] ⛔ 渲染器 %s 自带固定管线 ⇒ 不叠加",
+             fixedPipelineOwner.UTF8String];
+        }
+        NSString *fpeModID = A2LaunchDetectFpeEmulatorMod(gameDir);
+        if (fpeModID.length > 0) {
+            [A2Log criterion:@"[A2-SFPEW] ⛔ 检测到 FPE 模组 %s ⇒ 不启用", fpeModID.UTF8String];
+        }
+        if (fixedPipelineOwner.length == 0 && fpeModID.length == 0) {
+            sfpewCompat = YES;
+            [A2Log criterion:@"[A2-SFPEW] 兼容层开关=开（实例=%@，渲染器=%@）",
+             version.name, renderer.identifier];
+        }
     }
 
     // ========================================================================
@@ -1149,7 +1285,8 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                                                  lwjglDir:lwjglDir
                                            frameworksPath:frameworks
                                             rendererDylib:renderer.identifier
-                                              renderScale:renderScale];
+                                              renderScale:renderScale
+                                             sfpewCompat:sfpewCompat];
                 [A2Log log:@"[A2-LAUNCH] ③ 建 VM 返回 rc=%d", vmRC];
                 // ★区域验收快照（建 VM 之后）★：此刻 libjvm 已经发过它自己那发 brk #0x69，
                 //   这一行如实报本模块视角拿到的区（拿不到不追责：libjvm 的 rc 才是结论）。

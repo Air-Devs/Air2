@@ -227,6 +227,7 @@
 		018FD66D236D5BE4BA7BF065 /* a2_gl2_shim.m in Sources */ = {isa = PBXBuildFile; fileRef = 86E423FE25F99494D4D91D1C /* a2_gl2_shim.m */; };
 		9C3F95924BF96FCEFE9A2D98 /* a2_gl_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 7122630510302DEFFCBDA6B8 /* a2_gl_bridge.m */; };
 		E60B81CEF174962114DA466F /* a2_renderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 76FB869ECFD07C22D9C0F43B /* a2_renderer.m */; };
+		E60DC2C0DD7C30F318582201 /* a2_sfpew_host.m in Sources */ = {isa = PBXBuildFile; fileRef = 9E2F5810830559C9088726DD /* a2_sfpew_host.m */; };
 		57972BDDED3886180B1367D9 /* A2JITEnabler.m in Sources */ = {isa = PBXBuildFile; fileRef = 1C7A04D357334D0924D1E1AD /* A2JITEnabler.m */; };
 		E04C097645AD3CC6F4684CE5 /* A2JITEnvironment.m in Sources */ = {isa = PBXBuildFile; fileRef = A651CCF3099E12483ECACD39 /* A2JITEnvironment.m */; };
 		6205684F66AC401AFFD011DD /* A2LegacyJITGate.m in Sources */ = {isa = PBXBuildFile; fileRef = 17E69AE8630320F493B33C59 /* A2LegacyJITGate.m */; };
@@ -478,6 +479,7 @@
 		86E423FE25F99494D4D91D1C /* a2_gl2_shim.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_gl2_shim.m"; sourceTree = "<group>"; };
 		7122630510302DEFFCBDA6B8 /* a2_gl_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_gl_bridge.m"; sourceTree = "<group>"; };
 		76FB869ECFD07C22D9C0F43B /* a2_renderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_renderer.m"; sourceTree = "<group>"; };
+		9E2F5810830559C9088726DD /* a2_sfpew_host.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_sfpew_host.m"; sourceTree = "<group>"; };
 		1C7A04D357334D0924D1E1AD /* A2JITEnabler.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITEnabler.m"; sourceTree = "<group>"; };
 		A651CCF3099E12483ECACD39 /* A2JITEnvironment.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITEnvironment.m"; sourceTree = "<group>"; };
 		17E69AE8630320F493B33C59 /* A2LegacyJITGate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LegacyJITGate.m"; sourceTree = "<group>"; };
@@ -716,6 +718,7 @@
 		B0F01132F932C08F25A6DAF2 /* a2_gl2_shim.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_gl2_shim.h"; sourceTree = "<group>"; };
 		81BAC4932618C2728A52D6F9 /* a2_gl_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_gl_bridge.h"; sourceTree = "<group>"; };
 		17A733F4890B4DE82120E806 /* a2_renderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_renderer.h"; sourceTree = "<group>"; };
+		75283622058665D7EF6FF70E /* a2_sfpew_host.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_sfpew_host.h"; sourceTree = "<group>"; };
 		4081FC794A431FB512010C2F /* A2JITEnabler.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITEnabler.h"; sourceTree = "<group>"; };
 		99A22A8A368208284945EF9E /* A2JITEnvironment.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITEnvironment.h"; sourceTree = "<group>"; };
 		ED91123D82787E1A085EC926 /* A2LegacyJITGate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LegacyJITGate.h"; sourceTree = "<group>"; };
@@ -1021,6 +1024,7 @@
 				86E423FE25F99494D4D91D1C /* a2_gl2_shim.m */,
 				7122630510302DEFFCBDA6B8 /* a2_gl_bridge.m */,
 				76FB869ECFD07C22D9C0F43B /* a2_renderer.m */,
+				9E2F5810830559C9088726DD /* a2_sfpew_host.m */,
 				D5167F3BAFE3C0EB46EB263B /* a2_eagl_egl.h */,
 				2D5EE38B9E92A558A8A68E9A /* a2_frame_perf.h */,
 				4614990A5E2F7C66916BD452 /* a2_gl2_jni_bind.h */,
@@ -1028,6 +1032,7 @@
 				B0F01132F932C08F25A6DAF2 /* a2_gl2_shim.h */,
 				81BAC4932618C2728A52D6F9 /* a2_gl_bridge.h */,
 				17A733F4890B4DE82120E806 /* a2_renderer.h */,
+				75283622058665D7EF6FF70E /* a2_sfpew_host.h */,
 			);
 			path = Renderer;
 			sourceTree = "<group>";
@@ -1898,6 +1903,7 @@
 				018FD66D236D5BE4BA7BF065 /* a2_gl2_shim.m in Sources */,
 				9C3F95924BF96FCEFE9A2D98 /* a2_gl_bridge.m in Sources */,
 				E60B81CEF174962114DA466F /* a2_renderer.m in Sources */,
+				E60DC2C0DD7C30F318582201 /* a2_sfpew_host.m in Sources */,
 				57972BDDED3886180B1367D9 /* A2JITEnabler.m in Sources */,
 				E04C097645AD3CC6F4684CE5 /* A2JITEnvironment.m in Sources */,
 				6205684F66AC401AFFD011DD /* A2LegacyJITGate.m in Sources */,
@@ -2001,7 +2007,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
-				CURRENT_PROJECT_VERSION = "3aa6a1a";
+				CURRENT_PROJECT_VERSION = "6a9e3a3";
 				DEAD_CODE_STRIPPING = "NO";
 				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";
@@ -2047,7 +2053,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
-				CURRENT_PROJECT_VERSION = "3aa6a1a";
+				CURRENT_PROJECT_VERSION = "6a9e3a3";
 				DEAD_CODE_STRIPPING = "NO";
 				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";

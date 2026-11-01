@@ -34,6 +34,7 @@ ROOT = os.path.dirname(os.path.dirname(HERE))          # 仓根
 SOURCES = [
     os.path.join(ROOT, "Natives", "Renderer", "a2_gl_bridge.m"),   # ★被测主体★
     os.path.join(ROOT, "Natives", "Renderer", "a2_renderer.m"),    # 渲染器名常量（本桥复用它）
+    os.path.join(ROOT, "Natives", "Renderer", "a2_sfpew_host.m"),  # ★[A2-SFPEW] 档位/兼容层的加载与解析（本桥 ①c/①d/⑦ 调它）★
     os.path.join(ROOT, "Natives", "Renderer", "a2_frame_perf.m"),  # ★[FRAME-PERF] 帧性能判据（本桥的帧动作每帧记一次）★
     os.path.join(ROOT, "Natives", "Support", "a2_log.m"),          # 日志实现（本桥记判据行）
     os.path.join(HERE, "gl_bridge_tests.m"),

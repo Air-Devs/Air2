@@ -26,6 +26,7 @@
 #import "a2_frame_perf.h"   // ★[FRAME-PERF] 与渲染器无关的帧性能判据（本文件的帧动作每帧记一次）
 #import "A2JITEnvironment.h"   // ★[A2PROBE]★ a2_jit_probe_arm（把 KW/ANGLE 的 glLoadIdentity 交给脚本布断点）
 #import "a2_eagl_egl.h"        // ★宿主 EGL 后端★：A2FakeEglWindowSize（上屏建面的实参）
+#import "a2_sfpew_host.h"      // ★[A2-SFPEW] 固定管线档位★：只在本档位命中时被调用（见 ①c / ④ / ⑤b）
 
 #import <objc/message.h>   // objc_msgSend（动态取 layer 用；不 import UIKit）
 #import <dlfcn.h>
@@ -147,6 +148,18 @@ static char gBackendName[96] = {0};
 /// 建面/上下文版本/库来源都据此分叉；attach 时置位，teardown 清零。
 static int   gHostEgl = 0;
 
+/// ★[A2-SFPEW] 本轮 GL 解析是否先问 SFPEW★：1 = 独立档位（①c）**或** 兼容层（①d）已就绪。
+/// 写点只有两个：`a2_gl_bridge_attach` 的 ①c/①d（置 1）与 `a2_gl_bridge_teardown`（清 0）。
+/// ★只被 ⑦ 的两个解析出口读★（`a2_gl_bridge_gl_symbol` / `a2_gl_bridge_gles_getprocaddress`）——
+/// 这两个出口不改变任何后端的建面/换页/上下文口径，因此兼容层能叠在 MG 等后端上而**不动它们**。
+/// 独立档位 / 兼容层都不成立时它恒为 0，现有各版本的路径与全局状态（环境变量 / 句柄）一字不动。
+static int   gSfpewTier = 0;
+
+/// ★[A2-SFPEW] 独立档位标记★：1 = 渲染器**就是** SFPEW（①c）。
+/// 与 `gSfpewTier` 分开的原因：兼容层（①d）**不接管建面/换页** —— 那三处（④ 不重复 dlopen /
+/// ⑤b makeCurrent+swapBuffers / ⑥ ES3 config）只认本标记 ⇒ 兼容层叠加时后端仍走它自己的原路径。
+static int   gSfpewStandalone = 0;
+
 /// ★建面用的 EGL 入口从哪来★（★全项目只有两个值、一个产地★：attach 的 MG 探测；teardown 复位）。
 typedef enum {
     A2GlBridgeEglSourceAngle = 0,   ///< 非 MG 自带 —— ANGLE 兼容底（`Frameworks/libEGL.framework/libEGL`）或宿主假 EGL（主镜像）
@@ -263,6 +276,8 @@ static void a2_gl_bridge_teardown(void) {
         gKryptonInitedHandle = NULL;   // 本轮结束 ⇒ 下次 attach 重新初始化，镜像保持加载
     }
     gHostEgl = 0;
+    gSfpewTier = 0;                          // ★[A2-SFPEW] 本轮结束 ⇒ 下次 attach 必须重新判（不继承上一轮的档位/兼容层）★
+    gSfpewStandalone = 0;                    // 同上：独立档位标记随本轮一起清（兼容层不动建面/换页，见其声明处）
     gEglSource = A2GlBridgeEglSourceAngle;   // ★EGL 源随句柄一起释放★：下次 attach 必须重新判（不留上一轮的结论）
     gMgEglEntriesGot = 0;                    // ★探测结果同理★：不留上一轮的数字（否则判据行会报别的后端/上一轮的入口数）
     gMgEglEntriesTotal = 0;
@@ -437,6 +452,13 @@ static const char *a2_gl_bridge_egl_entry_missing(void) {
 /// ★不另写判定★：门面是谁完全由 `a2_gl_bridge_egl_entry_handle()` 决定，这里不判后端名。
 static void *a2_gl_bridge_gl_symbol(const char *name) {
     if (name == NULL) return NULL;
+    // ★[A2-SFPEW] 契约③★：本档位下 GL 入口一律先问 SFPEW 的 `eglGetProcAddress`
+    //   （否则我们的 glClear/glViewport 会落到宿主实现，与 SFPEW 的固定管线状态两套口径）。
+    //   SFPEW 未命中 ⇒ 继续走原来的「门面 → 宿主」顺序，不改变其它后端的行为。
+    if (gSfpewTier) {
+        void *sfpew = a2_sfpew_host_getprocaddress(name);
+        if (sfpew != NULL) return sfpew;
+    }
     void *facade = a2_gl_bridge_egl_entry_handle();
     void *sym = (gEglGetProcAddress != NULL) ? gEglGetProcAddress(name) : NULL;
     if (sym == NULL && facade != NULL) sym = dlsym(facade, name);
@@ -1389,6 +1411,13 @@ static void *a2_gl_stub_lookup(const char *name) {
 
 static void *a2_gl_bridge_gles_getprocaddress(const char *name) {
     if (name == NULL) return NULL;
+    // ★[A2-SFPEW] 契约③★：本档位下解析口也先问 SFPEW —— 谁能拿到 `gl*` 谁就是唯一口径，
+    //   不允许「一部分入口来自 SFPEW、一部分来自宿主」（混用就是两条状态机）。
+    //   其它档位 gSfpewTier==0 ⇒ 下面原样执行。
+    if (gSfpewTier) {
+        void *sfpew = a2_sfpew_host_getprocaddress(name);
+        if (sfpew != NULL) return sfpew;
+    }
     void *sym = NULL;
     if (gGlesHandle != NULL) sym = dlsym(gGlesHandle, name);
     if (sym == NULL && gEglHandle != NULL) sym = dlsym(gEglHandle, name);
@@ -1982,6 +2011,7 @@ int a2_gl_bridge_backend_is_egl(const char *rendererName) {
         "libnggl4es_kw.dylib",       // NG-GL4ES / KW（≤1.12.2 默认；宿主必须显式 initialize_gl4es）
         "libtinygl4angle.dylib",
         "libeagl.dylib",             // 宿主 EGL（系统 GLES 3.0 / EAGL；1.17+ 临时默认）
+        A2SFPEWHostDylibName,        // ★[A2-SFPEW] 固定管线模拟层（≤1.16；默认关，见 a2_sfpew_host.h）★
     };
     for (size_t i = 0; i < sizeof(kEglBackends) / sizeof(kEglBackends[0]); i++) {
         if (kEglBackends[i] != NULL && strcmp(rendererName, kEglBackends[i]) == 0) return 1;
@@ -2049,6 +2079,52 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     //   ⇒ 清完之后按本次判定重新置位，后续建房/改绑/帧动作才认得出宿主 EGL 后端。
     if (hostEglBackend) {
         gHostEgl = 1;
+    }
+
+    // ---- ①c ★[A2-SFPEW] 完全隔离的固定管线档位（★默认关；只有显式选它才进来★）----
+    //   判据只有一条：`a2_sfpew_host_is_identifier(rendererName)`（= 选了 libSimpleFPEWrapper.dylib）。
+    //   本段只做两件事：加载（RTLD_LOCAL + 设 SFPEW_EGL）与置位；建面/取表/帧动作的接续在
+    //   ④ / ⑤b / ⑦ 各自的 `gSfpewStandalone` / `gSfpewTier` 分支里，★其余后端的路径一字不动★。
+    //   上游契约：① 建面归宿主（⑥ 照旧用 ANGLE 的 libEGL）；② RTLD_LOCAL、不靠构造函数初始化；
+    //            ③ GL 入口一律从它的 eglGetProcAddress 取；④ makeCurrent/swapBuffers 用它。
+    if (a2_sfpew_host_is_identifier(rendererName)) {
+        if (a2_sfpew_host_load(frameworksPath) != 0) {
+            a2_log_f(@"[A2-SFPEW] ★阻断★：档位已选中但 SFPEW 未就绪（原因见上一行）"
+                     @"⇒ 不回落其它渲染器，也不建面（附着 rc=%d）", A2GlBridgeErrLoadFailed);
+            return A2GlBridgeErrLoadFailed;
+        }
+        gSfpewTier = 1;
+        gSfpewStandalone = 1;
+    }
+
+    // ---- ①d ★[A2-SFPEW] 兼容层（★叠加在已选渲染器之上；默认关★）----
+    //   与 ①c 互斥：已选独立档位时不再叠加（那会把同一份 SFPEW 装两层，状态机没法同步）。
+    //   本段做两件事：以 `SFPEW_EGL=已选渲染器自己的 dylib` 加载（RTLD_LOCAL）与置 `gSfpewTier`；
+    //   ★建面/上下文版本一律不动★（⑥ 那几处只认 gSfpewStandalone）⇒ 后面的 ③/④/⑥ 与
+    //   「没开这个开关」时**逐行相同**（MG 的 EGL/GL 宿主、MG 的 ES2 上下文、MG 的 env 都不变）。
+    //   ★换页/切上下文按契约④交给 SFPEW★（⑤b，判据 `gSfpewTier`）：它是透明转发，
+    //   叠的只是固定管线状态同步，不改任何后端自己的入口实现。
+    //   失败口径：★不阻断启动★（兼容层是可选增强）；只记一行原因，然后按该渲染器的原路径继续。
+    else if (a2_sfpew_host_compat_layer_enabled()) {
+        // 后端 EGL = **已选渲染器自己的 dylib**（MG 的 libmobileglues.dylib 等）：
+        //   SFPEW 只翻译固定管线调用，翻完仍要落回用户选的那个后端 —— 否则渲染链就换人了。
+        //   ★只有该 dylib 真的在包内才这么传★；不在（或没有 Frameworks 路径）⇒ 传 nil，
+        //   由 `a2_sfpew_host_load_compat` 退到包内 ANGLE（与独立档位同一个后端，仍不落空）。
+        NSString *sfpewBackendPath = nil;
+        if (frameworksPath.length > 0 && glLayerName != NULL) {
+            NSString *candidate = [frameworksPath stringByAppendingPathComponent:
+                                   [NSString stringWithUTF8String:glLayerName]];
+            if ([NSFileManager.defaultManager fileExistsAtPath:candidate]) sfpewBackendPath = candidate;
+        }
+        int sfpewCompatRC = a2_sfpew_host_load_compat(frameworksPath, sfpewBackendPath);
+        if (sfpewCompatRC == 0) {
+            gSfpewTier = 1;
+            a2_log_criterion(@"[A2-SFPEW] 兼容层已生效：GL 解析先问 SFPEW（后端=%s；建面/换页由 SFPEW 转交它）",
+                             sfpewBackendPath.length ? glLayerName : A2SFPEWHostBackendEglRelPath);
+        } else {
+            a2_log_criterion(@"[A2-SFPEW] 兼容层未就绪（rc=%d）⇒ 本次启动按该渲染器原路径继续（不阻断）",
+                             sfpewCompatRC);
+        }
     }
 
     // ---- ② 原生窗口句柄 ----
@@ -2210,7 +2286,15 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     }
     // 后端本体（GL 层 = MG / compat 底 / KW …）：RTLD_GLOBAL 让 MC 后续能直接解析到它的 GL 符号。
     // ★MG 已在 ③0 加载过★（顺序必须是 ANGLE 之后），这里由 a2_gl_bridge_open_renderer 幂等返回成功。
-    if (!a2_gl_bridge_open_renderer(rendererPath.UTF8String)) {
+    // ★[A2-SFPEW] 独立档位例外★：SFPEW 已在 ①c 由 `a2_sfpew_host_load` 以 **RTLD_LOCAL** 载入
+    //   （契约②：它的 `gl*` 不许进 flat namespace）⇒ 这里只承接句柄，**不再 dlopen**
+    //   （`a2_gl_bridge_open_renderer` 恒用 RTLD_GLOBAL，对它就是错的加载旗标）。
+    //   ★兼容层不走这里★（只认 gSfpewStandalone）：叠加时后端本体仍按原样 RTLD_GLOBAL 打开。
+    if (gSfpewStandalone) {
+        gRendererHandle = a2_sfpew_host_handle();
+        a2_log_f(@"[A2-GLBRIDGE] SFPEW 后端本体：复用 ①c 的 RTLD_LOCAL 句柄=%p（④ 不重复 dlopen）",
+                 gRendererHandle);
+    } else if (!a2_gl_bridge_open_renderer(rendererPath.UTF8String)) {
         a2_gl_bridge_teardown();
         return A2GlBridgeErrLoadFailed;
     }
@@ -2314,6 +2398,22 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     gEglTerminate         = (A2PFN_eglTerminate)dlsym(eglEntryHandle, "eglTerminate");
     gEglQuerySurface      = (A2PFN_eglQuerySurface)dlsym(eglEntryHandle, "eglQuerySurface");
 
+    // ---- ⑤b ★[A2-SFPEW] 契约④：makeCurrent / swapBuffers 交给 SFPEW★ ----
+    //   为什么在建面表取完之后换：display/config/context/surface 仍由**宿主 / 已选后端**用自己的 EGL 建
+    //   （契约①，上面 ⑤ 从 `eglEntryHandle` 解析 —— 一处不改）；只把这两个「每次切上下文 / 每次换页
+    //   都要走一遍」的入口换成 SFPEW 的实现，它的固定管线状态才有机会在这两个时点同步。
+    //   ★判据是 `gSfpewTier`（档位与兼容层共用）★：SFPEW 的 makeCurrent/swap 会转交给它自己的后端
+    //   （档位 = 包内 ANGLE；兼容层 = 已选渲染器的 dylib），因此两种入口的语义一致 ——
+    //   兼容层叠加时 MG 的 makeCurrent/swap 仍是同一份实现，只是外面多了一层状态同步。
+    //   ★gSfpewTier 为 0（没开开关 / 兼容层未就绪）⇒ 这两枚入口仍是原函数，逐位不变。★
+    if (gSfpewTier) {
+        gEglMakeCurrent = (A2PFN_eglMakeCurrent)a2_sfpew_host_egl_make_current;
+        gEglSwapBuffers = (A2PFN_eglSwapBuffers)a2_sfpew_host_egl_swap_buffers;
+        a2_log_criterion(@"[A2-SFPEW] 契约④：eglMakeCurrent/eglSwapBuffers 已交给 SFPEW"
+                         @"（display/config/context/surface 仍由原后端建；档位=%d 兼容层=%d）",
+                         gSfpewStandalone, (gSfpewTier && !gSfpewStandalone) ? 1 : 0);
+    }
+
     // ---- ⑥ 建 EGL display / config / context / surface ----
     gDpy = gEglGetDisplay(A2_EGL_DEFAULT_DISPLAY);
     if (gDpy == A2_EGL_NO_DISPLAY) {
@@ -2366,8 +2466,25 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
             A2_EGL_STENCIL_SIZE,    8,
             A2_EGL_NONE
         };
+        // ★[A2-SFPEW] 本档位的 config★：与上面逐项相同（RGBA8 / D24S8），只把 RENDERABLE_TYPE
+        //   从 ES2_BIT 换成 **ES3_BIT** —— 它生成的着色器是 `#version 300 es`，上下文必须是 ES3
+        //   （见 ⑥ 里 wantVersion 的同一理由；config 与 context 两边口径必须一致，否则 EGL_BAD_MATCH）。
+        //   ★只在本档位生效★：其它后端仍用上面的 cfgAttribs / KW 的 cfgAttribsKrypton。
+        const A2EGLint cfgAttribsSfpew[] = {
+            A2_EGL_SURFACE_TYPE,    A2_EGL_WINDOW_BIT,
+            A2_EGL_RENDERABLE_TYPE, A2_EGL_OPENGL_ES3_BIT,
+            A2_EGL_RED_SIZE,        8,
+            A2_EGL_GREEN_SIZE,      8,
+            A2_EGL_BLUE_SIZE,       8,
+            A2_EGL_ALPHA_SIZE,      8,
+            A2_EGL_DEPTH_SIZE,      24,
+            A2_EGL_STENCIL_SIZE,    8,
+            A2_EGL_NONE
+        };
         A2EGLint numCfg = 0;
-        if (!gEglChooseConfig(gDpy, isKrypton ? cfgAttribsKrypton : cfgAttribs, &gCfg, 1, &numCfg)
+        const A2EGLint *chosenAttribs = isKrypton ? cfgAttribsKrypton
+                                     : (gSfpewStandalone ? cfgAttribsSfpew : cfgAttribs);
+        if (!gEglChooseConfig(gDpy, chosenAttribs, &gCfg, 1, &numCfg)
             || numCfg < 1 || gCfg == NULL) {
             a2_log_f(@"%s ★阻断★：EGL 建面失败：eglChooseConfig 无可用配置（eglError=0x%x）",
                      A2GlBridgeJudgementTag, (unsigned)(gEglGetError ? gEglGetError() : 0));
@@ -2465,7 +2582,7 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         // ★宿主 EGL 后端只认 ES3★：假 EGL 的 `eglCreateContext` 明确拒绝 version≠3
         //   （不做 ES2 降级，见 a2_eagl_egl.m）；它的 EAGLContext 也只按 ES3 建。
         const A2EGLint wantVersion = isKrypton ? (kwMode == 1 ? 1 : (kwMode == 2 ? 2 : 3))
-                                               : (hostEglBackend ? 3 : 2);
+                                               : (hostEglBackend ? 3 : (gSfpewStandalone ? 3 : 2));
         A2EGLint gotVersion = wantVersion;   // ★实际拿到的版本★（回退时为 fbVersion，日志按它记，不假装）
         const A2EGLint ctxAttribs[] = { A2_EGL_CONTEXT_CLIENT_VERSION, wantVersion, A2_EGL_NONE };
         gCtx = gEglCreateContext(gDpy, gCfg, A2_EGL_NO_CONTEXT, ctxAttribs);
@@ -2486,7 +2603,11 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
             a2_gl_bridge_teardown();
             return A2GlBridgeErrEgl;
         }
-        if (wantVersion != 2) {
+        // ★`&& !gSfpewStandalone`★ 与接入前逐位等价：这一行的判据本来只是「不想用 ES2 的后端」，
+        //   接入前命中的是 KW 与宿主 EGL 后端（libeagl，wantVersion=3）——两处照旧命中；
+        //   新增的 SFPEW 也只是 ES3，但它不是 NG-GL4ES，本行文案对它就是假标签 ⇒ 只把它排除。
+        //   ★兼容层不参与★：它不改 wantVersion（上面那一行只认 gSfpewStandalone）。
+        if (wantVersion != 2 && !gSfpewStandalone) {
             a2_log_f(@"[A2-RENDERER] NG-GL4ES 上下文就绪：请求 client version=ES%ld 实得=ES%ld context=%p",
                      (long)wantVersion, (long)gotVersion, (void *)gCtx);
         }
