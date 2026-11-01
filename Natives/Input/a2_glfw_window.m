@@ -426,9 +426,6 @@ static A2GlfwObserverHub *gObserverHub = nil;
 ///   真机表现为「没有 [A2-METAL] 日志 + 黑屏」。
 static void *gA2JavaVM = NULL;
 
-void a2_glfw_window_set_java_vm(void *vm) {
-    gA2JavaVM = vm;
-}
 
 static void a2_publish_ios_view_pointer(void *view, double scale) {
     if (view == NULL) return;

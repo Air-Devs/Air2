@@ -117,6 +117,3 @@ void a2_sdl_input_key(int glfwKey, int down) {
     a2_sdl_call(kA2SdlKey, 0, a2_sdl_keycode_from_glfw(glfwKey), down ? 1 : 0, 0);
 }
 
-int a2_sdl_input_active(void) {
-    return a2_sdl_prepare();
-}

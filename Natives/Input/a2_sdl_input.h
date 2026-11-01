@@ -9,6 +9,5 @@ void a2_sdl_input_button(int button, int down);
 /// 键盘：glfwKey 用 GLFW 键码
 void a2_sdl_input_key(int glfwKey, int down);
 /// 是否可用（26.3 才有 SdlInputBridge；其它版本返回 0）
-int  a2_sdl_input_active(void);
 
 #endif

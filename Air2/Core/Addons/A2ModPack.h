@@ -61,17 +61,7 @@ typedef NS_ENUM(NSInteger, A2ModPackFormat) {
 - (instancetype)init NS_UNAVAILABLE;
 @end
 
-/// 解析出的安装计划。
-@interface A2ModPackPlan : NSObject
-@property (nonatomic, assign, readonly) A2ModPackFormat format;
-@property (nonatomic, copy, readonly) NSString *name;
-@property (nonatomic, copy, readonly, nullable) NSString *version;
-@property (nonatomic, copy, readonly, nullable) NSString *gameVersion;
-@property (nonatomic, copy, readonly, nullable) NSString *loaderID;
-/// 覆盖目录名（CurseForge overrides，Modrinth 同义为 overrides）。
-@property (nonatomic, copy, readonly, nullable) NSString *overridesDir;
-@property (nonatomic, copy, readonly) NSArray<A2ModPackFile *> *files;
-@end
+
 
 
 FOUNDATION_EXPORT NSString *const A2ModPackErrorDomain;

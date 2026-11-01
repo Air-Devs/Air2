@@ -57,16 +57,5 @@ static NSString *const kMRIndexName = @"modrinth.index.json";
 
 @end
 
-@interface A2ModPackPlan ()
-@property (nonatomic, assign) A2ModPackFormat format;
-@property (nonatomic, copy) NSString *name;
-@property (nonatomic, copy, nullable) NSString *version;
-@property (nonatomic, copy, nullable) NSString *gameVersion;
-@property (nonatomic, copy, nullable) NSString *loaderID;
-@property (nonatomic, copy, nullable) NSString *overridesDir;
-@property (nonatomic, copy) NSArray<A2ModPackFile *> *files;
-@end
 
-@implementation A2ModPackPlan
-@end
 
