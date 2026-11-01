@@ -21,6 +21,7 @@
 // ============================================================================
 #include <pthread.h>
 #import "a2_gl_bridge.h"
+#import "a2_gl2_shim.h"   // ★[A2-GL2] 自研固定管线（默认关；见 a2_gl2_shim.m 文件头）★
 #import "a2_log.h"
 #import "a2_frame_perf.h"   // ★[FRAME-PERF] 与渲染器无关的帧性能判据（本文件的帧动作每帧记一次）
 #import "A2JITEnvironment.h"   // ★[A2PROBE]★ a2_jit_probe_arm（把 KW/ANGLE 的 glLoadIdentity 交给脚本布断点）
@@ -1450,6 +1451,11 @@ static void *a2_gl_bridge_gles_getprocaddress(const char *name) {
                 // ★拒绝 = 不给宿主实现，但**也不能给 NULL**★（lastlog-87：给 NULL 时 KW 会回落到
                 //   宿主 eglGetProcAddress 拿回 ANGLE 的同类入口，崩点原样复现）
                 //   ⇒ 改喂我们自己的空实现桩：非空指针 ⇒ KW 不再问 EGL；固定管线由它的 FPE 负责。
+                // ★[A2-GL2] 自研固定管线（默认关）★：先问本层；未启用/未实现 ⇒ NULL，
+                //   落到下面的空桩 —— 与接入前完全一致。调用点：`a2_gl2_shim_lookup`
+                //   （a2_gl2_shim.m 的唯一对外查询口）。
+                void *gl2 = a2_gl2_shim_lookup(name);
+                if (gl2 != NULL) return gl2;
                 void *stub = a2_gl_stub_lookup(name);
                 static char logged[64][40]; static int loggedCount = 0;
                 int seen = 0;
