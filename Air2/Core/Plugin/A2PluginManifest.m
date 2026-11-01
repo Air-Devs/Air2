@@ -167,6 +167,7 @@ NSString *A2PluginErrorCodeString(A2PluginError code) {
     switch (code) {
         case A2PluginErrorNone: return @"ok";
         case A2PluginErrorFormat: return @"E_FORMAT";
+        case A2PluginErrorManifestMissing: return @"E_MANIFEST_MISSING";
         case A2PluginErrorField: return @"E_FIELD";
         case A2PluginErrorFormatVersion: return @"E_FORMAT_VERSION";
         case A2PluginErrorPermUnknown: return @"E_PERM_UNKNOWN";
@@ -176,7 +177,7 @@ NSString *A2PluginErrorCodeString(A2PluginError code) {
         case A2PluginErrorPlatform: return @"E_PLATFORM";
         case A2PluginErrorJsonPerm: return @"E_JSON_PERM";
         case A2PluginErrorLegacySignature: return @"E_LEGACY_SIGNATURE";
-        case A2PluginErrorZipSlip: return @"E_ZIP_SLIP";
+        case A2PluginErrorZipSlip: return @"E_PATH_ESCAPE";
         case A2PluginErrorLink: return @"E_LINK";
         case A2PluginErrorDowngrade: return @"E_DOWNGRADE";
         case A2PluginErrorSameVersionDifferentContent: return @"E_SAME_VERSION_DIFFERENT_CONTENT";

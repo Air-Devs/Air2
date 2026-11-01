@@ -69,8 +69,11 @@ extern NSString *const A2PluginErrorFieldKey;
 typedef NS_ENUM(NSInteger, A2PluginError) {
     A2PluginErrorNone = 0,
     /// JSON 整体不成立：空文件、带 BOM、语法错、根节点不是对象。
-    /// 文档码：`E_SCHEMA`（包根缺 manifest.json 时另见 `E_MANIFEST_MISSING`，同归此码）。
+    /// 文档码：`E_SCHEMA`。
     A2PluginErrorFormat,
+    /// 包根根本没有 `manifest.json`（zip 中央目录里就没有，或解压后根目录里没有）。
+    /// 文档码：`E_MANIFEST_MISSING`（代码与文档同一个码，见 `PLUGIN-AUTHORING.md` 第十二节）。
+    A2PluginErrorManifestMissing,
     /// 字段层不成立：缺必填、类型不符、未知字段、取值非法、重复项。
     /// 文档码：`E_SCHEMA`。
     A2PluginErrorField,
@@ -81,7 +84,7 @@ typedef NS_ENUM(NSInteger, A2PluginError) {
     /// 文档码：`E_SCHEMA`（权限枚举值非法）。
     A2PluginErrorPermUnknown,
     /// 路径穿越：任一字符串含 `..` / 绝对路径 / 反斜杠 / 控制字符。
-    /// 文档码：`E_PATH_ESCAPE`（符号链接条目另见安装器的 `E_LINK`）。
+    /// 机器码：`E_PATH`（文档码 `E_PATH_ESCAPE`）；路径字符集不合法同归此码。
     A2PluginErrorPath,
     /// 超出上限：文件数、路径长度、单文件大小、包体大小。
     /// 文档码：`E_SIZE_LIMIT`。
@@ -103,10 +106,10 @@ typedef NS_ENUM(NSInteger, A2PluginError) {
 
     /// zip 条目路径会落到包目录之外（`..` 段 / 绝对路径 / 盘符 / 反斜杠），
     /// 或中央目录与本地文件头声明的名字不一致。
-    /// 文档码：`E_PATH_ESCAPE`。
+    /// 机器码就是文档码：`E_PATH_ESCAPE`。
     A2PluginErrorZipSlip,
     /// 包内出现符号链接 / 硬链接条目（zip 的外部属性位标记）。
-    /// 文档码：`E_PATH_ESCAPE`（「包里有符号链接」那一行）。
+    /// 机器码：`E_LINK`（文档码 `E_PATH_ESCAPE` 的「包里有符号链接」那一行）。
     A2PluginErrorLink,
     /// 装的是低于已装版本的包，且未开开发者模式。
     /// 文档码：`E_DOWNGRADE`。

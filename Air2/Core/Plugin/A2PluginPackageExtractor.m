@@ -28,23 +28,46 @@
 #import <CommonCrypto/CommonDigest.h>
 #import <errno.h>
 #import <fcntl.h>
+#import <stdlib.h>
 #import <string.h>
 #import <unistd.h>
 
+#import "A2Log.h"
 #import "A2ZipReader.h"
 
-/// 必须全部出现在 `manifest.files` 里的目录（PLUGIN-SYSTEM 3.2 第 4 条）。
-/// 包根的其他文件（README / LICENSE）不在此列：它们不影响加载，也不被任何代码路径执行。
-static NSArray<NSString *> *A2DeclaredDirectoryPrefixes(void) {
-    static NSArray<NSString *> *prefixes = nil;
+static NSString *const kRootManifestName = @"manifest.json";
+
+/// 分块算哈希时的块大小（64 KB）：与解压缓冲同量级，且远小于单文件上限 32 MB。
+static const size_t kHashChunkBytes = 64 * 1024;
+
+/// ★仅测试用★ 解压 / 校验节流：环境变量 `A2_PLUGIN_TEST_SLOW_MS`（毫秒，默认不设 = 0）。
+///
+/// 用途只有一个：真机验收「原子性」时，24 MB 的包解压太快，杀进程总落在写完以后，
+/// 观察不到「中途被打断」这一态。设上这个变量后，解压每个文件**前后各一次**、
+/// 逐文件校验每文件一次 sleep 指定毫秒，验收方能在解压中途把进程杀掉，
+/// 再看暂存目录与 registry 是否干净。
+///
+/// 生产路径不设这个变量 ⇒ 读到 0 ⇒ 两个入口都只做一次 `if (ms == 0) return;`。
+/// 不做成 API / 配置项，就是为了不让它有机会出现在正式安装流程里。
+static unsigned int A2PluginTestSlowMilliseconds(void) {
+    static unsigned int milliseconds = 0;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        prefixes = @[@"ui/", @"pages/", @"assets/", @"locales/", @"schematics/"];
+        const char *raw = getenv("A2_PLUGIN_TEST_SLOW_MS");
+        if (raw == NULL || *raw == '\0') return;
+        long parsed = strtol(raw, NULL, 10);
+        // 上限 60 s/文件：再大就不是「慢一点」，是验收脚本自己写错了
+        if (parsed > 0 && parsed <= 60000) milliseconds = (unsigned int)parsed;
     });
-    return prefixes;
+    return milliseconds;
 }
 
-static NSString *const kRootManifestName = @"manifest.json";
+/// 每处理一个文件调一次；默认不设环境变量时立即返回。
+static void A2PluginTestSlowTick(void) {
+    unsigned int milliseconds = A2PluginTestSlowMilliseconds();
+    if (milliseconds == 0) return;
+    usleep((useconds_t)milliseconds * 1000);
+}
 
 #pragma mark - 结果
 
@@ -69,13 +92,43 @@ static NSString *A2SHA256HexOfData(NSData *data) {
     return hex;
 }
 
-/// 单文件 SHA-256（64 位小写 hex）。文件已在单文件上限之内，直接映射读。
+/// 单文件 SHA-256（64 位小写 hex）。
+///
+/// ★分块算，不把文件一次读进内存★：单文件上限 32 MB（`maxSingleFileBytes`），
+/// 峰值会和解压缓冲叠加；在低内存设备上「装一个插件」不该变成一次 jetsam。
+/// 读失败返回 nil —— 绝不返回一个「看起来对」的哈希（那样坏包会被当成好包）。
 static NSString *A2SHA256HexOfFile(NSString *path) {
-    NSData *data = [NSData dataWithContentsOfFile:path
-                                          options:NSDataReadingMappedIfSafe
-                                            error:NULL];
-    if (!data) return nil;
-    return A2SHA256HexOfData(data);
+    int fd = open(path.fileSystemRepresentation, O_RDONLY);
+    if (fd < 0) return nil;
+
+    unsigned char *buffer = malloc(kHashChunkBytes);
+    if (buffer == NULL) {
+        close(fd);
+        return nil;
+    }
+
+    CC_SHA256_CTX context;
+    CC_SHA256_Init(&context);
+
+    BOOL ok = YES;
+    ssize_t got = 0;
+    while ((got = read(fd, buffer, kHashChunkBytes)) > 0) {
+        CC_SHA256_Update(&context, buffer, (CC_LONG)got);
+    }
+    if (got < 0) ok = NO;      // EINTR 也按失败算：这次校验宁可重来，也不猜内容
+
+    free(buffer);
+    close(fd);
+    if (!ok) return nil;
+
+    unsigned char digest[CC_SHA256_DIGEST_LENGTH];
+    CC_SHA256_Final(digest, &context);
+
+    NSMutableString *hex = [NSMutableString stringWithCapacity:CC_SHA256_DIGEST_LENGTH * 2];
+    for (int i = 0; i < CC_SHA256_DIGEST_LENGTH; i++) {
+        [hex appendFormat:@"%02x", digest[i]];
+    }
+    return hex;
 }
 
 #pragma mark - 解包器
@@ -179,7 +232,9 @@ static NSString *A2SHA256HexOfFile(NSString *path) {
     NSData *manifestData = [NSData dataWithContentsOfFile:manifestPath];
     if (!manifestData) {
         if (error) {
-            *error = A2PluginErrorMake(A2PluginErrorFormat, nil, @"包根缺少 manifest.json");
+            // 中央目录里有、解压后根目录里没有：预检已拦过一次，这里是第二道门。
+            *error = A2PluginErrorMake(A2PluginErrorManifestMissing, nil,
+                                       @"包根缺少 manifest.json");
         }
         return nil;
     }
@@ -357,7 +412,9 @@ static NSString *A2SHA256HexOfFile(NSString *path) {
 
     if (!hasRootManifest) {
         if (error) {
-            *error = A2PluginErrorMake(A2PluginErrorFormat, nil, @"包根缺少 manifest.json");
+            // 机器码与文档码一致：E_MANIFEST_MISSING（PLUGIN-AUTHORING 第十二节）
+            *error = A2PluginErrorMake(A2PluginErrorManifestMissing, nil,
+                                       @"包根缺少 manifest.json");
         }
         return NO;
     }
@@ -386,6 +443,11 @@ static NSString *A2SHA256HexOfFile(NSString *path) {
 
     for (A2ZipEntryInfo *info in infos) {
         if (info.isDirectory) continue;
+
+        // ★仅测试用★ 写这个条目之前先停一下：一个 24 MB 的包里可能只有一两个文件，
+        // 只在写完后停会让「杀进程」落在整包已经落盘之后。这里 + 循环末尾各一次，
+        // 任何规模的多文件包都能在「暂存目录里有东西、但还没换目录」的中间态被杀到。
+        A2PluginTestSlowTick();
 
         NSString *target = [destination stringByAppendingPathComponent:info.name];
 
@@ -458,6 +520,9 @@ static NSString *A2SHA256HexOfFile(NSString *path) {
             }
             return NO;
         }
+
+        // ★仅测试用★ 原子性验收：设了 A2_PLUGIN_TEST_SLOW_MS 才有停顿
+        A2PluginTestSlowTick();
     }
     return YES;
 }
@@ -488,16 +553,29 @@ static NSString *A2SHA256HexOfFile(NSString *path) {
                     relativePaths:(NSArray<NSString *> *)relativePaths
                       fileManager:(NSFileManager *)fileManager
                             error:(NSError **)error {
-    NSSet<NSString *> *actual = [NSSet setWithArray:relativePaths];
+    // 盘上的实际文件集合。**不含 manifest.json 自身**（它不是自己的清单项），
+    // 也不含目录 —— regularFilePathsInDirectory 只收 NSFileTypeRegular。
+    NSMutableSet<NSString *> *actual = [NSMutableSet setWithCapacity:relativePaths.count];
+    for (NSString *path in relativePaths) {
+        if ([path isEqualToString:kRootManifestName]) continue;
+        [actual addObject:path];
+    }
     NSMutableSet<NSString *> *declared = [NSMutableSet setWithCapacity:manifest.files.count];
 
+    // ① 清单 → 盘：声明了却没落地的，是清单说谎（≠「包里多文件」）
     for (A2PluginFileEntry *entry in manifest.files) {
         [declared addObject:entry.path];
         if (![actual containsObject:entry.path]) {
+            [A2Log log:@"[A2-PLUGIN] 完整性校验失败：manifest.files 声明了「%@」，"
+                       @"但包内没有这个文件（清单 %lu 项，盘上 %lu 项）",
+                      entry.path, (unsigned long)manifest.files.count,
+                      (unsigned long)actual.count];
             if (error) {
                 *error = A2PluginErrorMake(A2PluginErrorFileSetMismatch, entry.path,
-                                           @"manifest.files 声明了包里不存在的文件「%@」",
-                                           entry.path);
+                                           @"manifest.files 声明了包里不存在的文件「%@」"
+                                           @"（清单 %lu 项，包内实际 %lu 项）",
+                                           entry.path, (unsigned long)manifest.files.count,
+                                           (unsigned long)actual.count);
             }
             return NO;
         }
@@ -506,6 +584,7 @@ static NSString *A2SHA256HexOfFile(NSString *path) {
         NSDictionary<NSFileAttributeKey, id> *attributes =
             [fileManager attributesOfItemAtPath:filePath error:NULL];
         if (!attributes) {
+            [A2Log log:@"[A2-PLUGIN] 完整性校验失败：读不到「%@」的文件属性", entry.path];
             if (error) {
                 *error = A2PluginErrorMake(A2PluginErrorIO, entry.path,
                                            @"读不到文件属性「%@」", entry.path);
@@ -514,42 +593,64 @@ static NSString *A2SHA256HexOfFile(NSString *path) {
         }
         unsigned long long size = attributes.fileSize;
         if (size != entry.size) {
+            [A2Log log:@"[A2-PLUGIN] 完整性校验失败：「%@」字节数不符（清单 %llu，实际 %llu）",
+                  entry.path, entry.size, size];
             if (error) {
                 *error = A2PluginErrorMake(A2PluginErrorHashMismatch, entry.path,
-                                           @"「%@」实际 %llu 字节，清单写 %llu 字节",
-                                           entry.path, size, entry.size);
+                                           @"「%@」字节数与清单不符：清单写 %llu 字节，实际 %llu 字节",
+                                           entry.path, entry.size, size);
             }
             return NO;
         }
         NSString *digest = A2SHA256HexOfFile(filePath);
         if (!digest || ![digest isEqualToString:entry.sha256.lowercaseString]) {
+            [A2Log log:@"[A2-PLUGIN] 完整性校验失败：「%@」的 SHA-256 不符"
+                       @"（清单 %@，实际 %@）",
+                  entry.path, entry.sha256.lowercaseString, digest ?: @"(读不出来)"];
             if (error) {
                 *error = A2PluginErrorMake(A2PluginErrorHashMismatch, entry.path,
-                                           @"「%@」的 SHA-256 与清单不符（打包后又改过文件？）",
-                                           entry.path);
+                                           @"「%@」的 SHA-256 与清单不符：清单写 %@，实际 %@"
+                                           @"（打包后又改过文件？）",
+                                           entry.path, entry.sha256.lowercaseString,
+                                           digest ?: @"(读不出来)");
             }
             return NO;
         }
+
+        // ★仅测试用★ 原子性验收：设了 A2_PLUGIN_TEST_SLOW_MS 才有停顿
+        A2PluginTestSlowTick();
     }
 
-    // 反向：五个目录下的每个文件都必须在清单里，多一个就是没被校验过的内容
-    for (NSString *path in relativePaths) {
-        if ([path isEqualToString:kRootManifestName]) continue;
+    // ② 盘 → 清单：多出来的文件没有任何清单项覆盖它，就是夹带。
+    // 包根同样算在内（README / LICENSE 也一样）—— 双向严格相等是 schema 与
+    // PLUGIN-AUTHORING 第二节第 2 条对作者承诺的规则；不想被校验就别打进包。
+    // 按 UTF-8 字节序排序：NSSet 的顺序随机，报哪一个「多余文件」必须可复现。
+    NSArray<NSString *> *actualSorted =
+        [[actual allObjects] sortedArrayUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {
+        int result = strcmp(a.UTF8String, b.UTF8String);
+        if (result < 0) return NSOrderedAscending;
+        if (result > 0) return NSOrderedDescending;
+        return NSOrderedSame;
+    }];
+    for (NSString *path in actualSorted) {
         if ([declared containsObject:path]) continue;
-        for (NSString *prefix in A2DeclaredDirectoryPrefixes()) {
-            if ([path hasPrefix:prefix]) {
-                if (error) {
-                    *error = A2PluginErrorMake(A2PluginErrorFileSetMismatch, path,
-                                               @"「%@」在 %@ 下却没写进 manifest.files："
-                                               @"这份文件不会被任何校验覆盖", path, prefix);
-                }
-                return NO;
-            }
+        [A2Log log:@"[A2-PLUGIN] 完整性校验失败：包里有「%@」，manifest.files 里没有它"
+                   @"（清单 %lu 项，盘上 %lu 项）",
+              path, (unsigned long)manifest.files.count, (unsigned long)actualSorted.count];
+        if (error) {
+            *error = A2PluginErrorMake(A2PluginErrorFileSetMismatch, path,
+                                       @"包里有「%@」却没写进 manifest.files：这份文件不会被"
+                                       @"任何校验覆盖（清单 %lu 项，包内实际 %lu 项）",
+                                       path, (unsigned long)manifest.files.count,
+                                       (unsigned long)actualSorted.count);
         }
+        return NO;
     }
 
-    // 入口脚本必须真实存在（type: js 的 manifest 已在解析阶段保证 entry 非空）
+    // 入口脚本必须真实存在（type: js 的 manifest 已在解析阶段保证 entry 非空）。
+    // 上面两个方向都过了还走到这里 = entry 既没声明也不在盘上，是清单自相矛盾。
     if (manifest.entry.length && ![actual containsObject:manifest.entry]) {
+        [A2Log log:@"[A2-PLUGIN] 完整性校验失败：入口脚本「%@」不在包里", manifest.entry];
         if (error) {
             *error = A2PluginErrorMake(A2PluginErrorFileSetMismatch, @"entry",
                                        @"入口脚本「%@」不在包里", manifest.entry);

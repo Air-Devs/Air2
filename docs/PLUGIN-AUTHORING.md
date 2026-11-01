@@ -244,7 +244,9 @@ v3（页面 / 覆盖）见 `PLUGIN-PAGE.md`：
 - `path` 是包内相对路径（POSIX 分隔符），`sha256` 是小写 hex，`size` 是字节数。
 - **不要**把 `manifest.json` 列进来。
 - **不要**把 `AIR2SIG.json` 列进来，也不要放这个文件。
-- 清单外的文件一律让整包拒装。
+- 清单外的文件一律让整包拒装（包根的 README / LICENSE 也一样：不打进包就不用管）。
+- `files: []` 是合法的：一个只有 `manifest.json` 的包能装上（schema 的 `minItems` 为 0），
+  适合先占个 id、内容后续版本再加。
 
 ---
 
@@ -698,6 +700,38 @@ jsonschema.validate(m, s); print('manifest ok')
 | `E_PAGE_INVALID` | v3 页面树不合法（节点超限 / 绑定路径错 / 容器嵌套错） | 按 `PLUGIN-PAGE.md` 检查 |
 | `E_BINDING_INVALID` | `binding` 不是 `state.*` / `item.*` | 改绑定路径 |
 | `E_ACTION_UNKNOWN` | 纯 JSON 插件用了宿主不认识的动作 | 纯 JSON 只能用内置动作；复杂交互改 `js` |
+
+### 机器码对照（管理页显示的就是这一列）
+
+上表是**归类**用的文档码；管理页与安装失败详情里显示的是**机器码**
+（`A2PluginErrorCodeString()`）。两者可能不同 —— 本表是唯一口径，代码里有新码就必须在这里加一行：
+
+| 文档码 | 机器码（实际报出来的） |
+|---|---|
+| `E_MANIFEST_MISSING` | `E_MANIFEST_MISSING` |
+| `E_SCHEMA` | `E_FORMAT`（JSON 整体不成立）/ `E_FIELD`（字段层）/ `E_PERM_UNKNOWN`（权限 id 不在目录里） |
+| `E_FORMAT_VERSION` | `E_FORMAT_VERSION` |
+| `E_PATH_ESCAPE` | `E_PATH_ESCAPE`（zip 条目跑出包目录）/ `E_LINK`（符号链接条目）/ `E_PATH`（manifest 里的路径字符集或 `..`） |
+| `E_SIZE_LIMIT` | `E_SIZE` |
+| `E_TYPE_UNSUPPORTED` | `E_TYPE_UNSUPPORTED` |
+| `E_PLATFORM` | `E_PLATFORM` |
+| `E_JSON_PERM` | `E_JSON_PERM` |
+| `E_LEGACY_SIGNATURE` | `E_LEGACY_SIGNATURE` |
+| `E_FILE_SET_MISMATCH` | `E_FILE_SET_MISMATCH` |
+| `E_HASH_MISMATCH` | `E_HASH_MISMATCH` |
+| `E_DOWNGRADE` | `E_DOWNGRADE` |
+| `E_SAME_VERSION_DIFFERENT_CONTENT` | `E_SAME_VERSION_DIFFERENT_CONTENT` |
+| `E_PERM_CONFLICT` / `E_DEP_MISSING` / `E_DEP_CYCLE` / `E_SLOT_CONFLICT` / `E_NATIVE_UNSUPPORTED` / `E_PAGE_INVALID` / `E_BINDING_INVALID` / `E_ACTION_UNKNOWN` | 尚未实现（对应里程碑见 `PLUGIN-SYSTEM.md` 第六节），实现时沿用同名机器码 |
+
+宿主侧的原因（不是包的问题，没有文档码，但同样会带着机器码弹出来）：
+
+| 机器码 | 含义 |
+|---|---|
+| `E_IO` | 建目录 / 换目录 / 删目录 / 写注册表失败 —— 磁盘或权限问题 |
+| `E_NO_PREVIOUS` | 没有可回退的上一版 |
+| `E_BUILTIN` | 随 Air2 打包的内置插件，不能卸载 |
+| `E_LAUNCH_CHAIN_UNCONFIRMED` | 会改启动链的包没有过 10 次免责确认（调用方没给闸门） |
+| `E_USER_CANCELLED` | 用户在免责确认里点了取消 |
 
 ---
 

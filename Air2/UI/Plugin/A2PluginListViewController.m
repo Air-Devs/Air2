@@ -417,20 +417,13 @@ static void A2PluginConfirmUninstall(UIViewController *presenter,
 /// 开关走 `customAccessoryView` 而不是 `A2SettingsRowAccessorySwitch`：
 /// 后者会让整行变成「点哪都切开关」，没有地方点进详情。
 /// 用自定义附件时，开关自己接收点击，行的其余部分仍然可以点开详情。
+/// 开关控件本身与设置页完全同一个（`A2Switch`），动效/触感不需要另做一套。
 - (A2SettingsRow *)rowForEntry:(A2PluginRegistryEntry *)entry
                       manifest:(nullable A2PluginManifest *)manifest {
     A2SettingsRow *row = [[A2SettingsRow alloc] init];
     row.symbolName = @"puzzlepiece.extension.fill";
     row.title = manifest.name.length ? manifest.name : entry.pluginId;
-
-    NSMutableArray<NSString *> *facts = [NSMutableArray array];
-    [facts addObject:[NSString stringWithFormat:@"v%@", entry.version]];
-    [facts addObject:A2PluginSourceFactText(entry.sourceKind, entry.sourceDetail)];
-    if (manifest && !A2PluginAllPermissionsGranted(self.store, manifest)) {
-        // 与安装页同一口径：没授权齐也能用，只是功能受限。
-        [facts addObject:@"功能受限"];
-    }
-    row.subtitle = [facts componentsJoinedByString:@" · "];
+    row.subtitle = [self factsTextForEntry:entry manifest:manifest];
     row.accessibilityIdentifier = entry.pluginId;
 
     A2Switch *toggle = [[A2Switch alloc] initWithFrame:CGRectZero];
@@ -439,9 +432,19 @@ static void A2PluginConfirmUninstall(UIViewController *presenter,
 
     NSString *pluginId = [entry.pluginId copy];
     __weak typeof(self) weakSelf = self;
+    __weak typeof(toggle) weakToggle = toggle;
+    __weak A2SettingsRow *weakRow = row;      // 块不能强持有 row：row → toggle → 块 会成环
     toggle.onChange = ^(BOOL isOn) {
         __strong typeof(weakSelf) self = weakSelf;
-        [self applyEnabled:isOn forPluginId:pluginId];
+        [self applyEnabled:isOn
+               forPluginId:pluginId
+                    toggle:weakToggle
+                refreshRow:^{
+            // 授权页里可能刚补授了几项权限：只重算这副标题（「功能受限」要不要显示），
+            // 不重建行 —— 重建就是把用户点的那个开关连同动画一起拆掉。
+            __strong typeof(weakSelf) self = weakSelf;
+            weakRow.subtitle = [self factsTextForEntry:entry manifest:manifest];
+        }];
     };
     row.onTap = ^{
         __strong typeof(weakSelf) self = weakSelf;
@@ -450,20 +453,42 @@ static void A2PluginConfirmUninstall(UIViewController *presenter,
     return row;
 }
 
+/// 副标题里的「事实」串：版本 · 来源 ·（未授权齐时）功能受限。
+/// 首屏与开关切换后共用这一处，避免两边各拼一遍导致文案漂移。
+- (NSString *)factsTextForEntry:(A2PluginRegistryEntry *)entry
+                       manifest:(nullable A2PluginManifest *)manifest {
+    NSMutableArray<NSString *> *facts = [NSMutableArray array];
+    [facts addObject:[NSString stringWithFormat:@"v%@", entry.version]];
+    [facts addObject:A2PluginSourceFactText(entry.sourceKind, entry.sourceDetail)];
+    if (manifest && !A2PluginAllPermissionsGranted(self.store, manifest)) {
+        // 与安装页同一口径：没授权齐也能用，只是功能受限。
+        [facts addObject:@"功能受限"];
+    }
+    return [facts componentsJoinedByString:@" · "];
+}
+
 #pragma mark 动作
 
-- (void)applyEnabled:(BOOL)enabled forPluginId:(NSString *)pluginId {
+- (void)applyEnabled:(BOOL)enabled
+         forPluginId:(NSString *)pluginId
+              toggle:(nullable A2Switch *)toggle
+          refreshRow:(nullable void (^)(void))refreshRow {
     __weak typeof(self) weakSelf = self;
     A2PluginSetEnabled(self, self.registry, self.installer, self.store, self.hostMilestone,
                        pluginId, enabled,
                        ^(BOOL ok, NSString *message) {
-        // 下一轮 runloop 再重画：这个回调是从开关（行的子视图）的点击里出来的，
-        // 当场把那一行拆掉等于在控件自己的方法栈里释放它的父视图。
+        // 下一轮 runloop 再动：这个回调是从开关（行的子视图）的点击里出来的，
+        // 当场拆行等于在控件自己的方法栈里释放它的父视图。
         dispatch_async(dispatch_get_main_queue(), ^{
             __strong typeof(weakSelf) self = weakSelf;
             if (!ok) [A2Toast show:(message ?: @"操作失败") inView:self.view];
-            // 无论成功、被拦下还是失败，都按磁盘重画：开关停在错误的位置比报错更糟。
-            [self reload];
+            // ★不重画整页，只把开关原位滑回去★
+            //   设置页的开关从不在点击后被重建，所以它的滑块动画能完整播完；
+            //   这里以前是 [self reload]，用户刚点的那个开关连同 100 ms 的弹簧动画
+            //   一起被拆掉，看起来就是「插件页的开关没有动画」。状态以磁盘为准：
+            //   成功就停在用户选的位置，被拦下 / 写失败就滑回去。
+            [toggle setOn:(ok ? enabled : !enabled) animated:YES];
+            if (ok && refreshRow) refreshRow();
         });
     });
 }

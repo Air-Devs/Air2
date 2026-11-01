@@ -126,8 +126,10 @@ hello.air2plugin
 1. `assets/common/**` 与 `assets/<platform>/**` 按 `PLUGIN-COMPAT.md` 第三节叠加。
 2. `locales/` 下的文件名即 BCP-47 语言标记，回退顺序见 `PLUGIN-COMPAT.md`。
 3. `native/` 出现在 `formatVersion 2` 的包里 → 拒装（「本宿主不支持原生插件」）。
-4. `ui/`、`pages/`、`assets/`、`locales/`、`schematics/` 下的每个文件**必须在 `manifest.files` 里**，
-   且 `manifest.files` 里的每个路径**必须真实存在** —— 双向严格相等，多一个少一个都拒装。
+4. 除 `manifest.json` 自身之外，包内**每个文件**（含包根的 README / LICENSE）都必须在
+   `manifest.files` 里，且 `manifest.files` 里的每个路径**必须真实存在** —— 双向严格相等，
+   多一个少一个都拒装（`E_FILE_SET_MISMATCH`）。不想让某个文件被校验，就别把它打进包。
+   `files: []`（0 文件包）是合法包。
 5. 包根**不允许** `AIR2SIG.json`。出现即拒装（`E_LEGACY_SIGNATURE`），文案
    「此包使用了已移除的签名格式，请重新导出」。
 
@@ -224,6 +226,10 @@ hello.air2plugin
 - ⑥ 成功、⑦ 失败 → 目录已就位但没有注册表条目 ⇒ 下次启动的「孤儿目录清理」会删掉它。
   注册表是**唯一事实来源**，目录不是。
 - ⑥ 失败（rename 跨卷 / 目标已存在 / 磁盘满）→ staging 保留供重试，registry 不动。
+
+**仅测试用**：设环境变量 `A2_PLUGIN_TEST_SLOW_MS`（毫秒）后，解压与逐文件校验每处理一个文件
+就 sleep 指定毫秒，用于「解压中途杀进程」的原子性验收（默认不设 = 0 开销）。它不是配置项，
+不进 UI，正式包不设就没有任何行为差异。
 
 ### 4.3 原子性论证
 

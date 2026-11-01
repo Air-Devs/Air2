@@ -524,7 +524,7 @@ static void testZipSafety(void) {
     NSError *error = nil;
     ok([installer installPackageAtURL:slipURL source:LocalSource() error:&error] == nil,
        @"zip-slip 包被拒");
-    expectReject(@"zip-slip 给 E_ZIP_SLIP", error, @"E_ZIP_SLIP");
+    expectReject(@"zip-slip 给 E_PATH_ESCAPE", error, @"E_PATH_ESCAPE");
     ok(!FileExists([plugins.stringByDeletingLastPathComponent
                     stringByAppendingPathComponent:@"evil.txt"]),
        @"被拒的包没有在包目录之外写出文件");
@@ -639,6 +639,110 @@ static void testIntegrityAndHostGate(void) {
     error = nil;
     ok([installer installPackageAtURL:jsURL source:LocalSource() error:&error] != nil,
        @"打开 allowsJSPlugins 后 JS 插件可以装");
+}
+
+#pragma mark - 用例：完整性的双向严格相等（真机验收回归）
+
+/// 真机验收暴露的两类「坏包能装进去」，这里逐条钉住：
+///   · bad-hash：内容与 manifest.files 的 sha256 不符 → E_HASH_MISMATCH（原因里有文件名与两个哈希）
+///   · bad-fileset：包里有文件不在清单里（★包根也算★，以前只查 ui/pages/assets/locales/schematics）
+///   · bad-fileset：清单声明了包里没有的文件 → E_FILE_SET_MISMATCH（原因里点名那个路径）
+///   · bad-empty：`files: []` 是合法包（schema 的 minItems = 0），必须装得上
+///   · 没有 manifest.json → E_MANIFEST_MISSING（文档码就是机器码）
+/// 每条失败都要求：暂存目录清空、没有插件目录、registry 里没有条目。
+static void testIntegrityTwoWayStrictness(void) {
+    NSString *plugins = TempDirectory();
+    A2PluginRegistry *registry = NULL;
+    A2PluginInstaller *installer = MakeInstaller(plugins, &registry);
+    NSString *stagingDirectory = [plugins stringByAppendingPathComponent:@".staging"];
+    NSFileManager *fileManager = NSFileManager.defaultManager;
+
+    // ① bad-hash：清单里的 sha256 来自「另一份内容」
+    NSData *declaredBytes = UTF8(@"{\"a\":1}");
+    NSData *actualBytes = UTF8(@"{\"a\":2}");
+    NSMutableDictionary *hashManifest = PluginManifest(@"top.example.badhash", @"1.0.0");
+    hashManifest[@"files"] = @[@{@"path": @"ui/a.json",
+                                 @"sha256": SHA256Hex(declaredBytes),
+                                 @"size": @(declaredBytes.length)}];
+    NSURL *hashURL = WritePackage(Package(hashManifest, @{@"ui/a.json": actualBytes}),
+                                  @"bad-hash.air2plugin");
+
+    NSError *error = nil;
+    ok([installer installPackageAtURL:hashURL source:LocalSource() error:&error] == nil,
+       @"★bad-hash：内容与清单哈希不符 ⇒ 拒装★");
+    expectReject(@"bad-hash 给 E_HASH_MISMATCH", error, @"E_HASH_MISMATCH");
+    ok(error != nil
+       && [error.localizedDescription rangeOfString:@"ui/a.json"].location != NSNotFound,
+       @"bad-hash 的原因里点名了那个文件");
+    ok(error != nil
+       && [error.localizedDescription rangeOfString:SHA256Hex(declaredBytes)].location != NSNotFound,
+       @"bad-hash 的原因里带上了清单期望的哈希");
+    ok(!FileExists([plugins stringByAppendingPathComponent:@"top.example.badhash"]),
+       @"bad-hash：没有留下插件目录");
+    ok([registry entryForPluginId:@"top.example.badhash"] == nil, @"bad-hash：没写 registry");
+    ok(([fileManager contentsOfDirectoryAtPath:stagingDirectory error:NULL] ?: @[]).count == 0,
+       @"bad-hash：暂存目录已清空");
+
+    // ② bad-fileset（包里多文件）：多出来的那个在**包根**，不在五个目录之下
+    NSDictionary<NSString *, NSData *> *declaredFiles = @{@"ui/a.json": declaredBytes};
+    NSMutableDictionary *extraManifest = PluginManifest(@"top.example.badset", @"1.0.0");
+    DeclareFiles(extraManifest, declaredFiles);
+    NSMutableArray<TestZipEntry *> *extraEntries = [NSMutableArray array];
+    [extraEntries addObject:ZipEntry(@"manifest.json", ManifestData(extraManifest))];
+    [extraEntries addObject:ZipEntry(@"ui/a.json", declaredBytes)];
+    [extraEntries addObject:ZipEntry(@"evil.js", UTF8(@"// 没写进清单的夹带"))];
+    NSURL *extraURL = WritePackage(BuildZip(extraEntries), @"bad-fileset.air2plugin");
+
+    error = nil;
+    ok([installer installPackageAtURL:extraURL source:LocalSource() error:&error] == nil,
+       @"★bad-fileset：包里有文件不在 manifest.files 里 ⇒ 拒装（包根也算）★");
+    expectReject(@"包内多文件给 E_FILE_SET_MISMATCH", error, @"E_FILE_SET_MISMATCH");
+    ok(error != nil
+       && [error.localizedDescription rangeOfString:@"evil.js"].location != NSNotFound,
+       @"bad-fileset 的原因里点名了那个多余文件");
+    ok(!FileExists([plugins stringByAppendingPathComponent:@"top.example.badset"]),
+       @"bad-fileset：没有留下插件目录");
+    ok([registry entryForPluginId:@"top.example.badset"] == nil, @"bad-fileset：没写 registry");
+    ok(([fileManager contentsOfDirectoryAtPath:stagingDirectory error:NULL] ?: @[]).count == 0,
+       @"bad-fileset：暂存目录已清空");
+
+    // ③ bad-fileset（清单多文件）：声明了 ui/ghost.json，包里没有
+    NSMutableDictionary *ghostManifest = PluginManifest(@"top.example.ghost", @"1.0.0");
+    DeclareFiles(ghostManifest, @{@"ui/a.json": declaredBytes,
+                                  @"ui/ghost.json": UTF8(@"{\"ghost\":true}")});
+    NSURL *ghostURL = WritePackage(Package(ghostManifest, declaredFiles),
+                                   @"bad-fileset-ghost.air2plugin");
+
+    error = nil;
+    ok([installer installPackageAtURL:ghostURL source:LocalSource() error:&error] == nil,
+       @"清单声明了包里不存在的文件 ⇒ 拒装");
+    expectReject(@"清单多文件给 E_FILE_SET_MISMATCH", error, @"E_FILE_SET_MISMATCH");
+    ok(error != nil
+       && [error.localizedDescription rangeOfString:@"ui/ghost.json"].location != NSNotFound,
+       @"清单多文件的原因里点名了那个不存在的路径");
+    ok([registry entryForPluginId:@"top.example.ghost"] == nil, @"清单多文件：没写 registry");
+
+    // ④ bad-empty：files 为空数组是**合法包**（plugin.schema.json 的 minItems = 0）
+    NSMutableDictionary *emptyManifest = PluginManifest(@"top.example.empty", @"1.0.0");
+    NSURL *emptyURL = WritePackage(Package(emptyManifest, @{}), @"empty.air2plugin");
+
+    error = nil;
+    A2PluginInstallResult *emptyInstalled =
+        [installer installPackageAtURL:emptyURL source:LocalSource() error:&error];
+    ok(emptyInstalled != nil,
+       [NSString stringWithFormat:@"★0 文件包是合法的，必须装得上（错误：%@）★",
+        error.localizedDescription ?: @"无"]);
+    eqInt((NSInteger)[(NSArray *)emptyManifest[@"files"] count], 0, @"夹具的 files 确实是空数组");
+
+    // ⑤ 包根没有 manifest.json → E_MANIFEST_MISSING（文档码 = 机器码）
+    NSMutableArray<TestZipEntry *> *noManifestEntries = [NSMutableArray array];
+    [noManifestEntries addObject:ZipEntry(@"ui/a.json", declaredBytes)];
+    NSURL *noManifestURL = WritePackage(BuildZip(noManifestEntries), @"no-manifest.air2plugin");
+
+    error = nil;
+    ok([installer installPackageAtURL:noManifestURL source:LocalSource() error:&error] == nil,
+       @"没有 manifest.json 的包被拒");
+    expectReject(@"缺 manifest 给 E_MANIFEST_MISSING", error, @"E_MANIFEST_MISSING");
 }
 
 #pragma mark - 用例：安装会改启动链的插件（10 次免责确认闸门）
@@ -771,6 +875,7 @@ int main(void) {
         testRollback();
         testZipSafety();
         testIntegrityAndHostGate();
+        testIntegrityTwoWayStrictness();
         testLaunchChainConfirmGate();
         testSourceValidation();
 
