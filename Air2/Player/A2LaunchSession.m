@@ -34,7 +34,6 @@
 #import "A2IntegrityChecker.h"
 #import "A2JITEnabler.h"
 #import "A2LegacyJITGate.h"            // Natives/Support —— JIT 闸门的唯一实现（判据→申请→等待）
-#import "a2_gl2_shim.h"             // Natives/Renderer —— ★[A2-GL2] 自研固定管线档位判据（默认关）★
 #import "A2LegacyAssetsMapper.h"    // Core/Version —— 远古资源映射（virtual / map_to_resources）
 #import "A2Log.h"
 
@@ -111,20 +110,8 @@ static NSString *A2DefaultRendererForVersion(NSInteger major, NSInteger minor,
     if (major == 1 && minor >= 17) return A2RendererHostEGLDylibName;
     if (major == 1 && minor >= 13) return @"libmobileglues.dylib";
     if (major == 1 && minor <= 12) {
-        // ★[A2-GL2] 自研固定管线档位（★默认关★）★
-        //   判据只有一个：`a2_gl2_shim_enabled()`（环境变量 A2_GL2_SHIM，值 "0"/空/未设 ⇒ 关）。
-        //   开启后「固定管线实现者」从渲染器 dylib 换成本进程的 a2_gl2_shim：
-        //     立即模式（glBegin/glEnd）、矩阵栈、客户端顶点数组 → GLES3 VBO + 着色器绘制。
-        //   两处入口已接（见 a2_gl2_shim.h 文件头）：`a2_gl_bridge_gles_getprocaddress`
-        //   与假 EGL 的 `eglGetProcAddress`。
-        //   ★本轮边界（如实）★：包内还没有独立的 `liba2gl2.dylib` ⇒ 这一档**不换 dylib**，
-        //   仍取 KW（它提供 EGL 门面 + ES3 上下文）；本层只承担固定管线语义。
-        //   关闭时（默认）本分支与接入前完全等价。
-        if (a2_gl2_shim_enabled()) {
-            [A2Log criterion:@"[A2-GL2] 档位=自研固定管线：MC %ld.%ld ⇒ 固定管线入口由本进程 "
-                              @"a2_gl2_shim 承担（判据 A2_GL2_SHIM=1）；dylib 仍取 %@（EGL 门面 + ES3 上下文）",
-             (long)major, (long)minor, A2RendererNGGL4ESKWDylibName];
-        }
+        // ★[A2-GL2] 档位已移除★：a2_gl2_shim 系列文件不在本分支（判据与实现都不存在），
+        //   1.13–1.18 统一取 KW（EGL 门面 + ES3 上下文）；环境变量 A2_GL2_SHIM 不再有任何效果。
         return A2RendererNGGL4ESKWDylibName;
     }
     return @"libgl4es_114.dylib";   // 远古轨道（classic/Alpha/Beta，major=0）仍走老线兼容底
