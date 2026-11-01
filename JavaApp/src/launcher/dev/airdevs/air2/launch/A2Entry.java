@@ -51,11 +51,6 @@ public final class A2Entry {
         URL[] extra = A2GameClasspath.toUrls(plan.classpath());
         appendToSystemClassLoader(loader, extra);
 
-        // ★[A2-GL2] 固定管线入口抢占★（默认不生效：见 A2Gl2Gl11Bind 的判据说明）
-        //   必须在这里：GL11 必须在 MC 第一次 GL 调用之前完成 RegisterNatives；
-        //   又必须在类路径追加之后（GL11 在 libs/lwjgl-<ver>/lwjgl.jar 里）。
-        A2Gl2Gl11Bind.bind(loader);
-
         System.out.println("[A2-JAVA] 追加类路径 " + extra.length + " 条；派发 " + plan.mainClass());
         A2MainDispatcher.dispatch(plan.mainClass(), plan.arguments(), loader);
         System.out.println("[A2-JAVA] 主类正常返回");

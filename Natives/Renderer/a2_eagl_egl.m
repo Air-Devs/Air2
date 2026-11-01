@@ -51,7 +51,6 @@
 #import <time.h>
 
 #import "a2_eagl_egl.h"
-#import "a2_gl2_shim.h"   // ★[A2-GL2] 自研固定管线（默认关）★
 #import "a2_log.h"          // Natives/Support —— [A2-EAGL] / [A2-FAKEEGL] 日志出口
 
 // ===========================================================================
@@ -1467,15 +1466,6 @@ EGLint eglGetError(void) {
 __eglMustCastToProperFunctionPointerType eglGetProcAddress(const char *procname) {
     A2_FE_IDLE_OR(eglGetProcAddress, "eglGetProcAddress", (procname), NULL);
     if (procname == NULL) return NULL;
-
-    // ⓪ ★[A2-GL2] 自研固定管线（默认关）★：固定管线专属入口（glBegin/glVertex*/矩阵栈/
-    //   客户端数组…）由本进程实现，避免落回系统 GLES 的 GLES1 入口（未初始化其状态 ⇒ SIGBUS，
-    //   见 docs/LEGACY-GL-STATUS.md 第 1 节第 1 轮）。未启用 ⇒ NULL ⇒ 行为与接入前一致。
-    //   调用点：`a2_gl2_shim_lookup`（a2_gl2_shim.m 的唯一对外查询口）。
-    {
-        void *gl2 = a2_gl2_shim_lookup(procname);
-        if (gl2 != NULL) return (__eglMustCastToProperFunctionPointerType)gl2;
-    }
 
     // ① 本模块导出表（EGL 名字）
     void *sym = a2_fe_own_symbol(procname);
