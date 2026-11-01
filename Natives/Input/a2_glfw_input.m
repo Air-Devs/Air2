@@ -145,7 +145,10 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 ///   unrecognized selector` + 黑屏。
 ///   只在 Metal 渲染器（AMETHYST_METAL=1）时启用，gl4es/EGL 路径保持 CALayer。
 + (Class)layerClass {
-    if (getenv("AMETHYST_METAL") != NULL) {
+    // ★2026-11-01★ MG/ANGLE 路径同样需要 backing layer = CAMetalLayer：
+    //   老 Air 的 GameSurfaceView 就是 +layerClass 覆写成 CAMetalLayer，
+    //   ANGLE(iOS) 直接呈现到它；我们此前外挂子层 ⇒ 画得出、上不了屏。
+    if (getenv("AMETHYST_METAL") != NULL || getenv("A2_GL_METAL_HOST") != NULL) {
         return [CAMetalLayer class];
     }
     return [super layerClass];

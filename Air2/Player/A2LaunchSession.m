@@ -874,6 +874,10 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                 //   同时把 MG 自己的日志指到可导出路径，出问题能直接看它内部初始化到哪一步。
                 if ([bare rangeOfString:@"mobileglues"].location != NSNotFound) {
                     setenv("MOBILEGL_BACKEND_TYPE", "DirectGLES", 1);
+                    // ★2026-11-01★ ANGLE(iOS/Metal) 只呈现到视图的 backing layer。
+                    //   MG 路径下把游戏视图的 +layerClass 切成 CAMetalLayer（见 a2_glfw_input.m），
+                    //   否则我们只能外挂子层 ⇒ swap 返回 EGL_SUCCESS 却上不了屏。
+                    setenv("A2_GL_METAL_HOST", "1", 1);
                     NSString *mgDir = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
                     NSString *mgLog = [NSString stringWithFormat:@"%@/mobilegl.log", mgDir ?: NSTemporaryDirectory()];
                     setenv("MOBILEGL_LOG_FILE_PATH", mgLog.UTF8String, 1);
@@ -896,6 +900,7 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                     unsetenv("MOBILEGL_LOG_FILE_PATH");
                     unsetenv("MG_DIRECTORY_PATH");
                     unsetenv("MG_DIR_PATH");
+                    unsetenv("A2_GL_METAL_HOST");
                 }
             }
         }
