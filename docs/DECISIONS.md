@@ -378,3 +378,486 @@
   （manifest 申请了 `launch.args` / `launch.gameArgs` / `launch.classpath` / `launch.env.code` /
   `java.agent` / `native.code` 任一项 ⇒ 会改启动链），弹窗 `A2PluginLaunchChainConfirm`
   （安装器写完校验、**写 registry 之前**逐次弹 10 次；任一次取消 ⇒ 安装终止、清暂存、不写 registry）。
+
+---
+
+<!-- ===== 以下 ADR-015～025 由 feat/plugin-p1 原样并入（2026-11-01 插件系统 P1 移植）=====
+     为什么原样并入而不是重编号：主线的 ADR-001～014 与插件分支的 ADR-014 主题不同
+     （主线 ADR-014 = 渲染器侧 10 次免责确认；插件分支 ADR-014 = 技术栈确认为 ObjC），
+     所以只并入插件分支里**编号不冲突**的 ADR-015～025，编号一个字都不改
+     —— 插件源码注释里引用的「ADR-024 / ADR-025 / PLUGIN-SECURITY §9」因此全部对得上。
+     主线 ADR-014 保持原样，其「撤销记录」已说明 10 次免责确认迁到插件安装流程。 -->
+
+## ADR-015：插件执行模型定为「单进程 JSCore + 能力注入」
+
+- **状态**：已接受
+- **日期**：2026-10-31
+- **背景**：插件要能改 UI、改启动参数、写游戏目录文件。可选三条路：
+  ① **独立进程**（XPC / 子进程）隔离最好，但 iOS 上启动器与游戏共用大量进行中状态
+  （下载任务、实例选中、JIT 供给、渲染上下文），IPC 面会大到等于把宿主重写一遍；
+  ② **同进程 JSCore** 无进程隔离，但有 JS 沙箱，且能直接读写宿主对象；
+  ③ **自有字节码解释器** 可控性最高，但要自己实现语言、标准库、调试器 —— 不是 P0/P1 能承担的。
+  另一条独立的轴是「越权怎么处理」：运行时拒绝（`throw permission denied`）还是加载期不注入。
+- **决策**：
+  1. 执行模型 = **单进程、JSCore 上下文**（P3 落地；P2 只有纯 JSON 声明，没有代码执行）。
+  2. 越权处理 = **能力注入**：未授权的 API 在 `air2` 对象上**不存在**（`typeof === "undefined"`、
+     `"x" in air2 === false`），注入发生在上下文创建时、之后**不再变化**。
+  3. 硬禁（不是权限）：`eval` / `new Function` / `Function.constructor` / `WebAssembly` 不注入；
+     无 `require` / `import` / `fetch` / DOM。
+  4. 回调一律在主线程执行 + 时间预算（`onLoad` ≤ 50 ms，其余单次 ≤ 16 ms，超预算记诊断而非杀进程）。
+- **后果**：
+  - 好处：插件可以在 `onLoad` 第一行就判定「我有没有这个能力」，失败前移、可测；
+    宿主实现里不需要到处塞权限检查（少一类遗漏）；错误信息不会泄露权限目录。
+  - 代价：**运行期不能加权限** —— 用户改授权必须重载插件（卸载再加载），上下文内能力面恒定。
+    这是有意的取舍：能力面变化会让插件的分支逻辑在运行中失效，比「重载一次」危险得多。
+  - 残余风险（明确接受）：JSCore 自身的越界漏洞挡不住。缓解：禁 RCE 构造、原生面推迟到 P5 且设门槛
+    （ADR-020）、日志脱敏（形似 token 的串一律 `<redacted>`）。**不声称**这是安全沙箱。
+  - 落地约束：所有 API 对象必须由同一个「能力表」驱动生成，禁止在实现里写 `if (hasPermission)`
+    式的运行时判断 —— 否则「不存在」这条契约会被局部悄悄破坏。
+
+---
+
+## ADR-016：权限模型 = 分级目录 + 信任等级 + 组合判定，签名覆盖「manifest + 文件哈希清单」
+
+> **修订（2026-10-31）**：本条的**决策 5（T0/T1/T2 信任等级）、决策 6（T0 一次性授权）、
+> 决策 8（Ed25519 签名）已由 ADR-021 取代**。权限目录、launch 硬边界、文件/版本按用途拆分、
+> 组合判定继续有效；其中权限目录已在 `PLUGIN-SECURITY.md` 第二节扩展到 24 项。
+> 下文保留原记录，供理解「为什么曾经这样做」。
+
+- **状态**：已接受（**部分被 ADR-021 取代**）
+- **日期**：2026-10-31
+- **背景**：插件能改启动参数，就等于能改游戏行为（`-javaagent` 可注入任意 Java 代码）；
+  能写 `mods/*.jar`，就等于能换掉任意 mod 的代码。另一方面，绝大多数插件只需要「改个徽标、
+  加个镜像源」，如果所有插件都要走同一套 critical 授权，用户会习惯性点「同意」——
+  授权疲劳会让这套模型失效。所以需要**分级**，而不是一个开关。
+- **决策**：
+  1. **权限目录三级**：低（展示）/ 中（有副作用、边界清晰）/ critical（影响进程、代码执行或数据可信度）。
+     critical 项：`launch.args`、`launch.env.code`、`launch.classpath`、`launch.libraryPath`、
+     `java.agent`、`files.game.write.content`、`version.patch`、`native.module`、`ui.web`。
+  2. **launch 面硬边界**：`-Dminecraft.api.*.host` 直接禁止（不给权限也不许）；
+     `--gameDir` / `--assetsDir` / `--version` / `--username` / `--uuid` / `--accessToken`
+     插件不可写，宿主在插件参数**之后**统一追加；`-javaagent` 类另需 `java.agent`，
+     `-Xbootclasspath*` / `--patch-module` / `-cp` 另需 `launch.classpath`，
+     `-Djava.library.path` 另需 `launch.libraryPath`。
+  3. **文件面按用途拆**：`files.game.write.config`（中）与 `files.game.write.content`（critical）
+     分成两个 id —— 否则「只想改 `options.txt`」的插件被迫申请能换 mod jar 的权限。
+  4. **版本面按影响拆**：`version.decorate`（低，只改展示）/ `version.patch`（critical，改内容）。
+  5. **信任等级**：T0（无签名/签名无效/指纹不在白名单）只能拿低/中；
+     **T1 = 签名有效 且 签名者指纹在白名单**；T2 = 官方密钥 + 官方仓库 + 指纹一致。
+     签名「有效」与「被信任」是两件事：任何人都能自签一个密码学上有效的包。
+  6. **T0 授权一次性绑定 `(pluginId, packageHash)`**：包哈希变了就重新授权，
+     让「同一个 id 悄悄换了内容」必须被用户看见一次。
+  7. **组合判定**：`launch.args` + `java.agent`（args 可自带 `-javaagent`，绕过 jar 白名单）、
+     `launch.args` + `launch.classpath`、`launch.args` + `launch.env.code`、
+     `native.module` + 任一参数面、`ui.web` + `native.module`、`version.patch` + `download.source`
+     → **直接拒装**；单项 critical → **红色二次确认**（逐条列出将授予的具体后果）。
+  8. **签名范围 = manifest 规范化字节 + 文件哈希清单**，**不签整个 zip**；Ed25519，公钥内置 keyring，
+     不从网络取；`AIR2SIG.json` 结构损坏 → 降 T0（不报「包损坏」）。
+- **后果**：
+  - 好处：critical 权限**只可能**来自已知签名者（T0 下安装器直接不列出 critical 项）；
+    组合判定堵住了「用 A 权限绕过 B 权限校验」这一整类问题；签名覆盖语义内容 ⇒ 换打包工具、
+    重新压缩都不破坏签名，研究者能解开包看内容同时验签。
+  - 代价：未签名插件功能上限很低（这是有意的）；白名单需要维护流程（P2 静态内置，P5 才允许追加/吊销）；
+    组合表会让少数「确实需要全权」的插件装不上 —— 接受，因为那种插件等于宿主的一部分，应该走官方集成。
+  - 约束：**权限 id 永不改名**（改名 = 让所有已授权插件静默失权）；`plugin.schema.json` 的
+    permissions enum、`docs/PLUGIN-SECURITY.md` 第二节目录、注册表 `permissionsGranted` 三处必须同步改。
+  - 遗留：`launch.env` 与 `launch.env.code` 写同名变量的冲突在安装期不可知 ⇒ 运行时以 `code` 为准
+    并记诊断（不做拒装，否则会拒掉合法的「default + 覆盖」写法）。
+- **取代关系**：决策 5 / 6 / 8 由 ADR-021 取代；决策 1～4、7 继续有效。
+  新增的 7 项权限（`ui.contribute` / `ui.override` / `files.game.read` / `files.export` /
+  `instance.guard` / `launch.gameArgs` / `download.fetch`）见 ADR-023。
+
+---
+
+## ADR-017：包格式 `.air2plugin`（zip / formatVersion 2/3）与原子安装
+
+- **状态**：已接受
+- **日期**：2026-10-31
+- **背景**：安装插件的过程会被中断（磁盘满、用户杀进程、崩溃），而 iOS 上用户在文件 App 里
+  也能看到 `Documents`。需要一个「任何时刻中断都不留半成品」的安装模型，以及一个
+  「用户改不了」的存放位置。
+- **决策**：
+  1. 包 = **zip**，后缀 `.air2plugin`，`manifest.json` 必须在包根，UTF-8 文件名标志位置位；
+     `formatVersion = 2` 为 P1/P2 基线，`3` 为 P3b 页面/覆盖 + P5 native 结构。
+  2. 硬上限：包 64 MB / 解压 256 MB / 4096 文件 / 单文件 32 MB / 路径 255 字节 / 深度 8 / 压缩比 100:1；
+     路径拒 `..`、绝对路径、反斜杠、符号链接与硬链接。
+  3. **`manifest.files` 与「包内实际文件（除 manifest）」双向严格相等**：多一个即夹带、少一个即说谎。
+     包根不允许 `AIR2SIG.json`；出现即拒装（`E_LEGACY_SIGNATURE`）。
+  4. 安装七步：导入 → 结构校验 → schema + 语义 → 全量哈希 → 授权 → 同卷 `rename` 换目录 → 注册表原子替换。
+     任一步失败删除 staging，注册表不动。
+  5. **注册表是唯一事实来源**，目录不是；启动时清理 staging 与孤儿目录，注册表损坏则改名重建
+     （不猜、不修）。
+  6. **保留上一版**（每插件最多 1 份），清理发生在「下次成功启动到 `stable`」之后，
+     这样「新版本一启动就崩」时用户还能回退。
+  7. 目录固定在 `Library/Application Support/Air2/Plugins/`，**不用 `Documents`**，并排除 iCloud 备份。
+- **后果**：
+  - 好处：安装对系统其余部分是瞬时的（要么旧状态、要么新状态）；用户无法手改插件目录
+    （否则哈希只剩「拒载或信任篡改」两个坏选项）；注册表可回放、可诊断（`seq` + `lastBootStage`）。
+  - 代价：用户不能「把 zip 解压到目录里」当安装 —— 必须走导入（文件选择器/分享）；
+    旧版本占磁盘（最多一份，可接受）。
+  - 约束：`formatVersion` 只在**新增必填字段 / 改语义 / 新增 type 枚举值**时升版；
+    新增可选字段不升版（否则每个小功能都要全体重打包）。宿主接受 `formatVersion ∈ [2, 自身最大值]`。
+
+---
+
+## ADR-018：UI Schema 用「slot + 语义组件 + 语义图标 + 主题 token」
+
+> **修订（2026-10-31）**：slot / 语义组件 / 语义图标 / 层级推导继续有效；
+> 「复杂自定义界面要等 P3 整页替换 / ui.web」这部分由 **ADR-022（v3 原生 JSON 页面模型）** 取代。
+> `ui.web` 不再作为复杂页面的兜底，只保留为 P5 的独立能力。
+
+- **状态**：已接受（**部分被 ADR-022 取代**）
+- **日期**：2026-10-31
+- **背景**：插件要能改界面，但若允许插件直接指定平台控件（`UIButton`）或图片路径，
+  后果是：① UI 改版会打断所有插件；② 多端契约不可能成立（Android 没有 UIKit）；
+  ③ 插件可以指定任意图片路径 ⇒ 与 `air2.paths` 的路径抽象冲突（ADR-015 / `PLUGIN-COMPAT.md` 第三节）。
+- **决策**：
+  1. 插件只描述**语义**：`slot`（放哪儿）+ `component`（放什么语义组件）+ `icon`（语义图标 ID）+ `theme.tokens`。
+  2. `slot` / `component` / 常用 `icon` 都是 **schema 枚举**；写平台控件名或图片路径一律 schema 拒。
+  3. 层级（L0/L1/L2）由**申请的能力**推导，不由作者填写 —— 避免「自称 L0、实际做 L2 的事」。
+  4. 加载顺序 `(priority, layer, pluginId)` 三元组全升序，保证同注册表每次启动顺序一致。
+  5. 未知图标 ID / 未知 token → 宿主降级 + 诊断，**不拒载**（宿主加图标不应让旧包失效）。
+  6. L2 独占 slot（整页替换）同 slot 只允许一个插件，冲突在**安装期**拒装。
+- **后果**：
+  - 好处：宿主换 UI 实现不破坏插件；同一 manifest 在 Android/桌面可映射到各自设计语言；
+    插件没有路径能力也就没有路径泄露面。
+  - 代价：表现力受限 —— 复杂自定义界面走 ADR-022 的 v3 原生 JSON 页面模型；
+    `ui.web`（P5）只用于确实需要网页内容的独立场景，不再是复杂页面的默认答案。
+    宿主词表成为**兼容性资产**：加项容易，改项/删项必须走弃用流程（ADR-019）。
+  - 约束：`plugin.schema.json` 的 slot/component 枚举是契约的一部分，任何增删都要同时改
+    `PLUGIN-COMPAT.md` 2.2/2.3 与本条 ADR 的落地说明。
+
+---
+
+## ADR-019：版本兼容分三套号（包格式 / API / 注册表），平台与语言按显式回退链
+
+- **状态**：已接受
+- **日期**：2026-10-31
+- **背景**：插件系统里同时存在「包结构在变」「API 在长」「注册表在迁移」三件不同的事，
+  用一个版本号表达任意两件都会出错；多端与本地化也需要明确「缺了怎么办」，否则每个插件作者
+  都会自己发明一套回退。
+- **决策**：
+  1. **三个独立版本号**：`formatVersion`（包结构，manifest 内）/ `air2.host.apiVersion`（API 主版本）/
+     注册表自身的 `formatVersion`。三者在文档里必须互相索引。
+  2. `manifest.air2.host` 是**声明**（我要什么宿主），运行时 `air2.host` 是**只读视图**（我面对什么宿主），
+     字段集不同，同名不共义。
+  3. 平台：`platforms` 不含当前平台 → **拒装**，不静默降级；`assets/<platform>/` 逐文件覆盖
+     `assets/common/`，都不存在才用宿主默认。
+  4. 语言：BCP-47 回退链 `精确 → 去 REGION → 去 Script → 语言主标签 → 宿主下一语言 → en → key 本身`；
+     **不做**简体↔繁体自动转换。
+  5. UI 能力用 `uiCapabilities` 协商（`color.glass` / `motion.spring` / `haptics` / `grid.columns` /
+     `minTapTarget` …），与权限正交：能力管「画不画得出」，权限管「准不准做」。
+  6. 宿主接受 `formatVersion ∈ [2, 自身支持的最大值]`；新必填字段才升版。
+- **后果**：
+  - 好处：破坏性变更的爆炸半径最小（升 API 主版本不影响包格式，反之亦然）；
+    作者不必猜「宿主能不能画玻璃」，读 `uiCapabilities` 即可。
+  - 代价：三套版本号增加理解成本 —— 缓解手段是 `PLUGIN-AUTHORING.md` 第三节的字段表
+    与本节的三号对照表；不允许再引入第四套号。
+  - 约束：`type: js` 的包在 **P1 / P2 宿主**上**拒装**（这两个阶段没有 JSCore，装上只会误导，
+    错误码 `E_TYPE_UNSUPPORTED`）；`type: json` 的包在 P2 宿主上正常装。
+    平台不匹配一律拒装，不做「尽力而为」。
+
+---
+
+## ADR-020：原生模块门槛 —— 设备能力、v3 包格式、C ABI
+
+> **修订（2026-10-31）**：原决策 1「`native.module` 只能授予 T2（官方签名 + 白名单 + 指纹）」
+> **已由 ADR-021 取消**。新门槛 = 设备能力（TrollStore / 越狱）+ 三次 5 秒确认 +
+> 第四页「未审核原生代码」警告 + 组合硬拒装。其余决策（v3 格式、C ABI、组合门槛）继续有效。
+> 下文保留原记录，供理解「为什么曾经把原生面绑在签名上」。
+
+- **状态**：已接受（**决策 1 被 ADR-021 取代**）
+- **日期**：2026-10-31
+- **背景**：有些需求（自定义渲染路径、深度输入、性能探针）只有原生代码能满足，
+  P5 要开这个面；但原生 dylib 与宿主同进程、同地址空间，一旦允许就等于把「插件审核」
+  退化成「代码审计 + 祈祷」。同时 P0～P4 必须先把签名与信任等级建起来（ADR-016），
+  否则原生面会是第一个被滥用的面。
+- **决策**：
+  1. **设备门槛（ADR-021 修订）**：`native.module` 只在 `air2.host.nativePluginsSupported == true`
+     （TrollStore / 越狱设备）时列出；申请后走三次 5 秒确认 + 第四页「未审核原生代码」警告。
+     普通 App Store 设备不列出该权限，安装期拒装申请了它的包。**不再要求 T2 / 官方签名**。
+     原「只能授予 T2（官方发布密钥 + 官方仓库来源 + 指纹一致）」记录保留在 ADR-021 的背景中。
+  2. **格式门槛**：`native/` 目录只在 `formatVersion ≥ 3` 的包里合法；v2 包出现 `native/` 一律拒装
+     （失败方向是「旧宿主装不上」，不是「静默忽略 dylib」）。
+  3. **接口门槛**：dylib 只能链接宿主导出的 `air2_plugin_abi_v1` 符号表；ABI 版本不匹配 → 拒绝装载，
+     不做「尽力加载」。
+  4. **组合门槛**：`native.module` 不得与 `launch.args` / `launch.classpath` / `launch.libraryPath` /
+     `launch.env.code` 任一共存（拒装）；`ui.web` + `native.module` 也拒装。
+  5. **同行开放的两个面**（P5）：`ui.web`（禁 `file://`、独立进程或强隔离、页面与插件 JS 不直连）、
+     Java agent 自挂载（沿用 `java.agent` 权限 id，新增 `agentFiles` 清单，宿主校验哈希后写 `-javaagent=`）。
+- **后果**：
+  - 好处：原生面只在明确设备能力下开放，且「原生 + 任意启动参数」这条最危险的组合被结构性排除；
+    用户知道自己面对的是未审核代码，而不是被一个「官方」徽标误导。
+  - 代价：生态小（只有 TrollStore / 越狱设备能装，且用户要连续确认三次）；没有官方审核，
+    原生代码的风险由用户承担。**不再需要官方密钥与白名单基础设施**（ADR-021）。
+  - 约束：`air2_plugin_abi_v1` 一旦发布**不能改函数签名**，只能新增 `v2` 符号表并同时导出，直到 v1 退役；
+    ABI 变更必须新开 ADR。
+
+---
+
+## ADR-021：取消官方签名与信任等级，改为逐项授权 + critical 三步 5 秒确认
+
+- **状态**：已接受（**取代 ADR-016 决策 5 / 6 / 8、ADR-020 决策 1**）；决策 5（critical 授权按包哈希绑定）已被 **ADR-024** 取代
+- **日期**：2026-10-31
+- **背景**：
+  - 原方案 T0/T1/T2 依赖官方密钥、白名单、审核流程与吊销链。个人开发者几乎不可能进 T1，
+    复杂插件生态起不来；而 T0 只能拿低/中权限，等于把「能改启动参数」的插件全部锁在官方手里。
+  - 自签名在密码学上「有效」，但在信任上「无意义」：任何攻击者都能自己生成一对密钥签一个包。
+    白名单才是信任来源；没有白名单时，签名只提供「未被篡改」的错觉。
+  - 用户明确要求（2026-10-31）：**取消官方签名**，安装时直接向用户申请权限；
+    critical 权限连续三次提示框，每次需等待 5 秒才能继续。
+  - 「官方 / 已验证」徽标会被仿冒，反而让用户以为签名等于安全。取消后不再有这个误导。
+- **决策**：
+  1. **删除** Ed25519 签名、`AIR2SIG.json`、keyring、公钥、白名单、吊销列表、
+     `signerFingerprint`、`trustLevel`、T0/T1/T2 全部相关字段与流程。
+  2. 安装时展示**不可跳过**的详情页：插件名、id、版本、作者（标注「自述」）、来源、
+     `packageHash`（可展开/复制）、逐项权限说明、组合风险。
+  3. **低/中权限默认开启**，用户可逐项关闭；跨版本按 `(pluginId, permissionId)` 沿用。
+  4. **critical 权限默认关闭**；每个 critical 权限独立走三次提示框，每次 5 秒：
+     第 1 次讲「能做什么 + 不能做什么」，第 2 次讲「至少两个具体危害场景」，
+     第 3 次最终确认并列出本次将授予的全部 critical 项。
+  5. critical 授权绑定 `(pluginId, packageHash, permissionId)`；`packageHash` 变化
+     （升级 / 重装 / 改内容）→ 全部 critical 重新确认；低/中沿用。
+  6. 同包重装幂等；同版本不同内容拒装；降级默认拒装，开发者模式例外；
+     本地 `previousVersion` 回退不受降级规则影响。
+  7. 组合风险硬拒装保留（见 `PLUGIN-SECURITY.md` 4.1），不再有「签名白名单」门槛。
+  8. 原生面（P5）不再要求 T2；改为设备能力（TrollStore / 越狱）+ 三次确认 +
+     第四页原生代码警告；非该设备不列出。
+  9. 管理页**不显示**「官方 / 已验证 / 信任等级 / 签名者」任何徽标或字段；
+     作者名永远标「自述」，来源显示「从文件导入 / 从 URL 导入 / 开发模式」。
+  10. 包根出现 `AIR2SIG.json` → 拒装（`E_LEGACY_SIGNATURE`），并提示「签名机制已移除」。
+- **理由**：
+  - **诚实**：没有可信身份源就不要假装有。哈希只能证明「包没变」，不能证明「是谁做的」；
+    把这句写在安装页，比给一个蓝色徽标更接近真实风险。
+  - **可落地**：不需要官方密钥基础设施、审核团队、吊销链；个人开发者与官方走同一套流程。
+  - **风险前移**：用户在每个 critical 权限上连续看三次具体后果，比「看到已验证徽标就放心」
+    更能让人理解风险；三次 5 秒也降低了误触。
+  - **可撤销**：绑定包哈希，更新必须重新确认；用户随时可在管理页撤销。
+- **后果**：
+  - 好处：插件生态门槛降低；不再维护密钥/白名单/吊销；没有「自签也有效」的错觉；
+    权限模型更简单（只有风险级，没有信任级）。
+  - 代价：用户要自己判断来源；无法防仿冒；三次确认可能造成授权疲劳；
+    critical 权限的滥用只能靠组合硬拒装、安全模式与用户判断。
+  - 残余风险：能改 `registry.json` 的攻击者可以绕过授权记录；哈希不能证明作者身份；
+    JS 同进程的 JSCore 风险不变；用户可能不看文案直接点「授权」。
+  - 约束：**不得再引入「官方签名 / 信任等级」作为权限门槛**。若将来要恢复，必须新开 ADR，
+    解释密钥基础设施、审核流程、吊销链与「自签为什么不算信任」。
+- **落地**：`PLUGIN-SECURITY.md` 第三节（逐项授权）、第四/五节（组合与哈希）；
+  `PLUGIN-SYSTEM.md` 4.2 / 4.5 / 第六节（安装、升级、注册表）；
+  `plugin.schema.json` 删除 `author.fingerprint`、权限枚举 24 项。
+
+---
+
+## ADR-022：复杂页面走 v3 原生 JSON 页面模型，不用 WebView 兜底
+
+- **状态**：已接受（**部分取代 ADR-018** 关于「复杂界面等 `ui.web`」的表述）
+- **日期**：2026-10-31
+- **背景**：
+  - 1～10 号插件里，下载器、版本管理、整合包导出、设置面板等需要比 slot 更强的页面表现力。
+  - 原方案要么用 slot 拼（表现力不够），要么等 P5 的 `ui.web`（引入第二信任域、远端内容、
+    与 MD3 / 液态玻璃割裂、无障碍不可控）。
+  - 用户明确要求：复杂页面走原生 JSON 页面模型，不用 WebView 兜底。
+- **决策**：
+  1. `formatVersion 3` 引入 `ui.pages`；页面是 **JSON 组件树**，由宿主原生渲染。
+  2. 两种模式：`static`（`root` 内联树或 `source` 包内 JSON，无 manifest 初始 state）与
+     `dynamic`（JS `render(pageId, state)` 返回树）。`dynamic` 只能用于 `type: js`；
+     `type: json` 的页面必须是 static。
+  3. 容器：`column` / `row` / `card` / `section` / `scroll` / `list` / `grid`；
+     叶子：`text.*` / `button.*` / `switch.toggle` / `list.row` / `badge.status` /
+     `icon.glyph` / `divider` / `spacer` / `progress.linear` / `image.asset` /
+     `text.field` / `select.menu`。
+  4. 通用字段：`binding`（只读）/ `action` / `visibleWhen` / `enabledWhen` / `style`；
+     动作走 `onAction(pageId, actionId, payload, state)`。
+  5. 页面 chrome 由宿主绘制：返回、页面标题、插件名 + 「插件页面」横幅；
+     插件不能隐藏 / 移动 / 改文案。
+  6. 禁止 HTML、远程图片、密码框、任意颜色/字体/绝对定位；密钥走 `air2.ui.promptSecret`。
+  7. 页面在**插件串行队列** `render`，UI 提交主线程；`render` ≤16 ms，`onAction` ≤2 s，
+     交互钩子（实例解锁 / promptSecret）最长 60 s。
+  8. 限制：500 节点、深度 12、state 64 KB、返回树 512 KB、list 单屏 200 项、
+     单页动作 128 个。
+  9. P3 拆成 **3a（JSCore / API）** 与 **3b（页面模型）**；3b 才落 `ui.pages` / `ui.overrides`。
+- **理由**：
+  - 跨端可映射：同一棵语义树在 iOS / Android / desktop 映射到各自设计系统。
+  - 不引入第二信任域：页面不是网页，没有 HTML/JS 桥/远端内容。
+  - 可校验、可限流：schema 枚举 + 节点数/深度/state 上限，安装期与运行时都能拦。
+  - 表现力用组件词表换可控性；确实需要任意绘制时，应该做成宿主功能，而不是插件。
+- **后果**：
+  - 好处：复杂插件有正式落点；页面与宿主主题、无障碍、动效统一；
+    插件拿不到控件与路径，安全边界不因页面而扩大。
+  - 代价：组件词表成为兼容性资产，加项容易、改项/删项要走弃用流程；
+    复杂布局仍需宿主提供新容器；P3b 工作量大（粗估 4～6k 行 ObjC）。
+  - 约束：页面树只能在 v3 包出现；v2 宿主拒装 v3 包；
+    `ui.web` 不再是复杂页面的默认答案，只在 P5 作为独立能力存在；
+    纯 JSON 插件只能做静态页面，要动态页面必须写 JS。
+- **落地**：`PLUGIN-PAGE.md`（完整契约）、`PLUGIN-API.md` 第七节（JS 入口）、
+  `PLUGIN-COMPAT.md` 2.5（跨端约束）、`plugin.schema.json`（`ui.pages` / `node`）。
+
+---
+
+## ADR-023：P3/P4 扩展点与 1～10 号插件覆盖
+
+- **状态**：已接受
+- **日期**：2026-10-31
+- **背景**：
+  - 对 13 个候选插件做了可行性分析：简单级（徽标、主题、版本装饰、设置项）现有 slot 就能覆盖；
+    复杂级（下载器、版本管理、整合包导出、实例守卫、启动参数、文件管理）需要页面模型之外的
+    数据/动作扩展点。
+  - 原 API 只有「写游戏文件」，没有「读游戏文件」「导出」「归档」「实例钩子」「游戏参数」
+    「插件发起下载」；这些缺口会让 6 个复杂插件做不了。
+  - #11 Air2 Server、#13 自动化暂放一放，接受后续做成内置功能，不强行塞进插件系统。
+- **决策**：
+  1. **新增 7 项权限**：`ui.contribute`（低）、`ui.override`（中）、`files.game.read`（中）、
+     `files.export`（中）、`instance.guard`（中）、`launch.gameArgs`（critical）、
+     `download.fetch`（中）。
+  2. **新增 slot**：`home.section`、`launch.overlay`（v2）；`home.page`、`versions.list.page`（v3）。
+  3. **新增 API**：`air2.files.list/read/export`、`air2.archive.list/extract/create`、
+     `air2.download.fetchToFile`、`air2.crypto.digest`、`air2.instance.beforeOpen/beforeEdit`、
+     `air2.launch.addGameArg`、`onLaunchResult`、`air2.ui.promptSecret`。
+  4. **整合包导出**：`mrpack` + `zip` 两种格式；`archive.create` 生成临时归档，
+     `files.export` 交给系统分享面板。插件不能指定任意落盘路径。
+  5. **`launch.overlay` 明确为启动器自己的启动遮罩**（点启动后、游戏画面前），
+     不是 Minecraft 游戏内加载界面；只能叠加只读信息，不能阻塞启动链。
+  6. **`schematics/**` 加入 `files.game.write.content` 白名单**（蓝图文件）。
+  7. **下载 / 版本只做过滤器 + 事件**：`download.source` / `version.filter` 只影响展示与候选，
+     不替换下载引擎；`download.fetchToFile` 是插件发起的独立任务，不进引擎主链。
+  8. **#11 Air2 Server、#13 自动化**：不做插件，后续按内置功能评估。
+- **覆盖口径（1～10）**：
+
+| 类别 | 需要的扩展点 | 里程碑 |
+|---|---|---|
+| 简单级（徽标 / 主题 / 版本装饰 / 设置项） | `ui.contribute` + slot + `version.decorate` | P2 |
+| 版本列表 / 详情增强 | `versions.list.page` + v3 页面 + `version.filter` | P3b / P4 |
+| 下载器 / 镜像管理 | `download.source` + `download.fetch` + v3 页面 | P4 |
+| 整合包导入 / 导出 | `files.game.read` + `archive` + `files.export` + v3 页面 | P4 |
+| 实例守卫 / 解锁 | `instance.guard` + `ui.confirm` / `promptSecret` | P4 |
+| 启动参数 / 游戏参数 | `launch.args` / `launch.gameArgs` / `launch.properties` | P3a |
+| 文件管理 / 蓝图 | `files.game.read` + `files.game.write.content` + `schematics/**` | P4 |
+
+- **理由**：
+  - 扩展点按「数据 / 动作 / 页面」三类补齐，而不是为每个插件写专用 API。
+  - 读与写分权、导出与读分权，避免「能读就能外传」的默认路径。
+  - 游戏参数与 JVM 参数分段，保留 `launch.args` 的审计边界。
+  - #11 / #13 需要长期运行的后台服务与系统级自动化，超出「单进程 JSCore + 能力注入」模型；
+    强行插件化会破坏安全边界，所以明确暂放。
+- **后果**：
+  - 好处：1～10 号插件有明确落点；P3/P4 的工作量可按 3a/3b/4 拆分；
+    下载/版本仍然只做过滤器 + 事件，不碰引擎主链。
+  - 代价：权限从 17 项增到 24 项，安装页更长；P4 范围变大（读/导出/归档/实例/下载任务）；
+    页面模型与 `ui.override` 增加 P3b 工作量。
+  - 约束：新增权限 id 永不改名；`plugin.schema.json`、`PLUGIN-SECURITY.md` 第二节、
+    注册表 `permissionsGranted` / `criticalGrants` 三处必须同步。
+- **落地**：`PLUGIN-API.md` 第四/五节、`PLUGIN-SECURITY.md` 第二节、
+  `PLUGIN-COMPAT.md` 2.2/2.3、`plugin.schema.json` 权限与 slot 枚举。
+
+---
+
+## ADR-024：critical 授权改为权限集绑定 + 哈希白名单
+
+- **状态**：已接受（**取代 ADR-021 决策 5**；ADR-016 决策 6 的「签名+哈希覆盖」不受影响）
+- **日期**：2026-10-31
+- **背景**：
+  - v2 把 critical 授权绑定为 `(pluginId, packageHash, permissionId)`：包内容一变就全部重新确认。
+    实际后果是**每次更新都要把 3～10 个 critical 的三次确认重走一遍**（最多 30 个弹窗）。
+  - 插件迭代的常态是「改 bug / 换图标 / 改文案」——这类更新不动任何能力，
+    却要用户连点 30 次「我已知晓」。用户的行为是**闭眼连点**，三次确认退化为仪式，
+    比不重确认更危险：它训练用户忽略高危文案。
+  - 哈希本来就不该承担「信任」职责（ADR-021 已明确「哈希是完整性工具，不是信任工具」）。
+    把一个完整性值当成授权失效条件，是把两件事混在一起。
+  - 真正的风险信号是「这个插件**多要了一样能力**」，而不是「它的字节变了」。
+- **决策**：
+  1. **主键固定为 `(pluginId, permissionId)`**：critical 授权不再绑定 `packageHash`。
+  2. registry 新增 **`approvedHashes`**：`sha256` 数组，新值前插、**最多保留最近 5 个**，
+     记录「用户在哪些内容上点过同意」。它**不授予任何权限**，只用于更新页展示、管理页取证
+     与崩溃报告关联；丢失或被篡改不影响授权有效性。
+  3. registry 新增 **`permissionSet`**：上一版 manifest 的规范化权限集
+     （`id:risk` 按 id 排序、`\n` 连接）。升级时用它判断「权限集是否变了」，
+     不依赖旧版本目录是否还在。
+  4. **包哈希变化但权限集未变 ⇒ 不重确认**：更新页显示「内容已更新，权限未变」，
+     并把新哈希追加进 `approvedHashes`。组合风险判定**不缓存**，仍按新 manifest 重算。
+  5. **只有两种情形重走三次确认**：① **权限集新增 / 变更 critical**（新增 critical、中→critical），
+     ② **`major` 跨版本**（`majorVersion` 与当前 `major` 不等，全部 critical 重确认）。
+  6. **权限集缩小 ⇒ 自动撤销多余项**，不弹窗、不要求确认；只写一条诊断日志。
+     风险下调（critical → 中）同理：移入 `permissionsGranted`，默认开启、可关。
+  7. 新增 **`source`** 取证字段：`kind` ∈ {`local-import`, `url`, `share-sheet`, `dev-dir`}，
+     `sourceDetail` 记录域名或文件名（可空），`installedAt` 记录本次安装时间。
+     管理页**只陈述事实**（「从网址安装（example.com）」），**不做好坏判断、不挂任何徽标**——
+     没有可信身份源就不要伪造评价体系。
+  8. 新增「**等价后果翻译**」对照表（`PLUGIN-SECURITY.md` 第九节）：24 项权限各有一句人话后果，
+     安装页 / 确认页 / 管理页**必须**显示这句话而不是权限 id；每条 ≤ 30 汉字，只描述行为、
+     不写评价词。
+  9. 安装页权限按**后果**归为 5 组（改游戏文件 / 联网 / 读你的数据 / 启动参数 / 改界面），
+     默认折叠、组标题写后果、critical 仍逐项确认，不提供整组授权。
+  10. `type: json` 的表达力上限写进作者指南（`PLUGIN-AUTHORING.md` 第五节）：
+     只做静态展示、声明式 `host.*` 动作、静态过滤；计算 / 循环 / 异步 / 状态机一律需要 `js`。
+- **理由**：
+  - **重确认必须对应真实风险变化**。权限集是「能力」的精确表达，字节不是。
+    锚在权限集上，每次重确认都能告诉用户「它多要了什么」，文案才有说服力。
+  - **减少授权疲劳**是安全措施，不是体验优化：30 个弹窗换来的是用户不再读文案。
+  - **`approvedHashes` 保留取证能力**：仍然知道用户同意过哪些内容版本，
+    但不再用它做门禁，避免「改个图标 = 全部失效」。
+  - **缩小权限自动撤销**：缩小权限是降风险行为，不应该惩罚用户（弹窗、重审）。
+  - **来源只写事实**：取消签名后没有任何可信来源标签，任何「可信/已验证」措辞都是新的谎言。
+- **后果**：
+  - 好处：常规更新零打扰；重确认次数降到「真的加能力」时；更新页有一句诚实的
+    「内容已更新，权限未变」；取证信息（来源 + 同意过的哈希）完整。
+  - 代价 / 残余风险：
+    - 插件可以在**不新增权限**的前提下换掉实现（例如同样用 `files.game.write.content`
+      写入一个不同的 jar）。**这不是新漏洞**：授权的是能力，不是某份代码；一个已授权的
+      `write.content` 本来就能写任意内容。要收紧只能回到「每次更新都全量重审」，
+      而那已被证明会被用户闭眼跳过。
+    - `approvedHashes` 只有 5 个：更早的同意记录会被丢弃，取证时只能看到最近 5 版。
+    - `major` 判定依赖作者是否老实抬版本号。作者可以不抬 —— 所以 `major` 是**补充**
+      门槛，真正的门槛是权限集。
+    - 「同版本不同内容」仍然拒装（`E_SAME_VERSION_DIFFERENT_CONTENT`），这条是唯一
+      在安装期强制用户注意内容变化的硬规则。
+  - 约束：**不得**再把 `packageHash` 重新引入 critical 授权的有效性判定；
+    `criticalGrants` 里不允许出现 `packageHash` 字段；`approvedHashes` 上限固定 5 个。
+- **落地**：`PLUGIN-SECURITY.md` 3.1 / 3.2 / 3.2.1 / 3.3 / 3.4 / 3.5 / 6.3 / 6.4 / 8.1 / 第九节；
+  `PLUGIN-SYSTEM.md` 4.5 / 第六节（registry 字段、写入规则、迁移）/ 第七节（P1/P2 验收）；
+  `PLUGIN-AUTHORING.md` 3.3 / 第五节 / 9.2 / 9.3；`P0-V3-CHANGELOG.md`。
+
+---
+
+## ADR-025：安装「会修改启动链的插件」须逐次通过 10 次免责确认（不缓存同意）
+
+- 状态：已接受
+- 日期：2026-10-31
+
+  - 背景：第三方插件可以申请 `launch.args` / `launch.gameArgs` / `launch.classpath` /
+    `launch.env.code` / `java.agent` / `native.code`，这些能力允许它在**游戏主类之前**
+    追加参数、改类路径、注入 javaagent 或原生代码。启动链被这样改动后，游戏起的失败
+    （启动不了 / 黑屏 / 闪退 / 存档损坏）无法与「启动器的问题」区分，真机迭代时的
+    失败报告会因此失真。用户要求：**装之前**把责任边界逐次说到位（10 次），
+    而不是靠一句 toast 或一次总同意。
+  - 决策：
+    1. **判据只有一个**：`A2PluginLaunchChainRisk`（Core/Plugin）的判据集合 ——
+       `launch.args`、`launch.gameArgs`、`launch.classpath`、`launch.env.code`、
+       `java.agent`、`native.code`；manifest 申请了其中**任意一项**即视为「会修改启动链」。
+       ★不按风险级推导★：`files.game.write.content` / `version.patch` / `native.module` 同为
+       critical 但不改「游戏怎么被启动」，它们走各自的三次确认（ADR-021 / ADR-024）。
+    2. **时机**：`A2PluginInstaller` 完成校验与版本规则、**换目录和写 registry 之前**调用
+       闸门（`A2PluginLaunchChainGate`）。放校验之前 = 用户白点 10 次才被格式/降级规则拦下；
+       放写盘之后 = 已经来不及。
+    3. **形式**：`A2PluginLaunchChainConfirm` 逐个弹 10 次 `UIAlertController`（alert 样式，
+       不用 ActionSheet），点了才弹下一个；标题 `修改启动链的插件（n/10）`，正文每次完整
+       重述「插件 <名称> 申请了会修改启动链的权限：<人话名单>」+ 固定免责句，第 10 次
+       追加「继续即表示你已知晓并自行承担后果」；按钮 `取消` / `继续（n/10）`，
+       第 10 次为 `我已知晓，安装`。
+    4. **取消语义**：任一次取消 ⇒ 安装终止（清暂存、不写 registry、以 `E_USER_CANCELLED`
+       返回）。★没有闸门也拒装★（`E_LAUNCH_CHAIN_UNCONFIRMED`）：少传一个 block 就跳过
+       确认的话，这道门等于不存在。
+    5. ★不缓存同意★：没有 NSUserDefaults 键、没有进程内标志，每次安装都从头走完 10 次。
+  - 理由：逐次确认（而非一次总同意）能挡住「习惯性连点」；把确认挂在**安装**而不是**启动**
+    上，是因为「启动链被改了」这个事实在安装时就已确定，而启动时既不知道是哪个插件改的、
+    也不该让用户为上一次安装反复付费（主树 ADR-014 的渲染器侧确认已因此撤销）。
+  - 与 critical 三次确认的关系：两者目的不同、都保留 —— 10 次是「我知道这个包会动启动链，
+    我自担后果」，三次确认是「我授予它某一项 critical 能力」（授权页内，逐项、5 秒倒计时）。
+    10 次**不**授予任何权限，安装后的低/中默认值与 critical 默认关的规则不变。
+  - 并发 / 线程：闸门是同步 BOOL 返回的（10 次弹窗本来就要等），因此**安装必须在非主线程
+    执行**；同步版确认窗在主线程被调用时直接按取消处理（拒绝主线程自锁）。
+  - 落地：`Air2/Core/Plugin/A2PluginLaunchChainRisk.[hm]`（判据集合 + 人话名单）、
+    `Air2/Core/Plugin/A2PluginInstaller.[hm]`（闸门与取消清理）、
+    `Air2/Core/Plugin/A2PluginManifest.[hm]`（`E_LAUNCH_CHAIN_UNCONFIRMED` / `E_USER_CANCELLED`）、
+    `Air2/UI/Plugin/A2PluginLaunchChainConfirm.[hm]`（10 次弹窗与同步桥）、
+    `Air2/UI/Plugin/A2PluginListViewController.m`（导入走后台安装 + 收尾）、
+    `tests/Plugin/plugin_installer_tests.m`（判据集合 / 三态闸门 / 磁盘无残留）。

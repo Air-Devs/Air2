@@ -1,0 +1,768 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://air-devs.top/schema/air2-plugin-manifest-v2-v3.json",
+  "title": "Air2 Plugin Manifest (formatVersion 2 / 3)",
+  "description": "Air2 插件包根 manifest.json 的机器可读契约。additionalProperties 全为 false：写错字段名会在安装期被拒绝，不会被静默忽略。权限 id 的枚举与 PLUGIN-SECURITY.md 第二节的权限目录逐项对应。formatVersion 2 不允许 ui.pages / ui.overrides / native；formatVersion 3 才允许，且仍需宿主里程碑与设备能力支持。",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "formatVersion",
+    "id",
+    "name",
+    "version",
+    "type",
+    "air2",
+    "platforms",
+    "files"
+  ],
+  "definitions": {
+    "localizedText": {
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["i18n"],
+          "properties": {
+            "i18n": { "type": "string", "minLength": 1, "maxLength": 128 }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["text"],
+          "properties": {
+            "text": { "type": "string", "minLength": 1, "maxLength": 256 }
+          }
+        }
+      ]
+    },
+    "iconId": {
+      "description": "语义图标 ID（不是图片路径）。未识别的 ID 由宿主渲染 info 图标，不拒载。",
+      "type": "string",
+      "maxLength": 64,
+      "pattern": "^[a-z]+(\\.[a-z][a-z0-9_]*)+$"
+    },
+    "binding": {
+      "description": "只读绑定路径：state 或 item 作用域下的点分路径。插件不能通过 binding 写宿主状态；输入类组件通过 action 上报。",
+      "type": "string",
+      "maxLength": 128,
+      "pattern": "^(state|item)(\\.[A-Za-z0-9_-]+)+$"
+    },
+    "condition": {
+      "description": "可见 / 可用条件。只支持单条比较，不支持布尔表达式组合；复杂逻辑在 render 里算好再返回。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["binding"],
+      "properties": {
+        "binding": { "$ref": "#/definitions/binding" },
+        "equals": { "type": ["string", "number", "boolean", "null"] },
+        "notEquals": { "type": ["string", "number", "boolean", "null"] },
+        "in": {
+          "type": "array",
+          "maxItems": 32,
+          "items": { "type": ["string", "number", "boolean", "null"] }
+        },
+        "exists": { "type": "boolean" }
+      },
+      "oneOf": [
+        { "required": ["equals"] },
+        { "required": ["notEquals"] },
+        { "required": ["in"] },
+        { "required": ["exists"] }
+      ]
+    },
+    "action": {
+      "description": "动作声明。字符串等价于 { id }。宿主把 id + payload 交给 onAction；纯 JSON 插件的动作只能用于打开页面 / 关闭页面等宿主内置动作。",
+      "oneOf": [
+        {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_.-]*$"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["id"],
+          "properties": {
+            "id": {
+              "type": "string",
+              "maxLength": 64,
+              "pattern": "^[a-z][a-z0-9_.-]*$"
+            },
+            "payload": {
+              "type": "object",
+              "maxProperties": 16,
+              "additionalProperties": {
+                "type": ["string", "number", "boolean", "null"]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "componentName": {
+      "description": "语义组件名。容器与叶子共用一份枚举；具体组件允许哪些字段由宿主语义校验器检查。",
+      "enum": [
+        "column",
+        "row",
+        "card",
+        "section",
+        "scroll",
+        "list",
+        "grid",
+        "text.label",
+        "text.caption",
+        "text.heading",
+        "button.primary",
+        "button.secondary",
+        "button.text",
+        "switch.toggle",
+        "list.row",
+        "badge.status",
+        "icon.glyph",
+        "divider",
+        "spacer",
+        "progress.linear",
+        "image.asset",
+        "text.field",
+        "select.menu"
+      ]
+    },
+    "v2ComponentName": {
+      "description": "formatVersion 2 的 slot 只允许这些叶子组件；容器与页面属 v3。",
+      "enum": [
+        "text.label",
+        "text.caption",
+        "button.primary",
+        "button.secondary",
+        "switch.toggle",
+        "list.row",
+        "badge.status",
+        "icon.glyph",
+        "divider",
+        "spacer"
+      ]
+    },
+    "slotName": {
+      "enum": [
+        "home.toolbar.action",
+        "home.card.badge",
+        "versions.list.badge",
+        "version.detail.header",
+        "settings.section",
+        "home.section",
+        "launch.overlay",
+        "home.page",
+        "versions.list.page"
+      ]
+    },
+    "v2SlotName": {
+      "description": "formatVersion 2 的 slot。home.page / versions.list.page 属 v3 页面模型。",
+      "enum": [
+        "home.toolbar.action",
+        "home.card.badge",
+        "versions.list.badge",
+        "version.detail.header",
+        "settings.section",
+        "home.section",
+        "launch.overlay"
+      ]
+    },
+    "node": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["component"],
+      "properties": {
+        "component": { "$ref": "#/definitions/componentName" },
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_.-]*$"
+        },
+        "children": {
+          "type": "array",
+          "maxItems": 64,
+          "items": { "$ref": "#/definitions/node" }
+        },
+        "label": { "$ref": "#/definitions/localizedText" },
+        "icon": { "$ref": "#/definitions/iconId" },
+        "value": { "type": ["string", "number", "boolean"] },
+        "binding": { "$ref": "#/definitions/binding" },
+        "itemKey": {
+          "description": "仅 list.itemTemplate 内的 action 使用：当前项的标量字段绑定（item.*）。宿主触发动作时把解析出的标量作为 payload.itemKey 传给 onAction。",
+          "type": "string",
+          "maxLength": 128,
+          "pattern": "^(item)(\\.[A-Za-z0-9_-]+)+$"
+        },
+        "action": { "$ref": "#/definitions/action" },
+        "visibleWhen": { "$ref": "#/definitions/condition" },
+        "enabledWhen": { "$ref": "#/definitions/condition" },
+        "placeholder": { "$ref": "#/definitions/localizedText" },
+        "items": { "$ref": "#/definitions/binding" },
+        "itemTemplate": { "$ref": "#/definitions/node" },
+        "columns": { "type": "integer", "minimum": 1, "maximum": 4 },
+        "style": {
+          "enum": ["plain", "card", "tonal", "danger"]
+        },
+        "maxLines": { "type": "integer", "minimum": 1, "maximum": 8 },
+        "asset": {
+          "description": "仅 image.asset：包内 assets/ 下的相对路径；禁止 http(s)://、绝对路径与 ..。",
+          "type": "string",
+          "maxLength": 255,
+          "pattern": "^(?!\\.)(?!.*\\.\\.)(?!/)(?!.*://)[A-Za-z0-9._/-]+$"
+        },
+        "options": {
+          "description": "仅 select.menu：选项列表。",
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["value", "label"],
+            "properties": {
+              "value": { "type": "string", "maxLength": 128 },
+              "label": { "$ref": "#/definitions/localizedText" }
+            }
+          }
+        }
+      }
+    },
+    "page": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "slot", "title", "mode"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_.-]*$"
+        },
+        "slot": {
+          "description": "home.page = 在首页新增入口；versions.list.page = 替换版本列表整页。",
+          "enum": ["home.page", "versions.list.page"]
+        },
+        "title": { "$ref": "#/definitions/localizedText" },
+        "icon": { "$ref": "#/definitions/iconId" },
+        "mode": {
+          "description": "static = 使用 root/source 的静态树；dynamic = 由 JS render(pageId, state) 返回。dynamic 只能用于 type=js；type=json 的页面必须是 static。",
+          "enum": ["static", "dynamic"]
+        },
+        "root": { "$ref": "#/definitions/node" },
+        "source": {
+          "description": "静态页面树的包内路径（JSON）。与 root 二选一。",
+          "type": "string",
+          "maxLength": 255,
+          "pattern": "^(?!\\.)(?!.*\\.\\.)(?!/)[A-Za-z0-9._/-]+\\.json$"
+        },
+        "state": {
+          "description": "初始 state（仅 dynamic；static 页面没有 state）。运行时上限 64 KB。",
+          "type": "object",
+          "maxProperties": 64
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": -1000,
+          "maximum": 1000,
+          "default": 0
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "static" } }, "required": ["mode"] },
+          "then": {
+            "oneOf": [
+              { "required": ["root"] },
+              { "required": ["source"] }
+            ],
+            "not": { "required": ["state"] }
+          }
+        },
+        {
+          "if": { "properties": { "mode": { "const": "dynamic" } }, "required": ["mode"] },
+          "then": {
+            "not": {
+              "anyOf": [
+                { "required": ["root"] },
+                { "required": ["source"] }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "override": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["target", "mode"],
+      "properties": {
+        "target": {
+          "enum": [
+            "home.card",
+            "home.toolbar",
+            "versions.list",
+            "version.detail",
+            "settings",
+            "launch.overlay"
+          ]
+        },
+        "mode": {
+          "description": "hide = 隐藏宿主原界面；replace = 用 page 替换。launch.overlay 只允许 replace，且宿主保留「取消启动」/ 安全模式横幅 / 启动失败页。",
+          "enum": ["hide", "replace"]
+        },
+        "page": {
+          "description": "mode=replace 时必填：替换到哪个 page id。",
+          "type": "string",
+          "maxLength": 64,
+          "pattern": "^[a-z][a-z0-9_.-]*$"
+        },
+        "priority": {
+          "type": "integer",
+          "minimum": -1000,
+          "maximum": 1000,
+          "default": 0
+        }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "mode": { "const": "replace" } }, "required": ["mode"] },
+          "then": { "required": ["page"] }
+        },
+        {
+          "if": { "properties": { "target": { "const": "launch.overlay" } }, "required": ["target"] },
+          "then": { "properties": { "mode": { "const": "replace" } } }
+        }
+      ]
+    }
+  },
+  "properties": {
+    "formatVersion": {
+      "description": "包格式版本。2 = P1/P2/P3a 基线；3 = P3b 页面/覆盖 + P5 native 结构。其它值一律拒装。",
+      "enum": [2, 3]
+    },
+    "id": {
+      "description": "全局唯一插件 id，建议反向域名。小写字母/数字/点/下划线/连字符，至少两段。",
+      "type": "string",
+      "minLength": 3,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9]+(\\.[a-z0-9][a-z0-9_-]*)+$"
+    },
+    "name": {
+      "description": "展示名（未本地化时的回退值）。",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "version": {
+      "description": "插件自身版本，语义化版本。",
+      "type": "string",
+      "maxLength": 32,
+      "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(-[0-9A-Za-z.-]+)?$"
+    },
+    "type": {
+      "description": "json = 只有声明；js = 声明 + entry.js。native 属 P5 附加字段，不是 type 值。",
+      "enum": ["json", "js"]
+    },
+    "description": {
+      "description": "一句话说明，管理页展示。",
+      "type": "string",
+      "maxLength": 512
+    },
+    "author": {
+      "description": "作者信息是自述，不是身份认证。安装页必须标注「作者自述」。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+        "url": { "type": "string", "maxLength": 256, "pattern": "^https?://" }
+      }
+    },
+    "homepage": {
+      "type": "string",
+      "maxLength": 256,
+      "pattern": "^https?://"
+    },
+    "license": {
+      "description": "SPDX 标识符，或 FreeText:<自由文本>。",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64
+    },
+    "air2": {
+      "description": "对宿主的要求（声明）。运行时同名的 air2.host 是宿主给的只读视图，两者不是同一个东西。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["host"],
+      "properties": {
+        "host": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["apiVersion"],
+          "properties": {
+            "apiVersion": {
+              "description": "插件使用的宿主 API 主版本。v1 只允许 1。",
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1
+            },
+            "minHostVersion": {
+              "description": "宿主版本下限（含），语义化版本。当前宿主为 0.1.0；不要照抄 2.0.0。",
+              "type": "string",
+              "maxLength": 32,
+              "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+            },
+            "maxHostVersion": {
+              "description": "宿主版本上限（含）。只用于已确认不兼容的场景，正常运行不要填。",
+              "type": "string",
+              "maxLength": 32,
+              "pattern": "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+            }
+          }
+        }
+      }
+    },
+    "platforms": {
+      "description": "目标平台。不含当前平台即拒装，不做静默降级。common 不是合法值。",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": { "enum": ["ios", "android", "desktop"] }
+    },
+    "permissions": {
+      "description": "申请的权限。低/中默认授权（用户可关）；critical 默认关闭，必须逐项三次 5 秒确认。用户实际授予的集合可能更小；未授予的 API 在运行时不注入。",
+      "type": "array",
+      "maxItems": 24,
+      "uniqueItems": true,
+      "items": {
+        "enum": [
+          "launch.tuning",
+          "launch.properties",
+          "launch.args",
+          "launch.env",
+          "launch.env.code",
+          "launch.classpath",
+          "launch.libraryPath",
+          "launch.gameArgs",
+          "java.agent",
+          "files.game.read",
+          "files.game.write.config",
+          "files.game.write.content",
+          "files.export",
+          "version.decorate",
+          "version.patch",
+          "version.filter",
+          "network.http",
+          "download.source",
+          "download.fetch",
+          "ui.contribute",
+          "ui.override",
+          "instance.guard",
+          "native.module",
+          "ui.web"
+        ]
+      }
+    },
+    "depends": {
+      "description": "依赖的其它插件。安装期解析：缺失、版本不符、循环依赖一律拒装。",
+      "type": "array",
+      "maxItems": 32,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "version"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 3,
+            "maxLength": 128,
+            "pattern": "^[a-z0-9]+(\\.[a-z0-9][a-z0-9_-]*)+$"
+          },
+          "version": {
+            "description": "版本约束：>=x.y.z / ^x.y.z / ~x.y.z / x.y.z（精确）。不支持复合范围。",
+            "type": "string",
+            "maxLength": 32,
+            "pattern": "^(\\^|~|>=|=)?(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"
+          }
+        }
+      }
+    },
+    "entry": {
+      "description": "type=js 时必填：入口脚本在包内的相对路径。",
+      "type": "string",
+      "maxLength": 255,
+      "pattern": "^(?!\\.)(?!.*\\.\\.)(?!/)[A-Za-z0-9._/-]+$"
+    },
+    "ui": {
+      "description": "声明式 UI 贡献。纯 JSON 插件的能力面主要在这里；pages / overrides 属 v3。",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "priority": {
+          "description": "加载顺序权重，越小越先。相同则按层、再按 pluginId 字典序。",
+          "type": "integer",
+          "minimum": -1000,
+          "maximum": 1000,
+          "default": 0
+        },
+        "slots": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["slot", "component"],
+            "properties": {
+              "slot": { "$ref": "#/definitions/slotName" },
+              "component": { "$ref": "#/definitions/componentName" },
+              "id": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z][a-z0-9_.-]*$"
+              },
+              "icon": { "$ref": "#/definitions/iconId" },
+              "label": { "$ref": "#/definitions/localizedText" },
+              "action": { "$ref": "#/definitions/action" },
+              "binding": { "$ref": "#/definitions/binding" },
+              "visibleWhen": { "$ref": "#/definitions/condition" },
+              "enabledWhen": { "$ref": "#/definitions/condition" },
+              "priority": {
+                "type": "integer",
+                "minimum": -1000,
+                "maximum": 1000,
+                "default": 0
+              }
+            }
+          }
+        },
+        "theme": {
+          "description": "主题 token 覆盖（L1）。未知 token 由宿主忽略并记诊断，不拒载。",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "tokens": {
+              "type": "object",
+              "minProperties": 1,
+              "maxProperties": 64,
+              "propertyNames": { "pattern": "^[a-z]+(\\.[a-z][a-z0-9]*)+$" },
+              "additionalProperties": {
+                "type": "string",
+                "maxLength": 32
+              }
+            }
+          }
+        },
+        "pages": {
+          "description": "v3 页面模型。formatVersion 2 不允许出现。",
+          "type": "array",
+          "maxItems": 16,
+          "items": { "$ref": "#/definitions/page" }
+        },
+        "overrides": {
+          "description": "v3 界面覆盖。formatVersion 2 不允许出现；需要 ui.override 权限。",
+          "type": "array",
+          "maxItems": 32,
+          "items": { "$ref": "#/definitions/override" }
+        }
+      }
+    },
+    "contributes": {
+      "description": "数据层（L0）贡献。versionDecorate 需 version.decorate；downloadSources 需 download.source（P4）；versionFilter 需 version.filter（P4）。",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "versionDecorate": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "titleTemplate": { "type": "string", "maxLength": 64 },
+            "subtitleTemplate": { "type": "string", "maxLength": 64 },
+            "badge": { "$ref": "#/definitions/localizedText" },
+            "icon": { "$ref": "#/definitions/iconId" }
+          }
+        },
+        "downloadSources": {
+          "type": "array",
+          "maxItems": 8,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name", "urlTemplate"],
+            "properties": {
+              "name": { "type": "string", "minLength": 1, "maxLength": 64 },
+              "urlTemplate": {
+                "type": "string",
+                "minLength": 8,
+                "maxLength": 512,
+                "pattern": "^https://"
+              },
+              "priority": { "type": "integer", "minimum": 0, "maximum": 100, "default": 50 }
+            }
+          }
+        },
+        "versionFilter": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "hidePatterns": {
+              "type": "array",
+              "maxItems": 32,
+              "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+            },
+            "pinPatterns": {
+              "type": "array",
+              "maxItems": 32,
+              "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+            }
+          }
+        }
+      }
+    },
+    "locales": {
+      "description": "BCP-47 语言标记 → locales 目录下 JSON 文件的包内路径。回退顺序见 PLUGIN-COMPAT.md 第四节。",
+      "type": "object",
+      "maxProperties": 32,
+      "propertyNames": { "pattern": "^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$" },
+      "additionalProperties": {
+        "type": "string",
+        "maxLength": 255,
+        "pattern": "^(?!\\.)(?!.*\\.\\.)(?!/)[A-Za-z0-9._/-]+$"
+      }
+    },
+    "files": {
+      "description": "包内除 manifest.json 外所有文件的完整清单。与实际文件集合必须双向相等：多一个或少一个都拒装。包根不允许 AIR2SIG.json。",
+      "type": "array",
+      "minItems": 0,
+      "maxItems": 4096,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "sha256", "size"],
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 255,
+            "pattern": "^(?!\\.)(?!.*\\.\\.)(?!/)[A-Za-z0-9._/-]+$"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "size": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 33554432
+          }
+        }
+      }
+    },
+    "native": {
+      "description": "P5 原生模块声明。formatVersion 2 不允许出现；formatVersion 3 允许结构，但宿主还要 nativePluginsSupported 与 native.module 授权。",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ios"],
+      "properties": {
+        "ios": {
+          "type": "string",
+          "maxLength": 255,
+          "pattern": "^native/ios/[A-Za-z0-9._-]+\\.dylib$"
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": { "type": { "const": "js" } },
+        "required": ["type"]
+      },
+      "then": {
+        "required": ["entry"]
+      },
+      "else": {
+        "not": { "required": ["entry"] }
+      }
+    },
+    {
+      "if": {
+        "properties": { "type": { "const": "json" } },
+        "required": ["type"]
+      },
+      "then": {
+        "properties": {
+          "permissions": {
+            "items": {
+              "enum": [
+                "version.decorate",
+                "download.source",
+                "version.filter",
+                "ui.contribute",
+                "ui.override"
+              ]
+            }
+          },
+          "ui": {
+            "properties": {
+              "pages": {
+                "items": {
+                  "properties": {
+                    "mode": { "const": "static" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "formatVersion": { "const": 2 } },
+        "required": ["formatVersion"]
+      },
+      "then": {
+        "properties": {
+          "ui": {
+            "properties": {
+              "slots": {
+                "items": {
+                  "properties": {
+                    "slot": { "$ref": "#/definitions/v2SlotName" },
+                    "component": { "$ref": "#/definitions/v2ComponentName" }
+                  }
+                }
+              },
+              "pages": false,
+              "overrides": false
+            }
+          },
+          "native": false
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": { "formatVersion": { "const": 3 } },
+        "required": ["formatVersion"]
+      },
+      "then": {
+        "properties": {
+          "ui": {
+            "properties": {
+              "slots": {
+                "items": {
+                  "properties": {
+                    "slot": { "$ref": "#/definitions/slotName" },
+                    "component": { "$ref": "#/definitions/componentName" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

@@ -63,6 +63,7 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 | `Download/` | 下载引擎：分片、断点续传、镜像回退、速度自适应 |
 | `Addons/` | Mod / 资源包 / 光影 / 整合包的识别、依赖解析、安装 |
 | `Renderer/` | 渲染后端抽象与注册表（Metal / kopper / VirGL / GL4ES…） |
+| `Plugin/` | 插件系统数据层与安装器：`manifest.json` 解析校验、`registry.json` 原子读写、`.air2plugin` 包的解压安全校验、安装 / 卸载 / 回退、启动看门狗（boot marker） |
 | `Path/` | 沙盒路径规划，所有路径只在此处拼装 |
 | `Settings/` | 设置项注册表、类型安全的读写、默认值、迁移 |
 
@@ -75,6 +76,7 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 | `Screens/` | 页面级视图，一屏一文件 |
 | `Components/` | 跨页面复用的小组件（按钮、卡片、弹窗） |
 | `Control/` | 游戏内触控层（虚拟按键、摇杆、布局编辑） |
+| `Plugin/` | 插件管理页：列表 / 详情 / 启停 / 卸载 / 导入，权限授权页与 critical 三步确认、启动链插件 10 次免责确认 |
 | `Theme/` | 配色、字体、间距、动效常量 |
 
 **禁止**：在 View 里手写网络协议细节或拼接文件路径；发起请求与读写文件一律走 Core 服务（ViewController 只做调度，不内嵌实现）。
