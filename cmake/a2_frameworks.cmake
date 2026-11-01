@@ -45,9 +45,18 @@ set(A2_FRAMEWORK_PATHS "")
 foreach(_fw IN LISTS A2_SYSTEM_FRAMEWORKS)
     find_library(A2_FW_${_fw} ${_fw})
     if(NOT A2_FW_${_fw})
-        message(FATAL_ERROR
-            "找不到系统 framework ${_fw}（SDK=${CMAKE_OSX_SYSROOT}）。\n"
-            "若确实是 iOS SDK 缺这个 framework，请从 A2_SYSTEM_FRAMEWORKS 里删掉并说明原因。")
+        # ★Linux 宿主分支★ 非 Apple 宿主上 find_library 不认 .framework，改为显式检查 + -framework 链接
+        # （Linux 交叉编译 .app 用的那条路；Mac 宿主永远走上面的 find_library，行为不变）
+        set(_fwbin "${CMAKE_OSX_SYSROOT}/System/Library/Frameworks/${_fw}.framework/${_fw}")
+        if(NOT EXISTS "${_fwbin}")
+            set(_fwtbd "${CMAKE_OSX_SYSROOT}/System/Library/Frameworks/${_fw}.framework/${_fw}.tbd")
+            if(NOT EXISTS "${_fwtbd}")
+                message(FATAL_ERROR
+                    "找不到系统 framework ${_fw}（SDK=${CMAKE_OSX_SYSROOT}）。\n"
+                    "若确实是 iOS SDK 缺这个 framework，请从 A2_SYSTEM_FRAMEWORKS 里删掉并说明原因。")
+            endif()
+        endif()
+        set(A2_FW_${_fw} "-Wl,-framework,${_fw}")
     endif()
     list(APPEND A2_FRAMEWORK_PATHS "${A2_FW_${_fw}}")
 endforeach()
@@ -55,7 +64,14 @@ endforeach()
 # 系统库：zlib（A2ZipReader / A2DownloadEngine 用 <zlib.h>）
 find_library(A2_LIB_z z)
 if(NOT A2_LIB_z)
-    message(FATAL_ERROR "找不到 libz（SDK=${CMAKE_OSX_SYSROOT}/usr/lib）")
+    # ★Linux 宿主分支★ 同上：直接从 SDK 里取 libz.tbd / libz.dylib
+    set(A2_LIB_z "${CMAKE_OSX_SYSROOT}/usr/lib/libz.tbd")
+    if(NOT EXISTS "${A2_LIB_z}")
+        set(A2_LIB_z "${CMAKE_OSX_SYSROOT}/usr/lib/libz.dylib")
+    endif()
+    if(NOT EXISTS "${A2_LIB_z}")
+        message(FATAL_ERROR "找不到 libz（SDK=${CMAKE_OSX_SYSROOT}/usr/lib）")
+    endif()
 endif()
 list(APPEND A2_FRAMEWORK_PATHS "${A2_LIB_z}")
 

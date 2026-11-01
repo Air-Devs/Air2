@@ -63,12 +63,35 @@ set_target_properties(Air2 PROPERTIES
 # ---------------------------------------------------------------------------
 # a2-ipa：调 scripts/package_ipa_cmake.sh（资源清单复用 gen_xcodeproj 的
 # runtime_stage_script()，不另写一份）。这是脚本的唯一自动调用点。
+#
+# ★app 目录怎么取★ 两个宿主不一样，所以按宿主分两支，Mac 那一支逐字不变：
+#   · Apple 宿主（Xcode 的 cmake）：Air2 是 bundle 目标 ⇒ $<TARGET_BUNDLE_DIR:Air2>
+#   · Linux 宿主（交叉编译）：CMAKE_SYSTEM_NAME=Generic 下目标不是 bundle，
+#     CMake 生成期就报「TARGET_BUNDLE_DIR is allowed only for Bundle targets」
+#     ⇒ 改用 $<TARGET_FILE_DIR:Air2>（产物就落在 Air2.app/ 里，见本文件上方 OUTPUT_NAME）
 # ---------------------------------------------------------------------------
+if(CMAKE_HOST_APPLE)
+    set(A2_IPA_APP_DIR_GENEX "$<TARGET_BUNDLE_DIR:Air2>")
+else()
+    set(A2_IPA_APP_DIR_GENEX "$<TARGET_FILE_DIR:Air2>")
+endif()
 add_custom_target(a2-ipa
     COMMAND "${CMAKE_COMMAND}" -E echo "==> 打包 IPA（cmake 产物 + ldid）"
     COMMAND /bin/bash "${CMAKE_SOURCE_DIR}/scripts/package_ipa_cmake.sh"
-            --app-dir "$<TARGET_BUNDLE_DIR:Air2>"
+            --app-dir "${A2_IPA_APP_DIR_GENEX}"
             --out "${CMAKE_SOURCE_DIR}/artifacts"
     DEPENDS Air2
     COMMENT "package_ipa_cmake.sh → artifacts/Air2-cmake.ipa"
     VERBATIM)
+
+# ---------------------------------------------------------------------------
+# ★Linux 交叉链接垫片★（只在非 Apple 宿主上生效）
+#   __isPlatformVersionAtLeast 在 Apple 上由 compiler-rt 提供；Linux 的 clang
+#   没有这份 runtime ⇒ 显式把垫片并进可执行目标。Mac 上不加：那里由 compiler-rt
+#   提供同名符号，再加一份就是重复定义。
+#   为什么不用源扫描清单：scan_sources() 只收 .m/.mm，本文件是 .c；
+#   而且它只属于「Linux 宿主」这一种构建，不该出现在任何平台的通用清单里。
+# ---------------------------------------------------------------------------
+if(NOT CMAKE_HOST_APPLE)
+    target_sources(Air2 PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/Natives/a2_platform_version_shim.c)
+endif()
