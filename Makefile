@@ -59,8 +59,13 @@ natives: bootstrap
 	@echo "==> 编译原生层"
 	@mkdir -p "$(NATIVESDIR)/build"
 	@if [ -f "$(NATIVESDIR)/CMakeLists.txt" ]; then \
+		if ! command -v xcrun >/dev/null 2>&1; then \
+			echo "  (跳过：非 macOS，Natives/ 是 iOS 原生层，需要 Xcode 的 xcrun)"; \
+			exit 0; \
+		fi; \
 		cmake -S "$(NATIVESDIR)" -B "$(NATIVESDIR)/build" \
-			-DCMAKE_BUILD_TYPE="$(CMAKE_BUILD_TYPE)"; \
+			-DCMAKE_BUILD_TYPE="$(CMAKE_BUILD_TYPE)" \
+			-DCMAKE_TOOLCHAIN_FILE="$(SOURCEDIR)/cmake/toolchain-ios.cmake"; \
 		cmake --build "$(NATIVESDIR)/build"; \
 	else \
 		echo "  (Natives/CMakeLists.txt 尚未就绪)"; \
