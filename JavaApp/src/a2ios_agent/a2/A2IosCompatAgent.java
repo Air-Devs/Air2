@@ -42,6 +42,10 @@ public final class A2IosCompatAgent implements ClassFileTransformer {
 
     /** 规则 B：MC 的 macOS 朗读器实现。 */
     private static final String NARRATORMAC_CLASS = "com/mojang/text2speech/NarratorMac";
+    /** 规则 D：LWJGL 原生库哈希校验。 */
+    private static final String LWJGL_LIBRARY_CLASS = "org/lwjgl/system/Library";
+    /** 规则 F：★[A2-GL2-PROBE] 固定管线入口绑定取证★（GL11 的 <clinit> 末尾插一条探针调用）。 */
+    private static final String GL11_CLASS = "org/lwjgl/opengl/GL11";
 
     /** 规则 C：只要方法体碰了这些包，就判定为 macOS 专属实现。 */
     private static final String[] FORBIDDEN_OWNER_PREFIXES = {
@@ -78,6 +82,29 @@ public final class A2IosCompatAgent implements ClassFileTransformer {
             if (patched != null) {
                 return patched;
             }
+        }
+        // 规则 D：跳过 LWJGL 的原生库哈希校验。
+        //   换过 LWJGL 二进制（我们经常换）或启动器解包后字节有差异时，
+        //   org.lwjgl.system.Library.checkHash 会直接抛异常终止启动。
+        //   这里把 checkHash(String,String) 方法体置空（void，无需返回值）。
+        if (LWJGL_LIBRARY_CLASS.equals(className)) {
+            byte[] patched = patchCheckHash(classfileBuffer);
+            if (patched != null) {
+                return patched;
+            }
+        }
+        // 规则 F：★[A2-GL2-PROBE] 固定管线入口绑定取证★
+        //   为什么钉 GL11：MC ≤1.12.2 的 glBegin/glEnd/glVertex3f/glColor4f/glMatrixMode/
+        //   glLoadIdentity 都是 `org.lwjgl.opengl.GL11` 的 public static native
+        //   （javap 实测；glDrawArrays 的 native 声明在 GL11C 上）。取证要在「类刚初始化完」
+        //   这一刻做：此时 JNI 尚未绑定到我们的实现，看到的就是原路径。
+        //   ★只插一条 INVOKESTATIC a2/A2Gl2Probe.run()V，不改任何原有指令★。
+        if (GL11_CLASS.equals(className)) {
+            byte[] patched = patchGl11Probe(classfileBuffer);
+            if (patched != null) {
+                return patched;
+            }
+            return null;   // GL11 不碰 AppKit，不必再走规则 C
         }
         // 规则 C：通用 AppKit 方法体置空。
         return patchAppKitMethods(className, classfileBuffer);
@@ -121,10 +148,85 @@ public final class A2IosCompatAgent implements ClassFileTransformer {
         }
     }
 
+    /** 规则 D：把 org/lwjgl/system/Library.checkHash(String,String) 置空。 */
+    private static byte[] patchCheckHash(byte[] classfileBuffer) {
+        try {
+            ClassReader cr = new ClassReader(classfileBuffer);
+            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+            final boolean[] hit = { false };
+            cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+                @Override
+                public MethodVisitor visitMethod(int access, String name, String descriptor,
+                                                 String signature, String[] exceptions) {
+                    MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
+                    if ("checkHash".equals(name)) {
+                        hit[0] = true;
+                        return new EmptyBody(mv, descriptor);
+                    }
+                    return mv;
+                }
+            }, 0);
+            if (!hit[0]) {
+                return null;
+            }
+            System.out.println("[A2IOS-AGENT] LWJGL checkHash 已跳过（换过原生库不再因哈希校验中止）");
+            return cw.toByteArray();
+        } catch (Throwable t) {
+            System.out.println("[A2IOS-AGENT] checkHash 改写失败: " + t);
+            return null;
+        }
+    }
+
+    /**
+     * 规则 F：在 {@code GL11.<clinit>} 的每个 RETURN 之前插 {@code a2/A2Gl2Probe.run()V}。
+     *
+     * 只增一条 static 调用、不改任何原有指令 ⇒ 语义与没有探针时一致（探针自身也只打印）。
+     * 为什么选 {@code <clinit>}：GL11 的静态初始化只跑一次，且发生在 MC 第一次 GL 调用之前，
+     * 此时还没走到我们的 RegisterNatives，看到的就是**原绑定路径**。
+     */
+    private static byte[] patchGl11Probe(byte[] classfileBuffer) {
+        try {
+            ClassReader cr = new ClassReader(classfileBuffer);
+            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+            final boolean[] hit = { false };
+            cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+                @Override
+                public MethodVisitor visitMethod(int access, String name, String descriptor,
+                                                 String signature, String[] exceptions) {
+                    MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
+                    if (!"<clinit>".equals(name)) {
+                        return mv;
+                    }
+                    hit[0] = true;
+                    return new MethodVisitor(Opcodes.ASM9, mv) {
+                        @Override
+                        public void visitInsn(int opcode) {
+                            if (opcode == Opcodes.RETURN) {
+                                super.visitMethodInsn(Opcodes.INVOKESTATIC,
+                                        "a2/A2Gl2Probe", "run", "()V", false);
+                            }
+                            super.visitInsn(opcode);
+                        }
+                    };
+                }
+            }, 0);
+            if (!hit[0]) {
+                System.out.println("[A2IOS-AGENT] GL11 没有 <clinit> ⇒ [A2-GL2-PROBE] 探针未注入");
+                return null;
+            }
+            System.out.println("[A2IOS-AGENT] GL11.<clinit> 已注入 [A2-GL2-PROBE] 探针");
+            return cw.toByteArray();
+        } catch (Throwable t) {
+            System.out.println("[A2IOS-AGENT] 规则 F（GL11 探针）改写失败: " + t);
+            return null;
+        }
+    }
+
     /** 规则 B 用：整类方法体置空；构造只调 super()，保证类合法可加载。 */
     private static byte[] patchInertClass(String className, byte[] classfileBuffer) {
         try {
             ClassReader cr = new ClassReader(classfileBuffer);
+            final String superName = cr.getSuperName();   // ★真实父类★，不能写死 Object（曾导致 VerifyError）
             ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
             cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
                 @Override
@@ -132,7 +234,7 @@ public final class A2IosCompatAgent implements ClassFileTransformer {
                                                  String signature, String[] exceptions) {
                     MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
                     if ("<init>".equals(name)) {
-                        return new CtorBody(mv);
+                        return new CtorBody(mv, superName);
                     }
                     if ("<clinit>".equals(name)) {
                         return mv;   // 静态初始化保持原样（NarratorMac 的静态块不含 AppKit 调用）
@@ -149,14 +251,17 @@ public final class A2IosCompatAgent implements ClassFileTransformer {
 
     /** 构造函数：aload_0; invokespecial Object.<init>; return */
     private static final class CtorBody extends MethodVisitor {
-        CtorBody(MethodVisitor mv) {
+        private final String superName;
+
+        CtorBody(MethodVisitor mv, String superName) {
             super(Opcodes.ASM9, mv);
+            this.superName = superName;
         }
         @Override
         public void visitCode() {
             super.visitCode();
             super.visitVarInsn(Opcodes.ALOAD, 0);
-            super.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+            super.visitMethodInsn(Opcodes.INVOKESPECIAL, superName, "<init>", "()V", false);
             super.visitInsn(Opcodes.RETURN);
             super.visitMaxs(1, 1);
             super.visitEnd();

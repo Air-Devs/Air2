@@ -34,6 +34,7 @@
 #import "A2IntegrityChecker.h"
 #import "A2JITEnabler.h"
 #import "A2LegacyJITGate.h"            // Natives/Support —— JIT 闸门的唯一实现（判据→申请→等待）
+#import "a2_gl2_shim.h"             // Natives/Renderer —— ★[A2-GL2] 自研固定管线档位判据（默认关）★
 #import "A2LegacyAssetsMapper.h"    // Core/Version —— 远古资源映射（virtual / map_to_resources）
 #import "A2Log.h"
 
@@ -94,7 +95,23 @@ static NSString *A2DefaultRendererForVersion(NSInteger major, NSInteger minor) {
     }
     if (major == 1 && minor >= 17) return A2RendererHostEGLDylibName;
     if (major == 1 && minor >= 13) return @"libmobileglues.dylib";
-    if (major == 1 && minor <= 12) return A2RendererNGGL4ESKWDylibName;
+    if (major == 1 && minor <= 12) {
+        // ★[A2-GL2] 自研固定管线档位（★默认关★）★
+        //   判据只有一个：`a2_gl2_shim_enabled()`（环境变量 A2_GL2_SHIM，值 "0"/空/未设 ⇒ 关）。
+        //   开启后「固定管线实现者」从渲染器 dylib 换成本进程的 a2_gl2_shim：
+        //     立即模式（glBegin/glEnd）、矩阵栈、客户端顶点数组 → GLES3 VBO + 着色器绘制。
+        //   两处入口已接（见 a2_gl2_shim.h 文件头）：`a2_gl_bridge_gles_getprocaddress`
+        //   与假 EGL 的 `eglGetProcAddress`。
+        //   ★本轮边界（如实）★：包内还没有独立的 `liba2gl2.dylib` ⇒ 这一档**不换 dylib**，
+        //   仍取 KW（它提供 EGL 门面 + ES3 上下文）；本层只承担固定管线语义。
+        //   关闭时（默认）本分支与接入前完全等价。
+        if (a2_gl2_shim_enabled()) {
+            [A2Log criterion:@"[A2-GL2] 档位=自研固定管线：MC %ld.%ld ⇒ 固定管线入口由本进程 "
+                              @"a2_gl2_shim 承担（判据 A2_GL2_SHIM=1）；dylib 仍取 %@（EGL 门面 + ES3 上下文）",
+             (long)major, (long)minor, A2RendererNGGL4ESKWDylibName];
+        }
+        return A2RendererNGGL4ESKWDylibName;
+    }
     return @"libgl4es_114.dylib";   // 远古轨道（classic/Alpha/Beta，major=0）仍走老线兼容底
 }
 
@@ -146,8 +163,13 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
     NSInteger wantedVer = 0;
     if (mcMajor >= 26) {
         wantedVer = (mcMinor >= 3) ? 343 : 341;
-    } else if (mcMajor == 1 && mcMinor >= 13) {
+    } else if (mcMajor == 1 && mcMinor >= 21) {
         wantedVer = 341;
+    } else if (mcMajor == 1 && mcMinor >= 13) {
+        // ★2026-11-01 1.19.2 真机证据★ 这些版本按 LWJGL 3.3.1 声明并调用
+        //   STBIIOCallbacks.mallocStack(MemoryStack)，3.4.1 已删掉该方法 ⇒
+        //   NoSuchMethodError 导致 Rendering overlay 崩溃。1.13–1.20 一律用 331。
+        wantedVer = 331;
     }
     if (wantedVer > 0 && !wantsLWJGL2) {
         NSString *exact = nil, *above = nil;
@@ -221,6 +243,12 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
         setenv("ALSOFT_LOGLEVEL", "3", 1);
         setenv("ALSOFT_LOGFILE", alLog.UTF8String, 1);
         [A2Log criterion:@"[A2-AUDIO] openal 日志已开启 path=%@", alLog];
+
+        // ★2026-11-01 临时测试版★ 默认打开 GL2 探针（只注册+转发原实现、不改行为），
+        //   用来确认 1.12.2 的 GL11 入口到底是 JNI 中继还是 dlsym 直取。
+        //   取证完成后这行删除。
+        setenv("A2_GL2_PROBE", "1", 1);
+        [A2Log criterion:@"[A2-GL2] 探针默认开启（临时测试版）"];
     }
 
     void (^finish)(BOOL, NSInteger, NSString *) = ^(BOOL started, NSInteger rc, NSString *message) {
@@ -845,6 +873,19 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
             NSString *jnaLib = [jnaFW stringByAppendingPathComponent:@"libjnidispatch.jnilib"];
             BOOL jnaInBundle = [[NSFileManager defaultManager] fileExistsAtPath:jnaLib];
             [jvmOptions addObject:[NSString stringWithFormat:@"-Djna.boot.library.path=%@", jnaFW]];
+
+            // ★2026-11-01 LWJGL 3.3.x 原生库★ 选了 lwjgl-331 时，必须把 org.lwjgl.librarypath
+            //   指到包内 Frameworks/lwjgl-331：我们的 Frameworks 根目录放的是 3.4.x 的
+            //   liblwjgl*.dylib（缺 nsetupEnvData），1.19.2 用 3.3.1 的 Java jar 时会
+            //   UnsatisfiedLinkError: ThreadLocalUtil.nsetupEnvData。
+            if ([lwjglDir.lastPathComponent isEqualToString:@"lwjgl-331"]) {
+                NSString *fw331 = [[NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"Frameworks"]
+                                   stringByAppendingPathComponent:@"lwjgl-331"];
+                if (fw331.length) {
+                    [jvmOptions addObject:[NSString stringWithFormat:@"-Dorg.lwjgl.librarypath=%@", fw331]];
+                    [A2Log criterion:@"[A2-LWJGL] 原生库目录=%s（3.3.x 专用）", fw331.UTF8String];
+                }
+            }
             [jvmOptions addObject:@"-Djna.nosys=true"];      // 不查系统库路径
             [jvmOptions addObject:@"-Djna.noclasspath=true"];// 真正阻止从 jar 解包
             [jvmOptions addObject:@"-Djna.nounpack=true"];   // 文档同义词
