@@ -1886,7 +1886,27 @@ void a2_gl_bridge_swap_buffers(void) {
             gGamePresented = 1;   // 第一次由游戏提交 ⇒ 停掉预览清屏循环
             a2_log_f(@"[A2-GLBRIDGE] 游戏已开始提交帧 ⇒ 预览清屏循环让路（首次 glfwSwapBuffers）");
         }
-        gEglSwapBuffers(gDpy, gSurf);
+        // ★2026-11-01 黑屏根因★ swap 时线程上没有 EGL 上下文（真机：eglGetCurrentContext()=0x0），
+        //   于是 eglSwapBuffers 提交不到宿主层 ⇒ 画面永远上不了屏。
+        //   这里先确保绑定，再提交，并把返回值/错误一起打出来（每 60 次一行）。
+        typedef void *(*A2PFN_eglGetCurrentContextS)(void);
+        typedef int (*A2PFN_eglGetErrorS)(void);
+        void *curCtxS = NULL;
+        A2PFN_eglGetCurrentContextS getCurS =
+            (A2PFN_eglGetCurrentContextS)dlsym(RTLD_DEFAULT, "eglGetCurrentContext");
+        if (getCurS != NULL) curCtxS = getCurS();
+        if (curCtxS != (void *)gCtx) {
+            int brc = a2_gl_bridge_make_current();
+            a2_log_f(@"[A2-GLBRIDGE] ★swap 前补绑定★ 原 ctx=%p ⇒ make_current rc=%d（本层 gCtx=%p gSurf=%p）",
+                     curCtxS, brc, (void *)gCtx, (void *)gSurf);
+        }
+        int swrc = gEglSwapBuffers(gDpy, gSurf);
+        static unsigned long a2_swN = 0;
+        if ((++a2_swN % 60) == 1) {
+            A2PFN_eglGetErrorS getErrS = (A2PFN_eglGetErrorS)dlsym(RTLD_DEFAULT, "eglGetError");
+            a2_log_f(@"[A2-GLBRIDGE] swap 提交 #%lu rc=%d err=0x%x",
+                     a2_swN, swrc, getErrS ? getErrS() : 0);
+        }
     }
 }
 
