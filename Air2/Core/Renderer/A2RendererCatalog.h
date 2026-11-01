@@ -97,6 +97,20 @@ extern NSString *const A2RendererHostEGLDylibName;
 /// `+bundleDiagnosisForCandidate:` 的宿主 EGL 判据、`+isExperimentalLaunchChainIdentifier:`。
 extern NSString *const A2RendererMobileGluesDylibName;
 
+/// ★SFPEW（SimpleFPEWrapper，固定管线模拟层）的标识★ = `libSimpleFPEWrapper.dylib`。
+///
+/// 它把 `glBegin`/矩阵栈/光照/纹理环境这批老 GL 调用翻成 GLSL，再交给后端 EGL/GLES；
+/// 上游 LGPL-3.0，随包作为**独立动态库**（Air2 只 dlopen、不静态链接）。
+///
+/// ★接入形状（与其它候选不同，三条硬约束）★
+///   · 建面仍是宿主的活：EGL display/config/surface/context 由 `a2_gl_bridge.m` 用包内 ANGLE 的
+///     libEGL 建，SFPEW 只接管 GL 符号解析与 makeCurrent/swapBuffers；
+///   · 只能 `dlopen(RTLD_LOCAL)`（`a2_sfpew_host_load` 是唯一加载点）⇒ 本类的
+///     `+bundleDiagnosisForCandidate:` 对它**只判文件存在、不做 dlopen 探测**；
+///   · 只对 MC ≤1.16 启用，且**必须用户显式选**（判据在 Player 的 `A2DefaultRendererForVersion`）。
+///     ★默认映射一字不改★ —— 不选它等于这段代码不存在。
+extern NSString *const A2RendererSFPEWDylibName;
+
 /// ★是否属于「实验性启动链」★（判定 = 渲染器标识；纯判据，无副作用）。
 ///
 /// 实验性启动链 = 2026-10 起新接、仍在调试的三条：
