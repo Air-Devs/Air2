@@ -16,6 +16,7 @@
 #import "A2LaunchChain.h"            // ①→②→③ 的顺序与状态（★单一真相源★）
 #import "A2LaunchFailure.h"          // 失败分类 / 判据行 / 用户文案（Player 纯逻辑）
 #import "A2LaunchAlertPresenter.h"   // 顶层宿主查找（失败页用；10 次免责确认已迁到插件安装）
+#import "A2Toast.h"
 #import "A2JITReadinessProbe.h"       // ② 的结论枚举（verdict；判据实现见 A2JITEnabler）
 #import "A2JITScriptDelivery.h"      // ① 下发脚本（Bridge → Natives 的下发原语）
 #import "A2LaunchContract.h"
@@ -282,6 +283,13 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
     //   不再走自造的握手/尺寸等待；只有它也为假才去拉起使能器并等待。
     if (!A2JITIsEnabled(0) && ![A2JITEnabler isJITReadyNow]) {
         [A2Log criterion:@"[A2-JIT-ENABLER] 未就绪 ⇒ 中止启动（不建 VM）（先弹等待窗 → 再拉起使能器 → 拿到 JIT 才重新启动）"];
+        // ★2026-11-01 UX★ 真机反馈：卡在等待窗时界面没有任何说明，用户不知道在等什么。
+        //   这里在主线程给一条明确提示（不阻断流程，拿到 JIT 后照常继续）。
+        dispatch_async(dispatch_get_main_queue(), ^{
+            UIViewController *top = [A2LaunchAlertPresenter topViewController];
+            [A2Toast show:@"正在等待 JIT：请保持 StikDebug 在前台并完成授权，之后会自动继续"
+                    inView:top.view ?: UIApplication.sharedApplication.keyWindow];
+        });
         sWaitingForJIT = YES;
         __block BOOL resumed = NO;   // ★重入护栏★：同一次等待只认第一次回调
         [A2JITEnabler ensureJITThen:^(BOOL ok) {

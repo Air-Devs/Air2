@@ -59,10 +59,18 @@ public final class A2IosCompatAgent implements ClassFileTransformer {
         if (className == null) {
             return null;
         }
-        // 规则 B：让 NarratorMac 定义失败 ⇒ MC catch(Throwable) 后回退 Narrator.EMPTY。
+        // 规则 B：把 NarratorMac 变成「合法但空实现」的类。
+        //   ★2026-11-01 真机（1.19.2, lastlog-134）★ 旧做法是返回 0xCAFEBABE 让它定义失败，
+        //   1.20.1 的 Narrator.getNarrator 用 catch(Throwable) 能接住；1.19.2 只 catch Exception，
+        //   ClassFormatError 直接冒到 Main.main ⇒ 启动崩。
+        //   ⇒ 改成：类正常加载，但构造只调 super()、其余方法返回默认值 ⇒ 不会碰 AppKit，也不会抛 Error。
         if (NARRATORMAC_CLASS.equals(className)) {
-            System.out.println("[A2IOS-AGENT] NarratorMac 已禁用（返回非法字节使其定义失败）⇒ MC 自动降级为空朗读器");
-            return new byte[] { (byte) 0xCA, (byte) 0xFE, (byte) 0xBA, (byte) 0xBE };
+            byte[] patched = patchInertClass(className, classfileBuffer);
+            if (patched != null) {
+                System.out.println("[A2IOS-AGENT] NarratorMac 已置为合法空实现（不碰 AppKit）");
+                return patched;
+            }
+            return null;
         }
         // 规则 A：ehg 精确置空。
         if (TARGET_CLASS.equals(className)) {
@@ -111,6 +119,70 @@ public final class A2IosCompatAgent implements ClassFileTransformer {
             System.out.println("[A2IOS-AGENT] ehg 改写失败: " + t);
             return null;
         }
+    }
+
+    /** 规则 B 用：整类方法体置空；构造只调 super()，保证类合法可加载。 */
+    private static byte[] patchInertClass(String className, byte[] classfileBuffer) {
+        try {
+            ClassReader cr = new ClassReader(classfileBuffer);
+            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+            cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+                @Override
+                public MethodVisitor visitMethod(int access, String name, String descriptor,
+                                                 String signature, String[] exceptions) {
+                    MethodVisitor mv = super.visitMethod(access, name, descriptor, signature, exceptions);
+                    if ("<init>".equals(name)) {
+                        return new CtorBody(mv);
+                    }
+                    if ("<clinit>".equals(name)) {
+                        return mv;   // 静态初始化保持原样（NarratorMac 的静态块不含 AppKit 调用）
+                    }
+                    return new EmptyBody(mv, descriptor);
+                }
+            }, 0);
+            return cw.toByteArray();
+        } catch (Throwable t) {
+            System.out.println("[A2IOS-AGENT] 空实现改写失败 " + className + ": " + t);
+            return null;
+        }
+    }
+
+    /** 构造函数：aload_0; invokespecial Object.<init>; return */
+    private static final class CtorBody extends MethodVisitor {
+        CtorBody(MethodVisitor mv) {
+            super(Opcodes.ASM9, mv);
+        }
+        @Override
+        public void visitCode() {
+            super.visitCode();
+            super.visitVarInsn(Opcodes.ALOAD, 0);
+            super.visitMethodInsn(Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+            super.visitInsn(Opcodes.RETURN);
+            super.visitMaxs(1, 1);
+            super.visitEnd();
+        }
+        @Override public void visitInsn(int opcode) { }
+        @Override public void visitIntInsn(int opcode, int operand) { }
+        @Override public void visitVarInsn(int opcode, int varIndex) { }
+        @Override public void visitTypeInsn(int opcode, String type) { }
+        @Override public void visitFieldInsn(int opcode, String owner, String name, String descriptor) { }
+        @Override public void visitMethodInsn(int opcode, String owner, String name, String descriptor, boolean isInterface) { }
+        @Override public void visitInvokeDynamicInsn(String name, String descriptor,
+                                                    org.objectweb.asm.Handle bsm, Object... bsmArgs) { }
+        @Override public void visitJumpInsn(int opcode, Label label) { }
+        @Override public void visitLabel(Label label) { }
+        @Override public void visitLdcInsn(Object value) { }
+        @Override public void visitIincInsn(int varIndex, int increment) { }
+        @Override public void visitTableSwitchInsn(int min, int max, Label dflt, Label... labels) { }
+        @Override public void visitLookupSwitchInsn(Label dflt, int[] keys, Label[] labels) { }
+        @Override public void visitMultiANewArrayInsn(String descriptor, int numDimensions) { }
+        @Override public void visitTryCatchBlock(Label start, Label end, Label handler, String type) { }
+        @Override public void visitLocalVariable(String name, String descriptor, String signature,
+                                                 Label start, Label end, int index) { }
+        @Override public void visitLineNumber(int line, Label start) { }
+        @Override public void visitFrame(int type, int numLocal, Object[] local, int numStack, Object[] stack) { }
+        @Override public void visitMaxs(int maxStack, int maxLocals) { }
+        @Override public void visitEnd() { }
     }
 
     /**
