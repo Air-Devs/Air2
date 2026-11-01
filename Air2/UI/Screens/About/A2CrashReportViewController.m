@@ -24,6 +24,10 @@
 #import "A2Log.h"
 #import "A2ThemeManager.h"   // 主题色板（崩溃遮罩用；既有崩溃页仍用系统色，观感不变）
 #import "A2Typography.h"
+// ★[A2-EXIT-GUARD] 进程级退出拦截层★：本页「重启启动器」的退出必须走它（不是 `exit(0)`）——
+//   直接写 exit 会让链接器为 exit 生成本地 stub，使 __interpose 表里那一格失效 ⇒
+//   游戏里的 System.exit(-1) 拦不住。原因与判据见 Natives/Context/a2_exit_guard.h 的注释。
+#import "a2_exit_guard.h"
 
 @interface A2CrashReportViewController ()
 @property (nonatomic, copy) NSString *pageTitle;
@@ -238,7 +242,9 @@
     }];
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.4 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
-        exit(0);
+        // ★不能直接写 exit(0)★（会让 exit 生成本地 stub ⇒ 游戏退出拦截失效）：
+        //   走 a2_exit_guard_terminate_now ⇒ 调的是同一个 libSystem 原函数，行为一字不差。
+        a2_exit_guard_terminate_now(0);
     });
 }
 

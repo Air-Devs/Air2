@@ -603,6 +603,9 @@ int a2_launch_jvm_with_argv(int argc, const char *const argv[], A2LaunchInput in
             //   区间 = 「主类 main 即将被调用」→「它返回」。此区间内 exit/_exit/abort 的
             //   非 0 退出由 Natives/Context/a2_exit_guard.m 拦下（不真退、广播同一 notification），
             //   区间外（启动链本身、退出后的收尾）一律原样转调原函数 —— 行为一字不变。
+            //   进窗口之前先「装拦截 + 打判据」（表值核对 / 装了几个镜像）：拦截「没发生」时
+            //   不会有任何日志，所以必须在拦截之前就留下「到底装没装上」的证据。
+            a2_exit_guard_arm();
             gA2GameRunning = 1;
             int mrc2 = a2_run_main(tenv, mainCls, pargs);
             gA2GameRunning = 0;

@@ -31,4 +31,28 @@ extern volatile sig_atomic_t gA2GameRunning;
 /// 唯一消费方：Air2/App/A2AppDelegate.m 的观察者（按同名 notification 收，读 userInfo[@"code"]）。
 extern NSString *const a2_exit_guard_exited_notification_name;
 
+/// ★安装拦截（判据行也在这里）★ 进「游戏运行中」窗口之前调一次：
+/// 逐镜像改绑定（`dyld_dynamic_interpose`），并打三行「表值核对」+ 一行「已装」判据。
+/// ★为什么不能只靠 `__DATA,__interpose` 静态段★：dyld4 在启动时只扫 **MH_DYLIB** 镜像的
+/// __interpose 段（源码 `DyldRuntimeState.cpp::buildInterposingTables`：
+/// `if ( !hdr->isDylib() ) continue;`），而 App 主程序是 MH_EXECUTE ⇒ 静态表在真机上不会被登记。
+/// 那张表保留作「元组的唯一定义处」（replacee 由 dyld 的普通绑定解析成真地址），
+/// 真正生效靠本函数逐镜像改绑定 —— 这一步也正是「拦截是否生效」的唯一判据来源。
+/// 调用方（唯一）：Natives/Context/a2_launch.m —— 派发主类 main 之前（那时 libjvm 已加载）。
+void a2_exit_guard_arm(void);
+
+/// 立刻结束进程（★行为 = `exit(code)`，一字不差：调的是同一个 libSystem 原函数★）。
+/// 调用方（唯一）：Air2/UI/Screens/About/A2CrashReportViewController.m 的 `restartLauncher`
+/// 「重启启动器」—— 它原来直接写 `exit(0)`。
+/// ★为什么必须经过这里，而不是直接写 `exit(0)`★（不是风格问题，是拦截能不能成立）：
+///   ld64.lld 只要在本镜像里见过一次 `exit()` 调用，就会为 `exit` 生成本地 **stub**，并把
+///   __interpose 表里「取 exit 地址」那一格直接写成 **stub 地址**；而 dyld 解析该表时，
+///   replacee 那一格必须是**绑定项（bind）**——它按 bind 记录去解析真实符号地址，填成静态
+///   stub 的一格会被当成空项丢掉（dyld 源码 `DyldRuntimeState.cpp` 的 forEachRebase/forEachBind
+///   分支 + `if ((t.tuple.replacee == 0) || …) continue;`）⇒ `exit` 就拦不住，
+///   游戏里 `System.exit(-1)` 会照旧把进程杀掉。改成走函数指针调用 ⇒ 不再生成 stub，
+///   表里那一格恢复成 bind ⇒ 拦截成立。★表值是否真对得上，由 a2_exit_guard_arm 的
+///   「表值核对 … 一致=1」那几行判★。
+void a2_exit_guard_terminate_now(int code) __attribute__((noreturn));
+
 #endif /* A2_EXIT_GUARD_H */
