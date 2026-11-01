@@ -8,6 +8,7 @@
 //
 
 #import "A2LaunchSession.h"
+#import <AVFoundation/AVFoundation.h>
 #import <UIKit/UIKit.h>   // 启动失败界面（UIAlertController / UIWindowScene）
 #import "A2LaunchPlan.h"
 #import "A2LaunchOverlay.h"
@@ -196,6 +197,22 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
 
 + (void)startCurrentVersionWithCompletion:(void (^)(A2LaunchSessionResult *))completion {
     if (completion == nil) return;
+
+    // ★2026-11-01 声音★ 真机：画面已出、OpenAL initialized、Sound engine started，但没有任何声音。
+    //   原因是没有把 AVAudioSession 设成 playback 并激活 —— OpenAL 能初始化，输出却被系统静音。
+    //   这里在启动链最开始显式激活一次（失败只记日志，不阻断启动）。
+    {
+        NSError *a2AudioErr = nil;
+        AVAudioSession *a2Session = AVAudioSession.sharedInstance;
+        [a2Session setCategory:AVAudioSessionCategoryPlayback
+                          mode:AVAudioSessionModeDefault
+                       options:0
+                         error:&a2AudioErr];
+        [a2Session setActive:YES error:&a2AudioErr];
+        [A2Log criterion:@"[A2-AUDIO] 会话激活 category=playback active=YES err=%@",
+         a2AudioErr.localizedDescription ?: @"(none)"];
+    }
+
     void (^finish)(BOOL, NSInteger, NSString *) = ^(BOOL started, NSInteger rc, NSString *message) {
         A2LaunchSessionResult *r = [A2LaunchSessionResult resultWithStarted:started
                                                                  returnCode:rc

@@ -252,15 +252,15 @@ static void a2_gl_bridge_teardown(void) {
     // ★句柄各自独立★（MG 门面下也不再有别名）：gEglHandle/gGlesHandle = ANGLE 的两份，
     //   gRendererHandle = 后端本体。仍保留「与本体同一镜像就不重复 dlclose」的比较 ——
     //   那是对同一镜像 dlopen 两次时引用计数的保险（别多减一次）。
-    void *rendererHandleBefore = gRendererHandle;
+    // ★2026-11-01 真机崩溃证据★ 不再 dlclose 后端/ANGLE 镜像。
+    //   崩溃：进程连续运行 10.5 小时，在账号页渲染 SF Symbol 时
+    //   EXC_BAD_ACCESS at 0x0 in CoreImage CI::GLContext，且崩溃时进程内已无任何 GL/EGL 镜像。
+    //   机理：ANGLE 的 libEGL/libGLESv2 以 RTLD_GLOBAL 进 flat namespace，退出时 dlclose
+    //   会把符号从全局命名空间撤走；此前已绑定过它们的代码再走 GL 路径就跳进已卸载地址。
+    //   处理：镜像只增不卸（保留在静态里复用），只清空本轮状态。
     if (gRendererHandle != NULL) {
-        dlclose(gRendererHandle);
-        gRendererHandle = NULL;
-        gKryptonInitedHandle = NULL;   // 镜像已关 ⇒ 下次 attach 必须重新初始化
+        gKryptonInitedHandle = NULL;   // 本轮结束 ⇒ 下次 attach 重新初始化，镜像保持加载
     }
-    if (gGlesHandle != NULL)     { if (gGlesHandle != rendererHandleBefore) dlclose(gGlesHandle); gGlesHandle = NULL; }
-    // ★宿主 EGL 后端的 gEglHandle 是 dlopen(NULL)（主镜像句柄）★：不能 dlclose（那会试图卸载主二进制）。
-    if (gEglHandle != NULL)      { if (!gHostEgl && gEglHandle != rendererHandleBefore) dlclose(gEglHandle); gEglHandle = NULL; }
     gHostEgl = 0;
     gEglSource = A2GlBridgeEglSourceAngle;   // ★EGL 源随句柄一起释放★：下次 attach 必须重新判（不留上一轮的结论）
     gMgEglEntriesGot = 0;                    // ★探测结果同理★：不留上一轮的数字（否则判据行会报别的后端/上一轮的入口数）
@@ -1052,8 +1052,20 @@ static void *a2_gl_bridge_metal_layer_for(void *renderable) {
             a2_log_f(@"[A2-GLBRIDGE] ★层序★ 子视图数=%lu 游戏视图位置=%ld（0=最底，末尾=最顶）",
                      (unsigned long)(subs ? subs.count : 0),
                      (long)((idx == NSNotFound) ? -1 : (long)idx));
+            // ★2026-11-01 控件失效★ 直接把游戏视图提到最前会压住控件层（真机：触摸有反应但控件没用）。
+            //   正确顺序：游戏视图插到 A2GameControlsView 之下，控件始终在最上层。
             SEL toFront = sel_registerName("bringSubviewToFront:");
-            if ([dw respondsToSelector:toFront]) {
+            id ctlView = nil;
+            if (subs != nil) {
+                for (id sib in subs) {
+                    if ([NSStringFromClass([sib class]) isEqualToString:@"A2GameControlsView"]) { ctlView = sib; break; }
+                }
+            }
+            if (ctlView != nil && [dw respondsToSelector:sel_registerName("insertSubview:belowSubview:")]) {
+                typedef void (*A2InsertFn)(id, SEL, id, id);
+                ((A2InsertFn)objc_msgSend)(dw, sel_registerName("insertSubview:belowSubview:"), dv, ctlView);
+                a2_log_f(@"[A2-GLBRIDGE] ★游戏视图已插到控件层之下★（控件保持最上层）");
+            } else if ([dw respondsToSelector:toFront]) {
                 [dw performSelector:toFront withObject:dv];
                 NSArray *subs2 = [dw valueForKey:@"subviews"];
                 NSUInteger idx2 = (subs2 != nil) ? [subs2 indexOfObject:dv] : NSNotFound;
