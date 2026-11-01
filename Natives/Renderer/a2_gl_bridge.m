@@ -420,12 +420,13 @@ static void *a2_gl_bridge_egl_entry_handle(void) {
     return (a2_gl_bridge_egl_source() == A2GlBridgeEglSourceMG) ? gRendererHandle : gEglHandle;
 }
 
-/// ★EGL 符号的唯一取法★（默认 RTLD_LOCAL ⇒ 不能再靠 flat namespace）：
+/// ★探针用 `egl*` 的取法★（默认 RTLD_LOCAL ⇒ 不能再靠 flat namespace）：
 ///   ① 门面句柄（`a2_gl_bridge_egl_entry_handle()`）；
 ///   ② 宿主句柄 `gEglHandle`（门面=MG 时宿主仍是 ANGLE）；
 ///   ③ `RTLD_DEFAULT` 仅作最后兜底（宿主 EGL 后端的主镜像 / 旧 GLOBAL 回调环境）。
-/// ★只用于诊断/探针的 `egl*`★：建面用的入口表由 attach ⑤ 从①的句柄装配，不走这里。
-static void *a2_gl_bridge_egl_symbol(const char *name) {
+/// ★只给诊断探针用★：建面用的入口表由 attach ⑤ 经 `a2_gl_bridge_egl_symbol(handle,name,&missing)`
+///   装配，两者不是一回事（名字相近，别混用）。
+static void *a2_gl_bridge_egl_probe_symbol(const char *name) {
     if (name == NULL) return NULL;
     void *facade = a2_gl_bridge_egl_entry_handle();
     void *sym = (facade != NULL) ? dlsym(facade, name) : NULL;
@@ -1968,9 +1969,9 @@ void a2_gl_bridge_swap_buffers(void) {
             typedef void *(*A2PFN_eglGetCurrentContext)(void);
             typedef void *(*A2PFN_eglGetCurrentSurface)(int);
             A2PFN_eglGetCurrentContext curCtxFn =
-                (A2PFN_eglGetCurrentContext)a2_gl_bridge_egl_symbol("eglGetCurrentContext");
+                (A2PFN_eglGetCurrentContext)a2_gl_bridge_egl_probe_symbol("eglGetCurrentContext");
             A2PFN_eglGetCurrentSurface curSurfFn =
-                (A2PFN_eglGetCurrentSurface)a2_gl_bridge_egl_symbol("eglGetCurrentSurface");
+                (A2PFN_eglGetCurrentSurface)a2_gl_bridge_egl_probe_symbol("eglGetCurrentSurface");
             void *curCtx = curCtxFn ? curCtxFn() : NULL;
             void *curSurf = curSurfFn ? curSurfFn(0x305A /*EGL_READ*/) : NULL;
             a2_log_f(@"[A2-GLBRIDGE] 上下文归属 #%lu：当前 ctx=%p surf=%p ｜ 本层 gCtx=%p gSurf=%p %s",
@@ -2014,7 +2015,7 @@ void a2_gl_bridge_swap_buffers(void) {
         typedef int (*A2PFN_eglGetErrorS)(void);
         void *curCtxS = NULL;
         A2PFN_eglGetCurrentContextS getCurS =
-            (A2PFN_eglGetCurrentContextS)a2_gl_bridge_egl_symbol("eglGetCurrentContext");
+            (A2PFN_eglGetCurrentContextS)a2_gl_bridge_egl_probe_symbol("eglGetCurrentContext");
         if (getCurS != NULL) curCtxS = getCurS();
         if (curCtxS != (void *)gCtx) {
             int brc = a2_gl_bridge_make_current();
@@ -2025,7 +2026,7 @@ void a2_gl_bridge_swap_buffers(void) {
         static unsigned long a2_swN = 0;
         if ((++a2_swN % 60) == 1) {
             A2PFN_eglGetErrorS getErrS =
-                (A2PFN_eglGetErrorS)a2_gl_bridge_egl_symbol("eglGetError");
+                (A2PFN_eglGetErrorS)a2_gl_bridge_egl_probe_symbol("eglGetError");
             a2_log_f(@"[A2-GLBRIDGE] swap 提交 #%lu rc=%d err=0x%x",
                      a2_swN, swrc, getErrS ? getErrS() : 0);
         }
