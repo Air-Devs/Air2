@@ -16,11 +16,22 @@
 #import "a2_sfpew_host.h" // ★[A2-SFPEW] 固定管线档位★：本层只校验存在，加载归 GL 桥（RTLD_LOCAL）
 
 #include <dlfcn.h>
+#include <stdlib.h>   // getenv（加载模式开关 A2_GL_RTLD）
 #include <string.h>   // strcmp（宿主 EGL 后端的精确比较）
 
 const char *const A2RendererMetalDylibName   = "libmetallum.dylib";
 const char *const A2RendererCompatDylibName  = "libgl4es_114.dylib";
 const char *const A2RendererHostEAGLDylibName = "libeagl.dylib";
+
+int a2_renderer_uses_global_rtld(void) {
+    const char *v = getenv("A2_GL_RTLD");
+    if (v == NULL || v[0] == '\0') return 0;   // 默认 LOCAL
+    return (strcmp(v, "global") == 0 || strcmp(v, "GLOBAL") == 0 || strcmp(v, "1") == 0);
+}
+
+int a2_renderer_dlopen_flags(void) {
+    return RTLD_LAZY | (a2_renderer_uses_global_rtld() ? RTLD_GLOBAL : RTLD_LOCAL);
+}
 
 int a2_renderer_load_named(NSString *dylibName, NSString *frameworksPath) {
     // 空名 ⇒ 主推（上层没给就是「没选」，按主推走；判据行由 A2LaunchSession 打明来源）。
@@ -56,16 +67,18 @@ int a2_renderer_load_named(NSString *dylibName, NSString *frameworksPath) {
 
     // ★[A2-SFPEW] 固定管线档位：★本层不 dlopen★ —— 上游接入契约要求 `dlopen(RTLD_LOCAL)`，且
     //   加载点唯一 = `a2_sfpew_host_load`（`a2_gl_bridge_attach` 的 ①c，在建 EGL 面之前）。
-    //   本函数恒用 RTLD_GLOBAL ⇒ 会把它的 567 个 `gl*` 推进 flat namespace，和兼容底的解析抢符号
-    //   （契约②明确禁止）。文件存在性已由上面那条判据兜住（缺件仍按未内置阻断）。
+    //   本层的统一旗标对它是错的口径（它恒为 RTLD_LOCAL，且 567 个 gl* 不许进 flat namespace）。
     if (strcmp(name.UTF8String, A2SFPEWHostDylibName) == 0) {
         a2_log_f(@"[A2-RENDERER] 已选择 SFPEW 档位：%s（本层不 dlopen —— 由 GL 桥以 RTLD_LOCAL 加载）",
                  path.UTF8String);
         return 0;
     }
 
-    // RTLD_GLOBAL：与老链一致（渲染器符号需对后续 dlopen 的库可见）。
-    void *handle = dlopen(path.UTF8String, RTLD_LAZY | RTLD_GLOBAL);
+    // ★加载旗标★：默认 `RTLD_LOCAL`（`a2_renderer_dlopen_flags()` 的唯一产地）——
+    //   渲染器的 `gl*`/`egl*` 不进进程 flat namespace；下游各自按句柄解析
+    //   （MG 靠 `MG_DIRECTORY_PATH` 自己 dlopen ANGLE，LWJGL 靠 `org.lwjgl.opengl.libname`）。
+    //   回退：环境变量 `A2_GL_RTLD=global`（不用重编）。
+    void *handle = dlopen(path.UTF8String, a2_renderer_dlopen_flags());
     if (handle == NULL) {
         const char *err = dlerror();
         a2_log_f(@"[A2-RENDERER] 渲染后端 dlopen 失败：%s（%s）", path.UTF8String, err ? err : "(dlerror 无输出)");

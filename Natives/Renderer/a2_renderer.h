@@ -44,6 +44,16 @@ extern const char *const A2RendererCompatDylibName;
 /// 取值即 `A2SelectedRendererPrefKey` 存进 NSUserDefaults 的值。
 extern const char *const A2RendererHostEAGLDylibName;
 
+/// 渲染器 / ANGLE 的 dlopen 旗标（★唯一产地★，供 GL 桥与设置页的内置探测共用）。
+///
+/// 默认 **RTLD_LOCAL**：渲染器与 ANGLE 的 `egl*`/`gl*` 不进进程 flat namespace ——
+///   2026-11-01 账号页闪退的修法（系统框架建 EAGL 上下文时只会命中系统实现）。
+/// 回退：环境变量 `A2_GL_RTLD=global|GLOBAL|1` ⇒ `RTLD_GLOBAL`（旧行为，不用重编）。
+int a2_renderer_dlopen_flags(void);
+
+/// 是否处于 GLOBAL 回退模式（判据行与归属核对据此分叉；默认 0 = LOCAL 隔离）。
+int a2_renderer_uses_global_rtld(void);
+
 /// 显式选择并加载指定渲染后端（`<frameworksPath>/<dylibName>`）。
 ///
 /// ★调用点唯一★：`Air2/Bridge/A2LaunchRunner.m` 的 `+launchWithPlanPath:…`。

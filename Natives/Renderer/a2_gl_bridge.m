@@ -26,12 +26,14 @@
 #import "A2JITEnvironment.h"   // ★[A2PROBE]★ a2_jit_probe_arm（把 KW/ANGLE 的 glLoadIdentity 交给脚本布断点）
 #import "a2_eagl_egl.h"        // ★宿主 EGL 后端★：A2FakeEglWindowSize（上屏建面的实参）
 #import "a2_sfpew_host.h"      // ★[A2-SFPEW] 固定管线档位★：只在本档位命中时被调用（见 ①c / ④ / ⑤b）
+#import "a2_renderer.h"       // ★加载模式（RTLD_LOCAL/GLOBAL）的唯一产地★
 
 #import <objc/message.h>   // objc_msgSend（动态取 layer 用；不 import UIKit）
 #import <dlfcn.h>
 #include <unistd.h>       // usleep（首次 make_current 等宿主视图就绪的有界等待）
 #include <time.h>         // clock_gettime(CLOCK_MONOTONIC)（MG 引导的耗时判据）
 #include <string.h>
+#include <stdlib.h>       // getenv（加载模式开关 A2_GL_RTLD）
 #include <stdint.h>
 #include <mach-o/dyld.h>  // _dyld_image_count / _dyld_get_image_header（④a2 interpose 的目标镜像）
 #include <mach-o/loader.h>   // struct mach_header（dyld_dynamic_interpose 的第一个实参）
@@ -153,20 +155,6 @@ static int   gHostEgl = 0;
 /// 不选这一档时它恒为 0，现有各版本的路径与全局状态（环境变量 / 句柄）一字不动。
 static int   gSfpewTier = 0;
 
-/// ★2026-11-01 符号隔离开关★ 默认把 ANGLE / 渲染器 dylib 以 RTLD_LOCAL 加载，
-///   不让 egl*/gl* 进入进程的 flat namespace —— 这是「账号页闪退」的根治方向：
-///   系统框架（CoreImage/CoreUI）建 EAGL 上下文时不会再解析到我们的实现。
-///   回退开关：环境变量 A2_GL_RTLD=global（或 1）恢复旧的 RTLD_GLOBAL 行为。
-static int a2_gl_bridge_use_global_rtld(void) {
-    const char *v = getenv("A2_GL_RTLD");
-    if (v == NULL) return 0;                       // 默认 LOCAL
-    return (strcmp(v, "global") == 0 || strcmp(v, "GLOBAL") == 0 || strcmp(v, "1") == 0);
-}
-
-static int a2_gl_bridge_rtld_flags(void) {
-    return RTLD_LAZY | (a2_gl_bridge_use_global_rtld() ? RTLD_GLOBAL : RTLD_LOCAL);
-}
-
 /// ★建面用的 EGL 入口从哪来★（★全项目只有两个值、一个产地★：attach 的 MG 探测；teardown 复位）。
 typedef enum {
     A2GlBridgeEglSourceAngle = 0,   ///< 非 MG 自带 —— ANGLE 兼容底（`Frameworks/libEGL.framework/libEGL`）或宿主假 EGL（主镜像）
@@ -276,7 +264,7 @@ static void a2_gl_bridge_teardown(void) {
     // ★2026-11-01 真机崩溃证据★ 不再 dlclose 后端/ANGLE 镜像。
     //   崩溃：进程连续运行 10.5 小时，在账号页渲染 SF Symbol 时
     //   EXC_BAD_ACCESS at 0x0 in CoreImage CI::GLContext，且崩溃时进程内已无任何 GL/EGL 镜像。
-    //   机理：ANGLE 的 libEGL/libGLESv2 以 RTLD_GLOBAL 进 flat namespace，退出时 dlclose
+    //   机理：ANGLE 的 libEGL/libGLESv2（当时以 RTLD_GLOBAL 加载）退出时 dlclose
     //   会把符号从全局命名空间撤走；此前已绑定过它们的代码再走 GL 路径就跳进已卸载地址。
     //   处理：镜像只增不卸（保留在静态里复用），只清空本轮状态。
     if (gRendererHandle != NULL) {
@@ -432,6 +420,20 @@ static void *a2_gl_bridge_egl_entry_handle(void) {
     return (a2_gl_bridge_egl_source() == A2GlBridgeEglSourceMG) ? gRendererHandle : gEglHandle;
 }
 
+/// ★EGL 符号的唯一取法★（默认 RTLD_LOCAL ⇒ 不能再靠 flat namespace）：
+///   ① 门面句柄（`a2_gl_bridge_egl_entry_handle()`）；
+///   ② 宿主句柄 `gEglHandle`（门面=MG 时宿主仍是 ANGLE）；
+///   ③ `RTLD_DEFAULT` 仅作最后兜底（宿主 EGL 后端的主镜像 / 旧 GLOBAL 回调环境）。
+/// ★只用于诊断/探针的 `egl*`★：建面用的入口表由 attach ⑤ 从①的句柄装配，不走这里。
+static void *a2_gl_bridge_egl_symbol(const char *name) {
+    if (name == NULL) return NULL;
+    void *facade = a2_gl_bridge_egl_entry_handle();
+    void *sym = (facade != NULL) ? dlsym(facade, name) : NULL;
+    if (sym == NULL && gEglHandle != NULL && gEglHandle != facade) sym = dlsym(gEglHandle, name);
+    if (sym == NULL) sym = dlsym(RTLD_DEFAULT, name);
+    return sym;
+}
+
 /// ★EGL 入口表的完整性判据★（返回**第一个**空入口名；全有 ⇒ NULL）—— 唯一产地。
 /// 为什么必须单列：入口表只有两态（⑤ 一次填齐 / teardown 一次清空），半张表 = 上一轮中途失败；
 /// 此时任何 `egl*` 解引用都可能崩在空指针上（真机 iOS 16.7：键鼠窗触发相位改绑后再跑 attach
@@ -488,7 +490,8 @@ static const char *const kMgEglEntryNames[] = {
 /// ★两层栈的口径★：MG 导出的整套 `egl*` 只是**门面**（façade），它自己不建宿主 ——
 ///   真机 lastlog-104：只把 MG 当 EGL 源、并把 ANGLE 跳过之后，MG 自己报
 ///   `EGL entry point eglGetDisplay is not available in the backend library`，随后 SIGSEGV 循环。
-///   ⇒ 本层同时加载 ANGLE（`libEGL`/`libGLESv2`，RTLD_GLOBAL）当**宿主**，MG 的门面才有落地实现；
+///   ⇒ 本层同时加载 ANGLE（`libEGL`/`libGLESv2`）当**宿主**，MG 的门面才有落地实现；
+///   加载旗标默认 RTLD_LOCAL（见 `a2_renderer_dlopen_flags()`），门面/宿主的入口都走**句柄**解析。
 ///   而我们自己的 `egl*` 调用仍优先走门面（本函数的结论），见 `a2_gl_bridge_egl_entry_handle()`。
 ///   ⇒ 本函数只回答「门面是谁」，宿主恒为 ANGLE（`gHostEgl` 那条宿主假 EGL 分支除外）。
 ///
@@ -534,12 +537,12 @@ static int a2_gl_bridge_use_own_egl(void) {
 
 /// ★两层判据行（EGL 门面 / 宿主）★ —— 真机 grep 这一行即可判读「egl* 是谁的、宿主是谁」。
 /// 调用点：`a2_gl_bridge_attach` 的 ④ 之后**一次**（此时门面句柄与 ANGLE 宿主句柄都已落地，
-/// 也只有这时才能同时报出「门面入口数」与「宿主已 RTLD_GLOBAL」）。
+/// 也只有这时才能同时报出「门面入口数」与「宿主句柄已就绪」）。
 /// ★只报事实★：门面=MG 时点明入口数与自己那份句柄；门面=ANGLE 时点名 MG 缺的那一个入口。
 static void a2_gl_bridge_log_egl_layers(void) {
     if (a2_gl_bridge_egl_source() == A2GlBridgeEglSourceMG) {
         a2_log_criterion(@"[A2-GLBRIDGE] EGL 门面=MG（%d/%d 入口，句柄=%p）；"
-                         @"宿主=ANGLE（libEGL/libGLESv2 已 RTLD_GLOBAL）",
+                         @"宿主=ANGLE（libEGL/libGLESv2 句柄已就绪）",
                          gMgEglEntriesGot, gMgEglEntriesTotal, gRendererHandle);
     } else if (gMgEglFirstMissing == NULL && gMgEglEntriesGot > 0) {
         // ★MG 入口是齐的、却没被采用★：只可能是 ④a4 的归属核对把它退回去了（见该处日志）。
@@ -548,21 +551,46 @@ static void a2_gl_bridge_log_egl_layers(void) {
                          gMgEglEntriesGot, gMgEglEntriesTotal);
     } else {
         a2_log_criterion(@"[A2-GLBRIDGE] EGL 门面=ANGLE（MG 缺 %s）；"
-                         @"宿主=ANGLE（libEGL/libGLESv2 已 RTLD_GLOBAL）",
+                         @"宿主=ANGLE（libEGL/libGLESv2 句柄已就绪）",
                          (gMgEglFirstMissing != NULL) ? gMgEglFirstMissing : "(no entry probed)");
     }
 }
 
-/// 加载后端本体（EGL/GL 层的镜像）：RTLD_GLOBAL 让 MC 后续能直接解析到它的 GL 符号。
+// ---------------------------------------------------------------------------
+//  ★加载模式（2026-11-01 账号页闪退的修法）★
+// ---------------------------------------------------------------------------
+//  现象：进程里一旦把 ANGLE 的 `libEGL`/`libGLESv2` 以 RTLD_GLOBAL 常驻，
+//  系统框架（CoreUI/CoreImage）建 EAGL 上下文时会解析到**我们的实现**，
+//  `CI::GLContext` 构造里踩空指针（EXC_BAD_ACCESS at 0x0），栈里没有任何业务代码。
+//  修法：默认 RTLD_LOCAL —— 渲染器/ANGLE 的 `egl*`/`gl*` 不进进程 flat namespace；
+//  我们自己的入口一律 dlsym(句柄, 名字)，下游（MG / LWJGL）各自从自己的句柄解析。
+//  回退：环境变量 `A2_GL_RTLD=global|GLOBAL|1` ⇒ 恢复旧的 GLOBAL 行为（不用重编）。
+//
+//  ★旗标唯一产地 = `a2_renderer_dlopen_flags()`★（a2_renderer.h/.m）：本文件的
+//  后端本体、ANGLE libEGL/libGLESv2、④ 的常规加载，以及 a2_renderer_load_named
+//  的显式加载与设置页的内置探测，全部用同一份口径。
+/// ★判据行★（真机 grep `加载模式=` 即可确认本次进程到底隔离没隔离）。
+/// 调用点：`a2_gl_bridge_attach` 的 ③0 之前一次（早于任何 dlopen）。
+static void a2_gl_bridge_log_rtld_mode(void) {
+    const char *env = getenv("A2_GL_RTLD");
+    const char *shown = (env != NULL && env[0] != '\0') ? env : "(默认)";
+    if (a2_renderer_uses_global_rtld()) {
+        a2_log_criterion(@"[A2-GLBRIDGE] 加载模式=RTLD_GLOBAL（A2_GL_RTLD=%s）"
+                         @"⇒ 渲染器/ANGLE 符号进入 flat namespace（旧行为，仅回退用）", shown);
+    } else {
+        a2_log_criterion(@"[A2-GLBRIDGE] 加载模式=RTLD_LOCAL(隔离)（A2_GL_RTLD=%s）"
+                         @"⇒ 渲染器镜像不进入 flat namespace", shown);
+    }
+}
+
+/// 加载后端本体（EGL/GL 层的镜像）：默认 RTLD_LOCAL（见上面的加载模式说明）；
+/// 回退模式下才用 RTLD_GLOBAL 让 MC 直接解析到它的 GL 符号。
 /// ★两处调用，同一个动作★：① MG 先加载 —— 要问它要 EGL 门面入口（③0，顺序是契约）；
 /// ② ④ 里再补一次（其余后端在这里才真正加载；MG 已加载 ⇒ 幂等直接成功）。
 /// 已加载则直接成功（不会重复 dlopen）。
 static int a2_gl_bridge_open_renderer(const char *rendererPath) {
     if (gRendererHandle != NULL) return 1;
-    gRendererHandle = dlopen(rendererPath, a2_gl_bridge_rtld_flags());
-    a2_log_criterion(@"[A2-GLBRIDGE] 加载模式=%s（A2_GL_RTLD=%s）⇒ 渲染器镜像不进入 flat namespace",
-                     a2_gl_bridge_use_global_rtld() ? "RTLD_GLOBAL" : "RTLD_LOCAL(隔离)",
-                     getenv("A2_GL_RTLD") ?: "(默认)");
+    gRendererHandle = dlopen(rendererPath, a2_renderer_dlopen_flags());
     if (gRendererHandle == NULL) {
         const char *err = dlerror();
         a2_log_f(@"%s ★阻断★：后端本体 dlopen 失败 %s（%s）",
@@ -581,7 +609,7 @@ static int a2_gl_bridge_open_renderer(const char *rendererPath) {
 //  ⇒ flat 那枚地址落在 **dyld 共享缓存**（系统 OpenGLES），不是 ANGLE。MG 把「抢到 glTexImage2D 的
 //    那个镜像」当成 backend library，而系统 GLES 没有 EGL ⇒ MG 初始化失败；本桥随后继续用空指针
 //    ⇒ SIGSEGV（`a2_gl_bridge_attach + 2860`）。
-//  ⇒ 修法三条：① ANGLE 的 libEGL/libGLESv2 ★必须在 MG 本体之前★ 以 RTLD_GLOBAL 进 flat namespace；
+//  ⇒ 修法三条：① ANGLE 的 libEGL/libGLESv2 ★必须在 MG 本体之前★加载（当时用 GLOBAL；现默认 LOCAL、按句柄解析）；
 //              ② MG 后端 ★不 dlopen 系统 OpenGLES★（系统 GLES 只留给宿主 EGL / EAGL 后端）；
 //              ③ 已解析的 `gl*` 抢不回来（lastlog-11：系统 GLES 在 dyld 共享缓存里，任何 dlopen 顺序
 //                 都改不动它）⇒ 用 **dyld 动态 interpose** 把 `gl*` 改指 MG 自己的导出（见 ④a2）。
@@ -600,14 +628,17 @@ typedef enum {
 /// ★加载顺序：ANGLE 先行★（MG 后端专有；调用点：`a2_gl_bridge_attach` 的 ③0，MG 本体之前**一次**）。
 /// 句柄落在 `gEglHandle` / `gGlesHandle`（与 ④ 同一个产地 ⇒ teardown 的释放口径不变，不新增第三对句柄）。
 /// 幂等：已加载直接成功（`dlopen` 返回同一句柄，不重复计数）。
-/// 返回 1 = 两份都已在 flat namespace（RTLD_GLOBAL）；0 = 缺任意一份（已打阻断行，调用方据此中止）。
+/// ★加载旗标★：默认 RTLD_LOCAL（见 `a2_renderer_dlopen_flags()`）——ANGLE 的 `egl*`/`gl*`
+///   不再进 flat namespace；MG 侧由 `MG_DIRECTORY_PATH` 自己 dlopen ANGLE 解析入口
+///   （A2LaunchSession 已把该环境变量指向 Frameworks 目录）。
+/// 返回 1 = 两份都已加载（旗标见上）；0 = 缺任意一份（已打阻断行，调用方据此中止）。
 static int a2_gl_bridge_load_angle_first(NSString *eglPath, NSString *glesPath) {
     if (eglPath == nil || glesPath == nil) {
         a2_log_f(@"[A2-GLBRIDGE] ★阻断★：MG 后端要求 ANGLE 先行，但 EGL/GLESv2 路径缺失（frameworksPath 未解析）");
         return 0;
     }
     if (gEglHandle == NULL) {
-        gEglHandle = dlopen(eglPath.UTF8String, a2_gl_bridge_rtld_flags());
+        gEglHandle = dlopen(eglPath.UTF8String, a2_renderer_dlopen_flags());
         if (gEglHandle == NULL) {
             const char *err = dlerror();
             a2_log_f(@"[A2-GLBRIDGE] ★阻断★：ANGLE libEGL 先行加载失败 %s（%s）",
@@ -616,7 +647,7 @@ static int a2_gl_bridge_load_angle_first(NSString *eglPath, NSString *glesPath) 
         }
     }
     if (gGlesHandle == NULL) {
-        gGlesHandle = dlopen(glesPath.UTF8String, a2_gl_bridge_rtld_flags());
+        gGlesHandle = dlopen(glesPath.UTF8String, a2_renderer_dlopen_flags());
         if (gGlesHandle == NULL) {
             const char *err = dlerror();
             a2_log_f(@"[A2-GLBRIDGE] ★阻断★：ANGLE libGLESv2 先行加载失败 %s（%s）",
@@ -624,8 +655,9 @@ static int a2_gl_bridge_load_angle_first(NSString *eglPath, NSString *glesPath) 
             return 0;
         }
     }
-    a2_log_f(@"[A2-GLBRIDGE] 加载顺序=ANGLE→MG→其它：ANGLE 先入 flat namespace（RTLD_GLOBAL）"
+    a2_log_f(@"[A2-GLBRIDGE] 加载顺序=ANGLE→MG→其它（%s）"
              @"libEGL handle=%p；libGLESv2 handle=%p",
+             a2_renderer_uses_global_rtld() ? "RTLD_GLOBAL（旧行为）" : "RTLD_LOCAL（隔离）",
              gEglHandle, gGlesHandle);
     return 1;
 }
@@ -689,12 +721,18 @@ static A2GlBridgeSymbolOwner a2_gl_bridge_log_owner(const char *name, void *mgOw
 }
 
 /// ★归属纠正（重试一次；调用点：`a2_gl_bridge_verify_angle_ownership` 发现归属不对时）★。
+/// ★仅 GLOBAL 模式有意义★：RTLD_LOCAL 下 `egl*`/`gl*` 本就不进 flat namespace，
+///   不存在「全局归属」可纠正 ⇒ 直接跳过（打一行判据，不重试）。
 ///  ① 「若可控」放掉一份系统 OpenGLES 的句柄：`RTLD_NOLOAD` 只取**已加载**镜像的句柄
 ///     （不触发新加载），紧随的 `dlclose` 把引用计数配平 —— 共享缓存镜像真卸得掉就卸，
 ///     卸不掉也无害（不改变本进程已解析的绑定）。
-///  ② 再以 **RTLD_GLOBAL** dlopen ANGLE 两份（幂等）：`dlopen` 的 +1 由紧跟的 `dlclose` 配平，
+///  ② 再以 GLOBAL dlopen ANGLE 两份（幂等）：`dlopen` 的 +1 由紧跟的 `dlclose` 配平，
 ///     镜像本身仍由 `gEglHandle`/`gGlesHandle` 持有 ⇒ 不会真卸载，只是把 GLOBAL 归属再确认一次。
 static void a2_gl_bridge_reassert_angle_global(NSString *eglPath, NSString *glesPath) {
+    if (!a2_renderer_uses_global_rtld()) {
+        a2_log_f(@"[A2-GLBRIDGE] 归属纠正：RTLD_LOCAL 模式 ⇒ 跳过（符号不进 flat namespace，全局归属不适用）");
+        return;
+    }
     const char *systemGlesPath = "/System/Library/Frameworks/OpenGLES.framework/OpenGLES";
     void *sysHandle = dlopen(systemGlesPath, RTLD_LAZY | RTLD_NOLOAD);
     if (sysHandle != NULL) {
@@ -707,7 +745,7 @@ static void a2_gl_bridge_reassert_angle_global(NSString *eglPath, NSString *gles
     NSString *anglePaths[2] = { eglPath, glesPath };
     for (int i = 0; i < 2; i++) {
         if (anglePaths[i] == nil) continue;
-        void *h = dlopen(anglePaths[i].UTF8String, RTLD_LAZY | RTLD_GLOBAL);
+        void *h = dlopen(anglePaths[i].UTF8String, a2_renderer_dlopen_flags());
         if (h != NULL) dlclose(h);   // ★配平引用计数★（镜像仍由 gEglHandle/gGlesHandle 持有）
         a2_log_f(@"[A2-GLBRIDGE] 归属纠正②：%s 再次 RTLD_GLOBAL dlopen ⇒ %s",
                  anglePaths[i].UTF8String, (h != NULL) ? "OK（句柄已配平）" : "FAILED");
@@ -1200,7 +1238,7 @@ static A2EGLNativeWindowType a2_gl_bridge_window_arg(A2FakeEglWindowSize *box, v
 static const char *const A2GlBridgeHostEglLayerDylib = "libmobileglues.dylib";
 
 /// 交给 gl4es 的 GLES 入口解析器 —— 它在 `-DNOEGL` 下**唯一**的入口来源。
-/// 顺序固定：已 RTLD_GLOBAL 的 GLESv2（ANGLE）→ EGL → eglGetProcAddress。
+/// 顺序固定：GLESv2 句柄（ANGLE）→ EGL 句柄 → eglGetProcAddress。
 /// ★只解析 GLES/EGL 入口，不碰 `gl*` 包装层★：包装层符号由 LWJGL 从后端本体取（名字解析面 1328 个 gl*）。
 // ★GL 入口 trace（诊断）★：给 KW 解析到的 4 个查询函数套壳，打 enter/exit + 线程 id。
 //   目的：1.7.10 在 `GL caps init` 之后卡死，靠“有 enter 没 exit”精确定位到具体调用。
@@ -1930,9 +1968,9 @@ void a2_gl_bridge_swap_buffers(void) {
             typedef void *(*A2PFN_eglGetCurrentContext)(void);
             typedef void *(*A2PFN_eglGetCurrentSurface)(int);
             A2PFN_eglGetCurrentContext curCtxFn =
-                (A2PFN_eglGetCurrentContext)dlsym(RTLD_DEFAULT, "eglGetCurrentContext");
+                (A2PFN_eglGetCurrentContext)a2_gl_bridge_egl_symbol("eglGetCurrentContext");
             A2PFN_eglGetCurrentSurface curSurfFn =
-                (A2PFN_eglGetCurrentSurface)dlsym(RTLD_DEFAULT, "eglGetCurrentSurface");
+                (A2PFN_eglGetCurrentSurface)a2_gl_bridge_egl_symbol("eglGetCurrentSurface");
             void *curCtx = curCtxFn ? curCtxFn() : NULL;
             void *curSurf = curSurfFn ? curSurfFn(0x305A /*EGL_READ*/) : NULL;
             a2_log_f(@"[A2-GLBRIDGE] 上下文归属 #%lu：当前 ctx=%p surf=%p ｜ 本层 gCtx=%p gSurf=%p %s",
@@ -1949,6 +1987,10 @@ void a2_gl_bridge_swap_buffers(void) {
             A2PFN_glReadPixels rp = glLayerHandle
                 ? (A2PFN_glReadPixels)dlsym(glLayerHandle, "glReadPixels") : NULL;
             const char *rpSrc = "GL层句柄";
+            if (rp == NULL && gGlesHandle != NULL) {
+                rp = (A2PFN_glReadPixels)dlsym(gGlesHandle, "glReadPixels");
+                rpSrc = "GLESv2句柄";
+            }
             if (rp == NULL) {
                 rp = (A2PFN_glReadPixels)dlsym(RTLD_DEFAULT, "glReadPixels");
                 rpSrc = "RTLD_DEFAULT";
@@ -1972,7 +2014,7 @@ void a2_gl_bridge_swap_buffers(void) {
         typedef int (*A2PFN_eglGetErrorS)(void);
         void *curCtxS = NULL;
         A2PFN_eglGetCurrentContextS getCurS =
-            (A2PFN_eglGetCurrentContextS)dlsym(RTLD_DEFAULT, "eglGetCurrentContext");
+            (A2PFN_eglGetCurrentContextS)a2_gl_bridge_egl_symbol("eglGetCurrentContext");
         if (getCurS != NULL) curCtxS = getCurS();
         if (curCtxS != (void *)gCtx) {
             int brc = a2_gl_bridge_make_current();
@@ -1982,7 +2024,8 @@ void a2_gl_bridge_swap_buffers(void) {
         int swrc = gEglSwapBuffers(gDpy, gSurf);
         static unsigned long a2_swN = 0;
         if ((++a2_swN % 60) == 1) {
-            A2PFN_eglGetErrorS getErrS = (A2PFN_eglGetErrorS)dlsym(RTLD_DEFAULT, "eglGetError");
+            A2PFN_eglGetErrorS getErrS =
+                (A2PFN_eglGetErrorS)a2_gl_bridge_egl_symbol("eglGetError");
             a2_log_f(@"[A2-GLBRIDGE] swap 提交 #%lu rc=%d err=0x%x",
                      a2_swN, swrc, getErrS ? getErrS() : 0);
         }
@@ -2047,7 +2090,7 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     //   · EGL 句柄 = `dlopen(NULL)`（主镜像；`egl*` 已在主二进制里，flat namespace 第一位）
     //     ⇒ 建面用的 EGL 就是「假 EGL → EAGLContext/CAEAGLLayer」，不是 ANGLE；
     //   · GL 层 = MobileGlues（下方 `glLayerName`）⇒ `gBackendName` 记的是 **GL 层**，
-    //     MG 的 RTLD_GLOBAL / 归属核对等判据全都照旧命中（不另写一套 MG 判据）。
+    //     MG 的归属核对等判据全都照旧命中（不另写一套 MG 判据）。
     const int hostEglBackend = a2_gl_bridge_backend_is_host_egl(rendererName);
     const char *glLayerName = hostEglBackend ? A2GlBridgeHostEglLayerDylib : rendererName;
     if (hostEglBackend) {
@@ -2157,9 +2200,11 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     // （原「MG 后端：未加载系统 OpenGLES」判据行已删除 —— 见上面的订正：MG 需要系统 GLES 当宿主）
 
     // ---- ③0 ★MG：ANGLE 先行、MG 后行★ ----
+    //   ★加载模式判据行★（在任何 dlopen 之前打，保证真机第一眼就能看到隔离/回退）：
+    a2_gl_bridge_log_rtld_mode();
     //   ★顺序（lastlog-105 的修因，★不许再反转★）★：
-    //     ① 先把 ANGLE 的 libEGL/libGLESv2 以 RTLD_GLOBAL 放进 flat namespace（a2_gl_bridge_load_angle_first）；
-    //     ② 再加载 MG 本体（RTLD_GLOBAL）；③ 其它后端仍按 ④ 的常规顺序最后加载。
+    //     ① 先把 ANGLE 的 libEGL/libGLESv2 加载好（a2_gl_bridge_load_angle_first，默认 RTLD_LOCAL）；
+    //     ② 再加载 MG 本体；③ 其它后端仍按 ④ 的常规顺序最后加载。
     //   为什么不能再「MG 先、ANGLE 后」（上一版 lastlog-104 的写法）：那样 flat namespace 里排第一的
     //   `gl*` 会落到**系统 OpenGLES**（共享缓存里、早于我们的 dlopen 就在全局表），MG 把它当
     //   backend library ⇒ 找不到 `eglGetDisplay` ⇒ 初始化失败 ⇒ 本桥拿到空指针 ⇒ SIGSEGV。
@@ -2209,30 +2254,24 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         }
     }
 
-    // ---- ④ dlopen（★两层栈：门面 + 宿主★；EGL/GLES 兼容底的旗标按后端定：见下；后端本体恒 RTLD_GLOBAL）----
-    // ★KW 时用 RTLD_LOCAL★（真机 lastlog-84）：ANGLE 的 libGLESv2 若以 GLOBAL 加载，
-    //   它导出的 GLES1 入口（glLoadMatrixf 等）会被 MC/LWJGL 的 dlsym(RTLD_DEFAULT) 抢先命中，
-    //   从而绕过 KW 自带 FPE，直接崩在 ANGLE 的 GLES1State（未初始化）。⇒ 只让 KW 自己全局可见。
-    // ★MG 时恒 RTLD_GLOBAL★：MG 那套 `egl*` 只是**门面**，它要落到 **宿主 EGL**（backend library）
-    //   才真正工作；宿主 = ANGLE 的 libEGL/libGLESv2 ⇒ 两者都必须进 flat namespace，
-    //   MG 才解析得到 `eglGetDisplay`/`eglGetProcAddress`。
+    // ---- ④ dlopen（★两层栈：门面 + 宿主★；EGL/GLES 与后端本体统一用 a2_renderer_dlopen_flags()，默认 RTLD_LOCAL）----
+    // ★加载旗标★：统一由 `a2_renderer_dlopen_flags()` 给 —— 默认 **RTLD_LOCAL**
+    //   （2026-11-01 账号页闪退的修法：渲染器/ANGLE 的 `egl*`/`gl*` 不进 flat namespace，
+    //    系统框架建 EAGL 上下文时只会命中系统实现，不再踩空指针）。
+    //   KW 的旧要求（lastlog-84：ANGLE 的 GLES1 入口会抢 KW 的 FPE）由默认值直接覆盖；
+    //   MG 侧不依赖 flat namespace —— 它按 `MG_DIRECTORY_PATH` 自己 dlopen ANGLE 解析入口
+    //   （A2LaunchSession 已设置），LWJGL 按 `org.lwjgl.opengl.libname` 自己 dlopen 渲染器。
+    //   回退：环境变量 `A2_GL_RTLD=global`（一处开关，不用重编）。
     //   ★ANGLE 已由 ③0 先行加载★（`a2_gl_bridge_load_angle_first`）：这里复用句柄、不重复 dlopen
     //   （重复只多一份引用计数，teardown 还要多配平一次）。
-    //   ★SYMBOL THEFT 不复发的条件★：ANGLE 必须**早于** MG 进全局表 ⇒ flat 里的 `gl*` 命中 ANGLE，
-    //   而不是系统 GLES。反转回「MG 先」即复发 lastlog-105（本单的根因），③0 的顺序就是这条契约。
-    // ★KW 沿用原来的模糊判定★（`strstr`）：`libnggl4es.dylib`（老的那支）与
-    //   `libnggl4es_kw.dylib` 都按 KW 处理 —— 这是 lastlog-84 起的行为，不在本单里改口径。
-    const BOOL a2BackendIsKW = (strstr(rendererName, "krypton") != NULL) || (strstr(rendererName, "nggl4es") != NULL);
-    const BOOL a2DepFlagsLocal = a2BackendIsKW;   // ★只剩 KW 用 LOCAL★：MG 必须 GLOBAL（宿主 EGL 在 ANGLE 里）
-    const int a2GlDepFlags = RTLD_LAZY | (a2DepFlagsLocal ? RTLD_LOCAL : RTLD_GLOBAL);
+    // ★KW 的旧口径不再单独设旗标★：`libnggl4es.dylib`（老的那支）与 `libnggl4es_kw.dylib`
+    //   都按 KW 处理的那条模糊判定（`strstr`）仍留在下游 init 分支里，本段只统一加载旗标。
+    const int a2GlDepFlags = a2_renderer_dlopen_flags();
     a2_log_f(@"[A2-GLBRIDGE] 依赖加载旗标：%s（后端=%s）",
-             a2DepFlagsLocal ? "RTLD_LOCAL" : "RTLD_GLOBAL", gBackendName);
-    if (a2DepFlagsLocal) {
-        a2_log_f(@"[A2-GLBRIDGE] 旗标理由：KW 要自己的 GLES1 入口生效 ⇒ 不让兼容底的 gl* 进 flat namespace（防符号被抢）");
-    }
+             a2_renderer_uses_global_rtld() ? "RTLD_GLOBAL" : "RTLD_LOCAL", gBackendName);
 
     if (anglePreloaded) {
-        // ③0 已把 ANGLE 两份放进 flat namespace（同一对句柄、同一个产地）⇒ ④ 只确认、不再加载。
+        // ③0 已把 ANGLE 两份加载好（同一对句柄、同一个产地）⇒ ④ 只确认、不再重复加载。
         a2_log_f(@"[A2-GLBRIDGE] ANGLE 宿主句柄复用 ③0 的加载（④ 不重复 dlopen）：libEGL=%p；libGLESv2=%p",
                  gEglHandle, gGlesHandle);
     } else {
@@ -2257,11 +2296,11 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
             return A2GlBridgeErrLoadFailed;
         }
     }
-    // 后端本体（GL 层 = MG / compat 底 / KW …）：RTLD_GLOBAL 让 MC 后续能直接解析到它的 GL 符号。
+    // 后端本体（GL 层 = MG / compat 底 / KW …）：旗标见 a2_renderer_dlopen_flags()（默认 LOCAL）。
     // ★MG 已在 ③0 加载过★（顺序必须是 ANGLE 之后），这里由 a2_gl_bridge_open_renderer 幂等返回成功。
     // ★[A2-SFPEW] 本档位例外★：SFPEW 已在 ①c 由 `a2_sfpew_host_load` 以 **RTLD_LOCAL** 载入
     //   （契约②：它的 `gl*` 不许进 flat namespace）⇒ 这里只承接句柄，**不再 dlopen**
-    //   （`a2_gl_bridge_open_renderer` 恒用 RTLD_GLOBAL，对它就是错的加载旗标）。
+    //   （统一旗标对 SFPEW 仍必须是 LOCAL，故这里只承接句柄、不再 dlopen）。
     if (gSfpewTier) {
         gRendererHandle = a2_sfpew_host_handle();
         a2_log_f(@"[A2-GLBRIDGE] SFPEW 后端本体：复用 ①c 的 RTLD_LOCAL 句柄=%p（④ 不重复 dlopen）",
@@ -2298,13 +2337,13 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         //   `EGL entry point eglGetDisplay is not available in the backend library`，
         //   而本桥若继续在 MG 门面上建面 ⇒ 空指针 ⇒ SIGSEGV（`a2_gl_bridge_attach`）。
         //   归属不对时 MG 的 `egl*` 必然失败 ⇒ ★不再走 MG 门面★，EGL 入口改从 ANGLE 解析
-        //   （ANGLE 本就在 ③0 以 RTLD_GLOBAL 加载、且是宿主）—— 至少能出预览帧、不崩。
+        //   （ANGLE 本就在 ③0 加载、且是宿主）—— 至少能出预览帧、不崩。
         //   ★只换门面来源★：后端名 / 加载顺序 / 依赖旗标一律不动（不假装换了渲染器）。
         if (!angleOwnershipOK) {
             gEglSource = A2GlBridgeEglSourceAngle;
             eglFromMG = NO;
             a2_log_criterion(@"[A2-GLBRIDGE] ★退回 ANGLE 建面★ MG 门面归属不对 ⇒ EGL 入口改从 %s 解析"
-                             @"（MG 本体仍已 RTLD_GLOBAL 加载；后端名不变=%s）",
+                             @"（MG 本体仍已加载；后端名不变=%s）",
                              eglPath.UTF8String, gBackendName);
         }
         // ★两层判据行★（MG 后端专有）：门面句柄与 ANGLE 宿主句柄都已落地、归属结论已定稿，

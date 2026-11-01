@@ -19,6 +19,8 @@
 
 #import "A2RendererCatalog.h"
 
+#import "a2_renderer.h"   // ★加载模式唯一产地★：a2_renderer_dlopen_flags()
+
 #include <dlfcn.h>   // ★内置判定 = 文件存在 + 能 dlopen★（与 a2_renderer_load_named 同一口径）
 
 @implementation A2RendererCatalog
@@ -214,15 +216,16 @@ NSString *const A2RendererSFPEWDylibName = @"libSimpleFPEWrapper.dylib";
 
     // ★SFPEW：只判文件存在，★不做 dlopen 探测★★
     //   理由（上游接入契约②）：它只能以 `RTLD_LOCAL` 加载、且不能靠静态构造函数初始化 ——
-    //   而下面那条探测恒用 `RTLD_LAZY | RTLD_GLOBAL`：设置页每展开一次就会把它的 567 个 `gl*`
-    //   推进 flat namespace 并跑一遍构造函数。能不能用由启动侧 `a2_sfpew_host_load` 判
+    //   而下面那条探测会按统一旗标 dlopen（默认 RTLD_LOCAL；回退模式才是 GLOBAL）：
+    //   设置页每展开一次都会跑一遍它的构造函数。能不能用由启动侧 `a2_sfpew_host_load` 判
     //   （失败即阻断，并给出 dlerror 原文）。
     if ([candidate.identifier isEqualToString:A2RendererSFPEWDylibName]) {
         return nil;
     }
 
-    // ★判据与真正的加载处同一口径★（a2_renderer_load_named 用 RTLD_LAZY|RTLD_GLOBAL）：
-    //   能 dlopen 才算「内置」——「文件在、依赖缺」正是 GL4ES 那种「入了也不合格」的形态。
+    // ★判据与真正的加载处同一口径★（`a2_renderer_dlopen_flags()`，默认 RTLD_LOCAL；
+    //   A2_GL_RTLD=global 回退 GLOBAL）：能 dlopen 才算「内置」——
+    //   「文件在、依赖缺」正是 GL4ES 那种「入了也不合格」的形态。
     //   包内文件只读 ⇒ 结果按路径缓存（避免设置页每行都真的 dlopen 一次）。
     static NSMutableDictionary<NSString *, NSString *> *cache = nil;
     static dispatch_once_t once;
@@ -233,7 +236,7 @@ NSString *const A2RendererSFPEWDylibName = @"libSimpleFPEWrapper.dylib";
     }
 
     NSString *reason = nil;
-    void *handle = dlopen(path.UTF8String, RTLD_LAZY | RTLD_GLOBAL);
+    void *handle = dlopen(path.UTF8String, a2_renderer_dlopen_flags());
     if (handle == NULL) {
         const char *err = dlerror();
         reason = [NSString stringWithFormat:@"dlopen 失败：%s", err ? err : "(dlerror 无输出)"];
