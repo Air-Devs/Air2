@@ -33,6 +33,7 @@
 #import "A2LegacyProfile.h"
 #import "A2IntegrityChecker.h"
 #import "A2JITEnabler.h"
+#import "A2JITEnvironment.h"
 #import "A2LegacyJITGate.h"            // Natives/Support —— JIT 闸门的唯一实现（判据→申请→等待）
 #import "a2_gl2_shim.h"             // Natives/Renderer —— ★[A2-GL2] 自研固定管线档位判据（默认关）★
 #import "A2LegacyAssetsMapper.h"    // Core/Version —— 远古资源映射（virtual / map_to_resources）
@@ -1270,6 +1271,18 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                                                           reasonText:gateWhy ?: @"JIT 已就绪 ⇒ 走带 JIT 的启动参数路径"
                                                             evidence:lastEvidence]];
                 [A2Log log:@"[A2-LAUNCH] ③ 建 VM 开始（可能要 10~60 秒；若之后没有“建 VM 返回”行 ⇒ 卡在建 VM）"];
+                // ★2026-11-01 JIT 迟到★ 建 VM 前主动催建可执行区，最多 3 秒；拿不到也照常建 VM。
+                {
+                    for (int i = 0; i < 6; i++) {
+                        void *r = a2_jit_brk69_create_region_safe((size_t)64 * 1024 * 1024);
+                        if (r != NULL) {
+                            [A2Log criterion:@"[A2-JIT-WAIT] 建区成功 region=%p（第 %d 次尝试）", r, i + 1];
+                            break;
+                        }
+                        if (i == 5) [A2Log criterion:@"[A2-JIT-WAIT] 3 秒内仍未拿到可执行区 ⇒ 照常建 VM（失败语义不变）"];
+                        else usleep(500 * 1000);
+                    }
+                }
                 // ★区域验收快照（建 VM 前）★：拿到的是 64MB 还是一页/没有，一眼可见。
                 //   拿不到不是错误（iOS 26+ 的区由 libjvm 建 VM 时自己发 brk #0x69 取）。
                 [A2JITEnabler logRegionSnapshot:@"before-vm"];

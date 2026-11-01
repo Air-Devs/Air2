@@ -46,7 +46,7 @@
 NS_ASSUME_NONNULL_BEGIN
 
 /// zip 层错误的错误域。这一层不知道「插件」是什么，只报字节层的事实；
-/// 由调用方翻成自己的错误码（安装器翻成 `E_ZIP_SLIP` / `E_LINK` / `E_SIZE` 等）。
+/// 由调用方翻成自己的错误码（安装器翻成 `E_PATH_ESCAPE` / `E_LINK` / `E_SIZE` 等）。
 extern NSString *const A2ZipReaderErrorDomain;
 
 typedef NS_ENUM(NSInteger, A2ZipReaderError) {
