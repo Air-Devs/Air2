@@ -153,6 +153,20 @@ static int   gHostEgl = 0;
 /// 不选这一档时它恒为 0，现有各版本的路径与全局状态（环境变量 / 句柄）一字不动。
 static int   gSfpewTier = 0;
 
+/// ★2026-11-01 符号隔离开关★ 默认把 ANGLE / 渲染器 dylib 以 RTLD_LOCAL 加载，
+///   不让 egl*/gl* 进入进程的 flat namespace —— 这是「账号页闪退」的根治方向：
+///   系统框架（CoreImage/CoreUI）建 EAGL 上下文时不会再解析到我们的实现。
+///   回退开关：环境变量 A2_GL_RTLD=global（或 1）恢复旧的 RTLD_GLOBAL 行为。
+static int a2_gl_bridge_use_global_rtld(void) {
+    const char *v = getenv("A2_GL_RTLD");
+    if (v == NULL) return 0;                       // 默认 LOCAL
+    return (strcmp(v, "global") == 0 || strcmp(v, "GLOBAL") == 0 || strcmp(v, "1") == 0);
+}
+
+static int a2_gl_bridge_rtld_flags(void) {
+    return RTLD_LAZY | (a2_gl_bridge_use_global_rtld() ? RTLD_GLOBAL : RTLD_LOCAL);
+}
+
 /// ★建面用的 EGL 入口从哪来★（★全项目只有两个值、一个产地★：attach 的 MG 探测；teardown 复位）。
 typedef enum {
     A2GlBridgeEglSourceAngle = 0,   ///< 非 MG 自带 —— ANGLE 兼容底（`Frameworks/libEGL.framework/libEGL`）或宿主假 EGL（主镜像）
@@ -545,7 +559,10 @@ static void a2_gl_bridge_log_egl_layers(void) {
 /// 已加载则直接成功（不会重复 dlopen）。
 static int a2_gl_bridge_open_renderer(const char *rendererPath) {
     if (gRendererHandle != NULL) return 1;
-    gRendererHandle = dlopen(rendererPath, RTLD_LAZY | RTLD_GLOBAL);
+    gRendererHandle = dlopen(rendererPath, a2_gl_bridge_rtld_flags());
+    a2_log_criterion(@"[A2-GLBRIDGE] 加载模式=%s（A2_GL_RTLD=%s）⇒ 渲染器镜像不进入 flat namespace",
+                     a2_gl_bridge_use_global_rtld() ? "RTLD_GLOBAL" : "RTLD_LOCAL(隔离)",
+                     getenv("A2_GL_RTLD") ?: "(默认)");
     if (gRendererHandle == NULL) {
         const char *err = dlerror();
         a2_log_f(@"%s ★阻断★：后端本体 dlopen 失败 %s（%s）",
@@ -590,7 +607,7 @@ static int a2_gl_bridge_load_angle_first(NSString *eglPath, NSString *glesPath) 
         return 0;
     }
     if (gEglHandle == NULL) {
-        gEglHandle = dlopen(eglPath.UTF8String, RTLD_LAZY | RTLD_GLOBAL);
+        gEglHandle = dlopen(eglPath.UTF8String, a2_gl_bridge_rtld_flags());
         if (gEglHandle == NULL) {
             const char *err = dlerror();
             a2_log_f(@"[A2-GLBRIDGE] ★阻断★：ANGLE libEGL 先行加载失败 %s（%s）",
@@ -599,7 +616,7 @@ static int a2_gl_bridge_load_angle_first(NSString *eglPath, NSString *glesPath) 
         }
     }
     if (gGlesHandle == NULL) {
-        gGlesHandle = dlopen(glesPath.UTF8String, RTLD_LAZY | RTLD_GLOBAL);
+        gGlesHandle = dlopen(glesPath.UTF8String, a2_gl_bridge_rtld_flags());
         if (gGlesHandle == NULL) {
             const char *err = dlerror();
             a2_log_f(@"[A2-GLBRIDGE] ★阻断★：ANGLE libGLESv2 先行加载失败 %s（%s）",
