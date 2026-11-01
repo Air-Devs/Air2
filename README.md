@@ -107,6 +107,23 @@ make package       # 打包 IPA → artifacts/
 
 产物输出至 `artifacts/Air2.ipa`。
 
+### 备用通道：CMake + ldid（不经 xcodebuild）
+
+同一份源码在不依赖 `Air2.xcodeproj` / 证书的情况下也能出包（真机自签迭代用）：
+
+```bash
+cmake -S . -B build/cmake \
+  -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-ios.cmake \
+  -DCMAKE_BUILD_TYPE=Debug
+cmake --build build/cmake -j8
+cmake --build build/cmake --target a2-ipa     # → artifacts/Air2-cmake.ipa（ldid ad-hoc 签名）
+```
+
+两条通道并存、资源清单一律取自 `scripts/gen_xcodeproj.py`（源文件清单、随包清单各只有
+一份源头，见 `scripts/gen_cmake_sources.py`）。已知差异：CMake 通道不跑 `actool`
+（不产 `Assets.car`，图标走 `CFBundleIconFiles` 的 PNG），JVM 运行时仍需先跑
+`scripts/stage_runtime.sh`。
+
 ---
 
 ## 分支约定

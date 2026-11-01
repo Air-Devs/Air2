@@ -1,0 +1,999 @@
+# Air2 主页设计参考：Axolotl 自定义主页解剖
+
+> **研究基线**：`Axolotl-Launcher/Axolotl` @ `fb7993d1`（main，2026-10-25），本地浅克隆
+> `D:/CTF/_510src/ref/Axolotl`。文中所有 `路径:行号` 均可直接在该克隆里核对。
+>
+> **研究范围**：只研究「用户可自定义的主页卡片区」（Axolotl 叫 Home Dashboard / widgets）。
+> 不含其设置页、下载器、联机、主题系统。
+>
+> **本文性质**：设计参考。**不含任何照抄的代码**。Axolotl 是 Rust + Tauri + Vue，
+> Air2 是 SwiftUI + ObjC（ADR-001），技术栈不同，能迁移的只有**行为契约与数据结构**，
+> 所以下文只提炼这两样，实现层面的等价物另给。
+>
+> **本文不改 Air2 任何代码**。
+
+---
+
+## 一、结论先行
+
+1. **Axolotl 的卡片模型是「五段式」**：`kind`（9 种枚举）+ `size`（档位字符串）+ `target`
+   （引用实体，可空）+ `options`（按 kind 的散装参数）+ `position`（仅自由布局用）。
+   一个 JSON 文档装全部卡片，版本号 `version: 1` 在文档里，**不做逐字段迁移，只做整篇校验**。
+2. **尺寸不是自由组合，而是「全局档位池 + 每类型白名单」**：
+   `1x1/2x1/1x2/2x2/3x1/3x2` 六个档位，每类卡片只能取其中几个（如日历只能 `1x2`，
+   最近游玩可取四个）。窄屏时**只压缩跨度，不改用户存的档位**——这是它对 iPad↔iPhone
+   适配最关键的一条。
+3. **「顺序即布局」**：网格模式下列表顺序就是布局，排布由流式装箱算出来，不存坐标；
+   只有自由布局模式才存 `position`。而且**因屏幕变窄导致的临时挪位不落盘**（显示位置 ≠ 存储位置），
+   屏幕回宽后用户的原始坐标自动恢复。
+4. **编辑态是一个纯粹的 UI 开关**（不持久化）。表现是：卡片内容 `pointer-events: none`、
+   每张卡右上浮出「拖动手柄 + 尺寸标签 + ⋯ 菜单」、工具条才出现。**Axolotl 没有「锁定布局」**，
+   也没有密码/PIN/只读模式。
+5. **边界处理的核心是「软失败 + 不自动删」**：卡片引用的实例/存档/服务器没了，卡片**留在原地**，
+   显示存卡时记下的 `fallbackLabel` + 「Content unavailable」，由用户自己决定重指定还是删掉。
+   反过来，**整篇布局损坏或版本号不认识时是硬重置**（直接落默认方案并写回）——这条是它的弱点，
+   Air2 不该学。
+
+---
+
+## 二、Axolotl 是怎么做的
+
+### 2.1 代码地图
+
+| 层 | 文件 | 职责 |
+|---|---|---|
+| 数据模型 + 纯函数 | `apps/app-frontend/src/components/home/home-dashboard.ts`（736 行） | 常量、类型、默认方案、`normalize`、增删改、装箱、吸附、保存队列。**零 Vue 依赖**，可单测 |
+| 单测 | `apps/app-frontend/src/components/home/home-dashboard.test.ts`（445 行） | 22 条用例，把行为契约写死了，是最好的「规格说明书」 |
+| 页面壳 | `apps/app-frontend/src/pages/Index.vue`（653 行） | 持有 `config`、编辑开关、保存队列接线、编辑态浮动工具条 |
+| 卡片网格 | `apps/app-frontend/src/components/home/HomeDashboard.vue`（971 行） | 受控组件：渲染网格/自由布局、拖拽、改尺寸、删除、编辑条 |
+| 加卡面板 | `.../home/HomeWidgetPickerModal.vue`（478 行） | 两级选择：类型 → 实例 → 存档/服务器 |
+| 单卡实现 | `.../home/HomeGreeting.vue`、`HomeRecentWorlds.vue`、`HomeCalendar.vue`、`HomePinnedWorlds.vue`、`HomePinnedServers.vue`、`HomePinnedInstances.vue`、`HomeShortcutWidget.vue` | 每种卡片一个组件，都吃 `dashboardSize` 决定内容密度 |
+| 运行时数据 | `.../home/home-dashboard-runtime.ts`（261 行） | 提供「收藏存档/最近游玩/在跑的实例/本机服务器/游戏版本」，带去重与失效 |
+| 极简主页（另一种方案） | `.../home/HomeMinimal.vue`（385 行） | 不是卡片区，是「单实例大按钮」的固定页面 |
+| 落盘（Rust） | `packages/app-lib/src/state/settings.rs:165-171` | `home_layout` / `minimal_home_instance_id` / `home_widgets`(JSONB) / `home_widget_background_opacity` |
+| 落盘（SQL） | `packages/app-lib/migrations/20260804120000_home-widgets.sql` 等 4 个 | 见 §2.2.5 |
+
+### 2.2 卡片配置结构
+
+#### 2.2.1 先分清两个「方案」层级
+
+Axolotl 主页有**两层**互不相干的东西，很容易混：
+
+| 层级 | 取值 | 存在哪 | 语义 |
+|---|---|---|---|
+| **页面模式** | `standard` / `minimal` | `settings.home_layout` 标量列 | 信息型主页（卡片区）↔ 极简主页（一个大启动按钮 + 单实例选择） |
+| **卡片布局** | `grid` / `free` | 卡片 JSON 里的 `layout` 字段 | 同是卡片区，但一个「流式装箱」、一个「自由坐标」 |
+
+- 页面模式：Rust 枚举 `HomeLayout`，未知值一律回 `Standard`（`settings.rs:62-92`），
+  DB 侧还有 `CHECK (home_layout IN ('standard','minimal'))`（`migrations/20260727120000_minimal-home-layout.sql:1-4`）。
+- 卡片布局：`HOME_WIDGET_LAYOUTS = ['grid','free']`（`home-dashboard.ts:2`），非法值回 `grid`（`home-dashboard.ts:298-300`）。
+
+**这一分层值得直接搬**：模式（用哪个页面）是标量设置，方案（卡片怎么排）是文档；
+两者更新频率、失败影响完全不同，混在一个结构里会让「切模式」变成高风险写入。
+
+#### 2.2.2 卡片类型枚举（9 种）
+
+`home-dashboard.ts:31-40`：
+
+```ts
+'greeting' | 'recent' | 'calendar'
+| 'pinned-instances' | 'pinned-worlds' | 'pinned-servers'
+| 'instance' | 'world' | 'server'
+```
+
+三类语义很清晰，加卡面板也按这三组分（`HomeWidgetPickerModal.vue:125-201`）：
+
+| 组 | 类型 | 是不是「容器型」 | 是否需要 target |
+|---|---|---|---|
+| Overview（总览） | `greeting` `recent` `calendar` | 自己取数据，展示聚合结果 | 否 |
+| Collections（收藏集） | `pinned-instances` `pinned-worlds` `pinned-servers` | 自动收集「被钉到主页」的条目，**零配置** | 否 |
+| Single-item shortcuts（单项快捷） | `instance` `world` `server` | 指向**一个**具体对象 | **是** |
+
+**关键设计**：收藏集卡与单项卡是两种不同产品思路——前者「配一次，之后自动跟着收藏变」，
+后者「我把这一个钉死在主页」。两者并存，用户不用二选一。Axolotl 的「钉到主页」用的是
+实体自身的 `pinned_at` / `homePinnedAt` 字段（`migrations/20260727110000_home-dashboard.sql:1-2`、
+`home-dashboard-runtime.ts:157`），**不存在卡片里**——所以同一个实例可以同时出现在
+收藏集卡和单项卡里，不会打架。
+
+#### 2.2.3 每类卡片的字段
+
+类型定义在 `home-dashboard.ts:42-93`，数据结构只有五段：
+
+```ts
+type HomeWidgetPlacement = {
+    id: string                  // crypto.randomUUID()
+    kind: HomeWidgetKind
+    size: HomeWidgetSize        // '1x1' | '2x1' | '1x2' | '2x2' | '3x1' | '3x2'
+    target?: HomeWidgetTarget   // { instanceId, path?, address?, fallbackLabel }
+    options?: HomeWidgetOptions // 按 kind 的散装参数
+    position?: { column, row }  // 仅 free 布局
+}
+```
+
+逐类字段矩阵（尺寸列来自 `home-dashboard.ts:100-122`）：
+
+| kind | target 必填项 | options 字段 | 允许尺寸 | 默认尺寸 | 内容随尺寸变化 |
+|---|---|---|---|---|---|
+| `greeting` | — | `greetingMode`(`greeting`/`text-and-greeting`/`text`)、`greetingText`(≤120)、`greetingFont`(4 种)、`greetingFontSize`(16–32)、`greetingOverrides`(按账号，≤64 条) | `2x1` | `2x1` | 固定档 |
+| `recent` | — | `recentLimit`(2/4/6/8，默认 4) | `2x1` `2x2` `3x1` `3x2` | `2x2` | 条目数 + 列数 |
+| `calendar` | — | — | `1x2` | `1x2` | 固定档 |
+| `pinned-instances` | — | — | `1x1` `2x1` `1x2` `2x2` | `2x2` | 列表密度 |
+| `pinned-worlds` | — | — | 同上 | `1x2` | 列表密度 |
+| `pinned-servers` | — | — | 同上 | `1x2` | 列表密度 + 在线人数 |
+| `instance` | `instanceId` | — | `1x1` `2x1` | `1x1` | 布局重排（见下） |
+| `world` | `instanceId` + `path` | — | `1x1` `2x1` | `1x1` | 同上 |
+| `server` | `instanceId` + `address` | — | `1x1` `2x1` | `1x1` | 同上 |
+
+两个细节值得注意：
+
+- **`options` 是一个「按 kind 解释的散装袋」**，类型上不区分（`home-dashboard.ts:59-66`）。
+  代价是校验必须按 kind 分支写（`normalizeOptions`，`home-dashboard.ts:203-242`）；
+  好处是加卡片类型时不动外层结构。Air2 若用 Swift `enum with associated value` 可以做得更严，
+  但**别忘了保持「未知参数忽略而不是整篇失败」**。
+- **卡片内部按尺寸档位切换版式，而不是等比缩放**。`HomeShortcutWidget.vue:422-488` 里
+  `1x1` 是「图标在上、名字 + 一行 meta、隐藏 kind 标签和次行」；`2x1` 改成「左侧大图标区 +
+  右侧标题 + 两行 meta」。`HomePinnedInstances.vue:46-50` 同理（按档位决定条目版式：
+  `1x1`→`spotlight` 单条大字、`2x2`→`tile` 瓦片、其余→`row` 行；条目内部由
+  `HomeInstanceCard.vue:34` 的 `compact` 再收一层）。**这是「档位」应有的含义**：档位决定信息层级，不是决定像素。
+
+#### 2.2.4 尺寸档位怎么表示
+
+- 表示法：**字符串 `"列x行"`**（`HOME_WIDGET_SIZES`，`home-dashboard.ts:3-4`），
+  全局池 = 标准四档 + `3x1`/`3x2`。
+- 解析：`size.split('x').map(Number)` 得 `{columns, rows}`（`getHomeWidgetSpan`，`home-dashboard.ts:584-590`）。
+- **列数上限由容器决定**，超出即临时压缩：
+  ```ts
+  columns: Math.min(columns, Math.max(1, columnCount))   // 只压列，不动行
+  ```
+  所以 iPad 上 `3x1` 在 1 列的 iPhone 上渲染成「1 宽 × 1 高」，但存的还是 `3x1`。
+  单测把这条钉死：`home-dashboard.test.ts:60-68`「temporarily clamps wide widgets
+  without changing their preferred size」。
+- 列数公式（`home-dashboard.ts:557-564`）：最小列宽 240、间距 16、**最多 4 列**、
+  最少 1 列 → `min(4, max(1, floor((width + gap) / (240 + gap))))`。
+- 像素换算（`home-dashboard.ts:566-582`）：`列宽 =(容器宽 - gap*(n-1))/n`；
+  `宽 = 列宽*span + gap*(span-1)`；`高 = 160*span + gap*(span-1)`（行高常量 160，
+  `home-dashboard.ts:5-6`，行节距 176）。
+
+按这套公式算出的实际像素（已核）：
+
+| 容器宽（已扣内边距） | 列数 | 1x1 | 2x1 | 2x2 | 3x1 |
+|---|---|---|---|---|---|
+| iPad 横 1132pt | 4 | 271×160 | 558×160 | 558×336 | 845×160 |
+| iPad 竖 772pt | 3 | 247×160 | 509×160 | 509×336 | 772×160 |
+| iPhone 竖 369pt | 1 | 369×160 | 369×160¹ | 369×336¹ | 369×160¹ |
+| iPhone 横 804pt | 3 | 257×160 | 531×160 | 531×336 | 804×160 |
+
+¹ 跨度被压到 1 列，档位值不变。
+
+- **默认尺寸是一张表**，不是「猜」（`HOME_WIDGET_DEFAULT_SIZE`，`home-dashboard.ts:112-122`）；
+  默认方案直接写死 6 张卡（`createDefaultHomeDashboard`，`home-dashboard.ts:160-173`）：
+  greeting、calendar、recent、pinned-worlds、pinned-servers(`2x2`)、pinned-instances(`2x1`)。
+  单测把 4 列下的装箱结果整张表钉住（`home-dashboard.test.ts:181-200`），
+  改任何默认值都会红——很好的回归保险。
+
+#### 2.2.5 配置存哪里
+
+**不是文件，是 SQLite 单行设置表的一个 JSONB 列。**
+
+| 内容 | 位置 | 迁移文件 |
+|---|---|---|
+| 卡片方案整篇 JSON | `settings.home_widgets` JSONB NULL | `migrations/20260804120000_home-widgets.sql:1` |
+| 页面模式 | `settings.home_layout` TEXT + CHECK | `migrations/20260727120000_minimal-home-layout.sql:1-4` |
+| 极简主页选中的实例 | `settings.minimal_home_instance_id` TEXT，**`REFERENCES instances(id) ON DELETE SET NULL`** | 同上 `:6-8` |
+| 卡片背景不透明度（全局，不在 JSON 里） | `settings.home_widget_background_opacity` INT default 100 | `migrations/20260917130000_home-widget-background-opacity.sql:1` |
+
+读写路径：
+
+- 读：`settings.rs:494-503` —— `home_widgets` 先取字符串，`serde_json::from_str(...).ok()`，
+  **解析失败就是 `None`，不抛错**。写入侧 `settings.rs:621-626` + `:712-715`
+  （`home_widgets = jsonb($58)`），整篇替换。
+- 前端只认 `Settings.home_widgets: HomeDashboardConfig | null`（`helpers/settings.ts:176`），
+  每次写都是**整篇替换**，不是深合并：`helpers/settings-patch.test.ts:58-64`
+  明确用例「replaces structured configuration when keys are removed」。
+- 全局不透明度是独立标量：`0–100`，前后端都 clamp（`settings.rs:803-805`、`api/handler.rs:510`）。
+
+**为什么是 JSONB 而不是建 `home_widgets` 表？** 因为卡片是「整体读写、无跨卡查询、
+顺序有意义」的文档。Axolotl 只在极简主页那一个「只能用一次」的引用上用了真外键
+（`minimal_home_instance_id`，`ON DELETE SET NULL`），卡片引用一律放进 JSON ——
+**关系型引用能靠 FK 兜底，文档型引用只能靠渲染期软失败**。这条差异直接决定了 §2.4 的做法。
+
+#### 2.2.6 读取时的规范化（`normalizeHomeDashboard`）
+
+唯一入口，`home-dashboard.ts:288-336`。每次进主页都跑一遍（`Index.vue:210`），
+它同时是「校验器 + 迁移器 + 修复器」。顺序：
+
+1. **整篇门槛**：非对象、`version !== 1`、`widgets` 不是数组 → 直接返回 `null`（`:289-295`）。
+2. **布局**：`free` 之外一律 `grid`（`:298-300`）。
+3. **逐卡 flatMap**：任一条件不满足就**丢这一张，不丢整篇**（`:301-333`）：
+   - `kind` 不在枚举里 → 丢；
+   - `instance`/`world`/`server` 缺 target → 丢；
+   - `world` 缺 `path`、`server` 缺 `address` → 丢；
+   - `id` 缺失或与前面的重复 → **重发 UUID**（`:313-316`），不丢卡；
+   - `size` 不在该 kind 的白名单里 → 回该 kind 默认档（`:318-321`）；
+4. **target 规范化**：`instanceId` 与 `fallbackLabel` 都是**必填字符串**，缺一即视为无 target
+   （`:179-190`）——所以「没有兜底名」的引用不允许存在，这在 §2.4 的「不可用占位」里会用到。
+5. **position 规范化**：`column ∈ [0,100]`、`row ∈ [0,10000]`，取整；非法则**丢坐标保卡**
+   （`:192-201`，单测 `:161-179`）。
+6. **options 规范化**：按 kind 分支，枚举值不合法就回默认，字符串 `trim().slice()` 截断，
+   字号 clamp，`greetingOverrides` 最多 64 条且**空白条目直接丢**（`:203-286`）。
+7. 输出 `{ version: 1, layout, widgets }`——**永远是当前版本的形状**。
+
+注意它**不检查** target 指向的实体是否还存在：实体解析是渲染期的事（§2.4）。
+这条分工很重要——`normalize` 保持纯函数、可单测、零 IO，才能被放在「每次进主页」的热路径上。
+
+#### 2.2.7 版本迁移与默认回退
+
+三层，粒度不同：
+
+| 层 | 机制 | 位置 |
+|---|---|---|
+| 数据结构 | 文档内 `version: 1`，**严格相等**才收，否则整篇作废 | `home-dashboard.ts:1`、`:289-295` |
+| 单卡 | 逐卡校验 + 缺省回退（见 §2.2.6），无「卡片版本号」 | `home-dashboard.ts:301-333` |
+| DB | 四个 SQL 迁移增量加列；另有一次性「迁移版本冲突对账」 | `migrations/*`、`state/db.rs:1166-1265` |
+
+回退链（`Index.vue:204-233`）：
+
+```
+settings.home_widgets  ──parse ok──▶ normalize ok ──▶ 用
+        │                              │
+        │                              └─ null（版本不符/结构坏）─┐
+        └─ parse 失败（DB 里是垃圾）──────────────────────────────┤
+                                                                  ▼
+                              createDefaultHomeDashboard(特性开关)
+                                                                  │
+                                              ┌─ 首次：立即 enqueue 写回（Index.vue:219-220）
+                                              └─ 丢数据：同样立即写回（:216-220）
+```
+
+**这是它最该被批评的一处**：`version !== 1` 直接当坏数据处理 → 落默认 → **写回**。
+后果：用户装了新版本、用了新 `version: 2` 的布局，再降级回旧版，旧版会把新版布局**覆盖掉**，
+且没有备份。Air2 必须改成「高版本只读、不覆盖、可回滚」（见 §4.5）。
+
+`db.rs:1166-1265` 那段 `reconcile_existing_home_dashboard_migration` 是另一个层面的谨慎：
+早期 `home-dashboard` 迁移的版本号与另一条迁移撞了，他们写了一段「按已知 checksum 识别、
+补列、改写 `_sqlx_migrations` 记录」的对账逻辑，而不是让用户删库。这段**思路值得记**
+（迁移冲突要有显式修复路径），**实现不适用**（Air2 没有 sqlx 版本表）。
+
+#### 2.2.8 保存顺序与失败回滚
+
+卡片每次改动都是「整篇写」，所以必须防乱序覆盖。`createHomeDashboardSaveQueue`，
+`home-dashboard.ts:532-555`：
+
+```
+enqueue(config, rollback):
+    opVersion = ++version
+    queue = queue.then(() => persist(config))
+                      .catch(e => { if (opVersion === version) onRollback(rollback); onError(e) })
+```
+
+- **串行**：所有写排在同一条 promise 链上，不会两个写并发。
+- **只回滚最新一次**：连续改 5 次、第 3 次失败时，因为 `opVersion !== version`，不回滚——
+  否则会把用户已经做出的第 4、5 次改动弹回去。
+- 页面侧：先改本地 `dashboardConfig` 再入队，回滚函数就是「把 `dashboardConfig` 设回上一份」
+  （`Index.vue:127-136`、`:229-233`）。
+- 单测：`home-dashboard.test.ts:134-153`。
+
+Air2 侧对应的问题一样存在（SwiftUI 里 `@State` 直接改、`Task` 里落盘），
+但 iOS 上还要多一层：**滚出屏幕/退到后台时可能有未 flush 的写**，需要 `flush()` 语义
+（Axolotl 有这个 API，但页面里没在 `onUnmounted` 调——它在 `Index.vue:355-360` 只清理监听器）。
+
+### 2.3 编辑交互
+
+#### 2.3.1 怎么进 / 怎么退
+
+- **入口**：右下角浮动工具条的第一个按钮（铅笔 ⇄ 对勾），`Index.vue:422-442`；
+  是个 `aria-pressed` 的 toggle。极简模式下整个工具条不渲染（`Index.vue:401`）。
+- **编辑态是纯 UI 状态**：`const dashboardEditing = ref(false)`（`Index.vue:120`），
+  不写盘、不随配置存、刷新即失。切换极简模式时强制关掉（`:309`）。
+- **退出**：再点一次同一个按钮。**没有 Esc、没有点空白退出、没有「未保存」提示**——
+  因为每一次改动都即时入队保存，不存在「未保存」概念。
+- **编辑态出现的东西**：
+  - 工具条上多出：`+`（加卡）、↺（恢复默认，带 `window.confirm`）、grid/free 布局开关
+    （`Index.vue:402-467`）；
+  - 每张卡右上浮出编辑条（`HomeDashboard.vue:591-645`）：`⠿` 拖动手柄 + 尺寸标签 +
+    `⋯` 溢出菜单；
+  - 卡片**内容不可点**：`.is-editing .home-widget-content { pointer-events: none }`
+    （`HomeDashboard.vue:941-943`）——防止编辑时误启动游戏；
+  - 问候卡变虚线框（`:936-939`），因为它平时无边框无背景，编辑态得看得见边界。
+- 编辑条默认是折叠的（尺寸标签宽 0、菜单宽 0），**鼠标 hover/focus 才展开**
+  （`:870-888`）。这是桌面专属做法，iOS 上不适用（§3）。
+
+#### 2.3.2 拖拽排序（网格模式）
+
+用 `vuedraggable`（HTML5 拖放库）+ 一堆参数（`HomeDashboard.vue:548-583`）：
+
+| 参数 | 值 | 意图 |
+|---|---|---|
+| `handle` | `.home-widget-drag-handle` | 只有手柄能拖，卡片本体点击留给内容 |
+| `:disabled` | `!editing \|\| isFreeLayout` | 非编辑态、自由布局下禁用 |
+| `:force-fallback` | `true` + `:fallback-tolerance="0"` | 强制走「非原生拖放」的模拟实现——原生 HTML5 拖放在触屏上不可靠 |
+| `:animation` | `80` | 位移动画 |
+| `ghost-class` | 虚框 + brand 色 + `opacity .45` | 落点预览 |
+| `:swap-threshold` / `:invert-swap` | `0.2` / 真 | 换位判定 |
+| `:scroll` | 真 + 灵敏度 96 | 拖到边缘自动滚页面 |
+
+松手后**只比较顺序**，变了才提交（`HomeDashboard.vue:351-362`）：
+
+```ts
+const reordered = [...draggableWidgets.value]
+const unchanged = reordered.every((w, i) => w.id === props.config.widgets[i]?.id)
+if (!unchanged) emit('change', replaceHomeDashboardWidgets(props.config, reordered))
+```
+
+> 注意：网格模式下**顺序就是布局**，没有坐标。排布由 `packHomeWidgets`（`home-dashboard.ts:666-708`）
+> 从左上角逐格找空位（流式装箱）算出来，所以**永远不会有空洞，也不会重叠**。
+> 副作用：用户不能把卡片「往右挪一格」，只能「往前/往后排」——这是有意的简化。
+
+#### 2.3.3 自由布局拖拽（free 模式）
+
+自己写的指针拖拽，不是拖放库（`HomeDashboard.vue:252-321`）：
+
+1. `pointerdown`（仅左键/主指针）→ `setPointerCapture`，记 `startPosition`、`startClientX/Y`；
+2. `pointermove` → 算 `delta`，**夹在画布内**（左边界 `-startLeft`，右边界
+   `width - widgetWidth - startLeft`，上边界 `-startTop`），用 `requestAnimationFrame`
+   节流写 `transform: translate3d(...)`（`will-change: transform`，`:921-930`）；
+3. `pointerup/cancel` → 清 transform，把像素位移**除以列节距/行节距取整**得到目标格，
+   交给 `findNearestFreeHomeWidgetPosition`（`home-dashboard.ts:618-664`）：
+   - 先试目标格；被占则**按曼哈顿距离由近到远扫全画布**找一个不重叠的格；
+   - 搜索下界 `max(desired.row + widgets.length*2, lastOccupiedRow + span.rows)`；
+   - 只移动**被拖的那一张**，不推动别人（单测 `home-dashboard.test.ts:120-132`
+     「snaps manual placement to the nearest open cell without moving other widgets」）；
+4. `emit('change', setHomeWidgetPosition(...))` → 入队保存。
+5. 键盘：聚焦手柄后方向键一次挪一格，同样走吸附（`:323-349`）。
+
+**另一个关键机制：显示位置与存储位置分离**（`HomeDashboard.vue:115-137`）。
+`resolvedFreePositions` 每次渲染都按「非活跃卡先、正在拖的卡最后」的顺序重算一遍坐标，
+算出来的只用于显示：
+
+```ts
+for (const widget of orderedWidgets) {
+    const position = findNearestFreeHomeWidgetPosition(positioned, widget, rawFreeWidgetPosition(widget), columnCount)
+    positions[widget.id] = position
+    positioned.push({ ...widget, position })
+}
+```
+
+意义：**屏幕从 4 列缩到 2 列，卡片会临时挤开，但那个「挤开」不会被写回配置**；
+回到宽屏，用户原来的坐标原样恢复。这是我在这个项目里找到的最值得抄的一条交互决策
+（Air2 的横竖屏切换、分屏、Stage Manager 都会触发同样的问题）。
+
+#### 2.3.4 改尺寸的交互
+
+- **入口只有一个**：卡片 `⋯` 菜单里的尺寸项（`HomeDashboard.vue:481-491`）——
+  按该 kind 的白名单逐项列出（`ExpandIcon` + 「Size 2x1」），当前档位置灰；
+  只有一档的卡片（greeting/calendar）整个尺寸分组不出现（`sizeOptions.length > 1` 判断）。
+- **没有拖拽改尺寸的手柄**（没有右下角 resize grip）。
+- 自由布局下改尺寸后**自动重算位置**（`HomeDashboard.vue:414-432`）：
+  先 resize，再用新跨度跑一次 `findNearestFreeHomeWidgetPosition` 并把结果写回，
+  避免变大后压到邻居。
+- 网格模式下改尺寸只影响装箱结果，不写坐标。
+
+> 「改尺寸放在菜单里而不是拖手柄」对触屏其实是**更稳的选择**：拖手柄在手指遮挡下很难精确，
+> 而档位本来就只有 2–4 个选项。
+
+#### 2.3.5 增删卡片的入口
+
+**加**（`HomeWidgetPickerModal.vue`）：
+- 编辑态工具条的 `+`，或空态里的「Add widget」按钮（`HomeDashboard.vue:703`）；
+- 面板是一个**两级/三级下钻**：
+  1. 类型目录（三组九项，每项有图标 + 名字 + 一句说明，`:125-201`）；
+  2. 若选的是 `instance` → 直接加卡（target 用列表里那一项，`:260-269`）；
+  3. 若选的是 `world`/`server` → 先选实例（带搜索，`:203-208`）→ 再选存档/服务器
+     （按 type 过滤 + 搜索，`:210-218`）→ 加卡时把 `path` 或 `address` 写进 target（`:278-292`）；
+  4. 顶部有返回按钮，逐级退（`:294-302`）。
+- **替换目标复用同一个面板**：卡片的 `⋯` → `RefreshCw` 「Replace target」，
+  记下 `replacingWidgetId`，打开面板时把 kind 预选（`HomeDashboard.vue:405-408`）；
+  选中新目标后**保留原 id / 原 size / 原 position**，只换内容
+  （`HomeDashboard.vue:387-402`）——这样卡片不会跳位置。
+
+**删**：`⋯` 菜单最后一项，红色垃圾桶，**点击即删，无二次确认、无撤销**
+（`HomeDashboard.vue:519-524`）。可接受的唯一理由是：恢复到默认布局只要一次点击
+（但有 confirm），且卡片重建成本低。
+
+#### 2.3.6 有没有「锁定布局」
+
+**没有。** 全仓 `grep -i lock` 在 home 目录下零命中。也没有：
+- 只读/访客模式；
+- 密码/PIN/家长锁；
+- 「编辑完成后锁定，需长按解锁」。
+
+唯一的隐式保护是「编辑态必须显式进入」+「非编辑态卡片内容可点但不可拖」。
+对单用户桌面启动器这够用；对 **iPad 上可能被小孩误触**的场景（Air2 的现实场景更接近这个），
+建议加（见 §4.6 P2）。
+
+#### 2.3.7 无障碍与其它
+
+- 每个按钮都有 `aria-label` / `v-tooltip`；布局开关用 `role="switch"` + `aria-checked`（`Index.vue:453-457`）。
+- 拖拽期间 `user-select: none`（`HomeDashboard.vue:963-966`）。
+- `prefers-reduced-motion: reduce` 时关掉平滑滚动（`:968-971`）。
+- 手柄支持方向键微调（见 §2.3.3），这是它唯一的「无指针也能改布局」路径。
+
+### 2.4 边界处理
+
+#### 2.4.1 卡片引用的实例被删了 / 不可用
+
+**卡片不删，就地降级。** `HomeShortcutWidget.vue`：
+
+```ts
+const instance = computed(() => props.instances.find(c => c.id === props.placement.target?.instanceId))
+const missing  = computed(() => !instance.value || (props.placement.kind !== 'instance' && !world.value))
+```
+
+- 命中 `missing` 就渲染占位（`:299-310`）：`IssuesIcon` + **`target.fallbackLabel`** +
+  「Content unavailable」；
+- `fallbackLabel` 是**存卡时快照下来的名字**（加卡时写入，`HomeWidgetPickerModal.vue:266`、`:289`），
+  所以实例删了以后卡片还知道自己「原本是什么」——这是 `normalizeTarget` 要求它必填的原因
+  （§2.2.6 第 4 步）；
+- 卡片**保留在布局里**，位置、尺寸、顺序都不变；用户要删就自己删，要换目标就用 `Replace target`；
+- 全仓没有任何「实例删除 → 清理引用它的卡片」的代码（`grep` 无命中）。
+  对比：极简主页那个**单值**引用是用 DB 外键 `ON DELETE SET NULL` 兜的
+  （`minimal_home_instance_id`），客户端还会再兜一层：发现 id 不在列表里就写回 `null`
+  （`Index.vue:147-158`）。
+
+> **两条路线的差别值得抄进 Air2 的设计说明**：单值引用可以「自动置空」，
+> 因为置空后 UI 有明确的下一步（让你重选）；**多卡片引用不能自动删**，
+> 因为删一张卡是用户没授权的布局变更，而且他可能就是「过两天我要把这个实例装回来」。
+> 所以卡片引用只能软失败 + 提供修复入口。
+
+#### 2.4.2 世界 / 服务器的二级解析
+
+`world` / `server` 类型的 target 是「实例 + 存档路径 / 服务器地址」，运行时**每次都要重新解析**
+（`HomeShortcutWidget.vue:183-213`）：
+
+- 触发：`watch([placement, instances, instanceRevision])`（`:271-278`），
+  实例事件（世界增删、改名、游玩）会 bump `instanceRevision`（`home-dashboard-runtime.ts:213-225`）；
+- 匹配：服务器按**归一化后的地址**比（`normalizeServerAddress`），单机存档按**路径精确**比；
+- 解析失败 → `world = null` → 走 `missing` 路径（和实例被删一样）；
+- 解析成功但服务器离线 → 不降级，只把 meta 行改成「Server offline」（`:155-160`），
+  这是「实体在、状态不可用」与「实体没了」两种不同降级的例子。
+
+#### 2.4.3 布局文件损坏 / 版本不匹配
+
+| 情形 | Axolotl 行为 | 位置 |
+|---|---|---|
+| DB 里是非法 JSON | `.ok()` → `None` → 默认方案 → 写回 | `settings.rs:494-500`、`Index.vue:210-220` |
+| `version` 不等于 1 | `normalize` 返回 `null` → 默认方案 → 写回 | `home-dashboard.ts:289-295` |
+| `widgets` 不是数组 | 同上 | 同上 |
+| 单卡 kind 非法 | 丢这一张 | `:303` |
+| 单卡尺寸非法 | 回该 kind 默认档 | `:318-321` |
+| 单卡 id 重复 | 重发 UUID | `:313-316` |
+| 单卡缺 target | 丢这一张 | `:309-311` |
+| position 非法 | 丢坐标保卡 | `:192-201` |
+| 读取本身抛异常（DB 层） | 默认方案 + 报错 toast，**不写回** | `Index.vue:221-226` |
+
+**没有备份、没有「恢复上一次」**。整篇作废就是全丢（除了默认方案能重新给你 6 张默认卡）。
+
+#### 2.4.4 重复卡片与 id 冲突
+
+- **允许同类卡片出现多次**（可以放三个「最近游玩」），`normalize` 也不去重
+  （单测 `home-dashboard.test.ts:202-219` 明确「retaining duplicate widgets」）；
+- id 冲突时后来者换新 UUID（`:313-316`），两条都留。
+- **副作用（一个真实的缺口）**：问候卡的文案编辑是按 `widgets.find(kind === 'greeting')`
+  取**第一张**（`Index.vue:235-237`），所以第二张问候卡**永远不可编辑**
+  （`canEdit` 为 false，`Index.vue:248`）。这是「同类型多实例 + 按类型找卡」组合出来的 bug，
+  Air2 要么禁同类多卡，要么按 id 定位。**建议：问候卡/日历这类「单例语义」的卡片，
+  在 picker 里就标成已添加并禁用**（Axolotl 没做）。
+
+#### 2.4.5 空态
+
+- 整页无卡：`min-h-64` 虚线框 + 一句「Add a widget to build your Home.」+ 按钮
+  （`HomeDashboard.vue:696-706`）；
+- 收藏集卡里没东西：`GridIcon` + 「还没有钉到主页的实例」这类文案
+  （`HomePinnedInstances.vue:93-96`）；
+- 自由布局空态下画布高度 `max(480, 0)` = 480，不会塌成 0（`HomeDashboard.vue:147-150`）。
+
+#### 2.4.6 多设备 / 多方案
+
+- **多方案：没有。** 一个用户只有一份卡片方案（一个 JSONB），外加一个「恢复默认」。
+  页面的 standard/minimal 两种模式不算方案（不能同时存在两套卡片）。
+- **多设备：没有同步。** `settings.sync_features_across_devices` 只绑了 5 个 UI 开关列
+  （`settings.rs:873`），**不含 `home_widgets`**；卡片方案纯本机。
+- **导入/导出：没有。**（这点对 Air2 反而是机会，见 §4.6 P2。）
+
+#### 2.4.7 边界处理小结（Axolotl 的原则）
+
+```
+实体引用（卡片内）  →  软失败：占位 + 快照名 + 提供重指定入口，绝不自动删卡
+单值引用（设置里）  →  硬兜底：FK SET NULL + 客户端发现失效即清空
+整篇文档            →  硬重置：不认识就整篇作废落默认，且立刻写回（弱点）
+单张卡片            →  软丢弃：坏卡丢一张，好卡照留
+写入失败            →  只回滚最新一次，不破坏后续改动
+```
+
+---
+
+## 三、可借鉴 vs 不适用
+
+### 3.1 可借鉴（附「为什么」）
+
+| # | 做法 | 为什么值得搬 |
+|---|---|---|
+| 1 | 五段式卡片模型 `kind/size/target/options/position` | 把「是什么卡」「多大」「指向谁」「细项」「放哪」拆开，每段独立演进；加卡类型只加 `kind` 分支 |
+| 2 | **顺序即布局**（网格模式不存坐标） | 省掉「布局有洞/重叠」这一整类 bug，也省掉坐标迁移；代价是不能任意摆放（可接受） |
+| 3 | **显示位置 ≠ 存储位置**（窄屏重排不落盘） | 横竖屏/分屏/Stage Manager 下不会把用户的布局越改越乱；这是 Air2 最需要的一条 |
+| 4 | 尺寸「全局档位池 + 每类型白名单 + 默认表」 | 防止用户把日历拉成 4x2；也防止代码里到处 `if size == ...` |
+| 5 | **窄屏只压跨度、不改档位** | iPad 的布局原封不动带到 iPhone 预览，不产生「两份配置」 |
+| 6 | `normalize` 单一入口、纯函数、每次进页面都跑 | 校验/修复/迁移三合一，可单测；比「读的时候信任、写的时候校验」稳 |
+| 7 | 逐卡丢弃 + 整篇门槛 的两级容错 | 坏一张卡不至于让用户重建整个主页 |
+| 8 | `fallbackLabel` 快照 | 实体没了卡片还能显示「它本来是什么」，这是软失败能成立的前提 |
+| 9 | 单值引用用真外键、文档引用用软失败 | 两种引用的失败语义本来就不同，别用一套机制 |
+| 10 | 保存队列：串行 + 版本号 + 只回滚最新 | 「整篇写」必然遇到乱序覆盖，这是最小正确实现 |
+| 11 | **加卡/换目标共用同一个 picker**（`replacingWidgetId`） | 少一个界面，且换目标时能保住 id/尺寸/位置 |
+| 12 | 编辑态禁用卡片内容交互 | 编辑时误点启动游戏是最伤的误操作 |
+| 13 | 卡片按档位切换**版式**而非缩放 | 1x1 和 2x2 该显示的信息本来就不一样 |
+| 14 | 默认方案 = 写死的 6 张卡 + 装箱结果单测 | 「恢复默认」必须有确定答案，且要能被回归测试钉住 |
+
+### 3.2 不适用（附「为什么」）
+
+| # | Axolotl 做法 | 为什么不适用 |
+|---|---|---|
+| 1 | `vuedraggable` + HTML5 拖放 + `force-fallback` | iOS 没有原生拖放语义；touch 要用 `UILongPressGestureRecognizer` + `UICollectionView` 重排，或自研「长按浮起 + 跟手 + 吸附」（Axolotl 的 free 模式那段 pointer 逻辑反而更接近 iOS 写法） |
+| 2 | 编辑条 **hover 才展开**（CSS `:hover`） | 触屏无 hover。Air2 编辑条必须常驻（或长按浮起），且要避开手指遮挡——建议放手柄在**左上**、菜单在右上 |
+| 3 | `⋯` 溢出菜单用 `OverflowMenu` 组件 | Air2 有自研 `A2OptionSheet`，且 ADR-005 禁系统 ActionSheet；直接用 `A2OptionSheet` |
+| 4 | 最小列宽 240pt、最多 4 列 | 240pt 是为桌面卡片内容（列表 + meta）定的；iPad 横屏 4 列会让每张卡只有 271pt 宽，Air2 卡片信息更少，建议 **3 列 + 最小 300pt**（见 §4.3） |
+| 5 | target 存 `path`（存档相对实例根的路径） | **这条最容易踩坑**：Air2 有版本隔离三档（关/仅 Mod/全部，`A2VersionIsolation.h:24-39`），「全部」档下 gameDir 就是 `versions/{版本名}`，同一个存档的物理位置随档位变化。**不能存绝对路径**，必须存「相对 gameDir 的路径」并在解析时按当前档位拼接 |
+| 6 | target 只存 `instanceId` | Air2 的实例标识是「游戏根目录 + 版本名」（`A2SettingsKeyGameHome` / `GameHomes` / `A2SettingsKeyCurrentVersionName`），**版本名在不同 gameHome 下会重名**。target 必须存 `(gameHome, versionName)` 二元组 |
+| 7 | 配置存 SQLite JSONB 列 | Air2 是 `Documents/config.json`，且 `A2Settings` 只收 Foundation 标量（`A2Settings.h:29-32` 注释）。卡片方案是嵌套文档，建议独立文件（§4.2），别塞进 settings 注册表 |
+| 8 | `version !== 1` 就整篇作废并写回 | 降级安装会**静默覆盖**新版本布局。必须「高版本只读 + 不覆盖 + 留备份」 |
+| 9 | 无「锁定布局」 | Air2 是可能给孩子/朋友拿着的 iPad，误触概率高；且 Air2 卡片里有「启动游戏」这种高代价动作 |
+| 10 | 问候文案按 accountId 存 override（`greetingOverrides`，上限 64 条） | Air2 当前是单账号场景（`A2SettingsKeyCurrentAccountID`），做多账号 override 是过度设计；留一个 `greetingText` 即可，P2 再考虑 |
+| 11 | `options` 用一个散装 `HomeWidgetOptions` | Vue 侧类型宽松靠 `normalize` 兜；Swift 侧用 `enum` + associated value 能编译期保证，不要为了「结构对齐」退回到散装字典 |
+| 12 | 无多方案、无导入导出、无同步 | 不是「不好」，是「没做」。Air2 做「多方案 + 导出 JSON 分享」成本很低（Air2 已有 Files 页可以承载），是差异化点 |
+| 13 | DB 迁移冲突对账（`db.rs:1166-1265`） | 依赖 sqlx 的 `_sqlx_migrations` 表与 checksum；Air2 无此机制。**思想可留**（迁移要能显式修复），实现不搬 |
+
+---
+
+## 四、给 Air2 的落地建议
+
+> 约束前提（来自仓库既有决策，不是本文新定）：
+> ADR-001 SwiftUI + ObjC；ADR-002 **Core 不依赖 UIKit**；ADR-005 目录 UpperCamelCase 单数、`A2` 前缀；
+> ADR-006 禁系统输入弹窗（用 `A2InputDialog`）；ADR-005/`UI-DESIGN.md:153` 禁 `UIAlertControllerStyleActionSheet`
+> （用 `A2OptionSheet`）；设置唯一读写点 `A2Settings`（`Documents/config.json`）。
+
+### 4.1 数据结构（Air2 版）
+
+用 Swift `Codable` + 枚举，落在 **Core 层**（不碰 UIKit）。要点与 Axolotl 一致的保留，
+不一致的地方是 air2 特有约束（§3.2 第 5/6 条）。
+
+```jsonc
+{
+  "schema": 1,                       // 文档版本；未知高版本 → 只读，不覆盖
+  "activeProfile": "p-default",
+  "profiles": [
+    {
+      "id": "p-default",
+      "name": "默认",
+      "layout": "grid",              // "grid" | "free"；free 才用 position
+      "cards": [
+        {
+          "id": "6F1B2C3D-...",      // UUID 字符串，重复即重发
+          "kind": "greeting",
+          "size": "2x1",
+          "options": { "mode": "auto", "fontSize": 22 },
+          "position": null           // grid 下恒为 null（写出时可省）
+        },
+        {
+          "id": "7A2C...",
+          "kind": "recent",
+          "size": "2x2",
+          "options": { "limit": 4 }  // 2 | 4 | 6 | 8
+        },
+        {
+          "id": "8B3D...",
+          "kind": "pinnedVersions",  // 对应 Axolotl pinned-instances
+          "size": "2x2"
+        },
+        {
+          "id": "9C4E...",
+          "kind": "shortcutVersion", // 对应 instance
+          "size": "1x1",
+          "target": {
+            "versionName": "1.21.5-fabric",
+            "gameHome": "/var/mobile/Containers/.../minecraft",
+            "fallbackLabel": "1.21.5-fabric"
+          }
+        },
+        {
+          "id": "0D5F...",
+          "kind": "shortcutWorld",   // 对应 world
+          "size": "1x1",
+          "target": {
+            "versionName": "1.21.5-fabric",
+            "gameHome": "/var/mobile/.../minecraft",
+            "worldPath": "saves/我的世界",   // ★ 相对 gameDir，不存绝对路径
+            "fallbackLabel": "我的世界"
+          }
+        },
+        {
+          "id": "1E60...",
+          "kind": "shortcutServer",
+          "size": "2x1",
+          "target": {
+            "versionName": "1.21.5-fabric",
+            "gameHome": "/var/mobile/.../minecraft",
+            "address": "play.example.com",   // 归一化后存（小写、去默认端口）
+            "fallbackLabel": "Example SMP"
+          }
+        }
+      ]
+    },
+    {
+      "id": "p-mini",
+      "name": "儿童机",
+      "layout": "grid",
+      "cards": [ /* 只有 1x1 快捷卡 */ ]
+    }
+  ]
+}
+```
+
+Swift 侧形状（示意，非最终代码）：
+
+```swift
+enum A2HomeCardKind: String, Codable {          // 裸值 = case 名（与 JSON 一致，不另起短名）
+    case greeting, recent, calendar
+    case pinnedVersions, pinnedWorlds, pinnedServers
+    case shortcutVersion, shortcutWorld, shortcutServer
+}
+
+enum A2HomeCardSize: String, Codable {          // 档位池
+    case oneByOne = "1x1", twoByOne = "2x1", oneByTwo = "1x2"
+    case twoByTwo = "2x2", threeByOne = "3x1", threeByTwo = "3x2"
+    var span: (cols: Int, rows: Int) { ... }
+}
+
+struct A2HomeCardTarget: Codable {              // 注意：所有引用都带 fallbackLabel
+    var versionName: String
+    var gameHome: String
+    var worldPath: String?      // 相对 gameDir
+    var address: String?
+    var fallbackLabel: String
+}
+
+struct A2HomeCard: Codable, Identifiable {
+    var id: String
+    var kind: A2HomeCardKind
+    var size: A2HomeCardSize
+    var target: A2HomeCardTarget?
+    var options: A2HomeCardOptions?             // enum + associated value，或按 kind 的 struct
+    var position: A2HomeCardPosition?           // 仅 free
+}
+
+struct A2HomeProfile: Codable { var id, name: String; var layout: A2HomeLayoutMode; var cards: [A2HomeCard] }
+struct A2HomeDocument: Codable { var schema: Int; var activeProfile: String; var profiles: [A2HomeProfile] }
+```
+
+**尺寸档位建议（Air2 版，可调）**：
+
+| kind | 白名单 | 默认 | 备注 |
+|---|---|---|---|
+| greeting | `2x1` `3x1` | `3x1` | 横屏宽卡更协调 |
+| recentPlayed | `2x2` `3x2` | `2x2` | |
+| calendar / playtime | `1x2` `2x2` | `1x2` | 双档，用户可选热力图大小 |
+| pinnedVersions / pinnedWorlds / pinnedServers | `1x1` `2x1` `1x2` `2x2` | `2x2` | |
+| shortcutVersion / shortcutWorld / shortcutServer | `1x1` `2x1` | `1x1` | 含「启动」按钮 |
+
+**规范化契约（照 Axolotl 的顺序，Air2 加两条「更严」的）**：
+
+1. `schema` 缺失/非整数 → 视为 1；
+2. `schema > 当前支持` → **不进正常流程**：以默认文档渲染，标 `isReadOnly`，**禁止任何写盘**，
+   顶部提示「此布局由更新版本的 Air2 创建」（§4.5）；
+3. `profiles` 非数组或空 → 造一个默认 profile；
+4. `activeProfile` 不在列表里 → 取第一个；
+5. 逐卡校验（丢坏卡保好卡）：kind 未知丢；`shortcutWorld` 缺 `worldPath` 丢；
+   `shortcut*` 缺 `versionName`/`gameHome` 丢；缺 `fallbackLabel` 也丢（继承 Axolotl 的取舍：
+   **没有兜底名的引用不允许存在**）；
+6. `id` 重复 → 重发 UUID；
+7. `size` 不在白名单 → 回默认档；
+8. `position`：`col ∈ [0, 起手列数×2]`、`row ∈ [0, 512]`，取整；非法则丢坐标保卡；
+9. 未知 `options` 键 → 忽略（保留原始字典以便写回时**不丢用户未来的字段**——
+   这一条 Axolotl 没做，Air2 加 `unknownOptions: [String: AnyCodable]?` 更稳）。
+
+### 4.2 存放位置与写入协议
+
+**建议：`Documents/home-layout.json` 独立文件，不进 `config.json`。**
+
+理由（三条，都可验证）：
+
+1. `A2Settings` 的设计是「托管标量 key 的注册表」（`A2Settings.h:29-32`：
+   「只存 Foundation 类型」「Key 与旧实现完全一致」），塞一个嵌套文档进去会破坏它的
+   「一 key 一默认值」模型；
+2. 写盘频率不同：设置页是低频显式提交，主页编辑是**每次拖动都写**（Axolotl 也是）；
+   高频小文档写独立文件，不和设置互相踩；
+3. 失败隔离：布局文件坏了不该影响主题/账号等设置。
+
+写入协议（**这是 Air2 必须比 Axolotl 严谨的地方**）：
+
+```
+写:  encode → 校验(自己的 normalize 过一遍，能往返) → 写 home-layout.json.tmp
+            → fsync → rename(原子替换)
+            → 保留上一版为 home-layout.bak.json（仅在成功 rename 后滚动）
+读:  读 home-layout.json → parse + normalize
+        ├── 成功 → 用
+        ├── 失败 → 试 home-layout.bak.json → 成功则用并向用户提示「已从备份恢复」
+        └── 都失败 → 默认方案（★ 不立即覆盖，等用户第一次真正编辑才写）
+```
+
+节流：拖动过程中**只改内存**，`pointerup`/`dragEnd` 才落盘（Axolotl 就是只在
+`finishFreeWidgetDrag`/`finishWidgetDrag` 时 emit，等价做法）；再加 250ms 合并窗口，
+避免快速连点时多次写。
+
+保存失败：沿用 Axolotl 的「串行队列 + 只回滚最新」；但 Air2 还要处理
+**scenePhase 进入 background 时的 flush**（`UIApplication.didEnterBackgroundNotification`
+里同步写一次未落盘的改动）。
+
+### 4.3 布局断点与像素换算
+
+推荐沿用同一套公式但换参数（**理由**：Air2 卡片信息量比 Axolotl 少，列数少一点每张卡更好点）：
+
+```
+列数 = clamp(floor((可用宽 + gap) / (最小卡宽 + gap)), 1, 3)     // 最小卡宽 300, gap 16
+行高 = 168                                                      // 行节距 184
+1x1 = 列宽 × 168；2x1 = 2×列宽+16 × 168；2x2 = 2×列宽+16 × 352
+```
+
+| 设备/方向 | 可用宽 | 列数 | 1x1 | 2x1 | 2x2 |
+|---|---|---|---|---|---|
+| iPad 横屏 1180pt | 1132 | 3 | 367×168 | 750×168 | 750×352 |
+| iPad 竖屏 820pt | 772 | 2 | 378×168 | 772×168 | 772×352 |
+| iPad 分屏 1/2（约 620pt） | 588 | 1 | 588×168 | 588×168¹ | 588×352¹ |
+| iPhone 竖屏 393pt | 369 | 1 | 369×168 | 369×168¹ | 369×352¹ |
+
+¹ 跨度压到 1 列，档位值不变（§2.2.4 的行为）。
+
+**关键三条**（照搬 Axolotl 的语义）：
+
+1. **只压列不压行**：`2x1` 在 1 列下变 `1x1` 的宽，但高度仍是 1 行——否则 iPhone 上会出现
+   一堆「高瘦」的卡；
+2. **压列的结果不落盘**（§2.3.3 的「显示位置 ≠ 存储位置」）；
+3. 档位不因设备变：iPad 上排的 `2x2`，iPhone 上还是 `2x2`（宽压、高留）。
+
+### 4.4 编辑交互（触屏版）
+
+| 环节 | Axolotl | Air2 建议 | 为什么改 |
+|---|---|---|---|
+| 进编辑 | 右下角铅笔按钮 toggle | 顶栏右侧「编辑」按钮；进入后顶栏变「完成 + 添加 + 布局 + 恢复默认」 | 触屏右下角易被 Home Indicator 手势抢 |
+| 编辑条 | 卡右上，hover 展开 | 卡**左上常驻**「⠿ 手柄」，右上常驻「⋯」；尺寸标签只在拖拽时显示 | 手指遮挡右上；无 hover |
+| 排序 | HTML5 拖放 | `UICollectionView` + `UICollectionViewDragDelegate`/自研长按浮起；**长按 0.4s 浮起 + 触觉反馈（`UIImpactFeedbackGenerator`）+ 跟手 + 松手吸附** | 触屏没有 drag 语义；长按浮起是 iOS 惯例（Springboard 同款） |
+| 改尺寸 | 菜单里选档位 | 长按卡 → `A2OptionSheet`（尺寸 / 换目标 / 删除）；尺寸项显示小图示 | 与 iOS 惯例一致；`A2OptionSheet` 已存在 |
+| 自由布局 | pointer 拖拽 + 最近空格吸附 | **建议 P1 再做**，直接搬语义：拖动跟手 + 松手吸附最近空格 + 只动自己 | 触屏自由布局收益低于 iPad 上的网格；先做稳网格 |
+| 加卡 | `+` → 两级面板 | `A2HomeWidgetPickerViewController`（sheet，medium/large detents）：三组九项 + 下钻 | 沿用其信息结构 |
+| 换目标 | 菜单 Replace target 复用 picker | 同一 sheet，带 `replacingCardID`，保住 id/尺寸/坐标 | 少一个界面 |
+| 删除 | 点击即删 | **滑动删除 + 二次确认**（或长按菜单里确认） | iPad 上误触代价高 |
+| 锁定 | 无 | 顶栏 🔒「锁定布局」：置灰编辑入口，需长按 1.5s 解锁（`A2Settings` 存一个 bool） | 防小孩误触；成本极低 |
+| 键盘 | 方向键微调 | 外接键盘方向键微调 + `⌘↑/↓` 换序 | Air2 已有键盘事件处理惯例可复用 |
+
+**编辑态的「隔离」照搬**：编辑时卡片内容 `isUserInteractionEnabled = NO`（等于 Axolotl 的
+`pointer-events: none`），只留手柄和菜单；这样「编辑时误点启动游戏」不可能发生。
+
+### 4.5 边界处理清单（Air2 版答案）
+
+| 场景 | 处理 | 提示文案（中） |
+|---|---|---|
+| 卡片的版本被删 | 卡**保留**，显示 `fallbackLabel` + 「版本已删除」+ 「重新指定」按钮 | 「这个卡片指向的版本已不存在」 |
+| 卡片的版本改名 | 按 `(gameHome, versionName)` 找不到 → 同上；**不猜**（同根下若只有一个近似名也不自动改） | 同上 |
+| `gameHome` 书签失效（`A2SettingsKeyGameHomeBookmarks` 里没这个路径） | 卡保留，显示「需要重新授权游戏目录」，点卡触发目录重新选择流程 | 「游戏目录访问权限已失效」 |
+| 存档被删（`worldPath` 不存在） | 卡保留 + 「存档已删除」 | 「这个卡片指向的存档已不存在」 |
+| 版本隔离档位变化导致 `saves` 位置变 | **必须能跟着走**：`worldPath` 相对 gameDir 解析，按当前档位拼；拼不到再降级 | 无提示（正常行为） |
+| 服务器地址归一化后匹配不到 | 卡保留 + 「服务器地址已变更？」 | 允许用户 Replace target |
+| 服务器在线状态失败 | **不降级**，只把 meta 行改成「离线」/「查询失败」 | 与「实体没了」区分开（Axolotl 也是这么分的） |
+| 收藏集卡里 0 条 | 空态图示 + 「还没有钉到主页的版本」+ 「去版本页钉一个」 | 引导而非报错 |
+| 整页 0 卡 | 虚线框 + 「添加卡片来布置主页」+ 主按钮 | |
+| 布局 JSON 语法坏 | 试 `.bak` → 成功则提示「已从备份恢复」；失败落默认**且不写盘**，直到用户编辑 | 「布局文件损坏，已恢复默认（原文件已保留为 home-layout.corrupt.json）」 |
+| `schema` 高于当前支持（降级安装） | **只读模式**：默认方案渲染 + 禁写 + 顶部横幅；同时把原文件备份 | 「此布局由更新版本的 Air2 创建，当前版本无法修改」 |
+| 同卡 `id` 重复 | 后一个重发 UUID | 无 |
+| 同类多卡（两个问候卡） | **picker 里单例卡标「已添加」并禁用**（修掉 Axolotl 的缺口） | 「已添加」 |
+| 多方案切换 | `activeProfile` 落地后立即重绘；切换失败回滚到原 profile | |
+| 写盘失败（磁盘满/沙盒权限） | 保留内存态 + 顶部持续提示「布局未保存」+ 重试按钮 | 「布局未能保存」 |
+
+### 4.6 分阶段落地
+
+#### P0 — 能用：网格模式 + 单方案 + 落盘可靠
+
+| 项 | 落点（新文件） | 要点 |
+|---|---|---|
+| 模型 + 规范化 + 读写 | `Air2/Core/Home/A2HomeLayout.{h,m}` | 纯 Foundation；`A2HomeLayoutNormalize()` 纯函数；原子写 + `.bak`；`schema` 只读判定 |
+| 卡片档位/白名单表 | 同上（`A2HomeCardSizeSpan` 等 C 函数或类方法） | 不含 UIKit；单测覆盖「窄屏只压列」 |
+| 网格视图 | `Air2/UI/Components/Home/A2HomeGridView.{h,m}` | 列数公式 + 行节距；卡片视图复用/回收 |
+| 卡片视图（各 kind） | `Air2/UI/Components/Home/A2HomeCardView.{h,m}` + 每 kind 一个内部 build 方法 | **按 `size` 切换版式**（1x1 精简 / 2x1 宽版） |
+| 编辑条 | `Air2/UI/Components/Home/A2HomeCardEditBar.{h,m}` | 左上手柄 + 右上 ⋯（`A2OptionSheet`） |
+| 加卡面板 | `Air2/UI/Screens/Home/A2HomeWidgetPickerViewController.{h,m}` | 三组九项 + 下钻；单例卡去重 |
+| 接入主页 | `Air2/UI/Screens/Home/A2LauncherViewController.m` | 主页加「经典 / 网格」模式切换，存 `A2SettingsKeyHomeMode`（新 key，默认经典，保证老用户无感） |
+| 缺失占位 | `A2HomeCardView` 内 | `fallbackLabel` + 「已不存在」 |
+
+**P0 验收**：① 拖动排序后杀进程重开顺序不变；② 手动把 `home-layout.json` 改成 `{` 后重开，
+不崩、从 `.bak` 恢复到上一版；③ 删掉卡片指向的版本 → 卡还在、显示兜底名；
+④ 屏幕从 iPad 横屏切竖屏再切回，自由坐标（若已实现）与顺序完全复原。
+
+#### P1 — 好用：自由布局 + 每卡设置 + 主题联动
+
+| 项 | 要点 |
+|---|---|
+| 自由布局 `layout: "free"` | 搬 `findNearestFreeHomeWidgetPosition` 语义：松手吸附最近空格、只动自己、**显示位置不落盘** |
+| 卡片选项 | 最近游玩条数、问候文案/字号（走 `A2InputDialog`，ADR-006）、日历视图（月/年） |
+| 卡片背景不透明度 | 复用 Air2 现有主题变量；参考 `settings.home_widget_background_opacity` 的 `0–100` + 前后端双 clamp |
+| 恢复默认 | `A2OptionSheet` 二次确认（不用 `UIAlertController`，同 ADR-005 精神） |
+| 键盘/手柄 | 方向键微调、`⌘↑↓` 换序 |
+| 空态与收藏集空态 | 统一视觉 |
+
+**P1 验收**：分屏宽度 600pt 下拖出来的卡片，恢复到全屏后位置回到原处（这条最能证明「显示 ≠ 存储」做对了）。
+
+#### P2 — 差异化：多方案 + 锁定 + iPhone
+
+| 项 | 要点 |
+|---|---|
+| 多方案 `profiles[]` | 顶栏切换 + 重命名/复制/删除；**默认方案不可删** |
+| 导入/导出 | 导出单 profile 为 `.airhome.json`，走 Air2 已有 Files 页；导入时跑同一套 normalize，schema 高版本拒绝 |
+| 锁定布局 | `A2SettingsKeyHomeLayoutLocked`，长按 1.5s 解锁 |
+| iPhone 适配 | 1 列 + 卡片版式下探（1x1 只留名字 + 启动按钮）；顺带验证「只压列」策略 |
+| 问候按账号 | 若将来多账号：`greetingOverrides[accountID]`（学 Axolotl 的 `pruneHomeGreetingOverrides`，账号删了要清） |
+| 云同步 | **暂不做**：需要账号后端 + 冲突合并；单机方案已够，先观察用户诉求 |
+
+---
+
+## 五、页面草图
+
+### 5.1 iPad 横屏 —— 网格模式（浏览态）
+
+默认 5 卡、3 列（Air2 参数）、按顺序流式装箱的落位示例（12 格全填满，无空洞）：
+
+```
+┌────────────────────────────────────────┐  ┌──────────────────────┐
+│ G  晚上好，Steve        2x1            │  │ W  收藏世界      1x2 │
+└────────────────────────────────────────┘  │ ● 我的世界           │
+                                            │ ● 空岛生存           │
+┌────────────────────────────────────────┐  └──────────────────────┘
+│ R  最近游玩             2x2            │
+│ ┌───────────────┬──────────────┐       │  ┌──────────────────────┐
+│ │ 1.21.5-fabric │ 1.20.1-forge │       │  │ S  收藏服务器    1x2 │
+│ │ 上次 2 小时前 │ 上次 昨天    │       │  │ ● Example SMP 32/100 │
+│ └───────────────┴──────────────┘       │  └──────────────────────┘
+└────────────────────────────────────────┘
+
+┌────────────────────────────────────────┐
+│ I  收藏版本             2x1            │
+│ ● 1.21.5-fabric ▶  ● 1.20.1-forge ▶    │
+└────────────────────────────────────────┘
+
+列宽 367  行高 168  gap 16  行节距 184  画布高 4×184 = 736
+G=问候 2x1  R=最近游玩 2x2  W=收藏世界 1x2  S=收藏服务器 1x2  I=收藏版本 2x1
+```
+
+落位（1-based，等价 Axolotl `packHomeWidgets` 的「从左上角逐格找空位」）：
+G→(1,1) 跨 2 列、W→(3,1) 跨 2 行、R→(1,2) 2×2、S→(3,3) 跨 2 行、I→(1,4) 跨 2 列。
+
+> **顺序装箱的代价（算出来的，不是猜的）**：把日历（`1x2`）作为第 6 张追加在这个顺序末尾，
+> 它会掉到 (1,5)，右侧两列空着——14/18 格。这不是 bug，是「顺序即布局」的必然结果。
+> Air2 有三条路：① 调整默认卡顺序（把 `1x2` 卡排在 `2x2` 前面就能填满）；② 装箱时做
+> dense 回填（Axolotl 只在拖拽中开 dense，见 `HomeDashboard.vue:724-726`）；③ 接受空洞。
+> 建议 **① + ③，别引 dense**——dense 会让「顺序 = 视觉位置」这条不变式失效，
+> 拖拽时卡片会跳到意料之外的位置（Axolotl 因此在非拖拽态关掉 dense）。
+
+### 5.2 iPad 横屏 —— 编辑态
+
+```
+┌──────────────────────────────────────────┐  ┌────────────────────────────┐
+│ ⠿                              ⋯         │  │ ⠿                       ⋯  │
+│ G  晚上好，Steve            2x1          │  │ W  收藏世界          1x2   │
+│ ┈┈ 虚线框＝可拖区（仅编辑态）┈┈          │  │ ● 我的世界                 │
+└──────────────────────────────────────────┘  │ ● 空岛生存                 │
+                                              └────────────────────────────┘
+┌──────────────────────────────────────────┐
+│ ⠿                              ⋯         │  ┌────────────────────────────┐
+│ R  最近游玩                 2x2          │  │ ⠿                       ⋯  │
+│ 长按 0.4s 浮起 → 跟手 → 吸附             │  │ S  收藏服务器        1x2   │
+└──────────────────────────────────────────┘  │ ● Example SMP 32/100       │
+                                              │ （卡片内容变灰、不可点）   │
+                                              └────────────────────────────┘
+
+顶栏：Air2    [＋ 添加]  [⟳ 布局]  [↺ 默认]      [🔒 锁定]  [完成]
+⋯ 菜单（A2OptionSheet）：  改尺寸 ›  更换图标/目标…  移除卡片（红）
+```
+
+编辑态三件事必须同时成立：**内容不可交互**、**每卡都有可见手柄**、**退出只切 flag 不写盘**。
+
+### 5.3 iPhone 竖屏 —— 1 列
+
+```
+┌──────────────────────────────────────┐
+│ 晚上好，Steve            2x1→满宽    │
+└──────────────────────────────────────┘
+
+┌──────────────────────────────────────┐
+│ 最近游玩                 2x2→1x2     │
+│ ┌────────────────────────────────┐   │
+│ │ 1.21.5-fabric               ▶ │    │
+│ ├────────────────────────────────┤   │
+│ │ 1.20.1-forge                ▶ │    │
+│ └────────────────────────────────┘   │
+└──────────────────────────────────────┘
+
+┌─────────────────┐ ┌──────────────────┐
+│ 1.21.5 ▶        │ │ 1.20.1 ▶         │
+└─────────────────┘ └──────────────────┘
+
+┌──────────────────────────────────────┐
+│ 收藏服务器               1x2         │
+│ ● Example SMP                        │
+│ ● 好友服  离线                       │
+└──────────────────────────────────────┘
+
+                          ┌──────────────┐
+                          │  ＋    编辑  │
+                          └──────────────┘
+
+↑ 底部编辑条，底距 34（避开 Home Indicator）
+```
+
+iPhone 上的两条取舍（写进 ADR 前先定）：
+
+1. **1 列时是否允许 `1x1` 半宽并排**：Axolotl 的做法是不允许（`columns` 最少 1，
+   所有卡都满宽），结果是 iPhone 上一屏只能放 3–4 张卡。Air2 若上 iPhone，
+   建议在 `columns == 1` 时把网格改成 **2 个半宽子列**，只让 `1x1` 卡吃半宽——
+   但这会让 `getWidgetSpan` 的语义变成「档位 → 半宽数量」，是与 Axolotl 不同的新规则，
+   属于 P2 的额外决策，不要在 P0 顺手加。
+2. **Air2 当前定位是 iPad 横屏**（`UI-DESIGN.md:9-13`），iPhone 图仅作为「尺寸策略是否站得住」
+   的检验：只要「只压列不压行 + 档位不因设备改」成立，iPad 布局迁到 iPhone 不会出现两份配置。
+
+---
+
+## 六、参考索引
+
+按主题列，方便复核（路径相对 `D:/CTF/_510src/ref/Axolotl`）：
+
+| 主题 | 位置 |
+|---|---|
+| 常量/档位/行高 | `apps/app-frontend/src/components/home/home-dashboard.ts:1-24` |
+| 类型（kind/target/options/placement/config） | `.../home-dashboard.ts:26-93` |
+| 每类白名单 + 默认档 | `.../home-dashboard.ts:100-122` |
+| 密度映射 | `.../home-dashboard.ts:124-133` |
+| 默认方案（6 卡） | `.../home-dashboard.ts:139-173` |
+| 整篇规范化 | `.../home-dashboard.ts:288-336` |
+| 单卡字段规范化 | `.../home-dashboard.ts:175-286` |
+| 增删改/换序 | `.../home-dashboard.ts:338-390`、`:511-530` |
+| 保存队列（串行+只回滚最新） | `.../home-dashboard.ts:532-555` |
+| 列数公式 / 像素换算 / 跨度压缩 | `.../home-dashboard.ts:557-590` |
+| 最近空格吸附（曼哈顿） | `.../home-dashboard.ts:618-664` |
+| 流式装箱 | `.../home-dashboard.ts:666-708` |
+| 网格→自由布局转换（坐标初始化） | `.../home-dashboard.ts:710-736` |
+| 行为规格单测（22 条） | `.../home-dashboard.test.ts`（重点 `:60-68` `:120-132` `:134-153` `:161-179` `:181-200` `:202-219`） |
+| 页面：加载/回退/保存接线 | `apps/app-frontend/src/pages/Index.vue:118-136`、`:204-233` |
+| 页面：重置/三个开关 | `.../pages/Index.vue:283-332` |
+| 页面：编辑态浮动工具条 | `.../pages/Index.vue:400-495` |
+| 网格视图：props/emits（受控） | `.../components/home/HomeDashboard.vue:66-76` |
+| 网格视图：自由布局显示位置重算 | `.../components/home/HomeDashboard.vue:115-137` |
+| 网格视图：自由拖拽（pointer+rAF+夹边） | `.../components/home/HomeDashboard.vue:252-321` |
+| 网格视图：键盘微调 | `.../components/home/HomeDashboard.vue:323-349` |
+| 网格视图：拖放参数 | `.../components/home/HomeDashboard.vue:548-583` |
+| 网格视图：编辑条/溢出菜单项 | `.../components/home/HomeDashboard.vue:456-526`、`:591-645` |
+| 网格视图：编辑态样式隔离 | `.../components/home/HomeDashboard.vue:932-943` |
+| 加卡/换目标面板 | `.../components/home/HomeWidgetPickerModal.vue:125-302` |
+| 单项快捷卡：缺失降级 | `.../components/home/HomeShortcutWidget.vue:88-93`、`:299-310` |
+| 单项快捷卡：二级解析 | `.../components/home/HomeShortcutWidget.vue:183-213`、`:271-278` |
+| 卡片按档位换版式 | `.../components/home/HomeShortcutWidget.vue:422-488`、`HomePinnedInstances.vue:46-50`、`HomeInstanceCard.vue:34` |
+| 收藏集空态 | `.../components/home/HomePinnedInstances.vue:93-96` |
+| 极简模式（第二方案） | `.../components/home/HomeMinimal.vue`、`pages/Index.vue:147-158`、`:301-320` |
+| 设置字段 | `packages/app-lib/src/state/settings.rs:62-92`、`:165-171` |
+| 设置读（JSON 解析失败即 None） | `packages/app-lib/src/state/settings.rs:494-503` |
+| 设置写（整篇 jsonb） | `packages/app-lib/src/state/settings.rs:621-626`、`:712-715` |
+| 不透明度 clamp | `packages/app-lib/src/state/settings.rs:803-805`、`packages/app-lib/src/api/handler.rs:510` |
+| 迁移：卡片列 | `packages/app-lib/migrations/20260804120000_home-widgets.sql` |
+| 迁移：页面模式 + 极简实例 FK | `packages/app-lib/migrations/20260727120000_minimal-home-layout.sql` |
+| 迁移：pinned_at + 游玩时长表 | `packages/app-lib/migrations/20260727110000_home-dashboard.sql` |
+| 迁移冲突对账 | `packages/app-lib/src/state/db.rs:1166-1265` |
+| 结构化设置「整篇替换」用例 | `apps/app-frontend/src/helpers/settings-patch.test.ts:58-64` |
+
+---
+
+## 七、未验证与后续
+
+- **未跑起来实测**：本文全部来自读码 + 单测，没有启动 Axolotl（Tauri 桌面端在本机跑不划算）。
+  涉及「手感和动画」的判断（80ms 动画、0.2 swap 阈值）只是参数抄录，不能当作体验结论。
+- **未核**：`home_widgets` 在超大卡片数下的性能（没有卡数上限；`packHomeWidgets` 是 O(n·格数)，
+  n 很小时无所谓）。
+- **未核**：Axolotl 是否有其它入口能改布局（只查了 `components/home` 与 `pages/Index.vue`）。
+- **要落地前需要 Air2 侧确认的两件事**（本文无法单方面决定）：
+  1. 主页「经典 / 网格」双模式是否可接受——还是直接把经典三区改成网格？前者迁移风险低，
+     后者视觉统一但会动 `A2LauncherViewController` 的现有约束。
+  2. 「游戏根目录 + 版本名」是否已经能唯一标识一个实例；如果 Air2 后续有稳定 instance id，
+     target 应换成 id（比二元组稳），本文的 JSON 里 `gameHome`+`versionName` 只是当下可用的方案。
