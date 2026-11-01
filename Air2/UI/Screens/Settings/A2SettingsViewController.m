@@ -35,6 +35,8 @@
 #import "A2SettingsSections.h"
 #import "A2DiagnosticsSettings.h"
 #import "A2OnDevicePairingSettings.h"   // [A2-PAIR-ONDEVICE] 诊断 › 设备内配对（调试开关控制显示）
+#import "A2PluginListViewController.h"  // ★插件★ 设置 › 插件（安装器/注册表/权限存储的唯一 UI 入口）
+#import "A2PluginRegistry.h"            // ★插件★ 分类行的副标题（已安装数）
 
 @interface A2SettingsViewController ()
 @property (nonatomic, strong) A2CategoryNavView *nav;
@@ -61,6 +63,9 @@
         [A2NavCategory title:@"游戏" symbol:@"gamecontroller.fill"],
         [A2NavCategory title:@"外观" symbol:@"paintpalette.fill"],
         [A2NavCategory title:@"诊断" symbol:@"stethoscope"],
+        // ★插件★（P1 移植）分类顺序 = rebuildContentForIndex 的索引，插件在 index 3。
+        // 只是多一档导航，前三档的索引不变 ⇒ 主线既有分类行为逐字不变。
+        [A2NavCategory title:@"插件" symbol:@"puzzlepiece.extension.fill"],
     ];
 
     __weak typeof(self) weakSelf = self;
@@ -126,6 +131,17 @@
     [self rebuildContentForIndex:_currentIndex];
 }
 
+/// 已安装插件数。读不出来就说读不出来 —— 显示「0 个」会被当成「一个都没装」。
+/// 调用点：rebuildContentForIndex 的插件分类（设置 › 插件 那一行的副标题）。
+- (NSString *)pluginSummaryText {
+    A2PluginRegistry *registry = [[A2PluginRegistry alloc] initWithPluginsDirectory:nil];
+    NSError *error = nil;
+    if (![registry loadWithError:&error]) return @"注册表读不出来";
+    NSUInteger count = [registry allEntries].count;
+    if (count == 0) return @"还没有安装插件";
+    return [NSString stringWithFormat:@"已安装 %lu 个", (unsigned long)count];
+}
+
 - (void)rebuildContentForIndex:(NSInteger)index {
     _currentIndex = index;
     for (UIView *v in _detailStack.arrangedSubviews) {
@@ -149,6 +165,28 @@
         [_detailStack addArrangedSubview:[A2OnDevicePairingSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2JITSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2AboutSettings buildWithHost:self]];
+    } else if (index == 3) {
+        // ★插件★（P1 移植）插件系统（安装器 / 注册表 / 权限存储）的唯一 UI 入口。
+        // 渲染器插件仍在「游戏 → 渲染」之外的老位置（A2RendererPluginViewController），
+        // 两条线在 P1 并存、互不影响。
+        A2SettingsSection *sec = [[A2SettingsSection alloc] initWithTitle:@"插件"];
+        sec.footerText = @"插件的每一项能力都写在权限里。安装之后可以逐项查看、关掉或重新审查。";
+
+        A2SettingsRow *row = [[A2SettingsRow alloc] init];
+        row.symbolName = @"puzzlepiece.extension.fill";
+        row.title = @"插件";
+        row.subtitle = [self pluginSummaryText];
+        row.accessory = A2SettingsRowAccessoryDisclosure;
+        row.showsSeparator = NO;
+        __weak typeof(self) weakSelf = self;
+        row.onTap = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            A2PluginListViewController *vc = [A2PluginListViewController defaultController];
+            [self.navigationController pushViewController:vc animated:YES];
+        };
+        [sec addRow:row];
+
+        [_detailStack addArrangedSubview:sec];
     }
 
     // 内容切换时淡入上浮

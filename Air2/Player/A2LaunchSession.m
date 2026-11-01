@@ -36,6 +36,7 @@
 #import "A2LegacyJITGate.h"            // Natives/Support —— JIT 闸门的唯一实现（判据→申请→等待）
 #import "a2_gl2_shim.h"             // Natives/Renderer —— ★[A2-GL2] 自研固定管线档位判据（默认关）★
 #import "A2LegacyAssetsMapper.h"    // Core/Version —— 远古资源映射（virtual / map_to_resources）
+#import "A2PluginBootGuard.h"       // ★插件 P1 第⑤块★ 启动看门狗（marker 写在建 VM 之前、首帧到了才清）
 #import "A2Log.h"
 
 // ② 的判据 / 闰门全部落在 Natives/Support/A2LegacyJITGate（老 Air 原样移植）：
@@ -1119,6 +1120,13 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                     }
                     return NO;
                 }
+                // ★插件 P1 第⑤块★ 记一次「启动开始」：位置在 **JIT 闰门通过之后、建 VM 之前**。
+                //   为什么是这个点而不是点按钮那一刻：闰门没过 ⇒ 返 NO 直接中止，那不是插件的锅，
+                //   记在插件头上会让无辜插件被自动停用；而这个点往后进程任何时刻死都算「启动了没跨首帧」，
+                //   marker 留在磁盘上，下一次启动据此给可疑插件累积失败次数（连续 3 次自动停用）。
+                //   返回值只在单测里断言；写不进 marker 最坏只是少记一次，不影响启动。
+                (void)[A2PluginBootGuard markLaunchStarted];
+
                 // ③ Bridge 唯一调 a2_launch_jvm_with_argv 的地方（★只有闰门放行才会走到这里★）。
                 [A2Log log:@"%@", [A2LaunchFailure jitvmLineWithStep:@"vm"
                                                              verdict:lastVerdict

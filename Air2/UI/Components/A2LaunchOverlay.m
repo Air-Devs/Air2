@@ -4,6 +4,7 @@
 //
 
 #import "A2LaunchOverlay.h"
+#import "A2PluginBootGuard.h"   // ★插件 P1 第⑤块★ 首帧到达 ⇒ 清 boot marker（接线点 B）
 #import "A2Log.h"
 
 NSNotificationName const A2LaunchStageNotification = @"A2LaunchStageNotification";
@@ -142,6 +143,12 @@ static UIProgressView *gProgress = nil;
         dispatch_async(dispatch_get_main_queue(), ^{ [self a2_gameFirstFrame:note]; });
         return;
     }
+    // ★插件 P1 第⑤块★ 接线点 B：首帧到了 = 这次启动成功跨过了启动链。
+    //   放在最前面 —— 后面全是动画与遮罩，任何早退都不该让「启动成功」这件事丢失。
+    //   本类是「A2GameFirstFrame」的唯一观察者，因此这里是全进程唯一能收到首帧的 UI 位置。
+    //   返回值只在单测里断言；失败最多让下次多记一次失败，不影响画面。
+    (void)[A2PluginBootGuard markFirstFrameReached];
+
     [gFirstFrameWatchdog invalidate];
     gFirstFrameWatchdog = nil;
     [A2Log log:@"[A2-LAUNCH] ✅ 收到首帧通知 ⇒ 撤遮罩"];
