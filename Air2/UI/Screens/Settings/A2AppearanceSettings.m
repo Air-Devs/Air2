@@ -42,6 +42,7 @@
 #import "A2CurseForgeAPI.h"
 #import "A2MirrorResolver.h"
 #import "A2Toast.h"
+#import "A2HomeStore.h"   // 主页网格开关（home.ui.gridEnabled，默认 NO）
 
 @implementation A2AppearanceSettings
 
@@ -78,8 +79,16 @@
         [A2ColorThemeDialog presentFrom:host
                               seedColor:A2ThemeManager.shared.scheme.cPrimary
                                   style:(A2PaletteStyle)A2ThemeManager.shared.paletteStyle
-                             onComplete:^(UIColor *color, A2PaletteStyle style) {
+                             onComplete:^(UIColor *color, A2PaletteStyle style, NSString *pluginThemeId) {
             A2ThemeManager *m = A2ThemeManager.shared;
+            if (pluginThemeId.length > 0) {
+                // 插件主题已由弹窗按 token 应用（含关自动取色 / 清手动种子色）。
+                // ★这里绝不能写 customSeedColor★ —— 写下去插件色板当场被种子色推导覆盖。
+                weakRow.valueText = m.theme.displayName;
+                weakSwatch.backgroundColor = m.scheme.cPrimary;
+                [A2Toast show:@"已应用插件主题" inView:host.view];
+                return;
+            }
             m.paletteStyle = style;
             m.customSeedColor = color;
             weakRow.valueText = m.theme.displayName;
@@ -88,6 +97,32 @@
         }];
     };
     [section addRow:themeRow];
+
+    // ---- 自动获取种子色（阿帅 2026-11-06 需求 ①②）----
+    //   启用后优先用自定义背景图取色；没有背景图 ⇒ 不允许开启，保持主题色（需求②）。
+    //   ★iOS 限制★ 系统壁纸没有公开读取接口，所以「种子图」只有自定义背景这一种来源。
+    A2SettingsRow *autoSeedRow = [[A2SettingsRow alloc] init];
+    autoSeedRow.symbolName = @"wand.and.stars";
+    autoSeedRow.title = @"自动获取种子色";
+    autoSeedRow.subtitle = @"用自定义背景图的颜色生成整套主题；没有背景图时不可开启";
+    autoSeedRow.accessory = A2SettingsRowAccessorySwitch;
+    autoSeedRow.on = A2ThemeManager.shared.autoSeedEnabled;
+    __weak A2SettingsRow *weakAutoRow = autoSeedRow;
+    __weak A2SettingsRow *weakThemeRow2 = themeRow;
+    __weak UIView *weakSwatch2 = swatch;
+    autoSeedRow.onToggle = ^(BOOL isOn) {
+        A2ThemeManager *m = A2ThemeManager.shared;
+        if (![m enableAutoSeed:isOn]) {
+            // 需求②：取不到种子图 ⇒ 开关回到关，并说明原因（不静默失败）
+            weakAutoRow.on = NO;
+            [A2Toast show:@"需要先设置自定义背景图，才能自动取色" inView:host.view];
+            return;
+        }
+        weakThemeRow2.valueText = m.theme.displayName;
+        weakSwatch2.backgroundColor = m.scheme.cPrimary;
+        [A2Toast show:isOn ? @"已启用自动取色" : @"已改回手动主题" inView:host.view];
+    };
+    [section addRow:autoSeedRow];
 
     // ---- 外观模式 ----
     A2SettingsRow *appearanceRow = [[A2SettingsRow alloc] init];
@@ -119,6 +154,24 @@
     };
     [section addRow:appearanceRow];
 
+    // ---- 主页网格（实验，默认关闭）----
+    //  落盘 = A2HomeStore.gridEnabled（键 home.ui.gridEnabled，走 A2Settings → config.json）；
+    //  消费点 = A2LauncherViewController：它监听 A2SettingsDidChangeNotification，切换后当场重画，
+    //  不用杀进程重启。
+    A2SettingsRow *gridRow = [[A2SettingsRow alloc] init];
+    gridRow.symbolName = @"square.grid.2x2";
+    gridRow.title = @"主页网格";
+    gridRow.subtitle = @"实验功能，默认关闭：开启后主页内容区改用可排版的卡片网格，"
+                        "关闭即回到原来的经典主页。";
+    gridRow.accessory = A2SettingsRowAccessorySwitch;
+    gridRow.on = A2HomeStore.shared.gridEnabled;
+    gridRow.onToggle = ^(BOOL isOn) {
+        A2HomeStore.shared.gridEnabled = isOn;
+        [A2Toast show:(isOn ? @"已开启主页网格（回到主页即生效）" : @"已关闭主页网格（回到经典主页）")
+               inView:host.view];
+    };
+    [section addRow:gridRow];
+
     // ---- 自定义背景 ----
     A2SettingsRow *bgRow = [[A2SettingsRow alloc] init];
     bgRow.symbolName = @"photo.fill";
@@ -140,6 +193,9 @@
         A2ThemeManager *m = A2ThemeManager.shared;
         weakRow.valueText = m.theme.displayName;
         weakSwatch.backgroundColor = m.scheme.cPrimary;
+        // 应用插件主题会顺手关掉「自动获取种子色」：开关必须跟着变，
+        // 否则界面上显示「已开启自动取色」，实际主题是插件给的 —— 界面在撒谎。
+        weakAutoRow.on = m.autoSeedEnabled;
     }];
 
     return section;
