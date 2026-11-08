@@ -14,7 +14,7 @@
 //                                  `Air2/Player/A2LaunchSession.m`
 //                                  `A2DefaultRendererForVersion()`（档位判据行）。
 //    · `a2_gl2_shim_lookup()`   ← 上面两个解析器入口各一处 + `Natives/Renderer/a2_gl2_jni_bind.m`
-//                                 的 7 个 JNI 转发各一处（★LWJGL 的 GL11 native 抢占★，见该文件头）。
+//                                 的 68 个 JNI 转发各一处（★LWJGL 的 GL11/GL11C native 抢占★，见该文件头）。
 //
 //  ★默认关闭★：只有环境变量 `A2_GL2_SHIM=1` 才启用（见 .m 的 `a2_gl2_shim_enabled`）。
 //    关闭时两个入口都不改变任何既有行为（返回 NULL ⇒ 调用方照旧走原逻辑）。

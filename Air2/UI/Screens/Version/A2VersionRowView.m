@@ -37,6 +37,11 @@
 @property (nonatomic, strong) UIButton *pinButton;
 @property (nonatomic, strong) UIButton *settingsButton;
 @property (nonatomic, strong) UIButton *moreButton;
+/// 插件徽标容器（P2 插入点 ③）。默认隐藏 —— 未装插件时不占宽度、不可见。
+@property (nonatomic, strong) UIStackView *badgeStack;
+/// 空徽标时把宽度钉成 0：空 UIStackView 没有固有尺寸，只给一条 trailing 约束会留下
+/// 宽度未定的歧义（Auto Layout 会报 ambiguous layout，真机上表现为行宽抖动）。
+@property (nonatomic, strong) NSLayoutConstraint *badgeStackCollapsedWidth;
 @property (nonatomic, strong) UISelectionFeedbackGenerator *feedback;
 @end
 
@@ -128,6 +133,17 @@
     buttonRow.spacing = 0;
     [self addSubview:buttonRow];
 
+    // 插件徽标（插入点 ③）：默认空 + 隐藏。没有徽标时宽度为 0，行布局与接线前一致。
+    _badgeStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _badgeStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _badgeStack.axis = UILayoutConstraintAxisHorizontal;
+    _badgeStack.spacing = A2SpaceXS;
+    _badgeStack.hidden = YES;
+    _badgeStack.userInteractionEnabled = NO;   // 只读徽标：点击仍然落到整行（切换当前版本）
+    [self addSubview:_badgeStack];
+    _badgeStackCollapsedWidth = [_badgeStack.widthAnchor constraintEqualToConstant:0.0];
+    _badgeStackCollapsedWidth.active = YES;
+
     [NSLayoutConstraint activateConstraints:@[
         [self.heightAnchor constraintGreaterThanOrEqualToConstant:64],
 
@@ -154,8 +170,15 @@
 
         [textStack.leadingAnchor constraintEqualToAnchor:_iconBox.trailingAnchor constant:A2SpaceM],
         [textStack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+        [textStack.trailingAnchor constraintLessThanOrEqualToAnchor:_badgeStack.leadingAnchor
+                                                          constant:-A2SpaceS],
         [textStack.trailingAnchor constraintLessThanOrEqualToAnchor:buttonRow.leadingAnchor
                                                           constant:-A2SpaceS],
+
+        // 徽标贴着右侧按钮组的左边；空/隐藏时宽度为 0，等于不存在。
+        [_badgeStack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+        [_badgeStack.trailingAnchor constraintEqualToAnchor:buttonRow.leadingAnchor
+                                                   constant:-A2SpaceS],
 
         [buttonRow.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-A2SpaceS],
         [buttonRow.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
@@ -188,6 +211,22 @@
 }
 
 #pragma mark - 属性
+
+/// 插件徽标（插入点 ③）。视图由调用方建（`A2PluginContributionHost badgeForEntry:onDarkSurface:`），
+/// 行只负责摆位置 —— 行不认识插件模型，也就不可能因为插件数据异常而崩。
+- (void)applyBadgeViews:(NSArray<UIView *> *)badgeViews {
+    for (UIView *view in [_badgeStack.arrangedSubviews copy]) {
+        [_badgeStack removeArrangedSubview:view];
+        [view removeFromSuperview];
+    }
+    for (UIView *view in badgeViews) {
+        [_badgeStack addArrangedSubview:view];
+    }
+    BOOL empty = (_badgeStack.arrangedSubviews.count == 0);
+    _badgeStack.hidden = empty;
+    // 空 ⇒ 宽度钉 0；有徽标 ⇒ 放开，宽度由内容决定。
+    _badgeStackCollapsedWidth.active = empty;
+}
 
 - (void)setCurrent:(BOOL)current {
     _current = current;

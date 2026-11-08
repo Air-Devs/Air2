@@ -53,7 +53,29 @@ int main(int argc, char *argv[]) {
 
         // 再轮转日志（上一次会话留档为 lastlog.old.txt）。
         // 必须早于任何业务日志，否则上一轮的日志会被本轮内容污染。
-        [A2Log archiveStderr];   // stderr → 同一个 lastlog.txt（单文件模式）
+        [A2Log archiveStderr];
+
+        // ★2026-11-08 MG 配置（对齐 Flux-Launcher-iOS 的 JavaLauncher.m:250-270）★
+        //   关键：customGLVersion=40 让 MG 对外声称 GL 4.0（十进制 40 = 4.0.0），
+        //   MC 才会走桌面 GL 路径；否则按 GLES 语义渲染 ⇒ 有声音无画面。
+        //   enableAngle 用枚举 2（ForceDisable）：iOS 上 0/1 都会被 MG 判成不可用。
+        {
+            NSString *mgRoot = [NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES) firstObject];
+            NSString *mgDir = [mgRoot stringByAppendingPathComponent:@"MG"];
+            [[NSFileManager defaultManager] createDirectoryAtPath:mgDir
+                                      withIntermediateDirectories:YES attributes:nil error:nil];
+            NSString *cfgPath = [mgDir stringByAppendingPathComponent:@"config.json"];
+            NSDictionary *cfg = @{ @"enableAngle": @2,
+                                   @"enableExtGL43": @1,
+                                   @"enableExtDirectStateAccess": @1,
+                                   @"maxGlslCacheSize": @128,
+                                   @"customGLVersion": @40,
+                                   @"ignoreError": @YES };
+            NSData *d = [NSJSONSerialization dataWithJSONObject:cfg options:0 error:nil];
+            [d writeToFile:cfgPath atomically:YES];
+            setenv("MG_DIR_PATH", mgDir.UTF8String, 1);
+            setenv("MOBILEGL_BACKEND_TYPE", "DirectGLES", 1);
+        }   // stderr → 同一个 lastlog.txt（单文件模式）
 
         // ★接线★：native 侧的判据行（[RXPC]/[FRAME]/native 的 [A2-PAIRPIN]）
         // 经 a2_log_criterion → a2_log_session_sink 落进会话日志文件 lastlog.txt，

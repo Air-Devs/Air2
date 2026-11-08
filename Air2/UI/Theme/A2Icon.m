@@ -82,6 +82,41 @@
     return t.cOnSurfaceVariant;
 }
 
+#pragma mark - 插件语义图标
+
+/// 语义 ID → SF Symbol（`PLUGIN-COMPAT.md` 2.4 的词表逐条对应）。
+/// 词表里没有的一律 `info.circle`：契约要求「宿主新增图标不会让旧插件画不出来」，
+/// 反过来「插件用了新 ID」也只降级成信息图标，不拒载、不空白。
++ (NSString *)symbolForSemanticIconID:(NSString *)iconID {
+    if (iconID.length == 0) return @"info.circle";
+
+    // 动作类
+    if ([iconID isEqualToString:@"action.download"]) return @"arrow.down.circle";
+    if ([iconID isEqualToString:@"action.play"])     return @"play.fill";
+    if ([iconID isEqualToString:@"action.settings"]) return @"gearshape";
+    if ([iconID isEqualToString:@"action.folder"])   return @"folder";
+    if ([iconID isEqualToString:@"action.share"])    return @"square.and.arrow.up";
+    if ([iconID isEqualToString:@"action.export"])   return @"square.and.arrow.up.on.square";
+    if ([iconID isEqualToString:@"action.import"])   return @"square.and.arrow.down";
+    if ([iconID isEqualToString:@"action.info"])     return @"info.circle";
+    if ([iconID isEqualToString:@"action.warning"])  return @"exclamationmark.triangle";
+    if ([iconID isEqualToString:@"action.refresh"])  return @"arrow.clockwise";
+    if ([iconID isEqualToString:@"action.delete"])   return @"trash";
+
+    // 状态类
+    if ([iconID isEqualToString:@"status.online"])   return @"circle.fill";
+    if ([iconID isEqualToString:@"status.offline"])  return @"circle.slash";
+    if ([iconID isEqualToString:@"status.running"])  return @"bolt.fill";
+    if ([iconID isEqualToString:@"status.idle"])     return @"moon.zzz";
+
+    // 内容类
+    if ([iconID isEqualToString:@"media.pack"])      return @"shippingbox";
+    if ([iconID isEqualToString:@"media.world"])     return @"globe";
+    if ([iconID isEqualToString:@"media.schematic"]) return @"square.on.square";
+
+    return @"info.circle";
+}
+
 #pragma mark - 界面图标
 
 /// 统一的构造方法。用 medium 字重，避免过细在深色背景上看不清。

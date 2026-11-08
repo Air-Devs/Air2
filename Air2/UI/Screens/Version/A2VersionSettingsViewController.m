@@ -59,6 +59,7 @@
 #import "A2Renderer.h"             // 渲染器取值的唯一来源（A2Renderer 类型）
 #import "A2RuntimeStrings.h"        // 渲染器显示名（缺 key 回退技术名）
 #import "A2Log.h"                  // 关闭/落盘事件落日志（[A2-VERCFG]）
+#import "A2PluginContributionHost.h"   // ★插件 P2 插入点 ④★ version.detail.header
 
 @interface A2VersionSettingsViewController ()
 /// 版本名（在 init 里赋值，后续只读）
@@ -87,6 +88,9 @@
 @property (nonatomic, strong) A2SettingsRow *jvmRow;
 @property (nonatomic, strong) A2SettingsRow *gameArgsRow;
 @property (nonatomic, strong) A2SettingsRow *integrityRow;
+
+/// ★插件插入点 ④★ 标题卡里的插件徽标（`version.detail.header`）。没有条目时返回空数组。
+- (NSArray<UIView *> *)pluginHeaderBadges;
 @end
 
 
@@ -159,6 +163,10 @@
         @"jvmArgs": iso.jvmArgs ?: @"",
         @"gameArgs": iso.gameArgs ?: @"",
         @"skipGameIntegrityCheck": @(iso.skipGameIntegrityCheck),
+        // ★2026-11-01 修「改了开关但保存按钮是灰的」★ 脏检查快照必须包含这一项，
+        //   否则 hasUnsavedChanges 恒为 NO ⇒ 点不了保存 ⇒ 重启回落到关。
+        @"gl2FixedPipeline": @(iso.gl2FixedPipeline),
+        @"gl2FixedPipelineSet": @(iso.gl2FixedPipelineSet),
     };
 }
 
@@ -347,6 +355,17 @@
     stack.spacing = A2SpaceS;
     [stack setCustomSpacing:A2SpaceM afterView:_dirtyLabel];
 
+    // ★插件插入点 ④★ `version.detail.header`：徽标成一行，追加在标题卡的栈尾。
+    // 未装插件时这行循环空转 —— 标题卡的排版与接线前逐字相同。
+    NSArray<UIView *> *headerBadges = [self pluginHeaderBadges];
+    if (headerBadges.count > 0) {
+        UIStackView *badgeRow = [[UIStackView alloc] initWithArrangedSubviews:headerBadges];
+        badgeRow.axis = UILayoutConstraintAxisHorizontal;
+        badgeRow.spacing = A2SpaceXS;
+        badgeRow.alignment = UIStackViewAlignmentCenter;
+        [stack addArrangedSubview:badgeRow];
+    }
+
     [card.contentView addSubview:stack];
     [NSLayoutConstraint activateConstraints:@[
         [stack.topAnchor constraintEqualToAnchor:card.contentView.topAnchor],
@@ -356,6 +375,21 @@
     ]];
 
     [self addSection:card];
+}
+
+/// ★插件插入点 ④★ `version.detail.header`（PLUGIN-COMPAT 2.2：放徽标、短文本、图标）。
+///
+/// 每次进页面新建一份视图：同一个 UIView 不能挂在两张卡上。
+/// 条目已由宿主按「该位置画得出来的 component」过滤过，这里只管建视图。
+- (NSArray<UIView *> *)pluginHeaderBadges {
+    NSArray<A2PluginSlotContribution *> *entries =
+        [A2PluginContributionHost entriesForSlot:@"version.detail.header"];
+    NSMutableArray<UIView *> *views = [NSMutableArray arrayWithCapacity:entries.count];
+    for (A2PluginSlotContribution *entry in entries) {
+        UIView *badge = [A2PluginContributionHost badgeForEntry:entry onDarkSurface:NO];
+        if (badge != nil) [views addObject:badge];
+    }
+    return views;
 }
 
 #pragma mark - 版本隔离
@@ -565,6 +599,33 @@
          weakSelf.version.name, isOn ? @"开" : @"关"];
     };
     [section addRow:sfpewCompatRow];
+
+    // ---- ★[A2-GL2] 自研固定管线层开关（按实例保存；未动过 ⇒ 自动档）----
+    //   与 SFPEW 那条不是一回事：SFPEW 是第三方包装层（叠加在渲染器之上），
+    //   GL2 是我们自己的实现（JNI 抢占 org.lwjgl.opengl.GL11），不需要动 libname。
+    {
+        // 自动档：mcMinor ≤ 12 默认开（版本名形如 1.12.2 / 1.16.5 / 26.1）
+        NSArray<NSString *> *nameParts = [self.version.name componentsSeparatedByString:@"."];
+        NSInteger vMajor = nameParts.count > 0 ? nameParts[0].integerValue : 0;
+        NSInteger vMinor = nameParts.count > 1 ? nameParts[1].integerValue : 0;
+        BOOL autoOn = (vMajor == 1 && vMinor > 0 && vMinor <= 12);
+
+        A2SettingsRow *gl2Row = [[A2SettingsRow alloc] init];
+        gl2Row.symbolName = @"square.3.layers.3d";
+        gl2Row.title = @"自研 GL2 固定管线层（实验）";
+        gl2Row.subtitle = @"接管 glBegin/矩阵栈/立即模式；不依赖 SFPEW，也不改 libname";
+        gl2Row.accessory = A2SettingsRowAccessorySwitch;
+        gl2Row.on = iso.gl2FixedPipelineSet ? iso.gl2FixedPipeline : autoOn;
+        gl2Row.onToggle = ^(BOOL isOn) {
+            __weak typeof(self) weakSelf = self;
+            weakSelf.version.isolation.gl2FixedPipeline = isOn;
+            weakSelf.version.isolation.gl2FixedPipelineSet = YES;
+            [weakSelf markConfigEdited];
+            [A2Log log:@"[A2-GL2] 实例 %@ 的固定管线层开关改为 %@（保存后生效）",
+             weakSelf.version.name, isOn ? @"开" : @"关"];
+        };
+        [section addRow:gl2Row];
+    }
 
     A2SettingsRow *jvmRow = [[A2SettingsRow alloc] init];
     self.jvmRow = jvmRow;

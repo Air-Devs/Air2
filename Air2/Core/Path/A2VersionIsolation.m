@@ -116,6 +116,8 @@ static NSString *A2SettingStateToString(A2SettingState state) {
     c.ramAllocation = self.ramAllocation;
     c.renderer = self.renderer;
     c.sfpewCompatLayer = self.sfpewCompatLayer;
+    c.gl2FixedPipeline = self.gl2FixedPipeline;
+    c.gl2FixedPipelineSet = self.gl2FixedPipelineSet;
     c.driver = self.driver;
     c.javaRuntime = self.javaRuntime;
     c.jvmArgs = self.jvmArgs;
@@ -135,6 +137,8 @@ static NSString *A2SettingStateToString(A2SettingState state) {
     iso.ramAllocation = [dict[@"ramAllocation"] integerValue] ?: -1;
     iso.renderer = [dict[@"renderer"] isKindOfClass:NSString.class] ? dict[@"renderer"] : nil;
     iso.sfpewCompatLayer = [dict[@"sfpewCompatLayer"] boolValue];
+    iso.gl2FixedPipeline = [dict[@"gl2FixedPipeline"] boolValue];
+    iso.gl2FixedPipelineSet = [dict[@"gl2FixedPipelineSet"] boolValue];
     iso.driver = [dict[@"driver"] isKindOfClass:NSString.class] ? dict[@"driver"] : nil;
     iso.javaRuntime = [dict[@"javaRuntime"] isKindOfClass:NSString.class] ? dict[@"javaRuntime"] : nil;
     iso.jvmArgs = [dict[@"jvmArgs"] isKindOfClass:NSString.class] ? dict[@"jvmArgs"] : nil;
@@ -153,6 +157,10 @@ static NSString *A2SettingStateToString(A2SettingState state) {
     if (self.renderer)        d[@"renderer"]        = self.renderer;
     // ★默认关 ⇒ 只在开的时候落盘★（config.json 不因这个功能出现无关的 false 行）。
     if (self.sfpewCompatLayer) d[@"sfpewCompatLayer"] = @YES;
+    if (self.gl2FixedPipelineSet) {
+        d[@"gl2FixedPipeline"] = @(self.gl2FixedPipeline);
+        d[@"gl2FixedPipelineSet"] = @YES;
+    }
     if (self.driver)          d[@"driver"]          = self.driver;
     if (self.javaRuntime)     d[@"javaRuntime"]     = self.javaRuntime;
     if (self.jvmArgs)         d[@"jvmArgs"]         = self.jvmArgs;

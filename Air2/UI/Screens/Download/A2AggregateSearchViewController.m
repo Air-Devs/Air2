@@ -37,6 +37,7 @@
 //
 
 #import "A2AggregateSearchViewController.h"
+#import "A2SlidePresentationAnimator.h"   // 全屏 modal 的 iOS 横向推入
 
 #import "A2AggregateSearchService.h"
 #import "A2ContentSource.h"
@@ -573,8 +574,7 @@ static NSString *A2AggregateSourceLabel(A2ContentPlatform platform) {
     if (self.navigationController != nil) {
         [self.navigationController pushViewController:vc animated:YES];
     } else {
-        vc.modalPresentationStyle = UIModalPresentationFullScreen;
-        [self presentViewController:vc animated:YES completion:nil];
+        [vc a2_presentFromRightFrom:self];   // ★iOS 横向推入★
     }
 }
 

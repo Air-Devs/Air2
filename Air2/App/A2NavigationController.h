@@ -39,13 +39,38 @@ typedef NS_ENUM(NSInteger, A2TransitionStyle) {
     A2TransitionStyleSheet,
     /// 右侧推入 —— 适合层级较深的钻取（如设置 → 子设置）
     A2TransitionStylePush,
+    /// 从来源放大展开 —— 像 iOS 桌面点图标开 App（主页五个入口用这个）
+    A2TransitionStyleZoom,
 };
 
 @interface A2NavigationController : UINavigationController
 
+/// ★转场样式偏好（设置 → 外观 → 转场动画）★
+///   落盘键 `ui.transitionStyle`；只作用于普通页面，主页五个入口固定 Zoom。
++ (A2TransitionStyle)preferredTransitionStyle;
++ (void)setPreferredTransitionStyle:(A2TransitionStyle)style;
+
+/// ★下一次 Zoom 转场的圆心（窗口坐标）★
+///   传给 nil/不设时，退回「来源视图中心」。主页在 push 前用实际触摸点调用它。
++ (void)setNextZoomOrigin:(CGPoint)pointInWindow;
++ (BOOL)consumeNextZoomOrigin:(CGPoint *)outPoint;
+
+/// ★动画速度偏好★ 0=慢 1=标准 2=快；返回时长倍率（慢 1.4 / 标准 1.0 / 快 0.72）
++ (NSInteger)preferredTransitionSpeed;
++ (void)setPreferredTransitionSpeed:(NSInteger)speed;
++ (CGFloat)transitionSpeedMultiplier;
+
 /// 以指定转场样式推入页面
 - (void)pushViewController:(UIViewController *)viewController
                 transition:(A2TransitionStyle)style
+                  animated:(BOOL)animated;
+
+/// ★从来源视图发起（iOS 桌面那种"从图标长出来"）★
+///   sourceView 传被点的那个卡片/图标；转场会以它的位置和大小作为起始态。
+///   传 nil 等价于上一条（从屏幕中心）。
+- (void)pushViewController:(UIViewController *)viewController
+                transition:(A2TransitionStyle)style
+                  fromView:(UIView *)sourceView
                   animated:(BOOL)animated;
 
 @end

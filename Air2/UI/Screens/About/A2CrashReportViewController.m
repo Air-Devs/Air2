@@ -41,6 +41,46 @@
 @property (nonatomic, assign) BOOL isGameCrash;
 @end
 
+// ★2026-11-01 照老 Air 的 analyzeCrashType 补「原因 + 建议」★
+//   老 Air 的 PLCrashView 在正文之上先给一段分类结论与建议，用户不必读全日志。
+//   这里只做同一件事：按已知判据归类（判据全部来自真机出现过的错误串），
+//   命中不了就明说「未分类」，绝不硬猜。
+static NSString *A2CrashAnalysisPrefix(NSInteger code, NSString *text) {
+    NSString *t = text ?: @"";
+    NSString *reason = nil;
+    NSString *advice = nil;
+    struct { const char *needle; const char *reason; const char *advice; } rules[] = {
+        { "OutOfMemoryError", "内存不足（Java 堆被打满）", "调小内存分配或关掉大型 mod / 高清材质" },
+        { "StackOverflowError", "栈溢出（递归过深）", "多半是某个 mod 递归调用；逐个禁用 mod 定位" },
+        { "SIGSEGV", "原生层崩溃（非法内存访问）", "看崩溃报告顶部栈：渲染器 / JIT / 驱动三者之一" },
+        { "SIGBUS", "原生层崩溃（总线错误，常见于 JIT 可执行内存）", "确认 JIT 已生效；未生效时改用 stikjit 重挂" },
+        { "EXC_BAD_ACCESS", "原生层崩溃（访问了无效地址）", "看崩溃报告栈顶三帧" },
+        { "UnsatisfiedLinkError", "原生库不匹配（找不到符号）", "该版本需要的原生库/渲染器没有随包提供" },
+        { "NoClassDefFoundError", "类缺失（依赖没进来）", "版本 JAR 与运行时 JDK 版本不匹配" },
+        { "ClassNotFoundException", "类缺失（依赖没进来）", "检查 assets 完整性 / 是否缺库" },
+        { "NoSuchMethodError", "API 版本不匹配（方法不存在）", "多半是 LWJGL 档位选错（1.19.x 需 3.3.1，1.21+ 用 3.4.x）" },
+        { "NoSuchFieldError", "API 版本不匹配（字段不存在）", "同上：检查 LWJGL / JDK 档位" },
+        { "JNI_CreateJavaVM", "Java 运行时创建失败", "看上一行的 rc 值：-4 多为 agent jar 缺依赖" },
+        { "There is no OpenGL context current", "GL 上下文没绑上", "渲染器与 GL 库名不匹配" },
+        { "eglMakeCurrent", "EGL 上下文切换失败", "换渲染器或关掉叠加层再试" },
+        { "OpenGL", "渲染层报错", "换渲染器（MG / ANGLE / KW）逐个试" },
+        { "code signature", "签名/权限问题", "重装 App（签名失效会导致这类失败）" },
+    };
+    size_t n = sizeof(rules) / sizeof(rules[0]);
+    for (size_t i = 0; i < n; i++) {
+        if ([t rangeOfString:[NSString stringWithUTF8String:rules[i].needle]].location != NSNotFound) {
+            reason = [NSString stringWithUTF8String:rules[i].reason];
+            advice = [NSString stringWithUTF8String:rules[i].advice];
+            break;
+        }
+    }
+    if (reason == nil) {
+        reason = [NSString stringWithFormat:@"未分类（退出码 %ld）", (long)code];
+        advice = @"看下方日志尾部，或把日志发给开发者";
+    }
+    return [NSString stringWithFormat:@"【原因】%@\n【建议】%@\n────────\n", reason, advice];
+}
+
 @implementation A2CrashReportViewController
 
 - (instancetype)initWithReport:(NSString *)report logPath:(NSString *)logPath {
@@ -63,7 +103,8 @@
     _exitCodeText = [NSString stringWithFormat:@"退出码：%ld", (long)exitCode];
     // ★只写调用方给的真实路径★：没找到报告就不编一条（「报告=(无)」在 [A2-CRASH-UI] 行里）。
     _reportPathText = reportPath.length ? [NSString stringWithFormat:@"崩溃报告：%@", reportPath] : nil;
-    _reportText = [report copy];
+    // ★原因/建议前缀★：正文保持原样，只在最前面加一段分类结论（照老 Air 的做法）。
+    _reportText = [A2CrashAnalysisPrefix(exitCode, report) stringByAppendingString:report ?: @""];
     return self;
 }
 

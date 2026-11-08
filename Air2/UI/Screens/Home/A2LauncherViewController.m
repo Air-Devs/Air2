@@ -27,6 +27,7 @@
 //
 
 #import "A2LauncherViewController.h"
+#import "A2SlidePresentationAnimator.h"
 #import "A2LaunchSession.h"
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
@@ -66,6 +67,12 @@
 
 
 @interface A2LauncherViewController () <A2HomeGridViewDelegate>
+/// ★最近一次被点的卡片（Zoom 转场的起始视图）★
+@property (nonatomic, weak) UIView *lastTapSourceView;
+/// ★实际按下位置（窗口坐标）★ Zoom 转场用它当圆心
+@property (nonatomic, assign) CGPoint lastTapWindowPoint;
+@property (nonatomic, assign) BOOL lastTapPointValid;
+
 @property (nonatomic, strong) A2BackgroundView *backgroundView;
 @property (nonatomic, strong) UIView *topBar;
 @property (nonatomic, strong) UILabel *appNameLabel;
@@ -161,6 +168,14 @@
     [super viewDidLoad];
     self.view.backgroundColor = UIColor.clearColor;
     _pluginInsertedViews = [NSMutableArray array];
+
+    // ★2026-11-07 iOS 放大转场★ 记录"被点的是哪块卡片"：
+    //   转场要以它的位置/大小作为起始态（从图标长出来），而不是从屏幕中心放大。
+    //   cancelsTouchesInView=NO ⇒ 不影响原有按钮/手势。
+    UITapGestureRecognizer *tapSrc =
+        [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(a2_recordTapSource:)];
+    tapSrc.cancelsTouchesInView = NO;
+    [self.view addGestureRecognizer:tapSrc];
 
     [self setupBackground];
     [self setupTopBar];
@@ -273,10 +288,19 @@
         [b.heightAnchor constraintEqualToConstant:A2MinTouchTarget],
     ]];
     SEL sel = NSSelectorFromString(name);
+    __weak typeof(self) weakSelf = self;
+    __weak UIButton *weakB = b;
     [b addAction:[UIAction actionWithHandler:^(UIAction *action) {
+        // ★2026-11-07★ 顶部三个按钮的放大转场以**按钮自身**为起始（不是整条按钮容器）
+        weakSelf.lastTapSourceView = weakB;
+        if (weakB.window != nil) {
+            CGPoint bc = CGPointMake(CGRectGetMidX(weakB.bounds), CGRectGetMidY(weakB.bounds));
+            weakSelf.lastTapWindowPoint = [weakB convertPoint:bc toView:weakB.window];
+            weakSelf.lastTapPointValid = YES;
+        }
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Warc-performSelector-leaks"
-        if ([self respondsToSelector:sel]) [self performSelector:sel];
+        if ([weakSelf respondsToSelector:sel]) [weakSelf performSelector:sel];
 #pragma clang diagnostic pop
     }] forControlEvents:UIControlEventTouchUpInside];
     b.tag = 700;   // 标记以便主题刷新时着色
@@ -853,7 +877,7 @@
         [A2Log log:@"[A2-HOME] 网格加卡 kind=%@，共 %lu 张",
                     A2HomeCardKindToken(card.kind), (unsigned long)profile.cards.count];
     };
-    [self pushScreen:picker style:A2TransitionStyleScaleFade];
+    [self pushScreen:picker style:A2TransitionStyleZoom];
 }
 
 - (void)activateHomeCard:(A2HomeCard *)card {
@@ -1085,7 +1109,7 @@
 - (void)buildVersionSection {
     _versionSection = [[UIControl alloc] initWithFrame:CGRectZero];
     _versionSection.translatesAutoresizingMaskIntoConstraints = NO;
-    [_versionSection addTarget:self action:@selector(openVersions)
+    [_versionSection addTarget:self action:@selector(a2_openVersionsFrom:)
               forControlEvents:UIControlEventTouchUpInside];
 
     // 版本图标（草方块）
@@ -1124,7 +1148,7 @@
         [UIImageSymbolConfiguration configurationWithPointSize:17 weight:UIFontWeightRegular];
     [_versionGear setImage:[UIImage systemImageNamed:@"gearshape.fill" withConfiguration:cfg]
                   forState:UIControlStateNormal];
-    [_versionGear addTarget:self action:@selector(openVersionSettings)
+    [_versionGear addTarget:self action:@selector(a2_openVersionSettingsFrom:)
            forControlEvents:UIControlEventTouchUpInside];
 
     [_versionSection addSubview:_versionIcon];
@@ -1292,36 +1316,75 @@
 }
 
 - (void)pushScreen:(UIViewController *)vc style:(A2TransitionStyle)style {
+    if (self.lastTapPointValid) {
+        [A2NavigationController setNextZoomOrigin:self.lastTapWindowPoint];
+    }
     if ([self.navigationController isKindOfClass:A2NavigationController.class]) {
-        [(A2NavigationController *)self.navigationController pushViewController:vc transition:style animated:YES];
+        [(A2NavigationController *)self.navigationController pushViewController:vc
+                                                                     transition:style
+                                                                       fromView:self.lastTapSourceView
+                                                                       animated:YES];
     } else {
-        vc.modalPresentationStyle = UIModalPresentationFullScreen;
-        [self presentViewController:vc animated:YES completion:nil];
+        // ★没有导航栈时：从被点的卡片放大呈现（iOS 桌面观感）★
+        //   之前这里是右滑，观感上就是"从右边冒出来"，用户明确指出过。
+        [vc a2_presentZoomFrom:self.lastTapSourceView presenter:self];
     }
 }
 
 - (void)openAccount {
-    [self pushScreen:[[A2AccountViewController alloc] init] style:A2TransitionStyleScaleFade];
+    [self pushScreen:[[A2AccountViewController alloc] init] style:A2TransitionStyleZoom];
+}
+
+- (void)a2_recordTapSource:(UITapGestureRecognizer *)g {
+    CGPoint pInView = [g locationInView:g.view];
+    if (g.view.window != nil) {
+        self.lastTapWindowPoint = [g.view convertPoint:pInView toView:g.view.window];
+        self.lastTapPointValid = YES;
+    }
+    UIView *v = [g.view hitTest:pInView withEvent:nil];
+    if ([v isKindOfClass:UIControl.class]) {      // 按钮等控件：直接用它自己
+        self.lastTapSourceView = v;
+        return;
+    }
+    UIView *card = v;
+    // 往上找"卡片"：有圆角、或就是那个块的容器（最多 4 层）
+    for (int i = 0; i < 4 && card.superview != nil; i++) {
+        if (card.layer.cornerRadius > 4.0) break;
+        card = card.superview;
+    }
+    self.lastTapSourceView = card ?: v;
 }
 
 - (void)openSettings {
-    [self pushScreen:[[A2SettingsViewController alloc] init] style:A2TransitionStyleScaleFade];
+    [self pushScreen:[[A2SettingsViewController alloc] init] style:A2TransitionStyleZoom];
 }
 
 - (void)openDownload {
     // 用标准的缩放淡入，不用从底部滑入。
     // 底部滑入适合模态小面板（比如选择器、确认框），
     // 而下载是个完整的页面，横屏下从底部推一整屏非常突兀。
-    [self pushScreen:[[A2DownloadViewController alloc] init] style:A2TransitionStyleScaleFade];
+    [self pushScreen:[[A2DownloadViewController alloc] init] style:A2TransitionStyleZoom];
 }
 
 - (void)openMultiplayer {
     // 确保联机模块已初始化
     [A2Multiplayer.shared initializeIfNeeded];
     A2MultiplayerViewController *vc = [[A2MultiplayerViewController alloc] init];
-    [self pushScreen:vc style:A2TransitionStyleScaleFade];
+    [self pushScreen:vc style:A2TransitionStyleZoom];
 }
 - (void)openFiles       { [A2Toast show:@"文件管理尚未接入" inView:self.view]; }
+/// ★2026-11-07★ 带 sender 的入口：把被点的卡片/齿轮当作放大转场的起始视图。
+///   原来用无参 action，手势记录抢不到时序 ⇒ 转场拿不到来源 ⇒ 退回"中心放大"。
+- (void)a2_openVersionsFrom:(id)sender {
+    if ([sender isKindOfClass:UIView.class]) self.lastTapSourceView = sender;
+    [self openVersions];
+}
+
+- (void)a2_openVersionSettingsFrom:(id)sender {
+    if ([sender isKindOfClass:UIView.class]) self.lastTapSourceView = sender;
+    [self openVersionSettings];
+}
+
 - (void)openVersionSettings {
     // 齿轮与「版本设置」进当前版本的单版本设置页（真实页面）。
     // 无版本时给提示，不进空页面；只有「游戏目录」进版本管理列表。
@@ -1331,11 +1394,11 @@
         return;
     }
     [self pushScreen:[[A2VersionSettingsViewController alloc] initWithVersionName:current.name]
-               style:A2TransitionStyleScaleFade];
+               style:A2TransitionStyleZoom];
 }
 /// 只有「游戏目录」进这里：版本管理列表。
 - (void)openVersions {
-    [self pushScreen:[[A2VersionListViewController alloc] init] style:A2TransitionStyleScaleFade];
+    [self pushScreen:[[A2VersionListViewController alloc] init] style:A2TransitionStyleZoom];
 }
 
 @end

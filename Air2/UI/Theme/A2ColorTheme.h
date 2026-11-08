@@ -68,6 +68,21 @@ typedef NS_ENUM(NSInteger, A2ThemeKind) {
                               name:(NSString *)name
                               desc:(NSString *)desc;
 
+/// 从「插件贡献的颜色主题 token」构造主题。
+///
+/// `tokens` 是 `ui.theme` 里声明、已过宿主校验的 `color.*`（token → `#RRGGBB`），
+/// 词表与「token → MD3 角色」的映射只在 `A2PluginThemeTokenRole` 一处实现。
+///
+/// 与种子色推导的区别：**不做算法推导** —— 作者给了哪个角色就用哪个角色的色值；
+/// 没给的字段（以及解析不出来的值）一律回落到 `base` 的对应色槽，
+/// 所以成品色板不会出现 nil，也不会因为插件只给三个 token 就变成半张灰板。
+///
+/// 注意 token 不分亮暗：同一个色值同时写入亮/暗两个色槽（作者拿不到第二组值）。
++ (instancetype)themeWithPluginTokens:(NSDictionary<NSString *, NSString *> *)tokens
+                                 name:(NSString *)name
+                                 desc:(NSString *)desc
+                                 base:(nullable A2ColorTheme *)base;
+
 /// 构造主题。override 块用于手调关键色，让成品不完全依赖算法。
 + (instancetype)themeWithSeed:(UIColor *)seed
                          kind:(A2ThemeKind)kind

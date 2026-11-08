@@ -37,6 +37,7 @@
 #import "A2OnDevicePairingSettings.h"   // [A2-PAIR-ONDEVICE] 诊断 › 设备内配对（调试开关控制显示）
 #import "A2PluginListViewController.h"  // ★插件★ 设置 › 插件（安装器/注册表/权限存储的唯一 UI 入口）
 #import "A2PluginRegistry.h"            // ★插件★ 分类行的副标题（已安装数）
+#import "A2PluginContributionHost.h"    // ★插件 P2★ 共享注册表 + 插入点 ⑤ settings.section
 
 @interface A2SettingsViewController ()
 @property (nonatomic, strong) A2CategoryNavView *nav;
@@ -126,6 +127,14 @@
     [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    // ★插件 P2 插入点 ⑤★ 「插件」分类里的 `settings.section` 是插件声明的：从插件页
+    // 装/启用一个插件回来，必须按当前注册表重画，否则要杀进程才看见。
+    // 只在插件分类做 —— 其它分类的内容与滚动位置不因为进出页面而重建。
+    if (_currentIndex == 3) [self rebuildContentForIndex:3];
+}
+
 - (void)onDevicePairingEntryDidChange:(NSNotification *)note {
     (void) note;
     [self rebuildContentForIndex:_currentIndex];
@@ -133,13 +142,24 @@
 
 /// 已安装插件数。读不出来就说读不出来 —— 显示「0 个」会被当成「一个都没装」。
 /// 调用点：rebuildContentForIndex 的插件分类（设置 › 插件 那一行的副标题）。
+///
+/// ★P2 接线★ 注册表取 `A2PluginContributionHost` 里那一份共享实例，不再每开一次页面
+/// 建一个新的（两份实例读到的内容一样，但「同一个实例」才谈得上共享与诊断）。
+/// 生效中的贡献条数只在 > 0 时追加，未装插件时的文案与接线前逐字相同。
 - (NSString *)pluginSummaryText {
-    A2PluginRegistry *registry = [[A2PluginRegistry alloc] initWithPluginsDirectory:nil];
+    A2PluginRegistry *registry = [A2PluginContributionHost packageRegistry];
     NSError *error = nil;
     if (![registry loadWithError:&error]) return @"注册表读不出来";
     NSUInteger count = [registry allEntries].count;
     if (count == 0) return @"还没有安装插件";
-    return [NSString stringWithFormat:@"已安装 %lu 个", (unsigned long)count];
+
+    NSUInteger contributions =
+        [[A2PluginContributionHost contributionRegistry] attachedPluginIds].count;
+    if (contributions == 0) {
+        return [NSString stringWithFormat:@"已安装 %lu 个", (unsigned long)count];
+    }
+    return [NSString stringWithFormat:@"已安装 %lu 个 · 生效贡献 %lu 个插件",
+            (unsigned long)count, (unsigned long)contributions];
 }
 
 - (void)rebuildContentForIndex:(NSInteger)index {
@@ -161,7 +181,6 @@
     } else if (index == 2) {
         [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildDuoSimSectionWithHost:self]];
-        [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildEaglSelfCheckSectionWithHost:self]];
         [_detailStack addArrangedSubview:[A2OnDevicePairingSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2JITSettings buildWithHost:self]];
         [_detailStack addArrangedSubview:[A2AboutSettings buildWithHost:self]];
@@ -187,6 +206,15 @@
         [sec addRow:row];
 
         [_detailStack addArrangedSubview:sec];
+
+        // ★插件插入点 ⑤★ `settings.section`：插件自己声明的设置分区（一个插件一张卡）。
+        // 只挂在「插件」这一分类里 —— 用户知道去哪找；其它分类的内容与顺序不变。
+        // 未装插件时 entries 为空 ⇒ 一张卡也不加。
+        NSArray<A2PluginSlotContribution *> *pluginSettings =
+            [A2PluginContributionHost entriesForSlot:@"settings.section"];
+        for (A2SettingsSection *pluginSection in [A2PluginContributionHost sectionsForEntries:pluginSettings]) {
+            [_detailStack addArrangedSubview:pluginSection];
+        }
     }
 
     // 内容切换时淡入上浮

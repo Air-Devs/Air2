@@ -77,8 +77,8 @@ const char *a2_log_current_path(void);
 /// 两侧共用同一个落盘函数 `a2_log_session_sink` ⇒ ★落点只有一处，不各写各的★。
 ///
 /// 调用点（本包内的判据行都在这里，新增判据行照此写）：
-///   [A2-PAIRPIN]：A2PairingKeepAlive / A2PairingNotifier / A2JITSettings /
-///                 A2JITPairingCodeSession / A2JITAutoPairingEngineBridge
+///   [A2-PAIRPIN]：A2PairingKeepAlive / A2JITPairingCodeSession
+///   [JIT-V]     ：A2JITSettings（诊断日志开关开着时的逐项细节）
 ///   [MEM]       ：A2LaunchRunner（probe）/ A2LaunchSession（ceiling → -Xmx）
 + (void)criterion:(NSString *)format, ... NS_FORMAT_FUNCTION(1, 2);
 

@@ -72,17 +72,21 @@ const CGFloat A2TallLayoutThreshold = 600;
 
 #pragma mark - 动效
 
-const NSTimeInterval A2AnimDuration     = 0.38;
+// ★2026-11-07 用户拍板：对齐 iOS 17 观感★
+const NSTimeInterval A2AnimDuration     = 0.35;
 const NSTimeInterval A2AnimDurationFast = 0.18;
 const NSTimeInterval A2AnimDurationSlow = 0.6;
-const NSTimeInterval A2AnimDurationCard = 0.42;
+const NSTimeInterval A2AnimDurationCard = 0.40;   // 卡片入场 0.4s
 
 /// MD3 Expressive 的弹簧比标准 MD3 更有弹性，
 /// damping 取 0.72（标准是 0.78），回弹更明显。
-const CGFloat A2SpringDamping  = 0.78;
-const CGFloat A2SpringVelocity = 0.35;
+// ★iOS 17 基准★ damping 0.9、初速 0（推入/返回的标准手感）
+const CGFloat A2SpringDamping  = 0.90;
+const CGFloat A2SpringVelocity = 0.0;
 
-const NSTimeInterval A2CardStaggerDelay = 0.035;
+const NSTimeInterval A2CardStaggerDelay = 0.03;   // 逐个入场 0.03s
+/// ★卡片逐个入场最多 6 个★：再多就不 stagger（后面的直接同时出现，避免"排队"感）
+const NSUInteger A2CardStaggerLimit = 6;
 
 #pragma mark - 动画器
 
@@ -132,8 +136,10 @@ UIViewPropertyAnimator *A2AnimateCardEntrance(NSArray<UIView *> *views,
         v.alpha = 0;
         v.transform = CGAffineTransformMakeTranslation(0, 16);
 
+        // ★最多 6 个逐个入场★ 之后的元素统一在最后一批出现
+        const NSUInteger staggerIndex = MIN(i, A2CardStaggerLimit - 1);
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW,
-                                     (int64_t)(i * staggerDelay * NSEC_PER_SEC)),
+                                     (int64_t)(staggerIndex * staggerDelay * NSEC_PER_SEC)),
                        dispatch_get_main_queue(), ^{
             UIViewPropertyAnimator *a = A2ExpressiveSpring(A2AnimDurationCard);
             [a addAnimations:^{

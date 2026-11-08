@@ -8,7 +8,7 @@
 
 #import "A2JITDDI.h"
 
-/// 默认新鲜度窗口：7 天（与 A2JITAutomaticPairingProvider 的配对文件窗口同口径）。
+/// 默认新鲜度窗口：7 天（与 A2JITPairingFileStore 的新鲜度口径一致）。
 static const NSTimeInterval kA2JITDDIDefaultMaxAge = 7.0 * 24.0 * 60.0 * 60.0;
 
 #pragma mark - 要求
@@ -202,23 +202,6 @@ static const NSTimeInterval kA2JITDDIDefaultMaxAge = 7.0 * 24.0 * 60.0 * 60.0;
     }
     return A2JITDDIVerdictPresent;
 }
-
-+ (NSInteger)preconditionStateValueForVerdict:(A2JITDDIVerdict)verdict {
-    // ★取值必须与 A2JITAutoPairingPreconditionState 逐值一致★
-    // （Unknown=0 / Satisfied=1 / Unsatisfied=2；单测与 A2JITDDIGuidance 双处断言）。
-    switch (verdict) {
-        case A2JITDDIVerdictPresent:
-            return 1;   // Satisfied
-        case A2JITDDIVerdictMissing:
-        case A2JITDDIVerdictVersionMismatch:
-        case A2JITDDIVerdictStale:
-            return 2;   // Unsatisfied
-        case A2JITDDIVerdictUnknown:
-        default:
-            return 0;   // Unknown（无法确认）
-    }
-}
-
 + (nullable NSString *)buildFromOperatingSystemVersionString:(NSString *)versionString {
     if (versionString.length == 0) {
         return nil;

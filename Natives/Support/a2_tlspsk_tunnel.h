@@ -14,7 +14,7 @@
 //      （见 A2TLSPskDefaultHostPolicy）—— 任何公网地址一律拒绝并如实记录，杜绝云中继。
 //
 //  ★调用点（谁调它·哪一行）★
-//    · 生产：`Air2/Bridge/A2JITAutoPairingEngineBridge.m` 的 TLS-PSK 口径块
+//    · 生产：`Air2/Bridge/A2TLSPskTunnelBridge.m` 的 TLS-PSK 口径块
 //      （`A2TLSPskMbedTLSEnsureRegistered()` → `[A2TLSPskTunnel statusLine]`）——真机诊断日志逐行可核；
 //    · 自证：`tests/JIT/jit_logic_tests.m` 的 [A2-INTEGRATION] 例（默认关 + 不谎报 + 不上云）。
 //  本文件之前 **无同职责实现**（旧的 `A2RPRSDPublicTLSPSKPathSufficient` 只对「公开 TLS 栈

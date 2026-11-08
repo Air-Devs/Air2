@@ -165,6 +165,21 @@ if [ -n "${ENTITLEMENTS:-}" ]; then
 fi
 "$LDID_BIN" "${SIGN_ARGS[@]}" "$APP/$BUNDLE_NAME"
 
+# ---- 嵌入式二进制一起伪签 ----
+# ★为什么必须做★：上面的 ldid 只签主程序。包内的 Frameworks/*.dylib 与
+#   Frameworks/StikJIT.framework/StikJIT（内建 JIT 引擎）同样是 Mach-O；侧载工具
+#   （SideStore / StikDebug / Sideloadly）会按「bundle 内每个 Mach-O 都得有
+#   LC_CODE_SIGNATURE」逐项处理，缺一个就整体装不上。这里对 Frameworks/ 下**所有
+#   Mach-O** 补一次 ldid（.js / .plist 等非 Mach-O 自动跳过）。
+if [ -d "$APP/Frameworks" ]; then
+    while IFS= read -r -d '' f; do
+        if file -b "$f" | grep -q 'Mach-O'; then
+            "$LDID_BIN" "${SIGN_ARGS[@]}" "$f"
+            echo "   [ok] ldid 伪签 ${f#$APP/}"
+        fi
+    done < <(find "$APP/Frameworks" -type f -print0)
+fi
+
 # ---- 签名自证 ----
 # ★只断言「二进制里嵌了 CodeDirectory」，不断言 codesign -v 通过★
 #   ldid 是 ad-hoc 签名：它写 LC_CODE_SIGNATURE + CodeDirectory，但**不生成**
@@ -190,6 +205,9 @@ need=(
     "Payload/$BUNDLE_NAME.app/$BUNDLE_NAME"
     "Payload/$BUNDLE_NAME.app/Info.plist"
     "Payload/$BUNDLE_NAME.app/Frameworks"
+    # 内建 JIT 引擎：缺了它 App 照常起（weak 链接），但 builtin 那条路会在运行时
+    # 如实报「包内缺少 StikJIT.framework」——所以随包断言放在这里，早失败。
+    "Payload/$BUNDLE_NAME.app/Frameworks/StikJIT.framework/StikJIT"
     "Payload/$BUNDLE_NAME.app/libs"
     "Payload/$BUNDLE_NAME.app/java_runtimes"
 )

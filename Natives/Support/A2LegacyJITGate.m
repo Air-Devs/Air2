@@ -723,9 +723,15 @@ A2LegacyJITGateOutcome A2LegacyJITGateOpen(NSString *_Nullable *_Nullable whyOut
 
     // 到这里 == 老 Air 的成功分支（哨兵 + Extension 已下发）★握手完成★：
     // 设 detachAfterFirstBr + 清 BAD_ACCESS 异常端口。
-    BOOL jit26AlwaysAttached =
-        [NSUserDefaults.standardUserDefaults boolForKey:@"A2JITAlwaysAttached"];
-    if (!a2_jit_set_detach_after_first_br(!jit26AlwaysAttached)) {
+    // ★2026-11-08 不再在闸门里请求脱离★
+    //   真机证据（StikDebug 控制台）：闸门握手后发了 cmd=3 ⇒ 脚本在下一发 0x69 处理完
+    //   就 JIT26Detach() ⇒ 建 VM 时 libjvm 的 BreakGetJITMapping(brk #0x69) 无人应答
+    //   ⇒ EXC_BREAKPOINT/SIGTRAP（ips: BreakGetJITMapping）。
+    //   老 Air 可以提前脱离是因为它拿完区就不再要第二发；我们的 JVM 建 VM 时还要。
+    //   ⇒ 默认保持 attach；确实要复现老行为时置 A2JITDetachAtGate=YES。
+    BOOL a2GateDetach =
+        [NSUserDefaults.standardUserDefaults boolForKey:@"A2JITDetachAtGate"];
+    if (!a2_jit_set_detach_after_first_br(a2GateDetach)) {
         a2_log_criterion(@"[JIT26] [JIT-NOCRASH] SetDetachAfterFirstBr NOT applied -- "
                          @"continuing in degraded mode");
     }
@@ -739,7 +745,7 @@ A2LegacyJITGateOutcome A2LegacyJITGateOpen(NSString *_Nullable *_Nullable whyOut
                      @"（region=%p；哨兵先现=%d；Extension 已下发=%d；SetDetachAfterFirstBr(%d)）",
                      hs.info.vmSize, expect, hs.info.addr,
                      (int)hs.sawSentinel, (int)hs.extDelivered,
-                     jit26AlwaysAttached ? 0 : 1);
+                     (int)a2GateDetach);
     if (whyOut) {
         *whyOut = [NSString stringWithFormat:
             @"JIT 已就绪（握手完成：哨兵 %@ + UniversalJIT26Extension 已下发 + brk #0x69 被服务；"

@@ -34,7 +34,7 @@ typedef NS_ENUM(NSInteger, A2JITEnvironmentKind) {
 
 /// ★[JIT-IMPL] 本机事实的【探测来源】★（唯一平台读取接缝，便于注入假数据单测）。
 ///
-/// 约定：实现只【读原始事实】，不得在此做任何策略判断（策略在 A2JITStrategySelector）。
+/// 约定：实现只【读原始事实】，不得在此做任何策略判断（判据在 Natives/Support/A2JITEnabler）。
 /// 返回值一律是「已解析好的判据」，不含业务/版本/账号概念。
 @protocol A2JITFactsSource <NSObject>
 

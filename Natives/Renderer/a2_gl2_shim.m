@@ -28,16 +28,30 @@
 //    光照/雾/裁剪面/逻辑运算/多边形模式/显示列表/求值器/选择-反馈/glGetFloatv 矩阵回读。
 //    这些入口若被 MC 调用：要么落到渲染器解析器的空桩（桥路径），要么落回宿主 GLES（假 EGL 路径）
 //    —— 两条都不崩、只是「效果缺失」，不阻断首帧。
+//
+//  ★下游可换（后端接缝）★ `A2GL2ES3`（28 个 ES3 入口）的填充方有两家，二选一
+//  （声明见 `a2_gl2_backend_metallum.h`，那是接缝的单一真源头）：
+//    A. 默认：dlsym 到 flat namespace 里的 GLES3（MG / ANGLE）—— 与本层接入前完全一致；
+//    B. `a2_gl2_backend_metallum.m`：libmetallum 的 Metal C API ⇒ 1.12 及更早**不经过
+//       GLES/ANGLE**，本层的顶点/矩阵/图元结果直接编码成 Metal 命令。
+//    选择点唯一：本文件 `a2gl2_resolve_es3()`。开关 `A2_GL2_BACKEND=metallum`，
+//    或未设/为空时看旧的 `A2_GL2_METAL=1`；加载失败一律回落 A（绝不因 Metal 失败而停）。
+//    判据行：`[A2-MTL] 后端=metallum 已安装 28/28 入口` / `[A2-MTL] 回落后端=GLES（原因=…）`。
 // ============================================================================
 
 #import <Foundation/Foundation.h>
 #import <dlfcn.h>
+#import <sys/mman.h>                  // mprotect（改写 glGetError）
+#import <libkern/OSCacheControl.h>    // sys_icache_invalidate
+#import <errno.h>
 #import <string.h>
 #import <stdlib.h>
 #import <math.h>
 #import <stdint.h>
 
 #import "a2_gl2_shim.h"
+#import "a2_gl2_backend_metallum.h"
+#import "a2_gl2_backend_gl4es.h"   // ★C 路线后端：JNI 接管 + gl4es 固定管线★   // 后端接缝 A2GL2ES3（28 入口）+ metallum 后端的安装入口
 #import "a2_log.h"       // Natives/Support —— [A2-GL2] 日志出口
 
 // ============================================================================
@@ -46,22 +60,11 @@
 //  理由同 a2_eagl_egl.m 文件头：`#import <OpenGLES/…>` 会经 module map 触发
 //  `-framework OpenGLES` 自动链接 ⇒ 系统 GLES 的 `gl*` 进 flat namespace，
 //  把现有 ANGLE/MG 路径的 `dlsym(RTLD_DEFAULT)` 结果改掉。本层只写需要的常量。
+//
+//  ★GL 标量类型不再在本文件定义★：它们随后端接缝一起搬到了
+//  `a2_gl2_backend_metallum.h`（`A2GL2_GL_TYPES_DEFINED` 守卫），
+//  这样语义层与两个后端（GLES / metallum）看的是同一份类型定义。
 // ============================================================================
-typedef unsigned int   GLenum;
-typedef unsigned char  GLboolean;
-typedef unsigned int   GLbitfield;
-typedef void           GLvoid;
-typedef int            GLint;
-typedef unsigned int   GLuint;
-typedef int            GLsizei;
-typedef float          GLfloat;
-typedef double         GLdouble;
-typedef char           GLchar;
-typedef intptr_t       GLintptr;
-typedef intptr_t       GLsizeiptr;
-typedef unsigned char  GLubyte;
-typedef short          GLshort;
-typedef unsigned short GLushort;
 
 #define A2GL2_FALSE                    0
 #define A2GL2_TRUE                     1
@@ -125,74 +128,17 @@ typedef unsigned short GLushort;
 #define A2GL2_LINK_STATUS              0x8B82
 
 // ============================================================================
-//  ② GLES3 入口（本层唯一「下游」）
+//  ② GLES3 入口（本层「默认」下游）
 // ----------------------------------------------------------------------------
 //  取法与 a2_eagl_egl.m 同口径：`dlsym(RTLD_DEFAULT, …)`（ANGLE 的 libGLESv2 以
 //  RTLD_GLOBAL 进 flat namespace，见 a2_gl_bridge.m:578）。
 //  唯一调用点：`a2gl2_resolve_es3()`（首次用到本层时一次）；失败 ⇒ 打一行 [A2-GL2] 并
 //  把 `gA2GL2Broken` 置位（之后 `a2_gl2_shim_lookup` 一律返回 NULL ⇒ 整层回到接入前行为）。
+//
+//  ★入口表的声明搬到了 `a2_gl2_backend_metallum.h`★（`A2GL2ES3` + 28 个函数指针类型）：
+//  它是"后端接缝"，GLES 与 metallum 两个实现填的是同一份字段表 —— 放在 .m 里就会逼出
+//  第二份 typedef（两份必然分叉）。字段顺序与原 typedef 逐字一致，diff 一眼可对。
 // ============================================================================
-typedef void      (*A2PFN2_glGenBuffers)(GLsizei, GLuint *);
-typedef void      (*A2PFN2_glBindBuffer)(GLenum, GLuint);
-typedef void      (*A2PFN2_glBufferData)(GLenum, GLsizeiptr, const void *, GLenum);
-typedef void      (*A2PFN2_glGenVertexArrays)(GLsizei, GLuint *);
-typedef void      (*A2PFN2_glBindVertexArray)(GLuint);
-typedef void      (*A2PFN2_glVertexAttribPointer)(GLuint, GLint, GLenum, GLboolean, GLsizei, const void *);
-typedef void      (*A2PFN2_glEnableVertexAttribArray)(GLuint);
-typedef void      (*A2PFN2_glDrawArrays)(GLenum, GLint, GLsizei);
-typedef void      (*A2PFN2_glDrawElements)(GLenum, GLsizei, GLenum, const void *);
-typedef GLuint    (*A2PFN2_glCreateShader)(GLenum);
-typedef void      (*A2PFN2_glShaderSource)(GLuint, GLsizei, const GLchar *const *, const GLint *);
-typedef void      (*A2PFN2_glCompileShader)(GLuint);
-typedef void      (*A2PFN2_glGetShaderiv)(GLuint, GLenum, GLint *);
-typedef void      (*A2PFN2_glGetShaderInfoLog)(GLuint, GLsizei, GLsizei *, GLchar *);
-typedef GLuint    (*A2PFN2_glCreateProgram)(void);
-typedef void      (*A2PFN2_glAttachShader)(GLuint, GLuint);
-typedef void      (*A2PFN2_glLinkProgram)(GLuint);
-typedef void      (*A2PFN2_glGetProgramiv)(GLuint, GLenum, GLint *);
-typedef void      (*A2PFN2_glGetProgramInfoLog)(GLuint, GLsizei, GLsizei *, GLchar *);
-typedef void      (*A2PFN2_glUseProgram)(GLuint);
-typedef GLint     (*A2PFN2_glGetAttribLocation)(GLuint, const GLchar *);
-typedef GLint     (*A2PFN2_glGetUniformLocation)(GLuint, const GLchar *);
-typedef void      (*A2PFN2_glUniformMatrix4fv)(GLint, GLsizei, GLboolean, const GLfloat *);
-typedef void      (*A2PFN2_glUniform1i)(GLint, GLint);
-typedef void      (*A2PFN2_glUniform1f)(GLint, GLfloat);
-typedef void      (*A2PFN2_glEnable)(GLenum);
-typedef void      (*A2PFN2_glDisable)(GLenum);
-typedef void      (*A2PFN2_glBlendFunc)(GLenum, GLenum);
-typedef void      (*A2PFN2_glTexParameteri)(GLenum, GLenum, GLint);
-
-typedef struct {
-    A2PFN2_glGenBuffers                genBuffers;
-    A2PFN2_glBindBuffer                bindBuffer;
-    A2PFN2_glBufferData                bufferData;
-    A2PFN2_glGenVertexArrays           genVertexArrays;
-    A2PFN2_glBindVertexArray           bindVertexArray;
-    A2PFN2_glVertexAttribPointer       vertexAttribPointer;
-    A2PFN2_glEnableVertexAttribArray   enableVertexAttribArray;
-    A2PFN2_glDrawArrays                drawArrays;
-    A2PFN2_glDrawElements              drawElements;
-    A2PFN2_glCreateShader              createShader;
-    A2PFN2_glShaderSource              shaderSource;
-    A2PFN2_glCompileShader             compileShader;
-    A2PFN2_glGetShaderiv               getShaderiv;
-    A2PFN2_glGetShaderInfoLog          getShaderInfoLog;
-    A2PFN2_glCreateProgram             createProgram;
-    A2PFN2_glAttachShader              attachShader;
-    A2PFN2_glLinkProgram               linkProgram;
-    A2PFN2_glGetProgramiv              getProgramiv;
-    A2PFN2_glGetProgramInfoLog         getProgramInfoLog;
-    A2PFN2_glUseProgram                useProgram;
-    A2PFN2_glGetAttribLocation         getAttribLocation;
-    A2PFN2_glGetUniformLocation        getUniformLocation;
-    A2PFN2_glUniformMatrix4fv          uniformMatrix4fv;
-    A2PFN2_glUniform1i                 uniform1i;
-    A2PFN2_glUniform1f                 uniform1f;
-    A2PFN2_glEnable                    enable;
-    A2PFN2_glDisable                   disable;
-    A2PFN2_glTexParameteri             texParameteri;
-} A2GL2ES3;
-
 static A2GL2ES3 gES3;
 static int      gA2GL2Resolved = 0;   ///< 0=未解析 1=解析成功 -1=解析失败（缺入口）
 static int      gA2GL2Broken   = 0;   ///< 位 = 着色器/VBO 建失败 ⇒ 整层退回（不崩、只缺画面）
@@ -202,11 +148,39 @@ static void *a2gl2_sym(const char *name) {
     return dlsym(RTLD_DEFAULT, name);
 }
 
+/// ★本层的「后端」选择★（★唯一判据处★；调用点只有 `a2gl2_resolve_es3`）。
+/// 判据：`A2_GL2_BACKEND` 优先（"metallum" / "gles"），未设或空 ⇒ 看旧的 `A2_GL2_METAL=1`。
+/// 返回 1 = 走 metallum（Metal 直出）；0 = 走 dlsym GLES（原链路，行为与接入前一致）。
+static int a2gl2_backend_wants_metallum(void) {
+    const char *backend = getenv("A2_GL2_BACKEND");
+    if (backend != NULL && backend[0] != '\0') {
+        if (strcmp(backend, "metallum") == 0) return 1;
+        if (strcmp(backend, "gles") == 0) return 0;
+        a2_log_f(@"[A2-GL2] A2_GL2_BACKEND=%s 不认识（只认 metallum/gles）⇒ 按未设处理", backend);
+    }
+    const char *legacy = getenv("A2_GL2_METAL");
+    return (legacy != NULL && legacy[0] != '\0' && strcmp(legacy, "0") != 0) ? 1 : 0;
+}
+
 /// ★解析全部 ES3 入口★（唯一调用点：`a2gl2_ready()`）。★幂等★：只做一次。
+/// 两个后端二选一：① metallum（Metal 直出，见 a2_gl2_backend_metallum.h）
+///               ② dlsym 到 flat namespace 里的 GLES3（原链路）。
+/// ① 失败 ⇒ 打 `[A2-MTL] 回落后端=GLES（原因=…）` 并**继续**走 ②（绝不因 Metal 失败而停）。
 /// 必需项（缺则整层失效）与否决口径写在必需项列表里，不逐项判。
 static int a2gl2_resolve_es3(void) {
     if (gA2GL2Resolved != 0) return gA2GL2Resolved == 1;
     gA2GL2Resolved = -1;
+
+    // ★后端 ①：metallum（Metal 直出）★ —— 判据行与回落原因都在这段里，真机 grep `[A2-MTL]`
+    if (a2gl2_backend_wants_metallum()) {
+        const int installed = a2gl2_metallum_install(&gES3);
+        if (installed == A2GL2_ES3_COUNT) {
+            gA2GL2Resolved = 1;
+            return 1;
+        }
+        memset(&gES3, 0, sizeof(gES3));   // ★不留半装状态★
+        a2_log_criterion(@"[A2-MTL] 回落后端=GLES（原因=%s）", a2gl2_metallum_reason());
+    }
 
 #define A2GL2_REQ(field, name) \
     gES3.field = (void *)a2gl2_sym(name); \
@@ -576,8 +550,19 @@ static void a2gl2_fetch_vertex(A2GL2Vertex *out, int i) {
 }
 
 /// 当前 MVP = projection * modelview（★唯一产地★）
+/// ★矩阵版本号★ 任何改矩阵的调用都会 ++；MVP 只在版本变化时重算。
+/// 依据：真机 lastlog-219/220 显示每绘制开销 ~0.1ms，而 MVP 每绘制都重算一次。
+static unsigned long gMatrixSerial = 1;
+static void a2gl2_matrix_dirty(void) { gMatrixSerial++; }
+
+static A2GL2Mat4 gMvpCache;
+static unsigned long gMvpCacheSerial = 0;
+
 static void a2gl2_mvp(A2GL2Mat4 *out) {
-    a2gl2_mat_mul(out, &gS.proj[gS.projTop], &gS.mv[gS.mvTop]);
+    if (gMvpCacheSerial == gMatrixSerial) { *out = gMvpCache; return; }
+    a2gl2_mat_mul(&gMvpCache, &gS.proj[gS.projTop], &gS.mv[gS.mvTop]);
+    gMvpCacheSerial = gMatrixSerial;
+    *out = gMvpCache;
 }
 
 /// alpha func 的 GL 枚举 → 着色器里的整数码（不改语义，只做表映射）
@@ -596,9 +581,19 @@ static GLint a2gl2_alpha_code(GLenum f) {
 
 /// ★上载并绘制 `n` 个已经落在 `gVerts` 里的顶点★（`mode` 为 GL 图元，含 ES3 没有的 QUADS）。
 /// 调用点：`glEnd` / `glDrawArrays` / `glDrawElements` 三处（都先填 gVerts 再调它）。
+// ★2026-11-07 真机 lastlog-214 判据★ 绘制入口的三种去向计数（每 120 次一行）：
+//   调用次数 / 顶点不足 / 后端未就绪 / 真正走到提交。用来分清「MC 没给数据」
+//   还是「我们判丢了」，不再靠猜。
+static unsigned long gDrawCalls = 0, gDrawEmpty = 0, gDrawNotReady = 0;
+
 static void a2gl2_draw(GLenum mode, int n) {
-    if (n <= 0) return;
-    if (!a2gl2_ready()) return;
+    gDrawCalls++;
+    if ((gDrawCalls % 120) == 0) {
+        a2_log_criterion(@"[A2-GL2] 绘制入口 调用=%lu 顶点不足=%lu 后端未就绪=%lu",
+                         gDrawCalls, gDrawEmpty, gDrawNotReady);
+    }
+    if (n <= 0) { gDrawEmpty++; return; }
+    if (!a2gl2_ready()) { gDrawNotReady++; return; }
 
     A2GL2Mat4 mvp;
     a2gl2_mvp(&mvp);
@@ -723,16 +718,19 @@ static void gl2_glNormal3fv(const GLfloat *v) { if (v) gl2_glNormal3f(v[0], v[1]
 
 // ---- 矩阵栈 ---------------------------------------------------------------
 static void gl2_glMatrixMode(GLenum mode) {
+    a2gl2_matrix_dirty();
     if (mode == A2GL2_MODELVIEW || mode == A2GL2_PROJECTION || mode == A2GL2_TEXTURE) gS.matrixMode = mode;
 }
 
-static void gl2_glLoadIdentity(void) { a2gl2_mat_identity(a2gl2_cur()); }
+static void gl2_glLoadIdentity(void) { a2gl2_matrix_dirty(); a2gl2_mat_identity(a2gl2_cur()); }
 
 static void gl2_glLoadMatrixf(const GLfloat *m) {
+    a2gl2_matrix_dirty();
     if (m != NULL) memcpy(a2gl2_cur()->m, m, sizeof(GLfloat) * 16);
 }
 
 static void gl2_glMultMatrixf(const GLfloat *m) {
+    a2gl2_matrix_dirty();
     if (m == NULL) return;
     A2GL2Mat4 t;
     memcpy(t.m, m, sizeof(t.m));
@@ -742,6 +740,7 @@ static void gl2_glMultMatrixf(const GLfloat *m) {
 }
 
 static void gl2_glPushMatrix(void) {
+    a2gl2_matrix_dirty();
     switch (gS.matrixMode) {
         case A2GL2_PROJECTION:
             if (gS.projTop + 1 < A2GL2_MAT_STACK) { gS.proj[gS.projTop + 1] = gS.proj[gS.projTop]; gS.projTop++; }
@@ -756,6 +755,7 @@ static void gl2_glPushMatrix(void) {
 }
 
 static void gl2_glPopMatrix(void) {
+    a2gl2_matrix_dirty();
     switch (gS.matrixMode) {
         case A2GL2_PROJECTION: if (gS.projTop > 0) gS.projTop--; break;
         case A2GL2_TEXTURE:    if (gS.texTop  > 0) gS.texTop--;  break;
@@ -764,6 +764,7 @@ static void gl2_glPopMatrix(void) {
 }
 
 static void gl2_glTranslatef(GLfloat x, GLfloat y, GLfloat z) {
+    a2gl2_matrix_dirty();
     A2GL2Mat4 t; a2gl2_mat_identity(&t);
     t.m[12] = x; t.m[13] = y; t.m[14] = z;
     A2GL2Mat4 r; a2gl2_mat_mul(&r, a2gl2_cur(), &t);
@@ -771,6 +772,7 @@ static void gl2_glTranslatef(GLfloat x, GLfloat y, GLfloat z) {
 }
 
 static void gl2_glScalef(GLfloat x, GLfloat y, GLfloat z) {
+    a2gl2_matrix_dirty();
     A2GL2Mat4 t; a2gl2_mat_identity(&t);
     t.m[0] = x; t.m[5] = y; t.m[10] = z;
     A2GL2Mat4 r; a2gl2_mat_mul(&r, a2gl2_cur(), &t);
@@ -778,6 +780,7 @@ static void gl2_glScalef(GLfloat x, GLfloat y, GLfloat z) {
 }
 
 static void gl2_glRotatef(GLfloat angle, GLfloat x, GLfloat y, GLfloat z) {
+    a2gl2_matrix_dirty();
     const GLfloat len = sqrtf(x * x + y * y + z * z);
     if (len <= 0.0f) return;
     const GLfloat rad = angle * 3.14159265358979323846f / 180.0f;
@@ -807,6 +810,7 @@ static void a2gl2_ortho(GLdouble l, GLdouble r, GLdouble b, GLdouble t, GLdouble
 }
 
 static void gl2_glOrtho(GLdouble l, GLdouble r, GLdouble b, GLdouble t, GLdouble n, GLdouble f) {
+    a2gl2_matrix_dirty();
     a2gl2_ortho(l, r, b, t, n, f);
 }
 static void gl2_glOrthof(GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f) {
@@ -831,6 +835,7 @@ static void gl2_glFrustum(GLdouble l, GLdouble r, GLdouble b, GLdouble t, GLdoub
     a2gl2_frustum(l, r, b, t, n, f);
 }
 static void gl2_glFrustumf(GLfloat l, GLfloat r, GLfloat b, GLfloat t, GLfloat n, GLfloat f) {
+    a2gl2_matrix_dirty();
     a2gl2_frustum(l, r, b, t, n, f);
 }
 
@@ -855,7 +860,8 @@ static void gl2_glEnable(GLenum cap) {
         default: break;
     }
     if (a2gl2_is_fixed_only(cap)) return;
-    if (a2gl2_ready()) gES3.enable(cap);     // ES3 有的开关一律转发（不记第二份状态）
+    // ★空指针保护★：后端解析失败/回落时 gES3 可能只填了一部分，直接调会 pc=0
+    if (a2gl2_ready() && gES3.enable != NULL) { gES3.enable(cap); }
 }
 
 static void gl2_glDisable(GLenum cap) {
@@ -867,7 +873,7 @@ static void gl2_glDisable(GLenum cap) {
         default: break;
     }
     if (a2gl2_is_fixed_only(cap)) return;
-    if (a2gl2_ready()) gES3.disable(cap);
+    if (a2gl2_ready() && gES3.disable != NULL) gES3.disable(cap);
 }
 
 static void gl2_glEnableClientState(GLenum arr) {
@@ -927,13 +933,19 @@ static void gl2_glShadeModel(GLenum mode) { gS.shadeSmooth = (mode == 0x1D01) ? 
 static void gl2_glAlphaFunc(GLenum func, GLfloat ref) { gS.alphaFunc = func; gS.alphaRef = ref; }
 
 // ---- 客户端顶点数组 -------------------------------------------------------
+/// VBO 偏移 → 真实地址（实现与唯一判据在 a2_gl2_jni_bind.m 的 a2gl2_vbo_translate）
+extern const void *a2gl2_vbo_translate(const void *p);
+
 static void gl2_glVertexPointer(GLint size, GLenum type, GLsizei stride, const void *ptr) {
+    ptr = a2gl2_vbo_translate(ptr);
     gS.vertexArr.size = size; gS.vertexArr.type = type; gS.vertexArr.stride = stride; gS.vertexArr.ptr = ptr;
 }
 static void gl2_glColorPointer(GLint size, GLenum type, GLsizei stride, const void *ptr) {
+    ptr = a2gl2_vbo_translate(ptr);
     gS.colorArr.size = size; gS.colorArr.type = type; gS.colorArr.stride = stride; gS.colorArr.ptr = ptr;
 }
 static void gl2_glTexCoordPointer(GLint size, GLenum type, GLsizei stride, const void *ptr) {
+    ptr = a2gl2_vbo_translate(ptr);
     gS.texCoordArr.size = size; gS.texCoordArr.type = type; gS.texCoordArr.stride = stride; gS.texCoordArr.ptr = ptr;
 }
 static void gl2_glNormalPointer(GLenum type, GLsizei stride, const void *ptr) {
@@ -1110,10 +1122,14 @@ static const A2GL2Entry kA2GL2Entries[] = {
 static int gA2GL2Enabled = -1;   ///< -1=未判 0=关 1=开（★唯一缓存★）
 
 int a2_gl2_shim_enabled(void) {
-    if (gA2GL2Enabled >= 0) return gA2GL2Enabled;
+    // ★2026-11-01 去掉缓存★ 真机证据：渲染器选型阶段（setenv 之前）先问了一次 ⇒ 缓存成「关」，
+    //   等启动链把 A2_GL2_SHIM=1 设好、Java 侧再问时仍返回旧值 ⇒ 一条入口都没注册。
+    //   一次 getenv 的成本可忽略，判据以「此刻的环境」为准。
     const char *env = getenv("A2_GL2_SHIM");
     const int on = (env != NULL && env[0] != '\0' && strcmp(env, "0") != 0);
+    const int prev = gA2GL2Enabled;
     gA2GL2Enabled = on ? 1 : 0;
+    if (prev == gA2GL2Enabled && prev != -1) return gA2GL2Enabled;   // 状态没变 ⇒ 不重复打判据
     // ★判据行★：真机 grep `[A2-GL2]`
     if (on) {
         a2_log_criterion(@"[A2-GL2] ★自研固定管线档位=启用★（判据：环境变量 A2_GL2_SHIM=%s）"
@@ -1125,10 +1141,21 @@ int a2_gl2_shim_enabled(void) {
     return gA2GL2Enabled;
 }
 
+
+
+static int gLookupMiss = 0;   ///< 未被本层接管的入口计数（诊断用）
+
 void *a2_gl2_shim_lookup(const char *name) {
     if (name == NULL) return NULL;
     if (!a2_gl2_shim_enabled()) return NULL;       // ★关闭 ⇒ 完全透明★
     a2gl2_state_init();                            // 首次命中前把状态摆到 GL 初值
+    // ★2026-11-07 C 路线★ 后端=gl4es：固定管线的实现交给 gl4es。
+    //   本层仍负责「把 LWJGL 的 native 抢下来」（那是绕开 libGLESv2 的唯一办法），
+    //   抢到之后按名转发；取不到就继续走下面本层/原实现的逻辑。
+    if (a2gl4_backend_enabled()) {
+        void *g4 = a2gl4_symbol(name);
+        if (g4 != NULL) return g4;
+    }
     for (int i = 0; kA2GL2Entries[i].name != NULL; i++) {
         if (strcmp(kA2GL2Entries[i].name, name) == 0) {
             if (gLookupHits < 64) {                // 首见打一行（去重：每个名字只报一次）
@@ -1137,6 +1164,11 @@ void *a2_gl2_shim_lookup(const char *name) {
             gLookupHits++;
             return kA2GL2Entries[i].fn;
         }
+    }
+    // ★2026-11-01 诊断★ 不归本层的入口：记录前若干条，用来判断 MC 卡在哪个 GL 调用上
+    if (gLookupMiss < 48) {
+        a2_log_f(@"[A2-GL2] 未接管入口 %s（第 %d 次）⇒ 走原实现", name, gLookupMiss + 1);
+        gLookupMiss++;
     }
     return NULL;                                    // 不归本层 ⇒ 调用方走原逻辑
 }

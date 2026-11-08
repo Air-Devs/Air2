@@ -311,7 +311,11 @@ void a2_glfw_window_handle_host_resize(long handle) {
     pthread_mutex_unlock(&gWindowLock);
     if (view == nil) return;
 
-    CGFloat scale = view.window.screen.scale > 0 ? view.window.screen.scale : 1.0;
+    CGFloat scale = (view.window.screen.scale > 0) ? view.window.screen.scale
+                          : (UIScreen.mainScreen.scale > 0 ? UIScreen.mainScreen.scale : 1.0);
+        // ★2026-11-08★ 视图刚被移挂时 view.window 为 nil，按上面的写法 scale 会退成 1
+        //   ⇒ 帧缓冲尺寸退回“点”（真机：fb=874x402，而屏是 2622x1206）⇒ MC 用错 viewport。
+        //   这里退回 UIScreen.mainScreen.scale，保证任何时刻都按像素算。
     CGRect b = view.bounds;
     int wp = (int) lround(b.size.width);
     int hp = (int) lround(b.size.height);
@@ -631,6 +635,31 @@ int a2_glfw_window_create(long window, int width, int height, const char *title)
 
         view.frame = container.bounds;
         view.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        // ★2026-11-08 对齐 AAMC/Amethyst-iOS★
+        //   他们的 GameSurfaceView 用 +layerClass 直接返回 CAMetalLayer（backing layer 就是 Metal 层），
+        //   而我们以前是在现有 CALayer 上 addSublayer ⇒ ANGLE/合成器拿到的不是“视图自己的层”，
+        //   画面不上屏。这里把 backing layer 直接换掉，并同步 contentsScale（=屏幕 scale）。
+        {
+            Class a2MetalCls = NSClassFromString(@"CAMetalLayer");
+            if (a2MetalCls != Nil) {
+                CALayer *a2Layer = [a2MetalCls layer];
+                if (a2Layer != nil) {
+                    a2Layer.frame = view.bounds;
+                    CGFloat a2Scale = (keyWin.screen != nil) ? keyWin.screen.scale : 1.0;
+                    a2Layer.contentsScale = a2Scale;
+                    // ★2026-11-08 5d6e7df 同款★ drawableSize 必须显式按像素设，
+                    //   否则 ANGLE 拿到的是“点”（真机：viewport=874x402 而屏是 2622x1206）⇒ 画面不出来。
+                    CGSize a2Px = CGSizeMake(view.bounds.size.width * a2Scale,
+                                             view.bounds.size.height * a2Scale);
+                    @try { [a2Layer setValue:[NSValue valueWithCGSize:a2Px] forKey:@"drawableSize"]; }
+                    @catch (__unused NSException *e) {}
+                    view.contentScaleFactor = a2Scale;
+                    [view setValue:a2Layer forKey:@"layer"];   // 替换 backing layer
+                    a2_log_criterion(@"[A2-GLFW] backing layer=CAMetalLayer contentsScale=%.2f drawableSize=%.0fx%.0f",
+                                     a2Scale, a2Px.width, a2Px.height);
+                }
+            }
+        }
         a2_log_criterion(@"[A2-GLFW] 建窗 3/6 视图 frame 设好 %.0fx%.0f",
                          container.bounds.size.width, container.bounds.size.height);
 

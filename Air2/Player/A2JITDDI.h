@@ -209,9 +209,6 @@ typedef NS_ENUM(NSInteger, A2JITDDIVerdict) {
                                now:(NSDate *)now
                                why:(NSString *_Nullable *_Nullable)whyOut;
 
-/// 判定 → 前置条件三态（★Unknown 只由 Unknown 判定产生★）。
-+ (NSInteger)preconditionStateValueForVerdict:(A2JITDDIVerdict)verdict;
-
 /// 从 `NSProcessInfo.operatingSystemVersionString`（形如 "Version 27.2 (Build 24B5084k)"）
 /// 里取出构建号；取不到 ⇒ nil（★不猜★）。
 + (nullable NSString *)buildFromOperatingSystemVersionString:(NSString *)versionString;

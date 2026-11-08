@@ -466,12 +466,24 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
         //   64MB 连续内存做代码缓存（MirrorMappedCodeCache 还要再镜像一份），
         //   真机直接 "malloc failed to allocate 67108912 bytes for Chunk::new" ⇒ OOM。
         //   java-8 降到 16MB；17/21/25 保持 64MB（它们是分块分配，不会一次要 64MB）。
-        a2ccMB = (javaMajorVersion == 8) ? 16 : 64;
+        // ★2026-11-08 降信号★ Mirror 是按 16KB 页向调试器要祝福（每页 2 条命令）：
+        //   64MB ≈ 4096 页 ≈ 8000 条请求 → StikDebug 被灌满。
+        //   JIT 区大小跟随代码缓存 ⇒ java17+ 先用 16m（≈1024 页），够跑起来看画面，
+        //   要更大用偏好键 A2CodeCacheMB 调（上限 64）。
+        a2ccMB = 64;   // ★与老 Air 同档★ 它日志是 "Requesting 64 MB → Got JIT mapping"；
+                       //   16m 时我们的请求无人应答（脚本按 64MB 档发放）
     }
     if (a2ccMB > 64) a2ccMB = 64;
     [options addObject:[NSString stringWithFormat:@"-XX:ReservedCodeCacheSize=%ldm", (long)a2ccMB]];
-    [options addObject:[NSString stringWithFormat:@"-XX:InitialCodeCacheSize=%ldm", (long)MIN(a2ccMB, (NSInteger)2)]];
-    [options addObject:@"-XX:CodeCacheExpansionSize=1m"];
+    if (javaMajorVersion == 8) {
+        // ★老 Air 同款★ Initial=16m、扩容步长 4m（默认 64K 太小，小步扩容会撞"没有连续空间"）
+        [options addObject:@"-XX:InitialCodeCacheSize=16m"];
+        [options addObject:@"-XX:CodeCacheExpansionSize=4m"];
+        [A2Log criterion:@"[A2-JIT] java-8 代码缓存：Reserved=64m Initial=16m Expansion=4m（老 Air 同款）"];
+    } else {
+        [options addObject:[NSString stringWithFormat:@"-XX:InitialCodeCacheSize=%ldm", (long)MIN(a2ccMB, (NSInteger)2)]];
+        [options addObject:@"-XX:CodeCacheExpansionSize=1m"];
+    }
     // ★开关(真机证据 2026-10-17)★:我们请求 64MB 的 JIT 区,但调试器只交付了
     //   ★16384 字节✗★(见 [A2JIT] region … size=16384) ⇒ MirrorMappedCodeCache 要把 64MB
     //   code cache 映射进 16KB 区里,VM 在初始化期跑 JIT 代码时卡住。
@@ -486,6 +498,12 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     //   ⇒ 默认改成★关✗★，让 JVM 用自己的 code cache 分配（进程在调试器下可执行内存本就可申请）。
     //   要恢复镜射：偏好键 A2UseMirrorCodeCache = YES。
     id a2mirrorVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2UseMirrorCodeCache"];
+    // ★2026-11-08 默认关闭 Mirror★
+    //   MirrorMappedCodeCache 是按 16KB 页向调试器要祝福：64MB ≈ 4096 页 × 2 条 ≈ 8000 条请求。
+    //   老 Air 从不传它（[ISSUE-FIX] #70: Java 8 -> skip），全程只有 1 发 brk #0x69 要整块 JIT 区。
+    //   要回退做对照：偏好键 A2UseMirrorCodeCache = YES。
+    // ★2026-11-08 回到 o 的默认★ fmt165o 实测：Mirror=1（java-17）、[JIT26] 只发 1 发 64MB、
+    //   没有任何刷屏 ⇒ Mirror 不是洪水源。设 A2UseMirrorCodeCache=NO 可关掉做对照。
     BOOL a2useMirror = (a2mirrorVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2UseMirrorCodeCache"];
     [A2Log criterion:@"[A2JIT] MirrorMappedCodeCache=%d（键 A2UseMirrorCodeCache 未设 ⇒ 默认开；设 NO 可关）",
           (int)a2useMirror];
@@ -493,7 +511,15 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     //     因为 java-8 的 libjvm 同样需要走「调试器 JIT 映射」这条路；缺这个 flag 时
     //     JNI_CreateJavaVM 直接 rc=-1、崩在 InstanceKlass::initialize）。
     //     显式偏好键 A2UseMirrorCodeCache=NO 仍可关掉做对照。
-    if (a2useMirror && (javaMajorVersion >= 17 || javaMajorVersion == 8)) {
+    // ★2026-11-08 对齐老 Air [ISSUE-FIX] #70★
+    //   老 Air 原文：Java 8 runtime -> skip -XX:+MirrorMappedCodeCache。
+    //   它靠「预先下发的 UniversalJIT26Extension.js」让 brk #0x69 有人服务，
+    //   代码缓存走普通映射 ⇒ 没有 RX/RW 双别名 ⇒ CodeHeap 记账不会乱。
+    //   我们之前不开 Mirror 卡死，是因为探针跑在 Extension 下发之前（顺序反了），
+    //   现在 A2LegacyJITGate 已改成先下发 Extension 再探。
+    if (javaMajorVersion == 8) {
+        [A2Log criterion:@"[A2-JIT] java-8 跳过 -XX:+MirrorMappedCodeCache（老 Air #70 同款）"];
+    } else if (a2useMirror && javaMajorVersion >= 17) {
         [options addObject:@"-XX:+MirrorMappedCodeCache"];
         [A2Log criterion:@"[A2-JIT] 下发 -XX:+MirrorMappedCodeCache（java-%ld）", (long)javaMajorVersion];
     }
@@ -506,7 +532,10 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     //   直接报 `Unrecognized option: -Xlog:init=debug:stderr` ⇒ `JNI_CreateJavaVM`
     //   失败（整条 java-8 路线一行代码废掉，矩阵 §4-③）。Java 8 走静默（老线的
     //   `-Xloggc:` 那套也不再追加：本链已无需要它定位的问题）。
-    if (javaMajorVersion >= 9) {
+    // ★2026-11-08 真机证据★ 这 5 条 -Xlog 在设备上写出 38,000 行 stderr，
+    //   首帧被拖到 109 秒（lastlog-276：VM 计时到 108.985s 才崩）。
+    //   ⇒ 默认全部关闭；要诊断时置 A2VMDiagAll=YES 再开。
+    if (javaMajorVersion >= 9 && [[NSUserDefaults.standardUserDefaults objectForKey:@"A2VMDiagInit"] boolValue]) {
         [options addObject:@"-Xlog:init=debug:stderr"];   // ★必须指定 stderr★：App 里 stdout 无处可去
     } else {
         [A2Log criterion:@"[A2-JRE] java-%ld 不认 -Xlog（Java 9+ 才有）⇒ 本条诊断选项不下发（否则建 VM 必失败）",
@@ -524,7 +553,7 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
     //   定位完默认关。
     {
         id diagVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2VMDiagAll"];
-        BOOL diagAll = (diagVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2VMDiagAll"];
+        BOOL diagAll = (diagVal == nil) ? NO : [NSUserDefaults.standardUserDefaults boolForKey:@"A2VMDiagAll"];
         // ★同样按 JRE 门控★：这 4 条 `-Xlog:*` 也是 Java 9+ 语法，Java 8 上
         //   `-Xlog:class+load=…` 一样是 `Unrecognized option` ⇒ 建 VM 失败。
         if (diagAll && javaMajorVersion >= 9) {
@@ -601,6 +630,13 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
         [options addObject:[NSString stringWithFormat:@"-D%@=%ld",
                             A2LaunchSysPropMaximumFramesPerSecond,
                             (long)facts.maximumFramesPerSecond]];
+    }
+    // ★MC 版本号必须下发给 agent★（2026-11-08 真机证据）
+    //   A2IosCompatAgent.java:95 读 -Da2.mc.version 决定 13..16 是否把 RenderSystem.fog 置空；
+    //   全仓此前没有任何地方设置它 ⇒ minor=0 ⇒ 规则恒不生效 ⇒ 1.16.5 调 GL11.glFogfv
+    //   时 LWJGL 抛 NPE（Checks.check → glFogfv）崩在 "Rendering screen"。
+    if (self.versionID.length > 0) {
+        [options addObject:[NSString stringWithFormat:@"-Da2.mc.version=%@", self.versionID]];
     }
     return options;
 }

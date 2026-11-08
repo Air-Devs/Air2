@@ -349,6 +349,39 @@ Phase A 生成加载序列，排序键为三元组：
   不能覆盖「取消启动」按钮。
 - 首帧之后 5s 的 `stable` 标记是**插件系统专有**的健康信号，与启动遮罩超时无关。
 
+
+### 5.6 UI 接线（P2 现状）
+
+P2 只有声明、没有插件代码，所以「加载」= 把安装期校验过的贡献集放进内存注册表，
+再由七处宿主插入点读出来画。装配与 component 映射集中在 `A2PluginContributionHost`（`Air2/UI/Plugin/`）。
+
+| slot | 位置 | 宿主类 | 该位置画得出来的 component |
+|---|---|---|---|
+| `home.toolbar.action` | 主页顶栏右侧 | `A2LauncherViewController` | `button.primary` / `button.secondary` / `icon.glyph` |
+| `home.card.badge` | 主页主卡右上角 | `A2LauncherViewController` | `badge.status` / `text.label` / `icon.glyph` |
+| `versions.list.badge` | 版本列表项右侧 | `A2VersionListViewController`（行使能 `applyBadgeViews:`） | `badge.status` / `text.label` |
+| `version.detail.header` | 版本详情标题卡 | `A2VersionSettingsViewController` | `badge.status` / `text.label` / `text.caption` / `icon.glyph` |
+| `settings.section` | 设置 › 插件 分类 | `A2SettingsViewController` | `list.row` / `switch.toggle` / `text.label` / `text.caption` / `divider` / `spacer` |
+| `home.section` | 主页右侧操作栏（主卡之后） | `A2LauncherViewController` | 同 `settings.section`（不含 `switch.toggle`） |
+| `launch.overlay` | 启动遮罩卡片底部 | `A2LaunchOverlay` | `text.label` / `text.caption` / `badge.status`（**只读，不加按钮**） |
+
+三条硬规矩：
+
+1. **一份注册表**。安装器、插件页、七处插入点读同一个 `A2PluginContributionRegistry` 实例
+   （`A2PluginContributionHost` 装配一次，`A2AppDelegate` 启动早期触发 + Phase A 建表）。
+   各页自建实例会让「停用 / 卸载 ⇒ 界面立刻不画」失效。
+2. **一条线程边界**。安装走后台线程、插入点走主线程；串行化放在**注册表内部**
+   （串行队列 + 读快照），调用方不需要自己排队，也就不会有「某处忘了排队」。
+3. **画不出就不画 + 一行判据**。未映射的 component 跳过、不伪造视图、不崩；
+   每处插入点每次渲染记一行：
+
+   ```
+   [A2-PLUGIN-UI] <slot> 渲染 N 条（跳过 M 条：原因）
+   ```
+
+未装插件时七处**一个视图都不加**（默认外观逐字不变）。`switch.toggle` 在 P2 渲染成禁用行并写明
+「要等 P3」，按钮点击如实提示「需要 P3 运行时」—— 不留点了没反应的死行。
+
 ---
 
 ## 六、注册表
@@ -468,7 +501,7 @@ v2 → v3 的迁移要点：
 |---|---|---|
 | **P0** | 文档：本文 + API + 安全 + 页面 + 兼容 + 作者指南 + `plugin.schema.json` + ADR-014～023 | 文档之间无矛盾；schema 能校验两个最小示例 |
 | **P1** | 安装器 / 注册表 / 权限存储 / 最小管理页 / **三步授权** / **boot marker** / **来源记录 + `approvedHashes` + `permissionSet`** / **最小崩溃闭环** | 能装、能启停、能卸载、能看原因；critical 三步 5 秒可测；权限集不变的更新**不**重确认；连续 3 次死在首帧前 → 自动停用最近启用的插件并提示；不动 UI 渲染、不动旧渲染器 |
-| **P2** | 注册表化 UI + slot + `ui.contribute` + 导入预览 + **完整安全模式** | JSON 插件能往 slot 塞组件；低/中默认授权可关；第 3 次失败进安全模式禁 L2，再失败禁 L1；逐插件诊断页 + 逐个恢复 |
+| **P2** | 注册表化 UI + slot + `ui.contribute` + 导入预览 + **完整安全模式**（第一步 `A2PluginContribution`：manifest v2 贡献点深校验 + 纯内存注册表已落地） | JSON 插件能往 slot 塞组件；低/中默认授权可关；第 3 次失败进安全模式禁 L2，再失败禁 L1；逐插件诊断页 + 逐个恢复 |
 | **P3a** | **JSCore 运行时 + API 面**（launch / files / storage / instance / crypto） | JS 插件能跑 `onLoad`/`onBoot`；未授权 API 在对象上不存在；插件串行队列与预算可测 |
 | **P3b** | **v3 页面模型** + `ui.override` + `launch.overlay` | 静态 / 动态页面能渲染、能交互动；页面横幅强制；无 HTML / 远端图片 / 密码框 |
 | **P4** | 下载源候选 + 版本过滤器 + 文件读/导出 + 整合包导出（mrpack / zip）+ 开发模式 | 过滤器能按规则隐藏版本；`files.game.read` 只读且无账号面；导出走系统分享面板；开发模式不污染正式注册表 |

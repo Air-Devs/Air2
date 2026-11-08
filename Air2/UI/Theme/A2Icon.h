@@ -51,6 +51,15 @@ NS_ASSUME_NONNULL_BEGIN
 /// 版本类型对应的符号色
 + (UIColor *)symbolColorForVersionType:(nullable NSString *)type;
 
+#pragma mark - 插件语义图标
+
+/// 插件 manifest 的 `icon` 是**语义 ID**（`PLUGIN-COMPAT.md` 2.4：`action.download` 等），
+/// 不是图片路径、也不是 SF Symbol 名。这里把语义 ID 落成具体字形。
+///
+/// 未识别的 ID 返回 `action.info` 的字形（`info.circle`）——契约写死「不拒载、只降级」，
+/// 宿主以后加 ID 不能让旧插件在旧宿主上画不出来。
++ (NSString *)symbolForSemanticIconID:(nullable NSString *)iconID;
+
 #pragma mark - 界面图标
 
 // 顶栏

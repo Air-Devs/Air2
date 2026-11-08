@@ -16,6 +16,7 @@ Air2 自研 GLFW —— 阶段 1 自证脚本（[A2-OWNGLFW-1]）
 """
 import os
 import re
+import struct
 import subprocess
 import sys
 import zipfile
@@ -58,6 +59,123 @@ def java_sources():
 # 任何一侧加/改事件而另一侧没跟 ⇒ 事件静默丢失。这里逐名+逐值比对，不靠人眼。
 NATIVE_HEADER = os.path.join(ROOT, "Natives", "Input", "a2_glfw_window.h")
 GLFW_JAVA = os.path.join(SRC, "org", "lwjgl", "glfw", "GLFW.java")
+
+# ===========================================================================
+# ⑥ 调用面覆盖（jar 里实际 invokestatic 的方法 ⇄ 本层是否声明）—— 防 NoSuchMethodError
+# ===========================================================================
+# 判据来源：MC 1.12.2 的 LWJGL2 兼容层 jar（A2LaunchSession.m 里那条
+#   libs/lwjgl-2/lwjgl-lwjglx.jar 闸门）。抽它的常量池里所有
+#   `Methodref org/lwjgl/glfw/GLFW.<名><描述符>`，限定到「链路类」，再与本层
+#   编译出来的 GLFW.class 已声明方法逐名逐描述符比对。任何漏项 ⇒ 真机必
+#   NoSuchMethodError（glfwSetWindowPos 就是这么漏掉的）。
+CHAIN_JAR = os.path.join(ROOT, "Libraries", "Jars", "lwjgl-2", "lwjgl-lwjglx.jar")
+# 这些类只在 Vulkan / 各平台原生窗口系统接入里自用，iOS 链不经过（也不在 MC 路径上）。
+CHAIN_SKIP = re.compile(r"^org/lwjgl/glfw/(GLFW$|GLFW\$Functions|GLFWNative|GLFWVulkan)")
+
+
+def _class_cp(b):
+    """返回 (常量池, 类体起始偏移)。常量池条目：('utf8', s) / (tag, a[, c])。"""
+    i = 10  # magic(4) + minor(2) + major(2) + cp_count(2)
+    count = struct.unpack_from(">H", b, 8)[0]
+    cp = [None] * count
+    k = 1
+    while k < count:
+        tag = b[i]
+        i += 1
+        if tag == 1:
+            n = struct.unpack_from(">H", b, i)[0]
+            i += 2
+            cp[k] = ("utf8", b[i:i + n].decode("utf-8", "replace"))
+            i += n
+        elif tag in (7, 8, 16, 19, 20):
+            cp[k] = (tag, struct.unpack_from(">H", b, i)[0]); i += 2
+        elif tag == 15:
+            cp[k] = (tag, struct.unpack_from(">H", b, i + 1)[0]); i += 3
+        elif tag in (3, 4, 9, 10, 11, 12, 17, 18):
+            cp[k] = (tag,) + struct.unpack_from(">HH", b, i); i += 4
+        elif tag in (5, 6):
+            cp[k] = (tag,); i += 8; k += 1
+        else:
+            raise ValueError("bad cp tag %d" % tag)
+        k += 1
+    return cp, i
+
+
+def _utf(cp, idx):
+    e = cp[idx]
+    return e[1] if e and e[0] == "utf8" else None
+
+
+def _declared_methods(path):
+    """GLFW.class 里声明的 (名字, 描述符) 集合。"""
+    b = open(path, "rb").read()
+    cp, i = _class_cp(b)
+    i += 6                                        # access_flags, this_class, super_class
+    n_if = struct.unpack_from(">H", b, i)[0]; i += 2 + 2 * n_if
+
+    def skip_members(i):
+        n = struct.unpack_from(">H", b, i)[0]; i += 2
+        out = []
+        for _ in range(n):
+            _acc, name_i, desc_i, n_attr = struct.unpack_from(">HHHH", b, i)
+            i += 8
+            out.append((_utf(cp, name_i), _utf(cp, desc_i)))
+            for _a in range(n_attr):
+                ln = struct.unpack_from(">I", b, i + 2)[0]
+                i += 6 + ln
+        return out, i
+
+    _fields, i = skip_members(i)                   # fields
+    methods, i = skip_members(i)                   # methods
+    return set(methods)
+
+
+def _jar_glfw_refs(jar):
+    """jar 内「链路类」对 org/lwjgl/glfw/GLFW 的方法引用：{(名,描述符): {调用类}}。"""
+    need = {}
+    with zipfile.ZipFile(jar) as z:
+        for entry in z.namelist():
+            if not entry.endswith(".class"):
+                continue
+            owner = entry[:-6]
+            if CHAIN_SKIP.match(owner):
+                continue
+            try:
+                cp, _ = _class_cp(z.read(entry))
+            except Exception:
+                continue
+            for e in cp:
+                if not e or e[0] not in (10, 11):
+                    continue
+                cls = cp[e[1]]
+                if not cls or _utf(cp, cls[1]) != "org/lwjgl/glfw/GLFW":
+                    continue
+                nt = cp[e[2]]
+                key = (_utf(cp, nt[1]), _utf(cp, nt[2]))
+                need.setdefault(key, set()).add(owner.split("/")[-1])
+    return need
+
+
+def check_call_surface():
+    fails = []
+    cls_path = os.path.join(CLASSES, "org", "lwjgl", "glfw", "GLFW.class")
+    if not os.path.isfile(cls_path):
+        print("[6] 调用面覆盖：找不到编译产物 GLFW.class ⇒ 跳过")
+        return ["call-surface"]
+    if not os.path.isfile(CHAIN_JAR):
+        print("[6] 调用面覆盖：找不到链路 jar %s ⇒ 跳过" % os.path.relpath(CHAIN_JAR, ROOT))
+        return ["call-surface"]
+    own = _declared_methods(cls_path)
+    need = _jar_glfw_refs(CHAIN_JAR)
+    missing = {k: v for k, v in need.items() if k not in own}
+    print("[6] 调用面覆盖：链路引用 %d 个 GLFW 成员 / 本层已声明 %d / 缺 %d"
+          % (len(need), len(own), len(missing)))
+    for (name, desc) in sorted(missing):
+        print("    ★缺★ %s%s  <- %s" % (name, desc, ", ".join(sorted(missing[(name, desc)]))))
+    if missing:
+        fails.append("call-surface")
+    return fails
+
 
 # JNI 描述符首字符 → Java 类型名（只列本链用到的）
 DESC_TYPES = {"J": "long", "I": "int", "D": "double", "F": "float",
@@ -189,6 +307,9 @@ def main():
 
     # ---- ⑤ 事件通道对齐（native ⇄ Java）----
     fails.extend(check_event_channel())
+
+    # ---- ⑥ 调用面覆盖（jar 引用 ⇄ 本层声明；防 NoSuchMethodError）----
+    fails.extend(check_call_surface())
 
     print("=" * 66)
     print("结果：" + ("全部通过 ✓" if not fails else ("失败 " + ", ".join(fails))))

@@ -27,6 +27,8 @@
 
 /// 与 A2GameInstaller.m 的 kVersionManifestURL 同值，改地址两处一起改。
 static NSString *const kVersionManifestURL = @"https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
+/// ★421 回落用的镜像清单（内部状态，用完即清）★
+static NSString *sA2ManifestURLOverride = nil;
 
 @implementation A2RemoteVersion
 
@@ -59,7 +61,12 @@ static NSString *const kVersionManifestURL = @"https://piston-meta.mojang.com/mc
         else dispatch_async(dispatch_get_main_queue(), ^{ completion(v, e); });
     };
     [A2Log log:@"remote-versions: 拉取版本清单"];
-    NSURL *url = [NSURL URLWithString:kVersionManifestURL];
+    NSString *urlString = sA2ManifestURLOverride ?: kVersionManifestURL;
+    if (sA2ManifestURLOverride != nil) {
+        [A2Log log:@"remote-versions: 本次使用镜像清单 %@", urlString];
+        sA2ManifestURLOverride = nil;
+    }
+    NSURL *url = [NSURL URLWithString:urlString];
     if (!url) {
         done(nil, [self err:@"清单地址非法"]);
         return;
@@ -74,6 +81,14 @@ static NSString *const kVersionManifestURL = @"https://piston-meta.mojang.com/mc
         if (error) { done(nil, error); return; }
         NSHTTPURLResponse *http = (NSHTTPURLResponse *)resp;
         if (http.statusCode < 200 || http.statusCode >= 300) {
+            // ★421 等异常 ⇒ 回落到 BMCLAPI 镜像再试一次★
+            if (http.statusCode == 421 || http.statusCode == 403 || http.statusCode >= 500) {
+                NSString *mirror = @"https://bmclapi2.bangbang93.com/mc/game/version_manifest_v2.json";
+                [A2Log log:@"remote-versions: HTTP %ld ⇒ 回落镜像 %@", (long)http.statusCode, mirror];
+                sA2ManifestURLOverride = mirror;   // 下一次进入本方法时改用它
+                [self fetchVersionsWithCompletion:completion];
+                return;
+            }
             done(nil, [self err:[NSString stringWithFormat:@"服务返回 HTTP %ld",
                                  (long)http.statusCode]]);
             return;

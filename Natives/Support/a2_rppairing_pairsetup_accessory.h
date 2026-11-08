@@ -165,7 +165,7 @@ typedef id<A2RPPairSetupMessageTransport> _Nullable (^A2RPPairSetupAccessoryTran
                                    isCancelled:(nullable BOOL (^)(void))isCancelled;
 
 /// 生产装配：真广告器（A2RPPairableHostAdvertiser）+ 真传输（RemoteXPC，originatedBy=device）。
-/// ★谁调它★：Air2/Bridge/A2JITAutoPairingEngineBridge.m 的设备发起档入口（唯一调用点）。
+/// ★谁调它★：暂无（JIT 页改版后自动配对 Bridge 已删；本模块作为下一阶段的机制件保留）。
 + (A2RPPairSetupAccessoryRun *)runWithHostName:(NSString *)hostName
                                            pin:(NSString *)pin
                                         budget:(NSTimeInterval)budget

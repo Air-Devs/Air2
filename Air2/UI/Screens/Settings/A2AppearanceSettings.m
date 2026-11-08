@@ -31,6 +31,7 @@
 #import "A2ControlsEditorViewController.h"
 #import "A2SettingsSection.h"
 #import "A2SettingsRow.h"
+#import "A2NavigationController.h"
 #import "A2ThemeManager.h"
 #import "A2PaletteStyle.h"
 #import "A2Metrics.h"
@@ -153,6 +154,61 @@
         [sheet presentFrom:host];
     };
     [section addRow:appearanceRow];
+
+    // ---- 转场动画（用户可选）----
+    //  落盘 = NSUserDefaults 键 ui.transitionStyle（见 A2NavigationController 的 preferredTransitionStyle）
+    A2SettingsRow *transRow = [[A2SettingsRow alloc] init];
+    transRow.symbolName = @"rectangle.arrowtriangle.2.inward";
+    transRow.title = @"转场动画";
+    // ★只列前三种★ 主页那五个入口固定是「放大展开」，不在这里选
+    NSArray<NSString *> *transNames = @[@"缩放淡入", @"从底部滑入", @"横向推入"];
+    __weak A2SettingsRow *weakTransRow = transRow;
+    A2TransitionStyle curTrans = [A2NavigationController preferredTransitionStyle];
+    if (curTrans > A2TransitionStylePush) curTrans = A2TransitionStylePush;   // 防越界（列表只有三档）
+    transRow.valueText = transNames[(NSUInteger)curTrans];
+    transRow.accessory = A2SettingsRowAccessoryDisclosure;
+    transRow.onTap = ^{
+        A2OptionSheet *sheet = [A2OptionSheet sheetWithTitle:@"转场动画"
+                                                     message:@"普通页面进入时的动画（主页五个入口固定用 iOS 放大展开）"];
+        for (NSInteger i = 0; i < (NSInteger)transNames.count; i++) {
+            NSInteger v = i;
+            [sheet addOptionWithTitle:transNames[i]
+                             selected:(v == (NSInteger)curTrans)
+                          destructive:NO
+                              handler:^{
+                [A2NavigationController setPreferredTransitionStyle:(A2TransitionStyle)v];
+                weakTransRow.valueText = transNames[v];
+            }];
+        }
+        [sheet presentFrom:host];
+    };
+    [section addRow:transRow];
+
+    // ---- 动画速度（慢 / 标准 / 快）----
+    A2SettingsRow *speedRow = [[A2SettingsRow alloc] init];
+    speedRow.symbolName = @"speedometer";
+    speedRow.title = @"动画速度";
+    NSArray<NSString *> *speedNames = @[@"慢", @"标准", @"快"];
+    NSInteger curSpeed = [A2NavigationController preferredTransitionSpeed];
+    if (curSpeed < 0 || curSpeed > 2) curSpeed = 1;
+    speedRow.valueText = speedNames[(NSUInteger)curSpeed];
+    speedRow.accessory = A2SettingsRowAccessoryDisclosure;
+    __weak A2SettingsRow *weakSpeedRow = speedRow;
+    speedRow.onTap = ^{
+        A2OptionSheet *sheet = [A2OptionSheet sheetWithTitle:@"动画速度" message:@"页面进入/返回的快慢"];
+        for (NSInteger i = 0; i < 3; i++) {
+            NSInteger v = i;
+            [sheet addOptionWithTitle:speedNames[i]
+                             selected:(v == curSpeed)
+                          destructive:NO
+                              handler:^{
+                [A2NavigationController setPreferredTransitionSpeed:v];
+                weakSpeedRow.valueText = speedNames[v];
+            }];
+        }
+        [sheet presentFrom:host];
+    };
+    [section addRow:speedRow];
 
     // ---- 主页网格（实验，默认关闭）----
     //  落盘 = A2HomeStore.gridEnabled（键 home.ui.gridEnabled，走 A2Settings → config.json）；

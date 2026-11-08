@@ -21,8 +21,11 @@
 //
 
 #import "A2CrashGuard.h"
+#import "A2SlidePresentationAnimator.h"   // 全屏 modal 的 iOS 横向推入
 #import "A2Log.h"
 #import "A2CrashReportViewController.h"
+#include <stdlib.h>
+#include <string.h>
 #import <UIKit/UIKit.h>
 #include <execinfo.h>
 #include <pthread.h>
@@ -120,12 +123,19 @@ static void A2SignalHandler(int sig) {
             UIViewController *top = UIApplication.sharedApplication.keyWindow.rootViewController;
             while (top.presentedViewController) top = top.presentedViewController;
             // 与「上次启动异常」统一：整页崩溃报告（可滚动 + 导出日志），不用弹窗。
+            // ★2026-11-01 默认不弹★（与 A2AppDelegate 同一口径；A2_CRASH_UI=on 才展示）
+            const char *cv = getenv("A2_CRASH_UI");
+            const BOOL crashUIShown = (cv != NULL &&
+                (strcmp(cv, "on") == 0 || strcmp(cv, "1") == 0 || strcmp(cv, "yes") == 0));
+            if (!crashUIShown) {
+                NSLog(@"[A2-CRASH-UI] 崩溃页默认关闭 ⇒ 只落盘不展示");
+                return;
+            }
             A2CrashReportViewController *vc =
                 [[A2CrashReportViewController alloc] initWithReport:(text ?: @"（无崩溃信息）")
                                                              logPath:A2Log.currentLogPath];
             UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:vc];
-            nav.modalPresentationStyle = UIModalPresentationFullScreen;
-            [top presentViewController:nav animated:YES completion:nil];
+            [nav a2_presentFromRightFrom:top];   // ★iOS 横向推入★
         });
         dispatch_resume(timer);
     }

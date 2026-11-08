@@ -8,29 +8,11 @@
 //
 
 #import "A2JITVerdictGuidance.h"
-#import "A2JITStrategySelector.h"
 
 @implementation A2JITVerdictGuidance
 
 + (BOOL)isUsable:(A2JITReadinessVerdict)verdict {
     return verdict == A2JITReadinessVerdictUsable;
-}
-
-+ (A2JITFailureReason)failureReasonForVerdict:(A2JITReadinessVerdict)verdict {
-    switch (verdict) {
-        case A2JITReadinessVerdictUsable:
-            return A2JITFailureReasonNone;
-        case A2JITReadinessVerdictUnknown:
-        case A2JITReadinessVerdictNotServiced:
-        case A2JITReadinessVerdictLegacySentinel:
-        case A2JITReadinessVerdictNoMapping:
-        case A2JITReadinessVerdictZeroSize:
-        case A2JITReadinessVerdictNotExecutable:
-        default:
-            // 粗粒度一律 ActivationFailed（状态机词汇不扩枚举）；
-            // 细粒度分流由 reasonKey/actionKey 承担。
-            return A2JITFailureReasonActivationFailed;
-    }
 }
 
 + (NSString *)displayNameForVerdict:(A2JITReadinessVerdict)verdict {
@@ -91,21 +73,6 @@
         case A2JITReadinessVerdictUnknown:
         default:                                  return @"jit.verdict.unknown.action";
     }
-}
-
-+ (NSString *)logLineWithProvider:(NSString *)providerName
-                         strategy:(A2JITStrategy)strategy
-                          verdict:(A2JITReadinessVerdict)verdict
-                         evidence:(nullable NSString *)evidence {
-    // 一行定成败：Provider / 版本档 / verdict / 取证摘要。
-    return [NSString stringWithFormat:
-            @"[A2JIT] provider=%@ strategy=%@ verdict=%@(%ld) %@ evidence=%@",
-            providerName,
-            [A2JITStrategySelector displayNameForStrategy:strategy],
-            [self displayNameForVerdict:verdict],
-            (long)verdict,
-            [self diagnosticForVerdict:verdict],
-            evidence.length ? evidence : @"(无取证记录)"];
 }
 
 @end

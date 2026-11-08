@@ -102,6 +102,14 @@ FOUNDATION_EXPORT NSString *A2VersionFolderDisplayName(A2VersionFolder folder);
 /// 本属性只存用户的选择 —— ★判定不改写它★）。
 /// 落盘键：`sfpewCompatLayer`（`{版本目录}/.air_version/config.json`）。
 @property (nonatomic, assign) BOOL sfpewCompatLayer;
+
+/// ★[A2-GL2] 「自研固定管线层」开关★（实例级；`Set=NO` 表示没设置过 ⇒ 按版本自动）。
+/// 语义：用我们自己的 GL2 层（JNI 抢占 org.lwjgl.opengl.GL11）接管 glBegin/矩阵栈/立即模式，
+///       不依赖第三方 FPE 包装，也不改 `org.lwjgl.opengl.libname`。
+/// 自动档：mcMinor ≤ 12 默认开；1.13–1.16 需手动打开（逐版本验证后再考虑放开）。
+/// 落盘键：`gl2FixedPipeline` / `gl2FixedPipelineSet`（`{版本目录}/.air_version/config.json`）。
+@property (nonatomic, assign) BOOL gl2FixedPipeline;
+@property (nonatomic, assign) BOOL gl2FixedPipelineSet;
 @property (nonatomic, copy, nullable) NSString *driver;
 @property (nonatomic, copy, nullable) NSString *javaRuntime;
 @property (nonatomic, copy, nullable) NSString *jvmArgs;

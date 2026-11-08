@@ -203,11 +203,12 @@
     _card.transform = CGAffineTransformMakeScale(0.85, 0.85);
     self.alpha = 0;
 
-    [UIView animateWithDuration:0.24
+    // ★2026-11-07 用户拍板★ 出现：0.32s / damping 0.86 / 初速 0
+    [UIView animateWithDuration:0.32
                           delay:0
-         usingSpringWithDamping:0.78
-          initialSpringVelocity:0.4
-                        options:UIViewAnimationOptionCurveEaseOut
+         usingSpringWithDamping:0.86
+          initialSpringVelocity:0.0
+                        options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState
                      animations:^{
         self.alpha = 1;
         self.card.transform = CGAffineTransformIdentity;
@@ -215,7 +216,13 @@
 }
 
 - (void)dismiss {
-    [UIView animateWithDuration:0.16 animations:^{
+    // ★2026-11-07★ 消失：0.22s / damping 0.95（不回弹、快速收）
+    [UIView animateWithDuration:0.22
+                          delay:0
+         usingSpringWithDamping:0.95
+          initialSpringVelocity:0.0
+                        options:UIViewAnimationOptionCurveEaseIn | UIViewAnimationOptionBeginFromCurrentState
+                     animations:^{
         self.alpha = 0;
         self.card.transform = CGAffineTransformMakeScale(0.92, 0.92);
     } completion:^(BOOL finished) {

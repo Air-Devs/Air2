@@ -131,7 +131,7 @@ NSString *A2RPPairableHostFailureName(A2RPPairableHostFailure failure);
 
 /// ★生产调用点★：把 [A2-RXPC] 整层的就绪度与契约写进判据行（[RXPC]），并做一次【有界】的
 /// 编解码自证（帧 / HPACK / XPC 往返）与 pairable-host 通告契约自证（authTag/txt/服务名）。
-/// 谁调它：Air2/Bridge/A2JITAutoPairingEngineBridge.m 的生成路径（只加一行，见报告）。
+/// 谁调它：暂无（JIT 页改版后自动配对 Bridge 已删；本模块作为下一阶段的机制件保留）。
 /// ★无网络动作、无副作用、不做 5 分钟等待★。
 void A2RXPCReportLayerReadiness(void);
 

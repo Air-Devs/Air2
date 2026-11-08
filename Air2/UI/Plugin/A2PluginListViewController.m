@@ -33,7 +33,9 @@
 #import "A2PluginListViewController.h"
 
 #import "A2Dialog.h"
+#import "A2Log.h"                     // [A2-PLUGIN-UI] 启动保护自动停用 ⇒ 摘贡献点
 #import "A2PluginBootGuard.h"
+#import "A2PluginContributionHost.h"   // ★P2 装配处★ 共享包注册表 / 安装器 / 贡献点注册表
 #import "A2PluginInstaller.h"
 #import "A2PluginLaunchChainConfirm.h"
 #import "A2PluginManifest.h"
@@ -241,10 +243,12 @@ static void A2PluginConfirmUninstall(UIViewController *presenter,
 @implementation A2PluginListViewController
 
 + (instancetype)defaultController {
-    // P1 还没有插件运行时装配处：按默认目录建一套，注册表与安装器共用同一个实例。
-    A2PluginRegistry *registry = [[A2PluginRegistry alloc] initWithPluginsDirectory:nil];
-    A2PluginInstaller *installer = [[A2PluginInstaller alloc] initWithRegistry:registry];
-    return [[self alloc] initWithRegistry:registry installer:installer];
+    // ★P2 装配处★ 包注册表与安装器都取自 `A2PluginContributionHost`：
+    //   · 全进程只有一份安装器与一份贡献点注册表 —— 在这里启用/停用/卸载时，
+    //     七处宿主插入点读到的就是同一份状态，「停用 ⇒ 界面立刻不画」才成立；
+    //   · 各页自己 `initWithPluginsDirectory:` 建一份的话，贡献点注册表会跟着变成两份。
+    return [[self alloc] initWithRegistry:[A2PluginContributionHost packageRegistry]
+                                installer:[A2PluginContributionHost installer]];
 }
 
 - (instancetype)init {
@@ -260,7 +264,10 @@ static void A2PluginConfirmUninstall(UIViewController *presenter,
         _registry = registry;
         _installer = installer;
         _store = [[A2PluginPermissionStore alloc] initWithRegistry:registry];
-        _hostMilestone = A2PluginMilestoneP1;
+        // ★2026-11-01 真机反馈（阿帅）★ 这行的默认值曾写成 P1，而所有权限的
+        //   「生效里程碑」都是 P2 ⇒ 详情页把每一项都标成「当前版本不可用」。
+        //   宿主当前阶段就是 P2（纯 JSON 声明），这里必须与之对齐。
+        _hostMilestone = A2PluginMilestoneP2;
     }
     return self;
 }
@@ -275,6 +282,17 @@ static void A2PluginConfirmUninstall(UIViewController *presenter,
     // 只在 viewDidLoad 结算一次：viewWillAppear 会反复来，重复结算虽然幂等，
     // 但没必要每次都读盘写盘。
     self.autoDisabledEntries = [A2PluginBootGuard evaluatePreviousLaunch];
+
+    // ★P2 一致性★ 被启动保护自动停用的插件，贡献点要立刻从共享注册表摘掉。
+    //   BootGuard 只改 registry 的 `enabled`（它不持有贡献点注册表），不摘的话七处插入点
+    //   会继续画一个已经被停用的插件，直到下次启动 —— 那正是「停用 ⇒ 界面不画」的反例。
+    A2PluginContributionRegistry *contributions = [A2PluginContributionHost contributionRegistry];
+    for (A2PluginRegistryEntry *autoDisabled in self.autoDisabledEntries) {
+        if ([contributions removeContributionsForPlugin:autoDisabled.pluginId]) {
+            [A2Log criterion:@"[A2-PLUGIN-UI] 启动保护自动停用 %@ ⇒ 贡献点已摘除", autoDisabled.pluginId];
+        }
+    }
+
     [self reload];
 }
 

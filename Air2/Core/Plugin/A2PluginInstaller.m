@@ -24,6 +24,15 @@
 //  所以顺序是「新目录就位 → 写注册表 → 旧目录收走」，
 //  而不是「旧目录先搬走 → 新目录就位 → 写注册表」。
 //
+//  ## 贡献点（P2 第一步）的三条接线
+//
+//  安装成功 ⇒ `applyContributionSet:`；卸载 / 停用 ⇒ `removeContributionsForPlugin:`（幂等）。
+//  接入点在**换目录之前**：贡献点在安装期唯一的失败原因是设置项键被别的插件占用
+//  （`E_SLOT_CONFLICT`），文档要求「冲突在安装期拒装」（PLUGIN-SYSTEM 5.2 / DECISIONS 决策 6），
+//  所以要赶在任何落盘之前 —— 装完再发现冲突，目录与 registry 都得回滚。
+//  接入之后到安装成功之间的每条失败分支都会撤回（`withdrawContributionsForPluginId:`）：
+//  贡献点注册表是运行时缓存，下次启动 Phase A 按磁盘重建，不会留下永久错位。
+//
 
 #import "A2PluginInstaller.h"
 
@@ -147,6 +156,21 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
 
 @interface A2PluginInstaller ()
 @property (nonatomic, strong) A2PluginRegistry *registry;
+
+/// 当前宿主里程碑 —— 唯一判据是 `allowsJSPlugins`。
+/// 写两处（能力门一个答案、贡献点校验另一个答案）会让同一个 js 包一层放行一层拒装。
+- (A2PluginHostMilestone)contributionHostMilestone;
+
+/// 把一份已验证的贡献集接进注册表，并记一行判据日志（成功写条数、冲突写原因码）。
+/// @return 成功 YES；冲突 NO 并给出 `E_SLOT_CONFLICT`（注册表未被改动）。
+- (BOOL)attachContributionSet:(A2PluginContributionSet *)set error:(NSError **)error;
+
+/// 把一个插件的贡献从注册表摘掉并记一行判据日志。幂等：不在册也记「0 条」。
+- (void)withdrawContributionsForPluginId:(NSString *)pluginId;
+
+/// 读**已装版本**的 manifest 字节重做一次贡献点校验（停用 → 重新启用时用它把贡献接回）。
+- (nullable A2PluginContributionSet *)contributionSetForInstalledPluginId:(NSString *)pluginId
+                                                                   error:(NSError **)error;
 @end
 
 @implementation A2PluginInstaller
@@ -161,6 +185,9 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
     self = [super init];
     if (self) {
         _registry = registry;
+        // 贡献点注册表默认自建：装配处换成共享实例之前，「停用 / 卸载 ⇒ 贡献点消失」
+        // 也已经成立（见头文件）。
+        _contributionRegistry = [A2PluginContributionRegistry new];
         _limits = A2PluginDefaultLimits();
         _allowsDowngrade = NO;
         _allowsJSPlugins = NO;
@@ -297,7 +324,133 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
     return entry;
 }
 
+#pragma mark 贡献点（P2 第一步）
+
+/// 当前宿主里程碑：`allowsJSPlugins` 就是「本宿主阶段有没有 JSCore」。
+/// P1 的能力门（`manifest.type == js && !allowsJSPlugins`）与贡献点校验共用这一个判据，
+/// 两处各写一份的话，同一个 js 包会被一层放行、一层拒装。
+- (A2PluginHostMilestone)contributionHostMilestone {
+    return self.allowsJSPlugins ? A2PluginHostMilestoneP3a : A2PluginHostMilestoneP2;
+}
+
+- (BOOL)attachContributionSet:(A2PluginContributionSet *)set error:(NSError **)error {
+    A2PluginContributionRegistry *contributions = self.contributionRegistry;
+    if (!contributions) {
+        // 装配处显式置 nil = 明确不接贡献点（离线迁移 / 单测）。不伪造一行「已接入」。
+        return YES;
+    }
+
+    NSError *applyError = nil;
+    if (![contributions applyContributionSet:set error:&applyError]) {
+        [self logLine:@"贡献点没能接入注册表：%@（%@）—— %@",
+         set.pluginId,
+         applyError.userInfo[A2PluginErrorCodeKey] ?: @"E_UNKNOWN",
+         applyError.localizedDescription ?: @"未知原因"];
+        if (error) *error = applyError;
+        return NO;
+    }
+
+    NSUInteger count = [contributions contributionCountForPlugin:set.pluginId];
+    [self logLine:@"贡献点已接入注册表：%@ %@ 共 %lu 条（slot %lu / 主题 token %lu / 版本装饰 %@）",
+     set.pluginId, set.pluginVersion, (unsigned long)count,
+     (unsigned long)set.slotContributions.count,
+     (unsigned long)set.themeTokens.count,
+     set.versionDecoration ? @"有" : @"无"];
+    return YES;
+}
+
+- (void)withdrawContributionsForPluginId:(NSString *)pluginId {
+    A2PluginContributionRegistry *contributions = self.contributionRegistry;
+    if (!contributions) return;
+
+    // 先取条数再摘：摘完就查不到了，而日志要的是「移除了多少」。
+    NSUInteger count = [contributions contributionCountForPlugin:pluginId];
+    if (![contributions removeContributionsForPlugin:pluginId]) {
+        [self logLine:@"贡献点无需移除：%@（本来就不在册，0 条）", pluginId];
+        return;
+    }
+    [self logLine:@"贡献点已移出注册表：%@ 共 %lu 条", pluginId, (unsigned long)count];
+}
+
+- (nullable A2PluginContributionSet *)contributionSetForInstalledPluginId:(NSString *)pluginId
+                                                                   error:(NSError **)error {
+    A2PluginRegistryEntry *entry = [self.registry entryForPluginId:pluginId];
+    if (!entry) {
+        if (error) {
+            *error = A2PluginErrorMake(A2PluginErrorField, @"id", @"注册表里没有 %@", pluginId);
+        }
+        return nil;
+    }
+
+    // 路径知识只留在安装器里（ARCHITECTURE：View 不拼路径），与 installedManifestForPluginId: 同一套目录布局。
+    NSString *manifestPath =
+        [[[self.pluginsDirectory stringByAppendingPathComponent:pluginId]
+          stringByAppendingPathComponent:entry.version]
+         stringByAppendingPathComponent:@"manifest.json"];
+    NSData *manifestData = [NSData dataWithContentsOfFile:manifestPath];
+    if (!manifestData) {
+        if (error) {
+            *error = A2PluginErrorMake(A2PluginErrorManifestMissing, nil,
+                                       @"已装版本里没有 manifest.json：%@", manifestPath);
+        }
+        return nil;
+    }
+
+    // 宿主版本只有解包器一处从 Info.plist 取（同一个回落口径），这里借它建一次校验，
+    // 不另抄一份「宿主版本怎么来」。
+    A2PluginPackageExtractor *extractor = [[A2PluginPackageExtractor alloc] initWithLimits:self.limits];
+    extractor.hostMilestone = [self contributionHostMilestone];
+    return [A2PluginContributionSet setWithManifestData:manifestData
+                                           hostVersion:extractor.hostVersion
+                                             milestone:extractor.hostMilestone
+                                                 error:error];
+}
+
 #pragma mark 安装
+
+- (NSUInteger)attachContributionsForEnabledPlugins {
+    if (!self.contributionRegistry) {
+        // 装配处显式置 nil = 不接贡献点（与 attachContributionSet: 同一口径，不伪造一行）。
+        return 0;
+    }
+
+    NSError *loadError = nil;
+    if (![self.registry loadWithError:&loadError]) {
+        // 读不出来就一条都不接：注册表是唯一事实来源，读不出来时「谁启用着」没有答案。
+        [self logLine:@"启动装配跳过：注册表读不出来 —— %@",
+         loadError.localizedDescription ?: @"未知原因"];
+        return 0;
+    }
+
+    NSUInteger enabledCount = 0;
+    NSUInteger attachedCount = 0;
+    NSUInteger skippedCount = 0;
+    for (A2PluginRegistryEntry *entry in [self.registry allEntries]) {
+        if (!entry.isEnabled) continue;      // 停用的插件本来就不该在册
+        enabledCount++;
+
+        NSError *setError = nil;
+        A2PluginContributionSet *set = [self contributionSetForInstalledPluginId:entry.pluginId
+                                                                          error:&setError];
+        if (!set) {
+            skippedCount++;
+            [self logLine:@"启动装配跳过 %@：贡献点校验不过（%@）—— %@",
+             entry.pluginId,
+             setError.userInfo[A2PluginErrorCodeKey] ?: @"E_UNKNOWN",
+             setError.localizedDescription ?: @"未知原因"];
+            continue;
+        }
+        if (![self attachContributionSet:set error:NULL]) {
+            skippedCount++;                  // 具体原因已由 attachContributionSet: 记过一行
+            continue;
+        }
+        attachedCount++;
+    }
+
+    [self logLine:@"启动装配：已启用插件 %lu 个，贡献点接入 %lu 个（跳过 %lu 个）",
+     (unsigned long)enabledCount, (unsigned long)attachedCount, (unsigned long)skippedCount];
+    return attachedCount;
+}
 
 /// 无闸门入口：转发而已（见头文件：会改启动链的包在这里必被拒，不静默放行）。
 - (nullable A2PluginInstallResult *)installPackageAtURL:(NSURL *)url
@@ -345,9 +498,11 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
     }
     NSString *root = [staging stringByAppendingPathComponent:@"root"];
 
-    // ① 校验 + 解压 + manifest + 完整性 + 摘要
+    // ① 校验 + 解压 + manifest + 贡献点 + 完整性 + 摘要
     A2PluginPackageExtractor *extractor =
         [[A2PluginPackageExtractor alloc] initWithLimits:self.limits];
+    // 里程碑与 ② 的宿主能力门必须是同一个答案（见 contributionHostMilestone）。
+    extractor.hostMilestone = [self contributionHostMilestone];
     NSError *extractError = nil;
     A2PluginPackage *package = [extractor extractPackageAtURL:url
                                                 intoDirectory:root
@@ -389,6 +544,13 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
             [NSFileManager.defaultManager removeItemAtPath:staging error:NULL];
             [self logLine:@"同一份内容已装过（%@ %@），本次只做校验，不动磁盘",
              manifest.pluginId, manifest.version];
+
+            // 已装过的插件本来就该在贡献点注册表里。重装是修复它的唯一机会（比如上次进程
+            // 启动时注册表还没建成），所以这里**顺手接一次**：幂等替换，冲突只记一行、不失败
+            // —— 这次安装本身什么都没改，不能因为「别的插件占了同一个设置项键」把重装报错。
+            if (package.contributionSet) {
+                [self attachContributionSet:package.contributionSet error:NULL];
+            }
 
             A2PluginInstallResult *reused = [A2PluginInstallResult new];
             reused.entry = existing;
@@ -465,6 +627,28 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
         [self logLine:@"启动链免责确认通过：%@ —— 继续安装", manifest.pluginId];
     }
 
+    // ④.5 ★把贡献点接进注册表★（P2 第一步）
+    // ========================================================================
+    // 判据：`A2PluginPackageExtractor` 已把 manifest 的 `ui` / `contributes` 校验成
+    //   `package.contributionSet`（校验不过的包在 ① 就拒装了），这里只负责接入。
+    // 时机：★换目录 / 写 registry 之前★ —— 这里唯一可能的失败是「设置项键已被别的插件占用」
+    //   （`E_SLOT_CONFLICT`），文档要求「冲突在安装期拒装」（PLUGIN-SYSTEM 5.2 / DECISIONS 决策 6）。
+    //   放到装完再判，就得回滚目录与 registry 两处状态。
+    // 代价：接入成功到安装成功之间有一小段窗口；窗口内失败一律 withdraw（下面每条失败分支都有），
+    //   注册表是运行时缓存，下次启动 Phase A 按磁盘重建，不会留下永久错位。
+    // ========================================================================
+    A2PluginContributionSet *contributionSet = package.contributionSet;
+    if (contributionSet) {
+        NSError *contributionError = nil;
+        if (![self attachContributionSet:contributionSet error:&contributionError]) {
+            [NSFileManager.defaultManager removeItemAtPath:staging error:NULL];
+            [self logLine:@"安装失败：贡献点与已装插件冲突（%@）—— 暂存已清理，registry 未写",
+             contributionError.userInfo[A2PluginErrorCodeKey] ?: @"E_UNKNOWN"];
+            if (error) *error = contributionError;
+            return nil;
+        }
+    }
+
     // ⑤ 换目录（同卷 rename，原子）
     NSFileManager *fileManager = NSFileManager.defaultManager;
     NSString *pluginDirectory =
@@ -477,6 +661,7 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
                                       error:NULL]) {
         [fileManager removeItemAtPath:staging error:NULL];
         [self logLine:@"安装失败：建不出插件目录（%@）", pluginDirectory];
+        [self withdrawContributionsForPluginId:manifest.pluginId];
         if (error) {
             *error = A2PluginErrorMake(A2PluginErrorIO, nil, @"建不出插件目录：%@", pluginDirectory);
         }
@@ -488,6 +673,8 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
         [self logLine:@"目标目录是上次留下的孤儿，先清掉：%@", target];
         if (![fileManager removeItemAtPath:target error:NULL]) {
             [fileManager removeItemAtPath:staging error:NULL];
+            [self logLine:@"安装失败：清不掉上次留下的目录（%@）", target];
+            [self withdrawContributionsForPluginId:manifest.pluginId];
             if (error) {
                 *error = A2PluginErrorMake(A2PluginErrorIO, nil,
                                            @"清不掉上次留下的目录：%@", target);
@@ -500,6 +687,7 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
         int renameErrno = errno;      // 先抓住：后面的清理会改写 errno
         [fileManager removeItemAtPath:staging error:NULL];
         [self logLine:@"安装失败：换目录失败（%s）", strerror(renameErrno)];
+        [self withdrawContributionsForPluginId:manifest.pluginId];
         if (error) {
             *error = A2PluginErrorMake(A2PluginErrorIO, nil, @"换目录失败：%s",
                                        strerror(renameErrno));
@@ -518,6 +706,7 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
         [fileManager removeItemAtPath:staging error:NULL];
         [self logLine:@"安装失败：注册表写不下去 —— %@（目录已就位，下次启动按孤儿清理）",
          upsertError.localizedDescription ?: @"未知原因"];
+        [self withdrawContributionsForPluginId:manifest.pluginId];
         if (error) {
             *error = A2PluginErrorMake(A2PluginErrorIO, nil,
                                        @"注册表写不下去：%@",
@@ -661,6 +850,27 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
         return NO;
     }
     [self logLine:@"用户%@插件：%@", enabled ? @"启用" : @"停用", pluginId];
+
+    // 贡献点跟着开关走：停用 ⇒ 立刻摘掉（不等下次启动）；启用 ⇒ 重新校验后接回去。
+    // 位置在写盘成功之后：registry 写不进去时内存已经回滚，贡献点也不该先动。
+    if (!enabled) {
+        [self withdrawContributionsForPluginId:pluginId];
+        return YES;
+    }
+
+    // 重新启用：从**已装版本**的 manifest 重做一次同样的贡献点校验再接入。
+    // 失败不改变「启用成功」这个结果 —— 开关已经写进 registry 了，回滚开关比少几条贡献更糟；
+    // 记一行说明，下次启动 Phase A 会重新接入。
+    NSError *contributionError = nil;
+    A2PluginContributionSet *set = [self contributionSetForInstalledPluginId:pluginId
+                                                                       error:&contributionError];
+    if (!set) {
+        [self logLine:@"启用后贡献点没能接回：%@（%@）—— %@；下次启动 Phase A 会重新接入",
+         pluginId, contributionError.userInfo[A2PluginErrorCodeKey] ?: @"E_UNKNOWN",
+         contributionError.localizedDescription ?: @"未知原因"];
+        return YES;
+    }
+    [self attachContributionSet:set error:NULL];
     return YES;
 }
 
@@ -687,6 +897,7 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
     A2PluginRegistryEntry *entry = [self.registry entryForPluginId:pluginId];
     if (!entry) {
         [self logLine:@"卸载跳过：%@ 本来就没装", pluginId];
+        [self withdrawContributionsForPluginId:pluginId];   // 幂等：注册表与贡献点都可能已经在
         return YES;      // 幂等：没装过也算卸干净了
     }
     if ([self.builtinPluginIds containsObject:pluginId]) {
@@ -709,6 +920,9 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
         }
         return NO;
     }
+
+    // 条目没了，贡献点也要立刻消失：留着它会让 UI 继续画一个已经不存在的插件的东西。
+    [self withdrawContributionsForPluginId:pluginId];
 
     // 再删目录。删不干净不算失败：下次启动按孤儿目录清理（4.6 第 3 条）
     NSFileManager *fileManager = NSFileManager.defaultManager;
@@ -884,6 +1098,15 @@ static BOOL A2RenamePath(NSString *from, NSString *to) {
                                        upsertError.localizedDescription ?: @"未知原因");
         }
         return NO;
+    }
+
+    // ④ 贡献点跟着回退后的版本走：换回的是「上一版能贡献什么」，不是当前版的。
+    // 回退失败不影响回退结果（目录与 registry 都已就位），失败只记一行，下次启动 Phase A 重建。
+    [self withdrawContributionsForPluginId:pluginId];
+    A2PluginContributionSet *rolledBackSet =
+        [self contributionSetForInstalledPluginId:pluginId error:NULL];
+    if (rolledBackSet) {
+        [self attachContributionSet:rolledBackSet error:NULL];
     }
 
     [self logLine:@"回退完成：%@ %@ → %@", pluginId, entry.version, oldManifest.version];

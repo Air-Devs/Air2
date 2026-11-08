@@ -20,14 +20,20 @@
 //        行为事实），未复制其任何代码。
 // ============================================================================
 #include <pthread.h>
+#include <sys/mman.h>          // ★[A2-MG-SHIM] mprotect（改写 MG 的 glGetError）
+#include <libkern/OSCacheControl.h>   // sys_icache_invalidate
+#include <errno.h>
 #import "a2_gl_bridge.h"
 #import "a2_gl2_shim.h"   // ★[A2-GL2] 自研固定管线（默认关；见 a2_gl2_shim.m 文件头）★
 #import "a2_log.h"
 #import "a2_frame_perf.h"   // ★[FRAME-PERF] 与渲染器无关的帧性能判据（本文件的帧动作每帧记一次）
 #import "A2JITEnvironment.h"   // ★[A2PROBE]★ a2_jit_probe_arm（把 KW/ANGLE 的 glLoadIdentity 交给脚本布断点）
-#import "a2_eagl_egl.h"        // ★宿主 EGL 后端★：A2FakeEglWindowSize（上屏建面的实参）
+#import "a2_gl_egl_types.h"     // ★EAGL 已移除★：只保留 EGL 类型/常量（实现属 MG/ANGLE）
 #import "a2_sfpew_host.h"      // ★[A2-SFPEW] 固定管线档位★：只在本档位命中时被调用（见 ①c / ④ / ⑤b）
 
+#if TARGET_OS_IPHONE || TARGET_OS_SIMULATOR
+#import <UIKit/UIKit.h>      // ★图层补救用：UIWindow / UIScene / UIView（1.20.1 同款修法）
+#endif
 #import <objc/message.h>   // objc_msgSend（动态取 layer 用；不 import UIKit）
 #import <dlfcn.h>
 #include <unistd.h>       // usleep（首次 make_current 等宿主视图就绪的有界等待）
@@ -155,6 +161,20 @@ static int   gHostEgl = 0;
 /// 独立档位 / 兼容层都不成立时它恒为 0，现有各版本的路径与全局状态（环境变量 / 句柄）一字不动。
 static int   gSfpewTier = 0;
 
+/// ★2026-11-01 符号隔离开关★ 默认把 ANGLE / 渲染器 dylib 以 RTLD_LOCAL 加载，
+///   不让 egl*/gl* 进入进程的 flat namespace —— 这是「账号页闪退」的根治方向：
+///   系统框架（CoreImage/CoreUI）建 EAGL 上下文时不会再解析到我们的实现。
+///   回退开关：环境变量 A2_GL_RTLD=global（或 1）恢复旧的 RTLD_GLOBAL 行为。
+static int a2_gl_bridge_use_global_rtld(void) {
+    const char *v = getenv("A2_GL_RTLD");
+    if (v == NULL) return 0;                       // 默认 LOCAL
+    return (strcmp(v, "global") == 0 || strcmp(v, "GLOBAL") == 0 || strcmp(v, "1") == 0);
+}
+
+static int a2_gl_bridge_rtld_flags(void) {
+    return RTLD_LAZY | (a2_gl_bridge_use_global_rtld() ? RTLD_GLOBAL : RTLD_LOCAL);
+}
+
 /// ★[A2-SFPEW] 独立档位标记★：1 = 渲染器**就是** SFPEW（①c）。
 /// 与 `gSfpewTier` 分开的原因：兼容层（①d）**不接管建面/换页** —— 那三处（④ 不重复 dlopen /
 /// ⑤b makeCurrent+swapBuffers / ⑥ ES3 config）只认本标记 ⇒ 兼容层叠加时后端仍走它自己的原路径。
@@ -191,6 +211,8 @@ static int                gMgInitGlesDone = 0;      // 0 = 未调过；1 = 已�
 static void *gEglHandle  = NULL;
 static void *gGlesHandle = NULL;
 static void *gRendererHandle = NULL;   // 后端本体（compat 底 = libgl4es_114.dylib）
+
+
 
 static A2EGLDisplay gDpy = A2_EGL_NO_DISPLAY;
 static A2EGLConfig  gCfg = NULL;
@@ -497,11 +519,6 @@ static int a2_gl_bridge_use_own_egl(void) {
     //   假 EGL（CAEAGLLayer 上屏的唯一实现）。若让 `egl*` 归 MG，`eglCreateWindowSurface` 就不再
     //   走本层的假 EGL ⇒ 上屏链断（画面出不来，且日志只看到 MG 自己的 EGL）。
     //   ⇒ 这条判据优先级最高，与 gHostEgl 绑定（attach ①b 置位）。
-    if (gHostEgl) {
-        gEglSource = A2GlBridgeEglSourceAngle;
-        a2_log_criterion(@"[A2-GLBRIDGE] EGL 门面=主镜像假 EGL（libeagl.dylib 必须由本层接管 egl*）；宿主=本二进制（CAEAGLLayer）");
-        return 0;
-    }
     if (gRendererHandle == NULL) return 0;
     int got = 0, total = 0;
     const char *firstMissing = NULL;
@@ -553,7 +570,16 @@ static void a2_gl_bridge_log_egl_layers(void) {
 /// 已加载则直接成功（不会重复 dlopen）。
 static int a2_gl_bridge_open_renderer(const char *rendererPath) {
     if (gRendererHandle != NULL) return 1;
-    gRendererHandle = dlopen(rendererPath, RTLD_LAZY | RTLD_GLOBAL);
+    gRendererHandle = dlopen(rendererPath, a2_gl_bridge_rtld_flags());
+    a2_log_criterion(@"[A2-GLBRIDGE] 加载模式=%s（A2_GL_RTLD=%s）⇒ 渲染器镜像不进入 flat namespace",
+                     a2_gl_bridge_use_global_rtld() ? "RTLD_GLOBAL" : "RTLD_LOCAL(隔离)",
+                     getenv("A2_GL_RTLD") ?: "(默认)");
+    // ★2026-11-01 真机证据（lastlog-160）★ MobileGlues 的 glGetError 在它的跳转表
+    //   初始化前被调用会直接 SIGSEGV（栈：libmobileglues.dylib glGetError+24 →
+    //   JVM_handle_bsd_signal → os::abort）。glGetError 只用于诊断，恒返回 0 不影响画面
+    //   正确性 ⇒ 把这个函数的前两条指令改成 `mov w0,#0; ret`。
+    //   ★只在后端名含 mobileglues 时安装★，其它渲染器一个字节都不动。
+
     if (gRendererHandle == NULL) {
         const char *err = dlerror();
         a2_log_f(@"%s ★阻断★：后端本体 dlopen 失败 %s（%s）",
@@ -598,7 +624,7 @@ static int a2_gl_bridge_load_angle_first(NSString *eglPath, NSString *glesPath) 
         return 0;
     }
     if (gEglHandle == NULL) {
-        gEglHandle = dlopen(eglPath.UTF8String, RTLD_LAZY | RTLD_GLOBAL);
+        gEglHandle = dlopen(eglPath.UTF8String, a2_gl_bridge_rtld_flags());
         if (gEglHandle == NULL) {
             const char *err = dlerror();
             a2_log_f(@"[A2-GLBRIDGE] ★阻断★：ANGLE libEGL 先行加载失败 %s（%s）",
@@ -607,7 +633,7 @@ static int a2_gl_bridge_load_angle_first(NSString *eglPath, NSString *glesPath) 
         }
     }
     if (gGlesHandle == NULL) {
-        gGlesHandle = dlopen(glesPath.UTF8String, RTLD_LAZY | RTLD_GLOBAL);
+        gGlesHandle = dlopen(glesPath.UTF8String, a2_gl_bridge_rtld_flags());
         if (gGlesHandle == NULL) {
             const char *err = dlerror();
             a2_log_f(@"[A2-GLBRIDGE] ★阻断★：ANGLE libGLESv2 先行加载失败 %s（%s）",
@@ -993,6 +1019,55 @@ static void a2_gl_bridge_force_layer_visible(void *viewPtr, void *layerPtr) {
                  winAlpha ? [[winAlpha description] UTF8String] : "(nil)",
                  winBounds ? [[winBounds description] UTF8String] : "(nil)",
                  superview ? [NSStringFromClass([superview class]) UTF8String] : "(nil)");
+        // ★2026-11-08 复刻 1.20.1 修法★ 图层不在窗口里 ⇒ 主动挂到 key window 根视图。
+        //   1.20.1 当年就是「呈现目标必须真的在窗口里」才出画面；这里补同样的补救。
+        if (win == nil && view != nil) {
+            UIWindow *keyWin2 = nil;
+            for (UIScene *sc in UIApplication.sharedApplication.connectedScenes) {
+                if (![sc isKindOfClass:[UIWindowScene class]]) continue;
+                for (UIWindow *w in ((UIWindowScene *)sc).windows) {
+                    if (w.isKeyWindow) { keyWin2 = w; break; }
+                }
+                if (keyWin2 != nil) break;
+            }
+            if (keyWin2 == nil) keyWin2 = UIApplication.sharedApplication.windows.firstObject;
+            UIView *rootView = keyWin2.rootViewController.view;
+            if (rootView != nil) {
+                [(UIView *)view setFrame:rootView.bounds];
+                [rootView addSubview:view];
+                [rootView bringSubviewToFront:view];
+                NSValue *rb = [NSValue valueWithCGRect:rootView.bounds];
+                [layer setValue:rb forKey:@"frame"];
+                a2_log_f(@"[A2-GLBRIDGE] ★补救★ 图层原先不在窗口里 ⇒ 已挂到 key window 根视图（rootView=%p）",
+                         rootView);
+            } else {
+                a2_log_f(@"[A2-GLBRIDGE] ★补救失败★ 找不到 key window 的根视图");
+            }
+        }
+        // ★2026-11-08★ 每次核对都把 layer.frame / drawableSize 对齐到视图的真实像素尺寸
+        //   （5d6e7df 的结论：drawableSize 不显式设 ⇒ ANGLE 用“点”，viewport 只有 874x402）
+        if (view != nil) {
+            @try {
+                NSValue *vb = [view valueForKey:@"bounds"];
+                NSNumber *cs = [view valueForKey:@"contentScaleFactor"];
+                if ([vb isKindOfClass:[NSValue class]]) {
+                    CGRect vr = vb.CGRectValue;
+                    CGFloat sc = (cs != nil) ? cs.doubleValue : 3.0;
+                    [layer setValue:vb forKey:@"frame"];
+                    // ★视图被重新挂载后 UIKit 会把 contentsScale 重置成 1★
+                    //   ⇒ GLFW 报的 framebuffer 尺寸退回“点”（真机：第二次 fb=874x402）。
+                    //   每次对齐都重新写回，保证 fb 尺寸恒为像素。
+                    [layer setValue:@(sc) forKey:@"contentsScale"];
+                    [view setValue:@(sc) forKey:@"contentScaleFactor"];
+                    NSValue *ds = [NSValue valueWithCGSize:CGSizeMake(vr.size.width * sc, vr.size.height * sc)];
+                    [layer setValue:ds forKey:@"drawableSize"];
+                    a2_log_f(@"[A2-GLBRIDGE] drawableSize 对齐 %.0fx%.0f（点 %.0fx%.0f × %.2f）",
+                             vr.size.width * sc, vr.size.height * sc, vr.size.width, vr.size.height, sc);
+                }
+            } @catch (__unused NSException *e) {
+                a2_log_f(@"[A2-GLBRIDGE] drawableSize 对齐失败：%@", e.reason);
+            }
+        }
         [layer setValue:@NO forKey:@"hidden"];
         [layer setValue:@1 forKey:@"opacity"];
         [layer setValue:@1000 forKey:@"zPosition"];
@@ -1681,9 +1756,16 @@ static void a2_gl_bridge_ensure_game_view_surface(void) {
         //   这里最多等 500ms（100 × 5ms）只等「视图就绪」这一刻；到点仍没有 ⇒ 照常先返回、
         //   继续用原表面（不阻断启动），并留给后续 make_current 再试。
         //   ★主线程上不等★：视图正是在主队列上建的，主线程等自己只会白等（还会拖慢启动）。
-        for (int i = 0; i < 100 && gameView == NULL; i++) {
-            usleep(5 * 1000);
-            gameView = a2_glfw_window_game_view();
+        // ★2026-11-07 lastlog-237★ 只等一次，不要每帧等。
+        //   实测：视图长期取不到 ⇒ 原来这套 100×5ms 每帧都跑满 500ms，
+        //   于是每帧固定 605ms（1.6fps）。改成进程内只尝试一次。
+        static int a2_rebindWaitTried = 0;
+        if (!a2_rebindWaitTried) {
+            a2_rebindWaitTried = 1;
+            for (int i = 0; i < 100 && gameView == NULL; i++) {
+                usleep(5 * 1000);
+                gameView = a2_glfw_window_game_view();
+            }
         }
     }
     if (gameView == NULL) {
@@ -1723,13 +1805,13 @@ static void a2_gl_bridge_ensure_game_view_surface(void) {
     // ★宿主 EGL 后端：同样要包成 A2FakeEglWindowSize（上屏）★ —— 与 attach ⑥1 共用同一个实参产地。
     A2FakeEglWindowSize hostWinBox = { 0, 0, NULL };
     A2FakeEglWindowSize *hostWinBoxPtr = NULL;
-    if (gHostEgl) {
+    if (0) {
         hostWinBox.width  = (A2EGLint)gWidthPixels;
         hostWinBox.height = (A2EGLint)gHeightPixels;
         hostWinBox.layer  = want;
         hostWinBoxPtr = &hostWinBox;
     }
-    void *eglWant = gHostEgl ? want : a2_gl_bridge_metal_layer_for(want);
+    void *eglWant = a2_gl_bridge_metal_layer_for(want);
     A2EGLSurface newSurf = A2_EGL_NO_SURFACE;
     if (a2_gl_bridge_is_krypton()) {
         // KW 家族在 attach 里就是「NULL 属性」（对齐老 Air 建面顺序）⇒ 这里保持一致。
@@ -1818,7 +1900,9 @@ static void a2_gl_bridge_frame_work(void) {
     if (gGamePresented) return;   // 游戏在画 ⇒ 本层不再清屏/呈现
 
     // ★首次 make_current 的表面改绑★（游戏页盖在黑底上 ⇒ 必须改挂到 GLFW 宿主视图）
+    const double t_start = CFAbsoluteTimeGetCurrent();
     a2_gl_bridge_ensure_game_view_surface();
+    const double t_surf = CFAbsoluteTimeGetCurrent();
 
     // ★2026-10-18 真机证据★ EGL 上下文同一时刻只能绑在【一个】线程上。
     //   我们过去在附着时 eglMakeCurrent 后一直占着它 ⇒ MC 渲染线程调
@@ -1826,6 +1910,7 @@ static void a2_gl_bridge_frame_work(void) {
     //   "There is no OpenGL context current in the current thread"。
     //   ⇒ 本层每帧【借用】上下文：进来绑定，画完立刻归还（NO_SURFACE/NO_CONTEXT）。
     if (gEglMakeCurrent != NULL) gEglMakeCurrent(gDpy, gSurf, gSurf, gCtx);
+    const double t_makec = CFAbsoluteTimeGetCurrent();
 
     gFrameCount++;
     uint32_t glErr = 0;
@@ -1840,6 +1925,7 @@ static void a2_gl_bridge_frame_work(void) {
 
     if (gGLClearColor != NULL) gGLClearColor(0.0f, 0.0f, 0.0f, 0.0f);
     if (gGLClear != NULL)      gGLClear(A2_GL_COLOR_BUFFER_BIT);
+    const double t_clear = CFAbsoluteTimeGetCurrent();
 
     // ---- ② ★可核对证据★：读回 scissor box（= 本帧真正被清屏/绘制的像素区域）----
     //   与 gWidthPixels/gHeightPixels 一致 ⇒ 「本帧确实按缩放尺寸清屏」有据可查；
@@ -1881,6 +1967,19 @@ static void a2_gl_bridge_frame_work(void) {
              (void *)gSurf);
 
     if (gFrameCb != NULL) gFrameCb(gFrameUser);
+    // ★2026-11-07 lastlog-236★ 单帧固定 605ms ⇒ 分段计时，指出钱花在哪一段
+    {
+        const double t_cb = CFAbsoluteTimeGetCurrent();
+        const double total = (t_cb - t_start) * 1000.0;
+        if (total > 50.0 || gFrameCount <= 3) {
+            a2_log_f(@"[A2-FRAME-TIME] 帧 #%d 共 %.1fms（surface=%.1f makec=%.1f clear=%.1f cb=%.1f）",
+                     gFrameCount, total,
+                     (t_surf - t_start) * 1000.0,
+                     (t_makec - t_surf) * 1000.0,
+                     (t_clear - t_makec) * 1000.0,
+                     (t_cb - t_clear) * 1000.0);
+        }
+    }
 
     // ★归还上下文★：把本线程的 current 解绑，MC 的渲染线程才绑得上。
     if (gEglMakeCurrent != NULL) gEglMakeCurrent(gDpy, NULL, NULL, NULL);
@@ -1912,8 +2011,34 @@ int a2_gl_bridge_make_current(void) {
 
 /// ★供 glfwSwapBuffers 调用★：只做「把当前表面 swap 上屏」，不碰 viewport/scissor、
 /// 不清屏、不改上下文绑定 —— 内容由游戏自己画，我们只负责提交。
+/// 见 a2_gl_bridge.h 的说明。★唯一调用点★：metallum 后端安装时取呈现目标。
+void *a2_gl_bridge_renderable_for_game_view(void) {
+    void *view = a2_glfw_window_game_view();
+    if (view == NULL) return NULL;
+    return a2_gl_bridge_metal_layer_for(a2_gl_bridge_renderable_handle(view));
+}
+
+/// metallum 后端「立刻收帧并呈现」（实现见 a2_gl2_backend_metallum.m）
+extern void a2gl2_metallum_present_now(void);
+
 void a2_gl_bridge_swap_buffers(void) {
     if (!gAttached) return;
+
+    // ★2026-11-07 真机 lastlog-235★ 一进 swap 就让预览循环让路。
+    //   原来 gGamePresented 是在 swap **成功之后**才置位；MC 第一次 swap 若卡住，
+    //   预览线程会继续清屏+呈现（日志里 600ms 一帧），两个线程抢同一个 drawable ⇒ 互相等死。
+    //   现在改为「开始 swap 就置位」：预览立刻停，只留 MC 一个呈现者。
+    if (!gGamePresented) {
+        gGamePresented = 1;
+        a2_log_f(@"[A2-GLBRIDGE] 游戏开始 swap ⇒ 预览循环立即让路（不再等 swap 成功）");
+        dispatch_async(dispatch_get_main_queue(), ^{
+            [NSNotificationCenter.defaultCenter postNotificationName:@"A2GameFirstFrame" object:nil];
+        });
+    }
+
+    // ★2026-11-07 真机 lastlog-216★ MC 每帧 swap 时把 metallum 的帧收掉并呈现到 layer。
+    //   不收帧 ⇒ 只在 offscreen colorTex 上画 ⇒ 屏幕全黑。
+    a2gl2_metallum_present_now();
     if (gEglSwapBuffers != NULL && gDpy != NULL && gSurf != NULL) {
         // ★2026-10-31 黑屏判定★ 提交前读中心 1 个像素（每 60 次打一行）：
         //   非 0/0/0 ⇒ 画面确实在画，问题在「呈现到图层」；
@@ -1936,8 +2061,13 @@ void a2_gl_bridge_swap_buffers(void) {
                      (curCtx == (void *)gCtx) ? "（同一上下文 ⇒ 画在本层表面）"
                                               : "（★不同上下文 ⇒ MC 画在别处★）");
         }
+        // ★2026-11-07 hs_err_pid1575 + lastlog-236★ 像素采样默认关闭。
+        //   两个实证后果：
+        //     ① glReadPixels 在 ANGLE/Metal 上强制 GPU 同步 ⇒ 每帧固定 605ms（1.7fps）
+        //     ② 真机 SIGBUS：libGLESv2 → rx::FramebufferMtl::getImplementationColorReadFormat
+        //   ⇒ 只在显式设了 A2_PX_PROBE=1 时才采样（排查用），正常启动不再读像素。
         static unsigned long a2_pxProbeN = 0;
-        if ((++a2_pxProbeN % 60) == 1) {
+        if (getenv("A2_PX_PROBE") != NULL && (++a2_pxProbeN % 60) == 1) {
             typedef void (*A2PFN_glReadPixels)(int, int, int, int, unsigned, unsigned, void *);
             // ★从 GL 层句柄取★：flat namespace 可能解析到系统 GLES（MG 报过 SYMBOL THEFT），
             //   那样读的就不是 MC 实际绘制用的那条链路 ⇒ 恒 0 是假象。
@@ -1952,6 +2082,7 @@ void a2_gl_bridge_swap_buffers(void) {
             if (rp != NULL && gWidthPixels > 2 && gHeightPixels > 2) {
                 unsigned char px[4] = { 0, 0, 0, 0 };
                 rp(gWidthPixels / 2, gHeightPixels / 2, 1, 1, 0x1908 /*GL_RGBA*/, 0x1401 /*GL_UNSIGNED_BYTE*/, px);
+
                 a2_log_f(@"[A2-GLBRIDGE] 采样中心像素 #%lu = R%u G%u B%u A%u（全 0 ⇒ 没画；非 0 ⇒ 画了没上屏）",
                          a2_pxProbeN, px[0], px[1], px[2], px[3]);
                 a2_log_f(@"[A2-GLBRIDGE] 像素采样来源=%s handle=%p", rpSrc, glLayerHandle);
@@ -1960,27 +2091,94 @@ void a2_gl_bridge_swap_buffers(void) {
         if (!gGamePresented) {
             gGamePresented = 1;   // 第一次由游戏提交 ⇒ 停掉预览清屏循环
             a2_log_f(@"[A2-GLBRIDGE] 游戏已开始提交帧 ⇒ 预览清屏循环让路（首次 glfwSwapBuffers）");
+            // ★2026-11-01 真机反馈★ 启动遮罩原来只等「预览帧回调第 60 帧」的通知；
+            //   而一旦游戏开始自己提交帧，预览循环立刻停 ⇒ 计数到不了 60 ⇒ 遮罩永不撤。
+            //   真正该通知的时刻是「游戏第一次提交帧」——就在这里补发（只发一次）。
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [NSNotificationCenter.defaultCenter postNotificationName:@"A2GameFirstFrame" object:nil];
+            });
         }
         // ★2026-11-01 黑屏根因★ swap 时线程上没有 EGL 上下文（真机：eglGetCurrentContext()=0x0），
         //   于是 eglSwapBuffers 提交不到宿主层 ⇒ 画面永远上不了屏。
         //   这里先确保绑定，再提交，并把返回值/错误一起打出来（每 60 次一行）。
         typedef void *(*A2PFN_eglGetCurrentContextS)(void);
         typedef int (*A2PFN_eglGetErrorS)(void);
+        typedef void *(*A2PFN_eglGetCurrentSurfaceS)(int);
+        // ★2026-11-08 改用自家 EGL 句柄解析★ RTLD_LOCAL 下 RTLD_DEFAULT 拿不到 egl*，
+        //   之前读到 ctx=0x0 是误判；顺带取「当前真正绑定的 surface」用于交换。
+        void *eglSymHandle = (gEglHandle != NULL) ? gEglHandle : gGlesHandle;
+        void *glSymH = (gGlesHandle != NULL) ? gGlesHandle : gRendererHandle;
         void *curCtxS = NULL;
+        void *curSurfS = NULL;
         A2PFN_eglGetCurrentContextS getCurS =
-            (A2PFN_eglGetCurrentContextS)dlsym(RTLD_DEFAULT, "eglGetCurrentContext");
+            eglSymHandle ? (A2PFN_eglGetCurrentContextS)dlsym(eglSymHandle, "eglGetCurrentContext") : NULL;
         if (getCurS != NULL) curCtxS = getCurS();
+        A2PFN_eglGetCurrentSurfaceS getSurfS =
+            eglSymHandle ? (A2PFN_eglGetCurrentSurfaceS)dlsym(eglSymHandle, "eglGetCurrentSurface") : NULL;
+        if (getSurfS != NULL) curSurfS = getSurfS(0x305A /*EGL_DRAW*/);
+        // ★黑屏定位诊断（2026-11-08）★ 每 60 次 swap 读 framebuffer 绑定 / viewport / 采样一个像素
+        {
+            static int a2SwapDiagN = 0;
+            if ((a2SwapDiagN++ % 60) == 0) {
+                typedef void (*A2PFN_glGetIntegerv)(unsigned int, int *);
+                typedef void (*A2PFN_glReadPixels)(int, int, int, int, unsigned int, unsigned int, void *);
+                void *glDiagHandle = (gGlesHandle != NULL) ? gGlesHandle : gRendererHandle;
+                A2PFN_glGetIntegerv gi = glDiagHandle ? (A2PFN_glGetIntegerv)dlsym(glDiagHandle, "glGetIntegerv") : NULL;
+                A2PFN_glReadPixels rp = glDiagHandle ? (A2PFN_glReadPixels)dlsym(glDiagHandle, "glReadPixels") : NULL;
+                int vp[4] = {0, 0, 0, 0};
+                int fb = -1;
+                unsigned char px[4] = {0, 0, 0, 0};
+                if (gi != NULL) { gi(0x0BA2, vp); gi(0x8CA6, &fb); }
+                if (rp != NULL) { rp(1, 1, 1, 1, 0x1908, 0x1401, px); }
+                a2_log_f(@"[A2-GLBRIDGE] swap 诊断 fb=%d viewport=%d,%d,%d,%d px=%02x%02x%02x",
+                         fb, vp[0], vp[1], vp[2], vp[3], px[0], px[1], px[2]);
+                typedef const unsigned char *(*A2PFN_glGetString2)(unsigned int);
+                A2PFN_glGetString2 gs2 = glDiagHandle ? (A2PFN_glGetString2)dlsym(glDiagHandle, "glGetString") : NULL;
+                const char *rndr2 = (gs2 != NULL) ? (const char *)gs2(0x1F01) : NULL;
+                const char *vers2 = (gs2 != NULL) ? (const char *)gs2(0x1F02) : NULL;
+                a2_log_f(@"[A2-GLBRIDGE] GL 实现 renderer=%s version=%s", rndr2 ? rndr2 : "(null)", vers2 ? vers2 : "(null)");
+            }
+        }
+
         if (curCtxS != (void *)gCtx) {
             int brc = a2_gl_bridge_make_current();
             a2_log_f(@"[A2-GLBRIDGE] ★swap 前补绑定★ 原 ctx=%p ⇒ make_current rc=%d（本层 gCtx=%p gSurf=%p）",
                      curCtxS, brc, (void *)gCtx, (void *)gSurf);
         }
-        int swrc = gEglSwapBuffers(gDpy, gSurf);
+        // ★2026-11-08 帧内容探针★（黑屏定位，唯一目的：回答"MC 到底画没画进这块 surface"）
+        //   每 60 帧读一次：当前 FBO 绑定 / viewport / 中心像素。
+        //   中心像素非黑 ⇒ 画进来了，问题在呈现；一直是 0 ⇒ 绘制没落在我们的 surface 上。
+        {
+            typedef void (*A2PFN_gi)(unsigned int, int *);
+            typedef void (*A2PFN_rp)(int, int, int, int, unsigned int, unsigned int, void *);
+            void *pxHandle = (gGlesHandle != NULL) ? gGlesHandle : gRendererHandle;
+            A2PFN_gi pgi = pxHandle ? (A2PFN_gi)dlsym(pxHandle, "glGetIntegerv") : NULL;
+            A2PFN_rp prp = pxHandle ? (A2PFN_rp)dlsym(pxHandle, "glReadPixels") : NULL;
+            static unsigned long a2_pxN = 0;
+            if (pgi && prp && ((a2_pxN++ % 60) == 1)) {
+                int fbo = -1, vp[4] = {0, 0, 0, 0};
+                pgi(0x8CA6, &fbo);            // GL_FRAMEBUFFER_BINDING
+                pgi(0x0BA2, vp);              // GL_VIEWPORT
+                unsigned char px[4] = {0, 0, 0, 0};
+                prp(vp[0] + vp[2] / 2, vp[1] + vp[3] / 2, 1, 1, 0x1908, 0x1401, px);
+                a2_log_f(@"[A2-GL-DIAG] 帧采样 #%lu fbo=%d viewport=%d,%d %dx%d 中心像素=%d,%d,%d,%d",
+                         a2_pxN, fbo, vp[0], vp[1], vp[2], vp[3], px[0], px[1], px[2], px[3]);
+            }
+        }
+
+        // ★2026-11-08★ 优先交换「线程上真正绑定的 surface」；没有才回退 gSurf。
+        void *swapSurf = (curSurfS != NULL && curSurfS != (void *)0) ? curSurfS : gSurf;
+        int swrc = gEglSwapBuffers(gDpy, swapSurf);
         static unsigned long a2_swN = 0;
-        if ((++a2_swN % 60) == 1) {
-            A2PFN_eglGetErrorS getErrS = (A2PFN_eglGetErrorS)dlsym(RTLD_DEFAULT, "eglGetError");
-            a2_log_f(@"[A2-GLBRIDGE] swap 提交 #%lu rc=%d err=0x%x",
-                     a2_swN, swrc, getErrS ? getErrS() : 0);
+        a2_swN++;
+        if (a2_swN == 1) {
+            a2_log_criterion(@"[A2-TIME] 首个 swap 提交 ⇒ 游戏已开始出帧");
+        }
+        if ((a2_swN % 60) == 1) {
+            A2PFN_eglGetErrorS getErrS =
+                eglSymHandle ? (A2PFN_eglGetErrorS)dlsym(eglSymHandle, "eglGetError") : NULL;
+            a2_log_f(@"[A2-GLBRIDGE] swap 提交 #%lu rc=%d err=0x%x ctx=%p surface=%p（本层 gSurf=%p）",
+                     a2_swN, swrc, getErrS ? getErrS() : 0, curCtxS, swapSurf, (void *)gSurf);
         }
     }
 }
@@ -2025,6 +2223,7 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         return A2GlBridgeErrNoSurface;
     }
 
+
     const char *rendererName = host->rendererName;
     if (rendererName != NULL) {
         snprintf(gBackendName, sizeof(gBackendName), "%s", rendererName);
@@ -2044,8 +2243,8 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     //     ⇒ 建面用的 EGL 就是「假 EGL → EAGLContext/CAEAGLLayer」，不是 ANGLE；
     //   · GL 层 = MobileGlues（下方 `glLayerName`）⇒ `gBackendName` 记的是 **GL 层**，
     //     MG 的 RTLD_GLOBAL / 归属核对等判据全都照旧命中（不另写一套 MG 判据）。
-    const int hostEglBackend = a2_gl_bridge_backend_is_host_egl(rendererName);
-    const char *glLayerName = hostEglBackend ? A2GlBridgeHostEglLayerDylib : rendererName;
+    const int hostEglBackend = 0;   // ★EAGL 已移除★：宿主 EGL 后端不再存在
+    const char *glLayerName = rendererName;
     if (hostEglBackend) {
         gHostEgl = 1;
         snprintf(gBackendName, sizeof(gBackendName), "%s", glLayerName);
@@ -2115,8 +2314,16 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         //   之前指向渲染器自己的 dylib（libmobileglues）⇒ SFPEW 的 eglMakeCurrent
         //   把 ANGLE 的 display/context 交给另一套 EGL ⇒ 返回 false（eglError=0x3000）
         //   ⇒ GL 桥 rc=-4 ⇒ 启动链误报 -12。
+        // ★2026-11-01 真机证据（lastlog-143）★ GL 入口由 SFPEW 当门面（libname=SFPEW），
+        //   SFPEW 再把 GL 调用转发给它的后端 ⇒ 后端必须是**渲染器自己的 GL 库**（MG 等），
+        //   而不是 ANGLE 的 libEGL（ANGLE 只提供 GLES，不经 MG 就没有 GL 3.x 翻译）。
         NSString *sfpewBackendPath = nil;
-        if (frameworksPath.length > 0) {
+        if (frameworksPath.length > 0 && glLayerName != NULL) {
+            NSString *candidate = [frameworksPath stringByAppendingPathComponent:
+                                   [NSString stringWithUTF8String:glLayerName]];
+            if ([NSFileManager.defaultManager fileExistsAtPath:candidate]) sfpewBackendPath = candidate;
+        }
+        if (sfpewBackendPath == nil && frameworksPath.length > 0) {
             NSString *angleEgl = [frameworksPath stringByAppendingPathComponent:
                                   [NSString stringWithUTF8String:A2GlBridgeEglLibraryRelPath]];
             if ([NSFileManager.defaultManager fileExistsAtPath:angleEgl]) sfpewBackendPath = angleEgl;
@@ -2210,7 +2417,7 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
             a2_gl_bridge_teardown();
             return A2GlBridgeErrLoadFailed;
         }
-        a2_gl_bridge_use_own_egl();   // 门面=MG / 回退 ANGLE（日志点明缺哪个入口）；宿主恒 ANGLE
+        a2_gl_bridge_use_own_egl();
     }
     // ★门面来源★：④a3 的归属核对可能把它改回 ANGLE（MG 门面不可用时）⇒ 这里不能是 const，
     //   否则下面的判据行会报「门面=MG」而实际建面用的是 ANGLE（两种事实必须一致）。
@@ -2324,6 +2531,8 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
         //   取代旧的「后端导出指针 == flat 指针」比法：那个比法只能回答「同不同源」，
         //   而且在 ANGLE 先加载后必然报「被抢走」（false alarm）—— 它答不了「归哪个镜像」。
         //   两行固定格式（真机 grep `归属核对` 即可判读），不通过则重试一次（见函数内注释）。
+        // ★2026-11-08 假 EGL 模式★ 本层自己就是 EGL 实现，不存在「归属给谁」的问题；
+        //   核对照样会判"其它/系统GLES"然后触发下面的退回 ANGLE（句柄 0x0 ⇒ 必挂）。
         int angleOwnershipOK = a2_gl_bridge_verify_angle_ownership(eglPath, glesPath);
 
         // ---- ④a4 ★MG 门面不可用 ⇒ 退回 ANGLE 建面★（判据：④a3 的归属结论）----
@@ -2411,7 +2620,11 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
     //   （档位 = 包内 ANGLE；兼容层 = 已选渲染器的 dylib），因此两种入口的语义一致 ——
     //   兼容层叠加时 MG 的 makeCurrent/swap 仍是同一份实现，只是外面多了一层状态同步。
     //   ★gSfpewTier 为 0（没开开关 / 兼容层未就绪）⇒ 这两枚入口仍是原函数，逐位不变。★
-    if (gSfpewTier) {
+    // ★2026-11-01 真机证据（lastlog-141）★ 兼容层下把 makeCurrent/swap 交给 SFPEW 会返回 false
+    //   （eglError=0x3000，即 EGL 本身没报错，是 SFPEW 的包装层没转成功）⇒ GL 桥 rc=-4 ⇒ 启动链误报 -12。
+    //   因此：**只有独立档位**（整条链都由 SFPEW 当 EGL 提供者）才换这两个入口；
+    //   兼容层只接管 GL 符号解析（⑦），EGL 生命周期仍归宿主，行为与未开兼容层时逐位一致。
+    if (gSfpewStandalone) {
         gEglMakeCurrent = (A2PFN_eglMakeCurrent)a2_sfpew_host_egl_make_current;
         gEglSwapBuffers = (A2PFN_eglSwapBuffers)a2_sfpew_host_egl_swap_buffers;
         a2_log_criterion(@"[A2-SFPEW] 契约④：eglMakeCurrent/eglSwapBuffers 已交给 SFPEW"
@@ -2834,5 +3047,6 @@ int a2_gl_bridge_attach(const A2GlHostSurface *host, NSString *frameworksPath) {
              A2GlBridgeJudgementTag, rendererName, gWidthPixels, gHeightPixels,
              (gFrameCb != NULL) ? "宿主已提供" : "宿主未提供");
     a2_gl_bridge_frame_work();
+
     return A2GlBridgeOK;
 }

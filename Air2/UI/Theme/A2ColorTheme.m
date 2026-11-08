@@ -23,6 +23,9 @@
 
 #import "A2ColorTheme.h"
 #import "A2ColorTheme_Internal.h"
+// 主题 token 的词表与「token → 角色」映射只有 Core/Plugin 一处实现
+// （`A2PluginThemeTokenRole`）；这里要用它，但**不另抄一份表**。
+#import "A2PluginContribution.h"
 
 #pragma mark - 色板推导
 
@@ -159,6 +162,86 @@ void A2PairSchemePublic(A2ColorScheme *out, A2RawScheme *light, A2RawScheme *dar
 #undef A2PAIR
 }
 
+#pragma mark - 插件主题 token
+
+/// 插件 token 的值 → UIColor。
+///
+/// 宿主校验器已保证「已知 token 的值必须是 `#RRGGBB`」，这里只做解析：形状不符返回 nil，
+/// 调用方按「作者没给这个字段」处理（回落 base），不崩、也不拒 —— 插件层的降级原则是
+/// 「未知 / 写坏 ⇒ 降级 + 诊断」（ADR-018 决策 5）。
+static UIColor *_Nullable A2ColorFromPluginTokenValue(id value) {
+    if (![value isKindOfClass:NSString.class]) return nil;
+    NSString *text = (NSString *)value;
+    if ([text hasPrefix:@"#"]) text = [text substringFromIndex:1];
+    if (text.length != 6) return nil;
+    NSScanner *scanner = [NSScanner scannerWithString:text];
+    unsigned int rgb = 0;
+    if (![scanner scanHexInt:&rgb] || !scanner.isAtEnd) return nil;
+    return A2Hex((uint32_t)rgb);
+}
+
+/// MD3 角色名 → 原始色板字段。角色名与字段名一一对应（`A2PluginThemeTokenRole` 返回的
+/// 就是 `A2ColorScheme` 的属性名），所以两边都写出来 —— 拼错是编译错误，不靠 KVC
+/// 换一个运行期 nil。同一个色值同时写亮/暗两槽：token 表不分模式，作者也只有一组值。
+static void A2ApplyPluginTokenToSchemes(NSString *role, UIColor *color,
+                                        A2RawScheme *light, A2RawScheme *dark) {
+#define A2_PLUGIN_ROLE(roleName, prop) if ([role isEqualToString:roleName]) { light.prop = color; dark.prop = color; return; }
+    A2_PLUGIN_ROLE(@"primary", primary);
+    A2_PLUGIN_ROLE(@"onPrimary", onPrimary);
+    A2_PLUGIN_ROLE(@"primaryContainer", primaryContainer);
+    A2_PLUGIN_ROLE(@"onPrimaryContainer", onPrimaryContainer);
+    A2_PLUGIN_ROLE(@"secondary", secondary);
+    A2_PLUGIN_ROLE(@"onSecondary", onSecondary);
+    A2_PLUGIN_ROLE(@"secondaryContainer", secondaryContainer);
+    A2_PLUGIN_ROLE(@"onSecondaryContainer", onSecondaryContainer);
+    A2_PLUGIN_ROLE(@"tertiary", tertiary);
+    A2_PLUGIN_ROLE(@"tertiaryContainer", tertiaryContainer);
+    A2_PLUGIN_ROLE(@"surface", surface);
+    A2_PLUGIN_ROLE(@"onSurface", onSurface);
+    A2_PLUGIN_ROLE(@"surfaceVariant", surfaceVariant);
+    A2_PLUGIN_ROLE(@"onSurfaceVariant", onSurfaceVariant);
+    A2_PLUGIN_ROLE(@"surfaceContainer", surfaceContainer);
+    A2_PLUGIN_ROLE(@"surfaceContainerLowest", surfaceContainerLowest);
+    A2_PLUGIN_ROLE(@"surfaceContainerLow", surfaceContainerLow);
+    A2_PLUGIN_ROLE(@"surfaceContainerHigh", surfaceContainerHigh);
+    A2_PLUGIN_ROLE(@"surfaceContainerHighest", surfaceContainerHighest);
+    A2_PLUGIN_ROLE(@"outline", outline);
+    A2_PLUGIN_ROLE(@"outlineVariant", outlineVariant);
+    A2_PLUGIN_ROLE(@"error", error);
+    A2_PLUGIN_ROLE(@"onError", onError);
+    A2_PLUGIN_ROLE(@"errorContainer", errorContainer);
+    A2_PLUGIN_ROLE(@"onErrorContainer", onErrorContainer);
+    A2_PLUGIN_ROLE(@"success", success);
+    A2_PLUGIN_ROLE(@"warning", warning);
+    A2_PLUGIN_ROLE(@"inverseSurface", inverseSurface);
+    A2_PLUGIN_ROLE(@"inverseOnSurface", inverseOnSurface);
+    A2_PLUGIN_ROLE(@"inversePrimary", inversePrimary);
+#undef A2_PLUGIN_ROLE
+}
+
+/// 回落基线：把 base 的亮/暗两套色槽整盘抄进原始色板（逐字段，不用 KVC）。
+/// 抄完再让 token 覆盖 —— 落不到 token 的字段就停在这里，因此不会有 nil。
+static void A2CopySchemeSlots(A2ColorScheme *base, A2RawScheme *light, A2RawScheme *dark) {
+#define A2_COPY_SLOT(prop) light.prop = base.prop.light; dark.prop = base.prop.dark
+    A2_COPY_SLOT(primary);            A2_COPY_SLOT(onPrimary);
+    A2_COPY_SLOT(primaryContainer);   A2_COPY_SLOT(onPrimaryContainer);
+    A2_COPY_SLOT(secondary);          A2_COPY_SLOT(onSecondary);
+    A2_COPY_SLOT(secondaryContainer); A2_COPY_SLOT(onSecondaryContainer);
+    A2_COPY_SLOT(tertiary);           A2_COPY_SLOT(tertiaryContainer);
+    A2_COPY_SLOT(surface);            A2_COPY_SLOT(onSurface);
+    A2_COPY_SLOT(surfaceContainerLowest);  A2_COPY_SLOT(surfaceContainerLow);
+    A2_COPY_SLOT(surfaceContainer);        A2_COPY_SLOT(surfaceContainerHigh);
+    A2_COPY_SLOT(surfaceContainerHighest);
+    A2_COPY_SLOT(surfaceVariant);     A2_COPY_SLOT(onSurfaceVariant);
+    A2_COPY_SLOT(outline);            A2_COPY_SLOT(outlineVariant);
+    A2_COPY_SLOT(error);              A2_COPY_SLOT(onError);
+    A2_COPY_SLOT(errorContainer);     A2_COPY_SLOT(onErrorContainer);
+    A2_COPY_SLOT(success);            A2_COPY_SLOT(warning);
+    A2_COPY_SLOT(inverseSurface);     A2_COPY_SLOT(inverseOnSurface);
+    A2_COPY_SLOT(inversePrimary);
+#undef A2_COPY_SLOT
+}
+
 @implementation A2ColorTheme
 
 + (instancetype)themeWithSeed:(UIColor *)seed
@@ -191,6 +274,51 @@ void A2PairSchemePublic(A2ColorScheme *out, A2RawScheme *light, A2RawScheme *dar
     t.lightPrimary = light.primary;
     t.darkPrimary = dark.primary;
     t.backgroundGradient = gradient;
+    return t;
+}
+
+#pragma mark 从插件贡献的主题 token 构造
+
++ (instancetype)themeWithPluginTokens:(NSDictionary<NSString *, NSString *> *)tokens
+                                 name:(NSString *)name
+                                 desc:(NSString *)desc
+                                 base:(nullable A2ColorTheme *)base {
+
+    // 回落基线：没有任何 base 时用默认预设（这条路径只在调用方异常时走，
+    // 但宁可给出一套完整色板，也不要吐出半张 nil 的色板）。
+    A2ColorTheme *fallback = base ?: [self themeForKind:A2ThemeKindGlacier];
+
+    A2RawScheme *light = [A2RawScheme new];
+    A2RawScheme *dark = [A2RawScheme new];
+    A2CopySchemeSlots(fallback.scheme, light, dark);
+
+    for (NSString *token in tokens) {
+        // 未知 token 在校验期就被丢弃了；这里再兜一次，避免以后词表回退时静默半套色板。
+        NSString *role = A2PluginThemeTokenRole(token);
+        if (role.length == 0) continue;
+        UIColor *color = A2ColorFromPluginTokenValue(tokens[token]);
+        if (!color) continue;      // 写坏的值 ⇒ 按「没给」处理，回落 base
+        A2ApplyPluginTokenToSchemes(role, color, light, dark);
+    }
+
+    A2ColorScheme *merged = [A2ColorScheme new];
+    A2PairSchemePublic(merged, light, dark);
+
+    A2ColorTheme *t = [A2ColorTheme new];
+    t.kind = A2ThemeKindCustom;     // 与「用户自定义种子色」同一档：都不是内置预设
+    t.displayName = name;
+    t.themeDescription = desc;
+    t.scheme = merged;
+    t.lightPrimary = light.primary;
+    t.darkPrimary = dark.primary;
+
+    // 渐变跟着主色走：插件没给渐变字段（token 表里也没有），只能由主色推。
+    UIColor *p = light.primary ?: fallback.lightPrimary;
+    t.backgroundGradient = @[
+        A2Tone(p, 0.70, 0.28),
+        p,
+        A2Tone(p, 0.75, 0.12),
+    ];
     return t;
 }
 

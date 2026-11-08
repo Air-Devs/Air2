@@ -88,7 +88,6 @@ extern NSString *const A2RendererNGGL4ESKWDylibName;
 /// ⇒ `+isBundled:` 对它判的是「GL 层在不在」（见实现里的说明），不判这个不存在的文件。
 /// ★为什么常量放 Core★：默认值（Player 的 `A2DefaultRendererForVersion`）、候选表、
 /// 阻断判据三处必须同一份字面量（同 `A2RendererNGGL4ESKWDylibName` 的理由）。
-extern NSString *const A2RendererHostEGLDylibName;
 
 /// ★GL 层 = MobileGlues 的标识★ = `libmobileglues.dylib`。
 ///

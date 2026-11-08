@@ -49,7 +49,7 @@ static const NSTimeInterval kA2JITWaitBudget = 120.0;
 /// 已经跳过一次之后的等待上限：★防死循环★ 第二次起不再跳，只给调试器一点收尾时间。
 static const NSTimeInterval kA2JITRepeatWaitBudget = 8.0;
 /// 轮询间隔：0.5s（老 Air 同量级；再密只是白刷 brk #0x69）。
-static const NSTimeInterval kA2JITPollInterval = 0.5;
+static const NSTimeInterval kA2JITPollInterval = 3.0;   // ★0.5→3.0：每 tick 都发 brk，太密会灌满 StikDebug
 /// ★回前台强制复查的重新等待预算★：回前台时若墙钟预算已被后台时间吃光，
 /// **重新给这么多秒**（★不因为「等过一次」就判死★）—— 用户可能是第二次才在
 /// StikDebug 里点对，回来就应当还能被接住，而不是弹失败页。
@@ -79,6 +79,7 @@ typedef NS_ENUM(NSInteger, A2JITEnablerTool) {
     A2JITEnablerToolTrollStore, ///< apple-magnifier://（TrollStore 2.x 的 enable-jit）
     A2JITEnablerToolSideStore,  ///< sidestore://sidejit-enable（SideJIT，<17.4 的既有形式）
     A2JITEnablerToolStikJIT,    ///< stikjit://（★会重拉 App★，仅作最后手段）
+    A2JITEnablerToolBuiltIn,    ///< ★内建引擎（StikJIT.framework，进程内）★：没有 URL 可拉
 };
 
 static NSString *a2jit_tool_name(A2JITEnablerTool tool) {
@@ -87,6 +88,7 @@ static NSString *a2jit_tool_name(A2JITEnablerTool tool) {
         case A2JITEnablerToolTrollStore: return @"TrollStore";
         case A2JITEnablerToolSideStore:  return @"SideStore";
         case A2JITEnablerToolStikJIT:    return @"stikjit";
+        case A2JITEnablerToolBuiltIn:    return @"内建引擎（StikJIT）";
         case A2JITEnablerToolNone:       break;
     }
     return @"(无)";
@@ -315,7 +317,15 @@ static NSString *_Nullable a2jit_direct_source_reason(void) {
 ///      dynamic-codesigning）—— 这正是 TrollStore 签名的产物，也是它 JIT 的来源；
 ///   ③ 执行式探针真的跑通一页（★真执行★；没有权限时探针自己会跳过，不会赌）。
 static BOOL a2jit_trollstore_ready(NSString *_Nullable *_Nullable whyOut) {
+    // ★每进程最多探 3 次★（每次探测 = 一发 brk #0x69）；超了直接判未就绪，
+    //   不再把 StikDebug 灌满。用户下次启动会重新计。
+    static int gA2GateProbeCount = 0;
     NSString *gateWhy = nil;
+    if (gA2GateProbeCount >= 3) {
+        if (whyOut) *whyOut = @"探测次数已封顶（3 次）";
+        return NO;
+    }
+    gA2GateProbeCount++;
     if (A2LegacyJITGateReadyNow(&gateWhy)) {
         if (whyOut) *whyOut = [NSString stringWithFormat:@"老 Air 闰门放行（%@）", gateWhy ?: @"—"];
         return YES;
@@ -352,7 +362,7 @@ static BOOL a2jit_trollstore_ready(NSString *_Nullable *_Nullable whyOut) {
 //    ③ `a2jit_start_preferred_run()` —— 非 auto 的流程守卫（不让安装源分支把来源抢走）。
 //
 //  ★六个取值是跨层契约★（NSUserDefaults 里存的就是它们，逐字相同）：
-//    `auto` `debugger` `jailbreak` `trollstore` `stikdebug` `sidestore`
+//    `auto` `debugger` `jailbreak` `trollstore` `stikdebug` `sidestore` `builtin`
 //  写入点 = `Air2/UI/Screens/Settings/A2JITSettings.m` 的「JIT 启动器」行；
 //  改这六个串必须同时改那里（那边有对应的四语文案表项）。
 
@@ -363,6 +373,7 @@ typedef NS_ENUM(NSInteger, A2JITPreferredSource) {
     A2JITPreferredSourceTrollStore = 3,  ///< 只用 TrollStore（apple-magnifier://）
     A2JITPreferredSourceStikDebug  = 4,  ///< 只用 StikDebug（stikdebug://）
     A2JITPreferredSourceSideStore  = 5,  ///< 只用 SideStore（sidestore://；不可用时才用 stikjit://）
+    A2JITPreferredSourceBuiltIn    = 6,  ///< ★只用内建引擎（StikJIT.framework，进程内，不拉任何外部 App）★
 };
 
 /// ★键名唯一定义处★（六个取值见上面那段契约说明）。
@@ -375,6 +386,7 @@ static NSString *a2jit_preferred_source_name(A2JITPreferredSource src) {
         case A2JITPreferredSourceTrollStore: return @"trollstore";
         case A2JITPreferredSourceStikDebug:  return @"stikdebug";
         case A2JITPreferredSourceSideStore:  return @"sidestore";
+        case A2JITPreferredSourceBuiltIn:    return @"builtin";
         case A2JITPreferredSourceAuto:       break;
     }
     return @"auto";
@@ -391,6 +403,7 @@ static A2JITPreferredSource a2jit_preferred_source(void) {
     if ([raw isEqualToString:@"trollstore"]) return A2JITPreferredSourceTrollStore;
     if ([raw isEqualToString:@"stikdebug"])  return A2JITPreferredSourceStikDebug;
     if ([raw isEqualToString:@"sidestore"])  return A2JITPreferredSourceSideStore;
+    if ([raw isEqualToString:@"builtin"])    return A2JITPreferredSourceBuiltIn;
     if ([raw isEqualToString:@"auto"])       return A2JITPreferredSourceAuto;
     static NSString *sLoggedUnknown = nil;
     if (![raw isEqualToString:sLoggedUnknown]) {
@@ -593,6 +606,9 @@ static BOOL a2jit_preferred_ready_now(A2JITPreferredSource src, NSString *_Nulla
 
         case A2JITPreferredSourceStikDebug:
         case A2JITPreferredSourceSideStore:
+        case A2JITPreferredSourceBuiltIn:
+            // ★builtin 也走同一条闸门★：内建引擎干的事就是「让 debugserver attach
+            //   本进程 + 跑脚本」，拿到 JIT 的形式与 StikDebug 完全一致（没有第二套判据）。
             return A2LegacyJITGateReadyNow(whyOut);
 
         case A2JITPreferredSourceAuto:
@@ -760,14 +776,27 @@ static A2JITEnablerTool a2jit_pick_enabler(NSURL *_Nullable *_Nullable urlOut,
                 candidates[1] = a2jit_url_stikjit();
                 tools[1] = A2JITEnablerToolStikJIT;
                 break;
+            case A2JITPreferredSourceBuiltIn:
+                // ★内建引擎没有 URL 可拉★：它在本进程内跑（见 A2JITBuiltInEnablerBlock）。
+                //   未注册 ⇒ 候选为空 ⇒ 下面走「不可用」分支如实失败（★不回退到 stikdebug★）。
+                if (A2JITBuiltInEnablerInstalled()) {
+                    tools[0] = A2JITEnablerToolBuiltIn;
+                }
+                break;
             case A2JITPreferredSourceDebugger:
             case A2JITPreferredSourceJailbreak:
             case A2JITPreferredSourceAuto:
                 break;   // 调试器 / 越狱没有「可拉起的使能器」（JIT 不是外部工具给的）
         }
         for (size_t i = 0; i < sizeof(tools) / sizeof(tools[0]); i++) {
+            if (tools[i] == A2JITEnablerToolNone) continue;
+            // ★内建引擎不走 canOpenURL★：没有 scheme 可问，能注册上就是能用。
+            if (tools[i] == A2JITEnablerToolBuiltIn) {
+                if (urlOut) *urlOut = nil;
+                return A2JITEnablerToolBuiltIn;
+            }
             NSURL *url = candidates[i];
-            if (url == nil || tools[i] == A2JITEnablerToolNone) continue;
+            if (url == nil) continue;
             if (a2jit_can_open(url) == 1) {
                 if (urlOut) *urlOut = url;
                 return tools[i];
@@ -781,6 +810,9 @@ static A2JITEnablerTool a2jit_pick_enabler(NSURL *_Nullable *_Nullable urlOut,
                     preferred == A2JITPreferredSourceDebugger
                         ? @"需先用调试器附加（本进程未被 trace）"
                         : @"未检测到越狱环境"];
+            } else if (preferred == A2JITPreferredSourceBuiltIn) {
+                *whyOut = @"所选 JIT 启动器＝builtin，但内建引擎未注册（包内缺 Frameworks/StikJIT.framework，"
+                          @"或 App 启动时没有装钩子）；★按所选来源如实失败，不回退到其它工具★";
             } else {
                 *whyOut = [NSString stringWithFormat:
                     @"所选 JIT 启动器＝%@ 在本机打不开（未安装，或它的 URL scheme 未被处理）；"
@@ -804,6 +836,15 @@ static A2JITEnablerTool a2jit_pick_enabler(NSURL *_Nullable *_Nullable urlOut,
             if (urlOut) *urlOut = url;
             return tools[i];
         }
+    }
+    // ★内建引擎（auto 的最后兜底）★：stikdebug / apple-magnifier / sidestore / stikjit
+    //   一个都打不开时，不再直接回 None（那是「只能人工引导」= 真机上等于没救）：
+    //   只要 App 层注册了内建引擎，就用它。★顺序：外部优先、内建兜底★，所以存量装机
+    //   （装了 StikDebug 的）行为一字未变。
+    if (A2JITBuiltInEnablerInstalled()) {
+        a2_log_criterion(@"[A2-JIT-BUILTIN] 外部使能器一个都打不开 ⇒ 改用内建引擎（进程内）");
+        if (urlOut) *urlOut = nil;
+        return A2JITEnablerToolBuiltIn;
     }
     if (urlOut) *urlOut = nil;
     return A2JITEnablerToolNone;
@@ -839,6 +880,9 @@ static A2JITEnablerTool a2jit_pick_enabler(NSURL *_Nullable *_Nullable urlOut,
                           tool:(A2JITEnablerTool)tool
                     enablerURL:(NSURL *_Nullable)url;
 - (void)openEnablerURL:(NSURL *)url tool:(A2JITEnablerTool)tool;
+/// ★内建引擎★：在全局队列上执行注入的 A2JITBuiltInEnablerBlock，成功后立刻复验判据。
+/// 调用点：`startWaitingWithBudget:tool:enablerURL:`（tool == BuiltIn 时，弹窗上屏后）。
+- (void)runBuiltInEnablerWithBudget:(NSTimeInterval)budget;
 - (void)scheduleNextTick;
 - (void)tickForced:(BOOL)forced;
 - (void)enterBackground;
@@ -853,6 +897,21 @@ static A2JITEnablerRun *gA2JITRun = nil;
 static BOOL gA2JITJumpedThisProcess = NO;
 /// 最近一次失败原因（给 lastFailureReason 读）。
 static NSString *gA2JITLastFailure = nil;
+
+#pragma mark - [A2-JIT-BUILTIN] 内建引擎注入点
+
+/// 内建引擎（App 层注册）。nil = 本包没有内建引擎 ⇒ 一切行为与改动前逐字一致。
+static A2JITBuiltInEnablerBlock gA2JITBuiltInEnabler = nil;
+
+void A2JITSetBuiltInEnabler(A2JITBuiltInEnablerBlock block) {
+    gA2JITBuiltInEnabler = [block copy];
+    a2_log_criterion(@"[A2-JIT-BUILTIN] 内建引擎%@（注册点：A2AppDelegate）",
+                     gA2JITBuiltInEnabler != nil ? @"已注册" : @"已注销");
+}
+
+BOOL A2JITBuiltInEnablerInstalled(void) {
+    return gA2JITBuiltInEnabler != nil;
+}
 
 #pragma mark - ②' 非 auto 的申请通道（钉死来源，不回退）
 
@@ -907,7 +966,11 @@ static BOOL a2jit_start_preferred_run(A2JITEnablerRun *run,
     NSTimeInterval budget = (tool == A2JITEnablerToolTrollStore) ? kA2JITTrollStoreWaitBudget
                                                                  : kA2JITWaitBudget;
     a2jit_log_decision(preferred, YES,
-                       [NSString stringWithFormat:@"拉起 %@：%@", a2jit_tool_name(tool), url.absoluteString]);
+                       tool == A2JITEnablerToolBuiltIn
+                           ? [NSString stringWithFormat:@"内建引擎（进程内，无 URL）：%@",
+                              a2jit_tool_name(tool)]
+                           : [NSString stringWithFormat:@"拉起 %@：%@",
+                              a2jit_tool_name(tool), url.absoluteString ?: @"(nil)"]);
     gA2JITJumpedThisProcess = YES;
     [run startWaitingWithBudget:budget tool:tool enablerURL:url];
     return YES;
@@ -1003,6 +1066,12 @@ static BOOL a2jit_start_preferred_run(A2JITEnablerRun *run,
         message = [NSString stringWithFormat:
             @"本进程已经拉起过一次 JIT 使能器。\n请确认它已为 Air2 开启 JIT，然后回到 Air2 —— 拿到 JIT 会自动继续启动。\n（最多再等 %.0f 秒）",
             budget];
+    } else if (tool == A2JITEnablerToolBuiltIn) {
+        // ★内建引擎文案★：不引导用户去任何外部 App —— 这一步全程在本机完成。
+        message = [NSString stringWithFormat:
+            @"正在用内建引擎（StikJIT）为 Air2 开启 JIT。\n"
+            @"全程在本机完成，不需要外部 App；成功后会自动继续启动。\n（最多等 %.0f 秒）",
+            budget];
     } else if (tool == A2JITEnablerToolTrollStore) {
         // ★巨魔机专用文案★：不引导用户「去 StikDebug」（他们不需要，也不该被引向一个
         //   多半用不了的工具）。TrollStore 若没把 URL Scheme 打开，apple-magnifier:// 打不开，
@@ -1062,6 +1131,17 @@ static BOOL a2jit_start_preferred_run(A2JITEnablerRun *run,
     self.waitingBroadcasted = YES;
     [NSNotificationCenter.defaultCenter postNotificationName:A2JITEnablerWaitingDidBeginNotification
                                                       object:self];
+
+    // ★内建引擎★：同样「弹窗先上屏，再开跑」（顺序与 openURL 那条一致，理由见上）。
+    if (tool == A2JITEnablerToolBuiltIn) {
+        __weak typeof(self) weakSelf = self;
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(kA2JITAlertLead * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            A2JITEnablerRun *run = weakSelf;
+            if (run == nil || run.finished || run.enablerLaunched) return;
+            [run runBuiltInEnablerWithBudget:budget];
+        });
+    }
 
     // ★② → ③ 的接缝★ 弹窗先上屏，再拉起使能器；one-shot（openEnablerURL 内再挡一次）。
     if (url != nil) {
@@ -1271,6 +1351,38 @@ static BOOL a2jit_start_preferred_run(A2JITEnablerRun *run,
                    reason:[NSString stringWithFormat:
                            @"%@ 打不开（未安装，或它的 URL scheme 未被处理）", a2jit_tool_name(tool)]];
     }];
+}
+
+/// ★内建引擎的执行★（与 openEnablerURL 同级：一次等待里只跑一次）。
+/// 语义：
+///   · 阻塞体在全局队列上跑（RSD 握手 + attach + 脚本，数十秒）⇒ 主线程只等回调；
+///   · 成功 ⇒ ★立刻 tickForced:YES 复验判据★（拿到 JIT 就继续启动，不空等轮询周期）；
+///   · 失败 ⇒ 立刻收尾并给出可读原因（不白等 120s —— 内建的失败是确定的，不是「还在等」）。
+- (void)runBuiltInEnablerWithBudget:(NSTimeInterval)budget {
+    if (self.enablerLaunched) return;
+    self.enablerLaunched = YES;
+    A2JITBuiltInEnablerBlock block = gA2JITBuiltInEnabler;
+    if (block == nil) {
+        [self finishWithOK:NO reason:@"内建 JIT 引擎未注册（A2JITSetBuiltInEnabler 没被调用）"];
+        return;
+    }
+    a2_log_criterion(@"[A2-JIT-BUILTIN] 开始执行内建引擎（后台队列，预算 %.0fs）", budget);
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        NSString *why = nil;
+        BOOL ok = block(budget, &why);
+        dispatch_async(dispatch_get_main_queue(), ^{
+            A2JITEnablerRun *run = weakSelf;
+            if (run == nil || run.finished) return;
+            if (!ok) {
+                a2_log_criterion(@"[A2-JIT-BUILTIN] 内建引擎失败 ⇒ 收尾：%@", why ?: @"(无原因)");
+                [run finishWithOK:NO reason:(why.length > 0 ? why : @"内建 JIT 引擎失败")];
+                return;
+            }
+            a2_log_criterion(@"[A2-JIT-BUILTIN] 内建引擎报告成功 ⇒ 立刻复验判据（不空等轮询）");
+            [run tickForced:YES];
+        });
+    });
 }
 
 @end

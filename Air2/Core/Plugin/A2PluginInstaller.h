@@ -48,6 +48,7 @@
 
 #import <Foundation/Foundation.h>
 
+#import "A2PluginContribution.h"
 #import "A2PluginManifest.h"
 
 @class A2PluginRegistry;
@@ -123,6 +124,30 @@ typedef BOOL (^A2PluginLaunchChainGate)(A2PluginManifest *manifest,
 - (instancetype)init NS_UNAVAILABLE;
 
 @property (nonatomic, strong, readonly) A2PluginRegistry *registry;
+
+/// 贡献点注册表（P2 第一步，纯内存）。三条接线：
+///  · 安装成功 → `applyContributionSet:`（失败 = `E_SLOT_CONFLICT`，安装期拒装）；
+///  · 卸载 / 停用 → `removeContributionsForPlugin:`（幂等）。
+///
+/// 默认是 `initWithRegistry:` 里自建的一个实例 —— 「卸掉 / 停用之后贡献点立刻消失」
+/// 不能依赖装配处记得接线。Phase A 要把**同一个实例**交给 UI 读时替换它：
+/// `installer.contributionRegistry = sharedRegistry;`（注册表只是运行时缓存，
+/// 磁盘上的唯一事实来源仍是 `A2PluginRegistry`）。
+@property (nonatomic, strong, nullable) A2PluginContributionRegistry *contributionRegistry;
+
+/// 启动装配（Phase A）：把「已装且**已启用**」的插件的贡献接进 `contributionRegistry`。
+///
+/// 为什么必须有这一条：注册表是**运行时缓存**，进程重启后是空的；没有它，
+/// 「昨天启用的插件今天开机就不见了」。停用/卸载路径已经在写盘成功后立刻摘除，
+/// 这里只负责「按磁盘上的 enabled 重建一次」。
+///
+/// 幂等：同一插件重复接入只覆盖（`applyContributionSet:` 的语义）。
+/// 单个插件失败（manifest 被改过 / 读不出 / `E_SLOT_CONFLICT`）**不影响其它插件**，
+/// 只记一行原因 —— 启动不能被一个坏插件拖住。
+///
+/// @return 本次成功接入的插件数；并记一行判据：
+///         `启动装配：已启用插件 N 个，贡献点接入 M 个（跳过 K 个）`
+- (NSUInteger)attachContributionsForEnabledPlugins;
 
 /// 安装期上限，默认 `A2PluginDefaultLimits()`。
 @property (nonatomic, assign) A2PluginLimits limits;

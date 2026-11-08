@@ -125,3 +125,49 @@ int a2_vm_launch_with_jli(NSString *javaHome,
     free(cargv);
     return A2JLIRCCalled;
 }
+
+// ★2026-11-07 macOS JLI 二段式启动★
+//   JLI_Launch 在 macOS 上第一次调用不会建 VM：它 dlsym(RTLD_DEFAULT,"main") 把宿主
+//   main 用 java 参数再调一次，第二次调用 JLI_Launch 才真正建 VM。
+//   ⇒ 宿主 main 被回调时，必须用回调进来的 argv 再调一次本函数。
+//   入参 argv[0] 形如 "<javaHome>/bin/java"；javaHome 由调用方剥离 /bin/java 得到。
+int a2_jli_launch_raw(const char *javaHomePath, int argc, const char **argv) {
+    if (javaHomePath == NULL || argc <= 0 || argv == NULL) {
+        return A2JLIRCBadArgs;
+    }
+    char libjli[PATH_MAX];
+    snprintf(libjli, sizeof(libjli), "%s/lib/jli/libjli.dylib", javaHomePath);
+    void *h = dlopen(libjli, RTLD_GLOBAL);
+    if (h == NULL) {
+        snprintf(libjli, sizeof(libjli), "%s/lib/libjli.dylib", javaHomePath);
+        h = dlopen(libjli, RTLD_GLOBAL);
+    }
+    if (h == NULL) {
+        a2_log_criterion(@"[A2JVM] J4 二段式：dlopen libjli 失败 path=%s", javaHomePath);
+        return A2JLIRCDlopenFailed;
+    }
+    a2_jli_launch_fn launch = (a2_jli_launch_fn)dlsym(h, "JLI_Launch");
+    if (launch == NULL) {
+        a2_log_criterion(@"[A2JVM] J4 二段式：dlsym(JLI_Launch) 失败");
+        return A2JLIRCDlsymFailed;
+    }
+    // ★2026-11-07★ 二段式这次调用要去掉 -XstartOnFirstThread：
+    //   它的语义是「在第一条线程(主线程)上建 VM」，而主线程此刻在 UIKit runloop 里，
+    //   VM 会一直等它让出 ⇒ 卡死在建 VM。这里过滤掉，让 VM 在 libjli 的线程上建。
+    const char *filtered[256];
+    int fcount = 0;
+    for (int i = 0; i < argc && fcount < 255; i++) {
+        if (argv[i] != NULL && strcmp(argv[i], "-XstartOnFirstThread") == 0) {
+            continue;
+        }
+        filtered[fcount++] = argv[i];
+    }
+    filtered[fcount] = NULL;
+    a2_log_criterion(@"[A2JVM] J4 二段式：第二次调用 JLI_Launch（argc=%d→%d，已去掉 -XstartOnFirstThread）",
+                     argc, fcount);
+    int rc = (int)launch(fcount, (const char **)filtered, 0, NULL, 0, NULL,
+                         "", "", "java", "java",
+                         JNI_FALSE, JNI_FALSE, JNI_FALSE, (jint)0);
+    a2_log_criterion(@"[A2JVM] J5 二段式：JLI_Launch 返回 rc=%d", rc);
+    return rc;
+}

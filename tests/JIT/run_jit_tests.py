@@ -28,41 +28,28 @@ PLAYER = os.path.join(ROOT, "Air2", "Player")
 
 # 被测的【真实】源文件（纯逻辑，无 UIKit）。
 SOURCES = [
-    os.path.join(PLAYER, "A2JITProvider.m"),
     os.path.join(PLAYER, "A2JITFacts.m"),
-    os.path.join(PLAYER, "A2JITStrategySelector.m"),
     os.path.join(PLAYER, "A2PairingFile.m"),
-    os.path.join(PLAYER, "A2JITStateMachine.m"),
-    os.path.join(PLAYER, "A2JITCoordinator.m"),
     os.path.join(PLAYER, "A2LaunchChain.m"),
     # --- [JIT↔VM] 启动链失败分类 / 判据行 / 用户文案（纯逻辑，可单测）---
     os.path.join(PLAYER, "A2LaunchFailure.m"),
-    os.path.join(PLAYER, "A2JITAutomaticPairingProvider.m"),
-    os.path.join(PLAYER, "A2JITImportedPairingProvider.m"),
-    os.path.join(PLAYER, "A2JITExternalToolProvider.m"),
-    os.path.join(PLAYER, "A2JITKernelJITProvider.m"),
     os.path.join(PLAYER, "A2JITLocalFactsSource.m"),
     # --- [JIT-IMPL-2] 本单新增的纯逻辑件（判据缝 / 分流表 / 四语文案 / 配对文件存储）---
     os.path.join(PLAYER, "A2JITVerdictGuidance.m"),
     os.path.join(PLAYER, "A2JITStrings.m"),
     os.path.join(PLAYER, "A2JITPairingFileStore.m"),
-    # --- [JIT-AUTOPAIR-1] 自动配对（iOS 27+，自研 RPPairing）的类型 / 前置条件 / 分流表 ---
-    os.path.join(PLAYER, "A2JITAutoPairing.m"),
-    os.path.join(PLAYER, "A2JITAutoPairingGuidance.m"),
-    # --- [JIT-AUTOPAIR-3] 配对码来源（可选项表 + 解析）+ 设备发起档的 6 位码会话 ---
-    os.path.join(PLAYER, "A2JITPairingPinSource.m"),
+    # --- [JIT-AUTOPAIR-3] 设备发起档的 6 位码会话（诊断页仍在用）---
     os.path.join(PLAYER, "A2JITPairingCodeSession.m"),
-    # 跨层契约常量（A2SelectedPairingPinSourcePrefKey 的唯一定义点）
+    # 跨层契约常量（A2SelectedRenderer/JavaRuntime/RenderScale 的唯一定义点）
     os.path.join(ROOT, "Air2", "Utils", "A2LaunchContract.m"),
     # 判据行的统一出口（Utils 叶子层，只有 Foundation + stdio）：
     # A2JITPairingCodeSession.m 的 [A2Log criterion:] 要它，否则 x86_64 链接报
     # Undefined symbols: _OBJC_CLASS_$_A2Log。
     os.path.join(ROOT, "Air2", "Utils", "A2Log.m"),
-    # --- [JIT-DDI-1] DDI（Developer Disk Image）：类型 / 纯逻辑 / 本地镜像存储 / 判定合成 / 分流表 ---
+    # --- [JIT-DDI-1] DDI（Developer Disk Image）：类型 / 纯逻辑 / 本地镜像存储 / 判定合成 ---
     os.path.join(PLAYER, "A2JITDDI.m"),
     os.path.join(PLAYER, "A2JITDDIStore.m"),
     os.path.join(PLAYER, "A2JITDDIProbe.m"),
-    os.path.join(PLAYER, "A2JITDDIGuidance.m"),
     # --- [JIT-AUTOPAIR-2] RPPairing 握手内核（Natives/Support：★真实现，含系统 corecrypto 的 X25519★）---
     os.path.join(ROOT, "Natives", "Support", "a2_rppairing_crypto.m"),
     os.path.join(ROOT, "Natives", "Support", "a2_rppairing.m"),
@@ -85,7 +72,7 @@ SOURCES = [
 # 额外头搜索路径：测试要用 Natives 的判据枚举做「跨层镜像」的运行期断言
 # （★只读头文件里的枚举值，不链接 A2JITEnvironment.m★ —— 后者的实现含 arm64 裸 brk）。
 EXTRA_INCLUDES = [os.path.join(ROOT, "Natives", "Support"),
-                  # [JIT-AUTOPAIR-3] 跨层契约常量（A2SelectedPairingPinSourcePrefKey 等）
+                  # 跨层契约常量（A2SelectedRenderer / A2SelectedJavaRuntime / A2SelectedRenderScale）
                   os.path.join(ROOT, "Air2", "Utils")]
 
 # ---------------------------------------------------------------------------

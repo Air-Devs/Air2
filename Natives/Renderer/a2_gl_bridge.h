@@ -126,6 +126,12 @@ void a2_gl_bridge_present_frame(void);
 /// 屏幕上只有我们预览清屏造成的纯黑，而日志里 atlas/资源加载全部正常。
 void a2_gl_bridge_swap_buffers(void);
 
+/// 取「游戏视图的 renderable」，并把它的 backing layer 保证是 CAMetalLayer。
+/// ★为什么必须走这里★：1.20.1 黑屏的实证结论——外挂子层（自己 new 一个 CAMetalLayer 叠上去）
+/// 不会被合成进画面，只有**视图的 backing layer** 才上屏；且 drawableSize 必须显式设置。
+/// 调用点唯一：`a2gl2_metallum_install`（在拿不到 metallum 自己的 layer 时用它）。
+void *a2_gl_bridge_renderable_for_game_view(void);
+
 /// 把已有 EGL 上下文设为调用线程的 current（GLFW 的 MakeContextCurrent 用）。
 ///
 /// ★首次调用会顺带把表面改绑到 GLFW 游戏宿主视图★：attach 发生在 JVM 启动前（挂的是启动器

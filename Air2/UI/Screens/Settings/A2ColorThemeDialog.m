@@ -26,6 +26,11 @@
 #import "A2Metrics.h"
 #import "A2Typography.h"
 #import "A2PrimaryButton.h"
+#import "A2Log.h"
+// 「插件主题」分组的数据来源：贡献点注册表（已启用插件）+ 安装器（读展示名）
+#import "A2PluginContributionHost.h"
+#import "A2PluginInstaller.h"
+#import "A2PluginManifest.h"
 
 /// 配色风格选项（名称与说明统一从 A2PaletteStyle 取，避免两处维护）
 static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
@@ -37,6 +42,67 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
     return out;
 }
 
+#pragma mark - 插件主题选项
+
+/// 一条「插件贡献的颜色主题」。
+///
+/// token 原样来自贡献点注册表（安装期已校验过），这里只补两样**纯展示**信息：
+/// 标题（插件 manifest 的 `name`）与预览色（这套 token 实际会得到的主色）。
+@interface A2PluginThemeOption : NSObject
+
+@property (nonatomic, copy) NSString *pluginId;
+@property (nonatomic, copy) NSString *title;
+@property (nonatomic, copy) NSDictionary<NSString *, NSString *> *tokens;
+/// 预览色点用。插件没给 primary 时它是回落后的当前主色，因此永远非 nil。
+@property (nonatomic, strong) UIColor *previewColor;
+
+@end
+
+@implementation A2PluginThemeOption
+@end
+
+/// 已启用（= 已接入贡献点注册表）且**真的声明了**主题 token 的插件。
+///
+/// 顺序沿用 `attachedPluginIds`（字典序）：slot 那套 (priority, layer, …) 排序键是给
+/// 「谁先渲染」用的，这里是给人挑颜色的列表，稳定可预期的顺序更好。
+///
+/// 返回空数组 ⇒ 调用方整组不画（**不留空分组**：没插件时对话框与以前一模一样）。
+static NSArray<A2PluginThemeOption *> *A2PluginThemeOptions(void) {
+    A2PluginContributionRegistry *registry = [A2PluginContributionHost contributionRegistry];
+    NSArray<NSString *> *pluginIds = registry.attachedPluginIds;
+    if (pluginIds.count == 0) return @[];
+
+    A2PluginInstaller *installer = [A2PluginContributionHost installer];
+    A2ColorTheme *current = A2ThemeManager.shared.theme;
+
+    NSMutableArray<A2PluginThemeOption *> *options = [NSMutableArray array];
+    for (NSString *pluginId in pluginIds) {
+        NSDictionary<NSString *, NSString *> *tokens = [registry themeTokensForPlugin:pluginId];
+        if (tokens.count == 0) continue;      // 这个插件不提供颜色主题
+
+        // 标题走 manifest 的 `name`；读不出来就用 id —— 一个插件读不动不该让整组少一行。
+        NSString *title = pluginId;
+        A2PluginManifest *manifest = [installer installedManifestForPluginId:pluginId error:NULL];
+        if (manifest.name.length > 0) title = manifest.name;
+
+        A2PluginThemeOption *option = [A2PluginThemeOption new];
+        option.pluginId = pluginId;
+        option.title = title;
+        option.tokens = tokens;
+        // 预览色 = 这套 token 真正会得到的主色（含「插件没给 ⇒ 回落当前主题」）。
+        // 颜色计算只走 A2ColorTheme 一处，弹窗不自己解析 hex，避免两套解析规则。
+        option.previewColor = [A2ColorTheme themeWithPluginTokens:tokens
+                                                             name:title
+                                                             desc:@""
+                                                             base:current].lightPrimary;
+        [options addObject:option];
+    }
+
+    [A2Log criterion:@"[A2-PLUGIN-UI] 颜色主题 列出来自插件的主题 %lu 套（已启用插件 %lu 个）",
+     (unsigned long)options.count, (unsigned long)pluginIds.count];
+    return options;
+}
+
 #pragma mark - 风格选项行
 
 @interface A2StyleOptionRow : UIControl
@@ -44,11 +110,17 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
 @property (nonatomic, strong) UILabel *descLabel;
 @property (nonatomic, strong) UIView *radioOuter;
 @property (nonatomic, strong) UIView *radioInner;
+/// 文字栈（色点要约束到它的右边，所以留引用）
+@property (nonatomic, strong) UIStackView *textStack;
+/// 右侧色点：插件主题用它预览主色。设 nil ⇒ 不建视图（配色风格行保持原样）。
+@property (nonatomic, strong, nullable) UIColor *swatchColor;
 // selected 沿用 UIControl 自带的（不要重声明 BOOL selected，
 // 否则子类不会自动合成 _selected，见 CI 报错根因）
 @end
 
-@implementation A2StyleOptionRow
+@implementation A2StyleOptionRow {
+    UIView *_swatchView;
+}
 
 - (instancetype)initWithTitle:(NSString *)title desc:(NSString *)desc {
     self = [super initWithFrame:CGRectZero];
@@ -84,6 +156,7 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
     textStack.translatesAutoresizingMaskIntoConstraints = NO;
     textStack.axis = UILayoutConstraintAxisVertical;
     textStack.spacing = 1;
+    _textStack = textStack;
 
     [self addSubview:_radioOuter];
     [self addSubview:textStack];
@@ -122,6 +195,33 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
     [self applyTheme];
 }
 
+- (void)setSwatchColor:(UIColor *)swatchColor {
+    _swatchColor = swatchColor;
+    if (!swatchColor) {
+        _swatchView.hidden = YES;
+        return;
+    }
+    if (!_swatchView) {
+        _swatchView = [[UIView alloc] initWithFrame:CGRectZero];
+        _swatchView.translatesAutoresizingMaskIntoConstraints = NO;
+        _swatchView.layer.cornerRadius = 7;
+        _swatchView.layer.cornerCurve = kCACornerCurveContinuous;
+        _swatchView.userInteractionEnabled = NO;
+        [self addSubview:_swatchView];
+        // 色点只在插件主题行上建；配色风格行的约束与排版因此一字未改。
+        [NSLayoutConstraint activateConstraints:@[
+            [_swatchView.widthAnchor constraintEqualToConstant:14],
+            [_swatchView.heightAnchor constraintEqualToConstant:14],
+            [_swatchView.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-A2SpaceM],
+            [_swatchView.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
+            [_textStack.trailingAnchor constraintLessThanOrEqualToAnchor:_swatchView.leadingAnchor
+                                                                constant:-A2SpaceS],
+        ]];
+    }
+    _swatchView.hidden = NO;
+    _swatchView.backgroundColor = swatchColor;
+}
+
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
     _radioOuter.layer.borderColor = (self.isSelected ? t.cPrimary : t.cOutline).CGColor;
@@ -144,9 +244,15 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
 @property (nonatomic, strong) UILabel *hexLabel;
 @property (nonatomic, strong) NSMutableArray<A2StyleOptionRow *> *styleRows;
 
+/// 「插件主题」分组（来自已启用插件的 resolvedThemeTokens）。空数组 ⇒ 整组不画。
+@property (nonatomic, copy) NSArray<A2PluginThemeOption *> *pluginOptions;
+@property (nonatomic, strong) NSMutableArray<A2StyleOptionRow *> *pluginRows;
+/// 当前选中的插件主题；nil = 用色盘（与「配色风格」互斥）
+@property (nonatomic, strong, nullable) A2PluginThemeOption *selectedPluginOption;
+
 @property (nonatomic, strong, nullable) UIColor *seedColor;
 @property (nonatomic, assign) A2PaletteStyle style;
-@property (nonatomic, copy, nullable) void (^onComplete)(UIColor *, A2PaletteStyle);
+@property (nonatomic, copy, nullable) void (^onComplete)(UIColor *, A2PaletteStyle, NSString *);
 @end
 
 @implementation A2ColorThemeDialog
@@ -154,7 +260,7 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
 + (void)presentFrom:(UIViewController *)host
           seedColor:(UIColor *)seedColor
               style:(A2PaletteStyle)style
-         onComplete:(void (^)(UIColor *, A2PaletteStyle))onComplete {
+         onComplete:(void (^)(UIColor *, A2PaletteStyle, NSString *))onComplete {
 
     A2ColorThemeDialog *vc = [[A2ColorThemeDialog alloc] init];
     vc.seedColor = seedColor ?: A2ThemeManager.shared.scheme.cPrimary;
@@ -228,6 +334,16 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
     leftColumn.axis = UILayoutConstraintAxisVertical;
     leftColumn.spacing = A2SpaceM;
     leftColumn.alignment = UIStackViewAlignmentFill;
+
+    // ---- 左列追加：插件主题（来自已启用插件的主题 token）----
+    //   没有插件提供色板时 `_pluginOptions` 为空 ⇒ 分组整个不建，等价于这个功能不存在。
+    _pluginOptions = A2PluginThemeOptions();
+    _pluginRows = [NSMutableArray array];
+    UIView *pluginGroup = [self buildPluginThemeGroup];
+    if (pluginGroup) {
+        [leftColumn addArrangedSubview:pluginGroup];
+        leftColumn.spacing = A2SpaceL;   // 两组之间留大一点，否则看起来是一串同级的选项
+    }
 
     // ---- 右列：大色盘 + 明度 + 色值 ----
     _wheel = [[A2ColorWheel alloc] initWithFrame:CGRectZero];
@@ -312,6 +428,7 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
         [buttonRow.heightAnchor constraintEqualToConstant:A2ButtonHeight],
     ]];
 
+    [self restoreSelectedPluginTheme];
     [self refreshStyleSelection];
     [self applyTheme];
 
@@ -319,6 +436,79 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
                                           selector:@selector(applyTheme)
                                               name:A2ThemeDidChangeNotification
                                             object:nil];
+}
+
+#pragma mark - 插件主题分组
+
+/// 建「插件主题」分组：小标题 + 一列单选行（行右侧带主色点）。
+/// 没有可选主题时返回 nil —— 调用方据此**整组不建**，不留空标题、不占位。
+///
+/// 行数多时行区自己滚：卡片高度被「≤ 92% 屏幕」限死，
+/// 装十几个插件不能把弹窗顶出屏幕（那会让底部按钮点不到）。
+- (nullable UIView *)buildPluginThemeGroup {
+    if (_pluginOptions.count == 0) return nil;
+
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectZero];
+    title.translatesAutoresizingMaskIntoConstraints = NO;
+    title.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
+    title.text = @"插件主题";
+
+    UIStackView *rows = [[UIStackView alloc] initWithFrame:CGRectZero];
+    rows.translatesAutoresizingMaskIntoConstraints = NO;
+    rows.axis = UILayoutConstraintAxisVertical;
+    rows.spacing = A2SpaceXS;
+
+    for (NSUInteger i = 0; i < _pluginOptions.count; i++) {
+        A2PluginThemeOption *option = _pluginOptions[i];
+        NSString *desc = [NSString stringWithFormat:@"插件贡献 · %lu 个色值",
+                          (unsigned long)option.tokens.count];
+        A2StyleOptionRow *row = [[A2StyleOptionRow alloc] initWithTitle:option.title desc:desc];
+        row.tag = (NSInteger)i;
+        row.swatchColor = option.previewColor;
+        [row addTarget:self action:@selector(pluginThemeTapped:) forControlEvents:UIControlEventTouchUpInside];
+        [_pluginRows addObject:row];
+        [rows addArrangedSubview:row];
+    }
+
+    UIScrollView *scroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    scroll.showsVerticalScrollIndicator = YES;
+    scroll.alwaysBounceVertical = NO;
+    [scroll addSubview:rows];
+
+    // 一行 48（A2StyleOptionRow 的最小高度）+ 4 间距；最多露 2 行，第 3 行起滚动。
+    // ★为什么是 2★ 卡片高度被「≤ 92% 屏幕」限死：2 行让 667pt 及以上的机型仍有富余，
+    //   3 行会把 iPhone 8 / SE2 那一档顶到上限。多出来的行滚动可见即可。
+    CGFloat visibleRows = MIN(2.0, (CGFloat)_pluginOptions.count);
+    CGFloat visibleHeight = visibleRows * 48.0 + MAX(0.0, visibleRows - 1.0) * A2SpaceXS;
+
+    [NSLayoutConstraint activateConstraints:@[
+        [scroll.heightAnchor constraintEqualToConstant:visibleHeight],
+        [rows.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor],
+        [rows.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor],
+        [rows.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor],
+        [rows.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor],
+        [rows.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor],
+    ]];
+
+    UIStackView *group = [[UIStackView alloc] initWithArrangedSubviews:@[title, scroll]];
+    group.translatesAutoresizingMaskIntoConstraints = NO;
+    group.axis = UILayoutConstraintAxisVertical;
+    group.spacing = A2SpaceXS;
+    return group;
+}
+
+/// 打开弹窗时，若当前生效的就是某个插件主题，把对应行预选上 ——
+/// 否则用户看不到「现在用的是哪一套」，只能靠猜。
+- (void)restoreSelectedPluginTheme {
+    NSString *activePluginId = A2ThemeManager.shared.pluginThemePluginId;
+    if (activePluginId.length == 0) return;
+    for (A2PluginThemeOption *option in _pluginOptions) {
+        if ([option.pluginId isEqualToString:activePluginId]) {
+            self.selectedPluginOption = option;
+            return;
+        }
+    }
 }
 
 - (void)dealloc {
@@ -329,6 +519,18 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
 
 - (void)styleTapped:(A2StyleOptionRow *)sender {
     self.style = (A2PaletteStyle)sender.tag;
+    // 选「配色风格」= 回到色盘那一路：确认后按「种子色 + 风格」重算，插件色板让位
+    self.selectedPluginOption = nil;
+    [self refreshStyleSelection];
+
+    UISelectionFeedbackGenerator *fb = [UISelectionFeedbackGenerator new];
+    [fb selectionChanged];
+}
+
+/// 选中一条「插件主题」（确认时才真正生效，取消仍然什么都不改）
+- (void)pluginThemeTapped:(A2StyleOptionRow *)sender {
+    if (sender.tag < 0 || (NSUInteger)sender.tag >= _pluginOptions.count) return;
+    self.selectedPluginOption = _pluginOptions[(NSUInteger)sender.tag];
     [self refreshStyleSelection];
 
     UISelectionFeedbackGenerator *fb = [UISelectionFeedbackGenerator new];
@@ -336,8 +538,15 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
 }
 
 - (void)refreshStyleSelection {
+    // 插件主题与「配色风格」是互斥的两条来源：只能亮一个圆点，
+    // 否则用户看到两个都选中，却不知道到底哪套色板在生效。
+    BOOL usingPluginTheme = (self.selectedPluginOption != nil);
     for (A2StyleOptionRow *row in _styleRows) {
-        row.selected = (row.tag == (NSInteger)self.style);
+        row.selected = (!usingPluginTheme && row.tag == (NSInteger)self.style);
+    }
+    for (NSUInteger i = 0; i < _pluginRows.count && i < _pluginOptions.count; i++) {
+        _pluginRows[i].selected = usingPluginTheme &&
+            [_pluginOptions[i].pluginId isEqualToString:self.selectedPluginOption.pluginId];
     }
 }
 
@@ -346,10 +555,27 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
 }
 
 - (void)confirm {
+    A2PluginThemeOption *pluginOption = self.selectedPluginOption;
+    if (pluginOption) {
+        // 插件主题由弹窗自己应用：token 只在它手里，而调用方只知道「种子色 + 风格」。
+        // 回调里把 pluginThemeId 带出去，调用方据此**不写种子色**
+        // —— 写下去会立刻把插件色板覆盖成种子色推导的结果。
+        void (^cb)(UIColor *, A2PaletteStyle, NSString *) = self.onComplete;
+        A2PaletteStyle style = self.style;
+        NSString *pluginId = pluginOption.pluginId;
+        NSString *title = pluginOption.title;
+        NSDictionary<NSString *, NSString *> *tokens = pluginOption.tokens;
+        [self dismissViewControllerAnimated:YES completion:^{
+            [A2ThemeManager.shared applyPluginThemeFromPlugin:pluginId name:title tokens:tokens];
+            if (cb) cb(nil, style, pluginId);
+        }];
+        return;
+    }
+
     UIColor *c = _wheel.color;
-    void (^cb)(UIColor *, A2PaletteStyle) = self.onComplete;
+    void (^cb)(UIColor *, A2PaletteStyle, NSString *) = self.onComplete;
     [self dismissViewControllerAnimated:YES completion:^{
-        if (cb) cb(c, self.style);
+        if (cb) cb(c, self.style, nil);
     }];
 }
 
@@ -361,6 +587,11 @@ static NSArray<NSArray<NSString *> *> *A2PaletteStyleOptions(void) {
 
 - (void)colorWheel:(A2ColorWheel *)wheel didFinishWithColor:(UIColor *)color {
     [self updateHexLabel:color];
+    // 动了色盘 = 想用这个种子色：插件主题取消选择（否则确认后色盘白调）
+    if (self.selectedPluginOption) {
+        self.selectedPluginOption = nil;
+        [self refreshStyleSelection];
+    }
     UISelectionFeedbackGenerator *fb = [UISelectionFeedbackGenerator new];
     [fb selectionChanged];
 }

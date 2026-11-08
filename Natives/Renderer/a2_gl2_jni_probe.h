@@ -34,6 +34,7 @@ extern "C" {
 /// 一条入口的「绑定事实」（全部由 dladdr/dlsym 当场得到，不缓存）
 typedef struct {
     const char *glName;        ///< GL 入口名（如 "glBegin"）
+    const char *jniName;       ///< Java 侧 native 方法名（指针入口是 nglXxx，与 glName 不同名）
     const char *jniSymbol;     ///< 该入口的 JNI 实现符号名（Java_org_lwjgl_opengl_GL11_glBegin）
     const char *declaringClass;///< Java 侧声明它的类（org/lwjgl/opengl/GL11 或 GL11C）
     void       *jniAddress;    ///< dlsym 到的地址；NULL = 该镜像还没进进程
@@ -42,7 +43,7 @@ typedef struct {
 } A2GL2ProbeFact;
 
 /// 采样本轮接管的入口（唯一产地）。返回写入条数（≤ cap）。
-/// 顺序 = `kA2GL2ProbeEntries` 的登记顺序（固定 7 个，见 .m）。
+/// 顺序 = `kA2GL2ProbeEntries` 的登记顺序（固定 68 个，见 .m）。
 int a2_gl2_probe_sample(A2GL2ProbeFact *out, int cap);
 
 /// 把采样结果打成 `[A2-GL2-PROBE]` 判据行（每个入口一行 + 一行结论）。
@@ -51,12 +52,12 @@ void a2_gl2_probe_log(void);
 
 #pragma mark - 登记表的只读访问（★唯一登记表在 .m，别处不另抄一份★）
 
-/// 登记表条数（固定 7：见 .m 的 `kA2GL2ProbeEntries`）。
-/// 调用点：`a2_gl2_jni_bind.m` 的 `a2_gl2_jni_install()`（按索引逐个注册/懒解析）。
+/// 登记表条数（固定 68：见 .m 的 `kA2GL2ProbeEntries`）。
+/// 调用点：`a2_gl2_jni_bind.m` 的 `a2gl2_verify_table()`（条数必须与登记表相等）。
 int a2_gl2_probe_entry_count(void);
 
 /// 第 index 条的 GL 入口名；越界返回 NULL。
-/// 调用点：`a2_gl2_jni_bind.m` 的 7 个 JNI 转发（取 `a2_gl2_shim_lookup` 的名字）。
+/// 调用点：`a2_gl2_jni_bind.m` 的 `a2gl2_enter()`（68 个 JNI 转发共用；取 `a2_gl2_shim_lookup` 的名字）。
 const char *a2_gl2_probe_gl_name(int index);
 
 /// 第 index 条的 JNI 实现符号名；越界返回 NULL。
@@ -64,7 +65,7 @@ const char *a2_gl2_probe_gl_name(int index);
 const char *a2_gl2_probe_jni_symbol(int index);
 
 /// 第 index 条在 Java 侧声明的类（内部名，GL11 / GL11C）；越界返回 NULL。
-/// 调用点：`a2_gl2_jni_bind.m` 的 `a2_gl2_jni_install()`（决定注册到哪个 jclass）。
+/// 调用点：`a2_gl2_jni_bind.m` 的 `a2gl2_verify_table()`（与登记表的首选类核对）。
 const char *a2_gl2_probe_declaring_class(int index);
 
 #ifdef __cplusplus

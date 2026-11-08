@@ -9,7 +9,7 @@
 //    · 同类型起一个 NWBrowser；浏览到任何结果 ⇒ 说明本地网络权限已给
 //    · listener 失败 / 超时内没结果 ⇒ 未授权（或环境异常），如实分类返回
 //
-//  ★调用点（唯一）★：Air2/Bridge/A2JITAutoPairingEngineBridge.m 的
+//  ★调用点★：暂无（JIT 页改版后自动配对 Bridge 已删；本模块作为下一阶段的机制件保留）
 //  -startDeviceInitiatedPairingWithHostName:… 里（开始广告之前）。
 //
 //  iOS 14+；只用 Network.framework，不需要 multicast entitlement。

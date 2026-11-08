@@ -172,7 +172,8 @@ static NSString *A2DefaultRendererForVersion(NSInteger major, NSInteger minor,
         if (major == 26 && (minor == 2 || minor == 3)) return @"libmetallum.dylib";
         return @"libmobileglues.dylib";
     }
-    if (major == 1 && minor >= 17) return A2RendererHostEGLDylibName;
+    // ★EAGL 已移除（2026-11-08）★：1.17+ 的默认渲染器改为 MobileGlues（GL 3.2+ 翻译到宿主 GLES）。
+    if (major == 1 && minor >= 17) return @"libmobileglues.dylib";
     if (major == 1 && minor >= 13) return @"libmobileglues.dylib";
     if (major == 1 && minor <= 12) {
         // ★[A2-GL2] 自研固定管线档位（★默认关★）★
@@ -803,6 +804,33 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
     // ========================================================================
     A2MemoryProbe *memProbe = [A2LaunchRunner currentMemoryProbe];
     NSInteger ceilingMB = [A2LaunchMemory safeHeapCeilingMBForProbe:memProbe];
+    // ★2026-11-08 对齐老 Air（tree510/LauncherPreferences.m:71-96）★
+    //   老 Air 的自动内存口径：拿到 increased-memory-limit（或私有 memorystatus）⇒
+    //   allocation = 物理内存 × 0.5；否则 × 0.25。available-预留 那条只在"抬不了
+    //   jetsam 顶"的情况下当安全网用。我们之前只用了 available-1200，entitlement 白给。
+    {
+        extern CFTypeRef SecTaskCopyValueForEntitlement(void *task, CFStringRef entitlement, CFTypeRef *error);
+        extern void *SecTaskCreateFromSelf(CFAllocatorRef allocator);
+        BOOL entitled = NO;
+        void *task = SecTaskCreateFromSelf(NULL);
+        if (task != NULL) {
+            CFTypeRef v = SecTaskCopyValueForEntitlement(task,
+                CFSTR("com.apple.developer.kernel.increased-memory-limit"), NULL);
+            entitled = (v != NULL);
+            if (v) CFRelease(v);
+            CFRelease(task);
+        }
+        if (entitled && memProbe.physicalMB > 0) {
+            NSInteger byRatio = (NSInteger)(memProbe.physicalMB * 0.50);
+            NSInteger availCeil = ceilingMB;
+            ceilingMB = MAX(byRatio, availCeil > 0 ? availCeil : byRatio);
+            [A2Log criterion:@"[MEM] increased-memory-limit=YES ⇒ 自动内存取物理×0.50 = %ldMB（available 口径 %ldMB；物理 %ldMB）",
+             (long)byRatio, (long)availCeil, (long)memProbe.physicalMB];
+        } else {
+            [A2Log criterion:@"[MEM] increased-memory-limit=NO ⇒ 维持 available-预留 = %ldMB（老 Air 未提额分支同口径）",
+             (long)ceilingMB];
+        }
+    }
     NSInteger jreMajor = [A2JavaRuntimeCatalog majorVersionForDirectoryName:jreDir];
     A2LaunchMemoryMode memMode = A2Settings.shared.memoryMode;
     NSInteger xmxMB = [A2LaunchMemory xmxMBWithCeilingMB:ceilingMB
@@ -1064,22 +1092,28 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
             // ★宿主 EGL 后端（libeagl.dylib）★：EGL 那一半在我们自己的二进制里（假 EGL → EAGL），
             //   所以这里下发的是 **GL 层**的名字（MobileGlues = GL 3.2+ 翻译到宿主 GLES 3.0）；
             //   不把 `eagl` 写成 libname（包内没有、也不该有 libeagl.dylib 这个库）。
-            const BOOL hostEGLBackend = [rendererID isEqualToString:A2RendererHostEGLDylibName];
-            NSString *bare = hostEGLBackend ? @"mobileglues" : rendererID;
+            // ★EAGL 已移除★：那条「宿主 EGL 后端 ⇒ GL 层固定用 mobileglues」的分支不再存在。
+            NSString *bare = rendererID;
             if ([bare hasPrefix:@"lib"]) bare = [bare substringFromIndex:3];
             if ([bare hasSuffix:@".dylib"]) bare = [bare substringToIndex:bare.length - 6];
             if (bare.length > 0) {
-                [jvmOptions addObject:[NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%@", bare]];
+                // ★2026-11-08 真机证据（lastlog-279）★ 传裸名 "mobileglues" 时 LWJGL 的 dlopen 失败，
+                //   回退到 flat namespace ⇒ glTexImage2D 归【系统 OpenGLES】⇒ MC 的绘制全打进一个
+                //   不会上屏的实现（fb=0/中心像素恒黑），MG 根本收不到调用。
+                //   ⇒ 能定位到包内实体文件时改传【绝对路径】，dlopen 直接命中 MG。
+                NSString *libFile = [NSString stringWithFormat:@"%@/Frameworks/%@.dylib",
+                                     NSBundle.mainBundle.bundlePath, bare];
+                NSString *libName = bare;
+                if ([[NSFileManager defaultManager] fileExistsAtPath:libFile]) {
+                    libName = libFile;
+                    [A2Log criterion:@"[A2-AGENT] GL 后端改用绝对路径（避免回退系统 GLES）：%@", libFile];
+                }
+                [jvmOptions addObject:[NSString stringWithFormat:@"-Dorg.lwjgl.opengl.libname=%@", libName]];
                 // ★同时设 opengles.libname★（真机 hs_err 证据：MC 1.7.10 的 GL11.glLoadIdentity
                 //   经 lwjglx 落到 LWJGL 的 **GLES** 绑定，而 GLES 绑定读的是 opengles.libname，
                 //   默认值就是 libGLESv2 → 打到 ANGLE 的 GLES1 状态机 ⇒ SIGBUS）。
-                [jvmOptions addObject:[NSString stringWithFormat:@"-Dorg.lwjgl.opengles.libname=%@", bare]];
+                [jvmOptions addObject:[NSString stringWithFormat:@"-Dorg.lwjgl.opengles.libname=%@", libName]];
                 [A2Log criterion:@"[A2-AGENT] GL 后端：opengl.libname=%@ opengles.libname=%@", bare, bare];
-                if (hostEGLBackend) {
-                    // ★判据行★：一眼看出「EGL 是谁、GL 是谁」（真机 grep 这一行）。
-                    [A2Log criterion:@"[A2-RENDERER] 宿主 EGL 后端：EGL=本二进制假 EGL（a2_eagl_egl → CAEAGLLayer 上屏）"
-                     @" GL 层=%@（渲染器标识 %@）", bare, rendererID];
-                }
 
                 // ★2026-10-31 对齐老 Air（tree510 egl_bridge.m:317-324）★
                 //   MobileGlues 是「GL on host GLES」那一类 ⇒ 后端类型必须是 DirectGLES；
@@ -1104,7 +1138,7 @@ static NSString *A2LaunchPickLWJGLDir(NSString *libsRoot, NSInteger mcMajor, NSI
                     NSString *fwDir = [NSBundle.mainBundle.bundlePath stringByAppendingPathComponent:@"Frameworks"];
                     if (fwDir.length) {
                         setenv("MG_DIRECTORY_PATH", fwDir.UTF8String, 1);
-                        setenv("MG_DIR_PATH", fwDir.UTF8String, 1);
+                        // ★MG_DIR_PATH 由 main.m 指向 Documents/MG（那里才有 config.json）★
                     }
                     [A2Log criterion:@"[A2-AGENT] MG 后端：MOBILEGL_BACKEND_TYPE=DirectGLES log=%@ dir=%@",
                      mgLog, fwDir ?: @"(nil)"];

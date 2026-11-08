@@ -37,12 +37,24 @@ public final class A2IosCompatAgent implements ClassFileTransformer {
 
     /** 规则 A：1.20.1 的 ehg 两个 macOS 方法（菜单 / 应用图标）。 */
     private static final String TARGET_CLASS = "ehg";
+    private static final String RENDERSYSTEM_CLASS = "com/mojang/blaze3d/systems/RenderSystem";
     private static final String TARGET_METHOD = "a";
     private static final String[] TARGET_DESCS = { "(J)V", "(Lakp;)V" };
 
     /** 规则 B：MC 的 macOS 朗读器实现。 */
     private static final String NARRATORMAC_CLASS = "com/mojang/text2speech/NarratorMac";
+    /// ★2026-11-07 真机 lastlog-209★ MC 1.12.2 用的是 NarratorOSX（macOS 版）：
+    ///   Narrator.getNarrator → NarratorOSX.<init> → ca.weblite.objc.NSObject → JNA
+    ///   ⇒ JNA 版本冲突（jar 5.1.0 vs 包内原生 6.1.6）⇒ Error 直接终止启动。
+    ///   与 NarratorMac 同样处理：类正常加载，但不碰 AppKit/JNA。
+    private static final String NARRATOROSX_CLASS = "com/mojang/text2speech/NarratorOSX";
+    /// ★2026-11-07 lastlog-210★ 只把 NarratorOSX 置空不够：构造函数必须调 super()，
+    ///   super 又走 NSObject → JNA ⇒ 版本冲突照样发生。
+    ///   ⇒ 在**工厂**处拦截：Narrator.getNarrator() 直接返回 null（MC 对 null 旁白有判空）。
+    private static final String NARRATOR_CLASS = "com/mojang/text2speech/Narrator";
     /** 规则 D：LWJGL 原生库哈希校验。 */
+    private static final String GL11C_CLASS = "org/lwjgl/opengl/GL11C";
+
     private static final String LWJGL_LIBRARY_CLASS = "org/lwjgl/system/Library";
     /** 规则 F：★[A2-GL2-PROBE] 固定管线入口绑定取证★（GL11 的 <clinit> 末尾插一条探针调用）。 */
     private static final String GL11_CLASS = "org/lwjgl/opengl/GL11";
@@ -54,20 +66,114 @@ public final class A2IosCompatAgent implements ClassFileTransformer {
         "com/sun/jna/platform/mac/",
     };
 
-    public static void premain(String args, Instrumentation inst) {
-        inst.addTransformer(new A2IosCompatAgent());
+    /// ★2026-11-07★ 真机 1.20.1 证据：agent 往 GL11.<clinit> 插的探针调用
+    ///   a2/A2Gl2Probe 在游戏侧类加载器里找不到（NoClassDefFoundError）⇒ GL11 初始化失败。
+    ///   这里把 agent 自己的 jar 追加到系统类加载器搜索路径，让 a2.* 可被解析。
+    private static void a2AppendSelfToSystemSearch(Instrumentation inst) {
+        try {
+            java.security.CodeSource cs = A2IosCompatAgent.class.getProtectionDomain().getCodeSource();
+            if (cs == null || cs.getLocation() == null) {
+                System.out.println("[A2IOS-AGENT] agent jar 路径未知 ⇒ 跳过类路径追加");
+                return;
+            }
+            java.io.File f = new java.io.File(cs.getLocation().toURI());
+            inst.appendToSystemClassLoaderSearch(new java.util.jar.JarFile(f));
+            System.out.println("[A2IOS-AGENT] 已把 agent jar 追加进系统类加载器：" + f.getName());
+        } catch (Throwable t) {
+            System.out.println("[A2IOS-AGENT] 类路径追加失败（不影响启动）：" + t);
+        }
     }
 
+    /// GL2 探针/改写只在启动器真正启用自研 GL2 层（≤1.12）时才有意义；
+    /// 其它版本注入会污染 GL11 初始化（1.17+ 的崩溃就是这么来的）。
+    private static final boolean A2_GL2_ON = "1".equals(System.getProperty("a2.gl2.shim"));
+
+    /// ★2026-11-08★ MC 版本决定 Narrator 怎么处理：
+    ///   1.17+ 调用方对 getNarrator() 的 null 有防御 ⇒ 可以返回 null；
+    ///   1.16 及更早没防御（1.16.5 实测：NPE this.d is null）⇒ 不能拦，让它正常创建，
+    ///   而 macOS 实现类已由本 agent 改成惰性空实现。
+    private static final int A2_MC_MINOR = a2ParseMinor(System.getProperty("a2.mc.version"));
+
+    private static int a2ParseMinor(String v) {
+        if (v == null) return 0;
+        try {
+            String[] parts = v.split("[.]");
+            if (parts.length >= 2 && "1".equals(parts[0])) return Integer.parseInt(parts[1]);
+        } catch (Throwable ignored) { }
+        return 0;
+    }
+
+    public static void premain(String args, Instrumentation inst) {
+        a2AppendSelfToSystemSearch(inst);
+        inst.addTransformer(new A2IosCompatAgent());
+        System.out.println("[A2IOS-AGENT] 就位（GL2 注入=" + (A2_GL2_ON ? "开" : "关") + "）");
+    }
+
+    /// ★2026-11-07 加固★ 真机 1.19.2 曾出现 ClassFormatError: Truncated class file /
+    ///   VerifyError: Bad <init> method call —— 都是本 agent 产出的字节不合法。
+    ///   现在：任何异常只记日志并返回 null（等于不转换）；产出前用 ASM 复解析一次，
+    ///   解析不过同样丢弃。宁可少改，也绝不把坏字节交给 JVM。
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
+        try {
+            byte[] out = transformImpl(loader, className, classBeingRedefined, protectionDomain, classfileBuffer);
+            if (out != null && !a2VerifyClass(out)) {
+                System.out.println("[A2IOS-AGENT] 跳过 " + className + "：改写结果不合法（已丢弃）");
+                return null;
+            }
+            return out;
+        } catch (Throwable t) {
+            System.out.println("[A2IOS-AGENT] 跳过 " + className + "：" + t);
+            return null;
+        }
+    }
+
+    private static boolean a2VerifyClass(byte[] bytes) {
+        try {
+            new ClassReader(bytes).getClassName();
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private byte[] transformImpl(ClassLoader loader, String className, Class<?> classBeingRedefined,
+                                 ProtectionDomain protectionDomain, byte[] classfileBuffer) {
         if (className == null) {
             return null;
         }
+        // ★规则 I（2026-11-08 1.16.5 真机）★ RenderSystem.fog(...) 在 GLES 下没有
+        //   固定管线入口（GL11.glFogfv 指针为空 ⇒ LWJGL Checks.check 抛 NPE）。
+        //   雾只影响观感，1.13–1.16 直接置空。
+        if (RENDERSYSTEM_CLASS.equals(className) && A2_MC_MINOR >= 13 && A2_MC_MINOR <= 16) {
+            byte[] noFog = patchVoidMethod(classfileBuffer, "fog");
+            if (noFog != null) {
+                System.out.println("[A2IOS-AGENT] RenderSystem.fog 已置空（GLES 无 glFogfv）");
+                return noFog;
+            }
+        }
+
         // 规则 B：把 NarratorMac 变成「合法但空实现」的类。
         //   ★2026-11-01 真机（1.19.2, lastlog-134）★ 旧做法是返回 0xCAFEBABE 让它定义失败，
         //   1.20.1 的 Narrator.getNarrator 用 catch(Throwable) 能接住；1.19.2 只 catch Exception，
         //   ClassFormatError 直接冒到 Main.main ⇒ 启动崩。
         //   ⇒ 改成：类正常加载，但构造只调 super()、其余方法返回默认值 ⇒ 不会碰 AppKit，也不会抛 Error。
+        if (NARRATOR_CLASS.equals(className) && A2_MC_MINOR >= 17) {
+            byte[] patchedFactory = patchNarratorFactory(classfileBuffer);
+            if (patchedFactory != null) {
+                System.out.println("[A2IOS-AGENT] Narrator.getNarrator 已改为返回 null（不实例化 macOS 旁白）");
+                return patchedFactory;
+            }
+            return null;
+        }
+        if (NARRATOROSX_CLASS.equals(className)) {
+            byte[] patchedOsx = patchInertClass(className, classfileBuffer);
+            if (patchedOsx != null) {
+                System.out.println("[A2IOS-AGENT] NarratorOSX 已置为合法空实现（不碰 AppKit/JNA）");
+                return patchedOsx;
+            }
+            return null;
+        }
         if (NARRATORMAC_CLASS.equals(className)) {
             byte[] patched = patchInertClass(className, classfileBuffer);
             if (patched != null) {
@@ -99,6 +205,9 @@ public final class A2IosCompatAgent implements ClassFileTransformer {
         //   （javap 实测；glDrawArrays 的 native 声明在 GL11C 上）。取证要在「类刚初始化完」
         //   这一刻做：此时 JNI 尚未绑定到我们的实现，看到的就是原路径。
         //   ★只插一条 INVOKESTATIC a2/A2Gl2Probe.run()V，不改任何原有指令★。
+        if (GL11_CLASS.equals(className) && !A2_GL2_ON) {
+            return null;   // 非 GL2 链路：不碰 GL11（否则探针类缺失会让 GL11 初始化失败）
+        }
         if (GL11_CLASS.equals(className)) {
             byte[] patched = patchGl11Probe(classfileBuffer);
             if (patched != null) {
@@ -106,8 +215,229 @@ public final class A2IosCompatAgent implements ClassFileTransformer {
             }
             return null;   // GL11 不碰 AppKit，不必再走规则 C
         }
+        // ★规则 G（2026-11-06）★ GL11C.glGetInteger 字节码级改写。
+        //   真机 lastlog-200/201：无论我们怎么 RegisterNatives，MC 读到
+        //   MAX_TEXTURE_SIZE 仍是 0 ⇒ 图集 0x0 ⇒ "Unable to fit"。
+        //   ⇒ 直接在字节码层改写这个方法：按能力表返回，并打 pname 取证。
+        if (GL11_CLASS.equals(className)) {
+            // ★规则 H★ GL11.glGetInteger 是 Java 包装（内部转 GL11C），
+            //   真机证明 GL11C 那条改写没被命中 ⇒ 包装层也改一份，双路径覆盖。
+            byte[] patchedH = patchGl11GlobalGetInteger(classfileBuffer);
+            if (patchedH != null) {
+                System.out.println("[A2IOS-AGENT] GL11.glGetInteger 已按能力表改写（规则 H）");
+            }
+            // 规则 F 的探针仍要注入：两者都改，然后一起返回
+            byte[] withProbe = patchGl11Probe(patchedH != null ? patchedH : classfileBuffer);
+            if (withProbe != null) return withProbe;
+            return patchedH;
+        }
+        if (GL11C_CLASS.equals(className) && !A2_GL2_ON) {
+            return null;   // 非 GL2 链路：不碰 GL11C
+        }
+        if (GL11C_CLASS.equals(className)) {
+            byte[] patched = patchGl11cGetInteger(classfileBuffer);
+            if (patched != null) {
+                System.out.println("[A2IOS-AGENT] GL11C.glGetInteger 已按能力表改写");
+                return patched;
+            }
+            return null;
+        }
         // 规则 C：通用 AppKit 方法体置空。
         return patchAppKitMethods(className, classfileBuffer);
+    }
+
+    /**
+     * 规则 G：把 {@code GL11C.glGetInteger(int)} 改写成「按能力表返回值」。
+     *
+     * <p>为什么要在字节码层做：这条方法是 Java 实现，内部调 nglGetIntegerv；
+     * 我们对该 native 的 RegisterNatives 在真机上始终没被调用到（lastlog-199/200），
+     * 而 MC 1.12.2 的图集尺寸完全依赖它 ⇒ 读到 0 就抛 StitcherException。
+     *
+     * <p>值取自与 a2gl2_stub_nglGetIntegerv 同一张能力表（两边必须一致）：
+     * 3379(GL_MAX_TEXTURE_SIZE)=16384、34921=16、34930=16、35660=16、35661=32、
+     * 34024=16384；未知 pname ⇒ 0（保持原语义）。
+     */
+    private static byte[] patchGl11cGetInteger(byte[] classfileBuffer) {
+        try {
+            ClassReader cr = new ClassReader(classfileBuffer);
+            // ★必须 COMPUTE_FRAMES★：改写后方法里有条件跳转，缺 stackmap frame 会在
+            //   类校验阶段直接 VerifyError（真机 lastlog-202 实证）。
+            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_FRAMES) {
+                @Override
+                protected String getCommonSuperClass(String type1, String type2) {
+                    return "java/lang/Object";   // 本方法只涉及 int，不需要真实继承关系
+                }
+            };
+            final boolean[] hit = { false };
+            cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+                @Override
+                public MethodVisitor visitMethod(int access, String name, String descriptor,
+                                                 String signature, String[] exceptions) {
+                    if (!"glGetInteger".equals(name) || !"(I)I".equals(descriptor)) {
+                        return super.visitMethod(access, name, descriptor, signature, exceptions);
+                    }
+                    hit[0] = true;
+                    final MethodVisitor out = super.visitMethod(access, name, descriptor, signature, exceptions);
+                    // ★原方法体全部丢弃★：只保留我们生成的这一段。
+                    //   上一版把新指令插在 visitCode 里、原方法体照旧输出 ⇒ 两段拼在一起，
+                    //   校验器直接报 VerifyError（lastlog-202）。
+                    return new MethodVisitor(Opcodes.ASM9) {
+                        @Override
+                        public void visitEnd() {
+                            out.visitCode();
+                            out.visitVarInsn(Opcodes.ILOAD, 0);
+                            out.visitMethodInsn(Opcodes.INVOKESTATIC, "a2/A2Gl2Probe",
+                                                "noteGetInteger", "(I)V", false);
+                            int[][] table = {
+                                { 3379, 16384 },   // GL_MAX_TEXTURE_SIZE
+                                { 34921, 16 },     // GL_MAX_VERTEX_ATTRIBS
+                                { 34930, 16 },     // GL_MAX_TEXTURE_IMAGE_UNITS
+                                { 35660, 16 },     // GL_MAX_VERTEX_TEXTURE_IMAGE_UNITS
+                                { 35661, 32 },     // GL_MAX_COMBINED_TEXTURE_IMAGE_UNITS
+                                { 34024, 16384 },  // GL_MAX_RENDERBUFFER_SIZE
+                            };
+                            for (int[] row : table) {
+                                org.objectweb.asm.Label next = new org.objectweb.asm.Label();
+                                out.visitVarInsn(Opcodes.ILOAD, 0);
+                                out.visitLdcInsn(row[0]);
+                                out.visitJumpInsn(Opcodes.IF_ICMPNE, next);
+                                out.visitLdcInsn(row[1]);
+                                out.visitInsn(Opcodes.IRETURN);
+                                out.visitLabel(next);
+                            }
+                            out.visitInsn(Opcodes.ICONST_0);
+                            out.visitInsn(Opcodes.IRETURN);
+                            out.visitMaxs(0, 0);
+                            out.visitEnd();
+                        }
+                    };
+                }
+            }, 0);
+            return hit[0] ? cw.toByteArray() : null;
+        } catch (Throwable t) {
+            System.out.println("[A2IOS-AGENT] patchGl11cGetInteger 失败：" + t);
+            return null;
+        }
+    }
+
+    /** 规则 H：把 GL11.glGetInteger(I)I 也改写成能力表返回值（包装层兜底）。 */
+    private static byte[] patchGl11GlobalGetInteger(byte[] classfileBuffer) {
+        try {
+            ClassReader cr = new ClassReader(classfileBuffer);
+            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_FRAMES) {
+                @Override
+                protected String getCommonSuperClass(String t1, String t2) { return "java/lang/Object"; }
+            };
+            final boolean[] hit = { false };
+            cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+                @Override
+                public MethodVisitor visitMethod(int access, String name, String descriptor,
+                                                 String signature, String[] exceptions) {
+                    if (!"glGetInteger".equals(name) || !"(I)I".equals(descriptor)) {
+                        return super.visitMethod(access, name, descriptor, signature, exceptions);
+                    }
+                    hit[0] = true;
+                    final MethodVisitor out = super.visitMethod(access, name, descriptor, signature, exceptions);
+                    return new MethodVisitor(Opcodes.ASM9) {
+                        @Override
+                        public void visitEnd() {
+                            out.visitCode();
+                            out.visitVarInsn(Opcodes.ILOAD, 0);
+                            out.visitMethodInsn(Opcodes.INVOKESTATIC, "a2/A2Gl2Probe",
+                                                "noteGetInteger", "(I)V", false);
+                            int[][] table = {
+                                { 3379, 16384 }, { 34921, 16 }, { 34930, 16 },
+                                { 35660, 16 }, { 35661, 32 }, { 34024, 16384 },
+                            };
+                            for (int[] row : table) {
+                                org.objectweb.asm.Label next = new org.objectweb.asm.Label();
+                                out.visitVarInsn(Opcodes.ILOAD, 0);
+                                out.visitLdcInsn(row[0]);
+                                out.visitJumpInsn(Opcodes.IF_ICMPNE, next);
+                                out.visitLdcInsn(row[1]);
+                                out.visitInsn(Opcodes.IRETURN);
+                                out.visitLabel(next);
+                            }
+                            out.visitInsn(Opcodes.ICONST_0);
+                            out.visitInsn(Opcodes.IRETURN);
+                            out.visitMaxs(0, 0);
+                            out.visitEnd();
+                        }
+                    };
+                }
+            }, 0);
+            return hit[0] ? cw.toByteArray() : null;
+        } catch (Throwable t) {
+            System.out.println("[A2IOS-AGENT] patchGl11GlobalGetInteger 失败：" + t);
+            return null;
+        }
+    }
+
+    /** 规则 I：把 Narrator.getNarrator() 整个方法体改成 `return null`。 */
+    private static byte[] patchNarratorFactory(byte[] classfileBuffer) {
+        try {
+            ClassReader cr = new ClassReader(classfileBuffer);
+            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+            final boolean[] hit = { false };
+            cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+                @Override
+                public MethodVisitor visitMethod(int access, String name, String descriptor,
+                                                 String signature, String[] exceptions) {
+                    if (!"getNarrator".equals(name) || !descriptor.startsWith("()L")) {
+                        return super.visitMethod(access, name, descriptor, signature, exceptions);
+                    }
+                    hit[0] = true;
+                    final MethodVisitor out = super.visitMethod(access, name, descriptor, signature, exceptions);
+                    return new MethodVisitor(Opcodes.ASM9) {
+                        @Override
+                        public void visitEnd() {
+                            out.visitCode();
+                            out.visitInsn(Opcodes.ACONST_NULL);
+                            out.visitInsn(Opcodes.ARETURN);
+                            out.visitMaxs(0, 0);
+                            out.visitEnd();
+                        }
+                    };
+                }
+            }, 0);
+            return hit[0] ? cw.toByteArray() : null;
+        } catch (Throwable t) {
+            System.out.println("[A2IOS-AGENT] patchNarratorFactory 失败：" + t);
+            return null;
+        }
+    }
+
+    /// 把指定名字、返回 void 的方法体整体替换成 return（规则 I 用）。
+    private static byte[] patchVoidMethod(byte[] classfileBuffer, final String methodName) {
+        try {
+            ClassReader cr = new ClassReader(classfileBuffer);
+            ClassWriter cw = new ClassWriter(cr, ClassWriter.COMPUTE_MAXS);
+            final boolean[] hit = { false };
+            cr.accept(new ClassVisitor(Opcodes.ASM9, cw) {
+                @Override
+                public MethodVisitor visitMethod(int access, String name, String descriptor,
+                                                 String signature, String[] exceptions) {
+                    if (!methodName.equals(name) || !descriptor.endsWith(")V")) {
+                        return super.visitMethod(access, name, descriptor, signature, exceptions);
+                    }
+                    hit[0] = true;
+                    final MethodVisitor out = super.visitMethod(access, name, descriptor, signature, exceptions);
+                    return new MethodVisitor(Opcodes.ASM9) {
+                        @Override
+                        public void visitEnd() {
+                            out.visitCode();
+                            out.visitInsn(Opcodes.RETURN);
+                            out.visitMaxs(0, 0);
+                            out.visitEnd();
+                        }
+                    };
+                }
+            }, 0);
+            return hit[0] ? cw.toByteArray() : null;
+        } catch (Throwable t) {
+            System.out.println("[A2IOS-AGENT] patchVoidMethod 失败：" + t);
+            return null;
+        }
     }
 
     /** 规则 A：ehg 的两个 (J)V、(Lakp;)V 方法体置空。 */

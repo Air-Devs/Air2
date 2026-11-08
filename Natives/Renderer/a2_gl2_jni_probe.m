@@ -14,28 +14,104 @@
 #import "a2_gl2_jni_probe.h"
 
 // ============================================================================
-//  ① 本轮接管的 7 个入口（★唯一登记表★：加名字先加这里，再加 a2_gl2_jni_bind.m 的转发）
+//  ① 本轮接管的 68 个入口（★唯一登记表★：加名字先加这里，再加 a2_gl2_jni_bind.m 的转发）
 // ----------------------------------------------------------------------------
-//  第三列 = JNI 实现符号名，规则是 javac/JNI 的 mangling：
+//  第三列 = Java 侧声明 native 的类；第四列 = JNI 实现符号名，规则是 javac/JNI 的 mangling：
 //    Java_<包名点换下划线>_<类名>_<方法名>
 //  它必须与 `liblwjgl_opengl.dylib` 导出的符号逐字相同（已用导出表实测：
-//  274 个 `Java_org_lwjgl_opengl_GL11_*`；`glDrawArrays` 的 native 声明在 GL11C 上，
-//  因为 `GL11.glDrawArrays(int,int,int)` 在 jar 里是普通 Java 方法，它转调 GL11C）。
+//  274 个 `Java_org_lwjgl_opengl_GL11_*`）。
+//  ★指针入口的 native 叫 nglXxx★（glVertex2fv / glVertexPointer / glDrawElements …在 jar 里
+//  是 Java 包装，真正的 native 是 `nglXxx(long ptr)`）⇒ 第二节的 jniName 与 GL 名不同名。
+//  ★同一个 GL 名字的 native 不一定在同一个类★（glEnable / glDrawArrays 的 native 在 GL11C），
+//  所以每条都带 declaringClass，安装时按它（以及另一类的兜底）登记。
 // ============================================================================
 typedef struct {
-    const char *glName;
+    const char *glName;           ///< GL 入口名（a2_gl2_shim_lookup 的名字）
+    const char *jniName;          ///< Java 侧 native 方法名（指针入口是 nglXxx）
     const char *declaringClass;   ///< Java 侧声明 native 的类（内部名）
-    const char *jniSymbol;
+    const char *jniSymbol;        ///< 该 native 的 JNI 实现符号名
 } A2GL2ProbeEntry;
 
 static const A2GL2ProbeEntry kA2GL2ProbeEntries[] = {
-    { "glBegin",        "org/lwjgl/opengl/GL11",  "Java_org_lwjgl_opengl_GL11_glBegin"        },
-    { "glEnd",          "org/lwjgl/opengl/GL11",  "Java_org_lwjgl_opengl_GL11_glEnd"          },
-    { "glVertex3f",     "org/lwjgl/opengl/GL11",  "Java_org_lwjgl_opengl_GL11_glVertex3f"     },
-    { "glColor4f",      "org/lwjgl/opengl/GL11",  "Java_org_lwjgl_opengl_GL11_glColor4f"      },
-    { "glMatrixMode",   "org/lwjgl/opengl/GL11",  "Java_org_lwjgl_opengl_GL11_glMatrixMode"   },
-    { "glLoadIdentity", "org/lwjgl/opengl/GL11",  "Java_org_lwjgl_opengl_GL11_glLoadIdentity" },
-    { "glDrawArrays",   "org/lwjgl/opengl/GL11C", "Java_org_lwjgl_opengl_GL11C_glDrawArrays"  },
+    // ---- 立即模式（glBegin/glEnd/glVertex*/glColor*/glTexCoord*/glNormal*）
+    { "glBegin", "glBegin", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glBegin" },
+    { "glEnd", "glEnd", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glEnd" },
+    { "glVertex2f", "glVertex2f", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glVertex2f" },
+    { "glVertex3f", "glVertex3f", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glVertex3f" },
+    { "glVertex2d", "glVertex2d", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glVertex2d" },
+    { "glVertex3d", "glVertex3d", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glVertex3d" },
+    { "glVertex2i", "glVertex2i", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glVertex2i" },
+    { "glVertex3i", "glVertex3i", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glVertex3i" },
+    { "glVertex2fv", "nglVertex2fv", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglVertex2fv" },
+    { "glVertex3fv", "nglVertex3fv", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglVertex3fv" },
+    { "glColor3f", "glColor3f", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glColor3f" },
+    { "glColor4f", "glColor4f", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glColor4f" },
+    { "glColor3ub", "glColor3ub", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glColor3ub" },
+    { "glColor4ub", "glColor4ub", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glColor4ub" },
+    { "glColor4fv", "nglColor4fv", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglColor4fv" },
+    { "glTexCoord2f", "glTexCoord2f", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glTexCoord2f" },
+    { "glTexCoord2d", "glTexCoord2d", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glTexCoord2d" },
+    { "glTexCoord2fv", "nglTexCoord2fv", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglTexCoord2fv" },
+    { "glNormal3f", "glNormal3f", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glNormal3f" },
+    { "glNormal3fv", "nglNormal3fv", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglNormal3fv" },
+
+    // ---- 矩阵栈
+    { "glMatrixMode", "glMatrixMode", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glMatrixMode" },
+    { "glLoadIdentity", "glLoadIdentity", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glLoadIdentity" },
+    { "glLoadMatrixf", "nglLoadMatrixf", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglLoadMatrixf" },
+    { "glMultMatrixf", "nglMultMatrixf", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglMultMatrixf" },
+    { "glPushMatrix", "glPushMatrix", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glPushMatrix" },
+    { "glPopMatrix", "glPopMatrix", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glPopMatrix" },
+    { "glTranslatef", "glTranslatef", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glTranslatef" },
+    { "glScalef", "glScalef", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glScalef" },
+    { "glRotatef", "glRotatef", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glRotatef" },
+    { "glOrtho", "glOrtho", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glOrtho" },
+    { "glFrustum", "glFrustum", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glFrustum" },
+
+    // ---- 开关 / 状态（glEnable/glDisable 的 native 在 GL11C，见文件头）
+    { "glEnable", "glEnable", "org/lwjgl/opengl/GL11C", "Java_org_lwjgl_opengl_GL11C_glEnable" },
+    { "glDisable", "glDisable", "org/lwjgl/opengl/GL11C", "Java_org_lwjgl_opengl_GL11C_glDisable" },
+    { "glEnableClientState", "glEnableClientState", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glEnableClientState" },
+    { "glDisableClientState", "glDisableClientState", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glDisableClientState" },
+    { "glPushAttrib", "glPushAttrib", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glPushAttrib" },
+    { "glPopAttrib", "glPopAttrib", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glPopAttrib" },
+    { "glPushClientAttrib", "glPushClientAttrib", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glPushClientAttrib" },
+    { "glPopClientAttrib", "glPopClientAttrib", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glPopClientAttrib" },
+    { "glShadeModel", "glShadeModel", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glShadeModel" },
+    { "glAlphaFunc", "glAlphaFunc", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glAlphaFunc" },
+
+    // ---- 客户端数组 + 绘制
+    { "glVertexPointer", "nglVertexPointer", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglVertexPointer" },
+    { "glColorPointer", "nglColorPointer", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglColorPointer" },
+    { "glTexCoordPointer", "nglTexCoordPointer", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglTexCoordPointer" },
+    { "glNormalPointer", "nglNormalPointer", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglNormalPointer" },
+    { "glDrawArrays", "glDrawArrays", "org/lwjgl/opengl/GL11C", "Java_org_lwjgl_opengl_GL11C_glDrawArrays" },
+    { "glDrawElements", "nglDrawElements", "org/lwjgl/opengl/GL11C", "Java_org_lwjgl_opengl_GL11C_nglDrawElements" },
+
+    // ---- 纹理状态改写
+    { "glTexEnvi", "glTexEnvi", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glTexEnvi" },
+    { "glTexEnvf", "glTexEnvf", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glTexEnvf" },
+    { "glTexParameteri", "glTexParameteri", "org/lwjgl/opengl/GL11C", "Java_org_lwjgl_opengl_GL11C_glTexParameteri" },
+    { "glTexParameterf", "glTexParameterf", "org/lwjgl/opengl/GL11C", "Java_org_lwjgl_opengl_GL11C_glTexParameterf" },
+
+    // ---- 明确忽略（shim 里共用 gl2_ignored：固定管线专属、本层不模拟）
+    { "glLightf", "glLightf", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glLightf" },
+    { "glLighti", "glLighti", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glLighti" },
+    { "glLightfv", "nglLightfv", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglLightfv" },
+    { "glLightiv", "nglLightiv", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglLightiv" },
+    { "glLightModelf", "glLightModelf", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glLightModelf" },
+    { "glLightModelfv", "nglLightModelfv", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglLightModelfv" },
+    { "glMaterialf", "glMaterialf", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glMaterialf" },
+    { "glMaterialfv", "nglMaterialfv", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglMaterialfv" },
+    { "glColorMaterial", "glColorMaterial", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glColorMaterial" },
+    { "glFogf", "glFogf", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glFogf" },
+    { "glFogi", "glFogi", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_glFogi" },
+    { "glFogfv", "nglFogfv", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglFogfv" },
+    { "glClipPlane", "nglClipPlane", "org/lwjgl/opengl/GL11", "Java_org_lwjgl_opengl_GL11_nglClipPlane" },
+    { "glPolygonMode", "glPolygonMode", "org/lwjgl/opengl/GL11C", "Java_org_lwjgl_opengl_GL11C_glPolygonMode" },
+    { "glHint", "glHint", "org/lwjgl/opengl/GL11C", "Java_org_lwjgl_opengl_GL11C_glHint" },
+    { "glLogicOp", "glLogicOp", "org/lwjgl/opengl/GL11C", "Java_org_lwjgl_opengl_GL11C_glLogicOp" },
+    { "glPointSize", "glPointSize", "org/lwjgl/opengl/GL11C", "Java_org_lwjgl_opengl_GL11C_glPointSize" },
 };
 
 #define A2GL2_PROBE_COUNT ((int)(sizeof(kA2GL2ProbeEntries) / sizeof(kA2GL2ProbeEntries[0])))
@@ -79,6 +155,7 @@ int a2_gl2_probe_sample(A2GL2ProbeFact *out, int cap) {
         A2GL2ProbeFact *f = &out[i];
         memset(f, 0, sizeof(*f));
         f->glName         = kA2GL2ProbeEntries[i].glName;
+        f->jniName        = kA2GL2ProbeEntries[i].jniName;
         f->jniSymbol      = kA2GL2ProbeEntries[i].jniSymbol;
         f->declaringClass = kA2GL2ProbeEntries[i].declaringClass;
         // ① 谁实现了这条 JNI native（LWJGL 侧）
@@ -100,7 +177,7 @@ void a2_gl2_probe_log(void) {
         const A2GL2ProbeFact *f = &facts[i];
         a2_log_criterion(@"[A2-GL2-PROBE] %s ← %s.%s（JNI 实现镜像=%s，地址=%p；"
                          @"进程 dlsym(\"%s\") 命中镜像=%s）",
-                         f->glName, f->declaringClass, f->glName,
+                         f->glName, f->declaringClass, f->jniName,
                          f->jniImage, f->jniAddress, f->glName, f->flatImage);
     }
     // 一行结论：不猜，只把两张镜像名摆出来 —— 判据是「JNI 实现镜像」这一列。
@@ -122,7 +199,7 @@ void a2_gl2_probe_log(void) {
 JNIEXPORT jstring JNICALL Java_a2_A2Gl2Probe_report(JNIEnv *env, jclass clazz) {
     (void)clazz;
     if (env == NULL) return NULL;
-    char buf[2048];
+    char buf[16384];   // 68 行判据 ≈ 10 KB；截断也只会少最后几行，不会越界
     size_t used = 0;
     A2GL2ProbeFact facts[A2GL2_PROBE_COUNT];
     const int n = a2_gl2_probe_sample(facts, A2GL2_PROBE_COUNT);
@@ -131,7 +208,7 @@ JNIEXPORT jstring JNICALL Java_a2_A2Gl2Probe_report(JNIEnv *env, jclass clazz) {
         int written = snprintf(buf + used, sizeof(buf) - used,
                                "[A2-GL2-PROBE] %s ← %s.%s：JNI 实现镜像=%s 地址=%p；"
                                "进程 dlsym(\"%s\")=%s\n",
-                               f->glName, f->declaringClass, f->glName,
+                               f->glName, f->declaringClass, f->jniName,
                                f->jniImage, f->jniAddress, f->glName, f->flatImage);
         if (written < 0) break;
         used += (size_t)written;

@@ -164,4 +164,21 @@ public final class A2Gl2Probe {
      * 宿主约定：主可执行文件即 JNI 符号宿主（A2Entry → A2NativeLibrary.load）。
      */
     private static native String report();
+
+
+    /** 取样计数：前 12 次打印 pname，用来确认 MC 是否真的在查 GL 能力。 */
+    private static int sGetIntCount = 0;
+
+    /**
+     * GL11C.glGetInteger 的字节码探针（agent 规则 G 插入的调用）。
+     * ★为什么在这里★ lastlog-199/200 证明：无论怎么 RegisterNatives，
+     * nglGetIntegerv 都收不到 MC 的调用 ⇒ 只能在 Java 层取证。
+     */
+    public static void noteGetInteger(int pname) {
+        if (sGetIntCount < 12) {
+            sGetIntCount++;
+            System.out.println("[A2-GL2] glGetInteger pname=0x" + Integer.toHexString(pname)
+                               + "（agent 规则 G 命中）");
+        }
+    }
 }

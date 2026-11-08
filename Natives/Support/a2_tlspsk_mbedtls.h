@@ -3,7 +3,7 @@
 //  Air2 —— [A2-INTEGRATION] mbedTLS（第三方，Apache-2.0）TLS-PSK 后端的注册入口
 // ----------------------------------------------------------------------------
 //  ★谁调它·哪一行★
-//    · 生产：`Air2/Bridge/A2JITAutoPairingEngineBridge.m` 的 TLS-PSK 诊断块
+//    · 生产：`Air2/Bridge/A2TLSPskTunnelBridge.m` 的 TLS-PSK 诊断块
 //      （A2TLSPskMbedTLSEnsureRegistered() → [A2TLSPskTunnel statusLine]）；
 //    · 自证：`tests/JIT/jit_logic_tests.m` 的 [A2-INTEGRATION] 例。
 //  ★为什么单独一个入口、不用 +load★：注册点是显式的，日志里能一眼看到「谁注册了后端」，

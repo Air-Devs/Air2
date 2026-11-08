@@ -44,21 +44,69 @@ public final class A2Entry {
 
         A2NativeLibrary.load(plan.nativeLibrary());
         // ★只读诊断★：打印 LWJGL 认定的 GL/GLES 提供者与库路径（不影响行为）
+        System.out.println("[A2-JAVA] nativeLibrary 已加载 ⇒ 开始 GL provider 探测");
         A2GlProviderProbe.dump();
+        System.out.println("[A2-JAVA] GL provider 探测结束");
         A2JvmProperties.apply(plan.properties());
+        System.out.println("[A2-JAVA] JVM 属性已应用");
 
         ClassLoader loader = ClassLoader.getSystemClassLoader();
         URL[] extra = A2GameClasspath.toUrls(plan.classpath());
+        // ★2026-11-08 真机（lastlog-279 watchdog）★ main 线程卡在
+        //   java.util.jar.JarVerifier$VerifierStream.read ⇒ URLClassLoader.defineClass，
+        //   即带签名的 jar（LWJGL 官方包）**逐类做签名校验** ⇒ 首帧被拖到 102 秒。
+        //   MC 不依赖 jar 签名，启动前把 META-INF/*.SF|*.RSA|*.DSA|*.EC 去掉即可让 JVM 按未签名处理。
+        a2StripJarSignatures(extra);
         appendToSystemClassLoader(loader, extra);
 
         // ★[A2-GL2] 固定管线入口抢占★（默认不生效：见 A2Gl2Gl11Bind 的判据说明）
         //   必须在这里：GL11 必须在 MC 第一次 GL 调用之前完成 RegisterNatives；
         //   又必须在类路径追加之后（GL11 在 libs/lwjgl-<ver>/lwjgl.jar 里）。
         A2Gl2Gl11Bind.bind(loader);
+        // ★兜底层★：先把 GL12C..GL32C 全注册成空实现，再让下面几个真实现覆盖
+        A2Gl2Gl11Bind.bindExtras(loader);
+        A2Gl2Gl11Bind.bindFbo(loader);
+        A2Gl2Gl11Bind.bindVbo(loader);
+        A2Gl2Gl11Bind.bindGl20(loader);
+        System.out.println("[A2-JAVA] GL2 抢占绑定返回（loader=" + loader.getClass().getName() + "）");
 
         System.out.println("[A2-JAVA] 追加类路径 " + extra.length + " 条；派发 " + plan.mainClass());
+        System.out.println("[A2-JAVA] 即将派发主类（若无下一条日志 ⇒ 卡在主类静态初始化/GLFW/LWJGL 初始化）");
+        startStallWatchdog();
         A2MainDispatcher.dispatch(plan.mainClass(), plan.arguments(), loader);
         System.out.println("[A2-JAVA] 主类正常返回");
+    }
+
+    /**
+     * ★卡死诊断★ 15 秒后把全部 Java 线程的栈打出来（只在前 3 次触发时打印）。
+     *
+     * <p>为什么需要它：真机 1.12.2 出现过「主类派发后一条日志都没有、进程还活着」的情形，
+     * 光看 lastlog 分不清是等锁、等 GL、还是死循环。栈是唯一能直接指认的方法。
+     */
+    private static void startStallWatchdog() {
+        Thread wd = new Thread(new Runnable() {
+            @Override
+            public void run() {
+                for (int round = 1; round <= 3; round++) {
+                    try {
+                        Thread.sleep(15000L);
+                    } catch (InterruptedException e) {
+                        return;
+                    }
+                    System.out.println("[A2-WD] 第 " + round + " 次线程栈（15s×" + round + "）：");
+                    for (java.util.Map.Entry<Thread, StackTraceElement[]> e
+                            : Thread.getAllStackTraces().entrySet()) {
+                        Thread t = e.getKey();
+                        System.out.println("[A2-WD] --- " + t.getName() + " [" + t.getState() + "]");
+                        for (StackTraceElement f : e.getValue()) {
+                            System.out.println("[A2-WD]     at " + f);
+                        }
+                    }
+                }
+            }
+        }, "A2-StallWatchdog");
+        wd.setDaemon(true);
+        wd.start();
     }
 
     /**
@@ -109,6 +157,70 @@ public final class A2Entry {
                             + "-Djava.system.class.loader=" + A2GameClassLoader.class.getName()
                             + "（Java 9+ 唯一可行路；Java 8 上也可用 --add-opens java.base/java.net=ALL-UNNAMED）",
                     e);
+        }
+    }
+
+    /// 去掉 jar 里的签名文件（只删 META-INF/*.SF|*.RSA|*.DSA|*.EC，内容原样保留）。
+    /// 调用点：main() 里 appendToSystemClassLoader 之前（见那里的注释）。
+    private static void a2StripJarSignatures(URL[] urls) {
+        int scanned = 0, stripped = 0;
+        long t0 = System.currentTimeMillis();
+        for (URL u : urls) {
+            if (!"file".equals(u.getProtocol())) continue;
+            File jar;
+            try { jar = new File(u.toURI()); } catch (Throwable t) { continue; }
+            String lower = jar.getName().toLowerCase(java.util.Locale.ROOT);
+            if (!jar.isFile() || !lower.endsWith(".jar")) continue;
+            scanned++;
+            if (a2StripOneJar(jar)) stripped++;
+        }
+        if (scanned > 0) {
+            System.out.println("[A2-JAVA] jar 签名剥离：扫描 " + scanned + "，改写 " + stripped
+                + "，耗时 " + (System.currentTimeMillis() - t0) + " ms");
+        }
+    }
+
+    private static boolean a2StripOneJar(File jar) {
+        java.util.zip.ZipFile zf = null;
+        try {
+            zf = new java.util.zip.ZipFile(jar);
+            boolean signed = false;
+            for (java.util.Enumeration<? extends java.util.zip.ZipEntry> e = zf.entries(); e.hasMoreElements(); ) {
+                String n = e.nextElement().getName().toUpperCase(java.util.Locale.ROOT);
+                if (n.startsWith("META-INF/") && (n.endsWith(".SF") || n.endsWith(".RSA")
+                        || n.endsWith(".DSA") || n.endsWith(".EC"))) { signed = true; break; }
+            }
+            if (!signed) return false;
+            File tmp = new File(jar.getParentFile(), jar.getName() + ".a2tmp");
+            java.util.zip.ZipOutputStream out = new java.util.zip.ZipOutputStream(
+                new java.io.BufferedOutputStream(new java.io.FileOutputStream(tmp)));
+            try {
+                for (java.util.Enumeration<? extends java.util.zip.ZipEntry> e = zf.entries(); e.hasMoreElements(); ) {
+                    java.util.zip.ZipEntry en = e.nextElement();
+                    String n = en.getName().toUpperCase(java.util.Locale.ROOT);
+                    if (n.startsWith("META-INF/") && (n.endsWith(".SF") || n.endsWith(".RSA")
+                            || n.endsWith(".DSA") || n.endsWith(".EC"))) continue;
+                    out.putNextEntry(new java.util.zip.ZipEntry(en.getName()));
+                    if (!en.isDirectory()) {
+                        java.io.InputStream in = zf.getInputStream(en);
+                        byte[] buf = new byte[65536];
+                        int r;
+                        while ((r = in.read(buf)) > 0) out.write(buf, 0, r);
+                        in.close();
+                    }
+                    out.closeEntry();
+                }
+            } finally {
+                out.close();
+            }
+            zf.close();
+            zf = null;
+            if (!jar.delete()) { tmp.delete(); return false; }
+            return tmp.renameTo(jar);
+        } catch (Throwable t) {
+            return false;
+        } finally {
+            if (zf != null) { try { zf.close(); } catch (Throwable ignored) { } }
         }
     }
 }

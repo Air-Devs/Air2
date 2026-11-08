@@ -466,7 +466,9 @@ int a2_launch_jvm_with_argv(int argc, const char *const argv[], A2LaunchInput in
         // ★默认走 JNI★（JLI 版真机一启动就闪退，先以 JNI 为准做诊断）；
         //   要试 JLI 就把偏好键 A2ForceJNIPath 显式置 NO。
         id a2ForceJNIVal = [NSUserDefaults.standardUserDefaults objectForKey:@"A2ForceJNIPath"];
-        BOOL a2ForceJNI = (a2ForceJNIVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2ForceJNIPath"];
+        // ★2026-11-07 老 Air 对照★ 它走 libjli；我们一直强制 JNI 直连。
+    //   默认改为 NO（走 JLI），与老 Air 一致。
+    BOOL a2ForceJNI = (a2ForceJNIVal == nil) ? YES : [NSUserDefaults.standardUserDefaults boolForKey:@"A2ForceJNIPath"];
         if (a2ForceJNI) {
             a2_log_f(@"[RT-P1] ★A2ForceJNIPath=YES ⇒ 跳过 JLI，强制走 JNI_CreateJavaVM★");
         }

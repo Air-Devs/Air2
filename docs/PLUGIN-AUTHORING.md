@@ -721,7 +721,25 @@ jsonschema.validate(m, s); print('manifest ok')
 | `E_HASH_MISMATCH` | `E_HASH_MISMATCH` |
 | `E_DOWNGRADE` | `E_DOWNGRADE` |
 | `E_SAME_VERSION_DIFFERENT_CONTENT` | `E_SAME_VERSION_DIFFERENT_CONTENT` |
-| `E_PERM_CONFLICT` / `E_DEP_MISSING` / `E_DEP_CYCLE` / `E_SLOT_CONFLICT` / `E_NATIVE_UNSUPPORTED` / `E_PAGE_INVALID` / `E_BINDING_INVALID` / `E_ACTION_UNKNOWN` | 尚未实现（对应里程碑见 `PLUGIN-SYSTEM.md` 第六节），实现时沿用同名机器码 |
+| `E_PERM_CONFLICT` / `E_DEP_MISSING` / `E_DEP_CYCLE` / `E_NATIVE_UNSUPPORTED` / `E_PAGE_INVALID` / `E_BINDING_INVALID` / `E_ACTION_UNKNOWN` | 尚未实现（对应里程碑见 `PLUGIN-SYSTEM.md` 第六节），实现时沿用同名机器码 |
+
+### P2 贡献点（`A2PluginContribution`）新增的机器码
+
+P1 的 `A2PluginManifest` 只管「结构」（字段名、类型、枚举），P2 再往下管「语义」
+（slot / component / token 词表、贡献点之间的冲突、宿主版本区间）。这一层自己的码：
+
+| 机器码 | 含义 | 作者怎么修 |
+|---|---|---|
+| `E_CONTRIB_UNKNOWN` | 出现白名单外的贡献点（`ui.foo` / `contributes.foo`），或该贡献点属于更晚的阶段（`ui.pages` / `contributes.downloadSources`） | 只用当前阶段支持的贡献点；v3 / P4 的东西要等对应版本 |
+| `E_SLOT_UNKNOWN` | `slot` 不在宿主词表（`PLUGIN-COMPAT.md` 2.2） | 换成词表里的 slot；`home.page` / `versions.list.page` 属 v3 |
+| `E_COMPONENT_UNKNOWN` | `component` 不是 v2 的语义组件（`PLUGIN-COMPAT.md` 2.3 叶子组件表） | 别写平台控件名；容器属页面模型 |
+| `E_CONTRIB_DUPLICATE` | 同一插件对同一 `(slot, id)` 声明了两份**内容不同**的贡献 | 同 slot 同 id 只能有一份，删掉多余的那条 |
+| `E_SLOT_CONFLICT` | 独占占位已被别的插件占用（当前唯一可独占的是 `settings.section` 的设置项键） | 换一个设置项 id（宿主用它持久化，键不能重复） |
+| `E_CONTRIB_PERM` | 声明了贡献点却没申请对应权限（`ui.slots`/`ui.theme` 要 `ui.contribute`；`versionDecorate` 要 `version.decorate`） | 补上权限，或删掉那段声明 |
+| `E_HOST_VERSION_MIN` / `E_HOST_VERSION_MAX` | `air2.host.minHostVersion` 高于 / `maxHostVersion` 低于当前宿主 | 放宽版本区间；别照抄旧文档的 `2.0.0` |
+
+> 未知 **token**、未知 **图标 ID** 不算失败：宿主忽略 + 记诊断（ADR-018 决策 5），
+> 因为宿主以后新增词表不该让旧包失效。**已知** token 的值写错（不是 `#RRGGBB`）才是 `E_FIELD`。
 
 宿主侧的原因（不是包的问题，没有文档码，但同样会带着机器码弹出来）：
 

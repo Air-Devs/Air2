@@ -215,6 +215,28 @@
 
 ★石山约束★：新增文件必须能指出调用点。`a2_metal_backend.mm` 的唯一调用方是 `a2_gl2_shim.m` 的后端选择处；`a2_gl2_backend.h` 只被 `a2_gl2_shim.m` 与两个后端实现包含。
 
+### 14.1 M0 已落地（2026-11-01）
+
+M0 先不接 MC，所以调用点是**一处**自我检测，而不是 §14 里的后端选择处：
+
+```
+ Natives/Renderer/a2_metal_backend.h/.mm   已落地：设备/队列/管线/采样器/深度 + 棋盘格纹理
+                                           + 60fps 自检驱动（120 帧）
+ 调用点（唯一）                             Natives/Renderer/a2_gl_bridge.m 的 a2_gl_bridge_attach ⑨：
+                                           if (a2_metal_selftest_requested())        // 只读环境变量
+                                               a2_metal_selftest_schedule(图层, 像素宽, 像素高, 120);
+ 开关                                    环境变量 A2_METAL_SELFTEST=1（不设 ⇒ 一行都不执行，
+                                           连 Metal 设备都不建 ⇒ 默认路径零影响）
+ 机器判据                                scripts/verify_metal_backend.py（make lint 会跑）
+ 真机判据日志                            [A2-METAL] 设备=… 后端=Metal …
+                                           [A2-METAL] 自检帧 #N 耗时=X.XXms drawable=WxH
+                                           [A2-METAL] 自检完成 平均帧耗时=X.XXms（…）
+```
+
+M1 起把这张图里的「自检驱动」换成 `a2_gl2_shim.m`：由 GL 语义层驱动
+`begin_frame / draw / end_frame`，`a2_metal_selftest_*` 两段整体退役（届时一并删掉，
+不留双入口）。
+
 ## 15. 与现有链路的关系
 
 ```
@@ -230,3 +252,153 @@
 `javaagent + ASM` 不是本方案的替代，而是**入口接线的另一种实现**（§4 的 B）。
 它能做的是「把 GL 入口改道到我们的实现」，不能替我们完成「GL 语义 → Metal」的翻译工作。
 本方案先走 A（RegisterNatives，已验证），B 作为覆盖不足时的升级路径。
+
+---
+
+## 16. M1-α 已落地（2026-11-01）：GL2 语义层的 Metal 后端
+
+> 本节记录**实际交付的那一层**，与 §5/§7 的设计有出入的地方以本节为准。
+> ★未编译、未真机验证★（本机无 ObjC/C 编译器；编译与首帧验证由远端 Mac 做）。
+
+### 16.1 落点与接线
+
+```
+ Natives/Renderer/a2_gl2_backend_metallum.h   新增：接缝单一真源头 A2GL2ES3（28 入口）
+                                              + 三个导出：available / install / reason
+ Natives/Renderer/a2_gl2_backend_metallum.m   新增：28 入口的 Metal 实现（libmetallum C API，全 dlsym）
+ Natives/Renderer/a2_gl2_shim.m               改：① A2GL2ES3 的 typedef/struct 搬到上面那个头文件
+                                                ② a2gl2_resolve_es3() 优先尝试 metallum，失败回落 GLES
+                                                ★翻译算法（立即模式/矩阵栈/图元摊平/客户端数组）一行未动★
+ scripts/verify_gl2_metallum.py               新增：源码自检（括号/引号、28 装齐、符号↔dylib、调用点）
+ Makefile                                     改：lint 里那段空的 if/else 补上这个脚本（原来 make lint 会语法错）
+ Air2.xcodeproj/project.pbxproj               重新生成（scripts/gen_xcodeproj.py，246 编译单元）
+                                              CMake 侧不用改：源清单由 scan_sources() 扫盘生成，已含新文件
+```
+
+框架依赖：`Metal` 与 `QuartzCore` **已在** `cmake/a2_frameworks.cmake` 的 `A2_SYSTEM_FRAMEWORKS` 里
+（QuartzCore 那条注释就写着 CAMetalLayer），故未重复添加。
+
+### 16.2 开关与判据行
+
+```sh
+A2_GL2_SHIM=1              # 前置：自研固定管线层（1.12 及更早由启动链设置）
+A2_GL2_BACKEND=metallum    # 本后端；也可写 gles 强制走原链路
+A2_GL2_METAL=1             # 兼容旧口径：A2_GL2_BACKEND 未设/为空时才看它
+```
+
+真机 grep 判据：
+
+```
+[A2-MTL] 设备=<GPU 名>（后端=metallum，libmetallum 的 Metal C API）      ← 设备与 dlsym 都通
+[A2-MTL] libmetallum 可用：40 条符号（必需 31 条全部命中）+ ...          ← 符号探测
+[A2-MTL] 使用内置 MSL uber-shader（GLSL 忽略）                          ← §7 的着色器策略
+[A2-MTL] 管线就绪：不透明 + alpha 混合 …
+[A2-MTL] 表面=CAMetalLayer 1080x1920 scale=3.00 颜色格式=80 深度格式=252
+[A2-MTL] 后端=metallum 已安装 28/28 入口（Metal 直出；不经过 GLES/ANGLE）
+[A2-MTL] 绘制 #1：mode=0x7 prim=3 顶点=4 索引=1 帧内=1 环=…
+[A2-MTL] 回落后端=GLES（原因=…）                                        ← 任一环节失败走这条
+```
+
+调参开关（全部「未设即默认」，不必重编）：`A2_MTL_COLOR_FORMAT`、`A2_MTL_DEPTH_FORMAT`、
+`A2_MTL_DRAWABLE=WxH`、`A2_MTL_FLIP_Y`（默认 1）、`A2_MTL_FRAME_GAP_MS`（默认 2）、
+`A2_MTL_RING_MB`（默认 16）、`A2_MTL_SAMPLER`（1=最近邻）、`A2_MTL_OFFSCREEN`（1=不碰 surface）、
+`A2_MTL_TEXTURE_STORAGE`、`A2_MTL_BUFFER_OPTIONS`。
+
+### 16.3 ★签名核对清单（远端编译时必须做，本机无法做）★
+
+`libmetallum.dylib` 的 C 头文件不在本仓，dlsym 只认符号名、不认签名。下表是**假定签名**
+（`.m` 的 §② API 表里逐条同注）——请对着真头文件核一遍；不一致时**只改那张表**，调用点不动。
+
+| 符号 | 假定签名 | 风险 |
+|---|---|---|
+| `create_system_default_device` | `void *f(void)` | 低 |
+| `MTLDevice_makeCommandQueue` / `MTLCommandQueue_makeCommandBuffer` | `void *f(void *)` | 低 |
+| `create_buffer` | `void *f(dev, size_t, unsigned)` | 中（options 语义） |
+| `get_buffer_contents` | `void *f(buf)` | 低 |
+| `create_texture_2d` | `void *f(dev, int fmt, int w, int h, int depth, unsigned usage, unsigned storage, const void *bytes, size_t bpr)` | 高（参数多） |
+| `create_shader_function` | `void *f(dev, const char *msl, size_t len)` | **最高**（若第 3 参是入口名 ⇒ 必崩） |
+| `init_pipelines` | `int f(dev)` | 低 |
+| `MTLRenderPipelineDescriptor_create` | `void *f(void)` | 低 |
+| `..._setAttachmentFormats` | `int f(desc, int colorFmt, int depthFmt)` | 中 |
+| `..._setBlendState` | `int f(desc, int enabled, int srcRGB, int dstRGB, int srcA, int dstA)` | **高** |
+| `..._setCompiledFunctions` | `int f(desc, vs, fs)` | 中 |
+| `..._setVertexDescriptor` | `int f(desc, vd)` | 低 |
+| `MTLVertexDescriptor_create` | `void *f(void)` | 低 |
+| `..._setAttribute` | `int f(vd, unsigned index, int format, size_t offset, unsigned bufferIndex)` | 中 |
+| `..._setLayout` | `int f(vd, unsigned bufferIndex, unsigned stride, int stepFunction)` | 中 |
+| `MTLDevice_makeRenderPipelineState` | `void *f(dev, desc)` | 低 |
+| `MTLDevice_makeDepthStencilState` | `void *f(dev, int compare, int writeEnabled)` | 中（可能收 descriptor 对象） |
+| `create_sampler` | `void *f(dev, min, mag, wrapS, wrapT)` | **高** |
+| `create_metal_layer` / `ios_get_view_metal_layer` | `void *f(void)` | 低 |
+| `configure_layer` | `int f(layer, double w, double h, double scale, int fmt)` | 中 |
+| `MTLCommandBuffer_makeRenderCommandEncoder` | `void *f(cb, colorTex, depthTex)` | **高**（可能还要 loadAction/clearColor） |
+| `..._setBuffer` | `int f(enc, buffer, size_t offset, unsigned index)` | **高**（是否分 vertex/fragment 段） |
+| `..._setTextureAndSampler` | `int f(enc, tex, sampler, unsigned index)` | 中 |
+| `..._setScissorRect` / `setCullMode` / `setFrontFacingWinding` | `int f(enc, …)` | 低 |
+| `..._setDepthBias` | `int f(enc, float, float, float)` | 低 |
+| `..._drawPrimitives` | `int f(enc, int prim, unsigned start, unsigned count)` | 中 |
+| `..._drawIndexedPrimitives` | `int f(enc, int prim, unsigned idxCount, int idxType, void *buf, size_t off)` | 中 |
+| `MTLCommandEncoder_endEncoding` / `MTLCommandBuffer_commit` | `int f(obj)` | 低 |
+| `MTLCommandBuffer_encodePresentTextureToDrawable` | `int f(cb, tex)` | 中 |
+| `MTLCommandBuffer_waitUntilCompleted` | `int f(cb)` | 低 |
+| `release_object` / `get_last_error` | `void f(obj)` / `const char *f(void)` | 中 |
+| `copy_device_name` | `int f(char *buf, size_t cap)` | 中（只影响一行日志） |
+
+为降低上面这些风险，`.m` 里做了三件事：
+① 全部调用集中在 §② 的 `gApi` 表（改签名只改一处）；
+② 初始化分阶段（设备 → 队列 → 着色器 → 顶点描述符 → 管线 → 表面），每阶段一行判据，
+   崩在哪一段一眼可见；
+③ uniform **只喂顶点阶段**（用 `[[flat]]` varying 传给片元），
+   ⇒ 不依赖 `setBuffer` 是否区分 vertex/fragment 段这个未验签语义。
+
+另：`metallum_init_pipelines` 的返回值、以及 dylib 内 MTL 枚举 rawValue（像素格式 70/80/252、
+顶点格式 29/30/9、采样器 0/1/0/2）同样是「假定值」，都可用 §16.2 的环境变量覆盖。
+
+**只验语法（不打包）的等价命令**（远端 Mac 上跑，`-I` 列表由仓内生成器给，不手抄）：
+
+```sh
+cd <repo>
+INC=$(python3 scripts/gen_cmake_sources.py --json \
+      | python3 -c 'import json,sys; print(" ".join("-I"+i for i in json.load(sys.stdin)["include_dirs"]))')
+xcrun -sdk iphoneos clang -fsyntax-only -fobjc-arc -x objective-c $INC \
+      Natives/Renderer/a2_gl2_backend_metallum.m
+python3 scripts/verify_gl2_metallum.py        # 结构/符号/调用点自检（不需编译器）
+```
+
+### 16.4 本层明确不做的（接缝之外，不作为缺陷申报）
+
+| 缺什么 | 原因 | 现象 |
+|---|---|---|
+| 清屏 / viewport / scissor | glClear/glViewport 不在 28 接缝内 | 颜色附件跨帧累积（叠影）；裁剪恒为整张附件 |
+| 纹理内容 | glBindTexture/glTexImage2D 不在接缝内 | 采样恒为 1×1 白纹理 ⇒ 片元 = 顶点色 |
+| glBlendFunc / glDepthFunc / glCullFace | 同上 | 固定 SRC_ALPHA/ONE_MINUS_SRC_ALPHA、LEQUAL+写、CULL_BACK |
+| 模板 / MSAA / 逻辑运算 / 雾 / 光照 | §2 的边界 | 点名一次后忽略 |
+| 真·每程序编译 | 语义层只有一个 uber-shader | 本层「记账 + 假句柄」，见 `.m` 文件头 |
+| 显式帧边界 | 接缝里没有 begin/endFrame | 用「绘制间隔 ≥ A2_MTL_FRAME_GAP_MS（默认 2ms）」判新帧，代价 ≈1 帧延迟 |
+| glBufferData 的"静态上传"语义 | 本层把拷贝推迟到绘制时（环形缓冲的复位点才安全） | 只上传不绘制的 VBO 数据会被丢弃 ⇒ `data` 必须在紧随的 draw 时仍有效 |
+
+★关于「推迟拷贝」这条假设★：唯一调用方 `a2gl2_shim.m` 的 `a2gl2_draw()` 每帧都
+`bufferData(gVerts/gIndex)` 紧跟一次 draw（流式上传），两个都是**静态数组** ⇒ 满足假设。
+若将来有人给本层接一个"上传一次、反复画"的调用方，必须改成"bufferData 就地拷进环"
+并重做环形缓冲的回收策略（那是 M3 换 fence/信号量时一起做的事）。
+
+### 16.5 下一步（M1-β / M2）要补的接缝
+
+按「先出画面、再出贴图」的顺序：
+
+```
+M1-β  glClear/glClearColor/glViewport/glScissor 三个入口进 kA2GL2Entries
+      ⇒ 帧边界与清屏不用再猜（把 §16.4 第 1 条与启发式一起去掉）
+M2    glGenTextures/glBindTexture/glTexImage2D/glTexSubImage2D/glDeleteTextures
+      ⇒ 填 a2_gl2_backend_metallum.m 里那张「GL 名 → MTLTexture」表
+         （表的读写函数已在：a2mtl_tex_register / a2mtl_tex_get，届时把 register 提成公开入口）
+M2+   glBlendFunc/glDepthFunc/glCullFace/glDepthMask ⇒ 混合与深度的完整语义（管线变体扩到 4~8 条）
+M3    显示列表（1.12 进世界必需）、环形缓冲换 fence/信号量（去掉帧末 waitUntilCompleted）
+```
+
+另有一条**可选**的清屏路径留给 M1-β：dylib 里导出了
+`metallum_MTLCommandBuffer_clearColorDepthTexturesRegion` 与
+`metallum_MTLRenderCommandEncoder_clearDraw`（名字见
+`grep -a -o 'metallum_[A-Za-z0-9_]*' Libraries/Renderers/libmetallum.dylib | sort -u`），
+本次**没有接**——它们的签名同样未验证，而在接缝里补 glClear 反而更干净（不用猜）。
+

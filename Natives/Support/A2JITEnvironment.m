@@ -1032,3 +1032,56 @@ static int gA2JITEnsureKickInflight = 0;
 
 // force-sync 20261018T1515
 
+
+// ============================================================================
+// ★温和陷阱守卫（移植自 Henge henge-ios-jit.c:henge_trap_handler）★
+// ----------------------------------------------------------------------------
+// 为什么需要它：建 VM 前我们把 SIGTRAP 复位成 SIG_DFL（HotSpot 要自己接管那几个
+// 崩溃信号），于是调试器一旦不在岗，libjvm 的 BreakGetJITMapping(brk #0x69)
+// 就是一发没人接的陷阱 ⇒ 进程直接死（真机 ips: EXC_BREAKPOINT / SIGTRAP）。
+//
+// Henge 的解法：装一个 SA_SIGINFO 处理器，只认「pc 上确实是 brk 指令」的情形，
+// 把 pc 跨过这条指令并把 x0 写 0（等价于"要区失败"），进程继续跑；其余陷阱
+// 原样交回上一个处理器并重新抛出，绝不吞真断点。
+static struct sigaction gA2GracefulTrapPrev;
+static volatile sig_atomic_t gA2GracefulTrapSwallowed = 0;
+
+static void a2_graceful_trap_handler(int sig, siginfo_t *info, void *ctx) {
+    (void)info;
+    ucontext_t *uc = (ucontext_t *)ctx;
+    if (uc != NULL) {
+        uint32_t *pc = (uint32_t *)uc->uc_mcontext->__ss.__pc;
+        uint32_t insn = (pc != NULL) ? *pc : 0;
+        // arm64: brk #imm16 编码 0xD4200000 | (imm16 << 5)
+        if ((insn & 0xFFE0001Fu) == 0xD4200000u) {
+            uc->uc_mcontext->__ss.__x[0] = 0;          // 要区失败
+            uc->uc_mcontext->__ss.__pc += 4;           // 跳过 brk 本身
+            gA2GracefulTrapSwallowed++;
+            return;
+        }
+    }
+    struct sigaction prev = gA2GracefulTrapPrev;
+    if (prev.sa_handler != NULL || prev.sa_sigaction != NULL) {
+        sigaction(sig, &prev, NULL);
+    } else {
+        signal(sig, SIG_DFL);
+    }
+    raise(sig);
+}
+
+void a2_jit_install_graceful_trap(void) {
+    struct sigaction sa;
+    memset(&sa, 0, sizeof(sa));
+    sa.sa_flags = SA_SIGINFO | SA_ONSTACK;
+    sa.sa_sigaction = a2_graceful_trap_handler;
+    sigemptyset(&sa.sa_mask);
+    if (sigaction(SIGTRAP, &sa, &gA2GracefulTrapPrev) != 0) {
+        a2_jit_log("[A2JIT] 温和陷阱守卫安装失败: %s", strerror(errno));
+    } else {
+        a2_jit_log("[A2JIT] 温和陷阱守卫已安装（无人接的 brk ⇒ x0=0 并跳过，进程不死）");
+    }
+}
+
+size_t a2_jit_swallowed_trap_count(void) {
+    return (size_t)gA2GracefulTrapSwallowed;
+}

@@ -70,7 +70,8 @@ LWJGL 的 `createCapabilities` 要求「这个 GL 库能报告当前上下文」
 
 ### 4.3 覆盖范围
 
-- `a2_gl2_shim.m` 已实现 **58 个入口**：立即模式（glBegin/glEnd/glVertex*/glColor*/glNormal*/glTexCoord*）、
+- `a2_gl2_shim.m` 的 `kA2GL2Entries` 一共 **70 个名字**（53 个功能性入口 + 17 个共用 `gl2_ignored` 的忽略项），
+  其中 **68 个**能登记成 JNI 接管（glOrthof / glFrustumf 在 GL11/GL11C 里没有 native 声明）。早前按功能组估的「58」以表为准：立即模式（glBegin/glEnd/glVertex*/glColor*/glNormal*/glTexCoord*）、
   矩阵栈（glMatrixMode/glLoadIdentity/glPushMatrix/glPopMatrix/glMultMatrixf/glOrtho/glFrustum/glRotatef/glScalef/glTranslatef）、
   状态（glEnable/glDisable/glShadeModel/glAlphaFunc/glTexEnv*/glTexParameter*）、
   客户端数组（glVertexPointer/glColorPointer/glNormalPointer/glTexCoordPointer/glEnableClientState/glDrawArrays/glDrawElements）。

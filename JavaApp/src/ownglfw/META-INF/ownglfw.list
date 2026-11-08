@@ -30,6 +30,24 @@ Air2 —— 自研 org.lwjgl.glfw.* 最小集（阶段 1）· 包内清单
   Libraries/Jars/lwjgl-341/lwjgl-glfw.jar   提供回调 SPI 类型（GLFWKeyCallbackI 等）与 Struct 类型
   Libraries/Jars/lwjgl-341/lwjgl.jar        提供 org.lwjgl.PointerBuffer / system.MemoryUtil
 
+【阶段 3：MC 1.12.2 调用面补齐（[A2-OWNGLFW-2]）】
+  病因：真机 NoSuchMethodError: org.lwjgl.glfw.GLFW.glfwSetWindowPos(JII)V。根因不是「漏了一个方法」，
+  而是从来没有一条判据把「jar 里实际调了哪些 GLFW 方法」与「本层声明了哪些」对齐过。
+  做法：静态抽 libs/lwjgl-2/lwjgl-lwjglx.jar 全部 .class 的方法引用（常量池 Methodref/InterfaceMethodref），
+  限定链路类（Sys / opengl.Display* / ContextGL / input.* / Callbacks / GLFW*Callback 包装类；
+  排除 GLFW 自身与 GLFWNative*/GLFWVulkan/GLFW$Functions），与本层 GLFW.class 逐名逐描述符做差集 ⇒ 差 8 个。
+  新增（描述符与 jar 内逐字一致）：
+    glfwSetWindowPos(JII)V                                   <- opengl/Display（真机报错点；写 Java 侧 xpos/ypos）
+    glfwGetVideoModes(J)Lorg/lwjgl/glfw/GLFWVidMode$Buffer;  <- opengl/Display（复用一份缓冲，1 个模式 = 当前尺寸）
+    glfwSetWindowIcon(JLorg/lwjgl/glfw/GLFWImage$Buffer;)V   <- opengl/Display（空实现）
+    glfwCreateCursor(Lorg/lwjgl/glfw/GLFWImage;II)J          <- input/Cursor$CursorElement（空实现，发假句柄）
+    glfwGetJoystickName(I)Ljava/lang/String;                 <- input/GLFWController（返回 null = 无手柄）
+    glfwSetMonitorCallback(Lorg/lwjgl/glfw/GLFWMonitorCallbackI;)Lorg/lwjgl/glfw/GLFWMonitorCallback;  <- GLFWMonitorCallback
+    glfwSetJoystickCallback(Lorg/lwjgl/glfw/GLFWJoystickCallbackI;)Lorg/lwjgl/glfw/GLFWJoystickCallback; <- GLFWJoystickCallback
+    nglfwCreateContext(J)J                                   <- opengl/ContextGL（Java 兜底：返回当前上下文句柄）
+  空实现一律经 GLFW.notImplemented() 打一行 [A2-OWNG]（去重，避免每帧刷屏）。
+  机器判据：ownglfw_verify.py 第 [6] 条「调用面覆盖」——差集非空即失败（缺失项连描述符与调用类一起打出）。
+
 【未落 · 剩余清单】（带原因，非待办空话）：
   A. org/lwjgl/glfw/GLFWVulkan.java —— 官方签名含 org.lwjgl.vulkan.{VkInstance,VkPhysicalDevice,
      VkAllocationCallbacks}；本仓 Libraries/Jars/lwjgl-341/ 无 lwjgl-vulkan jar ⇒ 现在落会编不过。
@@ -39,7 +57,10 @@ Air2 —— 自研 org.lwjgl.glfw.* 最小集（阶段 1）· 包内清单
   C. org/lwjgl/system/{Callback,CallbackI,APIUtil}.java —— 本仓 Libraries 的官方 3.4.1 jar 已随
      （老树那份是「iOS 旧版 Callback + 3.4.1 Descriptor」双实现补丁）。★本自研线只在
      官方 SPI 上编译，不覆盖 system/*；是否需覆盖待阶段 2 与真机行为对齐后再定★。
-  D. 手柄/光标高级接口（Joystick/Gamepad 全量、GLFWImage 光标）—— 非「进主界面」必需 ⇒ 缓。
+  D. 手柄/光标高级接口 —— 阶段 3 只补了「调用面必需」的入口（glfwGetJoystickName 返回 null、
+     glfwCreateCursor 发假句柄、两个插拔回调只登记不派发）；★真正的枚举/映射未做★：
+     glfwJoystickPresent / glfwGetJoystickAxes/Buttons、Gamepad 映射、GLFWImage 位图光标的设备侧落地
+     —— 非「进主界面」必需，且 iOS 上手柄要接 GCController ⇒ 待有需求再做。
 
 native 侧（本阶段只做「能编译 + 最小窗口/上下文」）：
   Natives/OwnGlfw/a2_own_glfw_bridge.m —— 11 个 JNI 符号，与 GLFW.java 的私有 native 一一对应：

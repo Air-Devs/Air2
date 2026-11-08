@@ -12,7 +12,6 @@
 // ============================================================================
 #import "a2_renderer.h"
 #import "a2_log.h"
-#import "a2_eagl_egl.h"   // ★宿主 EGL 后端★：选到它时由本层接管进程里的 egl*
 #import "a2_sfpew_host.h" // ★[A2-SFPEW] 固定管线档位★：本层只校验存在，加载归 GL 桥（RTLD_LOCAL）
 
 #include <dlfcn.h>
@@ -28,16 +27,13 @@ int a2_renderer_load_named(NSString *dylibName, NSString *frameworksPath) {
         ? dylibName
         : [NSString stringWithUTF8String:A2RendererMetalDylibName];
 
-    // ★宿主 EGL 后端（系统 GLES 3.0 / EAGL）★：没有包内 dylib 可 dlopen —— 这一层的 EGL
-    //   就编在主二进制里。这里做的是「宣告接管 + 如实记一行」，返回 0（= 已就绪），
-    //   ★不是「跳过加载」★：`a2_eagl_egl_engage()` 之后本进程的 egl* 才真的走本层
-    //   （之前一律让路给真 EGL）；GL 层（MobileGlues）由 GL 桥按同一标识加载。
+    // ★EAGL（宿主假 EGL）已于 2026-11-08 彻底移除★：不再有 `libeagl.dylib` 这一档，
+    //   EGL 层一律来自后端库（MG / ANGLE）。走到这里只可能是旧配置残留 ⇒ 如实拒绝，
+    //   而不是静默回退成别的渲染器（那会让人以为选的是 A，实际跑的是 B）。
     if (strcmp(name.UTF8String, A2RendererHostEAGLDylibName) == 0) {
-        a2_eagl_egl_engage();
-        a2_log_f(@"[A2-RENDERER] 已选择宿主 EGL 后端：%s（EGL=本二进制假 EGL，engaged=%d；"
-                 @"包内无此 dylib 是设计如此，GL 层由 GL 桥加载）",
-                 name.UTF8String, (int)a2_eagl_egl_is_engaged());
-        return 0;
+        a2_log_f(@"[A2-RENDERER] ★已移除★ 宿主 EAGL 渲染器（%s）不再支持；请在设置里改选 Metal / MobileGlues",
+                 name.UTF8String);
+        return -2;
     }
 
     if (frameworksPath.length == 0) {
@@ -65,7 +61,9 @@ int a2_renderer_load_named(NSString *dylibName, NSString *frameworksPath) {
     }
 
     // RTLD_GLOBAL：与老链一致（渲染器符号需对后续 dlopen 的库可见）。
-    void *handle = dlopen(path.UTF8String, RTLD_LAZY | RTLD_GLOBAL);
+    /* ★RTLD_NOW★：渲染器可能是 Swift 写的（libmetallum 强依赖 libswiftCore）
+       ⇒ 延迟绑定会让 Swift 元数据在首次发消息时才解析，解析不到就 objc brk（.ips 实证 SIGTRAP@realizeClassWithoutSwift） */
+    void *handle = dlopen(path.UTF8String, RTLD_NOW | RTLD_GLOBAL);
     if (handle == NULL) {
         const char *err = dlerror();
         a2_log_f(@"[A2-RENDERER] 渲染后端 dlopen 失败：%s（%s）", path.UTF8String, err ? err : "(dlerror 无输出)");

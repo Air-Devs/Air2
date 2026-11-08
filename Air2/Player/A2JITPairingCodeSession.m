@@ -104,7 +104,7 @@ static NSString *const kA2DetailKey  = @"A2PairingCodeDetail";
     [d setObject:_lastDetail forKey:kA2DetailKey];
 
     [A2Log criterion:@"%@", [A2JITPairingCodeSession criterionLineForState:_state host:_hostName code:_code
-                                                        detail:@"listener=由 A2JITAutoPairingEngineBridge→A2RPPairSetupAccessory 起 NWListener(_remotepairing-pairable-host._tcp) 并在同一条流上跑 pair-setup（本类只负责生成/显示码）"]];
+                                                        detail:@"listener=由诊断页的隧道自检（A2TLSPskTunnelBridge → A2RPPairSetupAccessory）起 NWListener(_remotepairing-pairable-host._tcp) 并在同一条流上跑 pair-setup（本类只负责生成/显示码）"]];
     return YES;
 }
 

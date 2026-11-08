@@ -121,6 +121,10 @@
     _chevron = [[UIImageView alloc] initWithImage:
                 [UIImage systemImageNamed:@"chevron.right" withConfiguration:chevCfg]];
     _chevron.translatesAutoresizingMaskIntoConstraints = NO;
+    // ★2026-11-06 真机反馈（箭头被拉得很长）★ UIImageView 默认 scaleToFill，
+    //   而 trailingStack 在文字区等式约束下会被拉宽 ⇒ 箭头图被横向拉伸。
+    //   图标一律按原始尺寸居中，不参与拉伸。
+    _chevron.contentMode = UIViewContentModeCenter;
     _chevron.hidden = YES;
 
     // MD3 风格开关（自绘），不用系统 UISwitch —— 外观差异明显
@@ -145,9 +149,13 @@
     _warningIcon = [self makeIcon:@"exclamationmark.triangle.fill"];
     _warningIcon.hidden = YES;
 
-    _checkmark = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"checkmark"]];
-    _checkmark.translatesAutoresizingMaskIntoConstraints = NO;
+    // ★2026-11-07 UI bug★ 原来没有尺寸约束 ⇒ 被 trailingStack 拉伸，
+    //   勾选符号被扯成一条横线（用户截图里的蓝色曲线就是这个）。
+    //   用 makeIcon 统一给 18×18 + scaleAspectFit。
+    _checkmark = [self makeIcon:@"checkmark"];
     _checkmark.hidden = YES;
+    [_checkmark setContentHuggingPriority:UILayoutPriorityRequired
+                                  forAxis:UILayoutConstraintAxisHorizontal];
 
     // 顺序即视觉顺序：警告 → 下载 → 当前值 → 选中勾 → 右箭头 → 下拉 → 开关
     _trailingStack = [[UIStackView alloc] initWithArrangedSubviews:
@@ -157,6 +165,22 @@
     _trailingStack.axis = UILayoutConstraintAxisHorizontal;
     _trailingStack.spacing = A2SpaceS;
     _trailingStack.alignment = UIStackViewAlignmentCenter;
+    // 右侧控件组按内容宽度收紧，不被文字区的等式约束拉宽
+    // ★必须 required★：右侧组只占内容宽，并且始终贴在行尾
+    [_trailingStack setContentHuggingPriority:UILayoutPriorityRequired
+                                      forAxis:UILayoutConstraintAxisHorizontal];
+    [_trailingStack setContentCompressionResistancePriority:UILayoutPriorityRequired
+                                                     forAxis:UILayoutConstraintAxisHorizontal];
+    // ★2026-11-07 UI bug★ 右侧组里的可拉伸视图（尤其是数值标签）hugging 太低，
+    //   会被平分剩余空间 ⇒ 数值浮到行中间、箭头落在自己槽位中央。
+    //   统一把右侧组内的所有成员设为「required 抗拉伸/抗压缩」，让它们紧贴行尾排布。
+    for (UIView *v in _trailingStack.arrangedSubviews) {
+        [v setContentHuggingPriority:UILayoutPriorityRequired
+                             forAxis:UILayoutConstraintAxisHorizontal];
+        [v setContentCompressionResistancePriority:UILayoutPriorityRequired
+                                           forAxis:UILayoutConstraintAxisHorizontal];
+    }
+
     [self addSubview:_trailingStack];
 
     // ---- 分隔线：与文字左对齐 ----
@@ -165,7 +189,16 @@
     _separator.hidden = YES;
     [self addSubview:_separator];
 
+    // 文字区右边界：必须用等式（不是 >=），否则宽度退化成标题固有宽度
+    NSLayoutConstraint *textStackTrailing =
+        [_textStack.trailingAnchor constraintEqualToAnchor:_trailingStack.leadingAnchor constant:-A2SpaceM];
+    // ★2026-11-06 真机反馈（箭头长度对了但不在最右）★
+    //   等式原来与 trailingStack 的抗拉伸同为 999 ⇒ 求解器可能选「文字撑满、右侧组内缩」。
+    //   降到 750：右侧组的「贴右 + 不拉伸」优先，文字区在空间不足时才让步。
+    textStackTrailing.priority = UILayoutPriorityDefaultHigh;
+
     [NSLayoutConstraint activateConstraints:@[
+        textStackTrailing,
         [self.heightAnchor constraintGreaterThanOrEqualToConstant:A2MinTouchTarget],
 
         [_fillView.topAnchor constraintEqualToAnchor:self.topAnchor],
@@ -197,6 +230,11 @@
         [_trailingStack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor],
         [_trailingStack.leadingAnchor constraintGreaterThanOrEqualToAnchor:_textStack.trailingAnchor
                                                                   constant:A2SpaceM],
+        // ★2026-11-01 真机反馈（阿帅）★「详情/副标题的宽度被限制成选项名长度」。
+        //   原因：文字区只钉了 leading，没有与右侧控件建立**等号**关系 ⇒ 宽度退化成
+        //   标题的固有宽度，副标题（Fill 对齐）于是按标题宽度换行/截断。
+        //   这里补一条高优先级的等式：文字区一直撑到右侧控件，副标题拿到整行宽度。
+
 
         [_separator.bottomAnchor constraintEqualToAnchor:self.bottomAnchor],
         [_separator.heightAnchor constraintEqualToConstant:1],

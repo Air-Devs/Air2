@@ -69,12 +69,24 @@ static void A2PluginTestSlowTick(void) {
     usleep((useconds_t)milliseconds * 1000);
 }
 
+/// 宿主版本（`x.y.z`）：贡献点校验拿它比 `air2.host.min/maxHostVersion`。
+///
+/// 取值口径与 `A2PluginPermissionStore` 一致（`CFBundleShortVersionString`），但回落值不同：
+/// 那边写的是 `"0"`（只给人看的展示字段），这边必须是 `"0.0.0"` ——
+/// `0` 不是合法 semver，会让每个声明了 `minHostVersion` 的包都被判「宿主太旧」。
+/// 单测二进制没有 Info.plist，走的正是这条回落。
+static NSString *A2PluginHostVersionFromBundle(void) {
+    NSString *version = NSBundle.mainBundle.infoDictionary[@"CFBundleShortVersionString"];
+    return A2PluginIsValidVersion(version) ? version : @"0.0.0";
+}
+
 #pragma mark - 结果
 
 @interface A2PluginPackage ()
 @property (nonatomic, copy) NSString *rootDirectory;
 @property (nonatomic, strong) A2PluginManifest *manifest;
 @property (nonatomic, copy) NSString *contentHash;
+@property (nonatomic, strong) A2PluginContributionSet *contributionSet;
 @end
 
 @implementation A2PluginPackage
@@ -149,6 +161,10 @@ static NSString *A2SHA256HexOfFile(NSString *path) {
     self = [super init];
     if (self) {
         _limits = limits;
+        // 宿主版本取自 Info.plist（唯一口径）；里程碑默认 P2（纯 JSON 声明），
+        // 由安装器按 `allowsJSPlugins` 抬高（见头文件）。
+        _hostVersion = A2PluginHostVersionFromBundle();
+        _hostMilestone = A2PluginHostMilestoneP2;
     }
     return self;
 }
@@ -238,6 +254,27 @@ static NSString *A2SHA256HexOfFile(NSString *path) {
         }
         return nil;
     }
+    // ★2026-11-01 真机反馈（阿帅）★ `type: js` 的包在 P2 宿主上应报 E_TYPE_UNSUPPORTED，
+    //   但 P1 的字段校验先看到「缺 entry」⇒ 报成 E_FIELD，用户看到的是字段错而不是
+    //   「本宿主阶段不支持 JS」。这里先做一次「类型 + 里程碑」的预检，让错误码回到语义本身。
+    {
+        id peek = [NSJSONSerialization JSONObjectWithData:manifestData options:0 error:NULL];
+        if ([peek isKindOfClass:NSDictionary.class]) {
+            id typeValue = ((NSDictionary *)peek)[@"type"];
+            if ([typeValue isKindOfClass:NSString.class] &&
+                [((NSString *)typeValue) isEqualToString:@"js"] &&
+                self.hostMilestone < A2PluginHostMilestoneP3a) {
+                if (error) {
+                    *error = A2PluginErrorMake(A2PluginErrorTypeUnsupported, @"type",
+                                               @"本宿主阶段（P2，纯 JSON 声明）不能安装 type: js 的插件："
+                                               @"没有 JSCore 运行时，装上也永远不会执行。"
+                                               @"要代码能力请等 P3a，或把插件改写成纯 JSON");
+                }
+                return nil;
+            }
+        }
+    }
+
     NSError *manifestError = nil;
     A2PluginManifest *manifest = [A2PluginManifest manifestWithData:manifestData
                                                              limits:self.limits
@@ -246,6 +283,34 @@ static NSString *A2SHA256HexOfFile(NSString *path) {
         if (error) *error = manifestError;
         return nil;
     }
+
+    // ⑤.5 贡献点深校验（P2 第一步）：slot / component / token 词表、贡献点之间的冲突、
+    //      权限配套、`air2.host.min/maxHostVersion` 区间、`type` / `formatVersion` 的里程碑门。
+    // 位置：manifest 解析成功之后、算哈希之前 —— 语义不成立的包不该先花一遍 SHA-256；
+    //      「一个包能贡献什么」也只在这里解析一次（结果跟着 package 交给安装器）。
+    // 错误：沿用 P1 的结构（同一个 domain + 同一个 A2PluginErrorCodeKey），不另造一套码，
+    //      管理页不需要知道这条错误是哪一层发现的。
+    NSError *contributionError = nil;
+    A2PluginContributionSet *contributionSet =
+        [A2PluginContributionSet setWithManifestData:manifestData
+                                         hostVersion:self.hostVersion
+                                           milestone:self.hostMilestone
+                                               error:&contributionError];
+    if (!contributionSet) {
+        [A2Log log:@"[A2-PLUGIN] 贡献点校验拒装：%@ %@（%@）—— %@",
+              manifest.pluginId, manifest.version,
+              contributionError.userInfo[A2PluginErrorCodeKey] ?: @"E_UNKNOWN",
+              contributionError.localizedDescription ?: @"未知原因"];
+        if (error) *error = contributionError;
+        return nil;
+    }
+    [A2Log log:@"[A2-PLUGIN] 贡献点校验通过：%@ %@，slot 贡献 %lu 条 / 主题 token %lu 个 / "
+               @"版本装饰 %@（里程碑 %ld，宿主 %@）",
+          manifest.pluginId, manifest.version,
+          (unsigned long)contributionSet.slotContributions.count,
+          (unsigned long)contributionSet.themeTokens.count,
+          contributionSet.versionDecoration ? @"有" : @"无",
+          (long)self.hostMilestone, self.hostVersion];
 
     // ⑥ 完整性 + ⑦ 内容摘要
     NSArray<NSString *> *relativePaths = [self regularFilePathsInDirectory:destination
@@ -279,6 +344,7 @@ static NSString *A2SHA256HexOfFile(NSString *path) {
     A2PluginPackage *package = [A2PluginPackage new];
     package.rootDirectory = destination;
     package.manifest = manifest;
+    package.contributionSet = contributionSet;
     package.contentHash = contentHash;
     return package;
 }

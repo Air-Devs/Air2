@@ -244,6 +244,11 @@ JNIEXPORT void JNICALL Java_org_lwjgl_glfw_GLFW_nSwapBuffers
     // ★[A2-GLFW-TRACE]★ 每帧都调 ⇒ 只打前 20 次（超过 100ms 的慢调用另计，不受限）。
     static unsigned long trSwapN = 0;
     unsigned long n = ++trSwapN;
+    // ★2026-11-07 判据★ 每 60 次打一行：确认 MC 的 Display.update 是否真的在调 swap。
+    //   lastlog-217 里循环在跑（runGameLoop 的 totalMemory 采样命中），但 swap 只发生 2 次。
+    if (n <= 3 || (n % 60) == 0) {
+        a2_log_criterion(@"[A2-GLFW] swap 累计 %lu 次", n);
+    }
     long long trT0 = a2_glfw_tr_us();
     unsigned long long trTid = a2_glfw_tr_tid();
     if (n <= 20) {

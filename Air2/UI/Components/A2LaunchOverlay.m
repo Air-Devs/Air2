@@ -5,6 +5,7 @@
 
 #import "A2LaunchOverlay.h"
 #import "A2PluginBootGuard.h"   // ★插件 P1 第⑤块★ 首帧到达 ⇒ 清 boot marker（接线点 B）
+#import "A2PluginContributionHost.h"   // ★插件 P2 插入点 ⑦★ launch.overlay
 #import "A2Log.h"
 
 NSNotificationName const A2LaunchStageNotification = @"A2LaunchStageNotification";
@@ -15,6 +16,36 @@ static UILabel *gStageLabel = nil;
 static UIProgressView *gProgress = nil;
 
 @implementation A2LaunchOverlay
+
+#pragma mark - 插件插入点 ⑦：启动遮罩内只读信息
+
+/// `launch.overlay`：把插件声明的只读信息叠进遮罩卡片底部。
+///
+/// 只加文本/徽标：**不加按钮**（否则用户会以为能从遮罩里操作插件）、
+/// 不替换进度条与阶段文案、不挡「取消启动」—— 这是 PLUGIN-COMPAT 2.2 写死的边界。
+/// @return 有内容时返回已挂进 card 的栈；没有返回 nil（调用方保留原来的「hint 贴卡底」约束）
++ (nullable UIStackView *)a2_pluginOverlayStackInCard:(UIView *)card {
+    NSArray<A2PluginSlotContribution *> *entries =
+        [A2PluginContributionHost entriesForSlot:@"launch.overlay"];
+    if (entries.count == 0) return nil;
+
+    NSMutableArray<UIView *> *views = [NSMutableArray arrayWithCapacity:entries.count];
+    for (A2PluginSlotContribution *entry in entries) {
+        // 遮罩是深底：用 onDarkSurface 的亮色文案，浅色主题的语义色搬过来会看不见
+        UIView *badge = [A2PluginContributionHost badgeForEntry:entry onDarkSurface:YES];
+        if (badge != nil) [views addObject:badge];
+    }
+    if (views.count == 0) return nil;
+
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:views];
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = 4.0;
+    stack.alignment = UIStackViewAlignmentLeading;
+    stack.userInteractionEnabled = NO;   // 只读信息：不拦触摸
+    [card addSubview:stack];
+    return stack;
+}
 
 + (void)show {
     if (![NSThread isMainThread]) {
@@ -80,7 +111,12 @@ static UIProgressView *gProgress = nil;
         [card addSubview:v];
     }
 
-    [NSLayoutConstraint activateConstraints:@[
+    // ★插件插入点 ⑦★ `launch.overlay`：只叠加只读信息，**不加按钮**、不替换遮罩、
+    // 不影响进度与「取消启动」（PLUGIN-COMPAT 2.2 的边界写死）。
+    // 未装插件时 pluginStack 为 nil ⇒ 下面走「hint 贴卡底」那条老约束，布局逐字不变。
+    UIStackView *pluginStack = [self a2_pluginOverlayStackInCard:card];
+
+    NSMutableArray<NSLayoutConstraint *> *constraints = [NSMutableArray arrayWithArray:@[
         [card.centerXAnchor constraintEqualToAnchor:cover.centerXAnchor],
         [card.centerYAnchor constraintEqualToAnchor:cover.centerYAnchor],
         [card.widthAnchor constraintEqualToConstant:300.0],
@@ -102,8 +138,19 @@ static UIProgressView *gProgress = nil;
 
         [hint.topAnchor constraintEqualToAnchor:progress.bottomAnchor constant:12.0],
         [hint.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:20.0],
-        [hint.bottomAnchor constraintEqualToAnchor:card.bottomAnchor constant:-18.0],
     ]];
+    if (pluginStack != nil) {
+        [constraints addObjectsFromArray:@[
+            [pluginStack.topAnchor constraintEqualToAnchor:hint.bottomAnchor constant:10.0],
+            [pluginStack.leadingAnchor constraintEqualToAnchor:card.leadingAnchor constant:20.0],
+            [pluginStack.trailingAnchor constraintEqualToAnchor:card.trailingAnchor constant:-20.0],
+            [pluginStack.bottomAnchor constraintEqualToAnchor:card.bottomAnchor constant:-18.0],
+        ]];
+    } else {
+        [constraints addObject:[hint.bottomAnchor constraintEqualToAnchor:card.bottomAnchor
+                                                               constant:-18.0]];
+    }
+    [NSLayoutConstraint activateConstraints:constraints];
 
     [win addSubview:cover];
     gOverlayView = cover;

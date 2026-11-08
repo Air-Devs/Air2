@@ -56,6 +56,11 @@ NSArray<NSString *> *a2_jli_build_argv(NSString *javaHome,
     // argv[0]：老线同款 `<javaHome>/bin/java`（JLI 用它作进程名/启动器身份）
     [argv addObject:(home.length > 0 ? [home stringByAppendingPathComponent:@"bin/java"] : @"java")];
 
+    // ★2026-11-07 老 Air 对照★ JLI 入参第二个位置是 -XstartOnFirstThread：
+    //   它决定 libjli 的线程策略。缺了它，libjli 会另起 apple_main 线程回调宿主
+    //   main() ⇒ 第二次 UIApplicationMain ⇒ "There can only be one UIApplication instance"。
+    [argv addObject:@"-XstartOnFirstThread"];
+
     // VM 选项：原序保留，丢掉空串与 classpath/jar 残留（带值的连值一起丢）
     for (NSUInteger i = 0; i < options.count; i++) {
         NSString *opt = options[i];

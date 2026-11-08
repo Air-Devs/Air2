@@ -444,8 +444,17 @@ static void A2RunnerRebindSurfaceIfTopWindowChanged(UIWindow *attachedWindow,
     if (entryJarPath.length > 0) {
         NSString *ownGlfwJar = [[entryJarPath stringByDeletingLastPathComponent]
                                 stringByAppendingPathComponent:A2LaunchJavaOwnGlfwJarName];
-        if ([NSFileManager.defaultManager fileExistsAtPath:ownGlfwJar]) {
+        // ★2026-11-01★ 自研 GLFW 只服务 1.13+（LWJGL3 官方 jar 缺 iOS 适配那条线）；
+        //   1.12 及更早用的是 libs/lwjgl-2 里的 Pojav fat jar，它自带完整 GLFW，
+        //   再叠自研的最小集会把 GLFW 顶掉（真机现象：NoSuchMethodError glfwSetWindowPos）。
+        //   判据用目录名：lwjgl-2 ⇔ MC ≤1.12（A2LaunchPickLWJGLDir 的口径）。
+        // ★2026-11-01★ 自研 GLFW 已补齐 1.12 链路实际调用的 8 个方法（含 glfwSetWindowPos），
+        //   verify 判据「链路引用 50 个成员 / 缺 0」全绿 ⇒ 恢复对所有版本加载。
+        const BOOL ownGlfwApplies = YES;
+        if (ownGlfwApplies && [NSFileManager.defaultManager fileExistsAtPath:ownGlfwJar]) {
             [frontItems addObject:ownGlfwJar];
+        } else if (!ownGlfwApplies) {
+            [A2Log log:@"[A2-LAUNCH] 1.12 及更早不加载自研 GLFW（改用 lwjgl-2 内 self 的完整 GLFW）"];
         } else {
             [A2Log log:@"[A2-LAUNCH] 自研 GLFW jar 不在包内：%@（回退官方 org.lwjgl.glfw.*）", ownGlfwJar];
         }

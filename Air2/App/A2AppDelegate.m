@@ -22,6 +22,7 @@
 //
 
 #import "A2JITEnabler.h"        // JIT 闸门/判据的唯一实现（重挂后自动继续也用它判）
+#import "A2StikJITProvider.h"  // 内建 JIT（StikJIT.framework）：注入给 A2JITEnabler
 #import "A2LaunchSession.h"
 #import "A2AppDelegate.h"
 #import "A2SceneDelegate.h"
@@ -163,6 +164,20 @@ didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *
         [A2Log criterion:@"[A2-PAIRPIN] 等 JIT 收尾（拿到 / 超时 / 取消）⇒ 保活关"];
         A2PairingKeepAliveStop();
     }];
+
+    // ★内建 JIT 引擎注册（唯一调用点）★
+    //   为什么在这里：A2JITEnabler 属 Natives/Support（JIT 环境层），不认识 Air2/Player；
+    //   反向 import 就是分层倒置。所以由 App 层把「进程内开 JIT」这件事注入进去：
+    //   用户在「JIT 启动器」里选 builtin，或 auto 下外部使能器一个都打不开时，
+    //   A2JITEnabler 才调这个块（外部 StikDebug 那条链一字未改，仍是 auto 的首选）。
+    //   ★块内是阻塞的★：A2JITEnabler 自己丢到全局队列跑，这里不要再多套一层队列。
+    A2JITSetBuiltInEnabler(^BOOL(NSTimeInterval budget, NSString *_Nullable *_Nullable whyOut) {
+        return [A2StikJITProvider enableBuiltInJITWithBudget:budget reason:whyOut];
+    });
+    [A2Log criterion:@"[A2-JIT-BUILTIN] 内建引擎 %@（版本 %@；不可用原因：%@）",
+     [A2StikJITProvider isAvailable] ? @"可用" : @"不可用",
+     [A2StikJITProvider frameworkVersion] ?: @"?",
+     [A2StikJITProvider unavailableReason] ?: @"无"];
 
     // 用户在「版本管理」里选过沙盒外的游戏目录时，访问权靠安全作用域书签。
     // 必须在任何读游戏目录的逻辑之前恢复，否则第一轮版本扫描会读到不存在的路径。

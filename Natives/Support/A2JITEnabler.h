@@ -180,4 +180,27 @@ BOOL a2jit_debug_hold_before_main(void);
 
 @end
 
+#pragma mark - [A2-JIT-BUILTIN] 内建引擎注入点（App 层注册；Natives 不反向依赖 App）
+
+/// 内建 JIT 引擎的执行体：为**本进程**开 JIT。
+///
+/// ★阻塞★：由 A2JITEnabler 丢到全局队列上跑（可能是 RSD 握手 + debugserver attach +
+/// 跑完脚本，数十秒），绝不在主线程调。
+///
+/// @param budget  本次允许花的时间上限（秒）。
+/// @param whyOut  失败的可读原因（成功时置 nil）。
+/// @return YES = 引擎报告成功。★这不等于「本进程已经有 JIT」★ —— 之后仍由
+///         `A2LegacyJITGateReadyNow` 复验（拿到可执行区）才算数。
+typedef BOOL (^A2JITBuiltInEnablerBlock)(NSTimeInterval budget, NSString *_Nullable *_Nullable whyOut);
+
+/// 注册内建引擎（传 nil 注销）。
+/// ★唯一调用点★：`Air2/App/A2AppDelegate.m` 的 `didFinishLaunching` ⇒ 包一层
+/// `A2StikJITProvider +enableBuiltInJITWithBudget:reason:`。
+/// ★为什么要注入而不是直接调★：本模块属 Natives/Support（JIT 环境层），不认识
+/// Air2/Player；反向 import 就是分层倒置（同 A2JITEnabler 不 import A2StikJITProvider）。
+FOUNDATION_EXPORT void A2JITSetBuiltInEnabler(A2JITBuiltInEnablerBlock _Nullable block);
+
+/// 是否已注册内建引擎（`a2jit_pick_enabler` 用它决定要不要把 builtin 当候选）。
+FOUNDATION_EXPORT BOOL A2JITBuiltInEnablerInstalled(void);
+
 NS_ASSUME_NONNULL_END

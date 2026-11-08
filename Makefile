@@ -94,6 +94,12 @@ package: natives java
 lint:
 	@echo "==> 规范检查"
 	@bash "$(SOURCEDIR)/scripts/lint_structure.sh"
+	@echo "==> GL2 → Metal 后端（[A2-MTL]）源码自检"
+	@if command -v python3 >/dev/null 2>&1; then \
+		python3 "$(SOURCEDIR)/scripts/verify_gl2_metallum.py"; \
+	else \
+		echo "  (跳过：没有 python3)"; \
+	fi
 
 # ------------------------------------------------------------
 clean:

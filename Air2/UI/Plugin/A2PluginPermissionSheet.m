@@ -21,6 +21,7 @@
 //
 
 #import "A2PluginPermissionSheet.h"
+#import "A2SlidePresentationAnimator.h"   // 全屏 modal 的 iOS 横向推入
 
 #import "A2Dialog.h"
 #import "A2Metrics.h"
@@ -121,8 +122,7 @@ static NSString *A2PluginSheetWrappedHash(NSString *hash) {
                                                                            packageHash:packageHash];
     sheet.hostMilestone = hostMilestone;
     sheet.completion = completion;
-    sheet.modalPresentationStyle = UIModalPresentationFullScreen;
-    [presenter presentViewController:sheet animated:YES completion:nil];
+    [sheet a2_presentFromRightFrom:presenter];   // ★iOS 横向推入★
     return sheet;
 }
 

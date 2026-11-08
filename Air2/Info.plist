@@ -51,6 +51,7 @@
 		<string>sidestore</string>
 		<string>stosdebug</string>
 		<string>apple-magnifier</string>
+		<string>localdevvpn</string>
 	</array>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
@@ -94,6 +95,11 @@
 	<true/>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<!-- ★2026-11-07 高刷支持★ 允许超过 60Hz 呈现（ProMotion 120Hz 必须） -->
+	<key>CADisableMinimumFrameDurationOnPhone</key>
+	<true/>
+	<key>LSSupportsGameMode</key>
+	<true/>
 	<key>UIRequiredDeviceCapabilities</key>
 	<array>
 		<string>arm64</string>

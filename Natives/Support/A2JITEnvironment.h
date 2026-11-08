@@ -140,6 +140,10 @@ BOOL a2_jit_send_script_safe(const char *utf8, size_t len);
 /// 无人应答时返回 NO（降级），不致死。
 BOOL a2_jit_set_detach_after_first_br(BOOL detach);
 
+/// 温和陷阱守卫：无人服务的 brk 返回 0 并跳过，而不是杀死进程（Henge 同款）
+void a2_jit_install_graceful_trap(void);
+size_t a2_jit_swallowed_trap_count(void);
+
 // ============================================================================
 // ★[A2PROBE]★ GL 断点探针 —— 让 StikDebug 脚本按 App 给的地址布 Z0，命中时脚本打寄存器。
 //

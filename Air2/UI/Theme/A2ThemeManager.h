@@ -76,6 +76,41 @@ extern NSNotificationName const A2BackgroundDidChangeNotification;
 /// 用户自定义的种子色。非 nil 时 selectedKind 视为「自定义」。
 @property (nonatomic, strong, nullable) UIColor *customSeedColor;
 
+#pragma mark - 自动种子色
+
+/// 是否启用「自动获取种子色」。
+/// 启用后：优先用自定义背景图取色；没有背景图就不允许开启（阿帅 2026-11-06 需求 ②）。
+/// ★插件兼容★：插件应用自己的主题时，必须先调用 setAutoSeedEnabled:NO，
+///   否则本开关会把插件主题覆盖掉（rebuildTheme 里 autoSeed 优先于 selectedKind）。
+@property (nonatomic, assign, readonly, getter=isAutoSeedEnabled) BOOL autoSeedEnabled;
+
+/// 开关自动种子色。@return NO = 当前没有可用种子图（无自定义背景），无法开启，保持原状。
+/// ★不叫 setAutoSeedEnabled:★ setter 形式必须返回 void，否则编译器报 type of setter must be void。
+- (BOOL)enableAutoSeed:(BOOL)enabled;
+
+#pragma mark - 插件贡献的颜色主题
+
+/// 当前生效的插件主题 token（token → `#RRGGBB`）。nil = 当前用的不是插件主题。
+@property (nonatomic, copy, readonly, nullable) NSDictionary<NSString *, NSString *> *pluginThemeTokens;
+
+/// 当前插件主题所属的插件 id；不是插件主题时为 nil。持久化，重启后仍是它。
+@property (nonatomic, copy, readonly, nullable) NSString *pluginThemePluginId;
+
+/// 应用「插件贡献的颜色主题」。
+///
+/// ★这是唯一入口★ 不要绕过去直接改 `selectedKind` / `customSeedColor`：
+/// 本方法做三件事，缺任何一件插件主题都会被别的分支盖掉——
+///   ① `enableAutoSeed:NO` —— 自动种子色在 rebuildTheme 里优先于一切；
+///   ② 清掉手动种子色 —— `_customSeedColor` 分支同样优先，不清就永远显示旧种子色；
+///   ③ 记下 token 并重建 + 持久化（重启后由 init 读回）。
+///
+/// @param pluginId 提供该主题的插件 id（展示与持久化用；空 ⇒ 直接忽略）
+/// @param name     主题展示名（一般是插件 manifest 的 `name`）
+/// @param tokens   该插件的 `themeTokens`（非空；空 ⇒ 直接忽略）
+- (void)applyPluginThemeFromPlugin:(NSString *)pluginId
+                              name:(nullable NSString *)name
+                            tokens:(NSDictionary<NSString *, NSString *> *)tokens;
+
 #pragma mark - 外观
 
 @property (nonatomic, assign) A2AppearanceMode appearanceMode;

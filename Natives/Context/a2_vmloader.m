@@ -3,6 +3,7 @@
 // ★ [RT-P1] R2 —— VMLoader（实现）
 // 方案：D:\CTF\_RUNTIME_REWRITE_PLAN.md §3.2
 // ============================================================================
+#import "A2JITEnvironment.h"   // a2_jit_install_graceful_trap
 #import "a2_vmloader.h"
 #import "a2_log.h"        // [A2JVM] R4/R5 与心跳行（单一日志出口）
 
@@ -68,7 +69,10 @@ void a2_vm_reset_signal_handlers(void) {
     signal(SIGILL,  SIG_DFL);
     signal(SIGFPE,  SIG_DFL);
     signal(SIGPIPE, SIG_DFL);
-    signal(SIGTRAP, SIG_DFL);
+    // ★SIGTRAP 不设 DFL★：调试器不在岗时，libjvm 的 BreakGetJITMapping(brk #0x69)
+    //   会变成一发没人接的陷阱 ⇒ 进程直接死（ips: EXC_BREAKPOINT）。
+    //   改由温和陷阱守卫接管：跳过 brk 并把 x0 置 0（Henge henge_trap_handler 同款）。
+    a2_jit_install_graceful_trap();
     a2_log_f(@"[A2JVM] 信号处理器已复位 SIGSEGV/SIGBUS/SIGILL/SIGFPE/SIGPIPE/SIGTRAP -> SIG_DFL（JVM 要自己接管）");
 }
 
@@ -278,6 +282,7 @@ int a2_vm_create(NSString *libjvmPath,
             rc = createVM(&vm, (void **)&env, &args);
         }
         a2_log_f(@"[A2JVM] R5 JNI_CreateJavaVM 返回 rc=%d vm=%p env=%p", rc, (void *)vm, (void *)env);
+        a2_log_criterion(@"[A2-TIME] VM 创建返回 rc=%d（此后到首帧的时间才是 MC 自己的初始化）", (int)rc);
         if (rc == JNI_OK) { used = kVersions[i]; break; }
         if (rc != JNI_EVERSION) break;   // 非版本问题，重试无意义
     }

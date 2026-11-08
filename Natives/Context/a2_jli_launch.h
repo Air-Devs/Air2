@@ -44,3 +44,6 @@ int a2_vm_launch_with_jli(NSString *javaHome,
                           int *outJLIRC);
 
 #endif /* A2_JLI_LAUNCH_H */
+
+/// macOS JLI 二段式：宿主 main 被 libjli 回调时，用回调进来的 argv 再调一次。
+int a2_jli_launch_raw(const char *javaHomePath, int argc, const char **argv);

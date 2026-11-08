@@ -383,6 +383,19 @@ public class GLFW {
     private static double timeOffset;
     private static String clipboard = "";
     private static final Object[] CB_ERROR = new Object[1];
+    /** 显示器回调（全进程一个，带 monitor 形参的登记语义在 GLFW3 是「显示器级」事件）。 */
+    private static final Object[] CB_MONITOR = new Object[1];
+    /** 手柄回调（同上：无 window 形参）。 */
+    private static final Object[] CB_JOYSTICK = new Object[1];
+
+    /** glfwCreateCursor 的假句柄发号器（与 glfwCreateStandardCursor 同一约定：高位置标记）。 */
+    private static long nextCursorId = 0xC1000000L;
+
+    /** glfwGetVideoModes 的返回缓冲（官方语义「调用方拥有」，这里改为进程内复用一次分配，避免每次调用泄漏）。 */
+    private static GLFWVidMode.Buffer videoModes;
+
+    /** 只为「未实现提示」去重：同一方法只打一行，避免每帧调用点刷屏。 */
+    private static final Map<String, Boolean> NOT_IMPLEMENTED = new ConcurrentHashMap<String, Boolean>();
 
     // 显示器：iOS 只有一个主显示器，用固定句柄表示（对齐「Java 假对象」做法）。
     private static final long MONITOR_PRIMARY = 0xA0000000L;
@@ -463,6 +476,26 @@ public class GLFW {
 
     static Window state(long window) {
         return WINDOWS.get(window);
+    }
+
+    /** 第一个已建窗口（无窗口时 null）：显示器/视频模式这类「全进程唯一」查询的取值源。 */
+    private static Window firstWindow() {
+        for (Window candidate : WINDOWS.values()) {
+            return candidate;
+        }
+        return null;
+    }
+
+    /**
+     * 未实现提示：每个方法只打一行 {@code [A2-OWNG]}，随后由调用方返回安全默认值。
+     *
+     * <p>为什么去重：这些入口会被 {@code Display.create()}/{@code Display.setIcon()} 这类
+     * 一次性路径调用，也可能落在每帧路径上；刷屏会把真机日志里的判据行冲掉。
+     */
+    private static void notImplemented(String api) {
+        if (NOT_IMPLEMENTED.putIfAbsent(api, Boolean.TRUE) == null) {
+            System.out.println("[A2-OWNG] 未实现 " + api + " —— 返回安全默认值（功能降级，不打断调用链）");
+        }
     }
 
     // ======================= 初始化 / 版本 / 错误 =======================
@@ -595,6 +628,21 @@ public class GLFW {
         if (w == null) return;
         if (xpos != null && xpos.remaining() > 0) xpos.put(0, w.xpos);
         if (ypos != null && ypos.remaining() > 0) ypos.put(0, w.ypos);
+    }
+
+    /**
+     * 设置窗口位置（★真机 NoSuchMethodError 的报错点：{@code Display.setLocation()}/{@code Display.create()} 必调★）。
+     *
+     * <p>iOS 只有一块全屏宿主视图，没有「窗口挪到屏幕某坐标」的语义 ⇒ 设备侧无可施加的动作；
+     * 这里把坐标写进 Java 侧窗口状态，保证 {@code glfwGetWindowPos} 读回的就是刚设进去的值
+     * （{@code Display} 自己缓存 displayX/displayY，读路径与写路径因此保持一致）。
+     * 不在此打 {@code [A2-OWNG]}：位置状态确实被维护，不是「什么都没做」的空实现。
+     */
+    public static void glfwSetWindowPos(long window, int xpos, int ypos) {
+        Window w = state(window);
+        if (w == null) return;
+        w.xpos = xpos;
+        w.ypos = ypos;
     }
 
     public static void glfwSetWindowSize(long window, int width, int height) {
@@ -976,6 +1024,36 @@ public class GLFW {
         return GLFWVidMode.create(mem);
     }
 
+    /**
+     * 列出显示器支持的全部视频模式（{@code Display.getAvailableDisplayModes()} 的取值源）。
+     *
+     * <p>iOS 只有一块固定分辨率屏 ⇒ 只有「当前窗口尺寸」这一种模式（8/8/8 @60Hz）。
+     * 返回的 {@code GLFWVidMode.Buffer} 与 {@link #glfwGetVideoMode} 同一条路径：
+     * {@code MemoryUtil} 分配 + {@code GLFWVidMode.create(address, capacity)}，
+     * 因此 {@code width()}/{@code height()} 走的还是官方 {@code nwidth/nheight} 原生访问器，
+     * 不需要本层另造 Struct 子类。
+     *
+     * <p>★与官方的差异★：官方把缓冲所有权交给调用方（每次调用新分配）；这里复用一份进程内缓冲、
+     * 每次调用就地刷新数值 —— 避免 {@code Display} 反复调用时按官方语义泄漏。
+     */
+    public static GLFWVidMode.Buffer glfwGetVideoModes(long monitor) {
+        Window w = firstWindow();
+        int width = w != null ? w.width : 1920;
+        int height = w != null ? w.height : 1080;
+        if (videoModes == null) {
+            long mem = MemoryUtil.nmemAlloc(GLFWVidMode.SIZEOF);
+            videoModes = GLFWVidMode.create(mem, 1);
+        }
+        long mem = videoModes.address();
+        MemoryUtil.memPutInt(mem + GLFWVidMode.WIDTH, width);
+        MemoryUtil.memPutInt(mem + GLFWVidMode.HEIGHT, height);
+        MemoryUtil.memPutInt(mem + GLFWVidMode.REDBITS, 8);
+        MemoryUtil.memPutInt(mem + GLFWVidMode.GREENBITS, 8);
+        MemoryUtil.memPutInt(mem + GLFWVidMode.BLUEBITS, 8);
+        MemoryUtil.memPutInt(mem + GLFWVidMode.REFRESHRATE, 60);
+        return videoModes;
+    }
+
     // ======================= 剪贴板 =======================
     public static String glfwGetClipboardString(long window) {
         return clipboard;
@@ -1016,6 +1094,19 @@ public class GLFW {
     }
 
     // ======================= 光标 =======================
+    /**
+     * 用位图建光标（{@code org.lwjgl.input.Cursor} → {@code Cursor$CursorElement} 调用）。
+     *
+     * <p>空实现：iOS 端光标由 UIKit 侧管理，本层没有「自定义位图光标」的落点。
+     * 返回一个高位置标记的假句柄（与 {@link #glfwCreateStandardCursor} 同一约定），
+     * 让 {@code Cursor}/{@code Mouse.setNativeCursor} 的「有句柄 ⇒ 已创建」判断成立，
+     * 不至于因为句柄为 0 被当成创建失败而抛 LWJGLException。
+     */
+    public static long glfwCreateCursor(GLFWImage image, int xhot, int yhot) {
+        notImplemented("glfwCreateCursor");
+        return nextCursorId++;
+    }
+
     public static long glfwCreateStandardCursor(int shape) {
         return 0xC0000000L | (shape & 0xFFFF);
     }
@@ -1029,5 +1120,72 @@ public class GLFW {
         if (w != null) {
             w.cursor = cursor;
         }
+    }
+
+    // =========================================================================
+    // MC 1.12.2（LWJGL2 → lwjglx → GLFW3）链路补齐 · 阶段 3（[A2-OWNGLFW-2]）
+    // -------------------------------------------------------------------------
+    // 判据来源：静态抽取 libs/lwjgl-2/lwjgl-lwjglx.jar 全部 .class 的方法引用，
+    //   取「链路类」（Sys / opengl.Display* / ContextGL / input.* / Callbacks /
+    //   GLFW*Callback 包装类）对 org/lwjgl/glfw/GLFW 的调用面，再与本类已声明的方法做差集。
+    //   差集 = 本段这 5 个 + glfwSetWindowPos + glfwGetVideoModes + glfwCreateCursor（已就近落位）。
+    //   复现命令见 JavaApp/scripts/ownglfw_verify.py 的第 [6] 条（调用面覆盖自证）。
+    // =========================================================================
+
+    /**
+     * 设置窗口图标（{@code Display.setIcon()} 调用；官方签名收的是 {@code GLFWImage.Buffer}）。
+     *
+     * <p>空实现：iOS 应用图标由 Info.plist / Asset Catalog 决定，运行期没有「换窗口图标」的落点。
+     * ★注意：{@code Display.setIcon} 的 try/catch 只捕 {@code Exception}，NoSuchMethodError 是
+     * {@code Error}，漏掉这个方法会直接打断 {@code Display.create()}。
+     */
+    public static void glfwSetWindowIcon(long window, GLFWImage.Buffer images) {
+        notImplemented("glfwSetWindowIcon");
+    }
+
+    /** 显示器热插拔回调。iOS 无显示器插拔事件 ⇒ 只登记、永不派发。 */
+    public static GLFWMonitorCallback glfwSetMonitorCallback(GLFWMonitorCallbackI cbfun) {
+        notImplemented("glfwSetMonitorCallback");
+        return swapPrev(CB_MONITOR, cbfun, GLFWMonitorCallback.class);
+    }
+
+    /** 手柄插拔回调。本层不枚举手柄 ⇒ 只登记、永不派发。 */
+    public static GLFWJoystickCallback glfwSetJoystickCallback(GLFWJoystickCallbackI cbfun) {
+        notImplemented("glfwSetJoystickCallback");
+        return swapPrev(CB_JOYSTICK, cbfun, GLFWJoystickCallback.class);
+    }
+
+    /**
+     * 手柄名（{@code GLFWController.getName()} 调用）。
+     *
+     * <p>返回 {@code null} = 官方语义的「该 jid 上没有手柄」。本层不做手柄枚举，
+     * {@code GLFWInputImplementation} 也不会造出 {@code GLFWController} 实例，
+     * 所以 null 不会被解引用。不打 {@code [A2-OWNG]}：null 是正确答案，不是降级。
+     */
+    public static String glfwGetJoystickName(int jid) {
+        return null;
+    }
+
+    /**
+     * 供 LWJGL2 的 {@code org.lwjgl.opengl.ContextGL} 在「共享上下文」构造里取上下文句柄。
+     *
+     * <p>官方这里是 native（在窗口上另建一个 GL 上下文）。本层上下文由
+     * {@code nCreateWindow} 在 native 侧一次性建好，因此没有可「新建」的对象 ⇒
+     * 返回当前上下文句柄（没有则退回第一个窗口句柄），让随后的
+     * {@code glfwMakeContextCurrent(handle)} 仍然指向一个真实存在的窗口。
+     *
+     * <p>★可达性★：{@code ContextGL} 的两条构造路径里，只有
+     * {@code Display.create(PixelFormat, Drawable)}（AWT/共享 drawable 变体）会走到这里；
+     * MC 1.12.2 走的是 {@code Display.create(PixelFormat)} → {@code Display$Window.createWindow}
+     * → {@code new ContextGL(窗口句柄)}（long 构造），★不经过本方法★。
+     * 仍然补齐，是为了让「共享上下文」这种边缘入口不至于 NoSuchMethodError 硬崩。
+     */
+    public static long nglfwCreateContext(long shareContext) {
+        notImplemented("nglfwCreateContext");
+        if (currentContext != 0L) {
+            return currentContext;
+        }
+        Window w = firstWindow();
+        return w != null ? w.handle : 0L;
     }
 }

@@ -51,6 +51,7 @@
 #import "A2Metrics.h"
 #import "A2Typography.h"
 #import "A2Log.h"
+#import "A2PluginContributionHost.h"   // ★插件 P2 插入点 ③★ versions.list.badge
 #import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 /// 游戏目录项
@@ -144,6 +145,10 @@
 @property (nonatomic, strong) NSMutableArray<A2VersionRowView *> *rowViews;
 @property (nonatomic, weak, nullable) UILabel *emptyTitleLabel;
 @property (nonatomic, weak, nullable) UILabel *emptySubtitleLabel;
+
+/// ★插件插入点 ③★ 给一行挂上版本列表徽标（视图由宿主建，行只负责摆位置）。
+- (void)applyPluginBadges:(NSArray<A2PluginSlotContribution *> *)entries
+                    toRow:(A2VersionRowView *)row;
 @end
 
 @implementation A2VersionListViewController
@@ -430,12 +435,18 @@
         [self buildNoMatchState];
         return;
     }
+
+    // ★插件插入点 ③★ 一次取齐（判据行只记一行），再逐行建视图 —— 同一个视图不能挂到两行上。
+    NSArray<A2PluginSlotContribution *> *badgeEntries =
+        [A2PluginContributionHost entriesForSlot:@"versions.list.badge"];
+
     for (NSDictionary<NSString *, id> *v in visible) {
         A2VersionRowView *row = [[A2VersionRowView alloc] initWithVersionName:v[@"name"]
                                                                         meta:v[@"meta"]];
         row.current = [v[@"current"] boolValue];
         row.pinned = [v[@"pinned"] boolValue];
         row.valid = [v[@"valid"] boolValue];
+        [self applyPluginBadges:badgeEntries toRow:row];
 
         __weak typeof(self) weakSelf = self;
         __weak A2VersionRowView *weakRow = row;
@@ -478,6 +489,22 @@
             [row.trailingAnchor constraintEqualToAnchor:_listStack.trailingAnchor],
         ]];
     }
+}
+
+/// 版本列表徽标（插入点 ③，`PLUGIN-COMPAT` 2.2 的 `versions.list.badge`）。
+///
+/// P2 的贡献是**静态声明、没有 binding**：生效的徽标对每一行相同。
+/// 「只有某个版本才显示」要靠 v3 的绑定模型，P2 宿主不假装支持。
+- (void)applyPluginBadges:(NSArray<A2PluginSlotContribution *> *)entries
+                    toRow:(A2VersionRowView *)row {
+    if (entries.count == 0 || row == nil) return;
+
+    NSMutableArray<UIView *> *views = [NSMutableArray arrayWithCapacity:entries.count];
+    for (A2PluginSlotContribution *entry in entries) {
+        UIView *badge = [A2PluginContributionHost badgeForEntry:entry onDarkSurface:NO];
+        if (badge != nil) [views addObject:badge];
+    }
+    [row applyBadgeViews:views];      // 空数组 = 行自己把徽标栈藏起来，视觉不变
 }
 
 /// 空列表：给一句话 + 一个真入口，不留白屏。

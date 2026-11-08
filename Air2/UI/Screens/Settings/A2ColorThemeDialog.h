@@ -46,11 +46,17 @@ NS_ASSUME_NONNULL_BEGIN
 
 @interface A2ColorThemeDialog : UIViewController
 
-/// 确认时回调：返回选中的种子色与配色风格
+/// 确认时回调。两种结果**二选一**（弹窗只会给出其中一种）：
+///   · 选了色盘：`color` 非 nil、`pluginThemeId` 为 nil —— 调用方按「种子色 + 风格」应用；
+///   · 选了「插件主题」：`color` 为 nil、`pluginThemeId` 非 nil ——
+///     主题**已由弹窗应用**（插件色板只有弹窗手里有），调用方只需刷新界面文案，
+///     ★不要再写 `customSeedColor`★，写下去会把插件色板立刻覆盖成种子色推导。
 + (void)presentFrom:(UIViewController *)host
           seedColor:(nullable UIColor *)seedColor
               style:(A2PaletteStyle)style
-         onComplete:(void (^)(UIColor *color, A2PaletteStyle style))onComplete;
+         onComplete:(void (^)(UIColor *_Nullable color,
+                             A2PaletteStyle style,
+                             NSString *_Nullable pluginThemeId))onComplete;
 
 @end
 

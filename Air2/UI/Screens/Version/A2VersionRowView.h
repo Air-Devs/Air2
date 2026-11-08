@@ -55,6 +55,14 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, copy, nullable) void (^onSettings)(void);
 @property (nonatomic, copy, nullable) void (^onMore)(void);
 
+/// 插件徽标（P2 `versions.list.badge` 插入点 ③）。
+///
+/// 行本身**不认识插件**：只收一组现成的视图插在右侧按钮之前。
+/// 空数组 = 与接线前逐字相同（徽标栈隐藏、不占宽度）。
+/// 调用点：`A2VersionListViewController buildVersionList`（每行一份新视图 ——
+/// 同一个视图不能挂到两行上）。
+- (void)applyBadgeViews:(NSArray<UIView *> *)badgeViews;
+
 - (void)applyTheme;
 
 @end
