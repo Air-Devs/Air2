@@ -1,5 +1,7 @@
 #import "LauncherPreferences.h"
 #import "PLLogOutputView.h"
+#import "A2Account.h"
+#import "A2AccountManager.h"
 #import "SurfaceViewController.h"
 
 #include <objc/runtime.h>
@@ -246,9 +248,9 @@ jstring UIKit_accessClipboard(JNIEnv* env, jint action, jbyteArray copySrc) {
 void UIKit_launchMinecraftSurfaceVC(UIWindow* window, NSDictionary* metadata) {
     // Leave this pref, might be useful later for launching with Quick Actions/Shortcuts/URL Scheme
     //setPreference(@"internal_launch_on_boot", getPreference(@"restart_before_launch"));
-    BaseAuthenticator *currentAuth = BaseAuthenticator.current;
-    // selected_account 存储 accountId（唯一标识），确保重启后能按 accountId 恢复登录状态
-    setPrefObject(@"internal.selected_account", currentAuth.authData[@"accountId"]);
+    A2Account *currentAuth = A2AccountManager.shared.currentAccount;
+    // selected_account 存储账号唯一标识，确保重启后能按它恢复登录状态
+    setPrefObject(@"internal.selected_account", currentAuth.uniqueID ?: @"");
     dispatch_async(dispatch_get_main_queue(), ^{
         tmpRootVC = window.rootViewController;
         [UIView animateWithDuration:0.2 animations:^{

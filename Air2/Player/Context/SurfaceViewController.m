@@ -2,14 +2,16 @@
 #import <GameController/GameController.h>
 #import <objc/runtime.h>
 
-#import "input/ControllerInput.h"
-#import "input/GyroInput.h"
-#import "input/KeyboardInput.h"
+#import "ControllerInput.h"
+#import "GyroInput.h"
+#import "KeyboardInput.h"
 
 #import "JavaLauncher.h"
 #import "LauncherPreferences.h"
 #import "PLProfiles.h"
 #import "SurfaceViewController.h"
+#import "A2Account.h"
+#import "A2AccountManager.h"
 #import "A2ResolutionManager.h"
 #import "utils.h"
 #import "TrackedTextField.h"
@@ -17,6 +19,7 @@
 #import "ios_uikit_bridge.h"
 #import "LanPortDetector.h"
 // ★ [LAUNCH-PROGRESS] 启动阶段上报 API(遮罩订阅 AmeLaunchProgressChangedNotification)
+#import "AmeLaunchProgress.h"
 
 // 由 Natives/ctxbridges/gl_bridge.m 提供：SDL3（MC 26.3+）路径下 GL 拥有呈现层
 // 且 MC 以「点」回报窗口尺寸，需要把 CAMetalLayer 对齐 1x。GLFW 与 Vulkan 路径恒 NO。
@@ -1671,7 +1674,7 @@ static BOOL ame87_mcVersionRequiresTextureBuffer(NSString *mcVersionId) {
         }
         
         // Validate authenticator
-        BaseAuthenticator *currentAuth = BaseAuthenticator.current;
+        A2Account *currentAuth = A2AccountManager.shared.currentAccount;
         if (!currentAuth) {
             NSLog(@"[SurfaceViewController] Error: no authenticator available");
             dispatch_async(dispatch_get_main_queue(), ^{
@@ -1680,13 +1683,13 @@ static BOOL ame87_mcVersionRequiresTextureBuffer(NSString *mcVersionId) {
             });
             return;
         }
-        
+
         // Validate accountId（用作账户文件名，传给 Java 端加载对应账户）
-        NSString *accountId = currentAuth.authData[@"accountId"];
-        if (!accountId || accountId.length == 0) {
+        NSString *accountId = currentAuth.uniqueID;
+        if (accountId.length == 0) {
             // 兜底：极少数情况下 accountId 缺失（如旧账户未迁移），回退到 username
-            accountId = currentAuth.authData[@"username"];
-            if (!accountId || accountId.length == 0) {
+            accountId = currentAuth.username;
+            if (accountId.length == 0) {
                 accountId = @"Player";
             }
         }

@@ -23,6 +23,12 @@ static NSString *const kMCBBSManifestName = @"mcbbs.packmeta";
 /// MultiMC 系的清单名
 static NSString *const kMultiMCManifestName = @"mmc-pack.json";
 
+NSString *const A2ModPackErrorDomain = @"A2ModPackErrorDomain";
+
+/// 阶段划分的进度切分点（与 installPackAtPath: 里 report 的值对应）
+static const double kPhaseBaseEnd = 0.5;      // 准备本体
+static const double kPhaseDownloadEnd = 0.9;  // 下载文件
+
 static void A2Main(dispatch_block_t b) {
     if ([NSThread isMainThread]) b();
     else dispatch_async(dispatch_get_main_queue(), b);
@@ -43,9 +49,45 @@ static void A2Main(dispatch_block_t b) {
 @property (nonatomic, strong, nullable) A2ModPackManifest *manifest;
 @property (nonatomic, copy, nullable) void (^progressBlock)(double, NSString *);
 @property (nonatomic, copy, nullable) void (^completionBlock)(BOOL, NSError *);
+/// 用户是否已取消
+@property (nonatomic, assign) BOOL cancelled;
+/// completion 是否已回调过（取消与正常收尾不能重复回调）
+@property (nonatomic, assign) BOOL completed;
+/// 当前正在跑的本体安装器（取消时要传达下去）
+@property (nonatomic, strong, nullable) A2GameInstaller *gameInstaller;
+
+/// completion 的唯一出口（只回调一次）
+- (void)completeWithSuccess:(BOOL)success error:(nullable NSError *)error;
+- (NSError *)cancelledError;
 @end
 
 @implementation A2ModPackInstaller
+
+#pragma mark - 进度换算
+
++ (NSArray<NSString *> *)phaseTitles {
+    return @[@"读取清单并准备游戏本体",
+             @"下载整合包文件",
+             @"解压覆盖文件"];
+}
+
++ (A2ModPackPhase)phaseForOverallProgress:(double)progress {
+    if (progress < kPhaseBaseEnd) return A2ModPackPhasePreparingBase;
+    if (progress < kPhaseDownloadEnd) return A2ModPackPhaseDownloadingFiles;
+    return A2ModPackPhaseExtractingOverrides;
+}
+
++ (double)fractionWithinPhaseForOverallProgress:(double)progress {
+    switch ([self phaseForOverallProgress:progress]) {
+        case A2ModPackPhasePreparingBase:
+            return progress / kPhaseBaseEnd;
+        case A2ModPackPhaseDownloadingFiles:
+            return (progress - kPhaseBaseEnd) / (kPhaseDownloadEnd - kPhaseBaseEnd);
+        case A2ModPackPhaseExtractingOverrides:
+            return (progress - kPhaseDownloadEnd) / (1.0 - kPhaseDownloadEnd);
+    }
+    return 0;
+}
 
 #pragma mark - 格式识别
 
@@ -275,13 +317,15 @@ static void A2Main(dispatch_block_t b) {
     self.gameHome = gameHome;
     self.progressBlock = progress;
     self.completionBlock = completion;
+    self.cancelled = NO;
+    self.completed = NO;
 
     [self report:0 message:@"正在读取整合包…"];
 
     __weak typeof(self) weakSelf = self;
     [self parseManifestAtPath:zipPath completion:^(A2ModPackManifest *manifest, NSError *error) {
         __strong typeof(weakSelf) self = weakSelf;
-        if (!self) return;
+        if (!self || self.cancelled) return;
 
         if (!manifest) { [self failWithError:error]; return; }
         self.manifest = manifest;
@@ -300,6 +344,8 @@ static void A2Main(dispatch_block_t b) {
 /// 确保游戏本体与加载器就绪。
 /// 整合包不包含游戏本体，只声明依赖 —— 缺的话要先装。
 - (void)ensureBaseVersion {
+    if (self.cancelled) return;
+
     A2ModPackManifest *m = self.manifest;
 
     // 找本地是否有符合的版本（同游戏版本 + 同加载器）
@@ -337,20 +383,49 @@ static void A2Main(dispatch_block_t b) {
 
     __weak typeof(self) weakSelf = self;
     A2GameInstaller *installer = [[A2GameInstaller alloc] init];
+    self.gameInstaller = installer;
     [installer install:req
         progress:^(A2InstallStage stage, double progress, NSString *message) {
         __strong typeof(weakSelf) self = weakSelf;
-        if (!self) return;
+        if (!self || self.cancelled) return;
         // 本体安装占总进度的 0~50%
         [self report:progress * 0.5 message:message];
     }
         completion:^(BOOL success, NSError *error) {
         __strong typeof(weakSelf) self = weakSelf;
-        if (!self) return;
+        if (!self || self.cancelled) return;
+        self.gameInstaller = nil;
         if (!success) { [self failWithError:error]; return; }
         self.versionName = req.versionName;
         [self installFiles];
     }];
+}
+
+#pragma mark - 取消
+
+- (void)cancel {
+    if (self.cancelled || self.completed) return;
+    self.cancelled = YES;
+
+    [A2Logger info:@"A2ModPackInstaller" message:@"用户取消了整合包安装"];
+    [self.gameInstaller cancel];
+    self.gameInstaller = nil;
+    // 不再 cancelAll —— 那会连用户正在跑的其它下载（平台整合包 / 资源）一起掐掉，
+    // 本安装器自身的循环已按 cancelled 逐项退出，在途的那一个文件下完即停。
+
+    // 异步回调，避免在调用方（进度弹窗的取消回调）的同步栈里重入
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+        [self completeWithSuccess:NO error:[self cancelledError]];
+    });
+}
+
+- (NSError *)cancelledError {
+    return [NSError errorWithDomain:A2ModPackErrorDomain
+                               code:A2ModPackErrorCancelled
+                           userInfo:@{NSLocalizedDescriptionKey: @"用户已取消导入"}];
 }
 
 /// 找本地符合整合包要求的版本
@@ -372,6 +447,8 @@ static void A2Main(dispatch_block_t b) {
 
 /// 下载所有文件
 - (void)installFiles {
+    if (self.cancelled) return;
+
     A2ModPackManifest *m = self.manifest;
     if (m.files.count == 0) {
         [self extractOverrides];
@@ -392,7 +469,7 @@ static void A2Main(dispatch_block_t b) {
 
     next = ^{
         __strong typeof(weakSelf) self = weakSelf;
-        if (!self) return;
+        if (!self || self.cancelled) return;
 
         if (index >= total) {
             [self report:0.9 message:[NSString stringWithFormat:@"文件下载完成（%lu 个失败）",
@@ -417,7 +494,7 @@ static void A2Main(dispatch_block_t b) {
         if (file.urls.count == 0 && file.curseForgeProjectID > 0) {
             [self resolveCurseForgeFile:file completion:^(NSArray<NSString *> *urls, NSString *relPath) {
                 __strong typeof(weakSelf) self = weakSelf;
-                if (!self) return;
+                if (!self || self.cancelled) return;
 
                 if (urls.count == 0) {
                     failed++;
@@ -430,6 +507,7 @@ static void A2Main(dispatch_block_t b) {
                 if (relPath.length) file.relativePath = relPath;
                 [self downloadFile:file to:[self destinationPathForFile:file gameDir:gameDir]
                         completion:^(BOOL ok) {
+                    if (self.cancelled) return;
                     if (!ok) failed++;
                     index++;
                     [self reportProgressForIndex:index total:total];
@@ -440,6 +518,7 @@ static void A2Main(dispatch_block_t b) {
         }
 
         [self downloadFile:file to:dest completion:^(BOOL ok) {
+            if (self.cancelled) return;
             if (!ok) failed++;
             index++;
             [self reportProgressForIndex:index total:total];
@@ -541,6 +620,8 @@ static void A2Main(dispatch_block_t b) {
 
 /// 解压 overrides 目录里的文件（原样覆盖，不走下载）
 - (void)extractOverrides {
+    if (self.cancelled) return;
+
     A2ModPackManifest *m = self.manifest;
     NSString *overrides = m.overridesDir ?: @"overrides";
 
@@ -555,6 +636,7 @@ static void A2Main(dispatch_block_t b) {
         if (zip) {
             NSString *prefix = [overrides stringByAppendingString:@"/"];
             for (NSString *entry in zip.entryNames) {
+                if (self.cancelled) return;
                 if (![entry hasPrefix:prefix]) continue;
 
                 NSString *rel = [entry substringFromIndex:prefix.length];
@@ -578,13 +660,25 @@ static void A2Main(dispatch_block_t b) {
 #pragma mark - 收尾
 
 - (void)finish {
+    // 取消与收尾并发时以取消为准 —— 契约是「取消必回 Cancelled」
+    if (self.cancelled) return;
+
     [self report:1.0 message:@"整合包安装完成"];
 
     // 让版本列表刷新
     [A2VersionManager.shared reload];
 
+    [self completeWithSuccess:YES error:nil];
+}
+
+/// completion 的唯一出口 —— 保证只回调一次（取消与正常收尾不会各调一次）。
+- (void)completeWithSuccess:(BOOL)success error:(nullable NSError *)error {
+    if (self.completed) return;
+    self.completed = YES;
+    self.progressBlock = nil;
+
     A2Main(^{
-        if (self.completionBlock) self.completionBlock(YES, nil);
+        if (self.completionBlock) self.completionBlock(success, error);
     });
 }
 
@@ -599,10 +693,9 @@ static void A2Main(dispatch_block_t b) {
 }
 
 - (void)failWithError:(NSError *)error {
+    if (self.cancelled) return;
     [A2Logger error:@"A2ModPackInstaller" message:error.localizedDescription ?: @"安装失败"];
-    A2Main(^{
-        if (self.completionBlock) self.completionBlock(NO, error);
-    });
+    [self completeWithSuccess:NO error:error];
 }
 
 - (NSError *)err:(NSString *)msg {
