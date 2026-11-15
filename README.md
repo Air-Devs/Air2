@@ -5,8 +5,8 @@
 
 Air2 是 [Air-Devs](https://github.com/Air-Devs) 组织的下一代 iOS 启动器项目。
 与 ZL2（Android / Kotlin / Compose）同源设计理念，但面向 iOS 原生技术栈重新实现：
-SwiftUI/UIKit 负责界面与交互，Java 层复用 pojav 系的启动核心与 LWJGL 补丁，
-原生层（Objective-C / C）负责渲染桥接、输入注入与 JIT 环境。
+Objective-C 负责界面、交互与宿主，Java 层复用 pojav 系的启动核心与 LWJGL 补丁，
+原生层（Objective-C / C / Metal）负责渲染桥接、输入注入与 JIT 环境。
 
 ---
 
@@ -31,12 +31,12 @@ SwiftUI/UIKit 负责界面与交互，Java 层复用 pojav 系的启动核心与
 
 | 层 | 技术 | 说明 |
 |---|---|---|
-| UI | SwiftUI（主）+ UIKit（必要的宿主容器） | 面向 iOS 26 液态玻璃，向下兼容 |
-| 宿主 | Objective-C++ | 承载 JVM 生命周期、Metal 层、输入注入 |
-| 业务逻辑 | Swift | 账号、版本管理、下载、设置 |
+| UI | Objective-C + UIKit | 面向 iOS 26 视觉规范，向下兼容 |
+| 宿主 | Objective-C / C | 承载 JVM 生命周期、Metal 层、输入注入 |
+| 业务逻辑 | Objective-C | 账号、版本管理、下载、设置 |
 | 启动核心 | Java（复用 pojav 系） | 类加载、参数拼装、LWJGL 补丁 |
-| 图形 | Metal / MoltenVK / Mesa(kopper) | 渲染后端抽象，多渲染器可选 |
-| 构建 | Xcode + Makefile + CMake | 产物为 `.ipa` |
+| 图形 | MobileGlues / metallum / ANGLE / gl4es | GL→Vulkan→MoltenVK 或 GL→Metal，多后端可选 |
+| 构建 | CMake + ldid（附 Xcode 工程） | 产物为 `.ipa` |
 
 ### 后端来源
 
@@ -56,10 +56,10 @@ Air2 的 pojav 后端（LWJGL 补丁、Java 启动器、GLFW/SDL3 兼容层、Me
 
 ```
 Air2/
-├── Air2.xcodeproj/              # Xcode 工程定义
-├── Air2/                        # iOS 应用主体（Swift）
+├── Air2.xcodeproj/              # Xcode 工程定义（由脚本生成）
+├── Air2/                        # iOS 应用主体（Objective-C）
 │   ├── App/                     # 应用入口、生命周期、根导航
-│   ├── Bridge/                  # Swift ↔ ObjC ↔ JVM 三层桥接
+│   ├── Bridge/                  # ObjC ↔ JVM 桥接
 │   ├── Core/                    # 无 UI 的业务核心
 │   │   ├── Account/             # 账号体系（离线 / Microsoft / Yggdrasil）
 │   │   ├── Version/             # 版本安装、隔离、启动参数
@@ -75,6 +75,7 @@ Air2/
 │   │   └── Theme/               # 配色、字体、动效
 │   ├── Player/                  # 游戏会话与运行时宿主
 │   └── Utils/                   # 通用工具（无业务语义）
+├── Air2JITHelper/               # JIT 辅助扩展
 ├── Natives/                     # Objective-C / C 原生层
 │   ├── Context/                 # JVM 上下文与生命周期
 │   ├── Renderer/                # 渲染桥接（Metal / GL / Vulkan）
@@ -90,6 +91,7 @@ Air2/
 ├── cmake/                       # CMake 模块与工具链
 ├── scripts/                     # 构建与辅助脚本
 ├── docs/                        # 设计文档与决策记录
+├── tests/                       # 单元与集成测试
 └── .github/                     # CI 与 issue 模板
 ```
 
@@ -98,31 +100,26 @@ Air2/
 ## 构建
 
 ```bash
-# 环境要求：Xcode 26.x、iOS 26 SDK、CMake 3.20+、JDK 17
-make bootstrap     # 拉取依赖与子模块
-make natives       # 编译原生层
-make java          # 编译 Java 启动核心
-make package       # 打包 IPA → artifacts/
-```
-
-产物输出至 `artifacts/Air2.ipa`。
-
-### 备用通道：CMake + ldid（不经 xcodebuild）
-
-同一份源码在不依赖 `Air2.xcodeproj` / 证书的情况下也能出包（真机自签迭代用）：
-
-```bash
+# 环境要求：macOS、Xcode 26.x（iOS 26 SDK）、CMake 3.20+、JDK 17+
 cmake -S . -B build/cmake \
   -DCMAKE_TOOLCHAIN_FILE=cmake/toolchain-ios.cmake \
-  -DCMAKE_BUILD_TYPE=Debug
+  -DCMAKE_BUILD_TYPE=Release
 cmake --build build/cmake -j8
-cmake --build build/cmake --target a2-ipa     # → artifacts/Air2-cmake.ipa（ldid ad-hoc 签名）
+cmake --build build/cmake --target a2-ipa     # → artifacts/Air2.ipa（ldid ad-hoc 签名）
+```
+
+产物输出至 `artifacts/Air2.ipa`。JVM 运行时需先跑 `scripts/stage_runtime.sh`。
+
+### 备用通道：Xcode
+
+```bash
+scripts/gen_xcodeproj.py            # 由源清单生成 Air2.xcodeproj
+xcodebuild -project Air2.xcodeproj -scheme Air2 -configuration Release build
 ```
 
 两条通道并存、资源清单一律取自 `scripts/gen_xcodeproj.py`（源文件清单、随包清单各只有
 一份源头，见 `scripts/gen_cmake_sources.py`）。已知差异：CMake 通道不跑 `actool`
-（不产 `Assets.car`，图标走 `CFBundleIconFiles` 的 PNG），JVM 运行时仍需先跑
-`scripts/stage_runtime.sh`。
+（不产 `Assets.car`，图标走 `CFBundleIconFiles` 的 PNG）。
 
 ---
 
@@ -134,6 +131,9 @@ cmake --build build/cmake --target a2-ipa     # → artifacts/Air2-cmake.ipa（l
 | `dev` | 集成分支 |
 | `feat/*` | 功能开发 |
 | `fix/*` | 缺陷修复 |
+| `docs/*` | 文档 |
+
+提交信息遵循 Conventional Commits：`feat(renderer): …`、`fix(input): …`。
 
 ---
 
