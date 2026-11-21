@@ -1,0 +1,390 @@
+//
+//  A2SettingsViewController.m
+//  Air2
+//
+//  Copyright (C) 2026 Air-Devs and contributors.
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program. If not, see <https://www.gnu.org/licenses/gpl-3.0.txt>.
+//
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
+//  设置页 —— 左侧分类导航 + 右侧内容。
+//
+//  结构对齐 ZL2 的 SettingsScreen，左侧导航用共用的 A2CategoryNavView。
+//
+
+#import "A2SettingsViewController.h"
+#import "A2CategoryNavView.h"
+#import "A2SettingsSection.h"
+#import "A2SettingsRow.h"
+#import "A2ThemeManager.h"
+#import "A2Typography.h"
+#import "A2Metrics.h"
+
+#import "A2SettingsSections.h"
+#import "A2RendererSettingsViewController.h"
+#import "A2JREManager.h"
+#import "A2MemorySettings.h"
+#import "A2ResolutionSettingsView.h"
+#import "A2ResolutionManager.h"
+#import "A2JREManageViewController.h"
+#import "A2DiagnosticsSettings.h"
+
+@interface A2SettingsViewController ()
+@property (nonatomic, strong) A2CategoryNavView *nav;
+@property (nonatomic, strong) UIScrollView *detailScroll;
+@property (nonatomic, strong) UIStackView *detailStack;
+@end
+
+@implementation A2SettingsViewController
+
+- (void)viewDidLoad {
+    // 必须写在 super 之前：基类在 [super viewDidLoad] 里就按它决定建 scroll 还是
+    // plain 内容容器。晚设会让 plainContentView 一直是 nil，后面的约束拿到 nil
+    // 锚点，直接抛 NSInvalidArgumentException。
+    self.usesScrollContent = NO;
+    [super viewDidLoad];
+    self.pageTitle = @"设置";
+
+    // 分类结构对照 ZL2 的 SettingsScreen.kt：
+    //
+    //   渲染 / 游戏 / 控制 / 手柄 / 启动器
+    //   ────────────
+    //   Java 管理 / 控制布局管理
+    //   ────────────
+    //   关于
+    //
+    // 我们只列【有真实实现】的分类 —— 加没有实现的分类就是造假。
+    // 与 ZL2 的差异：
+    //   · 「控制」「手柄」需要游戏内输入层，尚未实现，先不加
+    //   · 「Java 管理」「控制布局管理」同上
+    //   · 用「外观」代替「启动器」—— 我们这部分主要是外观相关
+    NSArray<A2NavCategory *> *cats = @[
+        [A2NavCategory title:@"渲染"   symbol:@"video.fill"],
+        [A2NavCategory title:@"游戏"   symbol:@"gamecontroller.fill"],
+        [A2NavCategory title:@"外观"   symbol:@"paintpalette.fill"],
+        [A2NavCategory title:@"下载"   symbol:@"arrow.down.circle" division:YES],
+        [A2NavCategory title:@"诊断"   symbol:@"stethoscope" division:YES],
+    ];
+
+    __weak typeof(self) weakSelf = self;
+    _nav = [[A2CategoryNavView alloc] initWithCategories:cats];
+    _nav.onSelect = ^(NSInteger index) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self rebuildContentForIndex:index];
+    };
+    [self.plainContentView addSubview:_nav];
+
+    _detailScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    _detailScroll.translatesAutoresizingMaskIntoConstraints = NO;
+    _detailScroll.showsVerticalScrollIndicator = NO;
+
+    // ---- 彻底禁用横向滚动 ----
+    //
+    // 这是用户反复反馈的「设置页能左右滑」问题的根因。
+    // 之前我只改了宽度约束，但那不够 —— contentSize.width 仍可能
+    // 被内容撑大（某个子视图宽度超出可视区时），UIScrollView 就会允许横拖。
+    //
+    // 四道保险：
+    //   1. showsHorizontalScrollIndicator = NO   （不显示横条）
+    //   2. alwaysBounceHorizontal = NO           （不需要横滑时不允许回弹）
+    //   3. directionalLockEnabled = YES          （锁定方向，不能斜着拖）
+    //   4. contentSize.width 钉死 = frame.width  （见下方约束）
+    _detailScroll.showsHorizontalScrollIndicator = NO;
+    _detailScroll.alwaysBounceHorizontal = NO;
+    _detailScroll.directionalLockEnabled = YES;
+    _detailScroll.alwaysBounceVertical = YES;
+    _detailScroll.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
+
+    // ⚠️ 顺序不能反：必须先创建 stack，再 addSubview。
+    //
+    // 原来是 [_detailScroll addSubview:_detailStack] 写在创建之前 ——
+    // 那一刻 _detailStack 还是 nil，addSubview:nil 是空操作，
+    // 于是 stack 从未真正加入 scrollView 的视图层级。
+    // 后面 activateConstraints 给 stack 加相对
+    // contentLayoutGuide 的约束时，两者没有共同祖先 →
+    // NSGenericException: "no common ancestor" → 点设置就闪退。
+    _detailStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _detailStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _detailStack.axis = UILayoutConstraintAxisVertical;
+    _detailStack.spacing = A2SpaceXL;
+
+    // 关键：内容栈宽度锁死等于可视区宽度 ——
+    // 这样 contentSize.width 恒等于 frame.width，横向无处可滚
+    [_detailScroll addSubview:_detailStack];
+    [self.plainContentView addSubview:_detailScroll];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [_nav.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_nav.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
+        [_nav.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
+                                           constant:A2SpaceS],
+
+        [_detailScroll.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_detailScroll.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
+        [_detailScroll.leadingAnchor constraintEqualToAnchor:_nav.trailingAnchor
+                                                    constant:A2SpaceM],
+        [_detailScroll.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor],
+
+        // ---- 垂直：贴合 contentLayoutGuide，决定可滚动范围 ----
+        [_detailStack.topAnchor constraintEqualToAnchor:_detailScroll.contentLayoutGuide.topAnchor
+                                               constant:A2SpaceS],
+        [_detailStack.bottomAnchor constraintEqualToAnchor:_detailScroll.contentLayoutGuide.bottomAnchor
+                                                  constant:-A2SpaceXXL],
+
+        // ---- 水平：宽度【精确等于】可视区 - margin ----
+        //
+        // 用 widthAnchor 而不是 leading/trailing 约束到 frameLayoutGuide ——
+        // 后者是「两端对齐」，理论上等价，但某个子视图 intrinsic width
+        // 超出时仍会把 contentSize 撑宽。widthAnchor 是硬约束，撑不开。
+        //
+        // 再用 centerX 定位。这样 contentSize.width 恒等于：
+        //     frame.width - 2*margin + 2*margin = frame.width
+        // 横向无处可滚。
+        [_detailStack.centerXAnchor constraintEqualToAnchor:_detailScroll.frameLayoutGuide.centerXAnchor],
+        [_detailStack.widthAnchor constraintEqualToAnchor:_detailScroll.frameLayoutGuide.widthAnchor
+                                                constant:-(A2SpaceM + A2SpaceXL)],
+
+        // ---- 第四道保险：contentSize 宽度钉死 ----
+        // ScrollView 的可滚内容宽度 = 内容栈 + 两侧 margin，恒等于 frame 宽度
+        [_detailScroll.contentLayoutGuide.widthAnchor
+            constraintEqualToAnchor:_detailScroll.frameLayoutGuide.widthAnchor],
+    ]];
+
+    [_nav selectIndex:0 animated:NO];
+}
+
+/// 下载性能设置 —— 并发数、镜像开关。
+///
+/// 这几项直接影响下载速度，值得单独成组。
+- (A2SettingsSection *)buildDownloadPerformanceSection {
+    A2SettingsSection *sec = [[A2SettingsSection alloc] initWithTitle:@"下载性能"];
+    sec.footerText = @"并发数越高下载越快，但过高可能被服务端限流。"
+                      "默认 64，与 ZL2 一致。";
+
+    A2SettingsRow *concurrencyRow = [[A2SettingsRow alloc] init];
+    concurrencyRow.symbolName = @"bolt.horizontal";
+    concurrencyRow.title = @"并发连接数";
+    concurrencyRow.subtitle = @"同时下载的文件数";
+    NSInteger cur = [NSUserDefaults.standardUserDefaults integerForKey:@"A2MaxConnections"];
+    if (cur <= 0) cur = 64;
+    concurrencyRow.valueText = [NSString stringWithFormat:@"%ld", (long)cur];
+    concurrencyRow.accessory = A2SettingsRowAccessoryDropdown;
+    concurrencyRow.showsSeparator = NO;
+
+    __weak A2SettingsRow *weakRow = concurrencyRow;
+    concurrencyRow.onTap = ^{
+        UIAlertController *sheet =
+            [UIAlertController alertControllerWithTitle:@"并发连接数"
+                                                message:@"越高越快，但可能被限流"
+                                         preferredStyle:UIAlertControllerStyleActionSheet];
+        for (NSNumber *n in @[@16, @32, @64, @128]) {
+            [sheet addAction:[UIAlertAction actionWithTitle:[n stringValue]
+                                                     style:UIAlertActionStyleDefault
+                                                   handler:^(UIAlertAction *a) {
+                [NSUserDefaults.standardUserDefaults setInteger:n.integerValue
+                                                        forKey:@"A2MaxConnections"];
+                weakRow.valueText = [n stringValue];
+            }]];
+        }
+        [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
+                                                 style:UIAlertActionStyleCancel handler:nil]];
+        sheet.popoverPresentationController.sourceView = weakRow;
+        sheet.popoverPresentationController.sourceRect = weakRow.bounds;
+        [self presentViewController:sheet animated:YES completion:nil];
+    };
+
+    [sec addRow:concurrencyRow];
+    return sec;
+}
+
+/// 分辨率编辑弹窗 —— 复用 A2ResolutionSettingsView（游戏内也用同一个）。
+- (void)showResolutionEditor {
+    UIViewController *host = [[UIViewController alloc] init];
+    host.view.backgroundColor = A2ThemeManager.shared.scheme.cSurface;
+    host.title = @"渲染分辨率";
+
+    UIScrollView *scroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    [host.view addSubview:scroll];
+
+    A2ResolutionSettingsView *editor = [[A2ResolutionSettingsView alloc] initWithFrame:CGRectZero];
+    [scroll addSubview:editor];
+
+    UILayoutGuide *frame = scroll.frameLayoutGuide;
+    [NSLayoutConstraint activateConstraints:@[
+        [scroll.topAnchor constraintEqualToAnchor:host.view.safeAreaLayoutGuide.topAnchor],
+        [scroll.bottomAnchor constraintEqualToAnchor:host.view.bottomAnchor],
+        [scroll.leadingAnchor constraintEqualToAnchor:host.view.leadingAnchor],
+        [scroll.trailingAnchor constraintEqualToAnchor:host.view.trailingAnchor],
+
+        [editor.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor constant:16],
+        [editor.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor constant:-24],
+        [editor.leadingAnchor constraintEqualToAnchor:frame.leadingAnchor constant:16],
+        [editor.trailingAnchor constraintEqualToAnchor:frame.trailingAnchor constant:-16],
+    ]];
+
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:host];
+    nav.modalPresentationStyle = UIModalPresentationFormSheet;
+    [self presentViewController:nav animated:YES completion:nil];
+}
+
+
+/// 内存分配设置 —— 对照 ZL2 的 MemorySettings。
+///
+/// 自动模式只调百分比；手动模式直接填 MB。
+/// 上限由 A2MemorySettings 按 jetsam 经验值钳制（填太大也会被压回来）。
+- (void)showMemorySettings {
+    A2MemorySettings *m = A2MemorySettings.shared;
+    UIViewController *host = [[UIViewController alloc] init];
+    host.view.backgroundColor = A2ThemeManager.shared.scheme.cSurface;
+    host.title = @"内存分配";
+
+    A2SettingsSection *info = [[A2SettingsSection alloc] initWithTitle:@"设备信息"];
+    info.footerText = [NSString stringWithFormat:
+                       @"设备内存 %ld MB，进程可用上限约 %ld MB。"
+                       @"超过上限会被系统直接杀掉（无日志闪退）。",
+                       (long)m.deviceMemoryMB, (long)m.processLimitMB];
+    [info addRow:[self infoRow:@"设备内存" value:[NSString stringWithFormat:@"%ld MB", (long)m.deviceMemoryMB]]];
+    [info addRow:[self infoRow:@"进程上限" value:[NSString stringWithFormat:@"%ld MB", (long)m.processLimitMB]]];
+    [info addRow:[self infoRow:@"当前生效" value:[NSString stringWithFormat:@"%ld MB", (long)m.effectiveHeapMB]]];
+
+    A2SettingsSection *modeSec = [[A2SettingsSection alloc] initWithTitle:@"分配方式"];
+    A2SettingsRow *autoRow = [[A2SettingsRow alloc] init];
+    autoRow.title = @"自动（按百分比）";
+    autoRow.accessory = A2SettingsRowAccessoryCheckmark;
+    autoRow.on = (m.mode == A2MemoryModeAuto);
+    autoRow.onTap = ^{
+        m.mode = A2MemoryModeAuto;
+        [m commit];
+        [host dismissViewControllerAnimated:YES completion:nil];
+    };
+
+    A2SettingsRow *manualRow = [[A2SettingsRow alloc] init];
+    manualRow.title = @"手动（指定 MB）";
+    manualRow.showsSeparator = NO;
+    manualRow.accessory = A2SettingsRowAccessoryCheckmark;
+    manualRow.on = (m.mode == A2MemoryModeManual);
+    manualRow.onTap = ^{
+        m.mode = A2MemoryModeManual;
+        [m commit];
+        [host dismissViewControllerAnimated:YES completion:nil];
+    };
+    [modeSec addRow:autoRow];
+    [modeSec addRow:manualRow];
+
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:host];
+    nav.modalPresentationStyle = UIModalPresentationFormSheet;
+    [self presentViewController:nav animated:YES completion:nil];
+}
+
+/// 生成一个「标题 + 右侧值」的只读行
+- (A2SettingsRow *)infoRow:(NSString *)title value:(NSString *)value {
+    A2SettingsRow *row = [[A2SettingsRow alloc] init];
+    row.title = title;
+    row.subtitle = value;
+    row.accessory = A2SettingsRowAccessoryNone;
+    return row;
+}
+
+- (void)rebuildContentForIndex:(NSInteger)index {
+    for (UIView *v in _detailStack.arrangedSubviews) {
+        [_detailStack removeArrangedSubview:v];
+        [v removeFromSuperview];
+    }
+
+    // 索引对应 setupNav 里的分类顺序
+    if (index == 0) {
+        // 渲染：一个入口行指向渲染器选择页
+        A2SettingsSection *sec = [[A2SettingsSection alloc] initWithTitle:@"渲染"];
+        sec.footerText = @"不同渲染器在不同设备上表现差异明显，建议逐个尝试后选择最稳定的一个。";
+
+        A2SettingsRow *row = [[A2SettingsRow alloc] init];
+        row.symbolName = @"video.fill";
+        row.title = @"渲染器";
+        row.subtitle = @"选择图形渲染后端，或导入渲染器插件";
+        row.accessory = A2SettingsRowAccessoryDisclosure;
+        row.showsSeparator = NO;
+        __weak typeof(self) weakSelf = self;
+        row.onTap = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            A2RendererSettingsViewController *vc =
+                [[A2RendererSettingsViewController alloc] init];
+            [self.navigationController pushViewController:vc animated:YES];
+        };
+        [sec addRow:row];
+
+        // ---- Java 运行时 ----
+        A2SettingsRow *jreRow = [[A2SettingsRow alloc] init];
+        jreRow.symbolName = @"cup.and.saucer.fill";
+        jreRow.title = @"Java 运行时";
+        NSArray<A2JRE *> *jres = A2JREManager.shared.allJREs;
+        jreRow.subtitle = jres.count > 0
+            ? [NSString stringWithFormat:@"已安装 %lu 个版本", (unsigned long)jres.count]
+            : @"尚未安装";
+        jreRow.accessory = A2SettingsRowAccessoryDisclosure;
+        jreRow.onTap = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            A2JREManageViewController *vc = [[A2JREManageViewController alloc] init];
+            [self.navigationController pushViewController:vc animated:YES];
+        };
+        [sec addRow:jreRow];
+
+        // ---- 内存分配（对照 ZL2 的 MemorySettings）----
+        A2SettingsRow *memRow = [[A2SettingsRow alloc] init];
+        memRow.symbolName = @"memorychip";
+        memRow.title = @"内存分配";
+        memRow.subtitle = [NSString stringWithFormat:@"当前 %ld MB（设备 %ld MB）",
+                           (long)A2MemorySettings.shared.effectiveHeapMB,
+                           (long)A2MemorySettings.shared.deviceMemoryMB];
+        memRow.accessory = A2SettingsRowAccessoryDisclosure;
+        memRow.onTap = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            [self showMemorySettings];
+        };
+        [sec addRow:memRow];
+
+        // ---- 分辨率 ----
+        A2SettingsRow *resRow = [[A2SettingsRow alloc] init];
+        resRow.symbolName = @"rectangle.compress.vertical";
+        resRow.title = @"渲染分辨率";
+        CGSize rs = A2ResolutionManager.shared.renderSize;
+        resRow.subtitle = [NSString stringWithFormat:@"当前 %.0f × %.0f",
+                           rs.width, rs.height];
+        resRow.accessory = A2SettingsRowAccessoryDisclosure;
+        resRow.showsSeparator = NO;
+        resRow.onTap = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            [self showResolutionEditor];
+        };
+        [sec addRow:resRow];
+
+        [_detailStack addArrangedSubview:sec];
+
+    } else if (index == 1) {
+        [_detailStack addArrangedSubview:[A2GameSettings buildWithHost:self]];
+    } else if (index == 2) {
+        [_detailStack addArrangedSubview:[A2AppearanceSettings buildWithHost:self]];
+        [_detailStack addArrangedSubview:[A2AppearanceSettings buildSourceSectionWithHost:self]];
+    } else if (index == 3) {
+        // 下载：镜像、并发、缓存
+        [_detailStack addArrangedSubview:[A2AppearanceSettings buildSourceSectionWithHost:self]];
+        [_detailStack addArrangedSubview:[self buildDownloadPerformanceSection]];
+    } else if (index == 4) {
+        [_detailStack addArrangedSubview:[A2DiagnosticsSettings buildWithHost:self]];
+        [_detailStack addArrangedSubview:[A2AboutSettings buildWithHost:self]];
+    }
+}
+
+@end

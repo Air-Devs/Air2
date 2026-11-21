@@ -1,0 +1,125 @@
+//
+//  A2Settings.h
+//  Air2
+//
+//  Copyright (C) 2026 Air-Devs and contributors.
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program. If not, see <https://www.gnu.org/licenses/gpl-3.0.txt>.
+//
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
+//  全局设置注册表 —— 启动器设置存 Documents/config.json，唯一读写点。
+//
+//  为什么需要：
+//    设置曾散在各处的裸 key 里，每加一个设置要改多处，
+//    且默认值/类型无人收敛（ZL2 用 AllSettings + SettingsRegistry 收敛了
+//    同一问题，这里学它的设计决策，用 ObjC 重写，不照抄实现）。
+//
+//  约束：
+//    · 只 import Foundation，保持 Core 不依赖 UIKit（CI 会查）。
+//    · 只存 Foundation 类型，不 import Addons 头文件，避免
+//      Settings ↔ Addons 循环依赖；枚举以 NSInteger 传递，调用方转换。
+//    · Key 与旧实现完全一致，老用户升级不丢值。
+//
+
+#import <Foundation/Foundation.h>
+
+NS_ASSUME_NONNULL_BEGIN
+
+/// 设置变更通知。userInfo 带 A2SettingsChangedKeyKey = 变更的 key。
+FOUNDATION_EXPORT NSNotificationName const A2SettingsDidChangeNotification;
+FOUNDATION_EXPORT NSString *const A2SettingsChangedKeyKey;
+
+/// 全部托管 key（与历史 key 一致，保证迁移无损）。
+/// A2SettingsKeyVersionIsolation 是旧的布尔开关，仅用于迁移，不再写入新值。
+FOUNDATION_EXPORT NSString *const A2SettingsKeyVersionIsolation;
+FOUNDATION_EXPORT NSString *const A2SettingsKeyVersionIsolationMode;
+FOUNDATION_EXPORT NSString *const A2SettingsKeySkipIntegrityCheck;
+FOUNDATION_EXPORT NSString *const A2SettingsKeyRAMAllocationMB;
+FOUNDATION_EXPORT NSString *const A2SettingsKeyRenderer;
+FOUNDATION_EXPORT NSString *const A2SettingsKeyPreferredContentPlatform;
+FOUNDATION_EXPORT NSString *const A2SettingsKeyMirrorPriority;
+FOUNDATION_EXPORT NSString *const A2SettingsKeyMirrorEnabled;
+FOUNDATION_EXPORT NSString *const A2SettingsKeyCurrentAccountID;
+FOUNDATION_EXPORT NSString *const A2SettingsKeyCurrentVersionName;
+FOUNDATION_EXPORT NSString *const A2SettingsKeyAutoLogin;
+
+/// 内容平台取值（对应 A2ContentPlatform，存 NSInteger 避免跨层 import）。
+static const NSInteger A2SettingsPlatformModrinth = 0;
+static const NSInteger A2SettingsPlatformCurseForge = 1;
+
+/// 版本隔离档位取值（对应 A2IsolationMode，存 NSInteger 避免跨层 import）。
+static const NSInteger A2SettingsIsolationNone = 0;
+static const NSInteger A2SettingsIsolationMod  = 1;
+static const NSInteger A2SettingsIsolationFull = 2;
+
+/// 镜像优先级取值（对应 A2MirrorPriority）。
+static const NSInteger A2SettingsMirrorOfficialFirst = 0;
+static const NSInteger A2SettingsMirrorFirst = 1;
+
+/// RAM 下限（对应 ZL2 ramAllocation min = 256，避免配出开不了的值）。
+static const NSInteger A2SettingsMinRAMMB = 256;
+
+@interface A2Settings : NSObject
+
++ (instancetype)shared;
+
+/// 重读 config.json（文件被外部改动后同步内存值）。
+- (void)reloadAll;
+
+/// 清掉全部托管 key，回到默认值（注销/恢复默认用）。
+- (void)resetAllToDefaults;
+
+/// 读布尔设置（缺 key 或类型不符时返回 def）。允许读未登记 key（如联机用 terracottaEnabled）。
+/// 与内部私有 helper `boolForKey:defaultValue:` 同语义，对外暴露短名以匹配调用方。
+- (BOOL)boolForKey:(NSString *)key default:(BOOL)def;
+
+/// 写布尔设置（写穿透到 config.json 并 post A2SettingsDidChangeNotification）。
+- (void)setBool:(BOOL)value forKey:(NSString *)key;
+
+/// 全局版本隔离档位（见上方取值常量）。默认「仅 Mod」。
+/// 旧版本用的是布尔开关 A2SettingsKeyVersionIsolation，读取时自动迁移：
+/// 开过隔离 → 全部，其余 → 仅 Mod。
+@property (nonatomic, assign) NSInteger versionIsolationMode;
+
+/// 全局跳过完整性检查。默认 NO。
+@property (nonatomic, assign) BOOL skipIntegrityCheck;
+
+/// 全局内存分配（MB）。默认 2048，写入时钳到 >= 256。
+@property (nonatomic, assign) NSInteger ramAllocationMB;
+
+/// 全局渲染器标识。默认 nil（未选择）。
+@property (nonatomic, copy, nullable) NSString *renderer;
+
+/// 首选资源平台（见上方取值常量）。默认 Modrinth。
+@property (nonatomic, assign) NSInteger preferredContentPlatform;
+
+/// 镜像优先级（见上方取值常量）。默认官方优先。
+@property (nonatomic, assign) NSInteger mirrorPriority;
+
+/// 是否允许镜像。默认 YES（是否真正生效还看网络检测）。
+@property (nonatomic, assign) BOOL mirrorEnabled;
+
+/// 当前账号 uniqueID。默认 nil。
+@property (nonatomic, copy, nullable) NSString *currentAccountID;
+
+/// 当前版本名。默认 nil。
+@property (nonatomic, copy, nullable) NSString *currentVersionName;
+
+/// 启动时自动登录（校验/续期当前账号凭据）。默认 YES。
+@property (nonatomic, assign) BOOL autoLogin;
+
+@end
+
+NS_ASSUME_NONNULL_END

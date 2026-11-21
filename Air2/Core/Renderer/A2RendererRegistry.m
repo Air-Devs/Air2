@@ -1,0 +1,408 @@
+//
+//  A2RendererRegistry.m
+//  Air2
+//
+//  Copyright (C) 2026 Air-Devs and contributors.
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program. If not, see <https://www.gnu.org/licenses/gpl-3.0.txt>.
+//
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
+//
+//
+//  A2RendererRegistry.m
+//  Air2
+//
+
+#import "A2RendererRegistry.h"
+#import "A2RendererImporter.h"
+#import "A2RendererLoader.h"
+#import "A2Logger.h"
+
+static NSString *const kSelectedRendererKey = @"A2SelectedRendererID";
+
+@implementation A2RendererEntry
+
+- (A2RendererAvailability)availability {
+    return self.plugin ? self.plugin.availability : A2RendererAvailabilityAvailable;
+}
+
+- (NSString *)unavailableReason {
+    return self.plugin.unavailableReason;
+}
+
+- (BOOL)hasConfigurableOptions {
+    if (!self.plugin) return NO;
+    for (A2RendererEnvSpec *spec in self.plugin.envSpecs) {
+        if (spec.type != A2RendererEnvTypeNormal) return YES;
+    }
+    return NO;
+}
+
+@end
+
+@interface A2RendererRegistry ()
+@property (nonatomic, copy) NSArray<A2RendererEntry *> *allRenderers;
+@end
+
+@implementation A2RendererRegistry
+
++ (instancetype)shared {
+    static A2RendererRegistry *shared = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        shared = [[A2RendererRegistry alloc] init];
+    });
+    return shared;
+}
+
+- (instancetype)init {
+    self = [super init];
+    if (!self) return nil;
+    _allRenderers = @[];
+    [self reload];
+
+    // 插件变化时自动重新合并 —— 任何地方导入插件后注册表都是最新的，
+    // 调用方不用手动 reload
+    [NSNotificationCenter.defaultCenter addObserverForName:A2RendererPluginsDidChangeNotification
+                                                    object:nil
+                                                     queue:NSOperationQueue.mainQueue
+                                                usingBlock:^(NSNotification *note) {
+        (void)note;
+        [A2RendererRegistry.shared reload];
+    }];
+    return self;
+}
+
+#pragma mark - 扫描
+
+- (void)reload {
+    NSMutableArray<A2RendererEntry *> *list = [NSMutableArray array];
+
+    // ---- 1. 内置渲染器 ----
+    // 这些是编译进 IPA 的，与 Air1 的做法一致。
+    // 实际的库路径在启动时由 CMake 产物决定，这里只登记元信息。
+    [list addObjectsFromArray:[self builtinRenderers]];
+
+    // ---- 2. 导入的插件 ----
+    NSArray<A2RendererPlugin *> *plugins = [A2RendererImporter.shared installedPlugins];
+    for (A2RendererPlugin *p in plugins) {
+        A2RendererEntry *e = [A2RendererEntry new];
+        e.identifier = p.rendererID;
+        e.displayName = p.displayName;
+        e.summary = p.pluginDescription;
+        e.builtin = NO;
+        e.sourceName = p.author ?: @"导入插件";
+        e.plugin = p;
+        e.minMCVer = p.minMCVer;
+        e.maxMCVer = p.maxMCVer;
+        [list addObject:e];
+    }
+
+    self.allRenderers = list;
+
+    [A2Logger info:@"A2RendererRegistry"
+           message:[NSString stringWithFormat:@"共 %lu 个渲染器（内置 %lu + 插件 %lu）",
+                    (unsigned long)list.count,
+                    (unsigned long)[self builtinRenderers].count,
+                    (unsigned long)plugins.count]];
+}
+
+/// 内置渲染器 —— 按 bundle 里【实际存在】的 dylib 列出。
+///
+/// ## 之前的两个错误
+///
+/// **1. 文件名对不上**
+///   注册表找的是 libnggl4es.dylib / libzink.dylib / libMobileGlues.dylib，
+///   而仓库里实际是 libgl4es_114.dylib / libMobileGL.dylib /
+///   libOSMesa.8.dylib / libvirgl_test_server.dylib。
+///   → 一个都匹配不上 → 列表永远是空的。
+///
+/// **2. 路径查找方式不对**
+///   pathForAuxiliaryExecutable: 在 iOS 上按 macOS 的 bundle 布局找
+///   （Contents/Frameworks、Frameworks.framework），
+///   而 CI 是把 dylib 直接放进 Air2.app/Frameworks/ 的。
+///   改成显式拼 bundlePath/Frameworks/。
+///
+/// ## 渲染器与库的对应关系（按实际产物）
+///
+///   MobileGL   → libMobileGL.dylib          GL+EGL 同一库（combined）
+///   MobileGL   → libMobileGL-gles.dylib     同上，GLES 变体
+///   OSMesa     → libOSMesa.8.dylib          离屏渲染（配 libSDL3）
+///   GL4ES      → libgl4es_114.dylib         老版本兼容
+///   VirGL      → libvirgl_test_server.dylib 虚拟化 GL
+///   Zink       → libvulkan.1.dylib + libMoltenVK.dylib
+///                                            Vulkan 后端，需要 Metal-Vulkan 层
+- (NSArray<A2RendererEntry *> *)builtinRenderers {
+    NSMutableArray<A2RendererEntry *> *list = [NSMutableArray array];
+
+    struct {
+        const char *ident;
+        const char *name;
+        const char *libName;      ///< 关键库（决定是否存在）
+        const char *extraLib;     ///< 可选：第二个必需库
+        const char *summary;
+        const char *minMC;
+    } builtins[] = {
+        { "builtin.mobilegl", "MobileGL", "libMobileGL.dylib", NULL,
+          "Metal 原生 GL 转译，性能最优", "1.17" },
+        { "builtin.zink",     "Zink",     "libvulkan.1.dylib", "libMoltenVK.dylib",
+          "Vulkan 后端，经 MoltenVK 转 Metal", "1.17" },
+        { "builtin.gl4es",    "GL4ES",    "libgl4es_114.dylib", NULL,
+          "GL4ES 增强版，兼容性最好，适合老版本", "1.7" },
+        { "builtin.osmesa",   "OSMesa",   "libOSMesa.8.dylib", "libSDL3.dylib",
+          "离屏渲染 + SDL3 呈现，兼容性兜底", "1.7" },
+        { "builtin.virgl",    "VirGL",    "libvirgl_test_server.dylib", NULL,
+          "虚拟化 GL，适合调试", "1.7" },
+    };
+
+    for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); i++) {
+        NSString *libName = [NSString stringWithUTF8String:builtins[i].libName];
+        NSString *path = [self bundleFrameworkPath:libName];
+
+        if (!path) {
+            [A2Logger debug:@"A2RendererRegistry"
+                    message:[NSString stringWithFormat:@"跳过 %@：bundle 里没有 %@",
+                             [NSString stringWithUTF8String:builtins[i].name], libName]];
+            continue;
+        }
+
+        // 有第二个必需库时也要检查（例如 Zink 需要 MoltenVK）
+        if (builtins[i].extraLib) {
+            NSString *extra = [NSString stringWithUTF8String:builtins[i].extraLib];
+            if (![self bundleFrameworkPath:extra]) {
+                [A2Logger debug:@"A2RendererRegistry"
+                        message:[NSString stringWithFormat:@"跳过 %@：缺 %@",
+                                 [NSString stringWithUTF8String:builtins[i].name], extra]];
+                continue;
+            }
+        }
+
+        A2RendererEntry *e = [A2RendererEntry new];
+        e.identifier = [NSString stringWithUTF8String:builtins[i].ident];
+        e.displayName = [NSString stringWithUTF8String:builtins[i].name];
+        e.summary = [NSString stringWithUTF8String:builtins[i].summary];
+        e.builtin = YES;
+        e.minMCVer = [NSString stringWithUTF8String:builtins[i].minMC];
+        [list addObject:e];
+
+        [A2Logger info:@"A2RendererRegistry"
+               message:[NSString stringWithFormat:@"发现渲染器 %@（%@）",
+                        e.displayName, path.lastPathComponent]];
+    }
+
+    return list;
+}
+
+/// 在 bundle 里找一个 dylib。
+///
+/// 不用 pathForAuxiliaryExecutable: —— 它在 iOS 上按 macOS 布局找，
+/// 而我们是把 dylib 直接放在 Air2.app/Frameworks/。
+- (NSString *)bundleFrameworkPath:(NSString *)name {
+    NSBundle *b = NSBundle.mainBundle;
+
+    // 1. Air2.app/Frameworks/xxx.dylib（CI 的注入位置）
+    NSString *p = [[b.bundlePath stringByAppendingPathComponent:@"Frameworks"]
+                   stringByAppendingPathComponent:name];
+    if ([NSFileManager.defaultManager fileExistsAtPath:p]) return p;
+
+    // 2. Air2.app/xxx.dylib（如果打包时平铺了）
+    p = [b.bundlePath stringByAppendingPathComponent:name];
+    if ([NSFileManager.defaultManager fileExistsAtPath:p]) return p;
+
+    // 3. 兜底：bundle 资源目录
+    p = [b.resourcePath stringByAppendingPathComponent:name];
+    if ([NSFileManager.defaultManager fileExistsAtPath:p]) return p;
+
+    return nil;
+}
+
+#pragma mark - 查询
+
+- (NSArray<A2RendererEntry *> *)availableRenderers {
+    NSMutableArray *out = [NSMutableArray array];
+    for (A2RendererEntry *e in self.allRenderers) {
+        if (e.availability == A2RendererAvailabilityAvailable) [out addObject:e];
+    }
+    return out;
+}
+
+- (A2RendererEntry *)rendererWithIdentifier:(NSString *)identifier {
+    for (A2RendererEntry *e in self.allRenderers) {
+        if ([e.identifier isEqualToString:identifier]) return e;
+    }
+    return nil;
+}
+
+- (NSString *)selectedIdentifier {
+    NSString *saved = [NSUserDefaults.standardUserDefaults stringForKey:kSelectedRendererKey];
+    if (saved.length > 0) return saved;
+    // 默认选第一个可用的
+    return self.availableRenderers.firstObject.identifier;
+}
+
+- (void)setSelectedIdentifier:(NSString *)selectedIdentifier {
+    [NSUserDefaults.standardUserDefaults setObject:selectedIdentifier
+                                            forKey:kSelectedRendererKey];
+}
+
+#pragma mark - 版本兼容
+
+/// 简单的版本比较：把 "1.21.4" 拆成数字元组。
+/// 不追求语义化版本的完整语义 —— MC 版本就是三段数字。
+- (BOOL)renderer:(A2RendererEntry *)renderer supportsMCVersion:(NSString *)version {
+    if (version.length == 0) return YES;
+    if (renderer.minMCVer.length == 0 && renderer.maxMCVer.length == 0) return YES;
+
+    if (renderer.minMCVer.length &&
+        [self compareVersion:version to:renderer.minMCVer] == NSOrderedAscending) {
+        return NO;
+    }
+    if (renderer.maxMCVer.length &&
+        [self compareVersion:version to:renderer.maxMCVer] == NSOrderedDescending) {
+        return NO;
+    }
+    return YES;
+}
+
+- (NSComparisonResult)compareVersion:(NSString *)a to:(NSString *)b {
+    NSArray *pa = [a componentsSeparatedByString:@"."];
+    NSArray *pb = [b componentsSeparatedByString:@"."];
+    NSUInteger n = MAX(pa.count, pb.count);
+    for (NSUInteger i = 0; i < n; i++) {
+        NSInteger va = (i < pa.count) ? [pa[i] integerValue] : 0;
+        NSInteger vb = (i < pb.count) ? [pb[i] integerValue] : 0;
+        if (va < vb) return NSOrderedAscending;
+        if (va > vb) return NSOrderedDescending;
+    }
+    return NSOrderedSame;
+}
+
+#pragma mark - 环境变量
+
+/// 把 manifest 里的 env 规约 + 用户设置，展开成实际要设的环境变量。
+///
+/// 这是「配置驱动」的核心：渲染器作者只写声明，
+/// 用户的选择存在 UserDefaults，启动时在这里合成。
+- (NSDictionary<NSString *, NSString *> *)environmentForRenderer:(A2RendererEntry *)renderer {
+    NSMutableDictionary<NSString *, NSString *> *env = [NSMutableDictionary dictionary];
+
+    if (!renderer.plugin) return env;   // 内置渲染器的 env 写死在启动逻辑里
+
+    // 读该插件的用户设置
+    NSString *prefix = [NSString stringWithFormat:@"RenderEnv.%@.", renderer.identifier];
+    NSDictionary *all = NSUserDefaults.standardUserDefaults.dictionaryRepresentation;
+    NSMutableDictionary<NSString *, id> *mine = [NSMutableDictionary dictionary];
+    for (NSString *key in all) {
+        if (![key hasPrefix:prefix]) continue;
+        mine[[key substringFromIndex:prefix.length]] = all[key];
+    }
+
+    for (A2RendererEnvSpec *spec in renderer.plugin.envSpecs) {
+        NSString *v = [spec resolvedValueWithUserSettings:mine];
+        if (v.length) env[spec.key] = v;
+    }
+
+    return env;
+}
+
+#pragma mark - 启动流程入口
+
+- (A2RendererHandle *)prepareRendererForMCVersion:(NSString *)mcVersion
+                                            error:(NSError **)error {
+
+    NSString *ident = self.selectedIdentifier;
+    A2RendererEntry *entry = [self rendererWithIdentifier:ident];
+
+    if (!entry) {
+        if (error) {
+            *error = [self err:@"没有选择渲染器"];
+        }
+        return nil;
+    }
+
+    // ---- 1. 可用性 ----
+    if (entry.availability != A2RendererAvailabilityAvailable) {
+        if (error) {
+            *error = [self err:(entry.unavailableReason ?: @"渲染器不可用")];
+        }
+        return nil;
+    }
+
+    // ---- 2. 版本兼容 ----
+    if (![self renderer:entry supportsMCVersion:mcVersion]) {
+        if (error) {
+            NSString *range = [NSString stringWithFormat:@"%@ ~ %@",
+                               entry.minMCVer ?: @"不限", entry.maxMCVer ?: @"不限"];
+            *error = [self err:[NSString stringWithFormat:
+                @"%@ 不支持游戏版本 %@（支持范围：%@）",
+                entry.displayName, mcVersion, range]];
+        }
+        return nil;
+    }
+
+    // ---- 3. 环境变量 + 加载 ----
+    NSDictionary<NSString *, NSString *> *env = [self environmentForRenderer:entry];
+    A2RendererLoader *loader = [A2RendererLoader new];
+
+    if (entry.plugin) {
+        return [loader loadPlugin:entry.plugin environment:env error:error];
+    }
+
+    // 内置渲染器：库路径按约定拼
+    //
+    // 约定：内置库放在 Air2.app/Frameworks/ 下，文件名与标识对应。
+    // 具体路径在启动流程实现时确认（CMake 产物名决定）。
+    NSString *glName = [self builtinGLNameForEntry:entry];
+    if (glName.length == 0) {
+        if (error) {
+            *error = [self err:[NSString stringWithFormat:
+                @"%@ 的库路径未配置（内置渲染器需在 CMake 中产出对应 dylib）",
+                entry.displayName]];
+        }
+        return nil;
+    }
+
+    NSString *path = [NSBundle.mainBundle pathForAuxiliaryExecutable:glName];
+    if (!path) {
+        if (error) {
+            *error = [self err:[NSString stringWithFormat:
+                @"找不到内置渲染器库 %@ —— 可能未打包进 IPA", glName]];
+        }
+        return nil;
+    }
+
+    // 内置渲染器目前都按合并库处理（GL + EGL 同库）
+    return [loader loadLibrariesAtGLPath:path
+                                 eglPath:nil
+                                  layout:A2RendererLibraryLayoutCombined
+                             environment:env
+                                   error:error];
+}
+
+/// 内置渲染器标识 → 库文件名
+- (NSString *)builtinGLNameForEntry:(A2RendererEntry *)entry {
+    if ([entry.identifier isEqualToString:@"builtin.nggl4es"])  return @"libnggl4es.dylib";
+    if ([entry.identifier isEqualToString:@"builtin.zink"])     return @"libzink.dylib";
+    if ([entry.identifier isEqualToString:@"builtin.mobilegl"]) return @"libMobileGlues.dylib";
+    if ([entry.identifier isEqualToString:@"builtin.virgl"])    return @"libvirgl.dylib";
+    return nil;
+}
+
+- (NSError *)err:(NSString *)msg {
+    return [NSError errorWithDomain:@"A2RendererRegistry" code:1
+                           userInfo:@{NSLocalizedDescriptionKey: msg ?: @"渲染器错误"}];
+}
+
+@end

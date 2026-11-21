@@ -1,0 +1,428 @@
+#!/usr/bin/env python3
+#
+#  check_imports.py
+#  Air2
+#
+#  Copyright (C) 2026 Air-Devs and contributors.
+#
+#  This program is free software: you can redistribute it and/or modify
+#  it under the terms of the GNU General Public License as published by
+#  the Free Software Foundation, either version 3 of the License, or
+#  (at your option) any later version.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+#  GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program. If not, see <https://www.gnu.org/licenses/gpl-3.0.txt>.
+#
+#  SPDX-License-Identifier: GPL-3.0-or-later
+"""
+校验所有 #import "XXX.h" 的本地头文件是否真实存在。
+
+这类错误在 Xcode 里表现为编译期 "'XXX.h' file not found"，
+一个文件一个错误，来回推 CI 非常浪费时间。
+本地一次全查出来。
+
+规则：
+  - #import "xxx.h"  是本地头文件，必须能在工程内找到
+  - #import <xxx.h>  是系统/框架头文件，不检查
+"""
+import os
+import re
+import sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SRC_ROOT = os.path.join(ROOT, "Air2")
+
+# 工程里所有头文件的 basename
+available = set()
+for dirpath, _, files in os.walk(SRC_ROOT):
+    for f in files:
+        if f.endswith(".h"):
+            available.add(f)
+
+# 也把系统框架的常见头文件排除掉（这些可能被写成 "xxx.h" 形式）
+SYSTEM_LIKE = {
+    "UIKit.h", "Foundation.h", "CoreGraphics.h", "QuartzCore.h",
+    "CoreImage.h", "Photos.h", "PhotosUI.h", "AVFoundation.h",
+    "MobileCoreServices.h", "UniformTypeIdentifiers.h",
+}
+
+
+
+
+def strip_comments(src):
+    """去掉注释，避免注释里的方法名干扰判断"""
+    import re
+    src = re.sub(r'/\*.*?\*/', '', src, flags=re.S)
+    src = re.sub(r'//[^\n]*', '', src)
+    return src
+
+
+def extract_methods(src, only_impl):
+    """
+    提取方法的基本名（用于声明/实现比对）。
+
+    关键：ObjC 的方法声明经常跨行写，例如
+        - (BOOL)renameVersion:(A2Version *)version
+                           to:(NSString *)newName
+                        error:(NSError **)error;
+    所以不能按行匹配，要先把整个签名拼起来。
+    比对时只用「方法首段」，例如 renameVersion: —— 参数名差异不影响。
+    """
+    import re
+    names = set()
+
+    # 先剔除 @protocol ... @end 段 ——
+    # 协议里的方法是「要求别人实现」的，不该要求本类实现。
+    src = re.sub(r'@protocol\b.*?@end', '', src, flags=re.S)
+
+    # 匹配 - 或 + 开头，直到遇到 ; 或 { （即一个完整签名）
+    # 用 DOTALL 让换行也在其中
+    for m in re.finditer(r'^[ \t]*([-+])[ \t]*\(([^)]*)\)(.*?)(?=[;{])',
+                         src, re.M | re.S):
+        body = m.group(3)
+        # 从签名体里取第一个标识符 + 后续连续的 :(type)name 对
+        head = re.match(r'\s*([A-Za-z_]\w*)', body)
+        if not head:
+            continue
+        base = head.group(1)
+
+        # 判断有没有参数（看这段签名里是否有冒号）
+        if ':' in body:
+            names.add(base + ':')
+        else:
+            names.add(base)
+
+    return names
+
+
+def check_declarations_vs_implementation():
+    """比对每个 .h/.m 对的方法声明"""
+    import os
+    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    issues = []
+
+    for dirpath, _, files in os.walk(os.path.join(ROOT, "Air2")):
+        for f in files:
+            if not f.endswith(".m"):
+                continue
+            m_path = os.path.join(dirpath, f)
+            h_path = m_path[:-2] + ".h"
+            if not os.path.exists(h_path):
+                continue
+
+            h_src = strip_comments(open(h_path).read())
+            m_src = strip_comments(open(m_path).read())
+
+            # 取本文件的【所有】@implementation 段，
+            # 再加上同名的分类文件（Xxx+Category.m）——
+            # 分类里也常有本类的方法实现。
+            sources = [m_src]
+
+            base = m_path[:-2]           # 去掉 .m
+            for extra in os.listdir(dirpath):
+                if not extra.endswith(".m"):
+                    continue
+                if not extra.startswith(os.path.basename(base) + "+"):
+                    continue
+                try:
+                    sources.append(open(os.path.join(dirpath, extra)).read())
+                except OSError:
+                    pass
+
+            impl_src = ""
+            for s_src in sources:
+                chunks = re.findall(r'@implementation\b(.*?)@end', s_src, re.S)
+                impl_src += "\n".join(chunks) + "\n"
+            if not impl_src.strip():
+                continue
+
+            declared = extract_methods(h_src, False)
+            implemented = extract_methods(impl_src, True)
+
+            # 声明了但没实现
+            for name in sorted(declared - implemented):
+                # 跳过属性生成的 setter/getter（名称里有大写开头且无冒号）
+                if not name.endswith(":") and name[0].isupper():
+                    continue
+                issues.append(f"{os.path.relpath(h_path, ROOT)} 声明了 {name} 但 {f} 未实现")
+
+    return issues
+
+
+
+
+def check_property_readonly():
+    """
+    检查 .h 与 .m 里同名属性的修饰符是否冲突。
+
+    规则：如果 .h 里的属性【没有】标 readonly，
+    而 .m 的类扩展里又声明了同名属性，会报 illegal redeclaration。
+    正确做法是 .h 标 readonly、.m 重声明为可写。
+    """
+    import os, re
+    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    issues = []
+
+    for dirpath, _, files in os.walk(os.path.join(ROOT, "Air2")):
+        for f in files:
+            if not f.endswith(".m"):
+                continue
+            m_path = os.path.join(dirpath, f)
+            h_path = m_path[:-2] + ".h"
+            if not os.path.exists(h_path):
+                continue
+
+            h_src = strip_comments(open(h_path).read())
+            m_src = strip_comments(open(m_path).read())
+
+            # 头文件里的属性 → 是否 readonly
+            header_props = {}
+            for pm in re.finditer(
+                    r'@property\s*\(([^)]*)\)[^;]*?\b(\w+)\s*;', h_src):
+                header_props[pm.group(2)] = 'readonly' in pm.group(1)
+
+            # .m 的类扩展里的属性
+            for em in re.finditer(r'@interface\s+\w+\s*\(\)(.*?)@end', m_src, re.S):
+                ext = em.group(1)
+                for pm in re.finditer(
+                        r'@property\s*\(([^)]*)\)[^;]*?\b(\w+)\s*;', ext):
+                    attrs, name = pm.group(1), pm.group(2)
+                    if name not in header_props:
+                        continue
+                    header_readonly = header_props[name]
+                    ext_readonly = 'readonly' in attrs
+
+                    # 头文件可写 + 扩展也存在 = 重复声明
+                    if not header_readonly and not ext_readonly:
+                        issues.append(
+                            f"{os.path.relpath(h_path, ROOT)} 的属性 {name} "
+                            f"未标 readonly，但 {f} 的类扩展里又声明了一遍 "
+                            f"→ 会报 illegal redeclaration。"
+                            f"应把头文件标 readonly、扩展里重声明为可写")
+
+    return issues
+
+
+
+
+def check_color_scheme_alignment():
+    """
+    检查 A2ColorScheme 的头文件与实现是否字段对齐。
+    """
+    import os, re
+    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    issues = []
+
+    h_path = os.path.join(ROOT, "Air2/UI/Theme/A2ColorScheme.h")
+    m_path = os.path.join(ROOT, "Air2/UI/Theme/A2ColorScheme.m")
+    if not (os.path.exists(h_path) and os.path.exists(m_path)):
+        return issues
+
+    h = open(h_path).read()
+    m = open(m_path).read()
+
+    declared = set(re.findall(r'UIColor \*(c[A-Z]\w+);', h))
+    resolved = set(re.findall(r'A2RESOLVE\(\w+,\s*(c[A-Z]\w+)\)', m))
+
+    for name in sorted(declared - resolved):
+        issues.append(f"A2ColorScheme.h 声明了 {name} 但 .m 里没有对应的 A2RESOLVE")
+    for name in sorted(resolved - declared):
+        issues.append(f"A2ColorScheme.m 解析了 {name} 但 .h 里没有声明")
+
+    # 原始 slot 与解析字段数量应一致
+    slots = set(re.findall(r'A2ColorSlot \*(\w+);', h))
+    if slots and declared and len(slots) != len(declared):
+        issues.append(
+            f"原始色槽 {len(slots)} 个 vs 解析字段 {len(declared)} 个，数量不匹配")
+
+    return issues
+
+
+
+
+def check_component_dependencies():
+    """
+    检查同层组件之间是否直接 import 了对方。
+    只查 Components 与 Screens —— 这两层里「同层组件互相引用」是常态，
+    靠传递引入容易在别处改动时断掉。
+    """
+    import os, re
+    ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+    type_to_header = {}
+    for dirpath, _, files in os.walk(os.path.join(ROOT, "Air2")):
+        for f in files:
+            if not f.endswith(".h"):
+                continue
+            src = open(os.path.join(dirpath, f)).read()
+            for m in re.finditer(r'@interface\s+(A2\w+)', src):
+                type_to_header[m.group(1)] = f
+
+    THEME_LAYER = {'A2ColorScheme.h', 'A2ColorTheme.h', 'A2ThemeManager.h',
+                   'A2ColorTheme_Internal.h'}
+
+    issues = []
+    # 之前只扫 UI 两层 —— Player/Context 里用了 A2Logger 却没 import
+    # 就连着两次漏过（JavaLauncher / SurfaceViewController）。
+    for sub in ("Air2/UI/Components", "Air2/UI/Screens",
+                "Air2/Player/Context", "Air2/Player/GameUI",
+                "Air2/Player/Controls", "Air2/App"):
+        base = os.path.join(ROOT, sub)
+        if not os.path.isdir(base):
+            continue
+        for dirpath, _, files in os.walk(base):
+            for f in files:
+                if not f.endswith(".m"):
+                    continue
+                p = os.path.join(dirpath, f)
+                src = open(p).read()
+
+                # 去掉注释再扫 —— 否则文档里提到的类名会被当成真实引用。
+                # 之前 A2GameInstallOptionsViewController 的注释里写了
+                # "A2InstallProgressDialog 是按 ZL2 做的"，就被误报成缺 import。
+                code_only = re.sub(r'/\*.*?\*/', '', src, flags=re.S)
+                code_only = re.sub(r'//[^\n]*', '', code_only)
+
+                imported = set(re.findall(r'#import\s+"(\w+\.h)"', code_only))
+                own = f[:-2] + ".h"
+                # 同名头文件自己也会引一批（例如 A2ControlRenderer.h 引了
+                # A2ControlLayout.h），这类传递引入不算缺失。
+                own_path = os.path.join(dirpath, own)
+                if os.path.exists(own_path):
+                    own_src = open(own_path).read()
+                    imported |= set(re.findall(r'#import\s+"(\w+\.h)"', own_src))
+
+                for t in set(re.findall(r'\b(A2[A-Z]\w+)\b', code_only)):
+                    if t not in type_to_header:
+                        continue
+                    hdr = type_to_header[t]
+                    if hdr == own or hdr in imported or hdr in THEME_LAYER:
+                        continue
+                    rel = os.path.relpath(p, ROOT)
+                    msg = f'{rel} \u7528\u5230 {t}\uff0c\u9700 #import "{hdr}"'
+                    if msg not in issues:
+                        issues.append(msg)
+
+    return issues
+
+
+
+
+
+
+def main():
+    problems = []
+    total_imports = 0
+
+    for dirpath, _, files in os.walk(SRC_ROOT):
+        for fname in sorted(files):
+            if not fname.endswith((".m", ".mm", ".h")):
+                continue
+            path = os.path.join(dirpath, fname)
+            rel = os.path.relpath(path, ROOT)
+            try:
+                lines = open(path, encoding="utf-8").read().split("\n")
+            except UnicodeDecodeError:
+                continue
+
+            for lineno, line in enumerate(lines, 1):
+                m = re.match(r'\s*#\s*import\s+"([^"]+)"', line)
+                if not m:
+                    continue
+                inc = m.group(1)
+                total_imports += 1
+                base = os.path.basename(inc)
+                if base in SYSTEM_LIKE:
+                    continue
+                if base in available:
+                    continue
+                # 带路径的引用（Libraries/... 或 ../）：
+                # 按「相对引用文件」与「相对仓库根」两种方式解析，
+                # 能落到真实文件就算有效 —— 这些是第三方头，
+                # 不在 available（只收 Air2/ 下）里。
+                if "/" in inc:
+                    cands = [
+                        os.path.normpath(os.path.join(os.path.dirname(path), inc)),
+                        os.path.normpath(os.path.join(ROOT, inc)),
+                    ]
+                    if any(os.path.exists(c) for c in cands):
+                        continue
+                problems.append((rel, lineno, inc))
+
+    print(f"检查了 {total_imports} 处本地 #import")
+    print(f"工程内共有 {len(available)} 个头文件")
+
+    if problems:
+        print(f"\n发现 {len(problems)} 处引用了不存在的头文件：")
+        for rel, lineno, inc in problems:
+            print(f"  {rel}:{lineno}  →  \"{inc}\"")
+        return 1
+
+    print("✓ 所有本地 #import 都能找到对应头文件")
+
+    # ---------- 头文件声明 vs 实现 一致性 ----------
+    # 这个错误反复出现：改了 .m 忘了 .h（调用方报 no visible @interface），
+    # 或改了 .h 忘了 .m（链接期报 unrecognized selector）。
+    # 两者都能提前静态发现。
+    decl_issues = check_declarations_vs_implementation()
+
+    # 这些文件的「声明但未实现」是正常的，检查器看不出原因：
+    #   SurfaceViewController —— 方法分散在多个 category 文件里
+    #   UIKit+hook —— 运行时 hook 声明，实现在 .m 的 C 函数里
+    DECL_SKIP = ("SurfaceViewController.h", "UIKit+hook.h")
+    decl_issues = [i for i in decl_issues if not any(sk in i for sk in DECL_SKIP)]
+
+    if decl_issues:
+        print(f"\n发现 {len(decl_issues)} 处声明与实现不一致：")
+        for msg in decl_issues:
+            print(f"  {msg}")
+        return 1
+
+    print("✓ 头文件声明与实现一致")
+
+    # ---------- 属性修饰符跨文件一致性 ----------
+    # 常见错误：头文件里 .h 声明了非 readonly 的属性，
+    # 而 .m 的类扩展里又声明了一遍 —— 报 illegal redeclaration。
+    # 或者反过来：头文件标 readonly 但 .m 扩展里没重声明为可写，
+    # 导致内部无法赋值。
+    prop_issues = check_property_readonly()
+    if prop_issues:
+        print(f"\n发现 {len(prop_issues)} 处属性修饰符问题：")
+        for msg in prop_issues:
+            print(f"  {msg}")
+        return 1
+
+    print("✓ 属性修饰符一致")
+
+    # ---------- 色板字段对齐 ----------
+    # A2ColorScheme 头文件声明的 cXxx 字段，必须在 .m 里都有对应的
+    # A2RESOLVE 解析。缺一个就会在运行期取到 nil（界面变透明/黑块），
+    # 而且编译器不报错。
+    scheme_issues = check_color_scheme_alignment()
+    if scheme_issues:
+        print(f"\n发现 {len(scheme_issues)} 处色板字段未对齐：")
+        for msg in scheme_issues:
+            print(f"  {msg}")
+        return 1
+
+    print("\u2713 \u8272\u677f\u5b57\u6bb5\u5bf9\u9f50")
+
+    dep_issues = check_component_dependencies()
+    if dep_issues:
+        print(f"\n\u53d1\u73b0 {len(dep_issues)} \u5904\u7ec4\u4ef6\u95f4\u7f3a\u5931 import\uff1a")
+        for msg in dep_issues:
+            print(f"  {msg}")
+        return 1
+
+    print("\u2713 \u7ec4\u4ef6\u95f4\u4f9d\u8d56\u5b8c\u6574")
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

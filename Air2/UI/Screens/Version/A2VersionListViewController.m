@@ -1,0 +1,951 @@
+//
+//  A2VersionListViewController.m
+//  Air2
+//
+//  Copyright (C) 2026 Air-Devs and contributors.
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program. If not, see <https://www.gnu.org/licenses/gpl-3.0.txt>.
+//
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
+//
+//  版本管理 —— 左侧游戏目录 + 右侧版本列表。
+//
+//  布局（左侧目录 + 右侧列表）：
+//    ┌──────────┬──────────────────────────────────────┐
+//    │ 游戏目录  │  ○ [1] 1.21.5-fabric    📌 ⚙️ ⋯      │
+//    │ (当前)   │     Fabric 0.16.10 · 隔离·仅 Mod       │
+//    │          │  ○ [1] 1.20.1-forge     📌 ⚙️ ⋯      │
+//    │          │     Forge 47.2.0 · 隔离·仅 Mod         │
+//    └──────────┴──────────────────────────────────────┘
+//
+//  列表行间距 12，页面内边距 12。
+//
+
+#import "A2VersionListViewController.h"
+#import "A2VersionSettingsViewController.h"
+#import "A2VersionExportViewController.h"
+#import "A2GameVersionListViewController.h"
+#import "A2InputDialog.h"
+#import "A2TextField.h"
+#import "A2VersionManager.h"
+#import "A2GamePathManager.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
+#import "A2VersionRowView.h"
+#import "A2GlassCard.h"
+#import "A2PrimaryButton.h"
+#import "A2Toast.h"
+#import "A2ThemeManager.h"
+#import "A2Metrics.h"
+#import "A2Typography.h"
+
+/// 游戏目录项
+@interface A2GamePathRow : UIControl
+@property (nonatomic, strong) UILabel *titleLabel;
+@property (nonatomic, strong) UILabel *pathLabel;
+@property (nonatomic, assign, getter=isCurrent) BOOL current;
+/// 长按时弹出的操作
+@property (nonatomic, copy, nullable) void (^onDelete)(void);
+@property (nonatomic, copy, nullable) void (^onRename)(void);
+/// 点击回调。
+///
+/// ⚠️ 必须放在主 @interface 里，不能放 category ——
+/// category 不能合成存储属性，编译器不会自动生成 setOnSelect:，
+/// 运行时调 row.onSelect = ... 就崩 unrecognized selector。
+/// 我之前就是把它单独放在 A2GamePathRow (Selection) 里，点了版本管理直接闪退。
+@property (nonatomic, copy, nullable) void (^onSelect)(void);
+@end
+
+@implementation A2GamePathRow {
+    BOOL _interactionsInstalled;
+}
+
+- (instancetype)initWithTitle:(NSString *)title path:(NSString *)path {
+    self = [super initWithFrame:CGRectZero];
+    if (!self) return nil;
+    self.translatesAutoresizingMaskIntoConstraints = NO;
+    self.layer.cornerRadius = A2RadiusM;
+    self.layer.cornerCurve = kCACornerCurveContinuous;
+
+    _titleLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    _titleLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+    _titleLabel.text = title;
+    _titleLabel.numberOfLines = 1;
+    _titleLabel.adjustsFontSizeToFitWidth = YES;
+    _titleLabel.minimumScaleFactor = 0.8;
+
+    _pathLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    _pathLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _pathLabel.font = [UIFont systemFontOfSize:11 weight:UIFontWeightRegular];
+    _pathLabel.text = path;
+    _pathLabel.numberOfLines = 2;
+    _pathLabel.lineBreakMode = NSLineBreakByTruncatingMiddle;
+
+    [self addSubview:_titleLabel];
+    [self addSubview:_pathLabel];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [_titleLabel.topAnchor constraintEqualToAnchor:self.topAnchor constant:A2SpaceS],
+        [_titleLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:A2SpaceM],
+        [_titleLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-A2SpaceM],
+
+        [_pathLabel.topAnchor constraintEqualToAnchor:_titleLabel.bottomAnchor constant:2],
+        [_pathLabel.leadingAnchor constraintEqualToAnchor:self.leadingAnchor constant:A2SpaceM],
+        [_pathLabel.trailingAnchor constraintEqualToAnchor:self.trailingAnchor constant:-A2SpaceM],
+        [_pathLabel.bottomAnchor constraintEqualToAnchor:self.bottomAnchor constant:-A2SpaceS],
+    ]];
+
+    [self applyTheme];
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                          selector:@selector(applyTheme)
+                                              name:A2ThemeDidChangeNotification
+                                            object:nil];
+    return self;
+}
+
+- (void)dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+- (void)setCurrent:(BOOL)current {
+    _current = current;
+    [self applyTheme];
+}
+
+- (void)applyTheme {
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+    self.backgroundColor = self.isCurrent ? t.cSecondaryContainer : t.cSurfaceContainerLow;
+    _titleLabel.textColor = self.isCurrent ? t.cOnSecondaryContainer : t.cOnSurface;
+    _pathLabel.textColor = self.isCurrent
+        ? [t.cOnSecondaryContainer colorWithAlphaComponent:0.75]
+        : t.cOnSurfaceVariant;
+}
+
+/// 点击 = 切换目录；长按 = 删除/重命名菜单。
+/// 放在这里而不是调用方设置，是因为 UIControl 的 target-action
+/// 与 block 回调混用容易乱。
+- (void)installInteractionsIfNeeded {
+    if (_interactionsInstalled) return;
+    _interactionsInstalled = YES;
+
+    [self addTarget:self action:@selector(handleTap) forControlEvents:UIControlEventTouchUpInside];
+
+    UILongPressGestureRecognizer *lp =
+        [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handleLongPress:)];
+    lp.minimumPressDuration = 0.5;
+    [self addGestureRecognizer:lp];
+}
+
+- (void)handleTap {
+    if (self.onSelect) self.onSelect();
+}
+
+- (void)handleLongPress:(UILongPressGestureRecognizer *)g {
+    if (g.state != UIGestureRecognizerStateBegan) return;
+
+    UIAlertController *sheet =
+        [UIAlertController alertControllerWithTitle:self.titleLabel.text
+                                            message:nil
+                                     preferredStyle:UIAlertControllerStyleActionSheet];
+    if (self.onRename) {
+        [sheet addAction:[UIAlertAction actionWithTitle:@"重命名"
+                                                 style:UIAlertActionStyleDefault
+                                               handler:^(UIAlertAction *a) {
+            if (self.onRename) self.onRename();
+        }]];
+    }
+    if (self.onDelete) {
+        [sheet addAction:[UIAlertAction actionWithTitle:@"移除"
+                                                 style:UIAlertActionStyleDestructive
+                                               handler:^(UIAlertAction *a) {
+            if (self.onDelete) self.onDelete();
+        }]];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
+                                             style:UIAlertActionStyleCancel handler:nil]];
+
+    UIViewController *host = self.window.rootViewController;
+    sheet.popoverPresentationController.sourceView = self;
+    sheet.popoverPresentationController.sourceRect = self.bounds;
+    [host presentViewController:sheet animated:YES completion:nil];
+}
+
+@end
+
+#pragma mark - 版本管理页
+
+@interface A2VersionListViewController () <UIDocumentPickerDelegate>
+@property (nonatomic, strong) UIScrollView *pathScroll;
+@property (nonatomic, strong) UIStackView *pathStack;
+@property (nonatomic, strong) UIScrollView *listScroll;
+@property (nonatomic, strong) UIStackView *listStack;
+@property (nonatomic, strong) A2TextField *searchField;
+@property (nonatomic, strong) NSArray<NSDictionary<NSString *, id> *> *versions;
+@property (nonatomic, copy) NSString *filterText;
+/// 版本分类筛选（对照 ZL2 的 VersionCategory：全部 / 原版 / 可安装模组）
+///   0 = 全部   1 = 原版   2 = 带模组加载器
+@property (nonatomic, assign) NSInteger selectedCategory;
+@property (nonatomic, strong, nullable) NSMutableArray<UIButton *> *categoryButtons;
+@property (nonatomic, strong) UIStackView *categoryBar;
+@property (nonatomic, strong) NSMutableArray<A2VersionRowView *> *rowViews;
+@property (nonatomic, strong) UIButton *addPathButton;
+/// 文件选择器回调要区分是「选目录」还是「选整合包」，用标记区分
+@property (nonatomic, assign) BOOL pickingFolder;
+@property (nonatomic, weak, nullable) UILabel *emptyTitleLabel;
+@property (nonatomic, weak, nullable) UILabel *emptySubtitleLabel;
+@end
+
+@implementation A2VersionListViewController
+
+- (void)viewDidLoad {
+    // 必须写在 super 之前：基类在 [super viewDidLoad] 里就按它决定建 scroll 还是
+    // plain 内容容器。晚设会让 plainContentView 一直是 nil。
+    self.usesScrollContent = NO;   // 自己管布局
+    [super viewDidLoad];
+    self.pageTitle = @"版本管理";
+    _rowViews = [NSMutableArray array];
+    _filterText = @"";
+    _searchField = [self makeSearchField];
+
+    __weak typeof(self) weakSelf = self;
+    [self addTrailingButtonWithSymbol:@"plus" action:^{
+        __strong typeof(weakSelf) self = weakSelf;
+        [self openGameVersionList];
+    }];
+
+    [self setupLayout];
+    [self buildPathList];
+
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                           selector:@selector(refreshEmptyStateTheme)
+                                               name:A2ThemeDidChangeNotification
+                                             object:nil];
+}
+
+/// 主题通知常驻，退出时摘掉（与行组件的 dealloc 摘除同理）。
+- (void)dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self];
+}
+
+/// 每次回到本页都重刷（设置页改名/删除、安装页装完回来时列表不能是旧的）。
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    [self reloadVersionList];
+}
+
+/// 从 A2VersionManager 读真实数据拼行。
+- (void)loadVersions {
+    A2VersionManager *mgr = A2VersionManager.shared;
+    NSMutableArray<NSDictionary<NSString *, id> *> *out = [NSMutableArray array];
+
+    for (A2Version *v in mgr.versions) {
+        // meta 文案：加载器 + 生效隔离档位（「仅 Mod」下原版/OptiFine 显示为关闭）。
+        // 无效版本直接给原因（缺 json / 缺 jar / 解析失败），比档位更有用。
+        NSMutableArray<NSString *> *parts = [NSMutableArray array];
+        if (v.loaderInfo.length) [parts addObject:v.loaderInfo];
+        if (v.isValid) {
+            [parts addObject:[NSString stringWithFormat:@"隔离·%@",
+                              A2IsolationModeDisplayName(v.effectiveIsolationMode)]];
+        } else {
+            [parts addObject:(v.invalidReason ?: @"文件不完整")];
+        }
+
+        [out addObject:@{
+            @"name": v.name,
+            @"meta": [parts componentsJoinedByString:@" · "],
+            @"current": @(mgr.currentVersion == v),
+            @"pinned": @(v.isolation.isPinned),
+            @"valid": @(v.isValid),
+            @"model": v,
+        }];
+    }
+
+    _versions = out;
+}
+
+- (void)setupLayout {
+    // ---- 左侧目录 ----
+    _pathScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    _pathScroll.translatesAutoresizingMaskIntoConstraints = NO;
+    _pathScroll.showsVerticalScrollIndicator = NO;
+
+    _pathStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _pathStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _pathStack.axis = UILayoutConstraintAxisVertical;
+    _pathStack.spacing = A2SpaceS;
+    [_pathScroll addSubview:_pathStack];
+
+    // ---- 右侧列表 ----
+    _listScroll = [[UIScrollView alloc] initWithFrame:CGRectZero];
+    _listScroll.translatesAutoresizingMaskIntoConstraints = NO;
+    _listScroll.showsVerticalScrollIndicator = NO;
+
+    _listStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _listStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _listStack.axis = UILayoutConstraintAxisVertical;
+    _listStack.spacing = A2SpaceM;   // 行间距 12
+    [_listScroll addSubview:_listStack];
+
+    [self.plainContentView addSubview:_pathScroll];
+    // ---- 版本分类条（对照 ZL2 的 [全部] [原版] [可安装模组]）----
+    _categoryBar = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _categoryBar.translatesAutoresizingMaskIntoConstraints = NO;
+    _categoryBar.axis = UILayoutConstraintAxisHorizontal;
+    _categoryBar.spacing = A2SpaceS;
+    _categoryBar.alignment = UIStackViewAlignmentCenter;
+
+    _categoryButtons = [NSMutableArray array];
+    NSArray<NSString *> *titles = @[@"全部", @"原版", @"模组版"];
+    for (NSInteger i = 0; i < titles.count; i++) {
+        UIButton *b = [UIButton buttonWithType:UIButtonTypeSystem];
+        b.translatesAutoresizingMaskIntoConstraints = NO;
+        b.tag = i;
+        b.contentEdgeInsets = UIEdgeInsetsMake(0, 12, 0, 12);
+        b.titleLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightMedium];
+        b.layer.cornerRadius = 14;
+        b.layer.cornerCurve = kCACornerCurveContinuous;
+        [b.heightAnchor constraintEqualToConstant:28].active = YES;
+        [b addTarget:self action:@selector(categoryTapped:)
+    forControlEvents:UIControlEventTouchUpInside];
+        [_categoryBar addArrangedSubview:b];
+        [_categoryButtons addObject:b];
+    }
+
+    [self.plainContentView addSubview:_categoryBar];
+    [self.plainContentView addSubview:_searchField];
+    [self.plainContentView addSubview:_listScroll];
+
+    [NSLayoutConstraint activateConstraints:@[
+        // 左侧固定 200
+        [_pathScroll.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_pathScroll.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
+        [_pathScroll.leadingAnchor constraintEqualToAnchor:self.plainContentView.leadingAnchor
+                                                  constant:A2SpaceM],
+        [_pathScroll.widthAnchor constraintEqualToConstant:200],
+
+        [_pathStack.topAnchor constraintEqualToAnchor:_pathScroll.topAnchor],
+        [_pathStack.bottomAnchor constraintEqualToAnchor:_pathScroll.bottomAnchor],
+        [_pathStack.leadingAnchor constraintEqualToAnchor:_pathScroll.leadingAnchor],
+        [_pathStack.trailingAnchor constraintEqualToAnchor:_pathScroll.trailingAnchor],
+        [_pathStack.widthAnchor constraintEqualToAnchor:_pathScroll.widthAnchor],
+
+        // 分类条（固定右上左侧，不随列表滚动）
+        [_categoryBar.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_categoryBar.leadingAnchor constraintEqualToAnchor:_pathScroll.trailingAnchor
+                                                   constant:A2SpaceM],
+        [_categoryBar.trailingAnchor constraintLessThanOrEqualToAnchor:_searchField.leadingAnchor
+                                                              constant:-A2SpaceM],
+
+        // 搜索框（固定右上，不随列表滚动）
+        [_searchField.topAnchor constraintEqualToAnchor:self.plainContentView.topAnchor],
+        [_searchField.leadingAnchor constraintEqualToAnchor:_pathScroll.trailingAnchor
+                                                   constant:A2SpaceM],
+        [_searchField.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
+                                                    constant:-A2SpaceL],
+
+        // 右侧列表（顶端留给搜索框）
+        [_listScroll.topAnchor constraintEqualToAnchor:_searchField.bottomAnchor
+                                             constant:A2SpaceM],
+        [_listScroll.bottomAnchor constraintEqualToAnchor:self.plainContentView.bottomAnchor],
+        [_listScroll.leadingAnchor constraintEqualToAnchor:_pathScroll.trailingAnchor
+                                                  constant:A2SpaceM],
+        [_listScroll.trailingAnchor constraintEqualToAnchor:self.plainContentView.trailingAnchor
+                                                   constant:-A2SpaceL],
+
+        [_listStack.topAnchor constraintEqualToAnchor:_listScroll.topAnchor],
+        [_listStack.bottomAnchor constraintEqualToAnchor:_listScroll.bottomAnchor],
+        [_listStack.leadingAnchor constraintEqualToAnchor:_listScroll.leadingAnchor],
+        [_listStack.trailingAnchor constraintEqualToAnchor:_listScroll.trailingAnchor],
+        [_listStack.widthAnchor constraintEqualToAnchor:_listScroll.widthAnchor],
+    ]];
+}
+
+/// 搜索框只创建装配，加屏与约束在 setupLayout（它依赖左侧栏定宽）。
+- (A2TextField *)makeSearchField {
+    A2TextField *field = [[A2TextField alloc] initWithLabel:@"搜索版本"];
+    field.translatesAutoresizingMaskIntoConstraints = NO;
+    __weak typeof(self) weakSelf = self;
+    field.onTextChange = ^(NSString *text) {
+        __strong typeof(weakSelf) self = weakSelf;
+        self.filterText = text ?: @"";
+        [self reloadVersionList];
+    };
+    field.onReturn = ^{
+        __strong typeof(weakSelf) self = weakSelf;
+        [self.view endEditing:YES];
+    };
+    return field;
+}
+
+- (void)buildPathList {
+    // 目录列表来自 A2GamePathManager —— 对照 ZL2 的 GamePathManager。
+    // 用户可以添加多个游戏目录（沙盒内 / 外部文件夹 / iCloud），
+    // 点哪一项就切到哪个目录，右侧的版本列表跟着变。
+    for (UIView *v in [_pathStack.arrangedSubviews copy]) {
+        [_pathStack removeArrangedSubview:v];
+        [v removeFromSuperview];
+    }
+
+    A2GamePathManager *mgr = A2GamePathManager.shared;
+    NSString *current = mgr.currentPath.identifier;
+
+    for (A2GamePathItem *item in mgr.allPaths) {
+        A2GamePathRow *row = [[A2GamePathRow alloc] initWithTitle:item.name path:item.path];
+        row.current = [item.identifier isEqualToString:current];
+
+        __weak typeof(self) weakSelf = self;
+        __weak A2GamePathRow *weakRow = row;
+        row.onSelect = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            (void)weakRow;
+            [self selectGamePath:item];
+        };
+        row.onDelete = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            [self deleteGamePath:item];
+        };
+        row.onRename = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            [self renameGamePath:item];
+        };
+
+        [_pathStack addArrangedSubview:row];
+    }
+
+    // 添加目录按钮
+    UIButton *add = [UIButton buttonWithType:UIButtonTypeSystem];
+    add.translatesAutoresizingMaskIntoConstraints = NO;
+    [add setTitle:@"＋ 添加游戏目录" forState:UIControlStateNormal];
+    add.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightMedium];
+    add.contentHorizontalAlignment = UIControlContentHorizontalAlignmentLeft;
+    add.contentEdgeInsets = UIEdgeInsetsMake(0, A2SpaceM, 0, A2SpaceM);
+    add.layer.cornerRadius = A2RadiusM;
+    add.layer.cornerCurve = kCACornerCurveContinuous;
+    add.layer.borderWidth = 1;
+    [add.heightAnchor constraintEqualToConstant:40].active = YES;
+    [add addTarget:self action:@selector(addGamePath) forControlEvents:UIControlEventTouchUpInside];
+    [_pathStack addArrangedSubview:add];
+    self.addPathButton = add;
+
+    // 撑起剩余空间
+    UIView *filler = [[UIView alloc] initWithFrame:CGRectZero];
+    filler.translatesAutoresizingMaskIntoConstraints = NO;
+    [filler setContentHuggingPriority:1 forAxis:UILayoutConstraintAxisVertical];
+    [_pathStack addArrangedSubview:filler];
+
+    [self applyPathListTheme];
+}
+
+- (void)applyPathListTheme {
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+    _addPathButton.tintColor = t.cPrimary;
+    _addPathButton.layer.borderColor = t.cOutlineVariant.CGColor;
+    _addPathButton.backgroundColor = t.cSurfaceContainer;
+}
+
+#pragma mark - 游戏目录操作
+
+- (void)selectGamePath:(A2GamePathItem *)item {
+    A2GamePathManager *mgr = A2GamePathManager.shared;
+    if ([item.identifier isEqualToString:mgr.currentPath.identifier]) return;
+
+    NSError *err = nil;
+    if (![mgr selectPathWithIdentifier:item.identifier error:&err]) {
+        [A2Toast show:(err.localizedDescription ?: @"切换失败") inView:self.view];
+        return;
+    }
+
+    // A2VersionManager 会收到目录变化通知并重新扫描，
+    // 这里只需重建左栏的选中态
+    [self buildPathList];
+    [A2Toast show:[NSString stringWithFormat:@"已切换到「%@」", item.name] inView:self.view];
+}
+
+- (void)addGamePath {
+    // 用文件选择器选一个目录
+    UIDocumentPickerViewController *picker;
+    if (@available(iOS 14.0, *)) {
+        picker = [[UIDocumentPickerViewController alloc]
+                  initForOpeningContentTypes:@[UTTypeFolder]];
+    } else {
+        picker = [[UIDocumentPickerViewController alloc]
+                  initWithDocumentTypes:@[@"public.folder"]
+                                 inMode:UIDocumentPickerModeOpen];
+    }
+    picker.allowsMultipleSelection = NO;
+    picker.delegate = self;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller
+didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    NSURL *url = urls.firstObject;
+    if (!url) return;
+
+    A2GamePathManager *mgr = A2GamePathManager.shared;
+    NSError *err = nil;
+    if (![mgr addPathFromURL:url name:nil error:&err]) {
+        [A2Toast show:(err.localizedDescription ?: @"添加失败") inView:self.view];
+        return;
+    }
+
+    [self buildPathList];
+    [A2Toast show:[NSString stringWithFormat:@"已添加「%@」", url.lastPathComponent]
+           inView:self.view];
+}
+
+- (void)deleteGamePath:(A2GamePathItem *)item {
+    if (item.isDefault) {
+        [A2Toast show:@"默认目录不能删除" inView:self.view];
+        return;
+    }
+
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"移除游戏目录"
+                                            message:[NSString stringWithFormat:
+                                                     @"确定要移除「%@」吗？\n文件不会被删除。",
+                                                     item.name]
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消"
+                                             style:UIAlertActionStyleCancel handler:nil]];
+    __weak typeof(self) weakSelf = self;
+    [alert addAction:[UIAlertAction actionWithTitle:@"移除"
+                                             style:UIAlertActionStyleDestructive
+                                           handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        NSError *err = nil;
+        if ([A2GamePathManager.shared removePathWithIdentifier:item.identifier error:&err]) {
+            [self buildPathList];
+        } else {
+            [A2Toast show:(err.localizedDescription ?: @"移除失败") inView:self.view];
+        }
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)renameGamePath:(A2GamePathItem *)item {
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"重命名目录"
+                                            message:nil
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *tf) {
+        tf.text = item.name;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消"
+                                             style:UIAlertActionStyleCancel handler:nil]];
+    __weak typeof(self) weakSelf = self;
+    [alert addAction:[UIAlertAction actionWithTitle:@"确定"
+                                             style:UIAlertActionStyleDefault
+                                           handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        NSString *name = alert.textFields.firstObject.text ?: @"";
+        if (name.length == 0) return;
+        [A2GamePathManager.shared renamePathWithIdentifier:item.identifier to:name error:nil];
+        [self buildPathList];
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)buildVersionList {
+    // 每次重建列表都同步分类条的数量（版本增删后角标要跟着变）
+    [self updateCategoryBar];
+
+    if (_versions.count == 0) {
+        [self buildEmptyState];
+        return;
+    }
+    NSArray<NSDictionary<NSString *, id> *> *visible = [self filteredVersions];
+    if (visible.count == 0) {
+        [self buildNoMatchState];
+        return;
+    }
+    for (NSDictionary<NSString *, id> *v in visible) {
+        A2VersionRowView *row = [[A2VersionRowView alloc] initWithVersionName:v[@"name"]
+                                                                        meta:v[@"meta"]];
+        row.current = [v[@"current"] boolValue];
+        row.pinned = [v[@"pinned"] boolValue];
+        row.valid = [v[@"valid"] boolValue];
+
+        __weak typeof(self) weakSelf = self;
+        __weak A2VersionRowView *weakRow = row;
+        NSString *name = v[@"name"];
+        NSString *meta = v[@"meta"];
+
+        row.onSelect = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            [self selectVersion:weakRow];
+        };
+        A2Version *model = v[@"model"];
+        row.onPin = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            BOOL newValue = !weakRow.isPinned;
+
+            // 落盘失败时回滚，行状态不动（applyPinnedAndSave 内已恢复 model）。
+            if (![model applyPinnedAndSave:newValue]) {
+                [A2Toast show:@"置顶保存失败" inView:self.view];
+                return;
+            }
+            weakRow.pinned = newValue;
+
+            [A2Toast show:(newValue ? @"已置顶" : @"已取消置顶") inView:self.view];
+        };
+        row.onSettings = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            A2VersionSettingsViewController *vc =
+                [[A2VersionSettingsViewController alloc] initWithVersionName:name];
+            [self.navigationController pushViewController:vc animated:YES];
+        };
+        row.onMore = ^{
+            __strong typeof(weakSelf) self = weakSelf;
+            [self showMoreMenuForVersion:model meta:meta fromView:weakRow];
+        };
+
+        [_rowViews addObject:row];
+        [_listStack addArrangedSubview:row];
+        [NSLayoutConstraint activateConstraints:@[
+            [row.leadingAnchor constraintEqualToAnchor:_listStack.leadingAnchor],
+            [row.trailingAnchor constraintEqualToAnchor:_listStack.trailingAnchor],
+        ]];
+    }
+}
+
+/// 空列表：给一句话 + 一个真入口，不留白屏。
+- (void)buildEmptyState {
+    A2GlassCard *card = [[A2GlassCard alloc] initWithFrame:CGRectZero];
+    card.cornerRadius = A2RadiusM;
+    card.elevation = A2CardElevationLow;
+
+    UILabel *title = [[UILabel alloc] initWithFrame:CGRectZero];
+    title.translatesAutoresizingMaskIntoConstraints = NO;
+    title.font = [A2Typography titleCard];
+    title.textAlignment = NSTextAlignmentCenter;
+    title.text = @"还没有安装任何版本";
+
+    UILabel *subtitle = [[UILabel alloc] initWithFrame:CGRectZero];
+    subtitle.translatesAutoresizingMaskIntoConstraints = NO;
+    subtitle.font = [A2Typography subtitleCard];
+    subtitle.textAlignment = NSTextAlignmentCenter;
+    subtitle.numberOfLines = 0;
+    subtitle.text = @"点下方按钮安装第一个版本";
+
+    A2PrimaryButton *installBtn = [[A2PrimaryButton alloc] initWithTitle:@"安装新版本"
+                                                                   style:A2ButtonStylePrimary];
+    installBtn.minHeight = 44;
+    [installBtn addTarget:self action:@selector(openGameVersionList) forControlEvents:UIControlEventTouchUpInside];
+
+    UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:@[title, subtitle, installBtn]];
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.spacing = A2SpaceM;
+    stack.alignment = UIStackViewAlignmentFill;
+
+    [card.contentView addSubview:stack];
+    [NSLayoutConstraint activateConstraints:@[
+        [stack.topAnchor constraintEqualToAnchor:card.contentView.topAnchor],
+        [stack.bottomAnchor constraintEqualToAnchor:card.contentView.bottomAnchor],
+        [stack.leadingAnchor constraintEqualToAnchor:card.contentView.leadingAnchor],
+        [stack.trailingAnchor constraintEqualToAnchor:card.contentView.trailingAnchor],
+    ]];
+
+    [_listStack addArrangedSubview:card];
+    [NSLayoutConstraint activateConstraints:@[
+        [card.leadingAnchor constraintEqualToAnchor:_listStack.leadingAnchor],
+        [card.trailingAnchor constraintEqualToAnchor:_listStack.trailingAnchor],
+    ]];
+
+    _emptyTitleLabel = title;
+    _emptySubtitleLabel = subtitle;
+    [self refreshEmptyStateTheme];
+}
+
+/// 空态文案跟主题走（注册一次，常驻观察；标签重建后刷新一次即可）。
+- (void)refreshEmptyStateTheme {
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+    _emptyTitleLabel.textColor = t.cOnSurface;
+    _emptySubtitleLabel.textColor = t.cOnSurfaceVariant;
+}
+/// 关键字过滤（大小写不敏感，空关键字即全部）。行与选中共用同一份可见集。
+- (NSArray<NSDictionary<NSString *, id> *> *)filteredVersions {
+    NSMutableArray<NSDictionary<NSString *, id> *> *out = [NSMutableArray array];
+
+    for (NSDictionary<NSString *, id> *v in _versions) {
+        // 分类筛选（对照 ZL2 的 VersionCategory）
+        //   原版 = 没有 loaderInfo
+        //   模组版 = 有 loaderInfo
+        if (_selectedCategory == 1) {
+            A2Version *model = v[@"model"];
+            if (model.loaderInfo.length > 0) continue;
+        } else if (_selectedCategory == 2) {
+            A2Version *model = v[@"model"];
+            if (model.loaderInfo.length == 0) continue;
+        }
+
+        // 关键字筛选
+        if (_filterText.length > 0) {
+            NSString *name = v[@"name"];
+            if ([name rangeOfString:_filterText options:NSCaseInsensitiveSearch].location == NSNotFound) {
+                continue;
+            }
+        }
+
+        [out addObject:v];
+    }
+    return out;
+}
+
+/// 点击分类（全部 / 原版 / 模组版）
+- (void)categoryTapped:(UIButton *)sender {
+    self.selectedCategory = sender.tag;
+    [self updateCategoryBar];
+    [self buildVersionList];
+}
+
+/// 刷新分类条的外观（选中态 + 数量角标）
+- (void)updateCategoryBar {
+    if (!self.categoryButtons.count) return;
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+
+    NSArray<NSString *> *titles = @[@"全部", @"原版", @"模组版"];
+    for (UIButton *b in self.categoryButtons) {
+        NSInteger cat = b.tag;
+        BOOL selected = (cat == self.selectedCategory);
+        NSUInteger n = [self countForCategory:cat];
+
+        [b setTitle:[NSString stringWithFormat:@"%@ (%lu)", titles[cat], (unsigned long)n]
+           forState:UIControlStateNormal];
+        b.backgroundColor = selected ? t.cPrimary : t.cSurfaceContainerHigh;
+        [b setTitleColor:(selected ? t.cOnPrimary : t.cOnSurfaceVariant)
+                 forState:UIControlStateNormal];
+    }
+}
+
+/// 各分类的数量（用于筛选条上的角标，对照 ZL2 的版本分类计数）
+- (NSUInteger)countForCategory:(NSInteger)category {
+    if (category == 0) return _versions.count;
+
+    NSUInteger n = 0;
+    for (NSDictionary<NSString *, id> *v in _versions) {
+        A2Version *model = v[@"model"];
+        BOOL isVanilla = (model.loaderInfo.length == 0);
+        if (category == 1 && isVanilla) n++;
+        if (category == 2 && !isVanilla) n++;
+    }
+    return n;
+}
+
+/// 有版本但关键字无命中：纯提示行，不复用空态卡（那张卡带安装按钮，语义不对）。
+- (void)buildNoMatchState {
+    UILabel *label = [[UILabel alloc] initWithFrame:CGRectZero];
+    label.translatesAutoresizingMaskIntoConstraints = NO;
+    label.font = [A2Typography subtitleCard];
+    label.textAlignment = NSTextAlignmentCenter;
+    label.numberOfLines = 0;
+    label.text = [NSString stringWithFormat:@"没有匹配“%@”的版本", _filterText];
+    [_listStack addArrangedSubview:label];
+    [NSLayoutConstraint activateConstraints:@[
+        [label.leadingAnchor constraintEqualToAnchor:_listStack.leadingAnchor],
+        [label.trailingAnchor constraintEqualToAnchor:_listStack.trailingAnchor],
+    ]];
+    [self refreshNoMatchTheme:label];
+}
+
+/// 无命中提示跟主题走（只在构建时取一次，随列表重建刷新）。
+- (void)refreshNoMatchTheme:(UILabel *)label {
+    label.textColor = A2ThemeManager.shared.scheme.cOnSurfaceVariant;
+}
+/// 切换当前版本。
+/// 无效版本不允许选中（缺 jar 或 json 的版本启动必然失败）。
+- (void)selectVersion:(A2VersionRowView *)selected {
+    NSArray<NSDictionary<NSString *, id> *> *visible = [self filteredVersions];
+    NSInteger index = [_rowViews indexOfObject:selected];
+    if (index == NSNotFound || index >= (NSInteger)visible.count) return;
+
+    A2Version *model = visible[index][@"model"];
+    if (!model.isValid) {
+        [A2Toast show:[NSString stringWithFormat:@"无法选择：%@",
+                       model.invalidReason ?: @"版本文件不完整"] inView:self.view];
+        return;
+    }
+
+    if (![A2VersionManager.shared selectCurrentVersion:model]) return;
+
+    for (A2VersionRowView *r in _rowViews) {
+        r.current = (r == selected);
+    }
+    [A2Toast show:[NSString stringWithFormat:@"已切换到 %@", model.name] inView:self.view];
+}
+
+/// 改名/复制/删除后重建列表（管理器内部已 reload，这里只重刷 UI）。
+- (void)reloadVersionList {
+    for (UIView *v in _listStack.arrangedSubviews) {
+        [v removeFromSuperview];
+    }
+    [_rowViews removeAllObjects];
+    _emptyTitleLabel = nil;
+    _emptySubtitleLabel = nil;
+    [self loadVersions];
+    [self buildVersionList];
+}
+
+- (void)showMoreMenuForVersion:(A2Version *)version meta:(NSString *)meta fromView:(UIView *)source {
+    UIAlertController *sheet =
+        [UIAlertController alertControllerWithTitle:version.name
+                                            message:meta
+                                     preferredStyle:UIAlertControllerStyleActionSheet];
+    __weak typeof(self) weakSelf = self;
+    [sheet addAction:[UIAlertAction actionWithTitle:@"重命名"
+                                              style:UIAlertActionStyleDefault
+                                            handler:^(UIAlertAction *action) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self showRenameDialogForVersion:version];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"复制"
+                                              style:UIAlertActionStyleDefault
+                                            handler:^(UIAlertAction *action) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self showCopyDialogForVersion:version fromView:source];
+    }]];
+    // 导出整合包 —— 把整个版本打包分享给别人
+    [sheet addAction:[UIAlertAction actionWithTitle:@"导出为整合包"
+                                             style:UIAlertActionStyleDefault
+                                           handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (!self) return;
+
+        A2VersionExportViewController *vc =
+            [[A2VersionExportViewController alloc] initWithVersionName:version.name
+                                                            versionPath:version.versionPath];
+        [self.navigationController pushViewController:vc animated:YES];
+    }]];
+
+    [sheet addAction:[UIAlertAction actionWithTitle:@"删除"
+                                              style:UIAlertActionStyleDestructive
+                                            handler:^(UIAlertAction *action) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self showDeleteConfirmForVersion:version];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消"
+                                              style:UIAlertActionStyleCancel
+                                            handler:nil]];
+    sheet.popoverPresentationController.sourceView = source;
+    sheet.popoverPresentationController.sourceRect = source.bounds;
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+/// 重命名弹窗：非法名由管理器校验，这里只透出错误文案。
+- (void)showRenameDialogForVersion:(A2Version *)version {
+    __weak typeof(self) weakSelf = self;
+    [A2InputDialog presentFrom:self
+                        title:@"重命名版本"
+                        label:@"新版本名"
+                  initialText:version.name
+                     onFinish:^(BOOL committed, NSString *text) {
+        if (!committed) return;
+        __strong typeof(weakSelf) self = weakSelf;
+        NSError *err = nil;
+        if ([A2VersionManager.shared renameVersion:version to:text error:&err]) {
+            [self reloadVersionList];
+            [A2Toast show:@"已重命名" inView:self.view];
+        } else {
+            [A2Toast show:(err.localizedDescription ?: @"重命名失败") inView:self.view];
+        }
+    }];
+}
+
+/// 复制：先选粒度（无输入框的 sheet，锚在行上防 iPad 崩），再输新名，两步都合规。
+- (void)showCopyDialogForVersion:(A2Version *)version fromView:(UIView *)source {
+    __weak typeof(self) weakSelf = self;
+    UIAlertController *sheet =
+        [UIAlertController alertControllerWithTitle:@"复制版本"
+                                            message:@"仅版本文件只拷 json 与 jar；全部文件连存档模组一起拷"
+                                     preferredStyle:UIAlertControllerStyleActionSheet];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"仅版本文件" style:UIAlertActionStyleDefault
+                                           handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self requestCopyNameForVersion:version mode:A2VersionCopyModeMinimal];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"全部文件" style:UIAlertActionStyleDefault
+                                           handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        [self requestCopyNameForVersion:version mode:A2VersionCopyModeFull];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    sheet.popoverPresentationController.sourceView = source ?: self.view;
+    sheet.popoverPresentationController.sourceRect = source ? source.bounds : self.view.bounds;
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+/// 复制第二步：输新名并执行（粒度由上一步定，不用开关传）。
+- (void)requestCopyNameForVersion:(A2Version *)version mode:(A2VersionCopyMode)mode {
+    __weak typeof(self) weakSelf = self;
+    [A2InputDialog presentFrom:self
+                        title:@"复制版本"
+                        label:@"新版本名"
+                  initialText:[version.name stringByAppendingString:@" 副本"]
+                     onFinish:^(BOOL committed, NSString *text) {
+        if (!committed) return;
+        __strong typeof(weakSelf) self = weakSelf;
+        NSError *err = nil;
+        if (mode == A2VersionCopyModeFull) {
+            [A2VersionManager.shared copyVersionFully:version to:text error:&err];
+        } else {
+            [A2VersionManager.shared copyVersionMinimal:version to:text error:&err];
+        }
+        [self completeCopyWithError:err];
+    }];
+}
+
+/// 复制收尾：成功重刷列表，失败透出原因（Cocoa 的 error 惯例，nil 即成功）。
+- (void)completeCopyWithError:(nullable NSError *)error {
+    if (!error) {
+        [self reloadVersionList];
+        [A2Toast show:@"已复制" inView:self.view];
+    } else {
+        [A2Toast show:(error.localizedDescription ?: @"复制失败") inView:self.view];
+    }
+}
+
+/// 删除二次确认：版本目录含用户存档模组，不可撤销。
+- (void)showDeleteConfirmForVersion:(A2Version *)version {
+    __weak typeof(self) weakSelf = self;
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"删除版本"
+                                            message:[NSString stringWithFormat:
+                @"将删除 %@ 及其所有文件，不可撤销。", version.name]
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
+    [alert addAction:[UIAlertAction actionWithTitle:@"删除" style:UIAlertActionStyleDestructive
+                                           handler:^(UIAlertAction *a) {
+        __strong typeof(weakSelf) self = weakSelf;
+        NSError *err = nil;
+        if ([A2VersionManager.shared deleteVersion:version error:&err]) {
+            [self reloadVersionList];
+            [A2Toast show:@"已删除" inView:self.view];
+        } else {
+            [A2Toast show:(err.localizedDescription ?: @"删除失败") inView:self.view];
+        }
+    }]];
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+#pragma mark - 安装入口
+
+/// 进游戏版本选版页挑版安装（清单里选，不手输版本号）。
+- (void)openGameVersionList {
+    A2GameVersionListViewController *vc = [[A2GameVersionListViewController alloc] init];
+    [self.navigationController pushViewController:vc animated:YES];
+}
+
+@end

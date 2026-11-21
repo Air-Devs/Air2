@@ -1,0 +1,128 @@
+//
+//  SurfaceViewController.h
+//  Air2
+//
+//  Copyright (C) 2026 Air-Devs and contributors.
+//
+//  This program is free software: you can redistribute it and/or modify
+//  it under the terms of the GNU General Public License as published by
+//  the Free Software Foundation, either version 3 of the License, or
+//  (at your option) any later version.
+//
+//  This program is distributed in the hope that it will be useful,
+//  but WITHOUT ANY WARRANTY; without even the implied warranty of
+//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+//  GNU General Public License for more details.
+//
+//  You should have received a copy of the GNU General Public License
+//  along with this program. If not, see <https://www.gnu.org/licenses/gpl-3.0.txt>.
+//
+//  SPDX-License-Identifier: GPL-3.0-or-later
+//
+//
+#import <UIKit/UIKit.h>
+#import "UIKit+hook.h"
+
+#import "GameSurfaceView.h"
+#import "PLLogOutputView.h"
+
+// ★必须在 .m 里定义、头里只做 extern 声明★
+//   原来直接写定义 ⇒ 每个 import 此头的 .m 都生成一份
+//   （Clang 11 起默认 -fno-common）⇒ 链接期 54 个 duplicate symbol：
+//     _canAppendToLog / _fatalExitGroup / _virtualMouseFrame / _lastVirtualMousePoint …
+extern BOOL canAppendToLog;
+extern dispatch_group_t fatalExitGroup;
+extern CGRect virtualMouseFrame;
+extern CGPoint lastVirtualMousePoint;
+
+// 前置声明必须放在 @interface 外面 —— 放进里面会报
+// "missing '@end'"（Objective-C 的 @class 是文件级声明，不是成员）。
+@class A2ControlRenderer;
+@class A2GameMenuOverlay;
+
+@interface SurfaceViewController : UIViewController
+
+/// 控件容器 —— 类型是 A2ControlRenderer（不是裸 UIView），
+/// 因为 loadCustomControls 与 updateControlHiddenState 需要它的
+/// inputDelegate / 控件枚举能力。
+@property(nonatomic) A2ControlRenderer *ctrlView;
+@property(nonatomic) GameSurfaceView* surfaceView;
+@property(nonatomic) UIView *touchView;
+@property UIImageView* mousePointerView;
+@property(nonatomic) UIPanGestureRecognizer* scrollPanGesture;
+
+@property(nonatomic) UIView* rootView;
+
+- (instancetype)initWithMetadata:(NSDictionary *)metadata;
+- (void)sendTouchPoint:(CGPoint)location withEvent:(int)event;
+- (void)updateSavedResolution;
+- (void)updateGrabState;
+
++ (GameSurfaceView *)surface;
++ (BOOL)isRunning;
+// 获取当前显示的 SurfaceViewController 实例
+// 支持作为 rootViewController 或以模态方式呈现两种情况
++ (instancetype)currentInstance;
+
+// LogView category
+@property(nonatomic) PLLogOutputView* logOutputView;
+
+// Navigation category
+@property(nonatomic) NSArray *menuArray;
+@property(nonatomic) UITableView *menuView;
+@property(nonatomic) UIScreenEdgePanGestureRecognizer* edgeGesture;
+/// 悬浮球 + FPS/内存显示（对照 ZL2 的 GameBall + GameInfoBox）
+/// 类型必须是 A2GameMenuOverlay，不能是 UIView —— 否则
+/// self.gameMenuOverlay.onOpenEditor 编译器找不到。
+@property(nonatomic, strong) A2GameMenuOverlay *gameMenuOverlay;
+
+@end
+
+@interface SurfaceViewController(ExternalDisplay)
+
+- (void)switchToExternalDisplay;
+- (void)switchToInternalDisplay;
+
+@end
+
+@interface SurfaceViewController(LogView)
+
+- (void)viewWillTransitionToSize_LogView:(CGRect)frame;
+
+@end
+
+@interface SurfaceViewController(Navigation)<UIGestureRecognizerDelegate, UITableViewDataSource, UITableViewDelegate>
+
+- (void)actionOpenNavigationMenu;
+- (void)didSelectMenuItem:(int)item;
+- (void)viewWillTransitionToSize_Navigation:(CGRect)frame;
+// FCL 风格游戏内菜单动作
+- (void)actionToggleControls;        // 隐藏/显示控制按钮
+- (void)actionToggleVirtualMouse;    // 虚拟鼠标开关
+- (void)actionToggleKeyboard;        // 游戏内键盘开关
+- (void)actionAdjustResolution;      // 分辨率调整
+- (void)actionOpenMultiplayer;       // 联机（陶瓦）
+
+@end
+
+// MARK: - SDL3 渲染层卫兵（egl_bridge 使用）
+// 找到当前嵌入的 SDL 视图（SDL_uikitview）；非 SDL3 路径返回 nil。
+UIView *Amethyst_FindEmbeddedSDLView(void);
+// 把 SDL 嵌入视图（及其内部的金属子视图）改为透明。
+// 它位于最前以接收触摸，但不透明会整块遮住下面的 GameSurfaceView → 黑屏。
+// 只置 opaque / 背景色，不改 alpha、不重排 z 序，以免影响输入与虚拟鼠标。
+// 已处理过（全部已透明）返回 NO，本次确实改过返回 YES。
+BOOL Amethyst_MakeSDLRenderTransparent(void);
+// Air Task 32 / Task 52：SDL3 呈现层不变量执法（黑屏根治）。
+// 必须在主线程调用。依次做四件事：
+//   1) 隐藏 SDL 自己的 UIWindow —— 原生 UIKit_ShowWindow 会 makeKeyAndVisible，
+//      那个空窗口浮在整个宿主窗口之上，直接盖住 GameSurfaceView = 黑屏
+//      （Air 原话：“空窗黑盖子”）。隐藏后把 key window 还给宿主。
+//   2) 揭开渲染目标：GameSurfaceView 及其 layer 的 hidden 置 NO。
+//      供应商 libSDL3.dylib 的 Zalith 同源嵌入补丁会按类名找到它并
+//      setHidden:YES，而 GL/Vulkan 的真正呈现面正是它的 CAMetalLayer。
+//   3) 让 SDL 嵌入视图透明（复用 Amethyst_MakeSDLRenderTransparent）。
+//   4) z 序终局：GameSurfaceView 紧贴 SDL 触摸视图「之下」，容器内其余
+//      子视图（虚拟鼠标指针、控制按钮）压到最上——即 Air 的排布。
+// 返回 YES 表示本次发现并修复了「渲染层被外部隐藏」。
+BOOL Amethyst_EnforceSDL3Presentation(void);

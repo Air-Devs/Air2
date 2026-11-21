@@ -1,0 +1,22 @@
+# 导出符号白名单（供 Xcode 的 EXPORTED_SYMBOLS_FILE 使用）
+#
+# 只导出 _main 一个符号，原因：
+#
+#   JavaLauncher.m 通过 dlsym 取到 JLI_Launch 后直接调用。macOS/iOS 版 libjli
+#   在 JLI_Launch 里要先确定"宿主可执行文件是谁"，做法是
+#
+#       dlsym(RTLD_DEFAULT, "main")
+#
+#   本工程主二进制默认一个符号都不导出（LC_DYSYMTAB.nextdefsym 实测为 0），
+#   于是 libjli 报：
+#
+#       Error: could not find executable dlsym(RTLD_DEFAULT, main): symbol not found
+#       error locating main entrypoint
+#
+#   JVM 还没起来就退出 —— 上机日志已确认为启动失败的直接原因。
+#
+# 为什么不用 -Wl,-export_dynamic：它会把全部全局符号（含 shaderc_impl_glue
+# 引用的 glslang 运行期符号）一起塞进导出表并变成启动期强引用，dyld 会以
+#   symbol not found in flat namespace '_glslang_finalize_process'
+# 直接杀掉 App（已实测闪退）。只导出 _main 没有这个副作用。
+_main
