@@ -87,6 +87,17 @@
 
 @interface A2IntegrityRepairer ()
 
+/// 取消标志。
+///
+/// 注意：A2IntegrityRepairer.h 里第 85 行的 `cancelled` 属性属于
+/// **A2IntegrityRepairResult**（结果对象用它标记「本次修复是被取消的」），
+/// 不是修复器自己的状态位。修复器需要在流程里反复查这个标志来决定是否
+/// 继续下一个文件，所以必须在这里单独声明一份私有属性。
+/// 缺了它就是编译错误：
+///   error: property 'cancelled' not found on object of type
+///          'A2IntegrityRepairer *'
+@property (nonatomic, assign) BOOL cancelled;
+
 /// 批量下载器必须由属性持有。
 /// 局部变量会在方法返回瞬间被 ARC 释放，下载静默死掉（表现为进度永远 0）。
 @property (nonatomic, strong, nullable) A2BatchDownloader *activeDownloader;
