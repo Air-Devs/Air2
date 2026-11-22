@@ -1958,6 +1958,19 @@ static int A2RequiredJavaVersionForMCVersion(NSString *verName) {
     // 不拦截触摸：启动期间仍可操作悬浮球
     splash.userInteractionEnabled = NO;
     splash.versionName = self.currentVersionName ?: @"Minecraft";
+
+    // 启动前检查清单（对照 ZL2 buildLaunchPhases 的四个 addTask）。
+    // 顺序与 A2LaunchTask 枚举一致，所以 task 的值可以直接当行号用。
+    [splash setTasks:@[
+        [A2LaunchTaskItem itemWithSymbol:@"person.crop.circle"
+                                  title:@"检查账号"],
+        [A2LaunchTaskItem itemWithSymbol:@"puzzlepiece.extension"
+                                  title:@"检查游戏环境"],
+        [A2LaunchTaskItem itemWithSymbol:@"checkmark.shield"
+                                  title:@"校验并修复文件"],
+        [A2LaunchTaskItem itemWithSymbol:@"paperplane.fill"
+                                  title:@"启动游戏"],
+    ]];
     [splash setStage:A2LaunchStagePreparing message:@"正在准备启动…"];
 
     self.launchOverlayView = splash;
@@ -1985,6 +1998,17 @@ static int A2RequiredJavaVersionForMCVersion(NSString *verName) {
 
         A2LaunchSplashView *sv = (A2LaunchSplashView *)self.launchOverlayView;
         if ([sv isKindOfClass:A2LaunchSplashView.class]) {
+            // 把清单推进到当前任务：之前的全部标完成，当前这项标进行中。
+            // A2LaunchTask 的取值是 0..3，与 setTasks: 里的行号一一对应。
+            NSInteger idx = (NSInteger)p.task;
+            if (idx >= 0 && idx < 4) {
+                for (NSInteger i = 0; i < idx; i++) {
+                    [sv setTaskState:A2LaunchTaskStateDone atIndex:i detail:nil];
+                }
+                [sv setTaskState:A2LaunchTaskStateRunning
+                         atIndex:idx
+                          detail:p.message];
+            }
             [sv setStage:stage message:p.message];
             [sv appendLog:[NSString stringWithFormat:@"[%@] %@", p.title, p.message]];
         }
