@@ -77,7 +77,7 @@
     if (self.postReport) {
         [text appendFormat:@"；复检：%@", [self.postReport summaryText]];
     }
-    if (self.cancelled) [text appendString:@"（已取消）"];
+    if (self.cancelRequested) [text appendString:@"（已取消）"];
     return text;
 }
 
@@ -87,16 +87,16 @@
 
 @interface A2IntegrityRepairer ()
 
-/// 取消标志。
+/// 取消标志（修复器自身的流程控制位）。
 ///
-/// 注意：A2IntegrityRepairer.h 里第 85 行的 `cancelled` 属性属于
-/// **A2IntegrityRepairResult**（结果对象用它标记「本次修复是被取消的」），
-/// 不是修复器自己的状态位。修复器需要在流程里反复查这个标志来决定是否
-/// 继续下一个文件，所以必须在这里单独声明一份私有属性。
-/// 缺了它就是编译错误：
-///   error: property 'cancelled' not found on object of type
-///          'A2IntegrityRepairer *'
-@property (nonatomic, assign) BOOL cancelled;
+/// 注意区分：A2IntegrityRepairer.h 里的 `cancelled` 是
+/// **A2IntegrityRepairResult** 的属性，标记「本次修复结果是被取消的」。
+/// 修复器需要一个自己的状态位来决定是否继续处理下一个文件，两者语义不同、
+/// 归属不同类，所以这里用不同名字，避免歧义。
+/// （最初写成同名的 cancelled 会直接编译失败：
+///    error: property 'cancelled' not found on object of type
+///           'A2IntegrityRepairer *'）
+@property (nonatomic, assign) BOOL cancelRequested;
 
 /// 批量下载器必须由属性持有。
 /// 局部变量会在方法返回瞬间被 ARC 释放，下载静默死掉（表现为进度永远 0）。
@@ -130,7 +130,7 @@
 
     self.selfRetain = self;
     self.progressBlock = progress;
-    self.cancelled = NO;
+    self.cancelRequested = NO;
 
     if (versionName.length == 0 || gameHome.length == 0) {
         A2IntegrityRepairResult *result = [A2IntegrityRepairResult new];
@@ -152,7 +152,7 @@
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
 
-        if (self.cancelled) {
+        if (self.cancelRequested) {
             A2IntegrityRepairResult *result = [A2IntegrityRepairResult new];
             result.cancelled = YES;
             [self finishWithResult:result completion:completion];
@@ -251,8 +251,8 @@
         }
         result.removedCorruptedFiles = removed;
 
-        if (self.cancelled || requests.count == 0) {
-            result.cancelled = self.cancelled;
+        if (self.cancelRequested || requests.count == 0) {
+            result.cancelled = self.cancelRequested;
             [self verifyAfterRepairForResult:result
                                     report:report
                                   gameHome:gameHome
@@ -280,7 +280,7 @@
 
         downloader.onProgress = ^(A2BatchProgress *batchProgress) {
             __strong typeof(weakSelf) self = weakSelf;
-            if (!self || self.cancelled) return;
+            if (!self || self.cancelRequested) return;
 
             double fraction = 0.05 + batchProgress.fraction * 0.80;
             NSString *message = [NSString stringWithFormat:
@@ -313,7 +313,7 @@
             result.failuresByPath = failures ?: @{};
             result.succeededFiles = MAX(0, (NSInteger)requests.count -
                                            (NSInteger)result.failuresByPath.count);
-            result.cancelled = self.cancelled;
+            result.cancelled = self.cancelRequested;
 
             if (result.failuresByPath.count > 0) {
                 [A2Logger warning:@"IntegrityRepairer"
@@ -386,7 +386,7 @@
 }
 
 - (void)cancel {
-    self.cancelled = YES;
+    self.cancelRequested = YES;
     [self.activeDownloader cancel];
     self.activeDownloader = nil;
     // 注意：不在这里置 selfRetain = nil —— 下载回调还在路上，
