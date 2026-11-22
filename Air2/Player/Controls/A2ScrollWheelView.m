@@ -33,6 +33,11 @@ static const CGFloat kA2ScrollTouchSlop = 8.0;
 
 @implementation A2ScrollWheelView
 
+// editing 声明在 .h 里，但父类 A2ControlButtonView 没有对应 ivar，
+// 编译器不合成 _editing（编译报 use of undeclared identifier '_editing'），
+// 这里显式合成。
+@synthesize editing = _editing;
+
 - (instancetype)initWithWidget:(A2ControlWidget *)widget {
     self = [super initWithWidget:widget];
     if (!self) return nil;
