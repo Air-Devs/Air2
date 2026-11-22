@@ -874,7 +874,7 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
             break;
     }
     if (![root isKindOfClass:NSDictionary.class]) {
-        if (error) *error = [self errorWith:@"序列化失败"];
+        if (error) *error = [A2ControlLayout errorWith:@"序列化失败"];
         return NO;
     }
 
@@ -903,7 +903,7 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
     return root;
 }
 
-- (NSError *)errorWith:(NSString *)msg {
++ (NSError *)errorWith:(NSString *)msg {
     return [NSError errorWithDomain:@"A2ControlLayout" code:1
                            userInfo:@{NSLocalizedDescriptionKey: msg}];
 }
