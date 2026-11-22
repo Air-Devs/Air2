@@ -903,7 +903,7 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
     return root;
 }
 
-+ (NSError *)errorWith:(NSString *)msg {
+- (NSError *)errorWith:(NSString *)msg {
     return [NSError errorWithDomain:@"A2ControlLayout" code:1
                            userInfo:@{NSLocalizedDescriptionKey: msg}];
 }
