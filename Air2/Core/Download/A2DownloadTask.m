@@ -63,12 +63,20 @@ const NSInteger A2DownloadResourceClassUnknown = -1;
 }
 
 - (double)progress {
+    // 外部任务（如整合包安装）的进度是「已完成文件数 / 总数」，
+    // 没有真实的字节总量，直接透传流程自报的值。
+    if (self.externallyDriven) {
+        return MAX(0.0, MIN(1.0, self.progressOverride));
+    }
     if (self.totalBytes <= 0) return 0;
     double value = (double)self.downloadedBytes / (double)self.totalBytes;
     return MAX(0.0, MIN(1.0, value));
 }
 
 - (NSString *)speedText {
+    if (self.externallyDriven) {
+        return self.speedTextOverride.length ? self.speedTextOverride : nil;
+    }
     if (self.speed <= 0) return nil;
     // 不用手写 MB 换算：NSByteCountFormatter 自带单位与有效位处理（Foundation，跨层安全）。
     NSByteCountFormatter *formatter = [[NSByteCountFormatter alloc] init];

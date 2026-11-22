@@ -72,6 +72,28 @@ extern NSNotificationName const A2DownloadTasksDidChangeNotification;
 /// 清空已结束任务
 - (void)clearFinishedTasks;
 
+#pragma mark - 外部流程任务
+
+/// 登记一个由外部流程（如整合包安装）驱动的任务。
+///
+/// 这类任务没有 A2DownloadRequest，进度/速度由流程自己推送，因此不可暂停；
+/// 取消时中心只回调 cancelHandler，真正的收尾由流程负责。
+/// @return 任务 ID（永不为 nil）
+- (NSString *)registerExternalTaskWithTitle:(NSString *)title
+                                   subtitle:(nullable NSString *)subtitle
+                              cancelHandler:(nullable void (^)(void))cancelHandler;
+
+/// 推送外部任务进度（0.0~1.0）；detailText 如「正在下载 (3/12)」。
+- (void)updateExternalTaskWithID:(NSString *)taskID
+                        progress:(double)progress
+                      detailText:(nullable NSString *)detailText
+                       speedText:(nullable NSString *)speedText;
+
+/// 结束外部任务。已处于 Cancelled 时直接返回，不覆盖取消态。
+- (void)finishExternalTaskWithID:(NSString *)taskID
+                         success:(BOOL)success
+                           error:(nullable NSError *)error;
+
 @end
 
 NS_ASSUME_NONNULL_END
