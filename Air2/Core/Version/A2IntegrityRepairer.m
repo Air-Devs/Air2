@@ -77,7 +77,7 @@
     if (self.postReport) {
         [text appendFormat:@"；复检：%@", [self.postReport summaryText]];
     }
-    if (self.cancelRequested) [text appendString:@"（已取消）"];
+    if (self.cancelled) [text appendString:@"（已取消）"];
     return text;
 }
 
