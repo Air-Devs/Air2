@@ -281,7 +281,14 @@ typedef NS_ENUM(NSInteger, A2JoystickTriggerMode) {
 
 @interface A2ControlLayout : NSObject
 
-@property (nonatomic, copy, readonly) NSString *sourceFormat;   // zl2 / fcl / air1 / air2
+/// 布局来源格式：zl2 / fcl / air1 / air2。
+///
+/// 注意这里是 readwrite 而不是 readonly：各格式解析器（A2ControlFormatZL.m、
+/// A2ControlFormatFCL.m …）在**另一个编译单元**里给这个属性赋值，看不到
+/// A2ControlLayout.m 里的类扩展重声明，只能靠头文件。
+/// 写成 readonly 会直接编译失败：
+///   A2ControlFormatZL.m:162:25: error: assignment to readonly property
+@property (nonatomic, copy) NSString *sourceFormat;
 @property (nonatomic, assign) NSInteger version;
 @property (nonatomic, copy) NSString *name;
 @property (nonatomic, copy, nullable) NSString *author;

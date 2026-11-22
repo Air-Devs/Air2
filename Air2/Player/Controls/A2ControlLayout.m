@@ -691,9 +691,9 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
 
 #pragma mark - 布局
 
-@interface A2ControlLayout ()
-@property (nonatomic, copy, readwrite) NSString *sourceFormat;
-@end
+// sourceFormat 已在 A2ControlLayout.h 里声明为 readwrite
+// （跨编译单元的解析器需要直接赋值），这里不再重复声明，
+// 否则会报 illegal redeclaration。
 
 @implementation A2ControlLayout
 
