@@ -1,0 +1,1196 @@
+# Air2 项目交接文档
+
+> **最后更新**：2026-10-08（见文末“第十章 本次交接后进展”，原文保留备查）
+> **当前进度**：CI 已绿；P1（Settings/Renderer/皮肤获取）与 P2（MurmurHash2/文件管理/整合包解析）及诊断入口均已落地，详见第十章
+> **接手须知**：先读「第二章 硬性约束」，那里写了不能违反的规则
+>
+> ⚠️ **注意：1.游戏启动流程（Bridge / Natives / Player / JavaApp）已由其他人负责，不要重复开发。**
+> 本文档中涉及启动流程的部分仅作接口说明，供协作对接使用。2.文档中的那些进度别全信，由于ci失败，后面的做的功能没有经过实测。
+---
+
+# 第一章 项目概况
+
+## 1.1 基本信息
+
+| 项 | 值 |
+|---|---|
+| 仓库 | https://github.com/Air-Devs/Air2 |
+| 可见性 | public |
+| 主分支 | `main` |
+| 当前规模 | 118 个 ObjC 文件 / 18523 行 |
+| 构建产物 | 未签名 IPA（需自行签名安装） |
+
+## 1.2 项目定位
+
+iOS 端 Minecraft: Java Edition 启动器，基于 pojav 后端重新开发。
+
+**核心诉求（用户原话）**：
+- 「禁止石山代码」
+- 「UI 必须好看、必须有动画」
+- 「先完成 UI + 动画」→ 已完成
+- 「版本隔离采用和 ZL2 一样的」
+- 「参考一下 ZL2」+「不要完全照抄 ZL2」（边界见 2.4）
+
+## 1.3 参考项目（设计依据）
+
+遇到拿不准的实现，**直接读这两家的源码**，不要凭感觉写：
+
+| 项目 | 地址 | 参考范围 |
+|---|---|---|
+| **ZL2** | `ZalithLauncher/ZalithLauncher2` | **Android 端成熟实现。UI 排版规格、版本隔离规则、下载引擎、双平台集成、账号流程 —— 全部以它为准** |
+| **Amethyst-iOS** | `herbrine8403/Amethyst-iOS-MyRemastered` | iOS 端 pojav 后端落地经验：JIT 环境、渲染桥、Natives 层、启动流程 |
+
+拉源码的方式：
+```bash
+curl -s -H "Authorization: token <TOKEN>" \
+  "https://raw.githubusercontent.com/ZalithLauncher/ZalithLauncher2/main/<文件路径>"
+```
+
+ZL2 的完整文件树可以先下载缓存：
+```bash
+curl -s "https://api.github.com/repos/ZalithLauncher/ZalithLauncher2/git/trees/main?recursive=1" -o zl2.json
+python3 -c "
+import json
+d=json.load(open('zl2.json'))
+for x in d['tree']:
+    print(x['type'], x['path'])
+"
+```
+
+---
+
+# 第二章 硬性约束（不可违反）
+
+## 2.1 技术栈（已定，不要改）
+
+| 层 | 语言 | 说明 |
+|---|---|---|
+| UI | **Objective-C** | 不是 Swift！不是 SwiftUI！ |
+| Core | **Objective-C** | |
+| 原生层 | Objective-C / C | |
+| 启动核心 | Java | 复用 pojav 系 |
+| 构建 | Xcode + Makefile + CMake | 不是 Gradle |
+
+**Swift 仅保留为极少量衔接点** —— 目前工程里**一个 Swift 文件都没有**。
+用户明确要求过「主用 ObjC」。
+
+## 2.2 依赖方向（CI 强制检查）
+
+```
+App → UI → Player → Core → Bridge → Natives
+              ↘ Utils ↙
+```
+
+- **Core 层禁止 import UIKit / SwiftUI**（CI 会失败）
+- **Bridge 层不得包含业务逻辑**
+- **Utils 不得反向依赖任何业务层**
+- 新增目录必须先登记 `docs/ARCHITECTURE.md`，否则 CI 失败
+
+## 2.3 路径与隔离规则
+
+**`A2GamePath` 是游戏路径的唯一出口**，业务代码禁止手写路径拼接。
+
+版本隔离是**全局三档**（「设置 → 游戏 → 隔离档位」里选，对所有版本统一生效），
+语义**逐条对照 Punch-air 的 `PLProfiles.m`**（`PLIsolationMode`）：
+
+| 档位 | 游戏目录 gameDir | mods 目录 |
+|---|---|---|
+| `none` 关闭 | `{gameHome}` | `{gameHome}/mods` |
+| `mod` 仅 Mod | `{gameHome}` | `{gameHome}/versions/{版本名}/mods` |
+| `full` 全部 | `{gameHome}/versions/{版本名}` | `{gameHome}/versions/{版本名}/mods` |
+
+- 仅 Mod 档还会把 `{gameHome}/mods` 换成指向**当前版本** mods 的符号链接；
+  建链前先把已有 mod 迁进版本目录，迁不干净或同名冲突就放弃建链（绝不删用户文件）。
+- 全部档在版本目录下建 9 个标准子目录：
+  `mods / saves / config / resourcepacks / shaderpacks / logs / crash-reports / datapacks / screenshots`。
+- 其余可隔离目录（`resourcepacks` / `saves` / `shaderpacks` / `screenshots`）跟随 gameDir。
+- **`libraries` 与 `assets` 始终共用**，不随档位变化。
+- 档位默认「仅 Mod」；旧版本的布尔开关 `A2GlobalVersionIsolation` 读取时自动迁移
+  （开过 → 全部，其余 → 仅 Mod）。
+
+`tests/Core/test_version_isolation.py` 覆盖三档路径解析、标准目录与迁移规则，改隔离逻辑必须跑。
+
+## 2.4 设计边界：参考 ZL2 的什么、不参考什么
+
+用户说过两句话，边界在这里：
+
+| 参考 ZL2 ✅ | 自己设计 ❌ |
+|---|---|
+| 布局结构（横屏三区、左右分栏） | 配色方案 |
+| 尺寸规格（30%/70% 分区、12 边距、28 圆角） | 具体视觉风格 |
+| 交互决策（卡片形态、设置行分组方式） | 动画曲线与时长 |
+| 算法（隔离规则、下载校验、双平台映射） | 图标与图标风格 |
+
+**教训**：曾经看到用户发的 ZL2 截图就开始逐像素复刻，被批评了。
+正确的做法是读懂它的**设计决策**，然后用 iOS 的方式实现。
+
+## 2.5 不要乱加功能
+
+**用户明确批评过「乱加设置」** —— 我曾编了 30 个设置项但全都没有实现。
+
+**规则：新增设置项 / 按钮 / 页面的前提是有真实实现。**
+
+反面例子（我犯过的）：
+- 渲染器选择 —— 但没有任何渲染器代码
+- Java 运行时管理 —— 但没有 JRE 管理逻辑
+- 内存分配滑块 —— 但没有内存分配逻辑
+- 「检查更新」按钮 —— 但没有更新检查实现
+
+**宁缺毋滥。** 没有实现就不放 UI，比放个点了没反应的按钮好。
+
+## 2.6 提交规范
+
+```
+<类型>(<范围>): <描述>
+
+类型：feat | fix | refactor | perf | docs | test | chore | build
+范围：app | ui | core | bridge | natives | java | ci | docs
+```
+
+提交者信息（用户要求）：
+```
+user.name  = yitenchen123
+user.email = 224235981+yitenchen123@users.noreply.github.com
+```
+
+推送命令（远程不存 token）：
+```bash
+git -c http.version=HTTP/1.1 \
+    -c http.https://github.com/.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64)" \
+    -c http.lowSpeedLimit=0 -c http.lowSpeedTime=999 \
+    push origin main
+```
+网络不稳，失败要重试（3-5 次），`http.version=HTTP/1.1` 能显著提高成功率。
+
+## 2.7 改动后必须做的事
+
+```bash
+# 1. 跑检查（必须全绿才能提交）
+bash scripts/lint_structure.sh
+
+# 2. 改了文件结构后重新生成工程
+python3 scripts/gen_xcodeproj.py
+
+# 3. 改了核心算法要跑测试
+python3 tests/Core/test_version_isolation.py
+python3 tests/Core/test_download_ledger.py
+python3 tests/Core/test_resume_validation.py
+python3 tests/Core/test_zip_reader.py
+```
+
+**⚠️ `Air2.xcodeproj/project.pbxproj` 是脚本生成的**，
+不要手工编辑，改了文件结构后重跑 `gen_xcodeproj.py` 即可。
+
+**⚠️ 检查脚本报错时先怀疑自己的改动，不要改脚本绕过。**
+每条规则都对应一次真实的 CI 失败。
+
+---
+
+# 第三章 进度总览
+
+## 3.1 完成度
+
+| 模块 | 完成度 | 说明 |
+|---|---|---|
+| 主题系统 | **95%** | 五套主题 + 动态取色 + 亮暗模式 + 四种配色风格 |
+| 基础组件 | **90%** | 卡片、按钮、设置行、进度、导航等 16 个组件 |
+| 页面 UI | **85%** | 11 个页面已完成，缺游戏内触控层与文件管理 |
+| 下载引擎 | **90%** | 分片、断点续传、镜像、校验齐全；进度 UI 已接 |
+| 双平台资源 | **85%** | Modrinth 完整；CurseForge 缺 MurmurHash2 |
+| 版本隔离 | **100%** | 逐条对照 ZL2，22 项测试全过 |
+| 版本管理 | **80%** | 扫描/选择/删除/重命名完成 |
+| 版本安装 | **70%** | 7 阶段流程完成，加载器安装完成 |
+| 账号体系 | **80%** | 三种登录方式完成；皮肤/披风未做 |
+| 模组加载器 | **75%** | 查询 + 安装完成；OptiFine 不支持自动装 |
+| 游戏启动 | — | **已分配给其他人，不要重复开发** |
+| 渲染后端 | — | 同上（跟随启动流程一起做） |
+| 全局设置 | **20%** | 散在 UserDefaults 里，未做注册表 |
+
+## 3.2 当前能跑通 / 跑不通
+
+**能跑通**：
+```
+打开 App → 主页显示 → 账号登录（微软/离线/第三方）
+        → 设置（主题/背景/镜像开关）
+        → 版本管理（列表/切换/删除/重命名）
+        → 版本设置（隔离开关，真实读写配置）
+        → 下载（Modrinth/CurseForge 切换、搜索、筛选、排序）
+        → 下载资源到对应目录
+        → 安装版本（7 阶段真实流程）
+```
+
+**尚未接通**（由其他人负责）：
+```
+⬜ 点「启动游戏」—— 目前只有个假动画占位，等 Bridge 层就绪后对接
+⬜ 游戏内触控
+⬜ 渲染后端
+```
+
+**协作接口**：`A2LauncherViewController` 的 `launchGame` 方法是启动入口，
+目前只有假动画。启动流程就绪后，把实现替换进去即可。
+详见第六章的「协作接口」小节。
+
+---
+
+# 第四章 目录结构与模块清单
+
+## 4.1 完整目录树
+
+```
+Air2/
+├── App/                    应用入口、生命周期、根导航        （6 文件，648 行）✅
+│   ├── main.m
+│   ├── A2AppDelegate        （锁横屏）
+│   ├── A2SceneDelegate
+│   ├── A2RootViewController （根容器 + 任务抽屉）
+│   ├── A2NavigationController（自定义转场）
+│   └── A2CrashGuard         （崩溃日志落盘）
+│
+├── Bridge/                 Swift↔ObjC↔JVM 桥接              ⬜ 空，待实现
+│
+├── Core/                   业务核心（禁止 import UIKit）      （15 文件，6709 行）
+│   ├── Account/            ✅ A2Account / A2AccountManager / A2MicrosoftAuth
+│   ├── Addons/             ✅ A2ModrinthAPI / A2CurseForgeAPI / A2ContentSource
+│   │                          A2MirrorResolver / A2ModLoaderAPI
+│   │                          A2ModLoaderInstaller / A2ZipReader
+│   ├── Download/           ✅ A2DownloadEngine / A2DownloadTask
+│   ├── Path/               ✅ A2VersionIsolation（含 A2GamePath）
+│   ├── Version/            ✅ A2VersionManager / A2GameInstaller
+│   ├── Renderer/           ⬜ 空，渲染后端选择
+│   └── Settings/           ⬜ 空，全局设置注册表
+│
+├── UI/                     界面                              （38 文件，11166 行）
+│   ├── Screens/            ✅ 11 个页面（见 4.3）
+│   ├── Components/         ✅ 16 个组件（见 4.2）
+│   ├── Control/            ⬜ 空，游戏内触控层
+│   └── Theme/              ✅ 主题系统
+│
+├── Player/                 ⬜ 空，游戏会话宿主
+├── Utils/                  ⬜ 空
+│
+├── Natives/                ⬜ 空，ObjC/C 原生层（渲染桥、输入注入）
+├── JavaApp/                ⬜ 空，Java 启动核心
+├── Libraries/              ⬜ 空，预编译二进制
+├── Assets/                 ⬜ 空，图标与本地化
+├── cmake/ scripts/ docs/ tests/
+└── Air2.xcodeproj/         （脚本生成，勿手改）
+```
+
+## 4.2 组件清单（`UI/Components/`）
+
+| 文件 | 作用 |
+|---|---|
+| `A2GlassCard` | MD3 卡片。用 `surfaceContainer` 五档层级表达深度，**不用毛玻璃** |
+| `A2CardPosition` | 分组内元素的圆角位置计算 |
+| `A2CardTitleBar` | 卡片顶栏 |
+| `A2PrimaryButton` | 渐变主按钮，弹簧按压 + 加载态 |
+| `A2SettingsRow` | 设置行（支持图标/副标题/箭头/开关/自定义右侧） |
+| `A2SettingsSection` | 设置分组（**自动处理首/中/末行圆角**） |
+| `A2CategoryNavView` | 左侧分类导航（设置页与下载页共用） |
+| `A2RingProgress` | 环形进度 |
+| `A2ProgressBar` | 线性进度条 + 速度 |
+| `A2TaskProgressView` | 任务卡片 |
+| `A2TaskDrawer` | 底部任务抽屉（可拖拽展开） |
+| `A2VersionCard` | 版本卡片 |
+| `A2QuickActionCard` | 快捷操作卡 |
+| `A2BackgroundView` | 自定义背景（含**右侧渐隐**处理） |
+| `A2ColorWheel` | 二维大色盘 |
+| `A2Toast` | 轻提示 |
+
+## 4.3 页面清单（`UI/Screens/`）
+
+| 页面 | 状态 | 说明 |
+|---|---|---|
+| `Home/A2LauncherViewController` | ✅ | 横屏三区主界面 |
+| `A2BaseViewController` | ✅ | 页面基类（统一顶栏 + 背景） |
+| `Account/A2AccountViewController` | ✅ | 账号列表 |
+| `Account/A2LoginViewController` | ✅ | 三种登录方式 |
+| `Settings/A2SettingsViewController` | ✅ | 设置（左导航 + 右内容） |
+| `Settings/A2AppearanceSettings` | ✅ | 外观分组构建器 |
+| `Settings/A2BackgroundSettingsViewController` | ✅ | 背景设置 |
+| `Settings/A2ColorThemeDialog` | ✅ | 颜色主题弹窗（大色盘） |
+| `Version/A2VersionListViewController` | ✅ | 版本管理（左目录 + 右列表） |
+| `Version/A2VersionSettingsViewController` | ✅ | 版本设置（含隔离） |
+| `Version/A2VersionRowView` | ✅ | 版本行 |
+| `Download/A2DownloadViewController` | ✅ | 下载中心（左导航） |
+| `Download/A2DownloadListViewController` | ✅ | 资源列表（搜索/筛选/排序） |
+| `Download/A2InstallingViewController` | ✅ | 安装进度（7 阶段） |
+
+---
+
+# 第五章 关键设计决策（改动前必读）
+
+## 5.1 主题系统：不用 UIColor 动态颜色 ⚠️
+
+**踩过的坑**：最初用 `colorWithDynamicProvider` 做亮暗适配，
+结果 iPhone 暗色模式下卡片仍是亮色。
+
+**根因**：动态颜色由「视图自身的 trait 环境」解析，
+而取色发生在 `applyTheme` 时，视图往往**还没加入 window 层级**，
+解析用的是默认 trait（亮色）。
+
+**现方案**：色板分两段
+
+```objc
+A2ColorSlot  → 同时持有亮色与暗色的【具体】色值
+cXxx 字段    → 经 resolvedForDark: 解析后的具体 UIColor
+```
+
+视图统一用 `s.cPrimary` / `s.cSurface` 取色，**不依赖 trait 解析时机**。
+
+**改色板时必须同步四处**（有检查脚本兜底）：
+1. `A2ColorScheme.h` 的 `A2ColorSlot *xxx` 声明
+2. `A2ColorScheme.h` 的 `cXxx` 解析字段声明
+3. `A2ColorScheme.m` 的 `cXxx` 属性 + `A2RESOLVE(xxx, cXxx)`
+4. `A2ColorTheme.m` 的亮暗两套推导值 + `A2PAIR(xxx)`
+
+漏一处不会编译报错，但**运行期会取到 nil**（界面透明或黑块）。
+`scripts/check_imports.py` 有色板对齐检查。
+
+## 5.2 下载引擎：断点续传要严格校验 ⚠️
+
+来自 ZL2 的 `Fetcher.ResumeContext.canResume`：
+
+- 必须 **206**（200 说明服务端忽略了 Range）
+- `Content-Encoding` 必须是 `identity`（压缩传输时 Range 语义错乱）
+- `contentLength == bodyLength + 已收字节`
+- 优先用 **strong ETag**（`W/` 开头的弱 ETag 不作依据），否则校验 URL + Last-Modified
+- `Content-Range` 的 start/end/total 逐字段精确匹配
+- `end - start + 1 == bodyLength`
+
+**为什么这么严**：接受「看起来差不多」的 206 会导致文件**静默损坏**——
+大小对、内容错，极难排查。
+
+**其他机制**：
+- 半成品写 `.part`，校验通过后原子替换
+- 看门狗看「有没有真的写进文件」（CDN 心跳字节会让 URLSession 空闲超时永不触发）
+- 测速**逐秒采样、不平滑不外推**（ZL2 的做法）
+- 进度支持**负 delta 回退**（换源/重试时上报负值）
+
+**⚠️ 暂停/恢复用自有断点机制**（半成品文件 + Range 请求），
+**不要用** `cancelByProducingResumeData:` —— 那是 `NSURLSessionDownloadTask` 的方法，
+我们用的是 `dataTask`，**两套 API 不能混用**。
+
+## 5.3 双平台资源抽象 ⚠️
+
+两家的数据模型差异不小，若让 UI 分别处理，每个页面都要写两套：
+
+| 项 | Modrinth | CurseForge |
+|---|---|---|
+| 项目 ID | 字符串 | 数字 |
+| 分类 | facets 字符串 | classId 数字 |
+| 分页 | offset/limit | index/pageSize |
+| 排序 | 字符串 | 数字码 |
+| 下载限制 | 无 | `allowModDistribution` |
+
+**统一成 `A2ContentItem` / `A2ContentVersion`**，UI 只面对一种结构。
+
+**两个照搬 ZL2 的设计**：
+
+1. **排序字段枚举同时携带两家的值**
+```objc
+A2ContentSortFieldRelevance → CurseForge "1" / Modrinth "relevance"
+A2ContentSortFieldDownloads → CurseForge "6" / Modrinth "downloads"
+A2ContentSortFieldPopularity→ CurseForge "2" / Modrinth "follows"
+A2ContentSortFieldNewest    → CurseForge "11"/ Modrinth "newest"
+A2ContentSortFieldUpdated   → CurseForge "3" / Modrinth "updated"
+```
+新增排序只需加一个枚举项，不用改两处 switch。
+
+2. **分类一对多映射**
+`A2ContentClass` 同时给出 CurseForge `classId`、Modrinth `project_type`、
+以及对应的**版本隔离目录名**。
+
+## 5.4 镜像加速
+
+CurseForge 与 Modrinth 的 CDN 在国内访问很慢，MCIM 做了反向代理：
+
+```
+https://edge.forgecdn.net  →  https://mod.mcimirror.top
+https://cdn.modrinth.com   →  同上
+https://media.forgecdn.net →  同上
+```
+
+策略（与 ZL2 一致）：
+- **只在检测到中国大陆网络时启用**（看时区，不发请求探测 IP ——
+  判断错了只影响快慢，不影响功能）
+- 用户可选「官方优先」/「镜像优先」
+- 返回**候选列表**交给下载引擎依次尝试 —— 天然支持失败回退
+
+## 5.5 凭据存储
+
+**API Key / Token 存 Keychain，不硬编码**（硬编码会进 git 历史且无法吊销）。
+
+- CurseForge Key：`A2CurseForgeAPI`，用
+  `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly`（仅本机、不参与 iCloud 备份）
+- 账号文件：`Documents/accounts.json`，权限收紧到 `0600`
+
+## 5.6 UI 规格速查
+
+**主页布局**（横屏三区）：
+```
+┌──────────────────────────────────────────────────┐
+│  Air2                            [账号] [下载] [设置] │
+├────────────────────────┬─────────────────────────┤
+│                        │  账户卡（头像 64 居中）    │
+│   自定义背景 / 主题渐变   │  版本卡（含启动按钮）      │
+│   70%                  │  最近游玩（横滑）          │
+│                        │  30%                    │
+└────────────────────────┴─────────────────────────┘
+```
+「操作区 30% / 内容区 70%」来自 ZL2 的 `ContentWeight=7f : ActionMenuWeight=3f`。
+
+**尺寸常量**（`A2Metrics.h`）：
+| 项 | 值 |
+|---|---|
+| 卡片外边距 / 内边距 / 间距 | 12 / 12 / 12 |
+| 圆角（MD3 Shape Scale） | 4 / 8 / 12 / 16 / **28** |
+| 顶栏高 | 52 |
+| 按钮高 | 52 |
+| 头像 | 大 64 / 小 48 |
+| 触控最小尺寸 | 44 |
+
+**「一组行拼成一张卡」**（`A2SettingsSection`）：
+```
+┌────────────────┐  ← 圆角 28（首行）
+│ 设置项          │
+├────────────────┤  ← 圆角 4（中间行）
+│ 设置项          │
+├────────────────┤  ← 圆角 4（中间行）
+│ 设置项          │
+└────────────────┘  ← 圆角 28（末行）
+     行间距 2
+```
+
+**动画**：统一用 `UIViewPropertyAnimator` + `UISpringTimingParameters`（damping 0.78）。
+`A2ExpressiveSpring`（damping 0.72）用于强调操作。
+**不用 ease-in-out**（iOS 上手感发木）。
+
+---
+
+# 第六章 协作分工与接口
+
+## 6.1 分工现状
+
+| 范围 | 负责人 | 状态 |
+|---|---|---|
+| **UI 层**（`Air2/UI/`） | 本文档的接手人 | 完成度 85% |
+| **Core 层**（`Air2/Core/`） | 本文档的接手人 | 完成度 60% |
+| **游戏启动流程** | **其他人** | 进行中 |
+| └ `Air2/Bridge/` | 其他人 | 未开始 |
+| └ `Air2/Natives/` | 其他人 | 未开始 |
+| └ `Air2/Player/` | 其他人 | 未开始 |
+| └ `Air2/JavaApp/` | 其他人 | 未开始 |
+
+**⚠️ 不要重复开发启动流程。** 本文档只说明需要对接的接口。
+
+## 6.2 需要对接的接口
+
+### 6.2.1 启动入口（UI → 启动流程）
+
+**位置**：`Air2/UI/Screens/Home/A2LauncherViewController.m`
+
+```objc
+- (void)launchGame {
+    // 目前是假动画占位，等启动流程就绪后替换为真实实现
+    _launchButton.loading = YES;
+    dispatch_after(..., ^{
+        self.launchButton.loading = NO;
+        [A2Toast show:@"启动流程尚未接入" inView:self.view];
+    });
+}
+```
+
+**启动流程侧需要提供的接口**（建议签名，可协商）：
+
+```objc
+/// 启动游戏
+@protocol A2GameLaunching <NSObject>
+- (void)launchVersion:(A2Version *)version
+              account:(A2Account *)account
+             progress:(void (^)(NSString *stage, double progress))progress
+           completion:(void (^)(BOOL success, NSError *error))completion;
+@end
+```
+
+**所需数据**（UI 侧已准备好，可直接取）：
+
+| 数据 | 来源 |
+|---|---|
+| 要启动的版本 | `A2VersionManager.shared.currentVersion` |
+| 版本所在目录 | `A2Version.gameDirectory`（隔离逻辑已处理） |
+| 版本 json 路径 | `A2Version.jsonPath` |
+| 客户端 jar 路径 | `A2GamePath.versionJarPath:` |
+| 当前账号 | `A2AccountManager.shared.currentAccount` |
+| 账号凭据 | `A2Account.accessToken` / `.profileID` / `.username` |
+| 内存分配 | `A2VersionIsolation.ramAllocation`（-1 表示跟随全局） |
+| JVM 参数 | `A2VersionIsolation.jvmArgs` |
+| 游戏参数 | `A2VersionIsolation.gameArgs` |
+| 隔离档位 | `A2Version.isolationMode`（全局，见 `A2Settings.versionIsolationMode`） |
+
+### 6.2.2 进度回传（启动流程 → UI）
+
+启动过程较长，UI 侧已准备好进度显示组件：
+
+| 组件 | 用途 |
+|---|---|
+| `A2RingProgress` | 环形总进度 |
+| `A2ProgressBar` | 线性进度 + 速度 |
+| `A2TaskProgressView` | 任务卡片 |
+| `A2TaskDrawer` | 底部任务抽屉（可拖拽展开） |
+| `A2InstallingViewController` | 完整的分阶段进度页（可参考它的 7 阶段实现） |
+
+`A2InstallingViewController` 里的阶段枚举可作为启动阶段的参考：
+
+```objc
+typedef NS_ENUM(NSInteger, A2InstallStage) {
+    A2InstallStageFetchManifest = 0,
+    A2InstallStageDownloadJSON,
+    A2InstallStageDownloadJar,
+    A2InstallStageDownloadLibraries,
+    A2InstallStageDownloadAssets,
+    A2InstallStageInstallLoader,
+    A2InstallStageFinalize,
+    A2InstallStageCount,
+};
+```
+
+### 6.2.3 版本安装器（可作为启动流程的参考）
+
+`A2GameInstaller` 已经实现了完整的**版本安装**流程，
+启动流程可以参考它的编排方式与进度回传机制：
+
+```objc
+- (void)install:(A2InstallRequest *)request
+       progress:(void (^)(A2InstallStage stage, double progress, NSString *message))progress
+     completion:(void (^)(BOOL success, NSError * _Nullable error))completion;
+```
+
+**注意**：`A2GameInstaller` 是**安装**（下载文件到磁盘），
+不是**启动**（创建 JVM 并运行）。两者是不同阶段，不要混淆。
+
+## 6.3 启动流程需要参考的资料
+
+如果协作方需要，这些是本项目已确认的参考来源：
+
+| 要做的事 | 参考文件 |
+|---|---|
+| JVM 启动 | Amethyst `Natives/JavaLauncher.m` |
+| 渲染桥 | Amethyst `Natives/ctxbridges/{osm,gl,vk}_bridge.m` |
+| 渲染面 | Amethyst `Natives/SurfaceViewController.m` |
+| Metal layer | Amethyst `Natives/GameSurfaceView.m` |
+| JIT 环境 | Amethyst `Natives/pocketj_jit/` |
+| 输入注入 | Amethyst `Natives/input/` |
+| 参数拼装 | ZL2 `game/launch/LaunchArgs.kt`、`GameLauncher.kt` |
+| 启动流程 | ZL2 `game/launch/GameLaunchFlow.kt` |
+| Java 侧核心 | Amethyst `JavaApp/src/launcher/` |
+
+## 6.4 本文档接手人应做的事
+
+**不包含启动流程**，focus 在这些：
+
+| 优先级 | 任务 | 说明 |
+|---|---|---|
+| P1 | `Core/Renderer/` | 渲染后端注册与选择（供启动流程调用） |
+| P1 | `Core/Settings/` | 全局设置注册表（目前散在 UserDefaults） |
+| P1 | 皮肤 / 披风 | 账号页有入口但无实现，参考 ZL2 `game/account/wardrobe/` |
+| P2 | CurseForge 更新检查 | 缺 MurmurHash2 实现 |
+| P2 | `UI/Control/` | 游戏内触控层（也可归入启动流程侧） |
+| P2 | 文件管理页 | 浏览游戏目录，参考 ZL2 `filemanager/` |
+| P2 | 整合包导入/导出 | 参考 ZL2 `game/download/modpack/` |
+| P3 | 应用图标、本地化、崩溃上报 | 打磨项 |
+
+# 第七章 环境限制与工作方式
+
+## 7.1 iSH 环境的坑
+
+| 坑 | 现象 | 解决 |
+|---|---|---|
+| `file_write` 静默失败 | 报告成功但文件没写 | 目标目录不存在时会发生。**先 `mkdir -p` 确认成功再写文件** |
+| `mkdir -p` 偶发失败 | `can't create directory` | 重试几次，或换个已存在的目录 |
+| BusyBox grep | 不支持 `--include`（GNU 扩展） | 用 `find ... -name` 喂文件 |
+| 正则爆内存 | `MemoryError` | 检查脚本里的正则要简单直接，避免嵌套量词 |
+| 无 ObjC 编译器 | 只能靠 CI | **见 7.2** |
+
+## 7.2 关于本地编译验证
+
+**iSH 里没有 ObjC 编译器**，所以本地只能做静态检查，
+真正的编译验证要靠 CI。
+
+曾尝试装 clang（`apk add clang`），但：
+- 包很大（17 个依赖，几百 MB）
+- 安装耗时超过 15 分钟，中途容易被中断
+- **即使装上也只能做语法检查**（缺 iOS SDK，编不了 target）
+
+**结论：暂时不装，靠 CI + 静态检查脚本。**
+
+### 这套静态检查已经抓过的问题
+
+`scripts/` 下的检查脚本不是摆设，每一条规则都对应一次真实的 CI 失败：
+
+| 规则 | 抓过的真实错误 |
+|---|---|
+| 只读属性赋值 | `UIViewPropertyAnimator.delay` 是只读的 |
+| 属性归属 | 在 `A2ColorScheme` 上访问 `A2ColorTheme` 的属性 |
+| 约束数组嵌套 | `A2GlassCard` 启动崩溃（数组套数组） |
+| 变量声明顺序 | `use of undeclared identifier 't'` |
+| 头文件引用 | CI 三次失败 |
+| 声明实现一致 | `cancelAll` 声明了但没实现 |
+| 属性修饰符跨文件 | `illegal redeclaration` |
+| block 循环引用 | 4 处真实内存泄漏 |
+| 色板字段对齐 | 2 个色槽从未被解析（运行期取 nil） |
+| 组件间依赖 | `unknown type name`（10 个编译错误） |
+
+**所以：改完代码一定要跑 `bash scripts/lint_structure.sh`。**
+它拦下来的问题，比你想象的要多。
+
+## 7.3 CI 与日志获取
+
+**CI**：`.github/workflows/build.yml`，macOS runner，产出未签名 IPA。
+
+**拿日志的方式**：
+```bash
+# 列出最近的 run
+curl -s -H "Authorization: token $TOKEN" \
+  "https://api.github.com/repos/Air-Devs/Air2/actions/runs?per_page=5"
+
+# 看某个 run 的 job 状态
+curl -s -H "Authorization: token $TOKEN" \
+  "https://api.github.com/repos/Air-Devs/Air2/actions/runs/<RUN_ID>/jobs"
+
+# 下载编译日志（失败时自动上传 build-log artifact）
+curl -sL -H "Authorization: token $TOKEN" \
+  "https://api.github.com/repos/Air-Devs/Air2/actions/artifacts/<ARTIFACT_ID>/zip" -o log.zip
+unzip -o log.zip && grep -E "error:|warning:" xcodebuild.log
+```
+
+**注意**：job logs API 需要 admin 权限（403），但 artifact 可以下载。
+
+## 7.4 推送重试
+
+网络不稳，推送经常失败：
+```bash
+for i in 1 2 3 4 5; do
+  timeout 100 git -c http.version=HTTP/1.1 \
+      -c http.https://github.com/.extraheader="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$TOKEN" | base64)" \
+      -c http.lowSpeedLimit=0 -c http.lowSpeedTime=999 \
+      push origin main 2>&1 | tail -2 && break
+  sleep 15
+done
+```
+
+---
+
+# 第八章 已知问题清单
+
+## 8.1 代码层面的隐患
+
+| 问题 | 影响 | 状态 |
+|---|---|---|
+| CurseForge 更新检查 | 用 MurmurHash2 而非 SHA1，未实现 | 接口返回 nil 而不给错数据 |
+| OptiFine 不支持自动安装 | 官方无公开 API | UI 需明确标注「手动安装」 |
+| `Core/Settings/` 未实现 | 设置散在 UserDefaults | 后续重构 |
+| 部分页面用示例数据 | 版本列表已接真实数据，其他待接 | — |
+
+## 8.2 未验证的部分
+
+**代码从未在真机完整跑过 UI 流程**。CI 只能验证编译通过，
+实际运行表现需要真机测试。
+
+已知会在真机暴露的问题类型：
+- 布局在横屏 iPad 与 iPhone 上的适配
+- 动画流畅度
+- 暗色模式下的实际观感
+
+## 8.3 安全提醒
+
+⚠️ **GitHub Token 曾在会话中明文出现，需要 revoke 并重新生成。**
+
+⚠️ **CurseForge API Key 也曾在会话中明文出现**，
+如果在意安全可以去 console.curseforge.com 重新生成。
+
+**不要把任何 Key 硬编码进源码。**
+
+---
+
+# 第九章 快速上手
+
+## 9.1 第一天的建议顺序
+
+```bash
+# 1. 确认 clang 装好了（如果没有，先装）
+which clang || nohup apk add --no-cache clang > /tmp/clang.log 2>&1 &
+
+# 2. 克隆仓库
+git clone https://github.com/Air-Devs/Air2.git && cd Air2
+
+# 3. 跑检查，建立基线
+bash scripts/lint_structure.sh
+
+# 4. 跑测试，确认核心算法没问题
+for t in tests/Core/*.py; do python3 "$t" | tail -3; done
+
+# 5. 生成 Xcode 工程看看结构
+python3 scripts/gen_xcodeproj.py
+
+# 6. 读这个文档的第二章（硬性约束）和第五章（关键设计）
+```
+
+## 9.2 第一个任务建议
+
+**⚠️ 不要做启动流程 —— 那部分已分配给其他人。**
+
+接手人的第一个任务建议从 **`Core/Settings/` 全局设置注册表**开始，因为：
+
+- 它是 P1，且**多个模块依赖它**（渲染器选择、内存分配、Java 运行时都要读设置）
+- 目前设置散落在 `A2GlobalGameSettings` 和裸的 UserDefaults 里，
+  每加一个设置就要改三处，已经是负担
+- 可以独立开发，不阻塞其他部分
+- ZL2 有完整的参考实现：`setting/AllSettings.kt`、`setting/SettingsRegistry.kt`
+
+**具体做法**：
+1. 读 ZL2 的 `setting/` 目录，理解它的注册表模式
+2. 在 `Air2/Core/Settings/` 下实现：
+   - 设置项的类型安全定义（Bool / Int / String / Enum）
+   - 默认值 + 持久化 + 变更通知
+   - 集中注册，避免散落
+3. 把现有的 `A2GlobalGameSettings` 迁移进去
+
+**第二个任务**：`Core/Renderer/` 渲染后端注册与选择。
+这部分 UI 已有入口（设置页），但后端是空的。
+
+## 9.3 有问题时怎么办
+
+1. **读 ZL2 / Amethyst 的源码** —— 它们是真机验证过的
+2. **看 `docs/` 下的其他文档**：
+   - `ARCHITECTURE.md` —— 目录职责权威定义
+   - `DECISIONS.md` —— 架构决策记录（ADR）
+   - `DEPENDENCIES.md` —— 依赖清单
+   - `UI-DESIGN.md` —— UI 设计规范
+3. **检查脚本的报错要认真看** —— 每条规则都对应一次真实失败
+
+---
+
+# 附录 A：常用命令速查
+
+```bash
+# 检查
+bash scripts/lint_structure.sh
+python3 scripts/lint_objc.py
+python3 scripts/check_imports.py
+python3 scripts/verify_pbxproj.py
+
+# 测试
+python3 tests/Core/test_version_isolation.py
+python3 tests/Core/test_download_ledger.py
+python3 tests/Core/test_resume_validation.py
+python3 tests/Core/test_zip_reader.py
+
+# 工程
+python3 scripts/gen_xcodeproj.py
+
+# 统计
+find Air2 -name '*.m' -o -name '*.h' | xargs wc -l | tail -1
+```
+
+# 附录 B：文件规模约定
+
+| 行数 | 处理 |
+|---|---|
+| ≤ 1000 | 正常 |
+| > 1000 | 检查脚本会提示，确认是否承担了多个职责 |
+
+**注意：不设硬性行数上限。**
+判断标准是「文件里是否存在两组不相干的关注点」，不是行数。
+（早期曾设 400 行硬限，导致为满足指标而拆出无意义的分类文件，
+反而增加复杂度 —— 已废弃该规则。）
+
+**当前最大文件**：`A2LauncherViewController.m` 约 760 行。
+
+---
+
+# 第十章 本次交接后进展（2026-10-08，会话记录）
+
+> 记法：只追加不改前文（前文进度数字不可全信，见第八章自述）。
+> 全部改动经 `lint_structure + verify_pbxproj + tests/Core` 本地全绿后推送，
+> CI `Build IPA` 连续 success。
+
+## 10.1 CI 修绿（此前 main 连续 27 次 failure）
+
+- [x] 子类 shadow 基类 `readonly contentStack`（Settings/Download）→ 改名 `detailScroll/detailStack`
+- [x] `_recentCard/_recentStack` 有用无声明 → 补声明
+- [x] UI 重定义 Core 类型 `A2ContentSource` 枚举 → 删重复定义，改用 `A2ContentPlatform`
+- [x] 下载列表沿用旧 Modrinth 字段 → 改用统一 `A2ContentItem`，删死代码 `projectType`
+- [x] `UIControl.selected` 被重声明两处 → 删重声明、setter 调 super
+- [x] `showsBottomSeparator` 改名残留三处 → 统一 `showsSeparator`
+- [x] `A2InstallRequest` 有声明无实现（链接失败）→ 补实现
+- [x] 类方法自调用笔误（`selfJSONObject`）→ 修正
+
+## 10.2 接手人任务（对照第六章 6.4）
+
+- [x] P1 `Core/Settings/` 注册表：`A2Settings`（类型安全/默认值/持久化/通知），
+      同 key 无损迁移 Account/ContentSource/Mirror/Version，`A2GlobalGameSettings` 转兼容转发
+- [x] P1 `Core/Renderer/`：`A2Renderer` 注册与解析（版本覆盖>全局>首个），只收机制不虚构后端、不加 UI
+- [x] P1 皮肤/披风：`A2Wardrobe`（会话 profile 解析、slim/classic、Caches 落盘、失败非致命），暂不加 UI
+- [x] P2 CurseForge 更新检查：`Utils/A2MurmurHash2`（内存/文件流式）+ 指纹 POST 与按文件反查，附向量测试
+- [x] P2 文件管理页：`A2GameFiles`（作用域守卫/校验/排序）+ 版本级浏览页，已接版本设置入口
+- [x] P2 整合包：`A2ModPack` 双格式清单解析（CF/MR 建模，只出计划不执行），附离线测试
+- [x] P3 崩溃上报（读侧）：设置诊断分类查看/清除 `air2_crash.log`（只写不读等于没有）
+- [x] 版权：124 个 `.h/.m` 补详细 GPL 头（生成文件跳过）
+- [ ] P2 `UI/Control`：归启动侧，不做（避免与他人重复开发）
+- [ ] P3 图标/本地化：缺设计资源与迁移策略，未做（硬做即新石山）
+- [ ] 整合包执行层、更新检查 UI：待另起任务，先有真实需求再做
+
+## 10.3 残留（非阻塞）
+
+- `ThemeManager` 仍直写 `NSUserDefaults`（UI 层有意保留）
+- `A2GlobalGameSettings` 垫片、旧指纹字符串存根保留兼容
+- CI 残留警告：未用变量/强捕获/未声明 selector/废弃 API各一处
+
+## 10.4 统一日志系统（2026-10-08）
+
+> 背景：有闪退无法定位，需要一份用户能自己取出、导出的日志。
+
+- [x] `Utils/A2Log`：`Documents/lastlog.txt`（本次）/ `lastlog.old.txt`（上次）。
+      每次启动轮转：删 old → 当前改名 old → 新建当前，只保留两代。
+      写入串行化到一条队列，行不交错；崩溃兜底前的日志用同步派发保证已落内核缓冲。
+- [x] `A2CrashGuard` 崩溃信息并入同一日志（异常处理器走 `A2Log`，
+      信号处理器用纯 C 访问器 `a2_log_current_path` + 低层 `open/write`，
+      避开信号上下文里的 ObjC 调用）；删除独立 `air2_crash.log` 与三个废接口。
+- [x] 启动链路埋点：`main` / `AppDelegate.didFinishLaunching` / `SceneDelegate.willConnect`，
+      用于判断闪退卡在哪一步。
+- [x] 诊断设置页改读统一日志（本次 / 上次两行），去掉写不进的旧崩溃文件逻辑。
+- [x] `CONTRIBUTING.md` 增「日志规范」：有必要的关键节点必须写日志，成熟后再放宽。
+- Info.plist 早已开 `UIFileSharingEnabled` + `LSSupportsOpeningDocumentsInPlace`，
+  日志放在 Documents 下即可被「文件」App 打开 / 导出，本次未改。
+
+## 10.5 下载重写（分支 `feat/download-game`，待合入）
+
+- [x] 游戏链路打通：`Core/Version/A2RemoteVersions` 拉 Mojang 清单；
+      两步页（选版本 → 选加载器 → 7 阶段安装）；中心游戏入口改走新链路。
+     此前游戏入口错进 Modrinth 搜模组、安装页零调用。
+- [x] 项目详情页：头信息 + 版本列表 + 下载；下载逻辑由列表页剪切过来，
+      列表只搜列与路由；禁分发/空版本各独立空态。
+- [x] 已装清单 `Core/Download/A2DownloadManifest`（成功才记、手删视为未装），
+      列表“已安装”角标、详情版本打勾、主按钮“更新到 x”提示。
+- [x] 删假入口：下载中心假加载器行、按 ID/收藏夹假列表入口改诚实提示；
+      主页零调用死方法（`openFiles/openMultiplayer`）删除。
+- [x] 背景去渐变改纯色、默认冰川蓝（`UI-DESIGN.md` 第四节已同步）。
+- 剩下：发 PR 合入 `main`（分支 CI 全绿）。
+
+## 10.6 下载重写·第二轮：整条链路重写（分支 `feat/download-game`）
+
+> 背景：10.5 落地后三页仍是「能跑就行」——加载器只有写死的四个选项，按 ID 与收藏只剩诚实提示。
+> 本轮照 ZL2 的交互规格把「游戏版本下载」整条链路重写一遍。
+> 记法同上：**不回头改 10.5**，本节只覆盖其中已过期的条目。
+
+- [x] `Core/Version/A2RemoteVersions`：清单解析补 `releaseTime`（ISO8601，解析失败置 nil），
+      选版页据此排序并显示发布时间。
+- [x] 选版页重写：正式版 / 快照 / 旧版 Beta / 旧版 Alpha 四类多选筛选 + 版本号搜索 + 刷新，
+      按发布时间倒序；失败与空态都给「点击重试」，不进空页面。
+- [x] 加载器选择页重写：版本名输入与重名校验；加载器单选后异步拉**真实**版本列表
+      （走 `A2ModLoaderAPI`），默认选最新稳定版；OptiFine 明确标注官方无自动安装接口；
+      用户未手动改过时，版本名按所选加载器自动建议。
+- [x] 安装进度页重写：改为接收明确的 `loaderType` / `loaderVersion`，不再靠版本名反推；
+      环形整体进度 + 分阶段线性进度条 + 7 项阶段清单，含取消确认、失败重试、完成返回。
+- [x] 下载中心：游戏分类只留「安装新版本」一个入口；**按 ID 与收藏由诚实提示改为真实入口**
+      （新增 `A2SearchByIdViewController` / `A2FavoritesViewController`），
+      收藏落盘在新增的 `Core/Download/A2DownloadFavorites`（纯 Foundation，JSON + 变更通知），
+      项目详情页支持收藏切换。
+      —— **本条取代 10.5 的「按 ID/收藏夹假列表入口改诚实提示」**。
+- [x] 本地 `make lint`（451 处 import / 163 文件）与 `tests/Core` 6 个脚本全绿；
+      CI `Build IPA` run `37763729306`（规范检查 + 编译打包）success。
+- 未做：真机端到端安装验证（本机无 Xcode，需用 CI 的未签名 IPA 自行签名）；
+  本轮按要求不出 PR，等指令后再合 `main`。
+
+## 10.7 下载区边栏常驻 + 选版页重写（分支 `feat/download-game`）
+
+> 背景：10.6 之后，一旦跳进选版页，整页被替换，左侧分类边栏跟着消失，
+> 用户得先退回来才能换分类；选版页自身也还是三行头部 + 列表，头部占掉不少高度。
+> 记法同上：**不回头改 10.5 / 10.6**，本节只记录本轮新增的结构性改动。
+
+- [x] **下载区拆成「容器 + 内层导航栈」**：新增 `A2DownloadHomeViewController`
+      承载各分类的落地内容与路由；`A2DownloadViewController` 收窄为容器，只做两件事 ——
+      常驻左侧 `A2CategoryNavView` 边栏、在右侧挂一条内层 `A2NavigationController`。
+      下载区及其所有子页面（选版 / 资源搜索 / 按 ID / 收藏 / 安装）都活在右侧这条栈上，
+      边栏因此不再消失，且只出现在下载区。子页面跳转写的 `self.navigationController`
+      会自动解析到离自己最近的那条栈，所以**子页面的跳转代码一行都没改**。
+      各分类的入口与落地内容本身不变，只是从「下载页内部换内容」变成「右侧栈底换内容」。
+- [x] **修正安装页的返回落点**：`A2InstallingViewController.backToDownloadCenter` 原先按
+      旧下载页的类在栈上找落点，栈改由内层导航器承载后会永远匹配不到、只退一层；
+      改按下载中心首屏的类判定。
+- [x] **选版页重写**：头部三行（筛选 / 搜索+刷新 / 计数）并为一行 —— 左侧类型胶囊限宽
+      六成、超出横向滚动，右侧搜索框 + 刷新图标按钮，下面压一条全宽 1pt 分隔线，
+      剩下的高度整块让给列表；列表行改为卡片（32pt 语义色图标方块 + 版本号 +
+      类型徽标 + 发布时间 + 右侧箭头），并按 ZL2 的做法给首屏列表做了一次性弹簧入场。
+      四类多选筛选、版本号搜索、发布时间倒序、失败与空态重试均保持原逻辑；
+      筛选/搜索/刷新/选中版本等关键节点日志保留。
+- [x] 本轮完全没动的共享组件：`A2CategoryNavView`、`A2NavigationController`。
+- [x] 本地 `make lint`（457 处 import / 165 文件）与 `tests/Core` 6 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）；本轮按要求不出 PR，等指令后再合 `main`。
+
+## 10.8 加载器选择改为单页可展开卡片（分支 `feat/download-game`）
+
+> 背景：10.6 的加载器选择是「同一页用 `A2SettingsRow` 做单选、再另起一个
+> 「加载器版本」分组」，与下载区其它页面的卡片风格不一致，且「请求版本列表」与
+> 「选版本」被拆在两处。本轮按 ZL2 的 `AddonListLayout` 形态合并为单页可展开卡片。
+> 记法同上：**不回头改 10.5 / 10.6 / 10.7**，本节只记录本轮新增的结构性改动。
+
+- [x] **新增组件 `A2LoaderCard`（`UI/Components/`）**：一张卡 = 一个加载器（或原版）。
+      卡头常驻（34pt 语义色图标方块 + 名称 + 状态摘要 + 尾部指示），点卡头就地展开
+      内嵌 `UITableView` 版本列表，选中某个版本后自动收起 —— 「请求版本列表」与
+      「选择版本」都发生在同一张卡里，不另开页面。版本列表首次展开才拉取，避免一进
+      安装页就并发打六家 meta 服务；加载中 / 失败可重试 / 空（置 `unavailableReason`
+      收起灰显）三态齐备。原版卡复用同一类，退化为可选、不可展开的纯选项。
+      delegate 两个回调：`loaderCardSelectionDidChange:`（调用方做单选互斥 + 联动版本名）
+      与可选的 `loaderCardDidExpand:`（调用方保证同一时刻只展开一张）。
+- [x] **重写 `A2GameInstallOptionsViewController` 的加载器部分**：删除原
+      `A2SettingsSection`/`A2SettingsRow` 内联单选与独立的「加载器版本」分组，改为
+      一个「模组加载器」分组内的垂直卡片栈（原版卡 + `allLoaderTypes` 各一张）；
+      OptiFine 等不支持自动安装的走 `unavailableReason` 灰显。`startInstall` 改从
+      选中卡的 `selectedVersion` 取加载器版本，版本名随加载器自动改名逻辑保留
+      （未手动改过时才自动改）。
+- [x] **修一处自检发现的 Auto Layout 冲突（根因修，非表面补丁）**：内嵌
+      `UITableView` 的定高约束在卡片收起后仍为 required，而 `UIStackView` 会为隐藏的
+      arrangedSubview 补一条 required 的 0 高约束，两者互斥 —— 在「已拉到版本(Loaded)
+      且卡片收起」时（即选完版本的那一刻）会刷 Autolayout 冲突日志。改为收起 / 未就绪
+      时把内嵌列表高度归零，冲突消失。
+- [x] 校验：`gen_xcodeproj.py`（编译单元 84）+ `verify_pbxproj.py` 通过；
+      `make lint`（464 处 import / 167 文件）通过；`tests/Core` 6 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）；本轮按要求不出 PR，等指令后再合 `main`。
+
+---
+
+## 10.9 游戏根目录改名 `.minecraft` → `minecraft`（分支 `feat/gamedir-minecraft`）
+
+> 背景：旧版游戏根目录是隐藏目录 `Documents/.minecraft`，「文件」App 里看不到，也不便
+> 用户直接管理数据。本轮把根目录改成可见的 `minecraft`，适配下载等引用，并给老用户做
+> 一次性自动迁移（改名）。记法同上：**不回头改 10.5–10.8**，本节只记录本轮改动。
+
+- [x] **中心出口改名**：`A2GamePath.defaultGameHome` 的根目录名由 `.minecraft` 改为
+      `minecraft`（收敛为常量 `kGameHomeDirName`，`A2VersionIsolation.m/.h` 注释同步）。
+- [x] **适配重复硬编码**：`A2DownloadManifest.manifestPath`、`A2DownloadFavorites.favoritesPath`
+      改为经 `A2GamePath.defaultGameHome` 派生，去掉各自手写的 `.minecraft`；
+      `A2VersionListViewController` 左侧目录展示串改 `Documents/minecraft`。
+- [x] **新增 `Core/Path/A2GameDirMigration`（`+ migrateIfNeeded`）**：启动时一次性把旧的
+      `Documents/.minecraft` 迁成 `Documents/minecraft`。决策矩阵：只有旧目录 → 空则删、
+      非空则改名；只有新目录 → 不动；两者都在 → 旧为空则删旧，新为空则删新再把旧改名过来，
+      两者都非空则按约定丢弃旧目录。幂等（改完再跑只是几次廉价判断），全程 `A2Log`。
+- [x] **挂载点**：在 `A2AppDelegate.didFinishLaunchingWithOptions:` 最早期调用迁移，早于任何
+      读取游戏目录的逻辑（版本扫描是惰性单例，晚于此处）。
+- [x] **测试**：`tests/Core/test_version_isolation.py` 的 `GAME_HOME` 更新；新增
+      `tests/Core/test_game_dir_migration.py`，在临时目录真实建出结构跑决策矩阵。
+- [x] 校验：`gen_xcodeproj.py`（编译单元 85）+ `verify_pbxproj.py` 通过；`make lint`
+      （469 处 import / 169 文件）通过；`tests/Core` 7 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）。
+
+## 10.10 版本隔离「仅 Mod」只隔离能装模组的版本（分支 `feat/isolation-mod-only`）
+
+> 背景：原实现里「仅 Mod」档对所有版本一律把 `mods` 隔离到版本目录，但原版与仅装
+> OptiFine 的版本本就装不了模组，隔离它们的 `mods` 没有意义。本轮把该档对齐为
+> PCL2/HMCL 式语义。记法同上：**不回头改 10.5–10.9**。
+
+- **三档最终语义**：关闭 = 全部不隔离；仅 Mod = **只隔离能装模组的版本**；
+  全部 = 所有版本都隔离。`libraries` / `assets` 仍始终共用。
+- [x] **新增版本级判定**：`A2Version.canInstallMods` —— 加载器为 Fabric / Quilt /
+      LegacyFabric / Forge / NeoForge 才算；OptiFine 只做优化、不加载其它模组，不算。
+      判定集中在 `loaderInfoFromVersionID:`（OptiFine 名收敛为常量 `kOptiFineLoaderName`）。
+- [x] **新增生效档位**：`A2Version.effectiveIsolationMode` —— 全局档位为「仅 Mod」且本版本
+      不能装模组时降级为「关闭」，其余档位与全局一致。
+- [x] **接入**：`gameDirectory` / `modsDirectory` / `directoryForFolder:` /
+      `ensureIsolationDirectories` 四个目录方法全部改用 `effectiveIsolationMode`；
+      `A2VersionManager.applyIsolation` 的共享 `mods` 符号链接对齐也按当前版本的生效档位决定
+      （原版/OptiFine 版本在「仅 Mod」下不再建链，已建的会恢复为真实目录），日志同时输出
+      全局档位与生效档位。
+- [x] **注释与文案同步**：`A2VersionIsolation.h` 头部/枚举/方法注释说明「Path 层只按传入的
+      生效档位解析路径」；设置页（`A2GameSettings`）、单版本设置页
+      （`A2VersionSettingsViewController`）、版本列表与主页元信息的展示改用生效档位，设置页
+      「仅 Mod」副标题改为「只隔离能装模组的版本」。
+- [x] **测试**：`tests/Core/test_version_isolation.py` 新增 `effective_mode` 复刻与第 10 组
+      断言（可装/不可装 × 三档，以及原版在全局「仅 Mod」下 `mods` 仍留在根目录）。
+- [x] 校验：`verify_pbxproj.py` 通过（无新增文件，工程文件未变）；`make lint`（169 文件）
+      通过；`tests/Core` 7 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）。
+
+## 10.11 下载区直达 + 真实筛选 + 带加载器安装链路修复（分支 `feat/download-direct`）
+
+> 背景：验收要求三件事——下载页除整合包外功能完善、去掉「点分类后还要再点一次」的中间
+> 落地页、修好带 mod 加载器版本的安装（此前必失败）。记法同上：**不回头改 10.5–10.10**。
+
+**1) 去掉中间落地页（分类直达）**
+
+- [x] **删除 `UI/Screens/Download/A2DownloadHomeViewController.h/.m`**：它每个分类只放
+      一个入口按钮，点进去才出内容，纯多余一跳。删除后同步 `gen_xcodeproj.py` 重建工程。
+- [x] **`A2DownloadViewController` 改为「选中分类即直达内容页」**：新增
+      `contentCache`（分类索引 → 内容页）与 `contentViewControllerForIndex:` /
+      `makeContentViewControllerForIndex:` / `resourceCategoryForIndex:`；切换分类时
+      `setViewControllers:@[vc] animated:NO` 直接把内容页设为内层栈底，切走再切回保留
+      搜索词与已拉清单。内容页的 `onBack` 改为退**外层**栈（它是内层栈底）。
+- [x] **`A2InstallingViewController.backToDownloadCenter`** 不再依赖已删的 Home 页，
+      改为回退到内层栈底（`nav.viewControllers.firstObject`）。
+
+**2) 资源列表筛选改真实数据（`A2DownloadListViewController`）**
+
+- [x] **删除硬编码**：`filtersForCategory`（假加载器表 / 假版本号表）与 `makeChip:` 一并删除。
+- [x] **新增私有 `A2FilterChip`（`filterValue`）**：筛选值不再靠展示文案反推
+      （旧代码 `"Legacy Fabric".lowercaseString` = `legacy fabric`，与接口要的
+      `legacy-fabric` 不符）。
+- [x] **加载器维度**用 `A2ModLoaderAPI.allLoaderTypes` 真实枚举（`identifierForType:` 取
+      fabric/quilt/legacy-fabric/forge/neoforge/optifine；已核对 Modrinth 官方 loader 标签
+      列表，六者皆为合法 facet 值）。
+- [x] **游戏版本维度**用 `A2RemoteVersions` 从 Mojang 清单动态拉取最新 8 个正式版
+      （`recentReleaseVersionIDsFrom:`），拉取失败只记日志并维持「全部」，不阻塞列表。
+- [x] 筛选条改为「维度子栈 + 分隔线 + 排序子栈」，三处 `alignment` 设为 Center。
+
+**3) 修好带加载器版本的安装链路（`A2GameInstaller`）**
+
+- [x] **根因**：旧逻辑把原版下到 `versions/<versionName>/`（带加载器后缀，如
+      `1.21.5-fabric`），而 `A2ModLoaderInstaller` 只认 `versions/<mcVersion>/` 的原版，
+      于是「需要先安装原版」必失败。新增 `baseVersionName`：带加载器时 = `mcVersion`，
+      原版 json/jar 一律落到基底目录。
+- [x] **已有原版则复用**：`vanillaInstalled:` 以「版本 json + 客户端 jar 都在」为判据
+      （与 `A2VersionManager.validate` 的「版本可用」定义一致）；命中则
+      `reuseVanilla=YES`，`skipVanillaStagesAndInstallLoader` 把原版各阶段标记为
+      「已复用」后直接进入加载器安装，**不删除、不覆盖**已有原版（加载器版 json 靠
+      `inheritsFrom` 引用原版，删了起不来）。
+- [x] **不存两份**：加载器版与基底版共用同一份 libraries/assets（本就按目录去重），
+      客户端 jar 由 `A2ModLoaderInstaller.mergeProfile` 以**硬链接**复用，不产生第二份大文件。
+- [x] 删除死方法 `saveLoaderSelection:`（全仓无调用点）。
+
+- [x] 校验：`gen_xcodeproj.py`（编译单元 84）+ `verify_pbxproj.py` 通过；`make lint` 通过；
+      `tests/Core` 7 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）；版本隔离落盘、整合包 `.mrpack` 解析安装（本轮范围外）。
+
+---
+
+## 10.12 禁用系统输入弹窗 + Mod 等资源下载链路补全（分支 `feat/download-direct`）
+
+> 背景：新增硬性规范——**任何地方不得使用系统输入弹窗**（`UIAlertController` +
+> `addTextFieldWithConfigurationHandler:`），文本输入一律走自研 MD3 组件；同时把除「游戏安装、
+> 整合包安装」外的资源下载链路补齐（详情页文件级筛选、CurseForge 加载器筛选）。记法同上：
+> **不回头改 10.5–10.11**。
+
+**1) 规范落地**
+
+- [x] `docs/UI-DESIGN.md` 新增「## 七、交互禁令（硬性）」：禁系统输入弹窗，必须用自研 MD3
+      输入弹窗/内联输入（语义色、8/12/16/20/28 圆角、弹簧动效、触控 ≥44、空/错误校验态）。
+- [x] `docs/DECISIONS.md` 新增 `ADR-006`（已接受，2026-10-09），点名 `A2CurseForgeKeyPrompt`，
+      注明此前无对应 ADR、不推翻任何旧条目。
+- [x] 工作区外 `~/.trae-cn/skills/air2-ui/SKILL.md`「硬性禁止清单」追加同一禁令。
+
+**2) 自研 MD3 输入弹窗（新增 `UI/Components/A2InputDialog.h/.m`）**
+
+- [x] 泛型接口：`title/message/label/initialText/secure/keyboardType/autocapitalizationType/
+      confirmTitle/cancelTitle` + `validator`（同步校验）+ `onCommit`（异步提交，失败可回填
+      错误文案）+ `onFinish`（成功/取消回调）；`+presentFrom:title:label:initialText:onFinish:`
+      为一步式便捷入口。
+- [x] 呈现方式：`overFullScreen` + 0.45 黑 backdrop（点击取消，提交中忽略）+ 卡片
+      `A2RadiusXL` / `cSurfaceContainerHigh`；最大宽 460，另加 ≤0.92 屏宽/高；入场弹簧回弹。
+- [x] 键盘跟随 `UIKeyboardWillChangeFrameNotification` 调卡片中心（含 `minCenterY` 防顶出上沿）；
+      回车即提交；提交中锁定取消键（`userInteractionEnabled=NO` + `alpha=0.4`——注意
+      `A2PrimaryButton` 的触摸处理不读 `enabled`，故不能靠 `enabled` 锁）。
+
+**3) 全仓替换系统输入弹窗（5 处，输入类全清）**
+
+- [x] `A2VersionSettingsViewController`：JVM 参数、游戏参数、重命名版本（重命名走 `onCommit`
+      做空名校验 + `renameVersion:to:error:` 回填失败原因）。
+- [x] `A2FilesViewController`：`askForNameWithTitle:initial:done:` 内部换实现，签名不变。
+- [x] `A2CurseForgeKeyPrompt`：Key 输入（`secure`、确认键「保存并验证」、`onCommit` 内校验并
+      存钥匙串；用 `__weak host` 避免 host→dlg→block→host 保留环）。
+- [x] 剩余 `UIAlertController` 均为 ActionSheet / 确认 Alert（非输入弹窗），按 ADR-006 不替换。
+
+**4) 资源筛选与详情页文件级筛选**
+
+- [x] 新增共享组件 `UI/Components/A2FilterChip.h/.m`：`filterValue` 携带真实筛选值，
+      `+chip` 工厂（走 alloc/init，确保命中 init 里的样式与主题监听），`setSelected:` 触发
+      `applyTheme`；列表页与详情页共用，删除列表页内同名私有类与 `styleChip:`。
+- [x] 详情页 `A2ProjectDetailViewController` 新增「游戏版本 + 加载器」两行 chip 筛选：选项从
+      已拉回的版本聚合（版本号数字感知降序、加载器去重），**客户端过滤**；无关行整行 `hidden`
+      让外层竖直 stack 连高度一起塌陷；「下载最新版」与更新检测以未筛选的 `allVersions` 为准，
+      避免筛了旧版误判有新版本。
+- [x] Core 补齐 CurseForge 加载器筛选：`A2CurseForgeAPI.searchClassID:` 增 `loader:` 形参，
+      内部按平台中立标识换算 `modLoaderType`（forge=1/fabric=4/quilt=5/neoforge=6，其余不加）；
+      `A2ContentSource.searchCurseForge:` 透传 `filter.loader`。此前选加载器会被静默忽略。
+- [x] 更新检测：列表行沿用「已安装」Badge；详情页 `refreshUpdateState` 已装且最新版未装时
+      主按钮改「更新到 x」。
+
+- [x] 校验：`gen_xcodeproj.py`（编译单元 86）+ `verify_pbxproj.py` 通过；`make lint`（171 文件）
+      通过；`tests/Core` 7 个脚本全绿。
+- 未做：真机端到端验证（本机无 Xcode）；游戏安装 / 整合包安装不做改造（本轮范围外）。
+
+---
+
+## 10.13 重写资源下载页：共用搜索/详情/任务列表 + 数据包分类（分支 `feat/download-direct`）
+
+> 背景：验收要求「重写所有资源下载页并保证功能齐全，除游戏版本与整合包外全部重写」。
+> 记法同上：**不回头改 10.5–10.12**。
+
+**1) Core 扩展：资源分类多选 + 平台能力判定**
+
+- [x] `A2ContentFilter` 新增 `categories`（多选，元素为 `A2ContentCategory.identifier`）；
+      `A2ContentSource` 新增 `-supportsContentClass:` 与 `-categoriesForContentClass:completion:`。
+- [x] Modrinth：`searchWithProjectType:` 增 `categories:` 形参，facets 分类组按 **OR** 拼
+      （`[["categories:a","categories:b"]]`）；新增 `categoryTagsForProjectType:`（GET `/tag/category`）。
+- [x] CurseForge：`searchClassID:` 增 `categoryIDs:` 形参（逗号拼接 `categoryIds`）；新增
+      `categoriesForClassID:`（GET `/categories?gameId=432&classId=X`）。
+- [x] 修正历史缺陷：`A2ProjectTypeForModrinth(World)` 原错兜底成 `datapack`，改为返回 `nil`；
+      `A2AllContentClasses()` 补 `A2ContentClassDataPack`。搜索前判空/不支持时回调明确错误。
+
+**2) 新增网络图片组件 `UI/Components/A2RemoteImageView.h/.m`**
+
+- [x] 内存 `NSCache`（64MB，成本按像素×4）+ 磁盘缓存（`Caches/A2RemoteImages`，文件名 = URL 的
+      SHA1）+ `CGImageSourceCreateThumbnailAtIndex` 下采样 + 请求令牌防 cell 复用竞态；
+      接口仅 `setImageURL:placeholder:` / `cancelLoading` / `applyTheme` / `cornerRadius`。
+
+**3) 新增统一下载任务中心 `Core/Download/A2DownloadTaskCenter.h/.m`**
+
+- [x] 全应用唯一入队/暂停/重试/取消入口；真实网络与落盘仍由 `A2DownloadEngine` 完成，中心只做编排，
+      成功时按 projectID/versionID/subdir 回写 `A2DownloadManifest`。
+- [x] 任务数组由内部串行队列保护，对外通知/回调一律回主线程；进度广播节流 100ms。
+- [x] `A2DownloadTask` 改造：删除自带的重名 `A2DownloadState` 枚举（与 `A2DownloadEngine.h` 重复，
+      潜在编译隐患）与无人引用的多文件聚合逻辑，改为复用引擎枚举；可变接口以类扩展形式并入
+      `A2DownloadTask.h`（标注「内部」，仅供中心使用）。`+shared` init 内不发通知（避开 dispatch_once 重入死锁）。
+- [x] 修复 CI lint 失败（`check_imports.py` 组件依赖检查）：可变接口原计划放独立内部头
+      `A2DownloadTask+Internal.h`，但该校验按「类名 → 头文件」建唯一映射，同一类被两个头文件
+      声明时归属随 `os.walk` 顺序变化（CI 与本地结果相反），且 `+` 无法被其 `(\w+\.h)` 正则解析。
+      根因修法：删除独立内部头，全部并入唯一的 `A2DownloadTask.h`，消除歧义。
+
+**4) 新增共用资源搜索页 `UI/Screens/Download/A2ResourceSearchViewController.h/.m`**
+
+- [x] 模组 / 资源包 / 光影 / 存档 / 数据包 **五类共用**，`initWithContentClass:` 区分。
+- [x] 可展开筛选卡（卡头挂手势而非 `card.tappable`，避免抢子控件点击）：平台切换 + **资源分类多选**
+      + 加载器 + 游戏版本**两者并存** + 排序 + 重置；收起态显示摘要。
+- [x] 平台按 `supportsContentClass:` 裁剪（存档只列 CurseForge），默认平台不支持本类时自动回落；
+      切 CurseForge 无 Key 走 `A2CurseForgeKeyPrompt`，取消回退不留坏状态。
+- [x] 结果卡含真实图标（`A2RemoteImageView`）、作者、简介、下载量、分类标签、**已安装**角标与
+      **收藏**星标（订阅 `A2FavoritesDidChangeNotification` 刷新）；分页 `limit=20`；四态独立文案
+      （加载中 / 无结果 / 请求失败 / 平台不支持）。
+
+**5) 新增共用资源详情页 `UI/Screens/Download/A2ResourceDetailViewController.h/.m`**
+
+- [x] 真实图标 + 简介正文 + 游戏版本/加载器两行客户端筛选（数字感知降序）+ 收藏 + 更新检测
+      （已装且最新版未装 → 主按钮改「更新到 x」）+ 禁分发独立空态。
+- [x] 下载改走 `A2DownloadTaskCenter.enqueueWithTitle:subtitle:request:projectID:versionID:subdir:completion:`，
+      不再直接调引擎、不自行记录清单。
+
+**6) 新增任务列表页 `UI/Screens/Download/A2DownloadTasksViewController.h/.m`**
+
+- [x] 「进行中 / 已完成」分组；每行进度条、速度、状态、失败原因；行内 暂停/继续/重试/取消；
+      顶栏清空已完成；订阅 `A2DownloadTasksDidChangeNotification`，结构不变只就地刷新行（避免抖动）。
+      自建 cell 直接消费引擎态（含 Cancelled），不复用无 Cancelled 的 `A2TaskProgressView`。
+
+**7) 容器接线与路由**
+
+- [x] `A2DownloadViewController`：侧栏新增「数据包」「任务」；索引 2–6 走新搜索页，
+      **整合包（索引 1）保持旧 `A2DownloadListViewController`**，游戏（索引 0）仍走选版页。
+- [x] `A2SearchByIdViewController` / `A2FavoritesViewController` 改跳新详情页（按分类猜 `A2ContentClass`，
+      补 datapack 判定）。
+- [x] `A2RootViewController` 把 `A2DownloadTaskCenter` 接入 `A2TaskDrawer`：仅「进行中」任务显示在
+      底部抽屉，完成/失败自动移除；点击可暂停/继续。
+
+- [x] 校验：`gen_xcodeproj.py`（编译单元 91）+ `verify_pbxproj.py` 通过；`make lint`（182 文件）
+      通过；`tests/Core` 7 个脚本全绿。`A2ResourceSearchViewController.m` 1102 行触发规模提示，
+      但按 CONTRIBUTING「行数不作为拆分依据」保留（单一职责：搜索页 + 其私有结果 cell）。
+- 未做：真机端到端验证（本机无 Xcode）；CurseForge `categoryIds` 多选需真机联调确认是否收敛。
+
+

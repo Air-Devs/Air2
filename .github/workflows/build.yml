@@ -1,0 +1,652 @@
+name: Build IPA
+
+# 出可安装的未签名 IPA。
+# 没有 Apple 开发者证书时走这条路：
+#   CI 用 CODE_SIGNING_ALLOWED=NO 编译 → 产出未签名 .app → 手动包成 ipa
+#   用户拿到后用 AltStore / Sideloadly / TrollStore 自行签名安装。
+
+on:
+  push:
+    branches: [ main, dev, 'feat/**', 'fix/**' ]
+  pull_request:
+    branches: [ main, dev ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # ============================================================
+  # 规范检查 —— 挡住"石山代码"
+  # ============================================================
+  lint:
+    name: 规范检查
+    runs-on: ubuntu-latest
+    steps:
+      # ★必须拉子模块★
+      # check_imports.py 会扫 Libraries/external/ 下的头文件
+      # （MobileGlues 的 glslang 等）。不拉子模块时那些目录是空的，
+      # 于是判定「引用了不存在的头文件」→ lint 失败，
+      # 而本地因为子模块齐全一直是绿的。
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      # 诊断：把失败原因直接打到日志里。
+      # 之前 job logs API 返回 BlobNotFound，完全看不到 lint 为什么失败，
+      # 只能靠猜。现在每步都显式打印退出码，并把输出落到 annotation。
+      - name: 环境信息
+        run: |
+          echo "python: $(python3 --version)"
+          echo "bash:   $BASH_VERSION"
+          echo "子模块:"
+          git submodule status || true
+          echo "scripts/ 文件数: $(ls scripts | wc -l)"
+
+      - name: 目录与命名规范
+        run: |
+          set +e
+          bash scripts/lint_structure.sh
+          rc=$?
+          echo "::error::lint_structure.sh exit=$rc"
+          exit $rc
+
+      - name: 校验头文件引用
+        run: |
+          set +e
+          python3 scripts/check_imports.py
+          rc=$?
+          echo "::error::check_imports.py exit=$rc"
+          exit $rc
+
+      - name: 校验 Xcode 工程完整性
+        run: |
+          set +e
+          python3 scripts/verify_pbxproj.py
+          rc=$?
+          echo "::error::verify_pbxproj.py exit=$rc"
+          exit $rc
+
+  # ============================================================
+  # 编译并打包 IPA
+  # ============================================================
+  build:
+    name: 编译打包
+    runs-on: macos-15
+    needs: lint
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # ★CI 必须拉子模块★ 否则 Libraries/external/{fishhook,AFNetworking,
+          # DBNumberedSlider,ZeroTierFramework} 是空壳目录，编译时报：
+          #   Air2/Player/Context/main_hook.m:26 'external/fishhook/fishhook.h' file not found
+          # （这些路径是 gitlink，actions/checkout 默认不初始化子模块）
+          submodules: recursive
+
+      - name: 环境信息
+        run: |
+          xcodebuild -version
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: 重新生成工程文件
+        run: python3 scripts/gen_xcodeproj.py
+
+      - name: 校验工程
+        run: python3 scripts/verify_pbxproj.py
+
+      - name: 下载预编译依赖
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # 246MB 动态库 + jar。不进 git，用脚本按准确大小校验下载。
+          # 必须走镜像：raw.githubusercontent.com 对大文件会静默截断
+          # （实测 8 个文件被截断过，最严重的只下到 6%）
+          python3 scripts/fetch_deps.py
+
+      - name: 下载 JRE
+        run: |
+          # 4 个版本（8/17/21/25）共 440MB
+          python3 scripts/fetch_jre.py
+
+      # ============================================================
+      # ★ 编译 Java 启动核心 ★
+      #
+      # 这一步原先【完全缺失】。后果是连锁的：
+      #   1. JavaApp/build/ 里没有 launcher.jar；
+      #   2. 打包阶段没人创建 Air2.app/libs/；
+      #   3. JavaLauncher.m 的 `-cp` 是空串，主类
+      #      net.kdt.pojavlaunch.PojavLauncher 找不到；
+      #   4. JLI_Launch 立刻失败，而退出发生在 ObjC 侧拿到任何错误之前
+      #      —— 表现就是「点启动 → 黑屏 → 没有任何反应」。
+      #
+      # 用 setup-java 提供 JDK（JavaApp/Makefile 需要 BOOTJDK）。选 17：
+      # 源码里有 `-XDignore.symbol.file` 与 caciocavallo 私有 API 用法，
+      # JDK 17 是这套源码唯一验证过的引导版本。
+      # ============================================================
+      - name: 准备 JDK
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: 编译 Java 启动核心
+        run: |
+          set -o pipefail
+          mkdir -p logs
+          make -C JavaApp BOOTJDK="$JAVA_HOME/bin" 2>&1 | tee logs/javac.log
+          echo "===== JavaApp/build 产物 ====="
+          ls -la JavaApp/build/*.jar
+          # 空 class 是这套 Makefile 已知的偶发竞态产物，check_empty_classes
+          # 已在 make 内部兜过一次；这里对最终 jar 做一次内容级校验，
+          # 避免"文件存在但里面是空的"漏到装机包里。
+          for j in JavaApp/build/*.jar; do
+            n=$(unzip -l "$j" 2>/dev/null | tail -1 | tr -s ' ' | cut -d' ' -f2)
+            echo "  $(basename "$j"): ${n:-?} 条目"
+            [ "${n:-0}" -gt 0 ] || { echo "::error::$j 是空 jar"; exit 1; }
+          done
+          # PojavLauncher 主类必须在 launcher.jar 里，否则启动必然黑屏。
+          unzip -l JavaApp/build/launcher.jar | grep -q 'net/kdt/pojavlaunch/PojavLauncher.class' \
+            || { echo "::error::launcher.jar 里没有 PojavLauncher.class"; exit 1; }
+          echo "  ✓ launcher.jar 含 PojavLauncher.class"
+
+          # ---- LWJGL jar 必须含 openal 模块类 ----
+          #
+          # Makefile 里叠加版本化 LWJGL 模块的那一步曾用相对路径
+          # `find ../../libs/lwjgl-$*`，从 JavaApp/build/lwjgl_lib_$* 出发解析成
+          # Air2/libs（不存在）—— find 什么都没找到，静默跳过，于是
+          # lwjgl-341.jar 里根本没有 lwjgl-openal 的类。运行时 MC 26.2 的
+          # CallbackDeviceTracker 拿不到 alcEventIsSupportedSOFT：
+          #   NoSuchFieldError: Class org.lwjgl.openal.ALCCapabilities
+          #     does not have member field 'long alcEventIsSupportedSOFT'
+          # 编译/打包全程绿灯，只有真机上才炸。这里做内容级校验。
+          for _ver in 333 341; do
+            _jar="JavaApp/build/lwjgl-${_ver}.jar"
+            [ -f "$_jar" ] || { echo "::error::$_jar 不存在"; exit 1; }
+            _n=$(unzip -l "$_jar" 2>/dev/null | grep -c 'org/lwjgl/openal/ALC' || true)
+            echo "  lwjgl-${_ver}.jar: openal 类 ${_n} 个"
+            if [ "${_n:-0}" -lt 5 ]; then
+              echo "::error::lwjgl-${_ver}.jar 里 openal 模块类只有 ${_n} 个（应 >= 5）"
+              exit 1
+            fi
+          done
+          # 341 必须含 SOFTSystemEvents（MC 26.2 音频初始化要它）
+          unzip -l JavaApp/build/lwjgl-341.jar | grep -q 'org/lwjgl/openal/SOFTSystemEvents.class' \
+            || { echo "::error::lwjgl-341.jar 缺 SOFTSystemEvents.class"; exit 1; }
+          echo "  ✓ lwjgl-341.jar 含 SOFTSystemEvents.class"
+
+      - name: 编译（未签名）
+        run: |
+          set -o pipefail
+          mkdir -p logs
+          xcodebuild \
+            -project Air2.xcodeproj \
+            -scheme Air2 \
+            -configuration Release \
+            -sdk iphoneos \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            ONLY_ACTIVE_ARCH=NO \
+            ARCHS=arm64 \
+            build 2>&1 | tee logs/xcodebuild.log
+
+      - name: 汇总编译错误
+        if: failure()
+        run: |
+          echo "===== 编译错误摘要 ====="
+          grep -E "error:" logs/xcodebuild.log | head -50 || true
+
+      - name: 注入 Frameworks 与 JRE 并打包
+        if: success()
+        run: |
+          set -e
+          APP=$(find build/Build/Products/Release-iphoneos -maxdepth 1 -name "*.app" | head -1)
+          if [ -z "$APP" ]; then
+            echo "::error::找不到编译产物 .app"
+            exit 1
+          fi
+          echo "产物: $APP"
+
+          # ---- 注入动态库 ----
+          mkdir -p "$APP/Frameworks"
+          cp Libraries/Frameworks/*.dylib "$APP/Frameworks/" 2>/dev/null || true
+          for f in Libraries/Frameworks/*.framework; do
+            [ -d "$f" ] && cp -R "$f" "$APP/Frameworks/"
+          done
+
+          # ---- 注入 Java 侧 jar 到 app/libs/ ----
+          #
+          # ★ 这一整段原先不存在 ★
+          #
+          # JavaLauncher.m 用 `NSBundle.mainBundle.bundlePath + "/libs"` 作为
+          # -cp 根、-javaagent 根和 lwjgl-<ver>/ 的父目录。这个目录必须由打包
+          # 阶段创建：
+          #   libs/launcher.jar        PojavLauncher 主类 + UIKit 桥 + patchsvc
+          #   libs/mojang-stubs.jar    Forge 模块层的 com.mojang.text2speech 桩
+          #   libs/patchjna_agent.jar  JNA 平台补丁 agent
+          #   libs/lwjgl-333/          LWJGL 3.3.3 全量
+          #   libs/lwjgl-341/          LWJGL 3.4.1 全量
+          # 缺任何一项，启动都会在黑屏阶段失败（JVM 找不到主类直接退出）。
+          # ---- 导出符号校验（_main + pojav*）----
+          #
+          # Java 侧 GLFW.java:
+          #   new MacOSXLibraryDL(<宿主可执行名>, RTLD_DEFAULT)
+          # 从宿主主二进制的动态符号表解析 pojavInit / pojavCreateContext / ...
+          # 缺任何一个 → LWJGL 初始化直接抛：
+          #   NullPointerException: A required function is missing: pojavInit
+          #   at com.mojang.blaze3d.platform.GLX._initGlfw
+          # 上机日志（06:57 那轮）已实锤。
+          #
+          # 编译成功 ≠ 导出成功，必须在这里核实。
+          echo "==> 校验导出符号"
+          missing=""
+          for _sym in _main _pojavInit _pojavCreateContext _pojavGetCurrentContext \
+                      _pojavMakeCurrent _pojavTerminate _pojavSetWindowHint \
+                      _pojavSwapBuffers _pojavSwapInterval _pojavPumpEvents \
+                      _pojavRewindEvents _pojavGetAndResetFps \
+                      _pojavIncrementFpsCounter _pojavIsActualVulkanPath \
+                      _Java_org_lwjgl_glfw_GLFW_nglfwSetFramebufferSizeCallback \
+                      _Java_org_lwjgl_glfw_GLFW_nglfwSetKeyCallback \
+                      _Java_org_lwjgl_glfw_GLFW_nglfwSetCharCallback \
+                      _Java_org_lwjgl_glfw_GLFW_nglfwSetMouseButtonCallback \
+                      _Java_org_lwjgl_glfw_GLFW_nglfwSetScrollCallback \
+                      _Java_org_lwjgl_glfw_GLFW_nglfwSetCursorPosCallback \
+                      _Java_org_lwjgl_glfw_GLFW_nglfwSetCursorEnterCallback \
+                      _Java_org_lwjgl_glfw_GLFW_nglfwSetWindowSizeCallback \
+                      _Java_org_lwjgl_glfw_CallbackBridge_nativeSetGrabbing \
+                      _Java_net_kdt_pojavlaunch_uikit_UIKit_showError; do
+            if ! xcrun nm -gU "$APP/Air2" 2>/dev/null | grep -q " ${_sym}\$"; then
+              missing="$missing $_sym"
+            fi
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::主二进制缺少导出符号：$missing"
+            echo "---- 实际导出符号（前 40 条）----"
+            xcrun nm -gU "$APP/Air2" 2>/dev/null | head -40 || true
+            exit 1
+          fi
+          echo "  ✓ _main 与 pojav* 全部导出"
+
+          # ---- dlopen/dlsym hook 必须被 main.m 调用 ----
+          #
+          # main_hook.m 定义了 hooked_dlopen（内含 Mach-O 平台重打标
+          # PLPatchMachOPlatformForFile）与 hooked_dlsym，但上游是在 main.m
+          # 里显式调用 init_hookFunctions() 才安装的。之前本工程从未调用，
+          # 整套 hook 静默失效，导致 JNA 的 macOS 库没被重打标：
+          #   incompatible platform (have 'macOS', need 'iOS')
+          #   at com.sun.jna.Native.loadNativeDispatchLibraryFromClasspath
+          # 上机日志 10:09 已实锤。源码级守卫，防止再次遗漏。
+          grep -q 'init_hookFunctions();' Air2/App/main.m \
+            || { echo "::error::main.m 没有调用 init_hookFunctions() —— dlopen/dlsym hook 不会安装"; exit 1; }
+          grep -q 'init_hookUIKitConstructor();' Air2/App/main.m \
+            || { echo "::error::main.m 没有调用 init_hookUIKitConstructor()"; exit 1; }
+          grep -q 'mach_excServer.c' Air2.xcodeproj/project.pbxproj \
+            || { echo "::error::mach_excServer.c 未编进工程 —— main_hook.o 会有 _mach_exc_server 未定义"; exit 1; }
+          echo "  ✓ main.m 调用了 hook 安装，mach_excServer.c 已编入"
+
+          # ---- 可执行文件名一致性校验 ----
+          #
+          # Java 侧 GLFW.java / UIKit.java 用主机可执行文件名去定位主 image、
+          # 解析 pojav* 符号；sdl3_hook.m 用同一个名字判断"这是我们自己的镜像"
+          # （防递归）。三处必须与 Info.plist 的 CFBundleExecutable 一致，
+          # 否则：
+          #   · 名字错 → System.load 失败 → LWJGL 报 "A required function is
+          #     missing: pojavInit" → com.mojang.blaze3d.platform.GLX._initGlfw 崩；
+          #   · 名字错 → sdl3_hook 的递归防护失效 → ame_glScissor 无限递归。
+          # 上机日志（06:57 那轮）已实锤 pojavInit 这一条。
+          echo "==> 校验可执行文件名一致性"
+          _plist_exec=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" \
+                         "$APP/Info.plist" 2>/dev/null || true)
+          _bin_name=$(basename "$APP/Air2")
+          if [ "$_plist_exec" != "$_bin_name" ]; then
+            echo "::error::Info.plist CFBundleExecutable=$_plist_exec 与实际二进制=$_bin_name 不一致"
+            exit 1
+          fi
+          echo "    Info.plist CFBundleExecutable = $_plist_exec ✓"
+          # Java 侧与 native 侧都必须用同一个名字
+          if ! grep -q '"air2.executable.name", "Air2"' \
+               JavaApp/src/lwjgl/org/lwjgl/glfw/GLFW.java \
+               JavaApp/src/launcher/net/kdt/pojavlaunch/uikit/UIKit.java; then
+            echo "::error::Java 侧的默认可执行文件名不是 Air2"
+            exit 1
+          fi
+          if ! grep -q 'strstr(img, "Air2")' Air2/Player/Renderer/sdl3_hook.m; then
+            echo "::error::sdl3_hook.m 的递归防护仍在匹配旧名字"
+            exit 1
+          fi
+          echo "    Java 侧与 sdl3_hook 均为 Air2 ✓"
+
+          echo "==> 注入 libs/"
+          mkdir -p "$APP/libs"
+
+          # 1. JavaApp 编译产物
+          #
+          # ★ 排除 lwjgl-<ver>.jar ★
+          #
+          # build/ 下会同时产出 lwjgl-333.jar（9.1MB）和 lwjgl-341.jar（12MB）。
+          # 它们各自有专属目录 libs/lwjgl-<ver>/，不该再放一份到 libs/ 根。
+          #
+          # 放了会怎样：JavaLauncher 收集 classpath 时遍历 libs/ 下所有 *.jar，
+          # 按字典序 lwjgl-333.jar 排在 lwjgl-341.jar 前面 → 3.3.3 的类先被加载。
+          # MC 26.2 需要 3.4.1 的 ALCCapabilities.alcEventIsSupportedSOFT，
+          # 而 3.3.3 那份没有该字段，于是启动崩在音频初始化：
+          #   NoSuchFieldError: ALCCapabilities does not have member field
+          #     'long alcEventIsSupportedSOFT'
+          #     at com.mojang.blaze3d.audio.Library.createDeviceTracker
+          # 上机崩溃报告 crash-2026-11-22_10.05.59-client.txt 已实锤。
+          for j in JavaApp/build/*.jar; do
+            [ -f "$j" ] || continue
+            case "$(basename "$j")" in
+              lwjgl-[0-9]*.jar)
+                echo "    (skip $(basename "$j") -> 由 libs/lwjgl-<ver>/ 提供)"
+                continue ;;
+            esac
+            cp "$j" "$APP/libs/"
+          done
+
+          # 2. 版本化 LWJGL（仓库里已带的运行期 jar）
+          for v in 333 341; do
+            src="Libraries/Jars/lwjgl-$v"
+            dst="$APP/libs/lwjgl-$v"
+            mkdir -p "$dst"
+            # ★ 不能再拷预置分片（lwjgl-glfw.jar / lwjgl-opengl.jar）★
+            #
+            # classpath 是 libs/lwjgl-<ver>/*，JVM 按【字典序】展开：
+            #     lwjgl-glfw.jar   ← '-' (0x2d) < '.' (0x2e)，排最前
+            #     lwjgl-opengl.jar
+            #     lwjgl.jar        ← 我们的 iOS 定制 GLFW 在这里
+            # 预置分片里的 GLFW.class 是【官方 LWJGL】，它在 <clinit> 里走
+            #     org.lwjgl.system.Library.loadNative(GLFW.java:29)
+            # 去找 liblwjgl_glfw.dylib —— iOS 上没有这种 native 库：
+            #     Graphics Device: <none>
+            #     [Boot/WARNING] 8s 内未收到首帧 → 黑屏
+            # 上机日志 13:25 那轮已实锤（Backend library: LWJGL 3.4.1-snapshot，
+            # java.library.path 里所有 .dylib 都是 "unknown type"）。
+            #
+            # 完整构建产物 lwjgl.jar（12MB、6201 条目）已含全部模块，
+            # 且其中的 GLFW.class 是 Amethyst 的 iOS 定制版（走 MacOSXLibraryDL
+            # + 主二进制导出的 pojav* 符号）。目录里只留它就够，也必须只留它。
+            # ★ 用 JavaApp 构建出的【完整】lwjgl-<ver>.jar 覆盖 lwjgl.jar ★
+            #
+            # Libraries/Jars/lwjgl-341/ 只有 3 个预置分片（lwjgl / glfw / opengl），
+            # 里面【没有】openal / stb / freetype 等模块。而 Makefile 会把
+            # JavaApp/libs/lwjgl-341/ 的全部模块解压合并进 build/lwjgl-341.jar。
+            #
+            # 之前只拷预置分片，于是 app/libs/lwjgl-341/lwjgl.jar 是个不含 openal
+            # 的残缺包。运行时 MC 26.2 的 SoundEngine 初始化：
+            #     NoSuchFieldError: Class org.lwjgl.openal.ALCCapabilities
+            #       does not have member field 'long alcEventIsSupportedSOFT'
+            #       at com.mojang.blaze3d.audio.Library.createDeviceTracker
+            # 上机崩溃报告 crash-2026-11-22_09.41.26-client.txt 已实锤。
+            # （打包阶段前面虽然校验过 build/lwjgl-<ver>.jar 内容正确，但从未把它拷进包里）
+            if [ -f "JavaApp/build/lwjgl-$v.jar" ]; then
+              cp -f "JavaApp/build/lwjgl-$v.jar" "$dst/lwjgl.jar"
+              echo "    lwjgl-$v/lwjgl.jar <- JavaApp/build/lwjgl-$v.jar ($(du -h "JavaApp/build/lwjgl-$v.jar" | cut -f1))"
+            else
+              echo "::error::JavaApp/build/lwjgl-$v.jar 不存在"
+              exit 1
+            fi
+          done
+
+          # 3. 硬校验：没有 launcher.jar 就别出包
+          if [ ! -f "$APP/libs/launcher.jar" ]; then
+            echo "::error::app/libs/launcher.jar 缺失 —— 启动必然黑屏"
+            ls -la "$APP/libs" || true
+            exit 1
+          fi
+          if [ ! -f "$APP/libs/lwjgl-333/lwjgl.jar" ] || [ ! -f "$APP/libs/lwjgl-341/lwjgl.jar" ]; then
+            echo "::error::libs/lwjgl-{333,341}/lwjgl.jar 缺失"
+            ls -R "$APP/libs" || true
+            exit 1
+          fi
+          echo "  libs/ 内容:"
+          ls -la "$APP/libs"
+
+          # ---- 装机包内的 lwjgl jar 必须含 openal（内容级校验）----
+          #
+          # 编译阶段校验过 JavaApp/build/lwjgl-<ver>.jar，但拷进 app 的是另一条路径
+          # （Libraries/Jars/lwjgl-<ver>/ 的预置分片），两边曾经不一致：
+          # 包里的 lwjgl.jar 只有 3 个分片、零个 openal 类，运行到音频初始化就崩：
+          #   NoSuchFieldError: ALCCapabilities does not have member field
+          #     'long alcEventIsSupportedSOFT'
+          # 所以在【最终装机包】上再验一次。
+          for _v in 333 341; do
+            _j="$APP/libs/lwjgl-$_v/lwjgl.jar"
+            [ -f "$_j" ] || { echo "::error::$_j 缺失"; exit 1; }
+            _n=$(unzip -l "$_j" 2>/dev/null | grep -c 'org/lwjgl/openal/ALC' || true)
+            echo "    包内 lwjgl-$_v/lwjgl.jar: openal 类 ${_n} 个"
+            if [ "${_n:-0}" -lt 5 ]; then
+              echo "::error::装机包 lwjgl-$_v/lwjgl.jar 只有 ${_n} 个 openal 类（应 >= 5）"
+              exit 1
+            fi
+          done
+          unzip -l "$APP/libs/lwjgl-341/lwjgl.jar" | grep -q 'org/lwjgl/openal/SOFTSystemEvents.class' \
+            || { echo "::error::装机包 lwjgl-341/lwjgl.jar 缺 SOFTSystemEvents.class"; exit 1; }
+          echo "  ✓ 装机包 lwjgl jar 含完整 openal 模块"
+
+          # ---- lwjgl 目录只能有 lwjgl.jar，且其中的 GLFW 必须是 iOS 定制版 ----
+          #
+          # classpath 是 libs/lwjgl-<ver>/*，按字典序展开。若目录里同时存在
+          # lwjgl-glfw.jar（官方分片），它会排在 lwjgl.jar 之前，官方 GLFW.class
+          # 抢先加载 → 走 Library.loadNative 找 liblwjgl_glfw.dylib（iOS 没有）
+          # → Graphics Device: <none> → 8 秒后撤遮罩 → 黑屏。
+          # 上机日志 13:25 那轮已实锤。
+          for _v in 333 341; do
+            _dir="$APP/libs/lwjgl-$_v"
+            _extra=$(ls "$_dir"/*.jar 2>/dev/null | grep -v "/lwjgl\.jar$" | wc -l | tr -d ' ')
+            if [ "${_extra:-0}" != "0" ]; then
+              echo "::error::$_dir 里除了 lwjgl.jar 还有 ${_extra} 个 jar（会把 GLFW 类遮蔽）"
+              ls -la "$_dir" || true
+              exit 1
+            fi
+          done
+          echo "  ✓ lwjgl 目录只含 lwjgl.jar"
+
+          # 包内 GLFW.class 必须是 Amethyst 的 iOS 定制版（走 MacOSXLibraryDL +
+          # 主二进制导出的 pojav* 符号），不是官方 LWJGL 版（走 Library.loadNative）。
+          for _v in 333 341; do
+            if ! unzip -p "$APP/libs/lwjgl-$_v/lwjgl.jar" org/lwjgl/glfw/GLFW.class 2>/dev/null \
+                 | grep -aq 'air2.executable.name'; then
+              echo "::error::lwjgl-$_v 的 GLFW.class 不是 iOS 定制版（缺 air2.executable.name）"
+              exit 1
+            fi
+          done
+          echo "  ✓ GLFW.class 是 iOS 定制版（MacOSXLibraryDL + pojav* 导出符号）"
+
+          # ---- libs/ 根目录不得有 lwjgl-<ver>.jar ----
+          #
+          # 根目录若有 lwjgl-333.jar，它会在 classpath 里排在 lwjgl-341.jar 之前
+          # （字典序），3.3.3 的类先被加载 → ALCCapabilities 缺
+          # alcEventIsSupportedSOFT → 音频初始化崩。版本化 LWJGL 只能存在于
+          # libs/lwjgl-<ver>/ 目录内。
+          _stale=$(ls "$APP/libs"/lwjgl-*.jar 2>/dev/null | wc -l | tr -d ' ')
+          if [ "${_stale:-0}" != "0" ]; then
+            echo "::error::libs/ 根目录残留 ${_stale} 个 lwjgl-*.jar（会让旧版本类抢先加载）"
+            ls -la "$APP/libs"/lwjgl-*.jar || true
+            exit 1
+          fi
+          echo "  ✓ libs/ 根目录无 lwjgl-*.jar"
+
+          # ---- 注入渲染器 dylib ----
+          #
+          # JavaLauncher 把 AMETHYST_RENDERER 直接当库名，用 @rpath/<名字> 去
+          # Frameworks/ 里找。gl4es 家族的三支（VGPU / GL4ESZL2 / NG-GL4ES）
+          # 与部分 Mesa 组件只在 Libraries/Renderers/ 下，缺了它们选中对应
+          # 渲染器就是 dlopen 失败 → 黑屏。
+          if [ -d Libraries/Renderers ]; then
+            for f in Libraries/Renderers/*.dylib; do
+              [ -f "$f" ] || continue
+              base=$(basename "$f")
+              # 不覆盖 Frameworks 里已有的同名库（那批是经过验证的主线）
+              [ -f "$APP/Frameworks/$base" ] && continue
+              cp "$f" "$APP/Frameworks/"
+            done
+          fi
+
+          # ---- 渲染器可用性清单（排障用）----
+          echo "==> Frameworks 里的渲染器:"
+          for r in libgl4es_114.dylib libtinygl4angle.dylib libmobileglues.dylib \
+                   libMobileGL.dylib libMobileGL-gles.dylib libOSMesa.8.dylib \
+                   libltw.dylib libMoltenVK.dylib libSimpleFPEWrapper.dylib \
+                   libmetallum.dylib libmithril.dylib libvirgl_test_server.dylib \
+                   libgl4eszl2.dylib libvgpu.dylib libnggl4es.dylib; do
+            if [ -f "$APP/Frameworks/$r" ]; then
+              echo "    ✓ $r"
+            else
+              echo "    ✗ $r (缺失)"
+            fi
+          done
+
+          # ---- 注入 JRE ----
+          # ★fetch_jre.py 落盘在 depends/java-<v>-openjdk，打包需要根目录 java_runtimes/★
+          #   之前直接 cp java_runtimes 失败：cp: java_runtimes: No such file or directory
+          mkdir -p java_runtimes
+          for v in 8 17 21 25; do
+            src="depends/java-${v}-openjdk"
+            [ -d "$src" ] && cp -R "$src" java_runtimes/
+          done
+          ls java_runtimes | head -10
+          cp -R java_runtimes "$APP/java_runtimes"
+
+          # ============================================================
+          # ★ 逐条对齐上游 Makefile 的 payload / jre 规则（JRE 拷贝之后执行）★
+          #
+          # 上游 payload 与 jre 目标把下面这些拷进 .app。之前每缺一项，JVM 真跑
+          # 起来之后就会撞一次闪退 —— 前面几轮就是这么一个个发现的。
+          # 注意：这些必须在 cp -R java_runtimes 之后跑，否则 $APP/java_runtimes
+          # 还不存在，循环匹配 0 项。
+          # ============================================================
+          echo "==> 对齐上游 payload 规则"
+
+          # ---- (0) JRE 结构硬校验（上游 jre 目标同款）----
+          for _v in 8 17 21 25; do
+            _jre="$APP/java_runtimes/java-${_v}-openjdk"
+            if [ ! -f "$_jre/lib/server/libjvm.dylib" ]; then
+              echo "::error::JRE-NEST: $_jre 缺 lib/server/libjvm.dylib"
+              ls -la "$_jre" 2>/dev/null | head -20 || true
+              exit 1
+            fi
+          done
+          echo "    JRE 四版本 libjvm.dylib 就位"
+
+          # ---- (a) libawt_xawt.dylib：AWT 的 iOS 补丁 ----
+          # java.awt.Toolkit.loadLibraries 会 System.loadLibrary("awt_xawt")，
+          # 即 <JRE>/lib/libawt_xawt.dylib。fetch_jre.py 原先查的是不存在的路径，
+          # 每次都静默跳过 → JVM 一碰 AWT 就 UnsatisfiedLinkError。
+          if [ ! -f Libraries/Frameworks/libawt_xawt.dylib ]; then
+            echo "::error::Libraries/Frameworks/libawt_xawt.dylib 缺失"
+            exit 1
+          fi
+          for jre in "$APP"/java_runtimes/*/; do
+            [ -d "$jre/lib" ] || continue
+            cp -f Libraries/Frameworks/libawt_xawt.dylib "$jre/lib/libawt_xawt.dylib"
+          done
+          echo "    libawt_xawt.dylib -> $(ls -d "$APP"/java_runtimes/*/ | wc -l) 个 JRE"
+
+          # ---- (b) Caciocavallo：iOS 上的 AWT 替代实现 ----
+          # JavaLauncher 会传 -Xbootclasspath/a:<bundle>/libs_caciocavallo17/cacio-*.jar
+          # （Java 8 走 /p + libs_caciocavallo）。上游 Makefile 显式 cp 这两个目录。
+          for d in caciocavallo caciocavallo17; do
+            src="JavaApp/libs/$d"
+            [ -d "$src" ] || { echo "::error::源目录缺失 $src"; exit 1; }
+            mkdir -p "$APP/libs_$d"
+            cp -R "$src"/* "$APP/libs_$d"/
+          done
+          echo "    libs_caciocavallo / libs_caciocavallo17 已注入"
+
+          # ---- (c) libs/others/* ----
+          if [ -d JavaApp/libs/others ]; then
+            mkdir -p "$APP/libs"
+            cp -R JavaApp/libs/others/* "$APP/libs"/ 2>/dev/null || true
+          fi
+
+          # ---- (d) 四个核心 jar 硬校验（上游逐个 cp 且 || exit 1）----
+          for j in launcher.jar patchjna_agent.jar patchsvc.jar mojang-stubs.jar; do
+            [ -f "$APP/libs/$j" ] || { echo "::error::app/libs/$j 缺失"; exit 1; }
+          done
+          echo "    libs/ 四个核心 jar 齐全"
+
+          # ---- (e) spirv-cross 软链接兜底（上游防御性步骤）----
+          if [ -f "$APP/Frameworks/libspirv-cross-c-shared.0.dylib" ] && \
+             [ ! -f "$APP/Frameworks/libspirv-cross.dylib" ]; then
+            ln -sf libspirv-cross-c-shared.0.dylib "$APP/Frameworks/libspirv-cross.dylib"
+          fi
+
+          # ---- (f) Mach-O 平台重打标（上游 METHOD_CHANGE_PLAT）----
+          # macOS 平台标记的 dylib 会被 iOS dyld 静默拒绝 → UnsatisfiedLinkError。
+          # 上游每次 payload 都对 .app 与 java_runtimes 幂等重打成 iOS。
+          if command -v vtool >/dev/null 2>&1; then
+            fixed=0
+            while IFS= read -r f; do
+              [ -f "$f" ] || continue
+              plat=$(vtool -show-build "$f" 2>/dev/null | awk '/platform/{print $2; exit}')
+              case "$plat" in
+                MACOS|IOS_SIMULATOR)
+                  vtool -set-build-version ios 14.0 18.0 -replace -output "$f" "$f" >/dev/null 2>&1 && fixed=$((fixed+1)) || true
+                  ;;
+              esac
+            done < <(find "$APP/Frameworks" "$APP/java_runtimes" -type f -name '*.dylib' 2>/dev/null)
+            echo "    Mach-O 重打标 $fixed 个"
+          else
+            echo "    (无 vtool，跳过)"
+          fi
+
+          # ---- 启动器资源 ----
+          for f in Assets/runtime/*; do
+            b=$(basename "$f")
+            case "$b" in Frameworks|*.lproj) continue ;; esac
+            cp -R "$f" "$APP/" 2>/dev/null || true
+          done
+
+          # ---- 统计 ----
+          echo "== 注入后体积 =="
+          du -sh "$APP/Frameworks" 2>/dev/null || echo "  Frameworks: 0"
+          du -sh "$APP/java_runtimes" 2>/dev/null || echo "  JRE: 0"
+
+          # ---- ad-hoc 签名（TrollStore 可用）----
+          # 注意顺序：必须先把 libs/ 里的 jar 和 Frameworks 里的 dylib 全部就位，
+          # 再做 codesign --deep，否则后加进去的二进制没有签名，
+          # 越狱/自签环境下 dlopen 会被内核直接拒绝（表现为黑屏且无错误）。
+          find "$APP/Frameworks" -name '*.dylib' -exec codesign -f -s - {} \; 2>/dev/null || true
+          codesign -f -s - --deep "$APP" 2>/dev/null || true
+
+          # ---- 打包 ----
+          mkdir -p artifacts/Payload
+          cp -R "$APP" artifacts/Payload/
+          cd artifacts
+          zip -qry Air2-unsigned.ipa Payload
+          rm -rf Payload
+
+          # ---- 体积校验 ----
+          SIZE_MB=$(( ($(stat -f%z Air2-unsigned.ipa 2>/dev/null || stat -c%s Air2-unsigned.ipa)) / 1048576 ))
+          echo "IPA: ${SIZE_MB} MB"
+          if [ "$SIZE_MB" -lt 50 ]; then
+            echo "::error::IPA 只有 ${SIZE_MB} MB，Frameworks/JRE 没注入成功"
+            ls -la "$APP/Frameworks" | head -20
+            exit 1
+          fi
+          ls -lh Air2-unsigned.ipa
+
+      - name: 上传 IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: Air2-IPA
+          path: artifacts/*.ipa
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: 上传编译日志（失败时）
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: |
+            logs/*.log
+          if-no-files-found: warn
+          retention-days: 7

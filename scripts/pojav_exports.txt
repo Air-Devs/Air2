@@ -1,0 +1,89 @@
+# 主可执行文件的导出符号白名单
+#
+# Java 侧 GLFW.java 通过
+#     new MacOSXLibraryDL(<主可执行文件名>, RTLD_DEFAULT)
+# 从宿主可执行文件的【动态符号表】里解析 pojav* 系列 GLFW 桥接符号：
+#     Init          = apiGetFunctionAddress(GLFW, "pojavInit")
+#     CreateContext = apiGetFunctionAddress(GLFW, "pojavCreateContext")
+#     ...
+#
+# 这些符号由 Air2/Player/Renderer/egl_bridge.m 定义。它们是普通的 C 全局符号，
+# 默认【不进入】动态符号表（ld 默认隐藏未在 exported_symbols_list 里点名的符号），
+# 于是 apiGetFunctionAddress 拿到 NULL，LWJGL 初始化直接抛：
+#     java.lang.NullPointerException: A required function is missing: pojavInit
+#     at org.lwjgl.glfw.GLFW$Functions.<clinit>
+#     at org.lwjgl.glfw.GLFW.glfwInit
+#     at com.mojang.blaze3d.platform.GLX._initGlfw
+# 上机日志已实锤。
+#
+# 用 -Wl,-exported_symbols_list 点名导出（上游 Amethyst 用的是同一手法：
+# -Wl,-exported_symbols_list,$(WORKINGDIR)/xxx.exports）。
+#
+# ⚠️ 不要改成 -export_dynamic：那会把【所有】全局符号一并导出，
+# 包括 shaderc_impl_glue.c 引用的 glslang 运行期符号，dyld 会在启动阶段
+# 强制解析它们，找不到就报
+#     symbol not found in flat namespace '_glslang_finalize_process'
+# 直接闪退（这个坑我们已经踩过一次）。
+#
+# 清单里写的是链接器用的名字，带前导下划线。
+
+_pojavInit
+_pojavCreateContext
+_pojavGetCurrentContext
+_pojavMakeCurrent
+_pojavTerminate
+_pojavSetWindowHint
+_pojavSwapBuffers
+_pojavSwapInterval
+_pojavPumpEvents
+_pojavRewindEvents
+_pojavGetAndResetFps
+_pojavIncrementFpsCounter
+_pojavIsActualVulkanPath
+
+# _main 也必须导出：libjli 在 JLI_Launch 里用 dlsym(RTLD_DEFAULT,"main")
+# 反查宿主可执行文件，找不到就报
+#     Error: could not find executable dlsym(RTLD_DEFAULT, main): symbol not found
+#     error locating main entrypoint
+_main
+
+# ---------------------------------------------------------------------------
+# JNI 入口（JVM 通过 dlsym 查找这些符号，必须可见）
+#
+# 之前白名单只放行 _main 与 pojav*，于是这些 JNI 函数虽然编进了主二进制，
+# 却被 -exported_symbols_list 挡在动态符号表之外。运行时表现：
+#     java.lang.UnsatisfiedLinkError: 'long org.lwjgl.glfw.GLFW.nglfwSetFramebufferSizeCallback(long, long)'
+#       at com.mojang.blaze3d.platform.Window.<init>(Window.java:126)
+#       at net.minecraft.client.Minecraft.<init>(Minecraft.java:513)
+# 上机崩溃报告已实锤（crash-2026-11-22_08.45.45-client.txt）。
+#
+# ADD_CALLBACK_WWIN(NAME) 宏在 input_bridge_v3.m 里展开出 10 个：
+#   Char / CharMods / CursorEnter / CursorPos / FramebufferSize /
+#   Key / MouseButton / Scroll / WindowPos / WindowSize
+# ---------------------------------------------------------------------------
+_Java_org_lwjgl_glfw_GLFW_nglfwSetCharCallback
+_Java_org_lwjgl_glfw_GLFW_nglfwSetCharModsCallback
+_Java_org_lwjgl_glfw_GLFW_nglfwSetCursorEnterCallback
+_Java_org_lwjgl_glfw_GLFW_nglfwSetCursorPosCallback
+_Java_org_lwjgl_glfw_GLFW_nglfwSetFramebufferSizeCallback
+_Java_org_lwjgl_glfw_GLFW_nglfwSetKeyCallback
+_Java_org_lwjgl_glfw_GLFW_nglfwSetMouseButtonCallback
+_Java_org_lwjgl_glfw_GLFW_nglfwSetScrollCallback
+_Java_org_lwjgl_glfw_GLFW_nglfwSetWindowPosCallback
+_Java_org_lwjgl_glfw_GLFW_nglfwSetWindowSizeCallback
+_Java_org_lwjgl_glfw_GLFW_nglfwSetShowingWindow
+
+_Java_org_lwjgl_glfw_CallbackBridge_nativeClipboard
+_Java_org_lwjgl_glfw_CallbackBridge_nativeIsGrabbing
+_Java_org_lwjgl_glfw_CallbackBridge_nativeSetGrabbing
+_Java_org_lwjgl_glfw_CallbackBridge_nativeSetModifiers
+
+_Java_org_lwjgl_system_ThreadLocalUtil_nsetupEnvData
+
+_Java_net_kdt_pojavlaunch_uikit_UIKit_showError
+_Java_net_kdt_pojavlaunch_uikit_UIKit_updateMCGuiScale
+
+_Java_java_awt_MenuItem_initIDs
+_Java_java_awt_Menu_initIDs
+_Java_java_awt_ScrollPane_initIDs
+_Java_java_awt_TrayIcon_initIDs

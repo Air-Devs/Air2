@@ -1,0 +1,1937 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		5B69779F761A566D166C2342 /* A2AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 8DA45F9AA021EBFBF929A56A /* A2AppDelegate.m */; };
+		59F01512A836702FD0D9F5D9 /* A2CrashGuard.m in Sources */ = {isa = PBXBuildFile; fileRef = EDF360D6C38161620D973AA3 /* A2CrashGuard.m */; };
+		84B4ED65340FEC57222535E6 /* A2NavigationController.m in Sources */ = {isa = PBXBuildFile; fileRef = F6EE6864D5C02736374620A3 /* A2NavigationController.m */; };
+		1D4ED46FBFBF946134C72573 /* A2RootViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E0A962942F56F74CF7617780 /* A2RootViewController.m */; };
+		84C22A76F0D470DBB7E9248C /* A2SceneDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */; };
+		B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */ = {isa = PBXBuildFile; fileRef = 36F3AADE4F4508F86A2F0505 /* main.m */; };
+		434831579F14E55A1DF7A0D1 /* A2Account.m in Sources */ = {isa = PBXBuildFile; fileRef = 88C69537AF21F68A7B1456D3 /* A2Account.m */; };
+		0B32EEA9A11A39AA5D315041 /* A2AccountManager.m in Sources */ = {isa = PBXBuildFile; fileRef = FBBBB4EFA2B5334A45EA3C4E /* A2AccountManager.m */; };
+		3352C680504CA3F9AB6CFD26 /* A2MicrosoftAuth.m in Sources */ = {isa = PBXBuildFile; fileRef = BA94035A25A574575C224EC9 /* A2MicrosoftAuth.m */; };
+		B70F2470805980B206B1EAF8 /* A2Wardrobe.m in Sources */ = {isa = PBXBuildFile; fileRef = 1FCEEB9DA67A103C2B6DBA4A /* A2Wardrobe.m */; };
+		EB8AF64AB9D51A26942A884F /* A2APIModDownloader.m in Sources */ = {isa = PBXBuildFile; fileRef = AF6416AF6E60A32784E6C349 /* A2APIModDownloader.m */; };
+		514C73BF78432EFA524E3D87 /* A2ContentSource.m in Sources */ = {isa = PBXBuildFile; fileRef = 1701CD5F8C697E4FB0EA95CC /* A2ContentSource.m */; };
+		0D17D81407F6A22D20B89620 /* A2CurseForgeAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = B9FA6C49037A18A6B1E59FD5 /* A2CurseForgeAPI.m */; };
+		7BC46830363BB7D24F1EB261 /* A2LoaderVersionSource+Forge.m in Sources */ = {isa = PBXBuildFile; fileRef = CAF1C722D6447EBFD3DE5AC9 /* A2LoaderVersionSource+Forge.m */; };
+		3D236CA3B00131FA0DD8C841 /* A2LoaderVersionSource.m in Sources */ = {isa = PBXBuildFile; fileRef = C5DA9E2487D36C274C80ACB0 /* A2LoaderVersionSource.m */; };
+		6520EA8C1584C6879CBE5834 /* A2LocalMod.m in Sources */ = {isa = PBXBuildFile; fileRef = 3EB242919BB0D524E0F04E05 /* A2LocalMod.m */; };
+		178E4C042E711E4F72FAAAED /* A2MirrorResolver.m in Sources */ = {isa = PBXBuildFile; fileRef = C4D9FC19281C2C7616C83363 /* A2MirrorResolver.m */; };
+		A83EEEB1694635A4E2D8A05C /* A2ModLoaderAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */; };
+		06B9E837FB19EE06FB5B8001 /* A2ModLoaderInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */; };
+		06B58AEDE70956F3099BAA8C /* A2ModLoaderSelection.m in Sources */ = {isa = PBXBuildFile; fileRef = 111E9AEC7F99B525E5C2561C /* A2ModLoaderSelection.m */; };
+		B93BF19B9A5817F070177A3E /* A2ModPack.m in Sources */ = {isa = PBXBuildFile; fileRef = 818837C4F3F9187CAE2C7B85 /* A2ModPack.m */; };
+		B4602EB8115274750785754F /* A2ModPackExporter.m in Sources */ = {isa = PBXBuildFile; fileRef = BC9BE22EBF1611FD9317C5F7 /* A2ModPackExporter.m */; };
+		233C8ED69D6FB00835F7FDEF /* A2ModPackInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = F9D1523FC914A5D7AD7339A1 /* A2ModPackInstaller.m */; };
+		4B3530EF7B225032A4145D7C /* A2ModScanner.m in Sources */ = {isa = PBXBuildFile; fileRef = 0D98C9FC5B84AD139084B48A /* A2ModScanner.m */; };
+		FAE87882A16451C5E2E43DDE /* A2ModrinthAPI.m in Sources */ = {isa = PBXBuildFile; fileRef = B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */; };
+		63E842FC660915F96957CD6E /* A2ResourcePack.m in Sources */ = {isa = PBXBuildFile; fileRef = 2A1D6A101DDDB12E54E429AC /* A2ResourcePack.m */; };
+		CEBCE40DED2386E621FE1198 /* A2ResourceScanner.m in Sources */ = {isa = PBXBuildFile; fileRef = 354E0D6D2FD88A0DA1EBAF70 /* A2ResourceScanner.m */; };
+		006F90647E36FA45B54D7B39 /* A2ZipReader.m in Sources */ = {isa = PBXBuildFile; fileRef = C7F15DE318744485CEE00538 /* A2ZipReader.m */; };
+		5DFE00B49A996C511291A505 /* A2ZipWriter.m in Sources */ = {isa = PBXBuildFile; fileRef = 025FEA920C79EED2B15C509E /* A2ZipWriter.m */; };
+		4486969AD52C845F0A5F88A7 /* A2BatchDownloader.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F8A5B15D5AD998096528CD6 /* A2BatchDownloader.m */; };
+		9F125686BA18A3A79AC3C941 /* A2DownloadEngine.m in Sources */ = {isa = PBXBuildFile; fileRef = 1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */; };
+		04806F8C420A200707485301 /* A2DownloadFavorites.m in Sources */ = {isa = PBXBuildFile; fileRef = 3F6494DF9E525C24C5D69098 /* A2DownloadFavorites.m */; };
+		E6679E2C4F527A9777EA6CEC /* A2DownloadManifest.m in Sources */ = {isa = PBXBuildFile; fileRef = 2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */; };
+		9B094A240FBA6A3C1821F88C /* A2DownloadTask.m in Sources */ = {isa = PBXBuildFile; fileRef = AE757274F8E1E206F093F68A /* A2DownloadTask.m */; };
+		7EA9A208AAFD076980572984 /* A2DownloadTaskCenter.m in Sources */ = {isa = PBXBuildFile; fileRef = 49E73CAF4B5DFDDC5E9F20AF /* A2DownloadTaskCenter.m */; };
+		BFB076DFBEF6F65B6AD45739 /* A2RateLimiter.m in Sources */ = {isa = PBXBuildFile; fileRef = 76A2AB6AE303BDE44A532F48 /* A2RateLimiter.m */; };
+		C88631DC63FBCAA4DA8514EA /* A2SharedSession.m in Sources */ = {isa = PBXBuildFile; fileRef = E38E026AC18486465C710415 /* A2SharedSession.m */; };
+		181BCAA1916DE4DBFD2E08F9 /* A2JREManager.m in Sources */ = {isa = PBXBuildFile; fileRef = AD4D1573AAD6B66A99BF1719 /* A2JREManager.m */; };
+		0FB8591245DA858CF4BAF88B /* A2Logger.m in Sources */ = {isa = PBXBuildFile; fileRef = EA103E9122B1B77443B27069 /* A2Logger.m */; };
+		2C4A505B192563D676DFDD2E /* A2Multiplayer.m in Sources */ = {isa = PBXBuildFile; fileRef = 76E2F83DD8568E1BB073643E /* A2Multiplayer.m */; };
+		186C2F9B8B2FA203E76FC125 /* A2GameDirMigration.m in Sources */ = {isa = PBXBuildFile; fileRef = F03B93794DA818FF2F14D7D0 /* A2GameDirMigration.m */; };
+		B084543A044A1B44B18F5627 /* A2GameFiles.m in Sources */ = {isa = PBXBuildFile; fileRef = D0693B31AD2EAB6A0328732E /* A2GameFiles.m */; };
+		F06A34B3124B9296AC65A46C /* A2GamePathManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 9ACCADCE8C9342A268838450 /* A2GamePathManager.m */; };
+		6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */ = {isa = PBXBuildFile; fileRef = 074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */; };
+		8B0D65271C85EAABC46B0226 /* A2Renderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 47106E1A43667C70F671BED2 /* A2Renderer.m */; };
+		01B85F275BBECA53B5E85F73 /* A2RendererImporter.m in Sources */ = {isa = PBXBuildFile; fileRef = 8D34430FDEB24984AD0E55DB /* A2RendererImporter.m */; };
+		E1702ED5DBB625CDC1ACD1E2 /* A2RendererLibraryLayout.m in Sources */ = {isa = PBXBuildFile; fileRef = B7393994B61F671185A745FD /* A2RendererLibraryLayout.m */; };
+		25473F84A8300128599A0867 /* A2RendererLoader.m in Sources */ = {isa = PBXBuildFile; fileRef = D924815CAA9110DE1E60C886 /* A2RendererLoader.m */; };
+		A23C776EFCE2C90AC27775E1 /* A2RendererPlugin.m in Sources */ = {isa = PBXBuildFile; fileRef = E79BEBB401EDD0A1A09B4A61 /* A2RendererPlugin.m */; };
+		2005F5B368FB32F5221D4DFB /* A2RendererRegistry.m in Sources */ = {isa = PBXBuildFile; fileRef = EF194CE5DE12660BE86A1C1E /* A2RendererRegistry.m */; };
+		E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */ = {isa = PBXBuildFile; fileRef = 035FB3CC4FE4018F44632AD5 /* A2Settings.m */; };
+		5B5898FC1BF46F679FCEAA2A /* A2Task.m in Sources */ = {isa = PBXBuildFile; fileRef = 6FC1E9BA4864AAFF0F7CA085 /* A2Task.m */; };
+		331D9070270556B0E7C3D3D5 /* A2TaskContext.m in Sources */ = {isa = PBXBuildFile; fileRef = 2616E0DA5FD964365AB3F574 /* A2TaskContext.m */; };
+		00AE37F819D7506BE9A0044D /* A2TaskFlowExecutor.m in Sources */ = {isa = PBXBuildFile; fileRef = 8161EDCD7D2D110CECB94A59 /* A2TaskFlowExecutor.m */; };
+		A43F2E9CD2F9BE21260C293F /* A2TaskFlowSnapshot.m in Sources */ = {isa = PBXBuildFile; fileRef = 7A08D7F6FA47520D8DF93A5A /* A2TaskFlowSnapshot.m */; };
+		5F26872D051F24E004470497 /* A2TaskFlowTypes.m in Sources */ = {isa = PBXBuildFile; fileRef = CD8F3F4403B041D5E261EEEB /* A2TaskFlowTypes.m */; };
+		03159518FBAB8BFE27715CD7 /* A2TaskPhase.m in Sources */ = {isa = PBXBuildFile; fileRef = 8B227654B452F4E36F89ED74 /* A2TaskPhase.m */; };
+		15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */ = {isa = PBXBuildFile; fileRef = 044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */; };
+		F6B0CF718AF1F4369DC848E8 /* A2GameLaunchCoordinator.m in Sources */ = {isa = PBXBuildFile; fileRef = 1F7F525D4A9EBB0B34986475 /* A2GameLaunchCoordinator.m */; };
+		20B189CC369DA2AC61DD52DF /* A2IntegrityChecker.m in Sources */ = {isa = PBXBuildFile; fileRef = FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */; };
+		5F41A03509C9877ED42A2B85 /* A2IntegrityRepairer.m in Sources */ = {isa = PBXBuildFile; fileRef = 88CFA2D788E3C8293E1C1288 /* A2IntegrityRepairer.m */; };
+		9FEF068C216458DA33AFF63E /* A2MemorySettings.m in Sources */ = {isa = PBXBuildFile; fileRef = FD148FA4B48FF8B75C314632 /* A2MemorySettings.m */; };
+		42E2F81428F01FB2F3F912BC /* A2RemoteVersions.m in Sources */ = {isa = PBXBuildFile; fileRef = C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */; };
+		2BC4E80EA8F83E9426E4BA2E /* A2VersionInfo.m in Sources */ = {isa = PBXBuildFile; fileRef = 3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */; };
+		7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 643B820206971C227F265607 /* A2VersionManager.m */; };
+		D564819D85268AE02EC0DEC2 /* A2VersionMetadata.m in Sources */ = {isa = PBXBuildFile; fileRef = B6A0FA8BE05E152AF38E328F /* A2VersionMetadata.m */; };
+		87649E39D86A647E14C884BC /* A2VersionModifier.m in Sources */ = {isa = PBXBuildFile; fileRef = ABFA57E18888655D94F65892 /* A2VersionModifier.m */; };
+		60A025E41FE3479CD77EF84B /* A2JITLauncher.m in Sources */ = {isa = PBXBuildFile; fileRef = 5E9E31598CF62220724EE0CC /* A2JITLauncher.m */; };
+		1EAA4088A23E5288FE47CD4B /* AmeLaunchProgress.m in Sources */ = {isa = PBXBuildFile; fileRef = FFB0E2399504AE38B12CDCF6 /* AmeLaunchProgress.m */; };
+		33F561A7EA802A8ACA46A4C8 /* GameSurfaceView.m in Sources */ = {isa = PBXBuildFile; fileRef = 622E3DB2F220A0CD6E0943DF /* GameSurfaceView.m */; };
+		AF347EF95CBD682B91081DB5 /* JavaLauncher.m in Sources */ = {isa = PBXBuildFile; fileRef = 05531083602CC4CC9ADFF035 /* JavaLauncher.m */; };
+		DC948E735D38C071A0BF693F /* LauncherPreferences.m in Sources */ = {isa = PBXBuildFile; fileRef = F4318F35FE1B821173E3D9FA /* LauncherPreferences.m */; };
+		21D0529E1DCA37C36D4AF376 /* PLPreferences.m in Sources */ = {isa = PBXBuildFile; fileRef = AC657CF7DD69342C4AC4CA18 /* PLPreferences.m */; };
+		B10922116CB4B6E341F1E08C /* PLProfiles.m in Sources */ = {isa = PBXBuildFile; fileRef = 67CFEFE3CFBAF99FC4B99E28 /* PLProfiles.m */; };
+		B17DDB99AE2E0EB4B6DA03A5 /* PLTaskStage.m in Sources */ = {isa = PBXBuildFile; fileRef = B4557A4B9E2DB6ABF426D792 /* PLTaskStage.m */; };
+		560326BE071A52289753CB07 /* SurfaceViewController+ExternalDisplay.m in Sources */ = {isa = PBXBuildFile; fileRef = 6CDC79F4F060961654E0BFBD /* SurfaceViewController+ExternalDisplay.m */; };
+		8D60447771F0B763C06B2F81 /* SurfaceViewController+LogView.m in Sources */ = {isa = PBXBuildFile; fileRef = 1D4C64F7E99D00A8C83F6461 /* SurfaceViewController+LogView.m */; };
+		8C992AF31FA8A22AC3526C37 /* SurfaceViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = CAEE71B0AFBCDAB3D6DE931F /* SurfaceViewController.m */; };
+		7FC10269A162141315B017EF /* environ_globals.m in Sources */ = {isa = PBXBuildFile; fileRef = 3379819526378EE72414030C /* environ_globals.m */; };
+		FC2EEB144AE1D45D9D71C15C /* main_hook.m in Sources */ = {isa = PBXBuildFile; fileRef = A3D0C5C637E9FA2B3F32F1BD /* main_hook.m */; };
+		32E98F4EECA61E102374FDE3 /* utils.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A5BAE11D028A2905E1791FC /* utils.m */; };
+		3F6BB9E75376EE54E35ADC74 /* A2ControlEditorViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3CABD20366E8E9C4350F53B8 /* A2ControlEditorViewController.m */; };
+		407CA5C8D4C73378860CD1E9 /* A2ControlFormat.m in Sources */ = {isa = PBXBuildFile; fileRef = FB5F53B07ECD8A87520B739B /* A2ControlFormat.m */; };
+		E74D03164F273F4A23A7B28C /* A2ControlFormatFCL.m in Sources */ = {isa = PBXBuildFile; fileRef = FC6C067EAD1B5E6AFEC87FD6 /* A2ControlFormatFCL.m */; };
+		E7810E9125145039155283C9 /* A2ControlFormatZL.m in Sources */ = {isa = PBXBuildFile; fileRef = 8D8A8B9DE4D3B3563EDBEFDB /* A2ControlFormatZL.m */; };
+		A94573B49E8114C2EAF53088 /* A2ControlInput.m in Sources */ = {isa = PBXBuildFile; fileRef = 8362D912769D68CC445B50FC /* A2ControlInput.m */; };
+		6ACE1ECF42DCF46629227683 /* A2ControlLayerPanel.m in Sources */ = {isa = PBXBuildFile; fileRef = F83F66ED58968DE8E1C3CE2D /* A2ControlLayerPanel.m */; };
+		F2CB4E7B7F47FF18A957EFB5 /* A2ControlLayout.m in Sources */ = {isa = PBXBuildFile; fileRef = 1DD83AEE82FD5DB2400F3B8B /* A2ControlLayout.m */; };
+		FE909770F1329CB8E985AD5F /* A2ControlRenderer.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A1769FF5839C6F59DA3DB26 /* A2ControlRenderer.m */; };
+		8647CE17C409C1610986C998 /* A2ControlStyle.m in Sources */ = {isa = PBXBuildFile; fileRef = 4CFED2A2A24C71D520AA07FC /* A2ControlStyle.m */; };
+		7248BD00DBF94569DDA08C01 /* A2DefaultControls.m in Sources */ = {isa = PBXBuildFile; fileRef = 5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */; };
+		481F5E4CA3795C1BD881C300 /* A2HotbarView.m in Sources */ = {isa = PBXBuildFile; fileRef = 58892B811927577584034FA9 /* A2HotbarView.m */; };
+		D8CCA0AE17848B8425D74AD8 /* A2JoystickView.m in Sources */ = {isa = PBXBuildFile; fileRef = FA7E2954383C7B15D8C251BF /* A2JoystickView.m */; };
+		E7E63DB8026B8D4793538ACF /* A2KeyCodeMap.m in Sources */ = {isa = PBXBuildFile; fileRef = 447DA48951C44FE642EF4EFE /* A2KeyCodeMap.m */; };
+		062C9510C87BE5CE71B8FCA7 /* A2TouchTransport.m in Sources */ = {isa = PBXBuildFile; fileRef = BC32DEDE020A2112CC01EF75 /* A2TouchTransport.m */; };
+		FC9219FD2D0892A86120A148 /* A2GameMenuOverlay.m in Sources */ = {isa = PBXBuildFile; fileRef = BA1CDFB3C78F08B828B7EEDC /* A2GameMenuOverlay.m */; };
+		A72D7475032C8A6614F6864D /* A2JVMRunningViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = F0EACB38F79192127D03C3C4 /* A2JVMRunningViewController.m */; };
+		04FA0FC85CCBBA11454EF9AE /* A2LaunchSplashView.m in Sources */ = {isa = PBXBuildFile; fileRef = 96009B3F837E8AD9139F1044 /* A2LaunchSplashView.m */; };
+		999713CBCD519FC8B0C363BE /* A2ResolutionManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */; };
+		F56BA6557B260E7C004C2CE4 /* A2ResolutionSettingsView.m in Sources */ = {isa = PBXBuildFile; fileRef = F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */; };
+		8C279AEDAE884403944CA9B5 /* ControllerInput.m in Sources */ = {isa = PBXBuildFile; fileRef = 16CD6637FF9A9120236C23FD /* ControllerInput.m */; };
+		63B99E24B6EFA7080D43B69C /* GyroInput.m in Sources */ = {isa = PBXBuildFile; fileRef = 72E3D40518553547A372551D /* GyroInput.m */; };
+		8AF2C614A2C3F3AAA6BB9FB7 /* KeyboardInput.m in Sources */ = {isa = PBXBuildFile; fileRef = E5C6EB5CE20391935ED13F45 /* KeyboardInput.m */; };
+		2C4993FFDDB94E65C157CF63 /* TrackedTextField.m in Sources */ = {isa = PBXBuildFile; fileRef = D7DD31F231F7C27A2387130B /* TrackedTextField.m */; };
+		E11B0E2509F9D5A48EA9D8E3 /* input_bridge_v3.m in Sources */ = {isa = PBXBuildFile; fileRef = 29A644FD215BCBE0DED58CF5 /* input_bridge_v3.m */; };
+		DD464082336DE87E5FB314F4 /* ZinkConfig.m in Sources */ = {isa = PBXBuildFile; fileRef = 52EBA7667EECC1A31AFBCF47 /* ZinkConfig.m */; };
+		2313D67563988A809D80ABBC /* egl_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = E368CBF075B0AB8032581171 /* egl_bridge.m */; };
+		F399FA9A45B20F687631E9C8 /* gl4es_family_boot.m in Sources */ = {isa = PBXBuildFile; fileRef = 2056A2513B531351EF6F4613 /* gl4es_family_boot.m */; };
+		CA5FB58293C7CE4B1660D42D /* gl_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 3D6BFFADE137E817AFABBEE7 /* gl_bridge.m */; };
+		1AF1D478BF3F6C2ACFA1880D /* openal_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = AA85EB0E82DC6C36A7EA7CA7 /* openal_shim.c */; };
+		D963E662806828468DA83EB7 /* osm_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = B430480194987DFD0DE5B92A /* osm_bridge.m */; };
+		256656C1B3B9BB729BD49F20 /* sdl3_hook.m in Sources */ = {isa = PBXBuildFile; fileRef = 877D37201914962A265F7875 /* sdl3_hook.m */; };
+		A66C61E1FD25ECFA681BD47E /* shader_cap_probe.m in Sources */ = {isa = PBXBuildFile; fileRef = 41167DA379475CE71BECC431 /* shader_cap_probe.m */; };
+		8F5741AD24199C221C070B67 /* shaderc_impl_glue.c in Sources */ = {isa = PBXBuildFile; fileRef = 4EBA0900AB704E513396046F /* shaderc_impl_glue.c */; };
+		BAEC5B5ADD3FC4718918C5AB /* shaderc_include.c in Sources */ = {isa = PBXBuildFile; fileRef = 287DA744A433A35B4878F96B /* shaderc_include.c */; };
+		F997B7FAC2D0C9449D7B34B9 /* shaderc_sandbox.m in Sources */ = {isa = PBXBuildFile; fileRef = 05B22A1299F6F9FA174C3C57 /* shaderc_sandbox.m */; };
+		5A8889AD35BF50CC8B2291E0 /* spvc_shim.c in Sources */ = {isa = PBXBuildFile; fileRef = 5F9D85AE4F9ABE9D7CDD8606 /* spvc_shim.c */; };
+		B9BB52B9AB6950D8832318B5 /* virgl_server.m in Sources */ = {isa = PBXBuildFile; fileRef = 7DDE616B504E6BC2BD95893F /* virgl_server.m */; };
+		AFB451E7DE6E2EF951660264 /* vk_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 6A147B235573B1F4D128EC56 /* vk_bridge.m */; };
+		775874999E7CA10F74D67F52 /* LanPortDetector.m in Sources */ = {isa = PBXBuildFile; fileRef = E147FF8C8EEE4B039515EF61 /* LanPortDetector.m */; };
+		09C2D11C05593159E6AFB14E /* McLanPortDetector.m in Sources */ = {isa = PBXBuildFile; fileRef = 61F59F7BC6DF5C142349F29D /* McLanPortDetector.m */; };
+		F557065DCB94B26935C0C6EB /* PLCrashView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2BE3947518DFBB0E9F7EC65F /* PLCrashView.m */; };
+		F7943E2D531B0044ECFEA76E /* PLLogOutputView.m in Sources */ = {isa = PBXBuildFile; fileRef = 52D8A04AFEDE1A805DC7E208 /* PLLogOutputView.m */; };
+		ABC7EC799C91BF1A5C50EDE2 /* ScreenUtils.m in Sources */ = {isa = PBXBuildFile; fileRef = BF0A41C1E121405427C314A9 /* ScreenUtils.m */; };
+		3F05A2797AFFCA010B7F9D59 /* UIKit+hook.m in Sources */ = {isa = PBXBuildFile; fileRef = 869782D9D81E98D0AB7F435E /* UIKit+hook.m */; };
+		07FB28CDA0698A31D2A16F24 /* UpdateChecker.m in Sources */ = {isa = PBXBuildFile; fileRef = D7399A9719C4F69C7AB042BF /* UpdateChecker.m */; };
+		5F6D34E5A9CA09F3E7F4AF19 /* empty.m in Sources */ = {isa = PBXBuildFile; fileRef = 2E6F468284C1C07BB9061ABA /* empty.m */; };
+		0C00E5953847471FCD43814F /* xawt_fake.m in Sources */ = {isa = PBXBuildFile; fileRef = 5486E1FF3753ECA76163F90D /* xawt_fake.m */; };
+		02C6CDDF3160D8779F0546C7 /* dyld_bypass_validation.m in Sources */ = {isa = PBXBuildFile; fileRef = 7AC1534A173C53027749838F /* dyld_bypass_validation.m */; };
+		350233B9D218FD8C460EB615 /* dyld_patch_platform.m in Sources */ = {isa = PBXBuildFile; fileRef = B1B815C20ECE35E2086A818B /* dyld_patch_platform.m */; };
+		58B95958C0A7DDB769DF52F4 /* ios_uikit_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = 462E6CD9270BB7206418B1C2 /* ios_uikit_bridge.m */; };
+		A7661EACDAE7C547662186E6 /* non_darwin_utils.m in Sources */ = {isa = PBXBuildFile; fileRef = F35AD048D88A48AB95377581 /* non_darwin_utils.m */; };
+		B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */ = {isa = PBXBuildFile; fileRef = 872075DCD0F565557A6554D2 /* A2BackgroundView.m */; };
+		BAF1CF7998AAC1E178EC66D0 /* A2CardPosition.m in Sources */ = {isa = PBXBuildFile; fileRef = C733462374B52500F6D83649 /* A2CardPosition.m */; };
+		D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */ = {isa = PBXBuildFile; fileRef = CA1D52969E0783051081B038 /* A2CardTitleBar.m */; };
+		0769485BDAD9E62F52C32A8C /* A2CategoryNavView.m in Sources */ = {isa = PBXBuildFile; fileRef = A283C0C24413C706B449C36A /* A2CategoryNavView.m */; };
+		0964A8EE7FBEE0DA072679D2 /* A2ColorWheel.m in Sources */ = {isa = PBXBuildFile; fileRef = 75554051E6AED37FAF518AAF /* A2ColorWheel.m */; };
+		EC9125D409E5D09498AB2DE4 /* A2Dialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 54836FA8732F32DC7C9B8499 /* A2Dialog.m */; };
+		14508C4B0A06618691BDCEE5 /* A2DownloadPanel.m in Sources */ = {isa = PBXBuildFile; fileRef = 640BA41815669C390C8CF122 /* A2DownloadPanel.m */; };
+		2BF445C4575E8B37E4ED01C4 /* A2FilterChip.m in Sources */ = {isa = PBXBuildFile; fileRef = 86E9A8E1F1CBFB462AEE7811 /* A2FilterChip.m */; };
+		CB87022628B4EEDE9D911585 /* A2FilterPanel.m in Sources */ = {isa = PBXBuildFile; fileRef = 0D6F12D8CC6D2D0C761EECC2 /* A2FilterPanel.m */; };
+		350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */ = {isa = PBXBuildFile; fileRef = A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */; };
+		DEED3AF7EFA50C5F3DB92751 /* A2IndeterminateBar.m in Sources */ = {isa = PBXBuildFile; fileRef = D0FA9F9312CA29F7B69492DF /* A2IndeterminateBar.m */; };
+		C5F3C56FAA94C667A202A766 /* A2InputDialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 1AAD1DB8B8E6685A93FA2940 /* A2InputDialog.m */; };
+		F2FCFBB9F41306188BD49BA1 /* A2InstallProgressDialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 27AAF421DE71B27F23A7EF32 /* A2InstallProgressDialog.m */; };
+		2C9CD0FA185D54ECBE085D43 /* A2LoaderCard.m in Sources */ = {isa = PBXBuildFile; fileRef = 139430B14A933139D8C20D5C /* A2LoaderCard.m */; };
+		C01154913A58826D1288C208 /* A2PaginationBar.m in Sources */ = {isa = PBXBuildFile; fileRef = 94C422B51FBF07CB2AAA7C12 /* A2PaginationBar.m */; };
+		552EA36099808FC6CF1AF68C /* A2PrimaryButton.m in Sources */ = {isa = PBXBuildFile; fileRef = EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */; };
+		8ABD4DA07F7A241239D71053 /* A2ProgressBar.m in Sources */ = {isa = PBXBuildFile; fileRef = EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */; };
+		ED8B276093698A47A8E600CB /* A2QuickActionCard.m in Sources */ = {isa = PBXBuildFile; fileRef = BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */; };
+		EE11839B7BF8F6987F6F88A7 /* A2RemoteImageView.m in Sources */ = {isa = PBXBuildFile; fileRef = 75996837421C7BC519ECA54A /* A2RemoteImageView.m */; };
+		D6D331A29BC51444971D8E7B /* A2ResourceBadge.m in Sources */ = {isa = PBXBuildFile; fileRef = DB4036A9A71DD969DBD0A3A2 /* A2ResourceBadge.m */; };
+		63F938DF3A60909E3702BC97 /* A2ResourceCard.m in Sources */ = {isa = PBXBuildFile; fileRef = 2E56917EAF9417BA50FFE0F3 /* A2ResourceCard.m */; };
+		54F109AC2BE3E147AEEE07FF /* A2RingProgress.m in Sources */ = {isa = PBXBuildFile; fileRef = 65B73468B0B2BABA009E64BC /* A2RingProgress.m */; };
+		11A6C38842401D6C12DD4597 /* A2SegmentedControl.m in Sources */ = {isa = PBXBuildFile; fileRef = FB7BA68822FCB0D14D580939 /* A2SegmentedControl.m */; };
+		41CF931E6887AD8AF73E145F /* A2SettingsRow.m in Sources */ = {isa = PBXBuildFile; fileRef = 235D2D4A2ABFFA39AEDB334D /* A2SettingsRow.m */; };
+		2AF28D616C17109E5DDEB2E6 /* A2SettingsSection.m in Sources */ = {isa = PBXBuildFile; fileRef = EE215D4473E1887376B33E1E /* A2SettingsSection.m */; };
+		7E84349CB65DC97070E0BD74 /* A2SkinHeadView.m in Sources */ = {isa = PBXBuildFile; fileRef = 84CCDDC48E40B58090F702AC /* A2SkinHeadView.m */; };
+		7CA4100025A1D308742A0665 /* A2Slider.m in Sources */ = {isa = PBXBuildFile; fileRef = 6BDEC3121EF50CDEC377E4D1 /* A2Slider.m */; };
+		A4CACC82C3345A217BD692ED /* A2Switch.m in Sources */ = {isa = PBXBuildFile; fileRef = 5B4EAC862A2B3BE1D9BCE6AE /* A2Switch.m */; };
+		5B82BB5F439B75DE2AE64C6A /* A2TaskDrawer.m in Sources */ = {isa = PBXBuildFile; fileRef = DA139E80AEDB846DE5191C14 /* A2TaskDrawer.m */; };
+		7F8920718F6CBE61B4ED89D1 /* A2TaskLogCard.m in Sources */ = {isa = PBXBuildFile; fileRef = F28792134BA46DD0000ECBF4 /* A2TaskLogCard.m */; };
+		AC8960E2417781EC601BFB8F /* A2TaskLogOutput.m in Sources */ = {isa = PBXBuildFile; fileRef = 2576FD4E0A0CB52A36078469 /* A2TaskLogOutput.m */; };
+		464FCB1D2C9D4FA080A24820 /* A2TaskProgressView.m in Sources */ = {isa = PBXBuildFile; fileRef = ADC4C42CB382EAFDCA556C09 /* A2TaskProgressView.m */; };
+		FD82F8F78F3C230BEBAE1F4B /* A2TextField.m in Sources */ = {isa = PBXBuildFile; fileRef = B498358055FFAD0453CC27C7 /* A2TextField.m */; };
+		5A0A0E6AE2BBFCAD8A947CA9 /* A2Toast.m in Sources */ = {isa = PBXBuildFile; fileRef = F3C972A56B473038ED5074FD /* A2Toast.m */; };
+		46BEB683A03C405C1E74C0B2 /* A2VersionCard.m in Sources */ = {isa = PBXBuildFile; fileRef = DCF1F61258EDBCB81698B32B /* A2VersionCard.m */; };
+		5440FDEA95986768641FF753 /* A2BaseViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */; };
+		DB69EBBFE2FB627A405DED59 /* A2LicenseViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6068960D14B3D649188A52E4 /* A2LicenseViewController.m */; };
+		4C2284D92DC7DE09B59CDBCF /* A2LogViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 86AF40E277EDF77B1E20CBC1 /* A2LogViewController.m */; };
+		8A4F4B97FC42F663BCC0D4CE /* A2AccountLeftPanel.m in Sources */ = {isa = PBXBuildFile; fileRef = FBB3373063BF809FA78DEE3C /* A2AccountLeftPanel.m */; };
+		912C3DEC9D63AE689DA1F2DE /* A2AccountRowView.m in Sources */ = {isa = PBXBuildFile; fileRef = 2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */; };
+		AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */; };
+		FB68423E2789A6F0A08E6E54 /* A2LoginViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */; };
+		D01CFE8588165E1AE9ED7AD1 /* A2DownloadTargetPicker.m in Sources */ = {isa = PBXBuildFile; fileRef = 94B3587CBA8EF148D0A0ACD3 /* A2DownloadTargetPicker.m */; };
+		F2AE6F53868183175D2DEFAD /* A2DownloadTasksViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = FCF786571196D883A85C10CF /* A2DownloadTasksViewController.m */; };
+		AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */; };
+		EBFE6778C18900FDF0942172 /* A2FavoritesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 82DAFF5D1DF928F825EA8452 /* A2FavoritesViewController.m */; };
+		B9AF292E811122649CF9FEE6 /* A2GameInstallOptionsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 3448695748B18FEC501E0C2F /* A2GameInstallOptionsViewController.m */; };
+		6C998AE9614B2353B8C03DC2 /* A2GameVersionListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = AD5DE88799682F07A3341134 /* A2GameVersionListViewController.m */; };
+		7344000874E6AFAA9489A939 /* A2InstallingViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */; };
+		36BD9E3D29A1204C4DE1649E /* A2ModPackImportViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = EAF5FDB108BCF648BF323F13 /* A2ModPackImportViewController.m */; };
+		0C5E9A5111CB1B65E9B79ED9 /* A2ResourceDetailViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 39176526660F1CAEC3199C8F /* A2ResourceDetailViewController.m */; };
+		07F456A55641318A92B41F45 /* A2ResourceResultCell.m in Sources */ = {isa = PBXBuildFile; fileRef = 05C7E85764E09AEA04C8DE32 /* A2ResourceResultCell.m */; };
+		D49F4495BA8F3A147387277B /* A2ResourceSearchViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 98024C5565241D478B54F4D6 /* A2ResourceSearchViewController.m */; };
+		4037C5EBDB3F5A02EBD25E87 /* A2SearchByIdViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = C769776AF3D8703861D81699 /* A2SearchByIdViewController.m */; };
+		7300D5E59DE772A9BD66181A /* A2FilesViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = E10CEEF11893D9C3037031FF /* A2FilesViewController.m */; };
+		F6C91785AE1F856D4C3E08BB /* A2LauncherViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = C8A9221A5FAC2B9E0D63B27A /* A2LauncherViewController.m */; };
+		7957584D40DDAA933CD18846 /* A2MultiplayerViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 88968B7F1E56FA0EECD12932 /* A2MultiplayerViewController.m */; };
+		9F8EE7E69BC7F3C10586FA6A /* A2AboutSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 566EB440D41933073AF9B84A /* A2AboutSettings.m */; };
+		8DF920441794A778BEFD9DD0 /* A2AppearanceSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */; };
+		28E0E9F04A06993B01FFC1D8 /* A2BackgroundSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */; };
+		231BA8D647ED52A70C2A644B /* A2ColorThemeDialog.m in Sources */ = {isa = PBXBuildFile; fileRef = 5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */; };
+		1E7FB60017717A3BE32B9A3C /* A2DiagnosticsSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */; };
+		C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */ = {isa = PBXBuildFile; fileRef = 0FB44E450592838BA6F7B061 /* A2GameSettings.m */; };
+		DCDEBCE58A13533B8A5DBDBB /* A2JREManageViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 832F97C49F2416C2C0488A79 /* A2JREManageViewController.m */; };
+		4F0C55C53DF109102154C739 /* A2RendererPluginViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = B53FD56CE6A8FAC76A2445BE /* A2RendererPluginViewController.m */; };
+		95B9DE285BF6EB5B2C8CC100 /* A2RendererSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = BAA21491506E419C480B4D51 /* A2RendererSettingsViewController.m */; };
+		1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */; };
+		F3A3A971AE05998E6D648440 /* A2ModListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 86984D61C69EA55C028368AC /* A2ModListViewController.m */; };
+		9AD821240E44F6B772B2DC0D /* A2VersionExportViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = B49A0AFE2700FB02330057CC /* A2VersionExportViewController.m */; };
+		5C3C3472B73A413C081E753F /* A2VersionListViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */; };
+		7635F6BA870CB67CA1FBFDF4 /* A2VersionRowView.m in Sources */ = {isa = PBXBuildFile; fileRef = 8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */; };
+		D33BBA190C82A6A3205F3A9E /* A2VersionSettingsViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */; };
+		AE9C6658254A1DE3418C1353 /* A2VersionTabBar.m in Sources */ = {isa = PBXBuildFile; fileRef = FDDDCB082DAEC15FCB03865C /* A2VersionTabBar.m */; };
+		27702DAD22876D499AD213EF /* A2ColorScheme.m in Sources */ = {isa = PBXBuildFile; fileRef = 93BF612ED3930C6A33249855 /* A2ColorScheme.m */; };
+		141BC76960489907EC08BDBA /* A2ColorTheme+Seed.m in Sources */ = {isa = PBXBuildFile; fileRef = 25966F1F7F932D2795B0F1A8 /* A2ColorTheme+Seed.m */; };
+		86D43CE5B95D29876BF7D34D /* A2ColorTheme.m in Sources */ = {isa = PBXBuildFile; fileRef = 82FE348CB0D3A5CE4DD665A1 /* A2ColorTheme.m */; };
+		1C9990B0808AD8111308F4AB /* A2Icon.m in Sources */ = {isa = PBXBuildFile; fileRef = CF7A0935F86AC60F1DFD3B1B /* A2Icon.m */; };
+		01294C3B04FD73AA638FC63E /* A2Metrics.m in Sources */ = {isa = PBXBuildFile; fileRef = C144BE68C9BFFFAA61A92B1A /* A2Metrics.m */; };
+		4BE5F7816DB3CEF6CBE3809A /* A2PaletteStyle.m in Sources */ = {isa = PBXBuildFile; fileRef = E6F6FA4C47FD771177075404 /* A2PaletteStyle.m */; };
+		7B7A47F5F8AA510170F1A159 /* A2ThemeManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */; };
+		0771576A647FFB4348CEC538 /* A2Typography.m in Sources */ = {isa = PBXBuildFile; fileRef = 42B68771E09EA8BB40AC83D7 /* A2Typography.m */; };
+		C754280DF19913731620CE6A /* A2Log.m in Sources */ = {isa = PBXBuildFile; fileRef = CE8E02818B37C0AFFABF71D5 /* A2Log.m */; };
+		6B1CD1AC96CD93B7EE0847A4 /* A2MurmurHash2.m in Sources */ = {isa = PBXBuildFile; fileRef = 70E537F57063CE783BE3A38B /* A2MurmurHash2.m */; };
+		173CB61901164D888C0739BA /* A2Strings.m in Sources */ = {isa = PBXBuildFile; fileRef = 7EC0262DD08DEE92A0AD385D /* A2Strings.m */; };
+		3BB6EB4576E1F9DF15247919 /* mach_excServer.c in Sources */ = {isa = PBXBuildFile; fileRef = E05FA006C10F10BAA3290EF1 /* mach_excServer.c */; };
+		FC6E8A547C179CC55A247D57 /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = F6B4BAFE39547DFF98D20300 /* Images.xcassets */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		082E22CB657D9948DD22CF5F /* Air2.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Air2.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		18FD4D9FAB9B1E1C27AFB511 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		8DA45F9AA021EBFBF929A56A /* A2AppDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AppDelegate.m"; sourceTree = "<group>"; };
+		EDF360D6C38161620D973AA3 /* A2CrashGuard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CrashGuard.m"; sourceTree = "<group>"; };
+		F6EE6864D5C02736374620A3 /* A2NavigationController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2NavigationController.m"; sourceTree = "<group>"; };
+		E0A962942F56F74CF7617780 /* A2RootViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RootViewController.m"; sourceTree = "<group>"; };
+		B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SceneDelegate.m"; sourceTree = "<group>"; };
+		36F3AADE4F4508F86A2F0505 /* main.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "main.m"; sourceTree = "<group>"; };
+		88C69537AF21F68A7B1456D3 /* A2Account.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Account.m"; sourceTree = "<group>"; };
+		FBBBB4EFA2B5334A45EA3C4E /* A2AccountManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountManager.m"; sourceTree = "<group>"; };
+		BA94035A25A574575C224EC9 /* A2MicrosoftAuth.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MicrosoftAuth.m"; sourceTree = "<group>"; };
+		1FCEEB9DA67A103C2B6DBA4A /* A2Wardrobe.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Wardrobe.m"; sourceTree = "<group>"; };
+		AF6416AF6E60A32784E6C349 /* A2APIModDownloader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2APIModDownloader.m"; sourceTree = "<group>"; };
+		1701CD5F8C697E4FB0EA95CC /* A2ContentSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ContentSource.m"; sourceTree = "<group>"; };
+		B9FA6C49037A18A6B1E59FD5 /* A2CurseForgeAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CurseForgeAPI.m"; sourceTree = "<group>"; };
+		CAF1C722D6447EBFD3DE5AC9 /* A2LoaderVersionSource+Forge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoaderVersionSource+Forge.m"; sourceTree = "<group>"; };
+		C5DA9E2487D36C274C80ACB0 /* A2LoaderVersionSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoaderVersionSource.m"; sourceTree = "<group>"; };
+		3EB242919BB0D524E0F04E05 /* A2LocalMod.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LocalMod.m"; sourceTree = "<group>"; };
+		C4D9FC19281C2C7616C83363 /* A2MirrorResolver.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MirrorResolver.m"; sourceTree = "<group>"; };
+		A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderAPI.m"; sourceTree = "<group>"; };
+		452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderInstaller.m"; sourceTree = "<group>"; };
+		111E9AEC7F99B525E5C2561C /* A2ModLoaderSelection.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModLoaderSelection.m"; sourceTree = "<group>"; };
+		818837C4F3F9187CAE2C7B85 /* A2ModPack.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPack.m"; sourceTree = "<group>"; };
+		BC9BE22EBF1611FD9317C5F7 /* A2ModPackExporter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPackExporter.m"; sourceTree = "<group>"; };
+		F9D1523FC914A5D7AD7339A1 /* A2ModPackInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPackInstaller.m"; sourceTree = "<group>"; };
+		0D98C9FC5B84AD139084B48A /* A2ModScanner.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModScanner.m"; sourceTree = "<group>"; };
+		B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModrinthAPI.m"; sourceTree = "<group>"; };
+		2A1D6A101DDDB12E54E429AC /* A2ResourcePack.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourcePack.m"; sourceTree = "<group>"; };
+		354E0D6D2FD88A0DA1EBAF70 /* A2ResourceScanner.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceScanner.m"; sourceTree = "<group>"; };
+		C7F15DE318744485CEE00538 /* A2ZipReader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ZipReader.m"; sourceTree = "<group>"; };
+		025FEA920C79EED2B15C509E /* A2ZipWriter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ZipWriter.m"; sourceTree = "<group>"; };
+		6F8A5B15D5AD998096528CD6 /* A2BatchDownloader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BatchDownloader.m"; sourceTree = "<group>"; };
+		1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadEngine.m"; sourceTree = "<group>"; };
+		3F6494DF9E525C24C5D69098 /* A2DownloadFavorites.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadFavorites.m"; sourceTree = "<group>"; };
+		2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadManifest.m"; sourceTree = "<group>"; };
+		AE757274F8E1E206F093F68A /* A2DownloadTask.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadTask.m"; sourceTree = "<group>"; };
+		49E73CAF4B5DFDDC5E9F20AF /* A2DownloadTaskCenter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadTaskCenter.m"; sourceTree = "<group>"; };
+		76A2AB6AE303BDE44A532F48 /* A2RateLimiter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RateLimiter.m"; sourceTree = "<group>"; };
+		E38E026AC18486465C710415 /* A2SharedSession.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SharedSession.m"; sourceTree = "<group>"; };
+		AD4D1573AAD6B66A99BF1719 /* A2JREManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JREManager.m"; sourceTree = "<group>"; };
+		EA103E9122B1B77443B27069 /* A2Logger.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Logger.m"; sourceTree = "<group>"; };
+		76E2F83DD8568E1BB073643E /* A2Multiplayer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Multiplayer.m"; sourceTree = "<group>"; };
+		F03B93794DA818FF2F14D7D0 /* A2GameDirMigration.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameDirMigration.m"; sourceTree = "<group>"; };
+		D0693B31AD2EAB6A0328732E /* A2GameFiles.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameFiles.m"; sourceTree = "<group>"; };
+		9ACCADCE8C9342A268838450 /* A2GamePathManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GamePathManager.m"; sourceTree = "<group>"; };
+		074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionIsolation.m"; sourceTree = "<group>"; };
+		47106E1A43667C70F671BED2 /* A2Renderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Renderer.m"; sourceTree = "<group>"; };
+		8D34430FDEB24984AD0E55DB /* A2RendererImporter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererImporter.m"; sourceTree = "<group>"; };
+		B7393994B61F671185A745FD /* A2RendererLibraryLayout.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererLibraryLayout.m"; sourceTree = "<group>"; };
+		D924815CAA9110DE1E60C886 /* A2RendererLoader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererLoader.m"; sourceTree = "<group>"; };
+		E79BEBB401EDD0A1A09B4A61 /* A2RendererPlugin.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererPlugin.m"; sourceTree = "<group>"; };
+		EF194CE5DE12660BE86A1C1E /* A2RendererRegistry.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererRegistry.m"; sourceTree = "<group>"; };
+		035FB3CC4FE4018F44632AD5 /* A2Settings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Settings.m"; sourceTree = "<group>"; };
+		6FC1E9BA4864AAFF0F7CA085 /* A2Task.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Task.m"; sourceTree = "<group>"; };
+		2616E0DA5FD964365AB3F574 /* A2TaskContext.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskContext.m"; sourceTree = "<group>"; };
+		8161EDCD7D2D110CECB94A59 /* A2TaskFlowExecutor.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskFlowExecutor.m"; sourceTree = "<group>"; };
+		7A08D7F6FA47520D8DF93A5A /* A2TaskFlowSnapshot.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskFlowSnapshot.m"; sourceTree = "<group>"; };
+		CD8F3F4403B041D5E261EEEB /* A2TaskFlowTypes.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskFlowTypes.m"; sourceTree = "<group>"; };
+		8B227654B452F4E36F89ED74 /* A2TaskPhase.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskPhase.m"; sourceTree = "<group>"; };
+		044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameInstaller.m"; sourceTree = "<group>"; };
+		1F7F525D4A9EBB0B34986475 /* A2GameLaunchCoordinator.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameLaunchCoordinator.m"; sourceTree = "<group>"; };
+		FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2IntegrityChecker.m"; sourceTree = "<group>"; };
+		88CFA2D788E3C8293E1C1288 /* A2IntegrityRepairer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2IntegrityRepairer.m"; sourceTree = "<group>"; };
+		FD148FA4B48FF8B75C314632 /* A2MemorySettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MemorySettings.m"; sourceTree = "<group>"; };
+		C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RemoteVersions.m"; sourceTree = "<group>"; };
+		3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionInfo.m"; sourceTree = "<group>"; };
+		643B820206971C227F265607 /* A2VersionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionManager.m"; sourceTree = "<group>"; };
+		B6A0FA8BE05E152AF38E328F /* A2VersionMetadata.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionMetadata.m"; sourceTree = "<group>"; };
+		ABFA57E18888655D94F65892 /* A2VersionModifier.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionModifier.m"; sourceTree = "<group>"; };
+		5E9E31598CF62220724EE0CC /* A2JITLauncher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JITLauncher.m"; sourceTree = "<group>"; };
+		FFB0E2399504AE38B12CDCF6 /* AmeLaunchProgress.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "AmeLaunchProgress.m"; sourceTree = "<group>"; };
+		622E3DB2F220A0CD6E0943DF /* GameSurfaceView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "GameSurfaceView.m"; sourceTree = "<group>"; };
+		05531083602CC4CC9ADFF035 /* JavaLauncher.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "JavaLauncher.m"; sourceTree = "<group>"; };
+		F4318F35FE1B821173E3D9FA /* LauncherPreferences.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "LauncherPreferences.m"; sourceTree = "<group>"; };
+		AC657CF7DD69342C4AC4CA18 /* PLPreferences.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "PLPreferences.m"; sourceTree = "<group>"; };
+		67CFEFE3CFBAF99FC4B99E28 /* PLProfiles.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "PLProfiles.m"; sourceTree = "<group>"; };
+		B4557A4B9E2DB6ABF426D792 /* PLTaskStage.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "PLTaskStage.m"; sourceTree = "<group>"; };
+		6CDC79F4F060961654E0BFBD /* SurfaceViewController+ExternalDisplay.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "SurfaceViewController+ExternalDisplay.m"; sourceTree = "<group>"; };
+		1D4C64F7E99D00A8C83F6461 /* SurfaceViewController+LogView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "SurfaceViewController+LogView.m"; sourceTree = "<group>"; };
+		CAEE71B0AFBCDAB3D6DE931F /* SurfaceViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "SurfaceViewController.m"; sourceTree = "<group>"; };
+		3379819526378EE72414030C /* environ_globals.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "environ_globals.m"; sourceTree = "<group>"; };
+		A3D0C5C637E9FA2B3F32F1BD /* main_hook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "main_hook.m"; sourceTree = "<group>"; };
+		6A5BAE11D028A2905E1791FC /* utils.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "utils.m"; sourceTree = "<group>"; };
+		3CABD20366E8E9C4350F53B8 /* A2ControlEditorViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlEditorViewController.m"; sourceTree = "<group>"; };
+		FB5F53B07ECD8A87520B739B /* A2ControlFormat.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlFormat.m"; sourceTree = "<group>"; };
+		FC6C067EAD1B5E6AFEC87FD6 /* A2ControlFormatFCL.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlFormatFCL.m"; sourceTree = "<group>"; };
+		8D8A8B9DE4D3B3563EDBEFDB /* A2ControlFormatZL.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlFormatZL.m"; sourceTree = "<group>"; };
+		8362D912769D68CC445B50FC /* A2ControlInput.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlInput.m"; sourceTree = "<group>"; };
+		F83F66ED58968DE8E1C3CE2D /* A2ControlLayerPanel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlLayerPanel.m"; sourceTree = "<group>"; };
+		1DD83AEE82FD5DB2400F3B8B /* A2ControlLayout.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlLayout.m"; sourceTree = "<group>"; };
+		6A1769FF5839C6F59DA3DB26 /* A2ControlRenderer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlRenderer.m"; sourceTree = "<group>"; };
+		4CFED2A2A24C71D520AA07FC /* A2ControlStyle.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlStyle.m"; sourceTree = "<group>"; };
+		5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DefaultControls.m"; sourceTree = "<group>"; };
+		58892B811927577584034FA9 /* A2HotbarView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2HotbarView.m"; sourceTree = "<group>"; };
+		FA7E2954383C7B15D8C251BF /* A2JoystickView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JoystickView.m"; sourceTree = "<group>"; };
+		447DA48951C44FE642EF4EFE /* A2KeyCodeMap.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2KeyCodeMap.m"; sourceTree = "<group>"; };
+		BC32DEDE020A2112CC01EF75 /* A2TouchTransport.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TouchTransport.m"; sourceTree = "<group>"; };
+		BA1CDFB3C78F08B828B7EEDC /* A2GameMenuOverlay.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameMenuOverlay.m"; sourceTree = "<group>"; };
+		F0EACB38F79192127D03C3C4 /* A2JVMRunningViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JVMRunningViewController.m"; sourceTree = "<group>"; };
+		96009B3F837E8AD9139F1044 /* A2LaunchSplashView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchSplashView.m"; sourceTree = "<group>"; };
+		000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResolutionManager.m"; sourceTree = "<group>"; };
+		F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResolutionSettingsView.m"; sourceTree = "<group>"; };
+		16CD6637FF9A9120236C23FD /* ControllerInput.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "ControllerInput.m"; sourceTree = "<group>"; };
+		72E3D40518553547A372551D /* GyroInput.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "GyroInput.m"; sourceTree = "<group>"; };
+		E5C6EB5CE20391935ED13F45 /* KeyboardInput.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "KeyboardInput.m"; sourceTree = "<group>"; };
+		D7DD31F231F7C27A2387130B /* TrackedTextField.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "TrackedTextField.m"; sourceTree = "<group>"; };
+		29A644FD215BCBE0DED58CF5 /* input_bridge_v3.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "input_bridge_v3.m"; sourceTree = "<group>"; };
+		52EBA7667EECC1A31AFBCF47 /* ZinkConfig.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "ZinkConfig.m"; sourceTree = "<group>"; };
+		E368CBF075B0AB8032581171 /* egl_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "egl_bridge.m"; sourceTree = "<group>"; };
+		2056A2513B531351EF6F4613 /* gl4es_family_boot.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "gl4es_family_boot.m"; sourceTree = "<group>"; };
+		3D6BFFADE137E817AFABBEE7 /* gl_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "gl_bridge.m"; sourceTree = "<group>"; };
+		AA85EB0E82DC6C36A7EA7CA7 /* openal_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "openal_shim.c"; sourceTree = "<group>"; };
+		B430480194987DFD0DE5B92A /* osm_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "osm_bridge.m"; sourceTree = "<group>"; };
+		877D37201914962A265F7875 /* sdl3_hook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "sdl3_hook.m"; sourceTree = "<group>"; };
+		41167DA379475CE71BECC431 /* shader_cap_probe.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "shader_cap_probe.m"; sourceTree = "<group>"; };
+		4EBA0900AB704E513396046F /* shaderc_impl_glue.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "shaderc_impl_glue.c"; sourceTree = "<group>"; };
+		287DA744A433A35B4878F96B /* shaderc_include.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "shaderc_include.c"; sourceTree = "<group>"; };
+		05B22A1299F6F9FA174C3C57 /* shaderc_sandbox.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "shaderc_sandbox.m"; sourceTree = "<group>"; };
+		5F9D85AE4F9ABE9D7CDD8606 /* spvc_shim.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "spvc_shim.c"; sourceTree = "<group>"; };
+		7DDE616B504E6BC2BD95893F /* virgl_server.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "virgl_server.m"; sourceTree = "<group>"; };
+		6A147B235573B1F4D128EC56 /* vk_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "vk_bridge.m"; sourceTree = "<group>"; };
+		E147FF8C8EEE4B039515EF61 /* LanPortDetector.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "LanPortDetector.m"; sourceTree = "<group>"; };
+		61F59F7BC6DF5C142349F29D /* McLanPortDetector.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "McLanPortDetector.m"; sourceTree = "<group>"; };
+		2BE3947518DFBB0E9F7EC65F /* PLCrashView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "PLCrashView.m"; sourceTree = "<group>"; };
+		52D8A04AFEDE1A805DC7E208 /* PLLogOutputView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "PLLogOutputView.m"; sourceTree = "<group>"; };
+		BF0A41C1E121405427C314A9 /* ScreenUtils.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "ScreenUtils.m"; sourceTree = "<group>"; };
+		869782D9D81E98D0AB7F435E /* UIKit+hook.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "UIKit+hook.m"; sourceTree = "<group>"; };
+		D7399A9719C4F69C7AB042BF /* UpdateChecker.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "UpdateChecker.m"; sourceTree = "<group>"; };
+		2E6F468284C1C07BB9061ABA /* empty.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "empty.m"; sourceTree = "<group>"; };
+		5486E1FF3753ECA76163F90D /* xawt_fake.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "xawt_fake.m"; sourceTree = "<group>"; };
+		7AC1534A173C53027749838F /* dyld_bypass_validation.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "dyld_bypass_validation.m"; sourceTree = "<group>"; };
+		B1B815C20ECE35E2086A818B /* dyld_patch_platform.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "dyld_patch_platform.m"; sourceTree = "<group>"; };
+		462E6CD9270BB7206418B1C2 /* ios_uikit_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "ios_uikit_bridge.m"; sourceTree = "<group>"; };
+		F35AD048D88A48AB95377581 /* non_darwin_utils.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "non_darwin_utils.m"; sourceTree = "<group>"; };
+		872075DCD0F565557A6554D2 /* A2BackgroundView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BackgroundView.m"; sourceTree = "<group>"; };
+		C733462374B52500F6D83649 /* A2CardPosition.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CardPosition.m"; sourceTree = "<group>"; };
+		CA1D52969E0783051081B038 /* A2CardTitleBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CardTitleBar.m"; sourceTree = "<group>"; };
+		A283C0C24413C706B449C36A /* A2CategoryNavView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2CategoryNavView.m"; sourceTree = "<group>"; };
+		75554051E6AED37FAF518AAF /* A2ColorWheel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorWheel.m"; sourceTree = "<group>"; };
+		54836FA8732F32DC7C9B8499 /* A2Dialog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Dialog.m"; sourceTree = "<group>"; };
+		640BA41815669C390C8CF122 /* A2DownloadPanel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadPanel.m"; sourceTree = "<group>"; };
+		86E9A8E1F1CBFB462AEE7811 /* A2FilterChip.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2FilterChip.m"; sourceTree = "<group>"; };
+		0D6F12D8CC6D2D0C761EECC2 /* A2FilterPanel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2FilterPanel.m"; sourceTree = "<group>"; };
+		A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GlassCard.m"; sourceTree = "<group>"; };
+		D0FA9F9312CA29F7B69492DF /* A2IndeterminateBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2IndeterminateBar.m"; sourceTree = "<group>"; };
+		1AAD1DB8B8E6685A93FA2940 /* A2InputDialog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2InputDialog.m"; sourceTree = "<group>"; };
+		27AAF421DE71B27F23A7EF32 /* A2InstallProgressDialog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2InstallProgressDialog.m"; sourceTree = "<group>"; };
+		139430B14A933139D8C20D5C /* A2LoaderCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoaderCard.m"; sourceTree = "<group>"; };
+		94C422B51FBF07CB2AAA7C12 /* A2PaginationBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PaginationBar.m"; sourceTree = "<group>"; };
+		EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PrimaryButton.m"; sourceTree = "<group>"; };
+		EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ProgressBar.m"; sourceTree = "<group>"; };
+		BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2QuickActionCard.m"; sourceTree = "<group>"; };
+		75996837421C7BC519ECA54A /* A2RemoteImageView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RemoteImageView.m"; sourceTree = "<group>"; };
+		DB4036A9A71DD969DBD0A3A2 /* A2ResourceBadge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceBadge.m"; sourceTree = "<group>"; };
+		2E56917EAF9417BA50FFE0F3 /* A2ResourceCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceCard.m"; sourceTree = "<group>"; };
+		65B73468B0B2BABA009E64BC /* A2RingProgress.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RingProgress.m"; sourceTree = "<group>"; };
+		FB7BA68822FCB0D14D580939 /* A2SegmentedControl.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SegmentedControl.m"; sourceTree = "<group>"; };
+		235D2D4A2ABFFA39AEDB334D /* A2SettingsRow.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsRow.m"; sourceTree = "<group>"; };
+		EE215D4473E1887376B33E1E /* A2SettingsSection.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsSection.m"; sourceTree = "<group>"; };
+		84CCDDC48E40B58090F702AC /* A2SkinHeadView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SkinHeadView.m"; sourceTree = "<group>"; };
+		6BDEC3121EF50CDEC377E4D1 /* A2Slider.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Slider.m"; sourceTree = "<group>"; };
+		5B4EAC862A2B3BE1D9BCE6AE /* A2Switch.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Switch.m"; sourceTree = "<group>"; };
+		DA139E80AEDB846DE5191C14 /* A2TaskDrawer.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskDrawer.m"; sourceTree = "<group>"; };
+		F28792134BA46DD0000ECBF4 /* A2TaskLogCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskLogCard.m"; sourceTree = "<group>"; };
+		2576FD4E0A0CB52A36078469 /* A2TaskLogOutput.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskLogOutput.m"; sourceTree = "<group>"; };
+		ADC4C42CB382EAFDCA556C09 /* A2TaskProgressView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TaskProgressView.m"; sourceTree = "<group>"; };
+		B498358055FFAD0453CC27C7 /* A2TextField.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2TextField.m"; sourceTree = "<group>"; };
+		F3C972A56B473038ED5074FD /* A2Toast.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Toast.m"; sourceTree = "<group>"; };
+		DCF1F61258EDBCB81698B32B /* A2VersionCard.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionCard.m"; sourceTree = "<group>"; };
+		BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BaseViewController.m"; sourceTree = "<group>"; };
+		6068960D14B3D649188A52E4 /* A2LicenseViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LicenseViewController.m"; sourceTree = "<group>"; };
+		86AF40E277EDF77B1E20CBC1 /* A2LogViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LogViewController.m"; sourceTree = "<group>"; };
+		FBB3373063BF809FA78DEE3C /* A2AccountLeftPanel.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountLeftPanel.m"; sourceTree = "<group>"; };
+		2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountRowView.m"; sourceTree = "<group>"; };
+		CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AccountViewController.m"; sourceTree = "<group>"; };
+		1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LoginViewController.m"; sourceTree = "<group>"; };
+		94B3587CBA8EF148D0A0ACD3 /* A2DownloadTargetPicker.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadTargetPicker.m"; sourceTree = "<group>"; };
+		FCF786571196D883A85C10CF /* A2DownloadTasksViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadTasksViewController.m"; sourceTree = "<group>"; };
+		58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DownloadViewController.m"; sourceTree = "<group>"; };
+		82DAFF5D1DF928F825EA8452 /* A2FavoritesViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2FavoritesViewController.m"; sourceTree = "<group>"; };
+		3448695748B18FEC501E0C2F /* A2GameInstallOptionsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameInstallOptionsViewController.m"; sourceTree = "<group>"; };
+		AD5DE88799682F07A3341134 /* A2GameVersionListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameVersionListViewController.m"; sourceTree = "<group>"; };
+		6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2InstallingViewController.m"; sourceTree = "<group>"; };
+		EAF5FDB108BCF648BF323F13 /* A2ModPackImportViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModPackImportViewController.m"; sourceTree = "<group>"; };
+		39176526660F1CAEC3199C8F /* A2ResourceDetailViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceDetailViewController.m"; sourceTree = "<group>"; };
+		05C7E85764E09AEA04C8DE32 /* A2ResourceResultCell.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceResultCell.m"; sourceTree = "<group>"; };
+		98024C5565241D478B54F4D6 /* A2ResourceSearchViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ResourceSearchViewController.m"; sourceTree = "<group>"; };
+		C769776AF3D8703861D81699 /* A2SearchByIdViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SearchByIdViewController.m"; sourceTree = "<group>"; };
+		E10CEEF11893D9C3037031FF /* A2FilesViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2FilesViewController.m"; sourceTree = "<group>"; };
+		C8A9221A5FAC2B9E0D63B27A /* A2LauncherViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LauncherViewController.m"; sourceTree = "<group>"; };
+		88968B7F1E56FA0EECD12932 /* A2MultiplayerViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MultiplayerViewController.m"; sourceTree = "<group>"; };
+		566EB440D41933073AF9B84A /* A2AboutSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AboutSettings.m"; sourceTree = "<group>"; };
+		CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2AppearanceSettings.m"; sourceTree = "<group>"; };
+		976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2BackgroundSettingsViewController.m"; sourceTree = "<group>"; };
+		5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorThemeDialog.m"; sourceTree = "<group>"; };
+		D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2DiagnosticsSettings.m"; sourceTree = "<group>"; };
+		0FB44E450592838BA6F7B061 /* A2GameSettings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameSettings.m"; sourceTree = "<group>"; };
+		832F97C49F2416C2C0488A79 /* A2JREManageViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2JREManageViewController.m"; sourceTree = "<group>"; };
+		B53FD56CE6A8FAC76A2445BE /* A2RendererPluginViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererPluginViewController.m"; sourceTree = "<group>"; };
+		BAA21491506E419C480B4D51 /* A2RendererSettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2RendererSettingsViewController.m"; sourceTree = "<group>"; };
+		9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2SettingsViewController.m"; sourceTree = "<group>"; };
+		86984D61C69EA55C028368AC /* A2ModListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ModListViewController.m"; sourceTree = "<group>"; };
+		B49A0AFE2700FB02330057CC /* A2VersionExportViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionExportViewController.m"; sourceTree = "<group>"; };
+		ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionListViewController.m"; sourceTree = "<group>"; };
+		8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionRowView.m"; sourceTree = "<group>"; };
+		4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionSettingsViewController.m"; sourceTree = "<group>"; };
+		FDDDCB082DAEC15FCB03865C /* A2VersionTabBar.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VersionTabBar.m"; sourceTree = "<group>"; };
+		93BF612ED3930C6A33249855 /* A2ColorScheme.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorScheme.m"; sourceTree = "<group>"; };
+		25966F1F7F932D2795B0F1A8 /* A2ColorTheme+Seed.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorTheme+Seed.m"; sourceTree = "<group>"; };
+		82FE348CB0D3A5CE4DD665A1 /* A2ColorTheme.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ColorTheme.m"; sourceTree = "<group>"; };
+		CF7A0935F86AC60F1DFD3B1B /* A2Icon.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Icon.m"; sourceTree = "<group>"; };
+		C144BE68C9BFFFAA61A92B1A /* A2Metrics.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Metrics.m"; sourceTree = "<group>"; };
+		E6F6FA4C47FD771177075404 /* A2PaletteStyle.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PaletteStyle.m"; sourceTree = "<group>"; };
+		5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ThemeManager.m"; sourceTree = "<group>"; };
+		42B68771E09EA8BB40AC83D7 /* A2Typography.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Typography.m"; sourceTree = "<group>"; };
+		CE8E02818B37C0AFFABF71D5 /* A2Log.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Log.m"; sourceTree = "<group>"; };
+		70E537F57063CE783BE3A38B /* A2MurmurHash2.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2MurmurHash2.m"; sourceTree = "<group>"; };
+		7EC0262DD08DEE92A0AD385D /* A2Strings.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Strings.m"; sourceTree = "<group>"; };
+		E05FA006C10F10BAA3290EF1 /* mach_excServer.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "mach_excServer.c"; sourceTree = "<group>"; };
+		52E0A8862124FBDB57E8C690 /* A2AppDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AppDelegate.h"; sourceTree = "<group>"; };
+		6A39662C0840C98AB5D33038 /* A2CrashGuard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CrashGuard.h"; sourceTree = "<group>"; };
+		FFF83F1A982D07C7CBBF5C78 /* A2NavigationController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2NavigationController.h"; sourceTree = "<group>"; };
+		2C58D391DAC32B55049E9809 /* A2RootViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RootViewController.h"; sourceTree = "<group>"; };
+		1185FA48A6FE1AB2F1E312DE /* A2SceneDelegate.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SceneDelegate.h"; sourceTree = "<group>"; };
+		748747C748D79B3DAEEDB5CF /* A2Account.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Account.h"; sourceTree = "<group>"; };
+		1EB22C948F38C8AEC14F9AB3 /* A2AccountManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountManager.h"; sourceTree = "<group>"; };
+		845233208F5ECAED2A1B1D6B /* A2MicrosoftAuth.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MicrosoftAuth.h"; sourceTree = "<group>"; };
+		BE140C5384D36CE4A510C926 /* A2Wardrobe.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Wardrobe.h"; sourceTree = "<group>"; };
+		C4CDABCCADEE50C7FF0835B2 /* A2APIModDownloader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2APIModDownloader.h"; sourceTree = "<group>"; };
+		7452A96D7665BFCA516E1759 /* A2ContentSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ContentSource.h"; sourceTree = "<group>"; };
+		732674FFF97FD95863EEEAC7 /* A2CurseForgeAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CurseForgeAPI.h"; sourceTree = "<group>"; };
+		0979A41483D76B482C1D92D2 /* A2LoaderVersionSource+Forge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoaderVersionSource+Forge.h"; sourceTree = "<group>"; };
+		5755D893F4092F66C2AF4252 /* A2LoaderVersionSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoaderVersionSource.h"; sourceTree = "<group>"; };
+		FFA1FB938552D628B2FCD93E /* A2LocalMod.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LocalMod.h"; sourceTree = "<group>"; };
+		D10B30C91899E9D94389EF4D /* A2MirrorResolver.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MirrorResolver.h"; sourceTree = "<group>"; };
+		2CDA5A9BDC1B71E004D187AD /* A2ModLoaderAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderAPI.h"; sourceTree = "<group>"; };
+		D845B0CEB9AEB5591C34C008 /* A2ModLoaderInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderInstaller.h"; sourceTree = "<group>"; };
+		7670593162EE52749064503E /* A2ModLoaderSelection.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModLoaderSelection.h"; sourceTree = "<group>"; };
+		82C5CA51B322A62C9A8716A5 /* A2ModPack.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPack.h"; sourceTree = "<group>"; };
+		C3B88A4174EAA6387B36869D /* A2ModPackExporter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPackExporter.h"; sourceTree = "<group>"; };
+		F9584853622B68DEDF2D6287 /* A2ModPackInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPackInstaller.h"; sourceTree = "<group>"; };
+		735CC9494C232A3CC6864C14 /* A2ModScanner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModScanner.h"; sourceTree = "<group>"; };
+		BEB699597AD1A56E18E868F6 /* A2ModrinthAPI.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModrinthAPI.h"; sourceTree = "<group>"; };
+		14B2141FFF1AB36422F6A31A /* A2ResourcePack.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourcePack.h"; sourceTree = "<group>"; };
+		C1B1480DB49DF49D264D7A98 /* A2ResourceScanner.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceScanner.h"; sourceTree = "<group>"; };
+		AFAF6FCA941790ECF1D16844 /* A2ZipReader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ZipReader.h"; sourceTree = "<group>"; };
+		2847F2CA5DB2AC03ADB15B8C /* A2ZipWriter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ZipWriter.h"; sourceTree = "<group>"; };
+		BD5AE965BB08676C6D4D0512 /* A2BatchDownloader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BatchDownloader.h"; sourceTree = "<group>"; };
+		DE956596465BDFF25E578448 /* A2DownloadEngine.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadEngine.h"; sourceTree = "<group>"; };
+		1EDE5D2DBCB81396D185C97D /* A2DownloadFavorites.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadFavorites.h"; sourceTree = "<group>"; };
+		D3ABD890B860FD03E77A2B0C /* A2DownloadManifest.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadManifest.h"; sourceTree = "<group>"; };
+		0F59C20AA19682790BF7251E /* A2DownloadTask.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTask.h"; sourceTree = "<group>"; };
+		A9FC62B0E895E90CEEE39D8E /* A2DownloadTaskCenter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTaskCenter.h"; sourceTree = "<group>"; };
+		78F13DED76CD9439168C53CC /* A2RateLimiter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RateLimiter.h"; sourceTree = "<group>"; };
+		9C29FEEF28CA87C324C5FA98 /* A2SharedSession.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SharedSession.h"; sourceTree = "<group>"; };
+		8F9742BF2853E93D86927BFF /* A2JREManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JREManager.h"; sourceTree = "<group>"; };
+		867390ED8965A503C3C46C99 /* A2Logger.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Logger.h"; sourceTree = "<group>"; };
+		1942FF65DA97FDD7897CC10B /* A2Multiplayer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Multiplayer.h"; sourceTree = "<group>"; };
+		801FBE3D9BBD2833977FF7A9 /* A2GameDirMigration.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameDirMigration.h"; sourceTree = "<group>"; };
+		0B3D6D1B16A31DBED39334EE /* A2GameFiles.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameFiles.h"; sourceTree = "<group>"; };
+		9F5359EDDF63525C251F80DF /* A2GamePathManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GamePathManager.h"; sourceTree = "<group>"; };
+		CDB8C000E2777EB953C462DD /* A2VersionIsolation.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionIsolation.h"; sourceTree = "<group>"; };
+		12B70B0E6FB31B7E75D61633 /* A2Renderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Renderer.h"; sourceTree = "<group>"; };
+		5D1F57A737C10747C284745F /* A2RendererImporter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererImporter.h"; sourceTree = "<group>"; };
+		F4115040F39E483024559030 /* A2RendererLibraryLayout.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererLibraryLayout.h"; sourceTree = "<group>"; };
+		9D8249B33CB9E5C34B143397 /* A2RendererLoader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererLoader.h"; sourceTree = "<group>"; };
+		F9D789402D37A2E55281C611 /* A2RendererPlugin.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererPlugin.h"; sourceTree = "<group>"; };
+		B5290E0419DA2C9F2A8A3BA0 /* A2RendererRegistry.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererRegistry.h"; sourceTree = "<group>"; };
+		8D9149596220C9F4F49C460D /* A2Settings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Settings.h"; sourceTree = "<group>"; };
+		5456898224A2384F4CB25E55 /* A2Task.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Task.h"; sourceTree = "<group>"; };
+		9B2C9C57818CB70F4585C1F4 /* A2TaskContext.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskContext.h"; sourceTree = "<group>"; };
+		1C520BA64D82944D1FBF6390 /* A2TaskFlowExecutor.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskFlowExecutor.h"; sourceTree = "<group>"; };
+		5BB5A3AD5F0583DABF8B2A20 /* A2TaskFlowSnapshot.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskFlowSnapshot.h"; sourceTree = "<group>"; };
+		7AB297C5A17A0E22C21194A8 /* A2TaskFlowTypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskFlowTypes.h"; sourceTree = "<group>"; };
+		076BD1F8AB5B59D84920B9E7 /* A2TaskPhase.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskPhase.h"; sourceTree = "<group>"; };
+		8407C36C2C93136130B9F07E /* A2GameInstaller.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameInstaller.h"; sourceTree = "<group>"; };
+		3EC032FE238142C71917EA1C /* A2GameLaunchCoordinator.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameLaunchCoordinator.h"; sourceTree = "<group>"; };
+		89044710CFCCD81045E82677 /* A2IntegrityChecker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2IntegrityChecker.h"; sourceTree = "<group>"; };
+		04B2CA17058985137DBB8205 /* A2IntegrityRepairer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2IntegrityRepairer.h"; sourceTree = "<group>"; };
+		85617EB6EC5C08FC92AEB19F /* A2MemorySettings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MemorySettings.h"; sourceTree = "<group>"; };
+		797843066906C8A344CE1344 /* A2RemoteVersions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RemoteVersions.h"; sourceTree = "<group>"; };
+		CE5120FF6E52910A07272F53 /* A2VersionInfo.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionInfo.h"; sourceTree = "<group>"; };
+		8566CA5C1C5F50A603ACC370 /* A2VersionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionManager.h"; sourceTree = "<group>"; };
+		F7DDE888061764C56E9A6BCF /* A2VersionMetadata.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionMetadata.h"; sourceTree = "<group>"; };
+		E6618D14DB0299A8DB6539CA /* A2VersionModifier.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionModifier.h"; sourceTree = "<group>"; };
+		CA4B959CCE02765457E1D8E1 /* A2JITLauncher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JITLauncher.h"; sourceTree = "<group>"; };
+		51994BE7CF4A796D8B8D6AF2 /* AmeLaunchProgress.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "AmeLaunchProgress.h"; sourceTree = "<group>"; };
+		709C4E0074FDBB9EC85649C8 /* GameSurfaceView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "GameSurfaceView.h"; sourceTree = "<group>"; };
+		8DAD8D49D4E965AEB8763685 /* JavaLauncher.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "JavaLauncher.h"; sourceTree = "<group>"; };
+		02E3BB0B714A305BD4BE007D /* LauncherPreferences.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "LauncherPreferences.h"; sourceTree = "<group>"; };
+		D1BF8E283D489D37DC5C942C /* PLPreferences.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PLPreferences.h"; sourceTree = "<group>"; };
+		7EDAFDA309890C6736A5408A /* PLProfiles.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PLProfiles.h"; sourceTree = "<group>"; };
+		E8261C827E7878BDC2048E92 /* PLTaskStage.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PLTaskStage.h"; sourceTree = "<group>"; };
+		8834A7FBD3EE02CF2ACBFE5A /* PLTaskStages.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PLTaskStages.h"; sourceTree = "<group>"; };
+		31EB54C762722EDE895BBE30 /* SurfaceViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "SurfaceViewController.h"; sourceTree = "<group>"; };
+		297B7509422391BE3ABF004B /* config.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "config.h"; sourceTree = "<group>"; };
+		C186822A4D93C6ED1D4F4D90 /* environ.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "environ.h"; sourceTree = "<group>"; };
+		F95E35A558207B66D283C093 /* jni.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "jni.h"; sourceTree = "<group>"; };
+		D90D6323014B3918ACC20743 /* utils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "utils.h"; sourceTree = "<group>"; };
+		8301CDE4BB2DAFB8B4BE53E1 /* A2ControlEditorViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlEditorViewController.h"; sourceTree = "<group>"; };
+		E851B4144905CDFA5E1E8CFB /* A2ControlFormat.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlFormat.h"; sourceTree = "<group>"; };
+		A027206836FBEE763B70C52E /* A2ControlFormatFCL.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlFormatFCL.h"; sourceTree = "<group>"; };
+		41E49C80FB2AB9525FFE802F /* A2ControlFormatZL.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlFormatZL.h"; sourceTree = "<group>"; };
+		562CC0607CB4EA35C6B344E2 /* A2ControlInput.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlInput.h"; sourceTree = "<group>"; };
+		BC37D90F1A8D50A0C0F96AA1 /* A2ControlLayerPanel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlLayerPanel.h"; sourceTree = "<group>"; };
+		9A480B77A9493A4A99FCF1E2 /* A2ControlLayout.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlLayout.h"; sourceTree = "<group>"; };
+		1C4E55239DDFE7C5F66C96EF /* A2ControlRenderer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlRenderer.h"; sourceTree = "<group>"; };
+		915DA19C97208F294F049473 /* A2ControlStyle.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlStyle.h"; sourceTree = "<group>"; };
+		17EFE083DFCD2B631A9B9195 /* A2DefaultControls.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DefaultControls.h"; sourceTree = "<group>"; };
+		A1EEACDD4A3CFD84E6F3B649 /* A2HotbarView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2HotbarView.h"; sourceTree = "<group>"; };
+		DA0D27F84D73DBEDA819E3C0 /* A2JoystickView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JoystickView.h"; sourceTree = "<group>"; };
+		32A0EFEF4581508BE5193F55 /* A2KeyCodeMap.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2KeyCodeMap.h"; sourceTree = "<group>"; };
+		ABBA497DBC96475F112E489F /* A2TouchTransport.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TouchTransport.h"; sourceTree = "<group>"; };
+		8F8DC63CC90EE44095B0B442 /* A2GameMenuOverlay.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameMenuOverlay.h"; sourceTree = "<group>"; };
+		21F797A74F81806352EACC05 /* A2JVMRunningViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JVMRunningViewController.h"; sourceTree = "<group>"; };
+		1C687E2D44BB19258F377A63 /* A2LaunchSplashView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchSplashView.h"; sourceTree = "<group>"; };
+		9A380B08F835A986A05EA196 /* A2ResolutionManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResolutionManager.h"; sourceTree = "<group>"; };
+		947208B1A4FAF92FA8883A17 /* A2ResolutionSettingsView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResolutionSettingsView.h"; sourceTree = "<group>"; };
+		ED376B63C03CB43B77351AEA /* ControllerInput.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ControllerInput.h"; sourceTree = "<group>"; };
+		C15C4D975D09A64629826AF8 /* GyroInput.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "GyroInput.h"; sourceTree = "<group>"; };
+		B7FB9EC370E3F461902C355F /* KeyboardInput.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "KeyboardInput.h"; sourceTree = "<group>"; };
+		8D653B4548AAD6FC6C153718 /* TrackedTextField.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "TrackedTextField.h"; sourceTree = "<group>"; };
+		A76CB9C5A1988D38B536AD70 /* glfw_keycodes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "glfw_keycodes.h"; sourceTree = "<group>"; };
+		2B37DFADE1F06684D11C31FD /* A2Exported.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Exported.h"; sourceTree = "<group>"; };
+		DC70190DBE9B404EF1531E30 /* AMEGlassStyle.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "AMEGlassStyle.h"; sourceTree = "<group>"; };
+		72D6508DC3DC26E413BB38F1 /* UIKit+GlassSurface.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UIKit+GlassSurface.h"; sourceTree = "<group>"; };
+		37D90EFF4CCA9E85DE0E3517 /* ZinkConfig.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ZinkConfig.h"; sourceTree = "<group>"; };
+		2A34A5014577B772CD72D225 /* bridge_tbl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "bridge_tbl.h"; sourceTree = "<group>"; };
+		7CF262046D4DF51E7ABA0970 /* gl4es_family_boot.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "gl4es_family_boot.h"; sourceTree = "<group>"; };
+		F34306F84E8465F465521F7F /* gl_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "gl_bridge.h"; sourceTree = "<group>"; };
+		C6E03F48A625FB0E30BB62E1 /* glslang_compat.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "glslang_compat.h"; sourceTree = "<group>"; };
+		B02010A240899112AEFCE3D0 /* osm_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "osm_bridge.h"; sourceTree = "<group>"; };
+		F99A9074E35208D9A630174A /* osmesa_internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "osmesa_internal.h"; sourceTree = "<group>"; };
+		AC840D7699090BF44B30F98F /* shader_cap_probe.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "shader_cap_probe.h"; sourceTree = "<group>"; };
+		C365481CBCB52D0982F38643 /* shaderc_include.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "shaderc_include.h"; sourceTree = "<group>"; };
+		399CED11E88508EFCFA245AD /* shaderc_sandbox.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "shaderc_sandbox.h"; sourceTree = "<group>"; };
+		AADA24A1BD4D76CBC13563DF /* virgl_server.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "virgl_server.h"; sourceTree = "<group>"; };
+		CD3B92E3823A44A4356AFA4B /* vk_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "vk_bridge.h"; sourceTree = "<group>"; };
+		2A93C02860DA18062D7AC389 /* LanPortDetector.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "LanPortDetector.h"; sourceTree = "<group>"; };
+		F5CCE8DB3512E656EC82EAC3 /* McLanPortDetector.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "McLanPortDetector.h"; sourceTree = "<group>"; };
+		E1893125C84095DEF8FD1357 /* PLCrashView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PLCrashView.h"; sourceTree = "<group>"; };
+		5A9E0C9370F3194F7E76A18B /* PLLogOutputView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "PLLogOutputView.h"; sourceTree = "<group>"; };
+		45227C4C23E6FBB066F8B7A8 /* ScreenUtils.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ScreenUtils.h"; sourceTree = "<group>"; };
+		ECD0D2D76994ED9F68466613 /* UIKit+hook.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UIKit+hook.h"; sourceTree = "<group>"; };
+		47AE80A94AE81F737A013BA1 /* UpdateChecker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UpdateChecker.h"; sourceTree = "<group>"; };
+		B198712AC6D520C821FCDD33 /* ios_uikit_bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "ios_uikit_bridge.h"; sourceTree = "<group>"; };
+		930418C55810BF7B65B85AE9 /* A2BackgroundView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundView.h"; sourceTree = "<group>"; };
+		EB440E13AD4A8BB54186F381 /* A2CardPosition.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CardPosition.h"; sourceTree = "<group>"; };
+		1F985FAD5DEB8D4699A8B5AE /* A2CardTitleBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CardTitleBar.h"; sourceTree = "<group>"; };
+		853858C5BCCD6563D696BCE9 /* A2CategoryNavView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2CategoryNavView.h"; sourceTree = "<group>"; };
+		D0D70559C6A4486D1060EC44 /* A2ColorWheel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorWheel.h"; sourceTree = "<group>"; };
+		73E98A7463CD170A0A7D9009 /* A2Dialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Dialog.h"; sourceTree = "<group>"; };
+		FF7F03AE8917004211768207 /* A2DownloadPanel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadPanel.h"; sourceTree = "<group>"; };
+		51821EE36006651D51525519 /* A2FilterChip.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2FilterChip.h"; sourceTree = "<group>"; };
+		7F65D6CE6087B25615A6099F /* A2FilterPanel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2FilterPanel.h"; sourceTree = "<group>"; };
+		011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GlassCard.h"; sourceTree = "<group>"; };
+		6C024914931CB0F4D8C72FFD /* A2IndeterminateBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2IndeterminateBar.h"; sourceTree = "<group>"; };
+		51D0A8ACF4410E0B1AC0B915 /* A2InputDialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InputDialog.h"; sourceTree = "<group>"; };
+		E2DC61F8365E9F99FF2E1B25 /* A2InstallProgressDialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InstallProgressDialog.h"; sourceTree = "<group>"; };
+		0AE3E9A2D83CB6D50AE64979 /* A2LoaderCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoaderCard.h"; sourceTree = "<group>"; };
+		5740BE3FAEB8059D8A26D5A4 /* A2PaginationBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PaginationBar.h"; sourceTree = "<group>"; };
+		F483F847F6597D3BD17BBBA5 /* A2PrimaryButton.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PrimaryButton.h"; sourceTree = "<group>"; };
+		A2C65A10681693BAA019E065 /* A2ProgressBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ProgressBar.h"; sourceTree = "<group>"; };
+		D771FB41CA40081650206A01 /* A2ProgressView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ProgressView.h"; sourceTree = "<group>"; };
+		6585C7CB91A28A24F014676B /* A2QuickActionCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2QuickActionCard.h"; sourceTree = "<group>"; };
+		3E4D49239E95F02845B43FE8 /* A2RemoteImageView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RemoteImageView.h"; sourceTree = "<group>"; };
+		5BD2FAB5FF20BB633E2E18FE /* A2ResourceBadge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceBadge.h"; sourceTree = "<group>"; };
+		8AD1D670660A4CF44FADDE22 /* A2ResourceCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceCard.h"; sourceTree = "<group>"; };
+		448AFE07A533753F67B61451 /* A2RingProgress.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RingProgress.h"; sourceTree = "<group>"; };
+		06BF25C201A9B83666E117F1 /* A2SegmentedControl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SegmentedControl.h"; sourceTree = "<group>"; };
+		32854779149E0E29A0EC1CE2 /* A2SettingsRow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsRow.h"; sourceTree = "<group>"; };
+		96423A07FE49DD9B2383632F /* A2SettingsSection.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsSection.h"; sourceTree = "<group>"; };
+		443AE8E5ACDC8A02D5AD1308 /* A2SkinHeadView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SkinHeadView.h"; sourceTree = "<group>"; };
+		1B05CA50E9E749359B69AC20 /* A2Slider.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Slider.h"; sourceTree = "<group>"; };
+		AE6A61B881AF3636A3DEC7FB /* A2Switch.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Switch.h"; sourceTree = "<group>"; };
+		86BA725A974D441AEC4C7082 /* A2TaskDrawer.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskDrawer.h"; sourceTree = "<group>"; };
+		0F1C782604967DC873EB6421 /* A2TaskLogCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskLogCard.h"; sourceTree = "<group>"; };
+		4F66F4146C5DB99558B1EFD9 /* A2TaskLogOutput.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskLogOutput.h"; sourceTree = "<group>"; };
+		1D0B896EEB924745CE5C4038 /* A2TaskProgressView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TaskProgressView.h"; sourceTree = "<group>"; };
+		46EB509F1EF9D56C1DD81B78 /* A2TextField.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2TextField.h"; sourceTree = "<group>"; };
+		DBF31C9D8FD1524E6BEB2D62 /* A2Toast.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Toast.h"; sourceTree = "<group>"; };
+		88C9076497160DA45470EFB1 /* A2VersionCard.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionCard.h"; sourceTree = "<group>"; };
+		346D941B767D969728343CD3 /* A2BaseViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BaseViewController.h"; sourceTree = "<group>"; };
+		95928851A19F7FC341B8F44F /* A2LicenseViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LicenseViewController.h"; sourceTree = "<group>"; };
+		884EEE8EC370C704A2B76DD9 /* A2LogViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LogViewController.h"; sourceTree = "<group>"; };
+		A52B4C019723DDFBE9488111 /* A2AccountLeftPanel.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountLeftPanel.h"; sourceTree = "<group>"; };
+		0D773FDDDB48AA7436E8FAA5 /* A2AccountRowView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountRowView.h"; sourceTree = "<group>"; };
+		6D2B976BBD0701B19B6533DD /* A2AccountViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2AccountViewController.h"; sourceTree = "<group>"; };
+		52F4C13395826CC0FD71F073 /* A2LoginViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LoginViewController.h"; sourceTree = "<group>"; };
+		27A67636607C66ADDEAFFE18 /* A2DownloadTargetPicker.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTargetPicker.h"; sourceTree = "<group>"; };
+		AC97C75576BC6EEE17640A0E /* A2DownloadTasksViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadTasksViewController.h"; sourceTree = "<group>"; };
+		A7D45435EB1780C938976BA4 /* A2DownloadViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DownloadViewController.h"; sourceTree = "<group>"; };
+		E9C2A18759AEABAB3EAE0B16 /* A2FavoritesViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2FavoritesViewController.h"; sourceTree = "<group>"; };
+		A9F54FD3EE4B13741768C5AE /* A2GameInstallOptionsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameInstallOptionsViewController.h"; sourceTree = "<group>"; };
+		202A98989688120E4B50688E /* A2GameVersionListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameVersionListViewController.h"; sourceTree = "<group>"; };
+		C7770877217FAF37A3CE2F32 /* A2InstallingViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InstallingViewController.h"; sourceTree = "<group>"; };
+		13CFDC12BA665812C543D1A4 /* A2ModPackImportViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModPackImportViewController.h"; sourceTree = "<group>"; };
+		3EA82DE1C4D37327845A0CE6 /* A2ResourceDetailViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceDetailViewController.h"; sourceTree = "<group>"; };
+		C88B6C791D172A2F08F35BF2 /* A2ResourceResultCell.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceResultCell.h"; sourceTree = "<group>"; };
+		C862BDE71D4C2C8EA8C47AB5 /* A2ResourceSearchViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ResourceSearchViewController.h"; sourceTree = "<group>"; };
+		018CB525E29025D7B9C0B237 /* A2SearchByIdViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SearchByIdViewController.h"; sourceTree = "<group>"; };
+		593DBA138961EDD00008892E /* A2FilesViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2FilesViewController.h"; sourceTree = "<group>"; };
+		39421C371A5FDC787D490323 /* A2LauncherViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LauncherViewController.h"; sourceTree = "<group>"; };
+		B19946D9170DF078A49507B0 /* A2MultiplayerViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MultiplayerViewController.h"; sourceTree = "<group>"; };
+		8A8A69E0C0117AD2228117A1 /* A2BackgroundSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2BackgroundSettingsViewController.h"; sourceTree = "<group>"; };
+		137E26C858B461DBC6F3AB93 /* A2ColorThemeDialog.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorThemeDialog.h"; sourceTree = "<group>"; };
+		9CE1BE0BB775D12731066330 /* A2DiagnosticsSettings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2DiagnosticsSettings.h"; sourceTree = "<group>"; };
+		7D32BA48E5B96160D5CA1A23 /* A2JREManageViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2JREManageViewController.h"; sourceTree = "<group>"; };
+		838C7F8423E85E5E058FD819 /* A2RendererPluginViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererPluginViewController.h"; sourceTree = "<group>"; };
+		7C21A1EE7A69ED22A12A0588 /* A2RendererSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2RendererSettingsViewController.h"; sourceTree = "<group>"; };
+		A309D45ADA810213043EDE96 /* A2SettingsSections.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsSections.h"; sourceTree = "<group>"; };
+		F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2SettingsViewController.h"; sourceTree = "<group>"; };
+		C595542224E314960D0F3C02 /* A2ModListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ModListViewController.h"; sourceTree = "<group>"; };
+		830A4845C2484A246469AEE3 /* A2VersionExportViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionExportViewController.h"; sourceTree = "<group>"; };
+		271E6A92F0F655D2A7EA5627 /* A2VersionListViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionListViewController.h"; sourceTree = "<group>"; };
+		EF8A5FB174D5923A21B4D162 /* A2VersionRowView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionRowView.h"; sourceTree = "<group>"; };
+		E0C16E70541109926240BD8B /* A2VersionSettingsViewController.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionSettingsViewController.h"; sourceTree = "<group>"; };
+		AE1934FEA19B175F6667747E /* A2VersionTabBar.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VersionTabBar.h"; sourceTree = "<group>"; };
+		DAC23739A567EAE9F7189258 /* A2ColorScheme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorScheme.h"; sourceTree = "<group>"; };
+		89FE8C9FAF9D157BFC4F8D14 /* A2ColorTheme.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorTheme.h"; sourceTree = "<group>"; };
+		7CD8335A45FF442EAEDE63C3 /* A2ColorTheme_Internal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ColorTheme_Internal.h"; sourceTree = "<group>"; };
+		93A43777F7CA812D51F8D65F /* A2Icon.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Icon.h"; sourceTree = "<group>"; };
+		E61D2D443ACA03984F35EFCA /* A2Metrics.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Metrics.h"; sourceTree = "<group>"; };
+		812104F4721E701E0A31697D /* A2PaletteStyle.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PaletteStyle.h"; sourceTree = "<group>"; };
+		789AF4E406F5B8122812523E /* A2ThemeManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ThemeManager.h"; sourceTree = "<group>"; };
+		2146F61DDD3A2234BEDF108A /* A2Typography.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Typography.h"; sourceTree = "<group>"; };
+		A0A4BD66A8E2E70961D106B2 /* A2Log.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Log.h"; sourceTree = "<group>"; };
+		089E9C0B1F10F5FF4BE351B0 /* A2MurmurHash2.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2MurmurHash2.h"; sourceTree = "<group>"; };
+		A817F7F6D7CB98164433DEE3 /* A2Strings.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Strings.h"; sourceTree = "<group>"; };
+		F6B4BAFE39547DFF98D20300 /* Images.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = "Assets/Images.xcassets"; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B365BE9502C3128F5D540532 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		31A5E41A9BD04E385DB196E5 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				082E22CB657D9948DD22CF5F /* Air2.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+
+		0D7DB83B69709B8B97AE4409 /* Air2 */ = {
+			isa = PBXGroup;
+			children = (
+				18FD4D9FAB9B1E1C27AFB511 /* Info.plist */,
+				7B4F16DD90D9362E0A2BDBD1 /* App */,
+				E5BA60354B4EC37E480783EA /* Core */,
+				BB2DECA4B69E986999FF31DD /* Player */,
+				B33E61FAD84ACA6142548585 /* UI */,
+				07456E46BBC30DF8EE54F44C /* Utils */,
+			);
+			path = Air2;
+			sourceTree = "<group>";
+		};
+
+		30F6BE50499D1A046A1A1B66 /* Libraries */ = {
+			isa = PBXGroup;
+			children = (
+				7200F62FB85B69CEBAA7AD93 /* external */,
+			);
+			path = Libraries;
+			sourceTree = "<group>";
+		};
+
+		7B4F16DD90D9362E0A2BDBD1 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				8DA45F9AA021EBFBF929A56A /* A2AppDelegate.m */,
+				EDF360D6C38161620D973AA3 /* A2CrashGuard.m */,
+				F6EE6864D5C02736374620A3 /* A2NavigationController.m */,
+				E0A962942F56F74CF7617780 /* A2RootViewController.m */,
+				B1DA89EF3BC30E9E78DE5D37 /* A2SceneDelegate.m */,
+				36F3AADE4F4508F86A2F0505 /* main.m */,
+				52E0A8862124FBDB57E8C690 /* A2AppDelegate.h */,
+				6A39662C0840C98AB5D33038 /* A2CrashGuard.h */,
+				FFF83F1A982D07C7CBBF5C78 /* A2NavigationController.h */,
+				2C58D391DAC32B55049E9809 /* A2RootViewController.h */,
+				1185FA48A6FE1AB2F1E312DE /* A2SceneDelegate.h */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+
+		E5BA60354B4EC37E480783EA /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				B31D400D67779826215CAD33 /* Account */,
+				184E0966D040B090B9F76405 /* Addons */,
+				6D1D1D1337AE93B0607365A8 /* Download */,
+				14D8A68BF0520B7B0A68241F /* Java */,
+				840E9F2E85929805E7338157 /* Logging */,
+				0DE8669EFBE7C26555887B84 /* Multiplayer */,
+				3C208AC8788CF22B0CC6CF18 /* Path */,
+				7BE232A3F169182CC82ED438 /* Renderer */,
+				836F8EEA81C821DAF5B999B4 /* Settings */,
+				450E1C891F5D9598475AE361 /* TaskFlow */,
+				1A5C09A9A5278A534417CCF0 /* Version */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+
+		BB2DECA4B69E986999FF31DD /* Player */ = {
+			isa = PBXGroup;
+			children = (
+				86E5F88D8B0C6AD482705BD3 /* Context */,
+				0BAD074392BFBB7D37D258C7 /* Controls */,
+				90A539DCE91F82FABE23328F /* GameUI */,
+				A58394A92A24973E7D4C0754 /* Input */,
+				CB139AD7F6209DC35B5EAAD9 /* Renderer */,
+				251D338764DFB1EA53AE6E38 /* Support */,
+			);
+			path = Player;
+			sourceTree = "<group>";
+		};
+
+		B33E61FAD84ACA6142548585 /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				8B89578D010E17535991475E /* Components */,
+				E4F1D82CF180792A5EDFE454 /* Screens */,
+				ED89BE603E6F0B8503DCD530 /* Theme */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+
+		07456E46BBC30DF8EE54F44C /* Utils */ = {
+			isa = PBXGroup;
+			children = (
+				CE8E02818B37C0AFFABF71D5 /* A2Log.m */,
+				70E537F57063CE783BE3A38B /* A2MurmurHash2.m */,
+				7EC0262DD08DEE92A0AD385D /* A2Strings.m */,
+				A0A4BD66A8E2E70961D106B2 /* A2Log.h */,
+				089E9C0B1F10F5FF4BE351B0 /* A2MurmurHash2.h */,
+				A817F7F6D7CB98164433DEE3 /* A2Strings.h */,
+			);
+			path = Utils;
+			sourceTree = "<group>";
+		};
+
+		7200F62FB85B69CEBAA7AD93 /* external */ = {
+			isa = PBXGroup;
+			children = (
+				B4739652393FB3134913E941 /* mach */,
+			);
+			path = external;
+			sourceTree = "<group>";
+		};
+
+		B31D400D67779826215CAD33 /* Account */ = {
+			isa = PBXGroup;
+			children = (
+				88C69537AF21F68A7B1456D3 /* A2Account.m */,
+				FBBBB4EFA2B5334A45EA3C4E /* A2AccountManager.m */,
+				BA94035A25A574575C224EC9 /* A2MicrosoftAuth.m */,
+				1FCEEB9DA67A103C2B6DBA4A /* A2Wardrobe.m */,
+				748747C748D79B3DAEEDB5CF /* A2Account.h */,
+				1EB22C948F38C8AEC14F9AB3 /* A2AccountManager.h */,
+				845233208F5ECAED2A1B1D6B /* A2MicrosoftAuth.h */,
+				BE140C5384D36CE4A510C926 /* A2Wardrobe.h */,
+			);
+			path = Account;
+			sourceTree = "<group>";
+		};
+
+		184E0966D040B090B9F76405 /* Addons */ = {
+			isa = PBXGroup;
+			children = (
+				AF6416AF6E60A32784E6C349 /* A2APIModDownloader.m */,
+				1701CD5F8C697E4FB0EA95CC /* A2ContentSource.m */,
+				B9FA6C49037A18A6B1E59FD5 /* A2CurseForgeAPI.m */,
+				CAF1C722D6447EBFD3DE5AC9 /* A2LoaderVersionSource+Forge.m */,
+				C5DA9E2487D36C274C80ACB0 /* A2LoaderVersionSource.m */,
+				3EB242919BB0D524E0F04E05 /* A2LocalMod.m */,
+				C4D9FC19281C2C7616C83363 /* A2MirrorResolver.m */,
+				A3D19D895874DEE2D8098956 /* A2ModLoaderAPI.m */,
+				452CB103E2800DE9E594C441 /* A2ModLoaderInstaller.m */,
+				111E9AEC7F99B525E5C2561C /* A2ModLoaderSelection.m */,
+				818837C4F3F9187CAE2C7B85 /* A2ModPack.m */,
+				BC9BE22EBF1611FD9317C5F7 /* A2ModPackExporter.m */,
+				F9D1523FC914A5D7AD7339A1 /* A2ModPackInstaller.m */,
+				0D98C9FC5B84AD139084B48A /* A2ModScanner.m */,
+				B861A80294DEA73B8E0D6BF6 /* A2ModrinthAPI.m */,
+				2A1D6A101DDDB12E54E429AC /* A2ResourcePack.m */,
+				354E0D6D2FD88A0DA1EBAF70 /* A2ResourceScanner.m */,
+				C7F15DE318744485CEE00538 /* A2ZipReader.m */,
+				025FEA920C79EED2B15C509E /* A2ZipWriter.m */,
+				C4CDABCCADEE50C7FF0835B2 /* A2APIModDownloader.h */,
+				7452A96D7665BFCA516E1759 /* A2ContentSource.h */,
+				732674FFF97FD95863EEEAC7 /* A2CurseForgeAPI.h */,
+				0979A41483D76B482C1D92D2 /* A2LoaderVersionSource+Forge.h */,
+				5755D893F4092F66C2AF4252 /* A2LoaderVersionSource.h */,
+				FFA1FB938552D628B2FCD93E /* A2LocalMod.h */,
+				D10B30C91899E9D94389EF4D /* A2MirrorResolver.h */,
+				2CDA5A9BDC1B71E004D187AD /* A2ModLoaderAPI.h */,
+				D845B0CEB9AEB5591C34C008 /* A2ModLoaderInstaller.h */,
+				7670593162EE52749064503E /* A2ModLoaderSelection.h */,
+				82C5CA51B322A62C9A8716A5 /* A2ModPack.h */,
+				C3B88A4174EAA6387B36869D /* A2ModPackExporter.h */,
+				F9584853622B68DEDF2D6287 /* A2ModPackInstaller.h */,
+				735CC9494C232A3CC6864C14 /* A2ModScanner.h */,
+				BEB699597AD1A56E18E868F6 /* A2ModrinthAPI.h */,
+				14B2141FFF1AB36422F6A31A /* A2ResourcePack.h */,
+				C1B1480DB49DF49D264D7A98 /* A2ResourceScanner.h */,
+				AFAF6FCA941790ECF1D16844 /* A2ZipReader.h */,
+				2847F2CA5DB2AC03ADB15B8C /* A2ZipWriter.h */,
+			);
+			path = Addons;
+			sourceTree = "<group>";
+		};
+
+		6D1D1D1337AE93B0607365A8 /* Download */ = {
+			isa = PBXGroup;
+			children = (
+				6F8A5B15D5AD998096528CD6 /* A2BatchDownloader.m */,
+				1AB69D44FBBC5CC51E15C202 /* A2DownloadEngine.m */,
+				3F6494DF9E525C24C5D69098 /* A2DownloadFavorites.m */,
+				2FC0B48C28C39D5C14E494FD /* A2DownloadManifest.m */,
+				AE757274F8E1E206F093F68A /* A2DownloadTask.m */,
+				49E73CAF4B5DFDDC5E9F20AF /* A2DownloadTaskCenter.m */,
+				76A2AB6AE303BDE44A532F48 /* A2RateLimiter.m */,
+				E38E026AC18486465C710415 /* A2SharedSession.m */,
+				BD5AE965BB08676C6D4D0512 /* A2BatchDownloader.h */,
+				DE956596465BDFF25E578448 /* A2DownloadEngine.h */,
+				1EDE5D2DBCB81396D185C97D /* A2DownloadFavorites.h */,
+				D3ABD890B860FD03E77A2B0C /* A2DownloadManifest.h */,
+				0F59C20AA19682790BF7251E /* A2DownloadTask.h */,
+				A9FC62B0E895E90CEEE39D8E /* A2DownloadTaskCenter.h */,
+				78F13DED76CD9439168C53CC /* A2RateLimiter.h */,
+				9C29FEEF28CA87C324C5FA98 /* A2SharedSession.h */,
+			);
+			path = Download;
+			sourceTree = "<group>";
+		};
+
+		14D8A68BF0520B7B0A68241F /* Java */ = {
+			isa = PBXGroup;
+			children = (
+				AD4D1573AAD6B66A99BF1719 /* A2JREManager.m */,
+				8F9742BF2853E93D86927BFF /* A2JREManager.h */,
+			);
+			path = Java;
+			sourceTree = "<group>";
+		};
+
+		840E9F2E85929805E7338157 /* Logging */ = {
+			isa = PBXGroup;
+			children = (
+				EA103E9122B1B77443B27069 /* A2Logger.m */,
+				867390ED8965A503C3C46C99 /* A2Logger.h */,
+			);
+			path = Logging;
+			sourceTree = "<group>";
+		};
+
+		0DE8669EFBE7C26555887B84 /* Multiplayer */ = {
+			isa = PBXGroup;
+			children = (
+				76E2F83DD8568E1BB073643E /* A2Multiplayer.m */,
+				1942FF65DA97FDD7897CC10B /* A2Multiplayer.h */,
+			);
+			path = Multiplayer;
+			sourceTree = "<group>";
+		};
+
+		3C208AC8788CF22B0CC6CF18 /* Path */ = {
+			isa = PBXGroup;
+			children = (
+				F03B93794DA818FF2F14D7D0 /* A2GameDirMigration.m */,
+				D0693B31AD2EAB6A0328732E /* A2GameFiles.m */,
+				9ACCADCE8C9342A268838450 /* A2GamePathManager.m */,
+				074A2046BA4799F9CF95C731 /* A2VersionIsolation.m */,
+				801FBE3D9BBD2833977FF7A9 /* A2GameDirMigration.h */,
+				0B3D6D1B16A31DBED39334EE /* A2GameFiles.h */,
+				9F5359EDDF63525C251F80DF /* A2GamePathManager.h */,
+				CDB8C000E2777EB953C462DD /* A2VersionIsolation.h */,
+			);
+			path = Path;
+			sourceTree = "<group>";
+		};
+
+		7BE232A3F169182CC82ED438 /* Renderer */ = {
+			isa = PBXGroup;
+			children = (
+				47106E1A43667C70F671BED2 /* A2Renderer.m */,
+				8D34430FDEB24984AD0E55DB /* A2RendererImporter.m */,
+				B7393994B61F671185A745FD /* A2RendererLibraryLayout.m */,
+				D924815CAA9110DE1E60C886 /* A2RendererLoader.m */,
+				E79BEBB401EDD0A1A09B4A61 /* A2RendererPlugin.m */,
+				EF194CE5DE12660BE86A1C1E /* A2RendererRegistry.m */,
+				12B70B0E6FB31B7E75D61633 /* A2Renderer.h */,
+				5D1F57A737C10747C284745F /* A2RendererImporter.h */,
+				F4115040F39E483024559030 /* A2RendererLibraryLayout.h */,
+				9D8249B33CB9E5C34B143397 /* A2RendererLoader.h */,
+				F9D789402D37A2E55281C611 /* A2RendererPlugin.h */,
+				B5290E0419DA2C9F2A8A3BA0 /* A2RendererRegistry.h */,
+			);
+			path = Renderer;
+			sourceTree = "<group>";
+		};
+
+		836F8EEA81C821DAF5B999B4 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				035FB3CC4FE4018F44632AD5 /* A2Settings.m */,
+				8D9149596220C9F4F49C460D /* A2Settings.h */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+
+		450E1C891F5D9598475AE361 /* TaskFlow */ = {
+			isa = PBXGroup;
+			children = (
+				6FC1E9BA4864AAFF0F7CA085 /* A2Task.m */,
+				2616E0DA5FD964365AB3F574 /* A2TaskContext.m */,
+				8161EDCD7D2D110CECB94A59 /* A2TaskFlowExecutor.m */,
+				7A08D7F6FA47520D8DF93A5A /* A2TaskFlowSnapshot.m */,
+				CD8F3F4403B041D5E261EEEB /* A2TaskFlowTypes.m */,
+				8B227654B452F4E36F89ED74 /* A2TaskPhase.m */,
+				5456898224A2384F4CB25E55 /* A2Task.h */,
+				9B2C9C57818CB70F4585C1F4 /* A2TaskContext.h */,
+				1C520BA64D82944D1FBF6390 /* A2TaskFlowExecutor.h */,
+				5BB5A3AD5F0583DABF8B2A20 /* A2TaskFlowSnapshot.h */,
+				7AB297C5A17A0E22C21194A8 /* A2TaskFlowTypes.h */,
+				076BD1F8AB5B59D84920B9E7 /* A2TaskPhase.h */,
+			);
+			path = TaskFlow;
+			sourceTree = "<group>";
+		};
+
+		1A5C09A9A5278A534417CCF0 /* Version */ = {
+			isa = PBXGroup;
+			children = (
+				044D1BEC3AFD9353427BC038 /* A2GameInstaller.m */,
+				1F7F525D4A9EBB0B34986475 /* A2GameLaunchCoordinator.m */,
+				FC531CDE0E34696268F1F781 /* A2IntegrityChecker.m */,
+				88CFA2D788E3C8293E1C1288 /* A2IntegrityRepairer.m */,
+				FD148FA4B48FF8B75C314632 /* A2MemorySettings.m */,
+				C2B743CEBD2B34A26F40E947 /* A2RemoteVersions.m */,
+				3B039E2E559DBF9CEB7FFF19 /* A2VersionInfo.m */,
+				643B820206971C227F265607 /* A2VersionManager.m */,
+				B6A0FA8BE05E152AF38E328F /* A2VersionMetadata.m */,
+				ABFA57E18888655D94F65892 /* A2VersionModifier.m */,
+				8407C36C2C93136130B9F07E /* A2GameInstaller.h */,
+				3EC032FE238142C71917EA1C /* A2GameLaunchCoordinator.h */,
+				89044710CFCCD81045E82677 /* A2IntegrityChecker.h */,
+				04B2CA17058985137DBB8205 /* A2IntegrityRepairer.h */,
+				85617EB6EC5C08FC92AEB19F /* A2MemorySettings.h */,
+				797843066906C8A344CE1344 /* A2RemoteVersions.h */,
+				CE5120FF6E52910A07272F53 /* A2VersionInfo.h */,
+				8566CA5C1C5F50A603ACC370 /* A2VersionManager.h */,
+				F7DDE888061764C56E9A6BCF /* A2VersionMetadata.h */,
+				E6618D14DB0299A8DB6539CA /* A2VersionModifier.h */,
+			);
+			path = Version;
+			sourceTree = "<group>";
+		};
+
+		86E5F88D8B0C6AD482705BD3 /* Context */ = {
+			isa = PBXGroup;
+			children = (
+				5E9E31598CF62220724EE0CC /* A2JITLauncher.m */,
+				FFB0E2399504AE38B12CDCF6 /* AmeLaunchProgress.m */,
+				622E3DB2F220A0CD6E0943DF /* GameSurfaceView.m */,
+				05531083602CC4CC9ADFF035 /* JavaLauncher.m */,
+				F4318F35FE1B821173E3D9FA /* LauncherPreferences.m */,
+				AC657CF7DD69342C4AC4CA18 /* PLPreferences.m */,
+				67CFEFE3CFBAF99FC4B99E28 /* PLProfiles.m */,
+				B4557A4B9E2DB6ABF426D792 /* PLTaskStage.m */,
+				6CDC79F4F060961654E0BFBD /* SurfaceViewController+ExternalDisplay.m */,
+				1D4C64F7E99D00A8C83F6461 /* SurfaceViewController+LogView.m */,
+				CAEE71B0AFBCDAB3D6DE931F /* SurfaceViewController.m */,
+				3379819526378EE72414030C /* environ_globals.m */,
+				A3D0C5C637E9FA2B3F32F1BD /* main_hook.m */,
+				6A5BAE11D028A2905E1791FC /* utils.m */,
+				CA4B959CCE02765457E1D8E1 /* A2JITLauncher.h */,
+				51994BE7CF4A796D8B8D6AF2 /* AmeLaunchProgress.h */,
+				709C4E0074FDBB9EC85649C8 /* GameSurfaceView.h */,
+				8DAD8D49D4E965AEB8763685 /* JavaLauncher.h */,
+				02E3BB0B714A305BD4BE007D /* LauncherPreferences.h */,
+				D1BF8E283D489D37DC5C942C /* PLPreferences.h */,
+				7EDAFDA309890C6736A5408A /* PLProfiles.h */,
+				E8261C827E7878BDC2048E92 /* PLTaskStage.h */,
+				8834A7FBD3EE02CF2ACBFE5A /* PLTaskStages.h */,
+				31EB54C762722EDE895BBE30 /* SurfaceViewController.h */,
+				297B7509422391BE3ABF004B /* config.h */,
+				C186822A4D93C6ED1D4F4D90 /* environ.h */,
+				F95E35A558207B66D283C093 /* jni.h */,
+				D90D6323014B3918ACC20743 /* utils.h */,
+			);
+			path = Context;
+			sourceTree = "<group>";
+		};
+
+		0BAD074392BFBB7D37D258C7 /* Controls */ = {
+			isa = PBXGroup;
+			children = (
+				3CABD20366E8E9C4350F53B8 /* A2ControlEditorViewController.m */,
+				FB5F53B07ECD8A87520B739B /* A2ControlFormat.m */,
+				FC6C067EAD1B5E6AFEC87FD6 /* A2ControlFormatFCL.m */,
+				8D8A8B9DE4D3B3563EDBEFDB /* A2ControlFormatZL.m */,
+				8362D912769D68CC445B50FC /* A2ControlInput.m */,
+				F83F66ED58968DE8E1C3CE2D /* A2ControlLayerPanel.m */,
+				1DD83AEE82FD5DB2400F3B8B /* A2ControlLayout.m */,
+				6A1769FF5839C6F59DA3DB26 /* A2ControlRenderer.m */,
+				4CFED2A2A24C71D520AA07FC /* A2ControlStyle.m */,
+				5ECC7BB7D158663F9C72752E /* A2DefaultControls.m */,
+				58892B811927577584034FA9 /* A2HotbarView.m */,
+				FA7E2954383C7B15D8C251BF /* A2JoystickView.m */,
+				447DA48951C44FE642EF4EFE /* A2KeyCodeMap.m */,
+				BC32DEDE020A2112CC01EF75 /* A2TouchTransport.m */,
+				8301CDE4BB2DAFB8B4BE53E1 /* A2ControlEditorViewController.h */,
+				E851B4144905CDFA5E1E8CFB /* A2ControlFormat.h */,
+				A027206836FBEE763B70C52E /* A2ControlFormatFCL.h */,
+				41E49C80FB2AB9525FFE802F /* A2ControlFormatZL.h */,
+				562CC0607CB4EA35C6B344E2 /* A2ControlInput.h */,
+				BC37D90F1A8D50A0C0F96AA1 /* A2ControlLayerPanel.h */,
+				9A480B77A9493A4A99FCF1E2 /* A2ControlLayout.h */,
+				1C4E55239DDFE7C5F66C96EF /* A2ControlRenderer.h */,
+				915DA19C97208F294F049473 /* A2ControlStyle.h */,
+				17EFE083DFCD2B631A9B9195 /* A2DefaultControls.h */,
+				A1EEACDD4A3CFD84E6F3B649 /* A2HotbarView.h */,
+				DA0D27F84D73DBEDA819E3C0 /* A2JoystickView.h */,
+				32A0EFEF4581508BE5193F55 /* A2KeyCodeMap.h */,
+				ABBA497DBC96475F112E489F /* A2TouchTransport.h */,
+			);
+			path = Controls;
+			sourceTree = "<group>";
+		};
+
+		90A539DCE91F82FABE23328F /* GameUI */ = {
+			isa = PBXGroup;
+			children = (
+				BA1CDFB3C78F08B828B7EEDC /* A2GameMenuOverlay.m */,
+				F0EACB38F79192127D03C3C4 /* A2JVMRunningViewController.m */,
+				96009B3F837E8AD9139F1044 /* A2LaunchSplashView.m */,
+				000C6DF2B54D88F8BC6C94D4 /* A2ResolutionManager.m */,
+				F866DED4DFB6F636F431EFD8 /* A2ResolutionSettingsView.m */,
+				8F8DC63CC90EE44095B0B442 /* A2GameMenuOverlay.h */,
+				21F797A74F81806352EACC05 /* A2JVMRunningViewController.h */,
+				1C687E2D44BB19258F377A63 /* A2LaunchSplashView.h */,
+				9A380B08F835A986A05EA196 /* A2ResolutionManager.h */,
+				947208B1A4FAF92FA8883A17 /* A2ResolutionSettingsView.h */,
+			);
+			path = GameUI;
+			sourceTree = "<group>";
+		};
+
+		A58394A92A24973E7D4C0754 /* Input */ = {
+			isa = PBXGroup;
+			children = (
+				16CD6637FF9A9120236C23FD /* ControllerInput.m */,
+				72E3D40518553547A372551D /* GyroInput.m */,
+				E5C6EB5CE20391935ED13F45 /* KeyboardInput.m */,
+				D7DD31F231F7C27A2387130B /* TrackedTextField.m */,
+				29A644FD215BCBE0DED58CF5 /* input_bridge_v3.m */,
+				ED376B63C03CB43B77351AEA /* ControllerInput.h */,
+				C15C4D975D09A64629826AF8 /* GyroInput.h */,
+				B7FB9EC370E3F461902C355F /* KeyboardInput.h */,
+				8D653B4548AAD6FC6C153718 /* TrackedTextField.h */,
+				A76CB9C5A1988D38B536AD70 /* glfw_keycodes.h */,
+			);
+			path = Input;
+			sourceTree = "<group>";
+		};
+
+		CB139AD7F6209DC35B5EAAD9 /* Renderer */ = {
+			isa = PBXGroup;
+			children = (
+				52EBA7667EECC1A31AFBCF47 /* ZinkConfig.m */,
+				E368CBF075B0AB8032581171 /* egl_bridge.m */,
+				2056A2513B531351EF6F4613 /* gl4es_family_boot.m */,
+				3D6BFFADE137E817AFABBEE7 /* gl_bridge.m */,
+				AA85EB0E82DC6C36A7EA7CA7 /* openal_shim.c */,
+				B430480194987DFD0DE5B92A /* osm_bridge.m */,
+				877D37201914962A265F7875 /* sdl3_hook.m */,
+				41167DA379475CE71BECC431 /* shader_cap_probe.m */,
+				4EBA0900AB704E513396046F /* shaderc_impl_glue.c */,
+				287DA744A433A35B4878F96B /* shaderc_include.c */,
+				05B22A1299F6F9FA174C3C57 /* shaderc_sandbox.m */,
+				5F9D85AE4F9ABE9D7CDD8606 /* spvc_shim.c */,
+				7DDE616B504E6BC2BD95893F /* virgl_server.m */,
+				6A147B235573B1F4D128EC56 /* vk_bridge.m */,
+				2B37DFADE1F06684D11C31FD /* A2Exported.h */,
+				DC70190DBE9B404EF1531E30 /* AMEGlassStyle.h */,
+				72D6508DC3DC26E413BB38F1 /* UIKit+GlassSurface.h */,
+				37D90EFF4CCA9E85DE0E3517 /* ZinkConfig.h */,
+				2A34A5014577B772CD72D225 /* bridge_tbl.h */,
+				7CF262046D4DF51E7ABA0970 /* gl4es_family_boot.h */,
+				F34306F84E8465F465521F7F /* gl_bridge.h */,
+				C6E03F48A625FB0E30BB62E1 /* glslang_compat.h */,
+				B02010A240899112AEFCE3D0 /* osm_bridge.h */,
+				F99A9074E35208D9A630174A /* osmesa_internal.h */,
+				AC840D7699090BF44B30F98F /* shader_cap_probe.h */,
+				C365481CBCB52D0982F38643 /* shaderc_include.h */,
+				399CED11E88508EFCFA245AD /* shaderc_sandbox.h */,
+				AADA24A1BD4D76CBC13563DF /* virgl_server.h */,
+				CD3B92E3823A44A4356AFA4B /* vk_bridge.h */,
+			);
+			path = Renderer;
+			sourceTree = "<group>";
+		};
+
+		251D338764DFB1EA53AE6E38 /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				E147FF8C8EEE4B039515EF61 /* LanPortDetector.m */,
+				61F59F7BC6DF5C142349F29D /* McLanPortDetector.m */,
+				2BE3947518DFBB0E9F7EC65F /* PLCrashView.m */,
+				52D8A04AFEDE1A805DC7E208 /* PLLogOutputView.m */,
+				BF0A41C1E121405427C314A9 /* ScreenUtils.m */,
+				869782D9D81E98D0AB7F435E /* UIKit+hook.m */,
+				D7399A9719C4F69C7AB042BF /* UpdateChecker.m */,
+				7AC1534A173C53027749838F /* dyld_bypass_validation.m */,
+				B1B815C20ECE35E2086A818B /* dyld_patch_platform.m */,
+				462E6CD9270BB7206418B1C2 /* ios_uikit_bridge.m */,
+				F35AD048D88A48AB95377581 /* non_darwin_utils.m */,
+				2A93C02860DA18062D7AC389 /* LanPortDetector.h */,
+				F5CCE8DB3512E656EC82EAC3 /* McLanPortDetector.h */,
+				E1893125C84095DEF8FD1357 /* PLCrashView.h */,
+				5A9E0C9370F3194F7E76A18B /* PLLogOutputView.h */,
+				45227C4C23E6FBB066F8B7A8 /* ScreenUtils.h */,
+				ECD0D2D76994ED9F68466613 /* UIKit+hook.h */,
+				47AE80A94AE81F737A013BA1 /* UpdateChecker.h */,
+				B198712AC6D520C821FCDD33 /* ios_uikit_bridge.h */,
+				9C8E9F6CAB6C863C2FF0B16C /* awt_xawt */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
+
+		8B89578D010E17535991475E /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				872075DCD0F565557A6554D2 /* A2BackgroundView.m */,
+				C733462374B52500F6D83649 /* A2CardPosition.m */,
+				CA1D52969E0783051081B038 /* A2CardTitleBar.m */,
+				A283C0C24413C706B449C36A /* A2CategoryNavView.m */,
+				75554051E6AED37FAF518AAF /* A2ColorWheel.m */,
+				54836FA8732F32DC7C9B8499 /* A2Dialog.m */,
+				640BA41815669C390C8CF122 /* A2DownloadPanel.m */,
+				86E9A8E1F1CBFB462AEE7811 /* A2FilterChip.m */,
+				0D6F12D8CC6D2D0C761EECC2 /* A2FilterPanel.m */,
+				A33B7F1AC73D9C7C39BDE240 /* A2GlassCard.m */,
+				D0FA9F9312CA29F7B69492DF /* A2IndeterminateBar.m */,
+				1AAD1DB8B8E6685A93FA2940 /* A2InputDialog.m */,
+				27AAF421DE71B27F23A7EF32 /* A2InstallProgressDialog.m */,
+				139430B14A933139D8C20D5C /* A2LoaderCard.m */,
+				94C422B51FBF07CB2AAA7C12 /* A2PaginationBar.m */,
+				EDDF66F1295D78E122E64EF7 /* A2PrimaryButton.m */,
+				EBBE7DFC0E260B37F3C90BB5 /* A2ProgressBar.m */,
+				BCC8BC09EAD0F4DA3FAFCC1E /* A2QuickActionCard.m */,
+				75996837421C7BC519ECA54A /* A2RemoteImageView.m */,
+				DB4036A9A71DD969DBD0A3A2 /* A2ResourceBadge.m */,
+				2E56917EAF9417BA50FFE0F3 /* A2ResourceCard.m */,
+				65B73468B0B2BABA009E64BC /* A2RingProgress.m */,
+				FB7BA68822FCB0D14D580939 /* A2SegmentedControl.m */,
+				235D2D4A2ABFFA39AEDB334D /* A2SettingsRow.m */,
+				EE215D4473E1887376B33E1E /* A2SettingsSection.m */,
+				84CCDDC48E40B58090F702AC /* A2SkinHeadView.m */,
+				6BDEC3121EF50CDEC377E4D1 /* A2Slider.m */,
+				5B4EAC862A2B3BE1D9BCE6AE /* A2Switch.m */,
+				DA139E80AEDB846DE5191C14 /* A2TaskDrawer.m */,
+				F28792134BA46DD0000ECBF4 /* A2TaskLogCard.m */,
+				2576FD4E0A0CB52A36078469 /* A2TaskLogOutput.m */,
+				ADC4C42CB382EAFDCA556C09 /* A2TaskProgressView.m */,
+				B498358055FFAD0453CC27C7 /* A2TextField.m */,
+				F3C972A56B473038ED5074FD /* A2Toast.m */,
+				DCF1F61258EDBCB81698B32B /* A2VersionCard.m */,
+				930418C55810BF7B65B85AE9 /* A2BackgroundView.h */,
+				EB440E13AD4A8BB54186F381 /* A2CardPosition.h */,
+				1F985FAD5DEB8D4699A8B5AE /* A2CardTitleBar.h */,
+				853858C5BCCD6563D696BCE9 /* A2CategoryNavView.h */,
+				D0D70559C6A4486D1060EC44 /* A2ColorWheel.h */,
+				73E98A7463CD170A0A7D9009 /* A2Dialog.h */,
+				FF7F03AE8917004211768207 /* A2DownloadPanel.h */,
+				51821EE36006651D51525519 /* A2FilterChip.h */,
+				7F65D6CE6087B25615A6099F /* A2FilterPanel.h */,
+				011710EF6A2FCA8EE073EBAE /* A2GlassCard.h */,
+				6C024914931CB0F4D8C72FFD /* A2IndeterminateBar.h */,
+				51D0A8ACF4410E0B1AC0B915 /* A2InputDialog.h */,
+				E2DC61F8365E9F99FF2E1B25 /* A2InstallProgressDialog.h */,
+				0AE3E9A2D83CB6D50AE64979 /* A2LoaderCard.h */,
+				5740BE3FAEB8059D8A26D5A4 /* A2PaginationBar.h */,
+				F483F847F6597D3BD17BBBA5 /* A2PrimaryButton.h */,
+				A2C65A10681693BAA019E065 /* A2ProgressBar.h */,
+				D771FB41CA40081650206A01 /* A2ProgressView.h */,
+				6585C7CB91A28A24F014676B /* A2QuickActionCard.h */,
+				3E4D49239E95F02845B43FE8 /* A2RemoteImageView.h */,
+				5BD2FAB5FF20BB633E2E18FE /* A2ResourceBadge.h */,
+				8AD1D670660A4CF44FADDE22 /* A2ResourceCard.h */,
+				448AFE07A533753F67B61451 /* A2RingProgress.h */,
+				06BF25C201A9B83666E117F1 /* A2SegmentedControl.h */,
+				32854779149E0E29A0EC1CE2 /* A2SettingsRow.h */,
+				96423A07FE49DD9B2383632F /* A2SettingsSection.h */,
+				443AE8E5ACDC8A02D5AD1308 /* A2SkinHeadView.h */,
+				1B05CA50E9E749359B69AC20 /* A2Slider.h */,
+				AE6A61B881AF3636A3DEC7FB /* A2Switch.h */,
+				86BA725A974D441AEC4C7082 /* A2TaskDrawer.h */,
+				0F1C782604967DC873EB6421 /* A2TaskLogCard.h */,
+				4F66F4146C5DB99558B1EFD9 /* A2TaskLogOutput.h */,
+				1D0B896EEB924745CE5C4038 /* A2TaskProgressView.h */,
+				46EB509F1EF9D56C1DD81B78 /* A2TextField.h */,
+				DBF31C9D8FD1524E6BEB2D62 /* A2Toast.h */,
+				88C9076497160DA45470EFB1 /* A2VersionCard.h */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+
+		E4F1D82CF180792A5EDFE454 /* Screens */ = {
+			isa = PBXGroup;
+			children = (
+				BE539C9F1A73C7EF119E283F /* A2BaseViewController.m */,
+				346D941B767D969728343CD3 /* A2BaseViewController.h */,
+				23F9CF061D8D127ACF21180B /* About */,
+				8957500F4C1E2FA1D18DFCD1 /* Account */,
+				55AB3FA6D6516DF096EA9950 /* Download */,
+				8AE91C9F5AC2D4232C4E21E3 /* Files */,
+				C7F61C0D99C863113AC1C553 /* Home */,
+				50B8C20F74EB14B422E159A9 /* Multiplayer */,
+				C09CC792827909A5EC124675 /* Settings */,
+				940C24E13AC2B0BB0C4F8B79 /* Version */,
+			);
+			path = Screens;
+			sourceTree = "<group>";
+		};
+
+		ED89BE603E6F0B8503DCD530 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				93BF612ED3930C6A33249855 /* A2ColorScheme.m */,
+				25966F1F7F932D2795B0F1A8 /* A2ColorTheme+Seed.m */,
+				82FE348CB0D3A5CE4DD665A1 /* A2ColorTheme.m */,
+				CF7A0935F86AC60F1DFD3B1B /* A2Icon.m */,
+				C144BE68C9BFFFAA61A92B1A /* A2Metrics.m */,
+				E6F6FA4C47FD771177075404 /* A2PaletteStyle.m */,
+				5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */,
+				42B68771E09EA8BB40AC83D7 /* A2Typography.m */,
+				DAC23739A567EAE9F7189258 /* A2ColorScheme.h */,
+				89FE8C9FAF9D157BFC4F8D14 /* A2ColorTheme.h */,
+				7CD8335A45FF442EAEDE63C3 /* A2ColorTheme_Internal.h */,
+				93A43777F7CA812D51F8D65F /* A2Icon.h */,
+				E61D2D443ACA03984F35EFCA /* A2Metrics.h */,
+				812104F4721E701E0A31697D /* A2PaletteStyle.h */,
+				789AF4E406F5B8122812523E /* A2ThemeManager.h */,
+				2146F61DDD3A2234BEDF108A /* A2Typography.h */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+
+		B4739652393FB3134913E941 /* mach */ = {
+			isa = PBXGroup;
+			children = (
+				E05FA006C10F10BAA3290EF1 /* mach_excServer.c */,
+			);
+			path = mach;
+			sourceTree = "<group>";
+		};
+
+		9C8E9F6CAB6C863C2FF0B16C /* awt_xawt */ = {
+			isa = PBXGroup;
+			children = (
+				2E6F468284C1C07BB9061ABA /* empty.m */,
+				5486E1FF3753ECA76163F90D /* xawt_fake.m */,
+			);
+			path = awt_xawt;
+			sourceTree = "<group>";
+		};
+
+		23F9CF061D8D127ACF21180B /* About */ = {
+			isa = PBXGroup;
+			children = (
+				6068960D14B3D649188A52E4 /* A2LicenseViewController.m */,
+				86AF40E277EDF77B1E20CBC1 /* A2LogViewController.m */,
+				95928851A19F7FC341B8F44F /* A2LicenseViewController.h */,
+				884EEE8EC370C704A2B76DD9 /* A2LogViewController.h */,
+			);
+			path = About;
+			sourceTree = "<group>";
+		};
+
+		8957500F4C1E2FA1D18DFCD1 /* Account */ = {
+			isa = PBXGroup;
+			children = (
+				FBB3373063BF809FA78DEE3C /* A2AccountLeftPanel.m */,
+				2A67EF3D8419C9CA6BF893C1 /* A2AccountRowView.m */,
+				CFB345C7BF099EBAF1F21DB8 /* A2AccountViewController.m */,
+				1B597AAB3A1E24868779CA51 /* A2LoginViewController.m */,
+				A52B4C019723DDFBE9488111 /* A2AccountLeftPanel.h */,
+				0D773FDDDB48AA7436E8FAA5 /* A2AccountRowView.h */,
+				6D2B976BBD0701B19B6533DD /* A2AccountViewController.h */,
+				52F4C13395826CC0FD71F073 /* A2LoginViewController.h */,
+			);
+			path = Account;
+			sourceTree = "<group>";
+		};
+
+		55AB3FA6D6516DF096EA9950 /* Download */ = {
+			isa = PBXGroup;
+			children = (
+				94B3587CBA8EF148D0A0ACD3 /* A2DownloadTargetPicker.m */,
+				FCF786571196D883A85C10CF /* A2DownloadTasksViewController.m */,
+				58F43A3884A20EAC64DF66C5 /* A2DownloadViewController.m */,
+				82DAFF5D1DF928F825EA8452 /* A2FavoritesViewController.m */,
+				3448695748B18FEC501E0C2F /* A2GameInstallOptionsViewController.m */,
+				AD5DE88799682F07A3341134 /* A2GameVersionListViewController.m */,
+				6F59A25E0523C2FBD75472C8 /* A2InstallingViewController.m */,
+				EAF5FDB108BCF648BF323F13 /* A2ModPackImportViewController.m */,
+				39176526660F1CAEC3199C8F /* A2ResourceDetailViewController.m */,
+				05C7E85764E09AEA04C8DE32 /* A2ResourceResultCell.m */,
+				98024C5565241D478B54F4D6 /* A2ResourceSearchViewController.m */,
+				C769776AF3D8703861D81699 /* A2SearchByIdViewController.m */,
+				27A67636607C66ADDEAFFE18 /* A2DownloadTargetPicker.h */,
+				AC97C75576BC6EEE17640A0E /* A2DownloadTasksViewController.h */,
+				A7D45435EB1780C938976BA4 /* A2DownloadViewController.h */,
+				E9C2A18759AEABAB3EAE0B16 /* A2FavoritesViewController.h */,
+				A9F54FD3EE4B13741768C5AE /* A2GameInstallOptionsViewController.h */,
+				202A98989688120E4B50688E /* A2GameVersionListViewController.h */,
+				C7770877217FAF37A3CE2F32 /* A2InstallingViewController.h */,
+				13CFDC12BA665812C543D1A4 /* A2ModPackImportViewController.h */,
+				3EA82DE1C4D37327845A0CE6 /* A2ResourceDetailViewController.h */,
+				C88B6C791D172A2F08F35BF2 /* A2ResourceResultCell.h */,
+				C862BDE71D4C2C8EA8C47AB5 /* A2ResourceSearchViewController.h */,
+				018CB525E29025D7B9C0B237 /* A2SearchByIdViewController.h */,
+			);
+			path = Download;
+			sourceTree = "<group>";
+		};
+
+		8AE91C9F5AC2D4232C4E21E3 /* Files */ = {
+			isa = PBXGroup;
+			children = (
+				E10CEEF11893D9C3037031FF /* A2FilesViewController.m */,
+				593DBA138961EDD00008892E /* A2FilesViewController.h */,
+			);
+			path = Files;
+			sourceTree = "<group>";
+		};
+
+		C7F61C0D99C863113AC1C553 /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				C8A9221A5FAC2B9E0D63B27A /* A2LauncherViewController.m */,
+				39421C371A5FDC787D490323 /* A2LauncherViewController.h */,
+			);
+			path = Home;
+			sourceTree = "<group>";
+		};
+
+		50B8C20F74EB14B422E159A9 /* Multiplayer */ = {
+			isa = PBXGroup;
+			children = (
+				88968B7F1E56FA0EECD12932 /* A2MultiplayerViewController.m */,
+				B19946D9170DF078A49507B0 /* A2MultiplayerViewController.h */,
+			);
+			path = Multiplayer;
+			sourceTree = "<group>";
+		};
+
+		C09CC792827909A5EC124675 /* Settings */ = {
+			isa = PBXGroup;
+			children = (
+				566EB440D41933073AF9B84A /* A2AboutSettings.m */,
+				CADC0CBFB45D64A024AAEFAA /* A2AppearanceSettings.m */,
+				976C691462D45F2EB3ACE714 /* A2BackgroundSettingsViewController.m */,
+				5E4C5DFE2DEAE529519BAB23 /* A2ColorThemeDialog.m */,
+				D8134F1E8B2BFEC67BACFD4D /* A2DiagnosticsSettings.m */,
+				0FB44E450592838BA6F7B061 /* A2GameSettings.m */,
+				832F97C49F2416C2C0488A79 /* A2JREManageViewController.m */,
+				B53FD56CE6A8FAC76A2445BE /* A2RendererPluginViewController.m */,
+				BAA21491506E419C480B4D51 /* A2RendererSettingsViewController.m */,
+				9D693E64ECB39A1EB1456F61 /* A2SettingsViewController.m */,
+				8A8A69E0C0117AD2228117A1 /* A2BackgroundSettingsViewController.h */,
+				137E26C858B461DBC6F3AB93 /* A2ColorThemeDialog.h */,
+				9CE1BE0BB775D12731066330 /* A2DiagnosticsSettings.h */,
+				7D32BA48E5B96160D5CA1A23 /* A2JREManageViewController.h */,
+				838C7F8423E85E5E058FD819 /* A2RendererPluginViewController.h */,
+				7C21A1EE7A69ED22A12A0588 /* A2RendererSettingsViewController.h */,
+				A309D45ADA810213043EDE96 /* A2SettingsSections.h */,
+				F75FFFC0853156E05B513D5D /* A2SettingsViewController.h */,
+			);
+			path = Settings;
+			sourceTree = "<group>";
+		};
+
+		940C24E13AC2B0BB0C4F8B79 /* Version */ = {
+			isa = PBXGroup;
+			children = (
+				86984D61C69EA55C028368AC /* A2ModListViewController.m */,
+				B49A0AFE2700FB02330057CC /* A2VersionExportViewController.m */,
+				ACB502FD0C0D40B6EBFB8659 /* A2VersionListViewController.m */,
+				8FCB2AFA4995A6C67FAF21E8 /* A2VersionRowView.m */,
+				4BD45FCFB5E680BC2C10AF40 /* A2VersionSettingsViewController.m */,
+				FDDDCB082DAEC15FCB03865C /* A2VersionTabBar.m */,
+				C595542224E314960D0F3C02 /* A2ModListViewController.h */,
+				830A4845C2484A246469AEE3 /* A2VersionExportViewController.h */,
+				271E6A92F0F655D2A7EA5627 /* A2VersionListViewController.h */,
+				EF8A5FB174D5923A21B4D162 /* A2VersionRowView.h */,
+				E0C16E70541109926240BD8B /* A2VersionSettingsViewController.h */,
+				AE1934FEA19B175F6667747E /* A2VersionTabBar.h */,
+			);
+			path = Version;
+			sourceTree = "<group>";
+		};
+
+		E2258AA71B17E0A3529C6C95 = {
+			isa = PBXGroup;
+			children = (
+				0D7DB83B69709B8B97AE4409 /* Air2 */,
+				30F6BE50499D1A046A1A1B66 /* Libraries */,
+				31A5E41A9BD04E385DB196E5 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		489989357F50184436B4C36D /* Air2 */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 09185177824D0012F345AF29 /* Build configuration list for PBXNativeTarget "Air2" */;
+			buildPhases = (
+				E9AC67C993D2511BDAD48561 /* Sources */,
+				B365BE9502C3128F5D540532 /* Frameworks */,
+				483A0E0C9C74F0CBD6A612E6 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = Air2;
+			productName = Air2;
+			productReference = 082E22CB657D9948DD22CF5F /* Air2.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		807E8FCA71E1D108200A94CC /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					489989357F50184436B4C36D = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = F086F31674BEA44957E3CCA5 /* Build configuration list for PBXProject "Air2" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = "zh-Hans";
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				"zh-Hans",
+				en,
+				Base,
+			);
+			mainGroup = E2258AA71B17E0A3529C6C95;
+			productRefGroup = 31A5E41A9BD04E385DB196E5 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				489989357F50184436B4C36D /* Air2 */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		483A0E0C9C74F0CBD6A612E6 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FC6E8A547C179CC55A247D57 /* Images.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		E9AC67C993D2511BDAD48561 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5B69779F761A566D166C2342 /* A2AppDelegate.m in Sources */,
+				59F01512A836702FD0D9F5D9 /* A2CrashGuard.m in Sources */,
+				84B4ED65340FEC57222535E6 /* A2NavigationController.m in Sources */,
+				1D4ED46FBFBF946134C72573 /* A2RootViewController.m in Sources */,
+				84C22A76F0D470DBB7E9248C /* A2SceneDelegate.m in Sources */,
+				B3BEDFE9B8FF8CA46A1E3394 /* main.m in Sources */,
+				434831579F14E55A1DF7A0D1 /* A2Account.m in Sources */,
+				0B32EEA9A11A39AA5D315041 /* A2AccountManager.m in Sources */,
+				3352C680504CA3F9AB6CFD26 /* A2MicrosoftAuth.m in Sources */,
+				B70F2470805980B206B1EAF8 /* A2Wardrobe.m in Sources */,
+				EB8AF64AB9D51A26942A884F /* A2APIModDownloader.m in Sources */,
+				514C73BF78432EFA524E3D87 /* A2ContentSource.m in Sources */,
+				0D17D81407F6A22D20B89620 /* A2CurseForgeAPI.m in Sources */,
+				7BC46830363BB7D24F1EB261 /* A2LoaderVersionSource+Forge.m in Sources */,
+				3D236CA3B00131FA0DD8C841 /* A2LoaderVersionSource.m in Sources */,
+				6520EA8C1584C6879CBE5834 /* A2LocalMod.m in Sources */,
+				178E4C042E711E4F72FAAAED /* A2MirrorResolver.m in Sources */,
+				A83EEEB1694635A4E2D8A05C /* A2ModLoaderAPI.m in Sources */,
+				06B9E837FB19EE06FB5B8001 /* A2ModLoaderInstaller.m in Sources */,
+				06B58AEDE70956F3099BAA8C /* A2ModLoaderSelection.m in Sources */,
+				B93BF19B9A5817F070177A3E /* A2ModPack.m in Sources */,
+				B4602EB8115274750785754F /* A2ModPackExporter.m in Sources */,
+				233C8ED69D6FB00835F7FDEF /* A2ModPackInstaller.m in Sources */,
+				4B3530EF7B225032A4145D7C /* A2ModScanner.m in Sources */,
+				FAE87882A16451C5E2E43DDE /* A2ModrinthAPI.m in Sources */,
+				63E842FC660915F96957CD6E /* A2ResourcePack.m in Sources */,
+				CEBCE40DED2386E621FE1198 /* A2ResourceScanner.m in Sources */,
+				006F90647E36FA45B54D7B39 /* A2ZipReader.m in Sources */,
+				5DFE00B49A996C511291A505 /* A2ZipWriter.m in Sources */,
+				4486969AD52C845F0A5F88A7 /* A2BatchDownloader.m in Sources */,
+				9F125686BA18A3A79AC3C941 /* A2DownloadEngine.m in Sources */,
+				04806F8C420A200707485301 /* A2DownloadFavorites.m in Sources */,
+				E6679E2C4F527A9777EA6CEC /* A2DownloadManifest.m in Sources */,
+				9B094A240FBA6A3C1821F88C /* A2DownloadTask.m in Sources */,
+				7EA9A208AAFD076980572984 /* A2DownloadTaskCenter.m in Sources */,
+				BFB076DFBEF6F65B6AD45739 /* A2RateLimiter.m in Sources */,
+				C88631DC63FBCAA4DA8514EA /* A2SharedSession.m in Sources */,
+				181BCAA1916DE4DBFD2E08F9 /* A2JREManager.m in Sources */,
+				0FB8591245DA858CF4BAF88B /* A2Logger.m in Sources */,
+				2C4A505B192563D676DFDD2E /* A2Multiplayer.m in Sources */,
+				186C2F9B8B2FA203E76FC125 /* A2GameDirMigration.m in Sources */,
+				B084543A044A1B44B18F5627 /* A2GameFiles.m in Sources */,
+				F06A34B3124B9296AC65A46C /* A2GamePathManager.m in Sources */,
+				6DA086F467887A64948307E1 /* A2VersionIsolation.m in Sources */,
+				8B0D65271C85EAABC46B0226 /* A2Renderer.m in Sources */,
+				01B85F275BBECA53B5E85F73 /* A2RendererImporter.m in Sources */,
+				E1702ED5DBB625CDC1ACD1E2 /* A2RendererLibraryLayout.m in Sources */,
+				25473F84A8300128599A0867 /* A2RendererLoader.m in Sources */,
+				A23C776EFCE2C90AC27775E1 /* A2RendererPlugin.m in Sources */,
+				2005F5B368FB32F5221D4DFB /* A2RendererRegistry.m in Sources */,
+				E25E5360A9384CB39937D6BB /* A2Settings.m in Sources */,
+				5B5898FC1BF46F679FCEAA2A /* A2Task.m in Sources */,
+				331D9070270556B0E7C3D3D5 /* A2TaskContext.m in Sources */,
+				00AE37F819D7506BE9A0044D /* A2TaskFlowExecutor.m in Sources */,
+				A43F2E9CD2F9BE21260C293F /* A2TaskFlowSnapshot.m in Sources */,
+				5F26872D051F24E004470497 /* A2TaskFlowTypes.m in Sources */,
+				03159518FBAB8BFE27715CD7 /* A2TaskPhase.m in Sources */,
+				15FCDF02D9A83B5081869F80 /* A2GameInstaller.m in Sources */,
+				F6B0CF718AF1F4369DC848E8 /* A2GameLaunchCoordinator.m in Sources */,
+				20B189CC369DA2AC61DD52DF /* A2IntegrityChecker.m in Sources */,
+				5F41A03509C9877ED42A2B85 /* A2IntegrityRepairer.m in Sources */,
+				9FEF068C216458DA33AFF63E /* A2MemorySettings.m in Sources */,
+				42E2F81428F01FB2F3F912BC /* A2RemoteVersions.m in Sources */,
+				2BC4E80EA8F83E9426E4BA2E /* A2VersionInfo.m in Sources */,
+				7B9AB26480F0093CF5FC40A9 /* A2VersionManager.m in Sources */,
+				D564819D85268AE02EC0DEC2 /* A2VersionMetadata.m in Sources */,
+				87649E39D86A647E14C884BC /* A2VersionModifier.m in Sources */,
+				60A025E41FE3479CD77EF84B /* A2JITLauncher.m in Sources */,
+				1EAA4088A23E5288FE47CD4B /* AmeLaunchProgress.m in Sources */,
+				33F561A7EA802A8ACA46A4C8 /* GameSurfaceView.m in Sources */,
+				AF347EF95CBD682B91081DB5 /* JavaLauncher.m in Sources */,
+				DC948E735D38C071A0BF693F /* LauncherPreferences.m in Sources */,
+				21D0529E1DCA37C36D4AF376 /* PLPreferences.m in Sources */,
+				B10922116CB4B6E341F1E08C /* PLProfiles.m in Sources */,
+				B17DDB99AE2E0EB4B6DA03A5 /* PLTaskStage.m in Sources */,
+				560326BE071A52289753CB07 /* SurfaceViewController+ExternalDisplay.m in Sources */,
+				8D60447771F0B763C06B2F81 /* SurfaceViewController+LogView.m in Sources */,
+				8C992AF31FA8A22AC3526C37 /* SurfaceViewController.m in Sources */,
+				7FC10269A162141315B017EF /* environ_globals.m in Sources */,
+				FC2EEB144AE1D45D9D71C15C /* main_hook.m in Sources */,
+				32E98F4EECA61E102374FDE3 /* utils.m in Sources */,
+				3F6BB9E75376EE54E35ADC74 /* A2ControlEditorViewController.m in Sources */,
+				407CA5C8D4C73378860CD1E9 /* A2ControlFormat.m in Sources */,
+				E74D03164F273F4A23A7B28C /* A2ControlFormatFCL.m in Sources */,
+				E7810E9125145039155283C9 /* A2ControlFormatZL.m in Sources */,
+				A94573B49E8114C2EAF53088 /* A2ControlInput.m in Sources */,
+				6ACE1ECF42DCF46629227683 /* A2ControlLayerPanel.m in Sources */,
+				F2CB4E7B7F47FF18A957EFB5 /* A2ControlLayout.m in Sources */,
+				FE909770F1329CB8E985AD5F /* A2ControlRenderer.m in Sources */,
+				8647CE17C409C1610986C998 /* A2ControlStyle.m in Sources */,
+				7248BD00DBF94569DDA08C01 /* A2DefaultControls.m in Sources */,
+				481F5E4CA3795C1BD881C300 /* A2HotbarView.m in Sources */,
+				D8CCA0AE17848B8425D74AD8 /* A2JoystickView.m in Sources */,
+				E7E63DB8026B8D4793538ACF /* A2KeyCodeMap.m in Sources */,
+				062C9510C87BE5CE71B8FCA7 /* A2TouchTransport.m in Sources */,
+				FC9219FD2D0892A86120A148 /* A2GameMenuOverlay.m in Sources */,
+				A72D7475032C8A6614F6864D /* A2JVMRunningViewController.m in Sources */,
+				04FA0FC85CCBBA11454EF9AE /* A2LaunchSplashView.m in Sources */,
+				999713CBCD519FC8B0C363BE /* A2ResolutionManager.m in Sources */,
+				F56BA6557B260E7C004C2CE4 /* A2ResolutionSettingsView.m in Sources */,
+				8C279AEDAE884403944CA9B5 /* ControllerInput.m in Sources */,
+				63B99E24B6EFA7080D43B69C /* GyroInput.m in Sources */,
+				8AF2C614A2C3F3AAA6BB9FB7 /* KeyboardInput.m in Sources */,
+				2C4993FFDDB94E65C157CF63 /* TrackedTextField.m in Sources */,
+				E11B0E2509F9D5A48EA9D8E3 /* input_bridge_v3.m in Sources */,
+				DD464082336DE87E5FB314F4 /* ZinkConfig.m in Sources */,
+				2313D67563988A809D80ABBC /* egl_bridge.m in Sources */,
+				F399FA9A45B20F687631E9C8 /* gl4es_family_boot.m in Sources */,
+				CA5FB58293C7CE4B1660D42D /* gl_bridge.m in Sources */,
+				1AF1D478BF3F6C2ACFA1880D /* openal_shim.c in Sources */,
+				D963E662806828468DA83EB7 /* osm_bridge.m in Sources */,
+				256656C1B3B9BB729BD49F20 /* sdl3_hook.m in Sources */,
+				A66C61E1FD25ECFA681BD47E /* shader_cap_probe.m in Sources */,
+				8F5741AD24199C221C070B67 /* shaderc_impl_glue.c in Sources */,
+				BAEC5B5ADD3FC4718918C5AB /* shaderc_include.c in Sources */,
+				F997B7FAC2D0C9449D7B34B9 /* shaderc_sandbox.m in Sources */,
+				5A8889AD35BF50CC8B2291E0 /* spvc_shim.c in Sources */,
+				B9BB52B9AB6950D8832318B5 /* virgl_server.m in Sources */,
+				AFB451E7DE6E2EF951660264 /* vk_bridge.m in Sources */,
+				775874999E7CA10F74D67F52 /* LanPortDetector.m in Sources */,
+				09C2D11C05593159E6AFB14E /* McLanPortDetector.m in Sources */,
+				F557065DCB94B26935C0C6EB /* PLCrashView.m in Sources */,
+				F7943E2D531B0044ECFEA76E /* PLLogOutputView.m in Sources */,
+				ABC7EC799C91BF1A5C50EDE2 /* ScreenUtils.m in Sources */,
+				3F05A2797AFFCA010B7F9D59 /* UIKit+hook.m in Sources */,
+				07FB28CDA0698A31D2A16F24 /* UpdateChecker.m in Sources */,
+				5F6D34E5A9CA09F3E7F4AF19 /* empty.m in Sources */,
+				0C00E5953847471FCD43814F /* xawt_fake.m in Sources */,
+				02C6CDDF3160D8779F0546C7 /* dyld_bypass_validation.m in Sources */,
+				350233B9D218FD8C460EB615 /* dyld_patch_platform.m in Sources */,
+				58B95958C0A7DDB769DF52F4 /* ios_uikit_bridge.m in Sources */,
+				A7661EACDAE7C547662186E6 /* non_darwin_utils.m in Sources */,
+				B50DEE3582EF279C1AE932E9 /* A2BackgroundView.m in Sources */,
+				BAF1CF7998AAC1E178EC66D0 /* A2CardPosition.m in Sources */,
+				D8738DB00BCEFE6D7E404547 /* A2CardTitleBar.m in Sources */,
+				0769485BDAD9E62F52C32A8C /* A2CategoryNavView.m in Sources */,
+				0964A8EE7FBEE0DA072679D2 /* A2ColorWheel.m in Sources */,
+				EC9125D409E5D09498AB2DE4 /* A2Dialog.m in Sources */,
+				14508C4B0A06618691BDCEE5 /* A2DownloadPanel.m in Sources */,
+				2BF445C4575E8B37E4ED01C4 /* A2FilterChip.m in Sources */,
+				CB87022628B4EEDE9D911585 /* A2FilterPanel.m in Sources */,
+				350EFD704AA15484EA10C7B3 /* A2GlassCard.m in Sources */,
+				DEED3AF7EFA50C5F3DB92751 /* A2IndeterminateBar.m in Sources */,
+				C5F3C56FAA94C667A202A766 /* A2InputDialog.m in Sources */,
+				F2FCFBB9F41306188BD49BA1 /* A2InstallProgressDialog.m in Sources */,
+				2C9CD0FA185D54ECBE085D43 /* A2LoaderCard.m in Sources */,
+				C01154913A58826D1288C208 /* A2PaginationBar.m in Sources */,
+				552EA36099808FC6CF1AF68C /* A2PrimaryButton.m in Sources */,
+				8ABD4DA07F7A241239D71053 /* A2ProgressBar.m in Sources */,
+				ED8B276093698A47A8E600CB /* A2QuickActionCard.m in Sources */,
+				EE11839B7BF8F6987F6F88A7 /* A2RemoteImageView.m in Sources */,
+				D6D331A29BC51444971D8E7B /* A2ResourceBadge.m in Sources */,
+				63F938DF3A60909E3702BC97 /* A2ResourceCard.m in Sources */,
+				54F109AC2BE3E147AEEE07FF /* A2RingProgress.m in Sources */,
+				11A6C38842401D6C12DD4597 /* A2SegmentedControl.m in Sources */,
+				41CF931E6887AD8AF73E145F /* A2SettingsRow.m in Sources */,
+				2AF28D616C17109E5DDEB2E6 /* A2SettingsSection.m in Sources */,
+				7E84349CB65DC97070E0BD74 /* A2SkinHeadView.m in Sources */,
+				7CA4100025A1D308742A0665 /* A2Slider.m in Sources */,
+				A4CACC82C3345A217BD692ED /* A2Switch.m in Sources */,
+				5B82BB5F439B75DE2AE64C6A /* A2TaskDrawer.m in Sources */,
+				7F8920718F6CBE61B4ED89D1 /* A2TaskLogCard.m in Sources */,
+				AC8960E2417781EC601BFB8F /* A2TaskLogOutput.m in Sources */,
+				464FCB1D2C9D4FA080A24820 /* A2TaskProgressView.m in Sources */,
+				FD82F8F78F3C230BEBAE1F4B /* A2TextField.m in Sources */,
+				5A0A0E6AE2BBFCAD8A947CA9 /* A2Toast.m in Sources */,
+				46BEB683A03C405C1E74C0B2 /* A2VersionCard.m in Sources */,
+				5440FDEA95986768641FF753 /* A2BaseViewController.m in Sources */,
+				DB69EBBFE2FB627A405DED59 /* A2LicenseViewController.m in Sources */,
+				4C2284D92DC7DE09B59CDBCF /* A2LogViewController.m in Sources */,
+				8A4F4B97FC42F663BCC0D4CE /* A2AccountLeftPanel.m in Sources */,
+				912C3DEC9D63AE689DA1F2DE /* A2AccountRowView.m in Sources */,
+				AF159D80E8438CEAF918024B /* A2AccountViewController.m in Sources */,
+				FB68423E2789A6F0A08E6E54 /* A2LoginViewController.m in Sources */,
+				D01CFE8588165E1AE9ED7AD1 /* A2DownloadTargetPicker.m in Sources */,
+				F2AE6F53868183175D2DEFAD /* A2DownloadTasksViewController.m in Sources */,
+				AE74BC4F89AE00AE11E2A32F /* A2DownloadViewController.m in Sources */,
+				EBFE6778C18900FDF0942172 /* A2FavoritesViewController.m in Sources */,
+				B9AF292E811122649CF9FEE6 /* A2GameInstallOptionsViewController.m in Sources */,
+				6C998AE9614B2353B8C03DC2 /* A2GameVersionListViewController.m in Sources */,
+				7344000874E6AFAA9489A939 /* A2InstallingViewController.m in Sources */,
+				36BD9E3D29A1204C4DE1649E /* A2ModPackImportViewController.m in Sources */,
+				0C5E9A5111CB1B65E9B79ED9 /* A2ResourceDetailViewController.m in Sources */,
+				07F456A55641318A92B41F45 /* A2ResourceResultCell.m in Sources */,
+				D49F4495BA8F3A147387277B /* A2ResourceSearchViewController.m in Sources */,
+				4037C5EBDB3F5A02EBD25E87 /* A2SearchByIdViewController.m in Sources */,
+				7300D5E59DE772A9BD66181A /* A2FilesViewController.m in Sources */,
+				F6C91785AE1F856D4C3E08BB /* A2LauncherViewController.m in Sources */,
+				7957584D40DDAA933CD18846 /* A2MultiplayerViewController.m in Sources */,
+				9F8EE7E69BC7F3C10586FA6A /* A2AboutSettings.m in Sources */,
+				8DF920441794A778BEFD9DD0 /* A2AppearanceSettings.m in Sources */,
+				28E0E9F04A06993B01FFC1D8 /* A2BackgroundSettingsViewController.m in Sources */,
+				231BA8D647ED52A70C2A644B /* A2ColorThemeDialog.m in Sources */,
+				1E7FB60017717A3BE32B9A3C /* A2DiagnosticsSettings.m in Sources */,
+				C7E256C9402B91A5772FB589 /* A2GameSettings.m in Sources */,
+				DCDEBCE58A13533B8A5DBDBB /* A2JREManageViewController.m in Sources */,
+				4F0C55C53DF109102154C739 /* A2RendererPluginViewController.m in Sources */,
+				95B9DE285BF6EB5B2C8CC100 /* A2RendererSettingsViewController.m in Sources */,
+				1D90A978EC5FA35453B44415 /* A2SettingsViewController.m in Sources */,
+				F3A3A971AE05998E6D648440 /* A2ModListViewController.m in Sources */,
+				9AD821240E44F6B772B2DC0D /* A2VersionExportViewController.m in Sources */,
+				5C3C3472B73A413C081E753F /* A2VersionListViewController.m in Sources */,
+				7635F6BA870CB67CA1FBFDF4 /* A2VersionRowView.m in Sources */,
+				D33BBA190C82A6A3205F3A9E /* A2VersionSettingsViewController.m in Sources */,
+				AE9C6658254A1DE3418C1353 /* A2VersionTabBar.m in Sources */,
+				27702DAD22876D499AD213EF /* A2ColorScheme.m in Sources */,
+				141BC76960489907EC08BDBA /* A2ColorTheme+Seed.m in Sources */,
+				86D43CE5B95D29876BF7D34D /* A2ColorTheme.m in Sources */,
+				1C9990B0808AD8111308F4AB /* A2Icon.m in Sources */,
+				01294C3B04FD73AA638FC63E /* A2Metrics.m in Sources */,
+				4BE5F7816DB3CEF6CBE3809A /* A2PaletteStyle.m in Sources */,
+				7B7A47F5F8AA510170F1A159 /* A2ThemeManager.m in Sources */,
+				0771576A647FFB4348CEC538 /* A2Typography.m in Sources */,
+				C754280DF19913731620CE6A /* A2Log.m in Sources */,
+				6B1CD1AC96CD93B7EE0847A4 /* A2MurmurHash2.m in Sources */,
+				173CB61901164D888C0739BA /* A2Strings.m in Sources */,
+				3BB6EB4576E1F9DF15247919 /* mach_excServer.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		282F8BED7AC8E61EF9F4311F /* Build configuration list for PBXProject "Air2" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = "NO";
+				CLANG_ANALYZER_NONNULL = "YES";
+				CLANG_ENABLE_MODULES = "YES";
+				CLANG_ENABLE_OBJC_ARC = "YES";
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = "YES";
+				CLANG_WARN_BOOL_CONVERSION = "YES";
+				CLANG_WARN_DOCUMENTATION_COMMENTS = "YES";
+				CLANG_WARN_EMPTY_BODY = "YES";
+				CLANG_WARN_ENUM_CONVERSION = "YES";
+				CLANG_WARN_INT_CONVERSION = "YES";
+				CLANG_WARN_UNREACHABLE_CODE = "YES";
+				COPY_PHASE_STRIP = "NO";
+				DEBUG_INFORMATION_FORMAT = "dwarf";
+				ENABLE_STRICT_OBJC_MSGSEND = "YES";
+				ENABLE_TESTABILITY = "YES";
+				GCC_C_LANGUAGE_STANDARD = "gnu17";
+				GCC_DYNAMIC_NO_PIC = "NO";
+				GCC_NO_COMMON_BLOCKS = "YES";
+				GCC_OPTIMIZATION_LEVEL = "0";
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_UNDECLARED_SELECTOR = "YES";
+				GCC_WARN_UNINITIALIZED_AUTOS = "YES";
+				GCC_WARN_UNUSED_FUNCTION = "YES";
+				GCC_WARN_UNUSED_VARIABLE = "YES";
+				IPHONEOS_DEPLOYMENT_TARGET = "14.0";
+				MTL_ENABLE_DEBUG_INFO = "INCLUDE_SOURCE";
+				ONLY_ACTIVE_ARCH = "YES";
+				SDKROOT = "iphoneos";
+			};
+			name = Debug;
+		};
+		BAA844323E141A79DF10B0D7 /* Build configuration list for PBXProject "Air2" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = "NO";
+				CLANG_ANALYZER_NONNULL = "YES";
+				CLANG_ENABLE_MODULES = "YES";
+				CLANG_ENABLE_OBJC_ARC = "YES";
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = "YES";
+				CLANG_WARN_BOOL_CONVERSION = "YES";
+				CLANG_WARN_DOCUMENTATION_COMMENTS = "YES";
+				CLANG_WARN_EMPTY_BODY = "YES";
+				CLANG_WARN_ENUM_CONVERSION = "YES";
+				CLANG_WARN_INT_CONVERSION = "YES";
+				CLANG_WARN_UNREACHABLE_CODE = "YES";
+				COPY_PHASE_STRIP = "NO";
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = "NO";
+				ENABLE_STRICT_OBJC_MSGSEND = "YES";
+				GCC_C_LANGUAGE_STANDARD = "gnu17";
+				GCC_NO_COMMON_BLOCKS = "YES";
+				GCC_WARN_UNDECLARED_SELECTOR = "YES";
+				GCC_WARN_UNINITIALIZED_AUTOS = "YES";
+				GCC_WARN_UNUSED_FUNCTION = "YES";
+				GCC_WARN_UNUSED_VARIABLE = "YES";
+				IPHONEOS_DEPLOYMENT_TARGET = "14.0";
+				MTL_ENABLE_DEBUG_INFO = "NO";
+				SDKROOT = "iphoneos";
+				VALIDATE_PRODUCT = "YES";
+			};
+			name = Release;
+		};
+		2381CE2D4AF8729870E1984E /* Build configuration list for PBXNativeTarget "Air2" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = "Automatic";
+				CURRENT_PROJECT_VERSION = "1";
+				GCC_SYMBOLS_PRIVATE_EXTERN = "NO";
+				GENERATE_INFOPLIST_FILE = "NO";
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/ThirdParty/NG-GL4ES/include",
+					"$(SRCROOT)/Libraries/external/SimpleFPEWrapper/include",
+					"$(SRCROOT)",
+					"$(SRCROOT)/Libraries/external/mesa",
+					"$(SRCROOT)/Libraries",
+					"$(SRCROOT)/Air2/Player/Context",
+					"$(SRCROOT)/Air2/Player/Input",
+					"$(SRCROOT)/Air2/Player/Renderer",
+					"$(SRCROOT)/Libraries/external/MobileGlues/src/main/cpp/include",
+				);
+				INFOPLIST_FILE = "Air2/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = "0.1.0";
+				OTHER_LDFLAGS = (
+					"-Wl,-U,_terracotta_ios_start",
+					"-Wl,-U,_terracotta_ios_get_state",
+					"-Wl,-U,_terracotta_ios_set_waiting",
+					"-Wl,-U,_terracotta_ios_set_scanning",
+					"-Wl,-U,_terracotta_ios_start_host_with_port",
+					"-Wl,-U,_terracotta_ios_set_guesting",
+					"-Wl,-U,_terracotta_ios_verify_room_code",
+					"-Wl,-U,_terracotta_ios_get_metadata",
+					"-Wl,-U,_terracotta_ios_free_string",
+					"$(SRCROOT)/Libraries/Frameworks/libglslang.dylib",
+					"-Wl,-exported_symbols_list,$(SRCROOT)/scripts/pojav_exports.txt",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.airdevs.air2";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = "YES";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		AB7D16C820D649D1E1709822 /* Build configuration list for PBXNativeTarget "Air2" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = "Automatic";
+				CURRENT_PROJECT_VERSION = "1";
+				GCC_SYMBOLS_PRIVATE_EXTERN = "NO";
+				GENERATE_INFOPLIST_FILE = "NO";
+				HEADER_SEARCH_PATHS = (
+					"$(inherited)",
+					"$(SRCROOT)/ThirdParty/NG-GL4ES/include",
+					"$(SRCROOT)/Libraries/external/SimpleFPEWrapper/include",
+					"$(SRCROOT)",
+					"$(SRCROOT)/Libraries/external/mesa",
+					"$(SRCROOT)/Libraries",
+					"$(SRCROOT)/Air2/Player/Context",
+					"$(SRCROOT)/Air2/Player/Input",
+					"$(SRCROOT)/Air2/Player/Renderer",
+					"$(SRCROOT)/Libraries/external/MobileGlues/src/main/cpp/include",
+				);
+				INFOPLIST_FILE = "Air2/Info.plist";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = "0.1.0";
+				OTHER_LDFLAGS = (
+					"-Wl,-U,_terracotta_ios_start",
+					"-Wl,-U,_terracotta_ios_get_state",
+					"-Wl,-U,_terracotta_ios_set_waiting",
+					"-Wl,-U,_terracotta_ios_set_scanning",
+					"-Wl,-U,_terracotta_ios_start_host_with_port",
+					"-Wl,-U,_terracotta_ios_set_guesting",
+					"-Wl,-U,_terracotta_ios_verify_room_code",
+					"-Wl,-U,_terracotta_ios_get_metadata",
+					"-Wl,-U,_terracotta_ios_free_string",
+					"$(SRCROOT)/Libraries/Frameworks/libglslang.dylib",
+					"-Wl,-exported_symbols_list,$(SRCROOT)/scripts/pojav_exports.txt",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = "dev.airdevs.air2";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = "YES";
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		F086F31674BEA44957E3CCA5 /* Build configuration list for PBXProject "Air2" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				282F8BED7AC8E61EF9F4311F /* Debug */,
+				BAA844323E141A79DF10B0D7 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+
+		09185177824D0012F345AF29 /* Build configuration list for PBXNativeTarget "Air2" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2381CE2D4AF8729870E1984E /* Debug */,
+				AB7D16C820D649D1E1709822 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+
+	};
+	rootObject = 807E8FCA71E1D108200A94CC /* Project object */;
+}
