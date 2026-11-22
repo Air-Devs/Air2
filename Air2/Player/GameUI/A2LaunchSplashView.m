@@ -29,6 +29,14 @@
 #import "A2ThemeManager.h"
 #import "A2Metrics.h"
 
+@interface A2LaunchTaskItem ()
+@property (nonatomic, copy, readwrite) NSString *symbolName;
+@property (nonatomic, copy, readwrite) NSString *title;
+@end
+
+@implementation A2LaunchTaskItem
+@end
+
 @interface A2LaunchSplashView ()
 @property (nonatomic, strong) UIVisualEffectView *blurView;
 @property (nonatomic, strong) UIImageView *iconView;
@@ -40,15 +48,12 @@
 @property (nonatomic, strong) NSTimer *timer;
 @property (nonatomic, strong) NSDate *startTime;
 @property (nonatomic, assign, readwrite) A2LaunchStage stage;
-@property (nonatomic, assign, readwrite) double progress;
-
-/// 进度条轨道（圆角底）
-@property (nonatomic, strong) UIView *progressTrack;
-/// 进度条填充（用宽度约束驱动，避免 frame 动画在旋转时错位）
-@property (nonatomic, strong) UIView *progressFill;
-@property (nonatomic, strong) NSLayoutConstraint *progressBarWidth;
-/// 百分比文字
-@property (nonatomic, strong) UILabel *percentLabel;
+/// 任务清单数据源
+@property (nonatomic, copy, nullable) NSArray<A2LaunchTaskItem *> *tasks;
+/// 任务清单容器（纵向 stack）
+@property (nonatomic, strong) UIStackView *taskStack;
+/// 每一行对应的视图，按索引对齐 tasks
+@property (nonatomic, strong) NSMutableArray<UIView *> *taskRows;
 @end
 
 @implementation A2LaunchSplashView
@@ -108,44 +113,16 @@
     _logView.layer.cornerCurve = kCACornerCurveContinuous;
     _logView.hidden = YES;
 
-    // ---- 进度条 ----
-    //
-    // 对照 FCL / ZL2 的启动页：一条横向进度条 + 右侧百分比，
-    // 覆盖「点启动 → JVM 起来 → MC 加载 → 首帧出现」整段过程。
-    // Air2 原来只有转圈 + 阶段文字，用户看不到还要等多久。
-    _progressTrack = [[UIView alloc] initWithFrame:CGRectZero];
-    _progressTrack.translatesAutoresizingMaskIntoConstraints = NO;
-    _progressTrack.layer.cornerRadius = 3;
-    _progressTrack.layer.cornerCurve = kCACornerCurveContinuous;
-    _progressTrack.clipsToBounds = YES;
-
-    _progressFill = [[UIView alloc] initWithFrame:CGRectZero];
-    _progressFill.translatesAutoresizingMaskIntoConstraints = NO;
-    _progressFill.layer.cornerRadius = 3;
-    _progressFill.layer.cornerCurve = kCACornerCurveContinuous;
-    [_progressTrack addSubview:_progressFill];
-
-    _progressBarWidth = [_progressFill.widthAnchor constraintEqualToConstant:0];
-
-    _percentLabel = [[UILabel alloc] initWithFrame:CGRectZero];
-    _percentLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _percentLabel.font = [UIFont monospacedDigitSystemFontOfSize:12 weight:UIFontWeightMedium];
-    _percentLabel.textAlignment = NSTextAlignmentRight;
-    _percentLabel.text = @"0%";
-    [_percentLabel setContentHuggingPriority:UILayoutPriorityRequired
-                             forAxis:UILayoutConstraintAxisHorizontal];
-    [_percentLabel setContentCompressionResistancePriority:UILayoutPriorityRequired
-                                           forAxis:UILayoutConstraintAxisHorizontal];
-
-    UIStackView *progressRow = [[UIStackView alloc] initWithArrangedSubviews:
-                                @[_progressTrack, _percentLabel]];
-    progressRow.translatesAutoresizingMaskIntoConstraints = NO;
-    progressRow.axis = UILayoutConstraintAxisHorizontal;
-    progressRow.alignment = UIStackViewAlignmentCenter;
-    progressRow.spacing = A2SpaceS;
+    // ---- 启动任务清单（对照 ZL2 buildLaunchPhases）----
+    _taskStack = [[UIStackView alloc] initWithFrame:CGRectZero];
+    _taskStack.translatesAutoresizingMaskIntoConstraints = NO;
+    _taskStack.axis = UILayoutConstraintAxisVertical;
+    _taskStack.alignment = UIStackViewAlignmentLeading;
+    _taskStack.spacing = 10;
+    _taskStack.hidden = YES;
 
     UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:
-                          @[_iconView, _titleLabel, _stageLabel, progressRow]];
+                          @[_iconView, _titleLabel, _stageLabel, _taskStack]];
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     stack.axis = UILayoutConstraintAxisVertical;
     stack.alignment = UIStackViewAlignmentCenter;
@@ -172,16 +149,6 @@
         [stack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor constant:-20],
         [stack.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.leadingAnchor constant:40],
         [stack.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor constant:-40],
-
-        // 进度条：轨道撑满 stack 宽度，高 6；min 宽 220 让它在窄屏也可读
-        [_progressTrack.heightAnchor constraintEqualToConstant:6],
-        [_progressTrack.widthAnchor constraintGreaterThanOrEqualToConstant:220],
-        [progressRow.widthAnchor constraintEqualToAnchor:stack.widthAnchor],
-
-        [_progressFill.topAnchor constraintEqualToAnchor:_progressTrack.topAnchor],
-        [_progressFill.bottomAnchor constraintEqualToAnchor:_progressTrack.bottomAnchor],
-        [_progressFill.leadingAnchor constraintEqualToAnchor:_progressTrack.leadingAnchor],
-        _progressBarWidth,
 
         [statusRow.topAnchor constraintEqualToAnchor:stack.bottomAnchor constant:A2SpaceL],
         [statusRow.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
@@ -211,97 +178,205 @@
 
 #pragma mark - 阶段
 
-/// 阶段 -> 进度区间的起点。
-///
-/// 权重不是平均分的，按真实耗时估算：
-///   · 检查/补下载：文件多但大多命中缓存，给 0~28
-///   · JVM 启动 + 类加载：MC 首次加载类是大头，30~72
-///   · 渲染器初始化：ANGLE/MobileGlues 起来比较慢，72~92
-///   · 等窗口 + 首帧：最后一段，92~100
-/// 这样进度条不会在「等首帧」那段卡在 50% 不动，也不会前段跑太快后段爬。
-+ (double)startProgressForStage:(A2LaunchStage)stage {
-    switch (stage) {
-        case A2LaunchStagePreparing:      return 0.00;
-        case A2LaunchStageRepairing:      return 0.06;
-        case A2LaunchStageStartingJVM:    return 0.28;
-        case A2LaunchStageLoadingClasses: return 0.42;
-        case A2LaunchStageInitializingGL: return 0.72;
-        case A2LaunchStageWaitingWindow:  return 0.92;
-        case A2LaunchStageFinished:       return 1.00;
-        case A2LaunchStageFailed:         return -1;    // 不推进
-    }
-    return 0;
+// ------------------------------------------------------------------
+//  启动任务清单
+// ------------------------------------------------------------------
+
++ (instancetype)itemWithSymbol:(NSString *)symbol title:(NSString *)title {
+    A2LaunchTaskItem *it = [A2LaunchTaskItem new];
+    it->_symbolName = [symbol copy] ?: @"circle";
+    it->_title = [title copy] ?: @"";
+    it->_state = A2LaunchTaskStatePending;
+    return it;
 }
 
+- (void)setTasks:(NSArray<A2LaunchTaskItem *> *)tasks {
+    _tasks = [tasks copy];
+    _taskRows = [NSMutableArray array];
+
+    // 清空旧行
+    for (UIView *v in _taskStack.arrangedSubviews) {
+        [_taskStack removeArrangedSubview:v];
+        [v removeFromSuperview];
+    }
+
+    if (tasks.count == 0) {
+        _taskStack.hidden = YES;
+        [self setNeedsLayout];
+        return;
+    }
+
+    for (NSUInteger i = 0; i < tasks.count; i++) {
+        UIView *row = [self buildRowForTask:tasks[i]];
+        [_taskStack addArrangedSubview:row];
+        [_taskRows addObject:row];
+    }
+    _taskStack.hidden = NO;
+    [self refreshAllRows];
+    [self setNeedsLayout];
+}
+
+- (UIView *)buildRowForTask:(A2LaunchTaskItem *)task {
+    UIView *row = [[UIView alloc] initWithFrame:CGRectZero];
+    row.translatesAutoresizingMaskIntoConstraints = NO;
+
+    UIImageView *icon = [[UIImageView alloc] initWithFrame:CGRectZero];
+    icon.translatesAutoresizingMaskIntoConstraints = NO;
+    icon.contentMode = UIViewContentModeScaleAspectFit;
+    icon.tag = 1001;
+
+    UILabel *title = [UILabel new];
+    title.translatesAutoresizingMaskIntoConstraints = NO;
+    title.font = [UIFont systemFontOfSize:14 weight:UIFontWeightRegular];
+    title.text = task.title ?: @"";
+    title.tag = 1002;
+
+    UILabel *detail = [UILabel new];
+    detail.translatesAutoresizingMaskIntoConstraints = NO;
+    detail.font = [UIFont systemFontOfSize:11 weight:UIFontWeightRegular];
+    detail.numberOfLines = 1;
+    detail.textColor = [UIColor secondaryLabelColor];
+    detail.tag = 1003;
+
+    UIActivityIndicatorView *spin =
+        [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleMedium];
+    spin.translatesAutoresizingMaskIntoConstraints = NO;
+    spin.hidesWhenStopped = YES;
+    spin.tag = 1004;
+
+    [row addSubview:icon];
+    [row addSubview:title];
+    [row addSubview:detail];
+    [row addSubview:spin];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [row.heightAnchor constraintGreaterThanOrEqualToConstant:22],
+
+        [icon.leadingAnchor constraintEqualToAnchor:row.leadingAnchor],
+        [icon.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+        [icon.widthAnchor constraintEqualToConstant:18],
+        [icon.heightAnchor constraintEqualToConstant:18],
+
+        [title.leadingAnchor constraintEqualToAnchor:icon.trailingAnchor constant:8],
+        [title.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+
+        [detail.leadingAnchor constraintEqualToAnchor:title.trailingAnchor constant:8],
+        [detail.trailingAnchor constraintLessThanOrEqualToAnchor:spin.leadingAnchor constant:-6],
+        [detail.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+
+        [spin.trailingAnchor constraintEqualToAnchor:row.trailingAnchor],
+        [spin.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
+        [spin.widthAnchor constraintEqualToConstant:16],
+        [spin.heightAnchor constraintEqualToConstant:16],
+
+        [title.trailingAnchor constraintLessThanOrEqualToAnchor:spin.leadingAnchor constant:-6],
+    ]];
+    return row;
+}
+
+- (void)refreshAllRows {
+    for (NSUInteger i = 0; i < _tasks.count && i < _taskRows.count; i++) {
+        [self renderRow:_taskRows[i] withTask:_tasks[i]];
+    }
+}
+
+- (void)renderRow:(UIView *)row withTask:(A2LaunchTaskItem *)task {
+    UIImageView *icon = (UIImageView *)[row viewWithTag:1001];
+    UILabel *title = (UILabel *)[row viewWithTag:1002];
+    UILabel *detail = (UILabel *)[row viewWithTag:1003];
+    UIActivityIndicatorView *spin = (UIActivityIndicatorView *)[row viewWithTag:1004];
+
+    A2ColorScheme *t = A2ThemeManager.shared.scheme;
+    NSString *symbol = task.symbolName;
+    UIColor *tint = t.cOnSurfaceVariant;
+
+    switch (task.state) {
+        case A2LaunchTaskStatePending:
+            tint = [t.cOnSurfaceVariant colorWithAlphaComponent:0.45];
+            symbol = @"circle";
+            break;
+        case A2LaunchTaskStateRunning:
+            tint = t.cPrimary;
+            symbol = task.symbolName;
+            break;
+        case A2LaunchTaskStateDone:
+            tint = [UIColor systemGreenColor];
+            symbol = @"checkmark.circle.fill";
+            break;
+        case A2LaunchTaskStateFailed:
+            tint = [UIColor systemRedColor];
+            symbol = @"xmark.circle.fill";
+            break;
+        case A2LaunchTaskStateSkipped:
+            tint = [t.cOnSurfaceVariant colorWithAlphaComponent:0.55];
+            symbol = @"minus.circle";
+            break;
+    }
+
+    icon.image = [UIImage systemImageNamed:symbol
+                         withConfiguration:[UIImageSymbolConfiguration configurationWithPointSize:15
+                                                                                         weight:UIImageSymbolWeightMedium]];
+    icon.tintColor = tint;
+    title.textColor = (task.state == A2LaunchTaskStatePending) ? [t.cOnSurfaceVariant colorWithAlphaComponent:0.6] : t.cOnSurface;
+
+    BOOL running = (task.state == A2LaunchTaskStateRunning);
+    if (running) [spin startAnimating]; else [spin stopAnimating];
+    spin.color = t.cPrimary;
+    icon.hidden = running;      // 进行中用工转圈代替图标
+
+    detail.text = task.detail;
+    detail.hidden = (task.detail.length == 0);
+
+    row.alpha = (task.state == A2LaunchTaskStatePending) ? 0.75 : 1.0;
+}
+
+- (void)setTaskState:(A2LaunchTaskState)state atIndex:(NSInteger)index detail:(NSString *)detail {
+    if (index < 0 || (NSUInteger)index >= _tasks.count) return;
+    A2LaunchTaskItem *task = _tasks[index];
+    task.state = state;
+    if (detail) task.detail = detail;
+    if ((NSUInteger)index < _taskRows.count) {
+        [UIView transitionWithView:_taskRows[index] duration:0.18
+                           options:UIViewAnimationOptionTransitionCrossDissolve
+                        animations:^{ [self renderRow:self->_taskRows[index] withTask:task]; }
+                        completion:nil];
+    }
+}
+
+/// 兼容旧调用：把语言级阶段映射到清单里「进行中」的那一项。
 - (void)setStage:(A2LaunchStage)stage message:(NSString *)message {
     _stage = stage;
     NSString *text = message.length ? message : [self defaultTextForStage:stage];
 
-    // 交叉淡入，避免文字硬切
     [UIView transitionWithView:_stageLabel
                       duration:0.22
                        options:UIViewAnimationOptionTransitionCrossDissolve
-                    animations:^{
-        self->_stageLabel.text = text;
-    } completion:nil];
+                    animations:^{ self->_stageLabel.text = text; }
+                    completion:nil];
 
-    double start = [[self class] startProgressForStage:stage];
-    if (start >= 0) {
-        [self setProgress:start message:nil];
+    // ------------------------------------------------------------------
+    //  「启动前检查」与「MC 启动中」是两个不同阶段，不复用同一套 UI
+    //
+    //  启动前检查（ZL2 buildLaunchPhases）：账号 / 环境 / 完整性 / 准备启动
+    //      —— 在启动器进程里跑，用上面的任务清单表达。
+    //  MC 启动中（JVM 起来 → 首帧）：JVM 初始化 → 类加载 → 渲染器初始化
+    //      → 等窗口 → 首帧
+    //      —— 已经在游戏进程里，清单没有意义，改为单行阶段文字 + 转圈。
+    //
+    //  所以一旦跨进 StartingJVM，就把清单收起来，避免两段混在一起。
+    // ------------------------------------------------------------------
+    if (stage >= A2LaunchStageStartingJVM && stage != A2LaunchStageFailed) {
+        _taskStack.hidden = YES;
     }
 
-    if (stage == A2LaunchStageFinished) {
-        // 首帧已经出来了，把进度条走满再淡出，别停在 99%
-        [self setProgress:1.0 message:nil];
+    if (stage == A2LaunchStageFailed || stage == A2LaunchStageFinished) {
+        for (A2LaunchTaskItem *task in _tasks) {
+            if (task.state == A2LaunchTaskStateRunning) {
+                task.state = (stage == A2LaunchStageFailed) ? A2LaunchTaskStateFailed : A2LaunchTaskStateDone;
+            }
+        }
+        [self refreshAllRows];
     }
-}
-
-- (void)setProgress:(double)progress message:(NSString *)message {
-    if (!isfinite(progress)) return;
-    double clamped = MAX(0.0, MIN(1.0, progress));
-    // 只进不退：阶段切换和字节回调可能乱序，回退会让进度条来回抖
-    if (clamped <= _progress) {
-        if (message.length) [self updateStageText:message];
-        return;
-    }
-    _progress = clamped;
-    [self applyProgress:clamped animated:YES];
-    if (message.length) [self updateStageText:message];
-}
-
-- (void)updateStageText:(NSString *)text {
-    if (!text.length) return;
-    [UIView transitionWithView:_stageLabel
-                      duration:0.18
-                       options:UIViewAnimationOptionTransitionCrossDissolve
-                    animations:^{
-        self->_stageLabel.text = text;
-    } completion:nil];
-}
-
-- (void)applyProgress:(double)progress animated:(BOOL)animated {
-    if (!_progressTrack || !_progressBarWidth) return;
-    [_progressTrack layoutIfNeeded];
-    CGFloat total = _progressTrack.bounds.size.width;
-    CGFloat w = MAX(0.0, total * progress);
-
-    void (^changes)(void) = ^{
-        self->_progressBarWidth.constant = w;
-        [self->_progressTrack layoutIfNeeded];
-    };
-    if (animated) {
-        [UIView animateWithDuration:0.35
-                              delay:0
-                            options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState
-                         animations:changes
-                         completion:nil];
-    } else {
-        changes();
-    }
-    // 百分比文字
-    _percentLabel.text = progress >= 1.0
-        ? @"100%"
-        : [NSString stringWithFormat:@"%d%%", (int)floor(progress * 100)];
 }
 
 - (NSString *)defaultTextForStage:(A2LaunchStage)stage {
@@ -437,11 +512,9 @@
     _logView.backgroundColor = [t.cSurfaceContainer colorWithAlphaComponent:0.7];
     _logView.textColor = t.cOnSurfaceVariant;
 
-    // 进度条配色：轨道用表面容器的低透明版本，填充用主色（和 spinner 一致）
-    _progressTrack.backgroundColor = [t.cSurfaceContainer
-        colorWithAlphaComponent:0.55];
-    _progressFill.backgroundColor = t.cPrimary;
-    _percentLabel.textColor = t.cOnSurfaceVariant;
+    // 任务清单一行的配色由 renderRow:withTask: 逐行处理（状态色），
+    // 这里只需要把已有行重刷一遍，保证换主题后颜色跟着变。
+    [self refreshAllRows];
 }
 
 @end
