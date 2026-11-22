@@ -59,6 +59,10 @@ typedef NS_ENUM(NSInteger, A2GamepadRegion) {
 
 /// 当前按住的区域（只读，调试/预览用）
 @property (nonatomic, assign, readonly) A2GamepadRegion activeRegion;
+/// 编辑模式（由 A2ControlRenderer 在布局编辑时置 YES）。
+/// 编辑态下控件不派发游戏输入，只响应拖拽/缩放。
+@property (nonatomic, assign) BOOL editing;
+
 
 - (instancetype)initWithWidget:(A2ControlWidget *)widget;
 - (void)applyTheme;

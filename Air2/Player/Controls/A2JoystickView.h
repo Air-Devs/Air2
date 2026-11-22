@@ -74,6 +74,10 @@ typedef NS_ENUM(NSInteger, A2JoystickDirection) {
 @property (nonatomic, readonly) A2JoystickDirection direction;
 /// 当前归一化幅度（0~1，已扣掉死区）
 @property (nonatomic, readonly) CGFloat magnitude;
+/// 编辑模式（由 A2ControlRenderer 在布局编辑时置 YES）。
+/// 编辑态下控件不派发游戏输入，只响应拖拽/缩放。
+@property (nonatomic, assign) BOOL editing;
+
 
 - (instancetype)initWithWidget:(A2ControlWidget *)widget;
 - (void)applyTheme;

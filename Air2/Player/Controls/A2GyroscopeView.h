@@ -74,6 +74,10 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// 采样器（可外部注入以共享，不注入时自建）
 @property (nonatomic, strong, nullable) A2GyroscopeReader *reader;
+/// 编辑模式（由 A2ControlRenderer 在布局编辑时置 YES）。
+/// 编辑态下控件不派发游戏输入，只响应拖拽/缩放。
+@property (nonatomic, assign) BOOL editing;
+
 
 - (instancetype)initWithWidget:(A2ControlWidget *)widget;
 - (void)applyTheme;

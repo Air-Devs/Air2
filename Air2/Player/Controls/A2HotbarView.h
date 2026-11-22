@@ -38,6 +38,10 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign, readonly) NSInteger selectedSlot;
 /// 选中回调（编辑器预览用，可以为 nil）
 @property (nonatomic, copy, nullable) void (^onSlotSelected)(NSInteger slot);
+/// 编辑模式（由 A2ControlRenderer 在布局编辑时置 YES）。
+/// 编辑态下控件不派发游戏输入，只响应拖拽/缩放。
+@property (nonatomic, assign) BOOL editing;
+
 
 - (instancetype)initWithWidget:(A2ControlWidget *)widget;
 - (void)applyTheme;
