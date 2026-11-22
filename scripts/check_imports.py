@@ -193,21 +193,31 @@ def check_property_readonly():
             h_src = strip_comments(open(h_path).read())
             m_src = strip_comments(open(m_path).read())
 
-            # 头文件里的属性 → 是否 readonly
+            # 头文件里的属性 → (类名, 属性名) 是否 readonly
+            #
+            # 必须按类分开存：同一个 .h 里不同类有同名属性是合法的，例如
+            #   @interface A2LaunchStep      ... @property (readonly) title;
+            #   @interface A2LaunchProgress  ... @property title;
+            # 早期版本只按属性名做 key，后者会把前者覆盖掉，于是误报
+            # "头文件可写 + 扩展可写 = 重复声明"。
             header_props = {}
-            for pm in re.finditer(
-                    r'@property\s*\(([^)]*)\)[^;]*?\b(\w+)\s*;', h_src):
-                header_props[pm.group(2)] = 'readonly' in pm.group(1)
+            for im in re.finditer(
+                    r'@interface\s+(\w+)\s*(?::\s*\w+)?\s*(.*?)@end',
+                    h_src, re.S):
+                cls, body = im.group(1), im.group(2)
+                for pm in re.finditer(
+                        r'@property\s*\(([^)]*)\)[^;]*?\b(\w+)\s*;', body):
+                    header_props[(cls, pm.group(2))] = 'readonly' in pm.group(1)
 
-            # .m 的类扩展里的属性
-            for em in re.finditer(r'@interface\s+\w+\s*\(\)(.*?)@end', m_src, re.S):
-                ext = em.group(1)
+            # .m 的类扩展里的属性（扩展属于哪个类，就从哪个类的头文件声明里取）
+            for em in re.finditer(r'@interface\s+(\w+)\s*\(\)(.*?)@end', m_src, re.S):
+                cls, ext = em.group(1), em.group(2)
                 for pm in re.finditer(
                         r'@property\s*\(([^)]*)\)[^;]*?\b(\w+)\s*;', ext):
                     attrs, name = pm.group(1), pm.group(2)
-                    if name not in header_props:
+                    if (cls, name) not in header_props:
                         continue
-                    header_readonly = header_props[name]
+                    header_readonly = header_props[(cls, name)]
                     ext_readonly = 'readonly' in attrs
 
                     # 头文件可写 + 扩展也存在 = 重复声明
