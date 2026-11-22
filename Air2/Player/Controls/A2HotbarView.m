@@ -10,6 +10,7 @@
 //
 
 #import "A2HotbarView.h"
+#import "A2ControlLayout.h"
 #import "A2ThemeManager.h"
 
 @interface A2HotbarView ()

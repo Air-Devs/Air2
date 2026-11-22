@@ -80,6 +80,19 @@ def extract_methods(src, only_impl):
     # 协议里的方法是「要求别人实现」的，不该要求本类实现。
     src = re.sub(r'@protocol\b.*?@end', '', src, flags=re.S)
 
+    # 剔除 NS_UNAVAILABLE / unavailable 标注的声明 ——
+    # 这类是「明确禁止调用」的声明，标准做法就是只在头文件里声明、
+    # 不提供实现（编译器据此报 error: 'init' is unavailable）。
+    # 把它们算成「声明了没实现」是误报。
+    #   - (instancetype)init NS_UNAVAILABLE;
+    #   + (instancetype)new NS_UNAVAILABLE;
+    #   - (void)foo __attribute__((unavailable));
+    src = re.sub(
+        r'^[ \t]*[-+][ \t]*\([^)]*\)[^;{}]*?'
+        r'(?:NS_UNAVAILABLE|UNAVAILABLE_ATTRIBUTE|__attribute__\s*\(\s*\(\s*unavailable)'
+        r'[^;{}]*;',
+        '', src, flags=re.M | re.S)
+
     # 匹配 - 或 + 开头，直到遇到 ; 或 { （即一个完整签名）
     # 用 DOTALL 让换行也在其中
     for m in re.finditer(r'^[ \t]*([-+])[ \t]*\(([^)]*)\)(.*?)(?=[;{])',
