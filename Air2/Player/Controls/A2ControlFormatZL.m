@@ -179,6 +179,10 @@ static NSString *ZLStr(id v) {
             ?: [NSString stringWithFormat:@"layer%lu", (unsigned long)i];
         layer.name = ZLStr(lj[@"name"]) ?: layer.identifier;
         layer.visibleByDefault = !ZLBool(lj[@"hide"], NO);
+        // ZL2 的层可见性开关（CcFclToZl.normalizeZlLayout 的默认值）
+        layer.hideWhenMouse = ZLBool(lj[@"hideWhenMouse"], YES);
+        layer.hideWhenGamepad = ZLBool(lj[@"hideWhenGamepad"], YES);
+        layer.hideWhenJoystick = ZLBool(lj[@"hideWhenJoystick"], NO);
         layer.rawJSON = lj;
 
         // 六组控件：前三种是 ZL2 原生，后三种是 Air2 扩展键
@@ -189,14 +193,20 @@ static NSString *ZLStr(id v) {
             [self arrayOrEmpty:lj[@"gamepadButtons"]],
             [self arrayOrEmpty:lj[@"gyroscopeButtons"]],
             [self arrayOrEmpty:lj[@"hotbarButtons"]],
+            // Air2 扩展：视角区 / 滚轮（ZL2 没有这两种类型，
+            // 作为未知键写回时 ZL2 会原样保留，再导回 Air2 能恢复）
+            [self arrayOrEmpty:lj[@"viewAreas"]],
+            [self arrayOrEmpty:lj[@"scrollButtons"]],
         ];
-        A2ControlWidgetType types[6] = {
+        A2ControlWidgetType types[8] = {
             A2ControlWidgetTypeButton,
             A2ControlWidgetTypeJoystick,
             A2ControlWidgetTypeTextBox,
             A2ControlWidgetTypeGamepad,
             A2ControlWidgetTypeGyroscope,
             A2ControlWidgetTypeHotbar,
+            A2ControlWidgetTypeView,
+            A2ControlWidgetTypeScroll,
         };
         for (NSUInteger b = 0; b < buckets.count; b++) {
             for (NSDictionary *wj in buckets[b]) {
@@ -351,6 +361,26 @@ static NSString *ZLStr(id v) {
     d[@"isSwipple"] = @(w.isSwipple);
     d[@"isPenetrable"] = @(w.isPenetrable);
     d[@"isToggleable"] = @(w.isToggleable);
+
+    // ---- Air2 扩展字段 ----
+    // ZL2 的 ButtonStyle 里才有 alpha，单控件没有不透明度字段；
+    // 写 air2Opacity 让 ZL2 原样保留，回到 Air2 时恢复。
+    if (w.opacity < 0.999) d[@"air2Opacity"] = @(w.opacity);
+    switch (w.type) {
+        case A2ControlWidgetTypeView:
+            d[@"viewScale"] = @(w.viewScale);
+            d[@"viewShowsBorder"] = @(w.viewShowsBorder);
+            d[@"mouseMode"] = w.mouseMode ?: @"slide";
+            d[@"mouseSensitivity"] = @(w.mouseSensitivity);
+            break;
+        case A2ControlWidgetTypeScroll:
+            d[@"scrollStep"] = @(w.scrollStep);
+            d[@"scrollInverted"] = @(w.scrollInverted);
+            d[@"scrollHorizontal"] = @(w.scrollHorizontal);
+            break;
+        default:
+            break;
+    }
     return d;
 }
 
@@ -389,6 +419,7 @@ static NSString *ZLStr(id v) {
     }
     d[@"directionEvents"] = dirs;
     d[@"lockEvents"] = [self zlEventsFromList:w.lockEvents ?: @[]];
+    if (w.opacity < 0.999) d[@"air2Opacity"] = @(w.opacity);
     return d;
 }
 
@@ -404,6 +435,8 @@ static NSString *ZLStr(id v) {
         NSMutableArray *gamepads = [NSMutableArray array];
         NSMutableArray *gyros = [NSMutableArray array];
         NSMutableArray *hotbars = [NSMutableArray array];
+        NSMutableArray *views = [NSMutableArray array];
+        NSMutableArray *scrolls = [NSMutableArray array];
 
         for (A2ControlWidget *w in layer.widgets) {
             switch (w.type) {
@@ -420,13 +453,17 @@ static NSString *ZLStr(id v) {
                 }
                 case A2ControlWidgetTypeGamepad:
                 case A2ControlWidgetTypeGyroscope:
-                case A2ControlWidgetTypeHotbar: {
+                case A2ControlWidgetTypeHotbar:
+                case A2ControlWidgetTypeView:
+                case A2ControlWidgetTypeScroll: {
                     // Air2 扩展类型：写进扩展键，ZL2 读不懂但会原样保留
                     NSMutableDictionary *d = [[self zlButtonJSONFromWidget:w aspect:aspect] mutableCopy];
                     d[@"air2Type"] = @(w.type);
                     if (w.type == A2ControlWidgetTypeGamepad) [gamepads addObject:d];
                     else if (w.type == A2ControlWidgetTypeGyroscope) [gyros addObject:d];
-                    else [hotbars addObject:d];
+                    else if (w.type == A2ControlWidgetTypeHotbar) [hotbars addObject:d];
+                    else if (w.type == A2ControlWidgetTypeView) [views addObject:d];
+                    else [scrolls addObject:d];
                     break;
                 }
             }
@@ -436,12 +473,17 @@ static NSString *ZLStr(id v) {
         lj[@"uuid"] = layer.identifier ?: [[NSUUID UUID] UUIDString];
         lj[@"name"] = layer.name ?: layer.identifier ?: @"Layer";
         lj[@"hide"] = @(!layer.visibleByDefault);
+        lj[@"hideWhenMouse"] = @(layer.hideWhenMouse);
+        lj[@"hideWhenGamepad"] = @(layer.hideWhenGamepad);
+        lj[@"hideWhenJoystick"] = @(layer.hideWhenJoystick);
         lj[@"normalButtons"] = buttons;
         lj[@"joystickButtons"] = joysticks;
         lj[@"textBoxes"] = texts;
         if (gamepads.count) lj[@"gamepadButtons"] = gamepads;
         if (gyros.count) lj[@"gyroscopeButtons"] = gyros;
         if (hotbars.count) lj[@"hotbarButtons"] = hotbars;
+        if (views.count) lj[@"viewAreas"] = views;
+        if (scrolls.count) lj[@"scrollButtons"] = scrolls;
         [layers addObject:lj];
     }
 

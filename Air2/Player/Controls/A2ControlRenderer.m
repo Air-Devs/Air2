@@ -32,8 +32,11 @@
 #import "A2HotbarView.h"
 #import "A2GamepadView.h"
 #import "A2GyroscopeView.h"
+#import "A2ViewAreaView.h"
+#import "A2ScrollWheelView.h"
 #import "A2ThemeManager.h"
 #import "A2Logger.h"
+#import <math.h>
 
 #pragma mark - 单个控件
 
@@ -281,7 +284,8 @@
         if (self.style) {
             [self applyTheme];   // 样式里含 pressed 态的颜色/圆角/字号
         } else {
-            self.alpha = self->_pressed ? 0.55 : (self.isOn ? 0.9 : 0.75);
+            CGFloat base = self->_pressed ? 0.55 : (self.isOn ? 0.9 : 0.75);
+            self.alpha = base * MAX(0.02, self.widget.opacity);
         }
         self.transform = self->_pressed
             ? CGAffineTransformMakeScale(0.94, 0.94)
@@ -295,6 +299,8 @@
         BOOL dark = (UITraitCollection.currentTraitCollection.userInterfaceStyle
                      == UIUserInterfaceStyleDark);
         [self.style applyToView:self darkMode:dark pressed:_pressed];
+        // 样式里的 alpha 是"外观"的一部分，单控件 opacity 是"玩家设置"，两者相乘
+        self.alpha = MAX(0.02, self.alpha * self.widget.opacity);
         _label.textColor = [self.style contentColorForDarkMode:dark pressed:_pressed];
         _label.font = [UIFont systemFontOfSize:[self.style fontSizeForDarkMode:dark pressed:_pressed]
                                         weight:UIFontWeightMedium];
@@ -307,7 +313,7 @@
     self.layer.borderWidth = 1;
     self.layer.borderColor = [t.cOutline colorWithAlphaComponent:0.5].CGColor;
     _label.textColor = t.cOnSurface;
-    self.alpha = self.isOn ? 0.9 : 0.75;
+    self.alpha = (self.isOn ? 0.9 : 0.75) * MAX(0.02, self.widget.opacity);
 }
 
 - (void)setOn:(BOOL)on {
@@ -317,7 +323,9 @@
 
 - (void)setEditing:(BOOL)editing {
     _editing = editing;
-    self.userInteractionEnabled = YES;   // 编辑模式下永远可点（用于选中）
+    // 编辑模式下永远可点（用于选中）；退出编辑后恢复"穿透"语义，
+    // 否则 TextBox 之类 isPenetrable 的控件会挡住在游戏里的触摸。
+    self.userInteractionEnabled = editing ? YES : !self.widget.isPenetrable;
     self.layer.borderColor = editing
         ? A2ThemeManager.shared.scheme.cPrimary.CGColor
         : [A2ThemeManager.shared.scheme.cOutline colorWithAlphaComponent:0.5].CGColor;
@@ -326,12 +334,89 @@
 
 @end
 
+#pragma mark - 选中框
+
+/// 编辑模式下的选中框：虚线边框 + 四角手柄。
+/// 单独一层视图，不参与命中测试（否则会挡住被选中控件自己的拖动）。
+@interface A2ControlSelectionView : UIView
+@property (nonatomic, strong) UIColor *accentColor;
+@end
+
+@implementation A2ControlSelectionView
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    self = [super initWithFrame:frame];
+    if (!self) return nil;
+    self.backgroundColor = UIColor.clearColor;
+    self.opaque = NO;
+    self.userInteractionEnabled = NO;
+    self.layer.cornerCurve = kCACornerCurveContinuous;
+    return self;
+}
+
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    return nil;
+}
+
+- (void)setAccentColor:(UIColor *)accentColor {
+    _accentColor = accentColor;
+    [self setNeedsDisplay];
+}
+
+- (void)drawRect:(CGRect)rect {
+    UIColor *accent = self.accentColor ?: UIColor.systemBlueColor;
+    [accent setStroke];
+
+    // 虚线边框
+    UIBezierPath *border = [UIBezierPath bezierPathWithRect:CGRectInset(rect, 1, 1)];
+    border.lineWidth = 1.5;
+    CGFloat dashes[] = {6, 4};
+    [border setLineDash:dashes count:2 phase:0];
+    [border stroke];
+
+    // 四角手柄（实心小方块）
+    CGFloat h = 8;
+    CGRect corners[] = {
+        CGRectMake(0, 0, h, h),
+        CGRectMake(CGRectGetWidth(rect) - h, 0, h, h),
+        CGRectMake(0, CGRectGetHeight(rect) - h, h, h),
+        CGRectMake(CGRectGetWidth(rect) - h, CGRectGetHeight(rect) - h, h, h),
+    };
+    [accent setFill];
+    for (int i = 0; i < 4; i++) {
+        UIBezierPath *p = [UIBezierPath bezierPathWithRoundedRect:corners[i] cornerRadius:2];
+        [p fill];
+    }
+}
+
+@end
+
 #pragma mark - 渲染器
 
-@interface A2ControlRenderer ()
+@interface A2ControlRenderer () <UIGestureRecognizerDelegate>
 @property (nonatomic, strong, readwrite) A2ControlLayout *layout;
 @property (nonatomic, strong, readwrite) A2ControlInputDispatcher *input;
 @property (nonatomic, strong) NSMutableArray<UIView *> *buttonViews;
+@property (nonatomic, strong) A2ControlSelectionView *selectionView;
+
+/// 编辑手势（只在 editing 时挂上）
+@property (nonatomic, strong, nullable) UIPanGestureRecognizer *editPan;
+@property (nonatomic, strong, nullable) UIPinchGestureRecognizer *editPinch;
+
+@property (nonatomic, weak, nullable) A2ControlWidget *dragWidget;
+@property (nonatomic, assign) CGPoint dragStartPoint;
+@property (nonatomic, assign) CGFloat dragStartX;
+@property (nonatomic, assign) CGFloat dragStartY;
+
+@property (nonatomic, weak, nullable) A2ControlWidget *pinchWidget;
+@property (nonatomic, assign) CGFloat pinchStartWidth;
+@property (nonatomic, assign) CGFloat pinchStartHeight;
+
+// 私有方法声明（同上：避免调用先于定义时的告警）
+- (void)installEditingGesturesIfNeeded;
+- (UIView *)widgetViewAtPoint:(CGPoint)point;
+- (CGRect)frameForWidget:(A2ControlWidget *)w;
+- (CGFloat)snappedValue:(CGFloat)value;
 @end
 
 @implementation A2ControlRenderer
@@ -343,7 +428,13 @@
     _buttonViews = [NSMutableArray array];
     _input = [A2ControlInputDispatcher new];
     _controlsOpacity = 1.0;
+    _snapStep = 0.5;
     self.backgroundColor = UIColor.clearColor;
+
+    _selectionView = [[A2ControlSelectionView alloc] initWithFrame:CGRectZero];
+    _selectionView.hidden = YES;
+    _selectionView.accentColor = A2ThemeManager.shared.scheme.cPrimary;
+
     [self reload];
     return self;
 }
@@ -353,20 +444,29 @@
     [self.input releaseAll];
     for (UIView *v in self.subviews) [v removeFromSuperview];
     [_buttonViews removeAllObjects];
+    self.dragWidget = nil;
+    self.pinchWidget = nil;
 
     for (A2ControlWidget *w in self.layout.allWidgets) {
         UIView *v = [self makeViewForWidget:w];
         if (!v) continue;
+        // 层顺序 = 数组顺序：先 add 的在底层。
+        // 布局文件里 viewGroup/layer 的顺序是「后写的在上层」，
+        // 这里 allWidgets 已按 layers 顺序展开，所以直接 add 即正确。
         [self addSubview:v];
         [_buttonViews addObject:v];
     }
 
+    // 选中框永远在最上层
+    [self addSubview:self.selectionView];
+
     [self setNeedsLayout];
     [self applyTheme];
+    [self refreshSelectionOverlay];
 }
 
 /// 按控件类型造视图。
-/// 摇杆/快捷栏/手柄/陀螺仪各有自己的触摸逻辑；
+/// 摇杆/快捷栏/手柄/陀螺仪/视角区/滚轮各有自己的触摸逻辑；
 /// 其余（Button / TextBox）走 A2ControlButtonView。
 - (UIView *)makeViewForWidget:(A2ControlWidget *)w {
     UIView *v = nil;
@@ -374,37 +474,37 @@
     switch (w.type) {
         case A2ControlWidgetTypeJoystick: {
             A2JoystickView *j = [[A2JoystickView alloc] initWithWidget:w];
-            j.inputDelegate = self.inputDelegate;
-            j.input = self.input;
-            j.editing = self.editing;
             v = j;
             break;
         }
 
         case A2ControlWidgetTypeHotbar: {
             A2HotbarView *h = [[A2HotbarView alloc] initWithWidget:w];
-            h.inputDelegate = self.inputDelegate;
-            h.input = self.input;
-            h.editing = self.editing;
             v = h;
             break;
         }
 
         case A2ControlWidgetTypeGamepad: {
             A2GamepadView *g = [[A2GamepadView alloc] initWithWidget:w];
-            g.inputDelegate = self.inputDelegate;
-            g.input = self.input;
-            g.editing = self.editing;
             v = g;
             break;
         }
 
         case A2ControlWidgetTypeGyroscope: {
             A2GyroscopeView *g = [[A2GyroscopeView alloc] initWithWidget:w];
-            g.inputDelegate = self.inputDelegate;
-            g.input = self.input;
-            g.editing = self.editing;
             v = g;
+            break;
+        }
+
+        case A2ControlWidgetTypeView: {
+            A2ViewAreaView *a = [[A2ViewAreaView alloc] initWithWidget:w];
+            v = a;
+            break;
+        }
+
+        case A2ControlWidgetTypeScroll: {
+            A2ScrollWheelView *a = [[A2ScrollWheelView alloc] initWithWidget:w];
+            v = a;
             break;
         }
 
@@ -412,8 +512,6 @@
         case A2ControlWidgetTypeTextBox:
         default: {
             A2ControlButtonView *b = [[A2ControlButtonView alloc] initWithWidget:w];
-            b.inputDelegate = self.inputDelegate;
-            b.input = self.input;
             // 样式：从 layout.buttonStyles 里按 buttonStyle 查
             if (w.buttonStyle.length) {
                 NSDictionary *styleJSON = self.layout.buttonStyles[w.buttonStyle];
@@ -424,85 +522,324 @@
         }
     }
 
+    // 统一设置输入出口 / 编辑态
+    if ([v respondsToSelector:@selector(setInput:)]) {
+        [(id)v setInput:self.input];
+    }
+    if ([v respondsToSelector:@selector(setInputDelegate:)]) {
+        [(id)v setInputDelegate:self.inputDelegate];
+    }
+    if ([v respondsToSelector:@selector(setEditing:)]) {
+        [(id)v setEditing:self.editing];
+    }
+    // 编辑态下禁用控件自己的手势（摇杆/快捷栏的 pan 等），
+    // 否则它们会和渲染器的拖动/缩放抢触摸。
     if (self.editing) {
+        for (UIGestureRecognizer *g in v.gestureRecognizers) {
+            g.enabled = NO;
+        }
         UITapGestureRecognizer *tap =
             [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)];
         [v addGestureRecognizer:tap];
     }
+
     return v;
 }
 
-- (void)handleTap:(UITapGestureRecognizer *)g {
-    UIView *v = g.view;
-    A2ControlWidget *w = nil;
-    if ([v isKindOfClass:A2ControlButtonView.class]) {
-        w = ((A2ControlButtonView *)v).widget;
-    } else if ([v isKindOfClass:A2JoystickView.class]) {
-        w = ((A2JoystickView *)v).widget;
-    }
-    if (!w) return;
+#pragma mark 控件 ⇄ 视图
 
-    self.selectedWidget = w;
-    for (UIView *b in _buttonViews) {
-        b.layer.borderWidth = (b == v) ? 2 : 1;
+- (A2ControlWidget *)widgetForView:(UIView *)view {
+    if ([view isKindOfClass:A2ControlButtonView.class]) {
+        return ((A2ControlButtonView *)view).widget;
     }
-    if (self.onSelectionChanged) self.onSelectionChanged(w);
+    if ([view isKindOfClass:A2JoystickView.class]) {
+        return ((A2JoystickView *)view).widget;
+    }
+    return nil;
+}
+
+- (UIView *)viewForWidget:(A2ControlWidget *)widget {
+    if (!widget) return nil;
+    for (UIView *v in self.buttonViews) {
+        if ([self widgetForView:v] == widget) return v;
+    }
+    return nil;
+}
+
+- (CGRect)frameForWidget:(A2ControlWidget *)w {
+    CGSize s = self.bounds.size;
+    CGFloat x = s.width  * w.xPercent / 100.0;
+    CGFloat y = s.height * w.yPercent / 100.0;
+    CGFloat width  = s.width  * w.widthPercent / 100.0;
+    CGFloat height = s.height * w.heightPercent / 100.0;
+
+    // 尺寸为 0 的控件给个默认值，避免完全看不见（与 normalize 的兜底一致）
+    if (width <= 0)  width  = MAX(48, s.height * 0.11);
+    if (height <= 0) height = width;
+    return CGRectMake(x, y, width, height);
 }
 
 - (void)layoutSubviews {
     [super layoutSubviews];
-    CGSize s = self.bounds.size;
 
-    // 百分比坐标 → 实际像素
-    for (UIView *v in _buttonViews) {
-        A2ControlWidget *w = nil;
-        if ([v isKindOfClass:A2ControlButtonView.class]) w = ((A2ControlButtonView *)v).widget;
-        else if ([v isKindOfClass:A2JoystickView.class]) w = ((A2JoystickView *)v).widget;
+    for (UIView *v in self.buttonViews) {
+        A2ControlWidget *w = [self widgetForView:v];
         if (!w) continue;
 
-        CGFloat x = s.width  * w.xPercent / 100.0;
-        CGFloat y = s.height * w.yPercent / 100.0;
-        CGFloat width  = s.width  * w.widthPercent / 100.0;
-        CGFloat height = s.height * w.heightPercent / 100.0;
+        v.frame = [self frameForWidget:w];
+        v.alpha = w.opacity;
+        CGFloat radius = MIN(CGRectGetWidth(v.bounds), CGRectGetHeight(v.bounds)) * 0.18;
+        // 圆角优先用 ZL2 的 ButtonShape（四角），没给才用默认比例
+        if (w.cornerTopStart > 0 || w.cornerTopEnd > 0 ||
+            w.cornerBottomEnd > 0 || w.cornerBottomStart > 0) {
+            CGFloat maxR = MIN(CGRectGetWidth(v.bounds), CGRectGetHeight(v.bounds)) / 2.0;
+            radius = MIN(maxR, MAX(w.cornerTopStart, MAX(w.cornerTopEnd,
+                       MAX(w.cornerBottomEnd, w.cornerBottomStart))) * 0.5);
+        }
+        v.layer.cornerRadius = radius;
+    }
 
-        // 尺寸为 0 的控件给个默认值，避免完全看不见
-        if (width <= 0)  width  = MAX(48, s.height * 0.11);
-        if (height <= 0) height = width;
+    [self refreshSelectionOverlay];
+}
 
-        v.frame = CGRectMake(x, y, width, height);
-        v.layer.cornerRadius = MIN(width, height) * 0.18;
+- (void)refreshSelectionOverlay {
+    if (!self.editing || !self.selectedWidget) {
+        self.selectionView.hidden = YES;
+        return;
+    }
+    UIView *v = [self viewForWidget:self.selectedWidget];
+    if (!v) {
+        self.selectionView.hidden = YES;
+        return;
+    }
+    self.selectionView.hidden = NO;
+    self.selectionView.frame = v.frame;
+    self.selectionView.accentColor = A2ThemeManager.shared.scheme.cPrimary;
+    [self bringSubviewToFront:self.selectionView];
+}
+
+- (void)setSelectedWidget:(A2ControlWidget *)selectedWidget {
+    _selectedWidget = selectedWidget;
+    [self refreshSelectionOverlay];
+    if (self.onSelectionChanged) self.onSelectionChanged(selectedWidget);
+}
+
+- (void)handleTap:(UITapGestureRecognizer *)g {
+    A2ControlWidget *w = [self widgetForView:g.view];
+    if (!w) return;
+    self.selectedWidget = w;
+}
+
+#pragma mark 编辑手势
+
+- (void)setEditing:(BOOL)editing {
+    if (_editing == editing) {
+        // 即使状态相同也要保证手势在位（reload 后视图是新的）
+        [self installEditingGesturesIfNeeded];
+        return;
+    }
+    _editing = editing;
+
+    if (editing) {
+        [self installEditingGesturesIfNeeded];
+    } else {
+        self.dragWidget = nil;
+        self.pinchWidget = nil;
+        self.selectedWidget = nil;
+        if (self.editPan) {
+            [self removeGestureRecognizer:self.editPan];
+            self.editPan = nil;
+        }
+        if (self.editPinch) {
+            [self removeGestureRecognizer:self.editPinch];
+            self.editPinch = nil;
+        }
+    }
+
+    // 重建子视图：编辑态要禁用控件自身手势、加选中 tap
+    [self reload];
+}
+
+- (void)installEditingGesturesIfNeeded {
+    if (!self.editing) return;
+
+    if (!self.editPan) {
+        UIPanGestureRecognizer *pan =
+            [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(handleEditPan:)];
+        pan.maximumNumberOfTouches = 1;
+        pan.delegate = self;
+        [self addGestureRecognizer:pan];
+        self.editPan = pan;
+    }
+    if (!self.editPinch) {
+        UIPinchGestureRecognizer *pinch =
+            [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(handleEditPinch:)];
+        pinch.delegate = self;
+        [self addGestureRecognizer:pinch];
+        self.editPinch = pinch;
     }
 }
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)otherGestureRecognizer {
+    return YES;
+}
+
+/// 找到触摸点下最上层的控件视图。
+/// 反序遍历 = 后加的在上面（与 UIKit 的 z 序一致）。
+- (UIView *)widgetViewAtPoint:(CGPoint)point {
+    for (UIView *v in [self.buttonViews reverseObjectEnumerator]) {
+        if (v.hidden || v.alpha < 0.01) continue;
+        if (CGRectContainsPoint(v.frame, point)) return v;
+    }
+    return nil;
+}
+
+- (CGFloat)snappedValue:(CGFloat)value {
+    CGFloat step = self.snapStep;
+    if (!isfinite(step) || step <= 0.01) return value;
+    return round(value / step) * step;
+}
+
+- (void)handleEditPan:(UIPanGestureRecognizer *)g {
+    if (!self.editing) return;
+
+    CGPoint point = [g locationInView:self];
+
+    switch (g.state) {
+        case UIGestureRecognizerStateBegan: {
+            // 双指缩放进行中不要抢
+            if (self.pinchWidget) return;
+            UIView *v = [self widgetViewAtPoint:point];
+            A2ControlWidget *w = [self widgetForView:v];
+            if (!w) {
+                self.dragWidget = nil;
+                return;
+            }
+            self.selectedWidget = w;
+            self.dragWidget = w;
+            self.dragStartPoint = point;
+            self.dragStartX = w.xPercent;
+            self.dragStartY = w.yPercent;
+            break;
+        }
+
+        case UIGestureRecognizerStateChanged: {
+            A2ControlWidget *w = self.dragWidget;
+            if (!w || CGSizeEqualToSize(self.bounds.size, CGSizeZero)) return;
+
+            CGFloat dx = (point.x - self.dragStartPoint.x) / self.bounds.size.width * 100.0;
+            CGFloat dy = (point.y - self.dragStartPoint.y) / self.bounds.size.height * 100.0;
+
+            CGFloat newX = [self snappedValue:self.dragStartX + dx];
+            CGFloat newY = [self snappedValue:self.dragStartY + dy];
+            newX = MAX(0.0, MIN(100.0 - w.widthPercent, newX));
+            newY = MAX(0.0, MIN(100.0 - w.heightPercent, newY));
+            w.xPercent = newX;
+            w.yPercent = newY;
+
+            UIView *v = [self viewForWidget:w];
+            if (v) v.frame = [self frameForWidget:w];
+            [self refreshSelectionOverlay];
+            if (self.onWidgetChanged) self.onWidgetChanged(w);
+            break;
+        }
+
+        case UIGestureRecognizerStateEnded:
+        case UIGestureRecognizerStateCancelled:
+        case UIGestureRecognizerStateFailed: {
+            A2ControlWidget *w = self.dragWidget;
+            self.dragWidget = nil;
+            if (w && self.onWidgetCommitted) self.onWidgetCommitted(w);
+            break;
+        }
+
+        default:
+            break;
+    }
+}
+
+- (void)handleEditPinch:(UIPinchGestureRecognizer *)g {
+    if (!self.editing) return;
+
+    switch (g.state) {
+        case UIGestureRecognizerStateBegan: {
+            A2ControlWidget *w = self.selectedWidget;
+            if (!w) {
+                CGPoint point = [g locationInView:self];
+                w = [self widgetForView:[self widgetViewAtPoint:point]];
+            }
+            if (!w) return;
+            self.selectedWidget = w;
+            self.pinchWidget = w;
+            self.pinchStartWidth = w.widthPercent;
+            self.pinchStartHeight = w.heightPercent;
+            break;
+        }
+
+        case UIGestureRecognizerStateChanged: {
+            A2ControlWidget *w = self.pinchWidget;
+            if (!w || g.numberOfTouches < 2) return;
+
+            CGFloat scale = g.scale;
+            if (!isfinite(scale) || scale <= 0.01) return;
+
+            CGFloat newW = MAX(2.0, MIN(100.0, self.pinchStartWidth * scale));
+            CGFloat newH = MAX(2.0, MIN(100.0, self.pinchStartHeight * scale));
+
+            // 以控件中心为锚点缩放，避免右上角飞出去
+            CGFloat centerX = w.xPercent + w.widthPercent / 2.0;
+            CGFloat centerY = w.yPercent + w.heightPercent / 2.0;
+            w.widthPercent = newW;
+            w.heightPercent = newH;
+            w.xPercent = MAX(0.0, MIN(100.0 - newW, centerX - newW / 2.0));
+            w.yPercent = MAX(0.0, MIN(100.0 - newH, centerY - newH / 2.0));
+
+            UIView *v = [self viewForWidget:w];
+            if (v) v.frame = [self frameForWidget:w];
+            [self refreshSelectionOverlay];
+            if (self.onWidgetChanged) self.onWidgetChanged(w);
+            break;
+        }
+
+        case UIGestureRecognizerStateEnded:
+        case UIGestureRecognizerStateCancelled:
+        case UIGestureRecognizerStateFailed: {
+            A2ControlWidget *w = self.pinchWidget;
+            self.pinchWidget = nil;
+            if (w && self.onWidgetCommitted) self.onWidgetCommitted(w);
+            break;
+        }
+
+        default:
+            break;
+    }
+}
+
+#pragma mark 其余
 
 - (void)setInputDelegate:(id<A2ControlInputDelegate>)inputDelegate {
     _inputDelegate = inputDelegate;
     self.input.delegate = inputDelegate;
-    for (id v in _buttonViews) {
+    for (id v in self.buttonViews) {
         if ([v respondsToSelector:@selector(setInputDelegate:)]) {
             [v setInputDelegate:inputDelegate];
         }
     }
 }
 
-- (void)setEditing:(BOOL)editing {
-    _editing = editing;
-    for (UIView *v in _buttonViews) {
-        if ([v respondsToSelector:@selector(setEditing:)]) [(id)v setEditing:editing];
-    }
-    if (editing) [self reload];   // 重加手势
-}
-
 - (void)setControlsOpacity:(CGFloat)controlsOpacity {
     _controlsOpacity = MAX(0, MIN(1, controlsOpacity));
-    for (UIView *v in _buttonViews) {
-        v.alpha = _controlsOpacity;
-    }
+    // 整体透明度放在容器上，单控件 opacity 由 layoutSubviews 各自应用
+    self.alpha = _controlsOpacity;
 }
 
 - (void)applyTheme {
-    for (id v in _buttonViews) {
+    self.selectionView.accentColor = A2ThemeManager.shared.scheme.cPrimary;
+    for (id v in self.buttonViews) {
         if ([v respondsToSelector:@selector(applyTheme)]) [(id)v applyTheme];
     }
+    [self refreshSelectionOverlay];
 }
 
 @end

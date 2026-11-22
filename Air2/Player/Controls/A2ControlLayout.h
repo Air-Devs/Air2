@@ -131,6 +131,16 @@ typedef NS_ENUM(NSInteger, A2ControlWidgetType) {
     A2ControlWidgetTypeGamepad,      ///< gamepadButtons
     A2ControlWidgetTypeGyroscope,    ///< gyroscopeButtons
     A2ControlWidgetTypeHotbar,       ///< hotbarButtons
+    /// 视角区（拖动即转视角）—— 对照：
+    ///   zl2/.../ui/control/mouse/TouchInput.kt 的「拖动屏幕转视角」分支
+    ///   fcl/.../control/FCLInput.java 的鼠标移动区域
+    /// 两家的布局 JSON 都没有独立类型，Air2 用扩展键 viewAreas 保存。
+    A2ControlWidgetTypeView,         ///< viewAreas
+    /// 滚轮（上下滑 → 滚轮事件）—— 对照：
+    ///   zl2/.../ui/control/event/Events.kt 的 LAUNCHER_EVENT_SCROLL_*
+    ///   FCL 的 ButtonEventData.outputKeycodes 里的 1003/1004
+    /// Air2 用扩展键 scrollButtons 保存。
+    A2ControlWidgetTypeScroll,       ///< scrollButtons
 };
 
 /// 摇杆触发模式（对照 ZL2 的 JoystickTriggerMode / FCL 的 DirectionStyle.styleType）
@@ -172,6 +182,13 @@ typedef NS_ENUM(NSInteger, A2JoystickTriggerMode) {
 @property (nonatomic, assign) CGFloat heightDp;
 
 // ---- 外观 ----
+/// 控件不透明度（0~1，默认 1）。
+/// ZL2 把 alpha 放在 ButtonStyle 里（StyleConfig.alpha），FCL 放在
+/// ButtonStyles.fillColor 的 alpha 通道；两边都没有「单个控件」的
+/// 不透明度字段，所以这是 Air2 的扩展：内部格式写 opacity，
+/// 导出 ZL2/FCL 时写 air2Opacity（对方不认识但会原样保留）。
+@property (nonatomic, assign) CGFloat opacity;
+
 /// 四角独立圆角（0~100，对应 ZL2 的 ButtonShape）
 @property (nonatomic, assign) CGFloat cornerTopStart;
 @property (nonatomic, assign) CGFloat cornerTopEnd;
@@ -245,6 +262,23 @@ typedef NS_ENUM(NSInteger, A2JoystickTriggerMode) {
 /// 指针灵敏度百分比（100 = 1:1，对照 ZL2 的 cursorSensitivity）
 @property (nonatomic, assign) CGFloat mouseSensitivity;
 
+// ---- 视角区专用（type == View）----
+// 复用 mouseMode / mouseSensitivity：
+//   slide  拖动时持续发送鼠标位移（默认，对照 ZL2 TouchInput 的拖动）
+//   click  单指点击 = 左键单击（对照 ZL2 的点击模式）
+/// 转视角的像素倍率（1.0 = 手指划过 1pt 转 1px）
+@property (nonatomic, assign) CGFloat viewScale;
+/// 是否显示淡淡的边框（给玩家提示「这里是视角区」；游戏内通常关掉）
+@property (nonatomic, assign) BOOL viewShowsBorder;
+
+// ---- 滚轮专用（type == Scroll）----
+/// 多少 pt 的滑动算一格滚轮（越小越灵敏；默认 18）
+@property (nonatomic, assign) CGFloat scrollStep;
+/// 滚动方向是否反转（对应系统「自然滚动」开关）
+@property (nonatomic, assign) BOOL scrollInverted;
+/// 是否同时支持左右滚轮（默认 NO，只做上下）
+@property (nonatomic, assign) BOOL scrollHorizontal;
+
 /// **保留原始 JSON**，保存时以它为基础只改有变动的字段
 @property (nonatomic, copy, nullable) NSDictionary *rawJSON;
 
@@ -252,6 +286,10 @@ typedef NS_ENUM(NSInteger, A2JoystickTriggerMode) {
                                    type:(A2ControlWidgetType)type
                                 layerID:(nullable NSString *)layerID;
 - (NSDictionary *)toJSON;
+
+/// 复制一个控件（编辑器「复制/粘贴」用）。
+/// 新控件有独立 identifier，其余字段深拷贝。
+- (A2ControlWidget *)duplicatedWidget;
 
 /// 新建一个空白控件（编辑器用）
 + (instancetype)newButtonAtX:(CGFloat)x y:(CGFloat)y;
@@ -269,6 +307,16 @@ typedef NS_ENUM(NSInteger, A2JoystickTriggerMode) {
 @property (nonatomic, copy) NSString *identifier;
 @property (nonatomic, copy) NSString *name;
 @property (nonatomic, assign) BOOL visibleByDefault;
+
+// ---- ZL2 原生的层可见性开关（对照 CcFclToZl.kt / CcZlToFcl.kt 里
+//      layer 上的 hideWhenMouse / hideWhenGamepad / hideWhenJoystick）----
+/// 接了鼠标时隐藏本层（ZL2 默认 true —— 有鼠标就不挡着）
+@property (nonatomic, assign) BOOL hideWhenMouse;
+/// 接了手柄时隐藏本层（ZL2 默认 true）
+@property (nonatomic, assign) BOOL hideWhenGamepad;
+/// 接了手柄摇杆时隐藏本层（ZL2 默认 false）
+@property (nonatomic, assign) BOOL hideWhenJoystick;
+
 /// ⚠️ 必须是 strong，不能用 copy ——
 /// copy 会把 NSMutableArray 复制成不可变的 NSArray，
 /// 之后 addObject: 直接崩 unrecognized selector。
@@ -316,6 +364,25 @@ typedef NS_ENUM(NSInteger, A2JoystickTriggerMode) {
 
 /// 新建一份空白布局（编辑器用，只有一层）
 + (instancetype)emptyLayout;
+
+/// Air2 内部快照（撤销/重做、复制粘贴、持久化用）。
+///
+/// 为什么不复用 ZL2 / FCL 的 JSON：那两家的 position 是「可用空间比例」
+/// （0~10000 / 0~1000），内部模型是屏幕百分比（0~100）。拿对方的 JSON
+/// 当快照，再解析回来会走在对方的坐标换算上，来回一次就漂移。
+/// 所以快照用内部单位，并且带 format 标记，不会被 detectFormat 认成 ZL2。
+- (NSDictionary *)snapshotJSON;
+
+/// 从快照重建（与 snapshotJSON 配对）。失败返回 nil。
++ (nullable instancetype)layoutFromSnapshot:(nullable NSDictionary *)snapshot;
+
+/// 数据自检 + 迁移：补齐旧版本缺失的字段、夹紧越界值、
+/// 修复空 identifier / 空层 / widget.layerID 不同步。
+/// 任何来源（文件、快照、导入）解析后都应调用一次。
+- (void)normalize;
+
+/// 当前内部格式版本（见 A2ControlStore 的迁移逻辑）
+@property (class, nonatomic, readonly) NSInteger currentFormatVersion;
 
 @end
 

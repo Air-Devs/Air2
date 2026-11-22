@@ -243,6 +243,14 @@ static NSDictionary<NSString *, NSArray<A2ControlEvent *> *> *A2DirectionEventsF
     w.gyroscopeThreshold = 0.02;
     w.hotbarSlotCount = 9;
     w.mouseSensitivity = 100;
+    // ---- Air2 扩展默认值（新控件先给可用的值，避免新建出来是"空"的）----
+    w.opacity = 1.0;
+    w.viewScale = 1.0;
+    w.viewShowsBorder = YES;
+    w.mouseMode = @"slide";
+    w.scrollStep = 18.0;
+    w.scrollInverted = NO;
+    w.scrollHorizontal = NO;
     return w;
 }
 
@@ -358,6 +366,39 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
             w.hotbarDropKey = @"81";   // Q：丢弃（ZL2 长按）
             w.clickEvents = @[];
             break;
+
+        case A2ControlWidgetTypeView:
+            // 视角区：右侧大半屏，透明（0.02 是为了编辑器里还能看见/点中）
+            w.identifier = @"air2.look";
+            w.text = @"";
+            w.xPercent = 30;
+            w.yPercent = 0;
+            w.widthPercent = 70;
+            w.heightPercent = 100;
+            w.opacity = 0.02;
+            w.isSwipple = NO;
+            w.isPenetrable = NO;      // 必须接触摸，否则转不了视角
+            w.mouseMode = @"slide";
+            w.mouseSensitivity = 100;
+            w.viewScale = 1.0;
+            w.viewShowsBorder = YES;
+            w.clickEvents = @[];
+            break;
+
+        case A2ControlWidgetTypeScroll:
+            // 滚轮：竖条，默认 18pt = 一格
+            w.identifier = @"air2.scroll";
+            w.text = @"滚轮";
+            w.xPercent = 90;
+            w.yPercent = 40;
+            w.widthPercent = 7;
+            w.heightPercent = 18;
+            w.isSwipple = NO;
+            w.scrollStep = 18;
+            w.scrollInverted = NO;
+            w.scrollHorizontal = NO;
+            w.clickEvents = @[];
+            break;
     }
 
     return w;
@@ -433,6 +474,11 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
 
     // ---- 外观 ----
     w.buttonStyle = A2Str(json, @[@"buttonStyle", @"style", @"styleId"]);
+
+    // 不透明度：内部格式写 opacity；ZL2/FCL 导出时写 air2Opacity（扩展键）
+    w.opacity = A2Num(json, @[@"opacity", @"alpha", @"air2Opacity"], 1.0);
+    if (!isfinite(w.opacity)) w.opacity = 1.0;
+    w.opacity = MAX(0.0, MIN(1.0, w.opacity));
 
     // ---- 行为 ----
     w.isSwipple    = A2Bool(json, @[@"isSwipple", @"swipple", @"isSwipeable"], NO);
@@ -512,6 +558,18 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
     // ---- 鼠标面板参数（对照 ZL2 MouseControlMode / cursorSensitivity）----
     w.mouseMode = A2Str(json, @[@"mouseMode", @"controlMode"]);
     w.mouseSensitivity = A2Num(json, @[@"mouseSensitivity", @"cursorSensitivity"], 100);
+
+    // ---- 视角区参数（type == View）----
+    w.viewScale = A2Num(json, @[@"viewScale"], 1.0);
+    if (!isfinite(w.viewScale) || w.viewScale <= 0) w.viewScale = 1.0;
+    w.viewShowsBorder = A2Bool(json, @[@"viewShowsBorder"], YES);
+    if (!w.mouseMode.length && type == A2ControlWidgetTypeView) w.mouseMode = @"slide";
+
+    // ---- 滚轮参数（type == Scroll）----
+    w.scrollStep = A2Num(json, @[@"scrollStep"], 18.0);
+    if (!isfinite(w.scrollStep) || w.scrollStep < 4) w.scrollStep = 18.0;
+    w.scrollInverted = A2Bool(json, @[@"scrollInverted"], NO);
+    w.scrollHorizontal = A2Bool(json, @[@"scrollHorizontal"], NO);
 
     return w;
 }
@@ -625,7 +683,37 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
     if (self.mouseMode.length) d[@"mouseMode"] = self.mouseMode;
     if (self.mouseSensitivity > 0) d[@"mouseSensitivity"] = @(self.mouseSensitivity);
 
+    // ---- 不透明度 + 视角区 / 滚轮 ----
+    // 这三个是 Air2 扩展。内部格式直接写；导出 ZL2/FCL 时由各自的
+    // serializer 写 air2Opacity / viewScale 等扩展键（见 A2ControlFormatZL/FCL）。
+    d[@"opacity"] = @(self.opacity);
+    switch (self.type) {
+        case A2ControlWidgetTypeView:
+            d[@"viewScale"] = @(self.viewScale);
+            d[@"viewShowsBorder"] = @(self.viewShowsBorder);
+            break;
+        case A2ControlWidgetTypeScroll:
+            d[@"scrollStep"] = @(self.scrollStep);
+            d[@"scrollInverted"] = @(self.scrollInverted);
+            d[@"scrollHorizontal"] = @(self.scrollHorizontal);
+            break;
+        default:
+            break;
+    }
+
     return d;
+}
+
+- (A2ControlWidget *)duplicatedWidget {
+    // 走一次"序列化 → 解析"：保证所有字段（含 rawJSON 里的未知键）都带上，
+    // 以后加字段也不用改这里。identifier 必须换新的，否则渲染层两票同 id。
+    NSDictionary *json = [self toJSON];
+    A2ControlWidget *copy = [A2ControlWidget widgetFromJSON:json
+                                                       type:self.type
+                                                    layerID:self.layerID];
+    copy.identifier = [[NSUUID UUID] UUIDString];
+    copy.rawJSON = json;
+    return copy;
 }
 
 - (NSDictionary *)dictOrEmpty:(id)v {
@@ -643,6 +731,11 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
     if (!self) return nil;
     _widgets = [NSMutableArray array];
     _visibleByDefault = YES;
+    // 默认值对齐 CcFclToZl.normalizeZlLayout：
+    //   hideWhenMouse = true、hideWhenGamepad = true、hideWhenJoystick = false
+    _hideWhenMouse = YES;
+    _hideWhenGamepad = YES;
+    _hideWhenJoystick = NO;
     return self;
 }
 
@@ -650,8 +743,16 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
     NSMutableDictionary *d = self.rawJSON
         ? [self.rawJSON mutableCopy] : [NSMutableDictionary dictionary];
 
-    d[@"id"] = self.identifier;
+    // ZL2 层的 id 字段叫 uuid；老 Air1/Air2 数据是 id。
+    // 以 rawJSON 的键名为准，两边都保留会互相覆盖。
+    if (d[@"uuid"] != nil || d[@"id"] == nil) d[@"uuid"] = self.identifier;
+    if (d[@"id"] != nil) d[@"id"] = self.identifier;
     if (self.name.length) d[@"name"] = self.name;
+
+    d[@"hide"] = @(!self.visibleByDefault);
+    d[@"hideWhenMouse"] = @(self.hideWhenMouse);
+    d[@"hideWhenGamepad"] = @(self.hideWhenGamepad);
+    d[@"hideWhenJoystick"] = @(self.hideWhenJoystick);
 
     NSMutableArray *buttons = [NSMutableArray array];
     NSMutableArray *joysticks = [NSMutableArray array];
@@ -659,6 +760,8 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
     NSMutableArray *gamepads = [NSMutableArray array];
     NSMutableArray *gyroscopes = [NSMutableArray array];
     NSMutableArray *hotbars = [NSMutableArray array];
+    NSMutableArray *views = [NSMutableArray array];
+    NSMutableArray *scrolls = [NSMutableArray array];
 
     for (A2ControlWidget *w in self.widgets) {
         NSDictionary *j = [w toJSON];
@@ -669,6 +772,8 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
             case A2ControlWidgetTypeGamepad:   [gamepads addObject:j]; break;
             case A2ControlWidgetTypeGyroscope: [gyroscopes addObject:j]; break;
             case A2ControlWidgetTypeHotbar:    [hotbars addObject:j]; break;
+            case A2ControlWidgetTypeView:      [views addObject:j]; break;
+            case A2ControlWidgetTypeScroll:    [scrolls addObject:j]; break;
         }
     }
 
@@ -683,6 +788,8 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
     if (gamepads.count)   d[@"gamepadButtons"] = gamepads;
     if (gyroscopes.count) d[@"gyroscopeButtons"] = gyroscopes;
     if (hotbars.count)    d[@"hotbarButtons"] = hotbars;
+    if (views.count)      d[@"viewAreas"] = views;
+    if (scrolls.count)    d[@"scrollButtons"] = scrolls;
 
     return d;
 }
@@ -739,7 +846,14 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
     layout.aspectRatio = 16.0 / 9.0;
 
     // ---- 格式识别 ----
-    if (json[@"layers"] != nil) {
+    // Air2 自己的内部格式带 air2Version / format=air2 标记。
+    // 必须排在 layers 判断之前 —— 内部格式也用 layers[]，但坐标是
+    // 屏幕百分比（0~100），被当成 ZL2 会错十倍。
+    if (json[@"air2Version"] != nil ||
+        [A2Str(json, @[@"format"]) isEqualToString:@"air2"]) {
+        layout.sourceFormat = @"air2";
+        layout.version = MAX([self currentFormatVersion], [json[@"air2Version"] integerValue]);
+    } else if (json[@"layers"] != nil) {
         layout.sourceFormat = @"zl2";
         layout.version = [json[@"editorVersion"] integerValue];
     } else if (json[@"viewGroups"] != nil) {
@@ -767,8 +881,13 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
             ? c[@"viewGroup"] : c;
 
         A2ControlLayer *layer = [A2ControlLayer new];
-        layer.identifier = A2Str(groupBody, @[@"id", @"name"]) ?: [NSString stringWithFormat:@"layer%lu", (unsigned long)i];
+        layer.identifier = A2Str(groupBody, @[@"uuid", @"id", @"name"])
+            ?: [NSString stringWithFormat:@"layer%lu", (unsigned long)i];
         layer.name = A2Str(groupBody, @[@"name", @"id"]) ?: layer.identifier;
+        layer.visibleByDefault = !A2Bool(groupBody, @[@"hide"], NO);
+        layer.hideWhenMouse = A2Bool(groupBody, @[@"hideWhenMouse"], YES);
+        layer.hideWhenGamepad = A2Bool(groupBody, @[@"hideWhenGamepad"], YES);
+        layer.hideWhenJoystick = A2Bool(groupBody, @[@"hideWhenJoystick"], NO);
         layer.rawJSON = groupBody;
         [layout collectWidgetsFrom:groupBody into:layer];
         [layout.layers addObject:layer];
@@ -787,13 +906,18 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
             [layout.buttonStyles addEntriesFromDictionary:styles];
         }
     }
-    if ([json[@"joystickStyles"] isKindOfClass:NSArray.class]) {
-        for (NSDictionary *s in json[@"joystickStyles"]) {
+    id joystickStyles = json[@"joystickStyles"];
+    if ([joystickStyles isKindOfClass:NSArray.class]) {
+        for (NSDictionary *s in (NSArray *)joystickStyles) {
             if (![s isKindOfClass:NSDictionary.class]) continue;
             NSString *sid = A2Str(s, @[@"id", @"uuid", @"name"]);
             if (sid.length) layout.joystickStyles[sid] = s;
         }
+    } else if ([joystickStyles isKindOfClass:NSDictionary.class]) {
+        [layout.joystickStyles addEntriesFromDictionary:(NSDictionary *)joystickStyles];
     }
+
+    [layout normalize];
 
     [A2Logger info:@"A2ControlLayout"
            message:[NSString stringWithFormat:@"加载「%@」：格式=%@ 版本=%ld 层=%lu 控件=%lu",
@@ -818,6 +942,9 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
         { @[@"gamepadButtons", @"gamepads"], A2ControlWidgetTypeGamepad },
         { @[@"gyroscopeButtons", @"gyroscopes"], A2ControlWidgetTypeGyroscope },
         { @[@"hotbarButtons", @"hotbars"], A2ControlWidgetTypeHotbar },
+        // Air2 扩展的「视角区 / 滚轮」（ZL2/FCL 没有对应类型）
+        { @[@"viewAreas", @"viewAreaButtons"], A2ControlWidgetTypeView },
+        { @[@"scrollButtons", @"scrollAreas"], A2ControlWidgetTypeScroll },
     };
 
     for (size_t i = 0; i < sizeof(groups) / sizeof(groups[0]); i++) {
@@ -901,6 +1028,194 @@ static NSDictionary<NSString *, NSString *> *A2DefaultGamepadMapping(void) {
     }
     if (!root[@"name"]) root[@"name"] = self.name;
     return root;
+}
+
++ (NSInteger)currentFormatVersion {
+    // 1 = layers[] + 屏幕百分比 + opacity/viewAreas/scrollButtons 扩展键
+    //     （旧的 Air1 数据没有版本号，normalize 时按 1 处理并补齐字段）
+    return 1;
+}
+
+#pragma mark - 归一化 / 迁移
+
+- (void)normalize {
+    if (![self.layers isKindOfClass:NSMutableArray.class]) {
+        self.layers = [NSMutableArray arrayWithArray:self.layers ?: @[]];
+    }
+    if (![self.buttonStyles isKindOfClass:NSMutableDictionary.class]) {
+        self.buttonStyles = [NSMutableDictionary dictionary];
+    }
+    if (![self.joystickStyles isKindOfClass:NSMutableDictionary.class]) {
+        self.joystickStyles = [NSMutableDictionary dictionary];
+    }
+    if (!isfinite(self.aspectRatio) || self.aspectRatio <= 0.05) {
+        self.aspectRatio = 16.0 / 9.0;
+    }
+    if (!self.name.length) self.name = @"未命名布局";
+    if (!self.sourceFormat.length) self.sourceFormat = @"air2";
+
+    // 至少一层 —— 渲染层与编辑器都假设 layers[0] 存在
+    if (self.layers.count == 0) {
+        A2ControlLayer *layer = [A2ControlLayer new];
+        layer.identifier = @"default";
+        layer.name = @"默认层";
+        [self.layers addObject:layer];
+    }
+
+    NSMutableSet<NSString *> *usedLayerIDs = [NSMutableSet set];
+    NSMutableSet<NSString *> *usedWidgetIDs = [NSMutableSet set];
+
+    for (A2ControlLayer *layer in self.layers) {
+        if (!layer.identifier.length) {
+            layer.identifier = [[NSUUID UUID] UUIDString];
+        }
+        // 层 id 去重（重复 id 会让 switch_layer 事件指向不确定的层）
+        if ([usedLayerIDs containsObject:layer.identifier]) {
+            layer.identifier = [[NSUUID UUID] UUIDString];
+        }
+        [usedLayerIDs addObject:layer.identifier];
+        if (!layer.name.length) layer.name = layer.identifier;
+        if (![layer.widgets isKindOfClass:NSMutableArray.class]) {
+            layer.widgets = [NSMutableArray arrayWithArray:layer.widgets ?: @[]];
+        }
+
+        for (A2ControlWidget *w in layer.widgets) {
+            if (!w.identifier.length) w.identifier = [[NSUUID UUID] UUIDString];
+            if ([usedWidgetIDs containsObject:w.identifier]) {
+                w.identifier = [[NSUUID UUID] UUIDString];
+            }
+            [usedWidgetIDs addObject:w.identifier];
+            w.layerID = layer.identifier;
+            if (!w.clickEvents) w.clickEvents = @[];
+
+            // 坐标/尺寸夹紧。0 尺寸的控件渲染层会给默认值，但数据里
+            // 也应该收成有效值，否则导出到 ZL2/FCL 会被对方判成非法。
+            if (!isfinite(w.xPercent)) w.xPercent = 0;
+            if (!isfinite(w.yPercent)) w.yPercent = 0;
+            if (!isfinite(w.widthPercent)) w.widthPercent = 0;
+            if (!isfinite(w.heightPercent)) w.heightPercent = 0;
+            if (w.widthPercent <= 0) w.widthPercent = 12;
+            if (w.heightPercent <= 0) w.heightPercent = 12;
+            w.widthPercent = MAX(1.0, MIN(100.0, w.widthPercent));
+            w.heightPercent = MAX(1.0, MIN(100.0, w.heightPercent));
+            w.xPercent = MAX(0.0, MIN(100.0 - w.widthPercent, w.xPercent));
+            w.yPercent = MAX(0.0, MIN(100.0 - w.heightPercent, w.yPercent));
+
+            if (!isfinite(w.opacity)) w.opacity = 1;
+            w.opacity = MAX(0.0, MIN(1.0, w.opacity));
+            w.cornerTopStart = MAX(0, MIN(100, w.cornerTopStart));
+            w.cornerTopEnd = MAX(0, MIN(100, w.cornerTopEnd));
+            w.cornerBottomEnd = MAX(0, MIN(100, w.cornerBottomEnd));
+            w.cornerBottomStart = MAX(0, MIN(100, w.cornerBottomStart));
+
+            if (!isfinite(w.deadZone)) w.deadZone = 0.15;
+            w.deadZone = MAX(0, MIN(0.9, w.deadZone));
+            if (!isfinite(w.lockThreshold)) w.lockThreshold = 0.3;
+            w.lockThreshold = MAX(0, MIN(1, w.lockThreshold));
+
+            if (w.type == A2ControlWidgetTypeJoystick &&
+                !w.directionEvents && w.clickEvents.count == 0) {
+                w.directionEvents = A2DefaultDirectionEvents();
+            }
+            if (w.type == A2ControlWidgetTypeView) {
+                if (!w.mouseMode.length) w.mouseMode = @"slide";
+                if (!isfinite(w.viewScale) || w.viewScale <= 0) w.viewScale = 1.0;
+            }
+            if (w.type == A2ControlWidgetTypeScroll) {
+                if (!isfinite(w.scrollStep) || w.scrollStep < 4) w.scrollStep = 18;
+            }
+            if (w.type == A2ControlWidgetTypeGyroscope) {
+                if (!isfinite(w.gyroscopeSensitivity) || w.gyroscopeSensitivity <= 0) {
+                    w.gyroscopeSensitivity = 1.0;
+                }
+                if (w.gyroscopeSmoothingWindow < 1) w.gyroscopeSmoothingWindow = 4;
+                if (!isfinite(w.gyroscopeThreshold)) w.gyroscopeThreshold = 0.02;
+            }
+        }
+    }
+
+    // 版本号：Air1 老数据没有版本号，这里补成当前内部版本；
+    // ZL2/FCL 的源版本号（editorVersion/controllerVersion）在各自 parser
+    // 里已经记下，不在这里覆盖，避免导出时版本倒退。
+    if (self.version <= 0) self.version = [A2ControlLayout currentFormatVersion];
+}
+
+#pragma mark - 快照
+
+- (NSDictionary *)snapshotJSON {
+    NSMutableArray *layers = [NSMutableArray array];
+    for (A2ControlLayer *layer in self.layers) {
+        NSMutableArray *widgets = [NSMutableArray array];
+        for (A2ControlWidget *w in layer.widgets) {
+            [widgets addObject:@{
+                @"type": @(w.type),
+                @"json": [w toJSON],
+            }];
+        }
+        [layers addObject:@{
+            @"id": layer.identifier ?: @"",
+            @"name": layer.name ?: @"",
+            @"visible": @(layer.visibleByDefault),
+            @"hideWhenMouse": @(layer.hideWhenMouse),
+            @"hideWhenGamepad": @(layer.hideWhenGamepad),
+            @"hideWhenJoystick": @(layer.hideWhenJoystick),
+            @"widgets": widgets,
+        }];
+    }
+    return @{
+        @"format": @"air2-snapshot",
+        @"air2Version": @([A2ControlLayout currentFormatVersion]),
+        @"name": self.name ?: @"",
+        @"author": self.author ?: @"",
+        @"aspectRatio": @(self.aspectRatio),
+        @"sourceFormat": self.sourceFormat ?: @"air2",
+        @"layers": layers,
+    };
+}
+
++ (instancetype)layoutFromSnapshot:(NSDictionary *)snapshot {
+    if (![snapshot isKindOfClass:NSDictionary.class]) return nil;
+
+    A2ControlLayout *layout = [A2ControlLayout new];
+    layout.sourceFormat = A2Str(snapshot, @[@"sourceFormat"]) ?: @"air2";
+    layout.version = (NSInteger)A2Num(snapshot, @[@"air2Version"], 1);
+    layout.name = A2Str(snapshot, @[@"name"]) ?: @"未命名布局";
+    layout.author = A2Str(snapshot, @[@"author"]);
+    layout.aspectRatio = A2Num(snapshot, @[@"aspectRatio"], 16.0 / 9.0);
+    layout.layers = [NSMutableArray array];
+    layout.buttonStyles = [NSMutableDictionary dictionary];
+    layout.joystickStyles = [NSMutableDictionary dictionary];
+
+    NSArray *layers = [snapshot[@"layers"] isKindOfClass:NSArray.class]
+        ? snapshot[@"layers"] : @[];
+    for (NSDictionary *lj in layers) {
+        if (![lj isKindOfClass:NSDictionary.class]) continue;
+        A2ControlLayer *layer = [A2ControlLayer new];
+        layer.identifier = A2Str(lj, @[@"id"]) ?: [[NSUUID UUID] UUIDString];
+        layer.name = A2Str(lj, @[@"name"]) ?: layer.identifier;
+        layer.visibleByDefault = A2Bool(lj, @[@"visible"], YES);
+        layer.hideWhenMouse = A2Bool(lj, @[@"hideWhenMouse"], YES);
+        layer.hideWhenGamepad = A2Bool(lj, @[@"hideWhenGamepad"], YES);
+        layer.hideWhenJoystick = A2Bool(lj, @[@"hideWhenJoystick"], NO);
+
+        NSArray *widgets = [lj[@"widgets"] isKindOfClass:NSArray.class]
+            ? lj[@"widgets"] : @[];
+        for (NSDictionary *entry in widgets) {
+            if (![entry isKindOfClass:NSDictionary.class]) continue;
+            NSNumber *typeNum = entry[@"type"];
+            NSDictionary *json = entry[@"json"];
+            if (![typeNum isKindOfClass:NSNumber.class] ||
+                ![json isKindOfClass:NSDictionary.class]) continue;
+            A2ControlWidget *w = [A2ControlWidget widgetFromJSON:json
+                                                            type:(A2ControlWidgetType)typeNum.integerValue
+                                                         layerID:layer.identifier];
+            if (w) [layer.widgets addObject:w];
+        }
+        [layout.layers addObject:layer];
+    }
+
+    [layout normalize];
+    return layout;
 }
 
 + (NSError *)errorWith:(NSString *)msg {

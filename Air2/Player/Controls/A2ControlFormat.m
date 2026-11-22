@@ -23,6 +23,13 @@ static NSString *const kA2ExtensionsKey = @"air2Extensions";
 + (A2ControlFormatKind)detectFormat:(NSDictionary *)json {
     if (![json isKindOfClass:NSDictionary.class]) return A2ControlFormatKindUnknown;
 
+    // Air2 内部格式必须最先判断：它也用 layers[]，但坐标是屏幕百分比。
+    // 判断晚了会被当成 ZL2，坐标错十倍（见 A2ControlLayout.h 的坐标说明）。
+    if (json[@"air2Version"] != nil) return A2ControlFormatKindAir2;
+    if ([json[@"format"] isKindOfClass:NSString.class] &&
+        [json[@"format"] isEqualToString:@"air2"]) {
+        return A2ControlFormatKindAir2;
+    }
     if ([A2ControlFormatFCL sniff:json]) return A2ControlFormatKindFCL;
     if ([json[@"layers"] isKindOfClass:NSArray.class]) return A2ControlFormatKindZL2;
     if ([json[@"normalButtons"] isKindOfClass:NSArray.class] ||
@@ -133,7 +140,25 @@ static NSString *const kA2ExtensionsKey = @"air2Extensions";
         A2ControlWidgetType type = (A2ControlWidgetType)typeNum.integerValue;
         if (type != A2ControlWidgetTypeGamepad &&
             type != A2ControlWidgetTypeGyroscope &&
-            type != A2ControlWidgetTypeHotbar) continue;
+            type != A2ControlWidgetTypeHotbar &&
+            type != A2ControlWidgetTypeView &&
+            type != A2ControlWidgetTypeScroll) continue;
+
+        // FCL 导出时给扩展控件写了一个装饰占位按钮（id = "<uuid>.air2"）。
+        // 恢复真控件前先把这个占位删掉，否则界面上会多一个点不动的假按钮。
+        NSString *uuid = widgetJSON[@"uuid"];
+        if (uuid.length) {
+            NSString *placeholderID = [uuid stringByAppendingString:@".air2"];
+            for (A2ControlLayer *l in layout.layers) {
+                NSMutableArray *toRemove = [NSMutableArray array];
+                for (A2ControlWidget *candidate in l.widgets) {
+                    if ([candidate.identifier isEqualToString:placeholderID]) {
+                        [toRemove addObject:candidate];
+                    }
+                }
+                for (A2ControlWidget *dead in toRemove) [l.widgets removeObject:dead];
+            }
+        }
 
         A2ControlWidget *w = [A2ControlWidget widgetFromJSON:widgetJSON
                                                         type:type
@@ -154,11 +179,19 @@ static NSString *const kA2ExtensionsKey = @"air2Extensions";
     for (A2ControlLayer *layer in layout.layers) {
         [layers addObject:[layer toJSON]];
     }
+    // format / air2Version 是内部格式的"身份证"：
+    //   · 让 detectFormat 走 Air2 分支（百分比坐标）
+    //   · 让 A2ControlStore 的迁移能判断文件版本
+    // editorVersion 保留 ZL2 的值只是方便人工阅读，不代表坐标是 ZL2 的。
     return @{
+        @"format": @"air2",
+        @"air2Version": @([A2ControlLayout currentFormatVersion]),
         @"editorVersion": @(MAX(12, layout.version)),
         @"name": layout.name ?: @"Air2 布局",
         @"author": layout.author ?: @"Air2",
         @"layers": layers,
+        @"buttonStyles": layout.buttonStyles ?: @{},
+        @"joystickStyles": layout.joystickStyles ?: @{},
     };
 }
 
@@ -168,7 +201,9 @@ static NSString *const kA2ExtensionsKey = @"air2Extensions";
         for (A2ControlWidget *w in layer.widgets) {
             if (w.type != A2ControlWidgetTypeGamepad &&
                 w.type != A2ControlWidgetTypeGyroscope &&
-                w.type != A2ControlWidgetTypeHotbar) continue;
+                w.type != A2ControlWidgetTypeHotbar &&
+                w.type != A2ControlWidgetTypeView &&
+                w.type != A2ControlWidgetTypeScroll) continue;
             [out addObject:@{
                 @"layer": layer.identifier ?: @"",
                 @"type": @(w.type),
@@ -202,9 +237,12 @@ static NSString *const kA2ExtensionsKey = @"air2Extensions";
             break;
     }
 
-    // 扩展控件保真：对方的控件类型表达不了，就把描述挂在根节点上
-    NSArray *extensions = [self extensionEntriesFromLayout:layout];
-    if (extensions.count) json[kA2ExtensionsKey] = extensions;
+    // 扩展控件保真：只有导出到对方格式时才需要挂在根节点上。
+    // Air2 原生格式里这些控件本来就在 layers[] 里，再挂一份会重复。
+    if (resolved == A2ControlFormatKindZL2 || resolved == A2ControlFormatKindFCL) {
+        NSArray *extensions = [self extensionEntriesFromLayout:layout];
+        if (extensions.count) json[kA2ExtensionsKey] = extensions;
+    }
 
     return json;
 }

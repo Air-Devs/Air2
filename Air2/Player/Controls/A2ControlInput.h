@@ -29,8 +29,13 @@
 //
 //  本层把这两种情况收敛掉：控件只要说「我按的是这个事件键」，
 //  由 A2ControlInputDispatcher 判断它是键盘、鼠标还是滚轮，
-//  并在宿主实现了扩展协议时走正确的通道；
-//  宿主没实现时退回老的 controlPressKey:（保持行为不变，不会更糟）。
+//  并在宿主实现了扩展协议时走正确的通道。
+//  宿主没实现扩展协议时**不再**退回 controlPressKey:（那会把鼠标键
+//  伪造成键盘码，左键 0 还会被宿主丢弃），而是：
+//    1. 优先用 dlsym 取 input_bridge 导出的
+//       CallbackBridge_nativeSendMouseButton / _SendScroll（见 .m 顶部说明）
+//    2. 都没有时发 A2ControlMouseButtonNotification / A2ControlScrollNotification
+//  这样无论宿主是否接线，鼠标键都不会变成错的键盘码。
 //
 //  ## 与宿主的契约
 //
@@ -46,6 +51,19 @@
 NS_ASSUME_NONNULL_BEGIN
 
 @protocol A2ControlInputDelegate;
+
+#pragma mark - 宿主未实现扩展协议时的兜底通知
+
+/// 鼠标键。userInfo：@"button" → NSNumber(0/1/2)、@"pressed" → NSNumber(BOOL)。
+/// 宿主（SurfaceViewController）若暂时没实现 A2ControlAdvancedInput，
+/// 可以订阅这个通知把鼠标键接到自己的通道上。
+FOUNDATION_EXPORT NSNotificationName const A2ControlMouseButtonNotification;
+
+/// 滚轮。userInfo：@"dx"/@"dy" → NSNumber（以「格」为单位，向上为正）。
+FOUNDATION_EXPORT NSNotificationName const A2ControlScrollNotification;
+
+/// 启动器事件（switch_layer 以外的自定义事件）。userInfo：@"event" → 事件名。
+FOUNDATION_EXPORT NSNotificationName const A2ControlLauncherEventNotification;
 
 #pragma mark - 事件键的分类
 

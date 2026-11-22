@@ -122,6 +122,16 @@ NS_ASSUME_NONNULL_BEGIN
 /// 选中变化回调
 @property (nonatomic, copy, nullable) void (^onSelectionChanged)(A2ControlWidget * _Nullable);
 
+/// 编辑时拖动/缩放控件后回调（编辑器用来同步属性面板）
+@property (nonatomic, copy, nullable) void (^onWidgetChanged)(A2ControlWidget * _Nullable);
+
+/// 一次拖动/缩放结束（编辑器用它把整次手势记进撤销栈）
+@property (nonatomic, copy, nullable) void (^onWidgetCommitted)(A2ControlWidget * _Nullable);
+
+/// 拖动/缩放时的网格步长（单位：屏幕百分比；0 = 不吸附）。
+/// 编辑器默认 0.5，对齐 ZL2 编辑器按 1/2 百分比取整的手感。
+@property (nonatomic, assign) CGFloat snapStep;
+
 - (instancetype)initWithLayout:(A2ControlLayout *)layout;
 
 /// 重新构建视图（改动布局数据后调用）
@@ -129,6 +139,13 @@ NS_ASSUME_NONNULL_BEGIN
 
 /// 按控件类型创建视图（编辑器「新增控件」可以直接用）
 - (UIView *)makeViewForWidget:(A2ControlWidget *)widget;
+
+/// 控件 → 视图 / 视图 → 控件（编辑器选中、拖动用）
+- (nullable UIView *)viewForWidget:(A2ControlWidget *)widget;
+- (nullable A2ControlWidget *)widgetForView:(nullable UIView *)view;
+
+/// 刷新选中框（选中控件的坐标/尺寸被程序改动后调用）
+- (void)refreshSelectionOverlay;
 
 /// 整体不透明度
 @property (nonatomic, assign) CGFloat controlsOpacity;

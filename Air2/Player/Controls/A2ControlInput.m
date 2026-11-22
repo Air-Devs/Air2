@@ -13,6 +13,50 @@
 #import "A2ControlRenderer.h"
 #import "A2Logger.h"
 #import <math.h>
+#import <dlfcn.h>
+
+// ---------------------------------------------------------------------------
+// 桥接兜底（有意的分层例外）
+//
+// 控件层的契约是 A2ControlInputDelegate（+可选的 A2ControlAdvancedInput）。
+// 但宿主 SurfaceViewController 目前只实现了老协议的 5 个方法，没有鼠标键 /
+// 滚轮通道。攻击、使用、滚轮这些默认控件就会"按了没反应"。
+//
+// input_bridge_v3.m 已经导出了这两个 C 函数（utils.h 里有声明，但那是
+// Player/Context 的巨型头文件，Controls 不应该 import 它）：
+//     void CallbackBridge_nativeSendMouseButton(int button, int action, int mods);
+//     void CallbackBridge_nativeSendScroll(CGFloat xoffset, CGFloat yoffset);
+// 所以这里用 dlsym 在运行时取符号：
+//   · 编译期零依赖，Controls 仍可单独编译/预览
+//   · 宿主以后实现了 A2ControlAdvancedInput，会优先走协议，不经过这里
+//   · 符号不存在（预览/单测）时退回通知
+// ---------------------------------------------------------------------------
+typedef void (*A2BridgeMouseButtonFn)(int button, int action, int mods);
+typedef void (*A2BridgeScrollFn)(CGFloat xoffset, CGFloat yoffset);
+
+static A2BridgeMouseButtonFn A2BridgeMouseButton(void) {
+    static A2BridgeMouseButtonFn fn = NULL;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        fn = (A2BridgeMouseButtonFn)(void *)dlsym(RTLD_DEFAULT,
+                                                 "CallbackBridge_nativeSendMouseButton");
+    });
+    return fn;
+}
+
+static A2BridgeScrollFn A2BridgeScroll(void) {
+    static A2BridgeScrollFn fn = NULL;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        fn = (A2BridgeScrollFn)(void *)dlsym(RTLD_DEFAULT,
+                                             "CallbackBridge_nativeSendScroll");
+    });
+    return fn;
+}
+
+NSNotificationName const A2ControlMouseButtonNotification = @"A2ControlMouseButtonNotification";
+NSNotificationName const A2ControlScrollNotification = @"A2ControlScrollNotification";
+NSNotificationName const A2ControlLauncherEventNotification = @"A2ControlLauncherEventNotification";
 
 #pragma mark - GLFW 键名表
 
@@ -372,6 +416,9 @@ static NSInteger A2MouseButtonFromName(NSString *name) {
 
 @interface A2ControlInputDispatcher ()
 @property (nonatomic, strong) A2KeyStateKeeper *keyState;
+/// 兜底告警只打一次，避免高频触摸刷爆日志
+@property (nonatomic, assign) BOOL didWarnMouseFallback;
+@property (nonatomic, assign) BOOL didWarnScrollFallback;
 @end
 
 @implementation A2ControlInputDispatcher
@@ -445,9 +492,26 @@ static NSInteger A2MouseButtonFromName(NSString *name) {
         [(id<A2ControlAdvancedInput>)d controlPressMouseButton:button];
         return;
     }
-    // 宿主还没实现新协议 —— 退回老通道（键盘语义），不会更糟
-    NSString *key = [A2ControlEventKey keyForMouseButton:button];
-    if (key) [self.keyState pressKey:key];
+    // 宿主还没实现扩展协议。
+    // 老实现会把鼠标键塞进 keyState 走 controlPressKey: —— 那是错的：
+    //   · 左键 0 被 SurfaceViewController 的 `code <= 0` 直接丢掉
+    //   · 右键/中键 1/2 会被当成 GLFW 键盘码 1/2 发进游戏（游戏里不存在这两个键）
+    // 这里先试运行时的 input_bridge 符号（见文件头说明），再退通知。
+    A2BridgeMouseButtonFn fn = A2BridgeMouseButton();
+    if (fn) {
+        fn((int)button, 1, 0);
+        return;
+    }
+    if (!self.didWarnMouseFallback) {
+        self.didWarnMouseFallback = YES;
+        [A2Logger warning:@"A2ControlInput"
+                  message:@"宿主未实现 A2ControlAdvancedInput，且找不到 "
+                          @"CallbackBridge_nativeSendMouseButton；鼠标键改走通知（不再伪造键盘码）"];
+    }
+    [NSNotificationCenter.defaultCenter
+        postNotificationName:A2ControlMouseButtonNotification
+                      object:self
+                    userInfo:@{@"button": @(button), @"pressed": @YES}];
 }
 
 - (void)releaseMouseButton:(NSInteger)button {
@@ -456,8 +520,15 @@ static NSInteger A2MouseButtonFromName(NSString *name) {
         [(id<A2ControlAdvancedInput>)d controlReleaseMouseButton:button];
         return;
     }
-    NSString *key = [A2ControlEventKey keyForMouseButton:button];
-    if (key) [self.keyState releaseKey:key];
+    A2BridgeMouseButtonFn fn = A2BridgeMouseButton();
+    if (fn) {
+        fn((int)button, 0, 0);
+        return;
+    }
+    [NSNotificationCenter.defaultCenter
+        postNotificationName:A2ControlMouseButtonNotification
+                      object:self
+                    userInfo:@{@"button": @(button), @"pressed": @NO}];
 }
 
 - (void)moveMouseBy:(CGPoint)delta {
@@ -482,15 +553,22 @@ static NSInteger A2MouseButtonFromName(NSString *name) {
         [(id<A2ControlAdvancedInput>)d controlScrollByX:dx y:dy];
         return;
     }
-    // 没有滚轮通道：用滚轮的单次触发事件名临时兜底（部分宿主会识别）
-    if (dy != 0) {
-        NSString *name = dy > 0 ? @"launcher.event.scroll_up.single"
-                                : @"launcher.event.scroll_down.single";
-        [NSNotificationCenter.defaultCenter
-            postNotificationName:@"A2ControlScrollNotification"
-                          object:self
-                        userInfo:@{@"event": name}];
+    // 没有滚轮通道：先试 input_bridge 的导出函数（见文件头说明），再发通知。
+    A2BridgeScrollFn fn = A2BridgeScroll();
+    if (fn) {
+        fn(dx, dy);
+        return;
     }
+    if (!self.didWarnScrollFallback) {
+        self.didWarnScrollFallback = YES;
+        [A2Logger warning:@"A2ControlInput"
+                  message:@"宿主未实现 A2ControlAdvancedInput，且找不到 "
+                          @"CallbackBridge_nativeSendScroll；滚轮改走通知"];
+    }
+    [NSNotificationCenter.defaultCenter
+        postNotificationName:A2ControlScrollNotification
+                      object:self
+                    userInfo:@{@"dx": @(dx), @"dy": @(dy)}];
 }
 
 #pragma mark 启动器事件
@@ -515,7 +593,7 @@ static NSInteger A2MouseButtonFromName(NSString *name) {
 
     // 其它启动器事件（切换鼠标模式、切层等）交给上层订阅
     [NSNotificationCenter.defaultCenter
-        postNotificationName:@"A2ControlLauncherEventNotification"
+        postNotificationName:A2ControlLauncherEventNotification
                       object:self
                     userInfo:@{@"event": name}];
 }

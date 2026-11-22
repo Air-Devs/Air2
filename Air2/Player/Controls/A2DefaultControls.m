@@ -2,176 +2,214 @@
 //  A2DefaultControls.m
 //  Air2
 //
-//  Copyright (C) 2026 Air-Devs and contributors.
-//
-//  This program is free software: you can redistribute it and/or modify
-//  it under the terms of the GNU General Public License as published by
-//  the Free Software Foundation, either version 3 of the License, or
-//  (at your option) any later version.
-//
-//  This program is distributed in the hope that it will be useful,
-//  but WITHOUT ANY WARRANTY; without even the implied warranty of
-//  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
-//  GNU General Public License for more details.
-//
-//  You should have received a copy of the GNU General Public License
-//  along with this program. If not, see <https://www.gnu.org/licenses/gpl-3.0.txt>.
-//
-//  SPDX-License-Identifier: GPL-3.0-or-later
-//
-//
-//
-//  A2DefaultControls.m
-//  Air2
+//  默认布局实现。坐标说明见 .h。
 //
 
 #import "A2DefaultControls.h"
+#import "A2ControlStore.h"
+#import "A2Logger.h"
 
-/// LWJGL GLFW 键码（与 input_bridge_v3.m 里的映射一致）
-static NSString *const kKeyW = @"87";
-static NSString *const kKeyA = @"65";
-static NSString *const kKeyS = @"83";
-static NSString *const kKeyD = @"68";
-static NSString *const kKeySpace = @"32";
-static NSString *const kKeyShift = @"340";
-static NSString *const kKeyCtrl = @"341";
-static NSString *const kKeyE = @"69";
-static NSString *const kKeyEsc = @"256";
-static NSString *const kKeyF1 = @"290";
+/// GLFW 键码（与 input_bridge_v3.m 的映射一致）
+static NSString *const kKeySpace     = @"32";
+static NSString *const kKeyShift     = @"340";   // 潜行
+static NSString *const kKeyCtrl      = @"341";   // 疾跑
+static NSString *const kKeyE         = @"69";
+static NSString *const kKeyEsc       = @"256";
 static NSString *const kKeyMouseLeft = @"0";
-static NSString *const kKeyMouseRight = @"1";
+static NSString *const kKeyMouseRight= @"1";
 
 @implementation A2DefaultControls
 
-/// 造一个按钮控件
-static A2ControlWidget *Btn(NSString *ident, NSString *text,
-                            CGFloat x, CGFloat y, CGFloat size,
-                            NSString *keyCode) {
-    A2ControlWidget *w = [A2ControlWidget new];
-    w.type = A2ControlWidgetTypeButton;
-    w.identifier = ident;
-    w.text = text;
-    w.xPercent = x;
-    w.yPercent = y;
-    w.widthPercent = size * 0.9;    // 竖屏下按高度算，这里给个近似
-    w.heightPercent = size;
-    w.buttonStyle = @"default";
-    w.isSwipple = YES;
-    w.isPenetrable = NO;
-    w.isToggleable = NO;
-    w.visibility = A2ControlVisibilityAlways;
+#pragma mark - 构件
 
-    if (keyCode.length) {
-        w.clickEvents = @[[A2ControlEvent keyEventWithCode:keyCode]];
+/// 造一个按钮控件（点击事件 0 个或多个）
+static A2ControlWidget *A2MakeButton(NSString *ident, NSString *text,
+                                     CGFloat x, CGFloat y, CGFloat w, CGFloat h,
+                                     NSArray<NSString *> *keyCodes) {
+    A2ControlWidget *widget = [A2ControlWidget newButtonAtX:x y:y];
+    widget.identifier = ident;
+    widget.text = text ?: @"";
+    widget.widthPercent = w;
+    widget.heightPercent = h;
+    widget.visibility = A2ControlVisibilityAlways;
+    widget.isSwipple = YES;
+    widget.isPenetrable = NO;
+    widget.isToggleable = NO;
+    widget.opacity = 1.0;
+
+    NSMutableArray<A2ControlEvent *> *events = [NSMutableArray array];
+    for (NSString *code in keyCodes) {
+        if (code.length) [events addObject:[A2ControlEvent keyEventWithCode:code]];
     }
-    return w;
+    widget.clickEvents = events;
+    return widget;
+}
+
+/// 造一个文本控件（穿透，不挡触摸；用于顶部状态条）
+static A2ControlWidget *A2MakeText(NSString *ident, NSString *text,
+                                   CGFloat x, CGFloat y, CGFloat w, CGFloat h) {
+    A2ControlWidget *widget = [A2ControlWidget newButtonAtX:x y:y];
+    widget.type = A2ControlWidgetTypeTextBox;
+    widget.identifier = ident;
+    widget.text = text ?: @"";
+    widget.xPercent = x;
+    widget.yPercent = y;
+    widget.widthPercent = w;
+    widget.heightPercent = h;
+    widget.isPenetrable = YES;
+    widget.isSwipple = NO;
+    widget.clickEvents = @[];
+    widget.opacity = 0.85;
+    widget.visibility = A2ControlVisibilityAlways;
+    return widget;
+}
+
++ (A2ControlLayout *)builtInLayout {
+    A2ControlLayout *layout = [A2ControlLayout emptyLayout];
+    layout.sourceFormat = @"air2";
+    layout.version = [A2ControlLayout currentFormatVersion];
+    layout.name = @"默认布局";
+    layout.author = @"Air2";
+    layout.aspectRatio = 16.0 / 9.0;
+    [layout.layers removeAllObjects];
+
+    // ============ 底层：视角区 ============
+    // 必须最先加（z 序最底），否则它会挡住上面的按钮。
+    A2ControlLayer *lookLayer = [A2ControlLayer new];
+    lookLayer.identifier = @"look";
+    lookLayer.name = @"视角";
+    {
+        A2ControlWidget *view = [A2ControlWidget newWidgetOfType:A2ControlWidgetTypeView];
+        view.identifier = @"air2.look";
+        view.xPercent = 0;
+        view.yPercent = 0;
+        view.widthPercent = 100;
+        view.heightPercent = 100;
+        view.opacity = 0.02;          // 游戏内几乎不可见；编辑器里能选中
+        view.viewShowsBorder = NO;
+        view.mouseMode = @"slide";
+        view.mouseSensitivity = 100;
+        view.viewScale = 1.0;
+        view.visibility = A2ControlVisibilityAlways;
+        [lookLayer.widgets addObject:view];
+    }
+    [layout.layers addObject:lookLayer];
+
+    // ============ 中层：操作区 ============
+    A2ControlLayer *main = [A2ControlLayer new];
+    main.identifier = @"main";
+    main.name = @"操作";
+    main.hideWhenMouse = YES;
+    main.hideWhenGamepad = YES;
+    main.hideWhenJoystick = NO;
+
+    // 左摇杆（八方向 WASD；斜向两键由 A2JoystickView 内部合成）
+    {
+        A2ControlWidget *joystick = [A2ControlWidget newWidgetOfType:A2ControlWidgetTypeJoystick];
+        joystick.identifier = @"air2.joystick";
+        joystick.xPercent = 3;
+        joystick.yPercent = 46;
+        joystick.widthPercent = 26;
+        joystick.heightPercent = 42;
+        joystick.deadZone = 0.15;
+        joystick.visibility = A2ControlVisibilityAlways;
+        [main.widgets addObject:joystick];
+    }
+
+    // 右侧拇指区：攻击 / 使用 / 跳跃 / 潜行 / 疾跑
+    [main.widgets addObject:A2MakeButton(@"air2.attack", @"攻",
+                                        86, 62, 11, 17, @[kKeyMouseLeft])];
+    [main.widgets addObject:A2MakeButton(@"air2.use", @"用",
+                                        86, 81, 11, 17, @[kKeyMouseRight])];
+    [main.widgets addObject:A2MakeButton(@"air2.jump", @"跳",
+                                        72, 80, 12, 17, @[kKeySpace])];
+    [main.widgets addObject:A2MakeButton(@"air2.sneak", @"潜",
+                                        72, 62, 11, 16, @[kKeyShift])];
+    [main.widgets addObject:A2MakeButton(@"air2.sprint", @"跑",
+                                        72, 44, 10, 14, @[kKeyCtrl])];
+
+    // 顶部：背包 / 菜单
+    [main.widgets addObject:A2MakeButton(@"air2.inventory", @"包",
+                                        86, 42, 10, 15, @[kKeyE])];
+    [main.widgets addObject:A2MakeButton(@"air2.menu", @"≡",
+                                        3, 8, 7, 13, @[kKeyEsc])];
+
+    // 九格快捷栏（单控件判定：ZL2 Hotbar.kt 的语义）
+    {
+        A2ControlWidget *hotbar = [A2ControlWidget newWidgetOfType:A2ControlWidgetTypeHotbar];
+        hotbar.identifier = @"air2.hotbar";
+        hotbar.xPercent = 26;
+        hotbar.yPercent = 88;
+        hotbar.widthPercent = 48;
+        hotbar.heightPercent = 10;
+        hotbar.visibility = A2ControlVisibilityAlways;
+        [main.widgets addObject:hotbar];
+    }
+
+    // 滚轮（右边缘竖条）
+    {
+        A2ControlWidget *scroll = [A2ControlWidget newWidgetOfType:A2ControlWidgetTypeScroll];
+        scroll.identifier = @"air2.scroll";
+        scroll.xPercent = 93;
+        scroll.yPercent = 30;
+        scroll.widthPercent = 5;
+        scroll.heightPercent = 26;
+        scroll.scrollStep = 18;
+        scroll.visibility = A2ControlVisibilityAlways;
+        [main.widgets addObject:scroll];
+    }
+
+    [layout.layers addObject:main];
+
+    // ============ 顶层：顶部状态 ============
+    // 纯文本、可穿透，不挡触摸；后续宿主可以把它绑定到坐标/FPS 显示。
+    A2ControlLayer *status = [A2ControlLayer new];
+    status.identifier = @"status";
+    status.name = @"状态";
+    status.hideWhenMouse = NO;
+    status.hideWhenGamepad = NO;
+    [status.widgets addObject:A2MakeText(@"air2.status", @"Air2 · 触屏控制", 2, 2, 40, 5)];
+    [layout.layers addObject:status];
+
+    [layout normalize];
+    return layout;
 }
 
 + (A2ControlLayout *)makeLayout {
-    A2ControlLayout *layout = [A2ControlLayout emptyLayout];
-    layout.name = @"默认布局";
-    layout.author = @"Air2";
-
-    NSMutableArray *ws = [NSMutableArray array];
-
-    // ============ 左侧：摇杆 + 快捷菜单 ============
-    A2ControlWidget *joystick = [A2ControlWidget new];
-    joystick.type = A2ControlWidgetTypeJoystick;
-    joystick.identifier = @"air2.joystick";
-    joystick.text = @"";
-    joystick.xPercent = 6;
-    joystick.yPercent = 58;
-    joystick.widthPercent = 22;
-    joystick.heightPercent = 30;
-    joystick.visibility = A2ControlVisibilityAlways;
-    [ws addObject:joystick];
-
-    // 摇杆外圈的四个方向键（三家默认都有，方便精确移动）
-    [ws addObject:Btn(@"air2.w",    @"", 22, 52,  8, kKeyW)];
-    [ws addObject:Btn(@"air2.a",    @"",  6, 66,  8, kKeyA)];
-    [ws addObject:Btn(@"air2.s",    @"", 22, 80,  8, kKeyS)];
-    [ws addObject:Btn(@"air2.d",    @"", 38, 66,  8, kKeyD)];
-
-    [ws addObject:Btn(@"air2.esc",   @"≡",  4,  8,  9, kKeyEsc)];
-    [ws addObject:Btn(@"air2.shift", @"潜行", 4, 26, 10, kKeyShift)];
-
-    // ============ 右侧：战斗与交互 ============
-    [ws addObject:Btn(@"air2.jump",   @"跳",  86, 76, 13, kKeySpace)];
-    [ws addObject:Btn(@"air2.attack", @"攻",  72, 86, 12, kKeyMouseLeft)];
-    [ws addObject:Btn(@"air2.use",    @"用",  88, 90, 12, kKeyMouseRight)];
-
-    [ws addObject:Btn(@"air2.inv",    @"包",  86, 20, 10, kKeyE)];
-    [ws addObject:Btn(@"air2.sneak",  @"蹲",  70, 72, 10, kKeyCtrl)];
-
-    // ============ 顶部：快捷栏 ============
-    for (int i = 0; i < 9; i++) {
-        NSString *label = [NSString stringWithFormat:@"%d", i + 1];
-        NSString *key = [NSString stringWithFormat:@"%d", kKeyF1.intValue + i];
-        [ws addObject:Btn([NSString stringWithFormat:@"air2.hotbar%d", i],
-                          label,
-                          24 + i * 5.8, 4, 6, key)];
+    NSError *err = nil;
+    A2ControlLayout *saved = [A2ControlStore loadUserLayoutWithError:&err];
+    if (saved) {
+        return saved;
+    }
+    if (err) {
+        // 用户文件坏了：保留原文件（不覆盖），回退内置布局
+        [A2Logger warning:@"A2DefaultControls"
+                  message:[NSString stringWithFormat:@"用户布局读取失败：%@，回退内置布局",
+                           err.localizedDescription ?: @""]];
     }
 
-    // ============ 功能键区（对照 ZL2 的默认布局）============
-    //
-    // ZL2 的默认控件里有 Esc / Tab / Alt / Shift / 左右键 / F1~F12。
-    // 这些都是「PC 游戏必需的键」，触屏上必须有对应的按钮，
-    // 否则玩家连背包合成、切视角、开聊天都做不到。
-    //
-    // 布局：顶部一行 12 个 F 键（缩小），左侧竖排 Esc/Tab/Alt/Shift，
-    // 右侧两个大键（鼠标左右键）。
-
-    static NSString *const kKeyTab  = @"258";
-    static NSString *const kKeyAlt  = @"342";
-
-    // F1 ~ F12 横向排布，屏幕中部偏上
-    for (int i = 0; i < 12; i++) {
-        NSString *key = [NSString stringWithFormat:@"%d", 290 + i];
-        CGFloat x = 12.0 + i * 6.2;
-        [ws addObject:Btn([NSString stringWithFormat:@"air2.f%d", i + 1],
-                          [NSString stringWithFormat:@"F%d", i + 1],
-                          x, 44, 5.5, key)];
+    A2ControlLayout *layout = [self builtInLayout];
+    NSError *saveErr = nil;
+    if (![A2ControlStore saveUserLayout:layout error:&saveErr]) {
+        [A2Logger warning:@"A2DefaultControls"
+                  message:[NSString stringWithFormat:@"默认布局落盘失败：%@",
+                           saveErr.localizedDescription ?: @""]];
     }
-
-    // 左侧竖排：Esc / Tab / Alt
-    [ws addObject:Btn(@"air2.tab", @"Tab", 6, 12, 8, kKeyTab)];
-    [ws addObject:Btn(@"air2.alt", @"Alt", 6, 20, 8, kKeyAlt)];
-
-    // 右侧：鼠标左右键（比「攻/用」大，因为要常按）
-    [ws addObject:Btn(@"air2.mouseL", @"左键", 88, 62, 12, @"0")];
-    [ws addObject:Btn(@"air2.mouseR", @"右键", 88, 74, 12, @"1")];
-
-    // 新模型用 layers[]，控件挂在层里（对照 ZL2 的 layers 结构）
-    A2ControlLayer *mainLayer = layout.layers.firstObject;
-    if (!mainLayer) {
-        mainLayer = [A2ControlLayer new];
-        mainLayer.identifier = @"default";
-        mainLayer.name = @"默认层";
-        [layout.layers addObject:mainLayer];
-    }
-    [mainLayer.widgets addObjectsFromArray:ws];
-
-    // 默认样式
-    layout.buttonStyles[@"default"] = @{
-        @"id": @"default",
-        @"color": @"#33FFFFFF",
-        @"borderColor": @"#66FFFFFF",
-        @"textColor": @"#FFFFFFFF",
-        @"borderWidth": @1,
-        @"alpha": @0.75,
-    };
-
     return layout;
 }
 
 + (BOOL)installDefaultLayoutToPath:(NSString *)path error:(NSError **)error {
-    A2ControlLayout *layout = [self makeLayout];
-    return [layout writeToFile:path error:error];
+    A2ControlLayout *layout = [self builtInLayout];
+    return [A2ControlStore saveLayout:layout toPath:path error:error];
 }
 
 + (BOOL)installIfNeededAtPath:(NSString *)path error:(NSError **)error {
     if ([NSFileManager.defaultManager fileExistsAtPath:path]) return YES;
     return [self installDefaultLayoutToPath:path error:error];
+}
+
++ (BOOL)restoreDefaultLayoutWithError:(NSError **)error {
+    return [A2ControlStore saveUserLayout:[self builtInLayout] error:error];
 }
 
 @end

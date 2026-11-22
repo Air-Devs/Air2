@@ -653,11 +653,20 @@ static NSString *FCLVisibilityName(A2ControlVisibility v) {
                 // 真值保存在 rawJSON → 由 A2ControlFormat 的扩展键继续携带。
                 case A2ControlWidgetTypeGamepad:
                 case A2ControlWidgetTypeGyroscope:
-                case A2ControlWidgetTypeHotbar: {
-                    // 装饰性占位：不带事件，避免 FCL 里出现一个「点了会乱发键」的按钮
-                    [buttons addObject:[self fclButtonJSONFromWidget:w
-                                                      includeEvents:NO
-                                                             aspect:aspect]];
+                case A2ControlWidgetTypeHotbar:
+                case A2ControlWidgetTypeView:
+                case A2ControlWidgetTypeScroll: {
+                    // 装饰性占位：不带事件，避免 FCL 里出现一个「点了会乱发键」的按钮。
+                    // 真值由 A2ControlFormat 的 air2Extensions 携带。
+                    //
+                    // id 必须换掉：占位按钮和扩展控件用同一个 uuid 的话，
+                    // 导回 Air2 时 mergeExtensionsFrom: 会认为「已经存在」而跳过恢复，
+                    // 扩展控件就丢了。加 .air2 后缀保证两者不同 id。
+                    NSMutableDictionary *placeholder =
+                        [[self fclButtonJSONFromWidget:w includeEvents:NO aspect:aspect] mutableCopy];
+                    placeholder[@"id"] = [NSString stringWithFormat:@"%@.air2",
+                                          w.identifier ?: [[NSUUID UUID] UUIDString]];
+                    [buttons addObject:placeholder];
                     break;
                 }
             }

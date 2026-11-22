@@ -42,10 +42,23 @@ typedef NS_ENUM(NSInteger, A2HideLayerWhen) {
 @end
 
 /// 图层面板（编辑器里的一个面板）
+///
+/// 交互（对照 ZL2 的 edit_layer/EditControlLayerDialog 与
+/// control_editor/_Layout.kt 的层列表）：
+///   · 点一层 = 选中（新控件加到这一层）
+///   · 上/下箭头 = 调整前后顺序（renderer 的 z 序跟着变）
+///   · 眼睛 = 显示/隐藏（对应 ZL2 的 layer.hide）
+///   · 垃圾桶 = 删除（至少保留一层）
 @interface A2ControlLayerPanel : UIView
 
-/// 层列表变化时回调
+/// 层列表变化时回调（顺序 / 可见性 / 增删）
 @property (nonatomic, copy, nullable) void (^onLayersChanged)(void);
+
+/// 选中某层
+@property (nonatomic, copy, nullable) void (^onLayerSelected)(A2ControlLayer *layer);
+
+/// 当前选中的层（nil 时用第一层）
+@property (nonatomic, strong, nullable) A2ControlLayer *selectedLayer;
 
 - (instancetype)initWithLayers:(NSMutableArray<A2ControlLayer *> *)layers;
 - (void)reload;
