@@ -916,7 +916,7 @@ static NSString *A2GameMenuRendererDescription(void) {
     UIImageSymbolConfiguration *config =
         [UIImageSymbolConfiguration configurationWithPointSize:pointSize
                                                         weight:UIImageSymbolWeightMedium];
-    UIImage *image = [UIImage systemImageNamed:(expanded ? @"xmark" : @"line.3.horizontal")
+    UIImage *image = [UIImage systemImageNamed:(expanded ? @"xmark" : @"gearshape.fill")
                              withConfiguration:config];
 
     if (!animated || !_ballIcon.image) {

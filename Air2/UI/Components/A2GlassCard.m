@@ -124,6 +124,11 @@
                                           selector:@selector(handleThemeChanged:)
                                               name:A2ThemeDidChangeNotification
                                             object:nil];
+    // 背景换成图片/视频时卡片透明度也要跟着变，否则会一直保持不透明
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                          selector:@selector(handleThemeChanged:)
+                                              name:A2BackgroundDidChangeNotification
+                                            object:nil];
 }
 
 /// 让子视图四边贴合自身
@@ -228,7 +233,8 @@
 - (void)applyTheme {
     A2ThemeManager *tm = A2ThemeManager.shared;
     A2ColorScheme *s = tm.scheme;
-    BOOL hasCustomBg = (tm.backgroundImage != nil);
+    // 图片和视频都算「有自定义背景」：卡片要半透明把媒体透出来
+    BOOL hasCustomBg = tm.hasCustomBackground;
 
     // —— 填充色按层级选 ——
     UIColor *fill;
@@ -243,20 +249,22 @@
     // 有自定义背景时让卡片半透明，让背景色透出来 —— 这是个性化的关键
     if (hasCustomBg) {
         CGFloat alpha = tm.isDark ? 0.68 : 0.76;
-        // 用户设了模糊，卡片内部也跟一点，整体更统一
-        if (tm.backgroundBlur > 60) alpha -= 0.08;
+        // 模糊越强卡片越透，和背景层的连续强度联动（别再是写死的三档）
+        alpha -= 0.08 * MIN(1.0, MAX(0.0, (CGFloat)tm.backgroundBlur / 100.0));
         fill = [fill colorWithAlphaComponent:alpha];
     }
 
     _fillView.backgroundColor = fill;
 
-    // —— 模糊（仅在用户开启背景模糊且存在背景图时启用）——
+    // —— 模糊（仅在用户开启背景模糊且存在图片/视频背景时启用）——
     BOOL wantBlur = hasCustomBg && tm.backgroundBlur > 0 && _blurAmount > 0;
     if (wantBlur) {
-        UIBlurEffectStyle style = tm.backgroundBlur < 40 ? UIBlurEffectStyleSystemUltraThinMaterial
-                               : tm.backgroundBlur < 75 ? UIBlurEffectStyleSystemThinMaterial
-                                                        : UIBlurEffectStyleSystemMaterial;
+        NSInteger blur = tm.backgroundBlur;
+        UIBlurEffectStyle style = blur < 40 ? UIBlurEffectStyleSystemUltraThinMaterial
+                               : blur < 75 ? UIBlurEffectStyleSystemThinMaterial
+                                           : UIBlurEffectStyleSystemMaterial;
         _blurView.effect = [UIBlurEffect effectWithStyle:style];
+        _blurView.alpha = MIN(1.0, MAX(0.15, (CGFloat)blur / 60.0));
         _blurView.hidden = NO;
     } else {
         _blurView.effect = nil;

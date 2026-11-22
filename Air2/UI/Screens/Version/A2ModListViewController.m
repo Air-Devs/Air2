@@ -222,7 +222,15 @@ static NSString *A2ModRowMeta(A2LocalMod *mod) {
 
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    _fillView.backgroundColor = t.cSurfaceContainerLow;
+    A2ThemeManager *tm = A2ThemeManager.shared;
+    UIColor *fill = t.cSurfaceContainerLow;
+    // 有自定义背景（图片/视频）时行底半透明，别把背景盖住
+    if (tm.hasCustomBackground) {
+        CGFloat alpha = tm.isDark ? 0.68 : 0.76;
+        alpha -= 0.08 * MIN(1.0, MAX(0.0, (CGFloat)tm.backgroundBlur / 100.0));
+        fill = [fill colorWithAlphaComponent:alpha];
+    }
+    _fillView.backgroundColor = fill;
     _iconBox.backgroundColor = t.cPrimaryContainer;
     _initialLabel.textColor = t.cOnPrimaryContainer;
     _nameLabel.textColor = t.cOnSurface;

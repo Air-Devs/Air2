@@ -165,6 +165,48 @@ static NSString *const kSelectedRendererKey = @"A2SelectedRendererID";
           "离屏渲染 + SDL3 呈现，兼容性兜底", "1.7" },
         { "builtin.virgl",    "VirGL",    "libvirgl_test_server.dylib", NULL,
           "虚拟化 GL，适合调试", "1.7" },
+
+        // ---- 以下为补齐项 ----
+        //
+        // 上面 5 项是初始化时最早写的一批，之后 Frameworks 里陆续加了
+        // 8 个渲染器 dylib，但没人把它们注册进来 —— 于是设置页永远只有
+        // 5 项，用户看不到也选不到其余渲染器（本文件是设置页的唯一数据源：
+        // A2RendererSettingsViewController.m:320 读的就是 allRenderers）。
+        //
+        // 判定条件仍然按「关键 dylib 是否存在」自动过滤，缺库不会显示成
+        // 幽灵选项，所以这里可以放心把能支持的都列上。
+
+        // MobileGlues：iOS 上最稳的一条 GLES 路线（ANGLE + Metal 后端），
+        // 默认渲染器就是它。
+        { "builtin.mobileglues", "MobileGlues", "libmobileglues.dylib", NULL,
+          "ANGLE + Metal 后端，默认推荐，兼容性与性能均衡", "1.17" },
+
+        // Metal / ANGLE 直通（tinygl4angle）：AnglE 直出 Metal，
+        // 对 MC 26.x 的 SDL3 渲染路径友好。
+        { "builtin.angle", "Metal (ANGLE)", "libtinygl4angle.dylib", NULL,
+          "ANGLE 直连 Metal，MC 26.x 首选", "26" },
+
+        // MobileGL 的 GLES 变体：后端只暴露 GLES，给不吃桌面 GL 的版本用。
+        { "builtin.mobilegl_gles", "MobileGL (GLES)", "libMobileGL-gles.dylib", NULL,
+          "MobileGL 的 GLES-only 变体", "1.17" },
+
+        // metallum：纯 Metal 原生后端。
+        { "builtin.metal", "Metal (metallum)", "libmetallum.dylib", NULL,
+          "metallum 原生 Metal 后端", "26" },
+
+        // SimpleFPEWrapper：固定管线仿真，只用于 1.16.x 及更老。
+        { "builtin.sfpew", "SimpleFPEWrapper", "libSimpleFPEWrapper.dylib", NULL,
+          "固定管线仿真，仅适合 <= 1.16.x", "1.7" },
+
+        // LTW：轻量中间层（Lightweight Translator Wrapper）。
+        { "builtin.ltw", "LTW", "libltw.dylib", NULL,
+          "轻量转译层", "1.17" },
+
+        // Mithril：另一条 Metal 转译路线。dylib 已在包里，但需要单独预编译
+        // 的 shim 才能完整工作；仍列出以便用户自行验证，不可用会在启动时
+        // 由 JavaLauncher 的 [RENDERER-AVAIL] 回落逻辑兜底。
+        { "builtin.mithril", "Mithril", "libmithril.dylib", NULL,
+          "Metal 转译（实验性）", "26" },
     };
 
     for (size_t i = 0; i < sizeof(builtins) / sizeof(builtins[0]); i++) {

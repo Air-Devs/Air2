@@ -52,12 +52,15 @@
     _trailingButtons = [NSMutableArray array];
     _buttonActions = [NSMapTable strongToStrongObjectsMapTable];
     _usesScrollContent = YES;
+    _backgroundPlaybackEnabled = YES;
     return self;
 }
 
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.view.backgroundColor = UIColor.blackColor;
+    // 根视图必须透明：不透明底色会盖住/干扰背景层，
+    // 真正的底色由 A2BackgroundView 自己按主题画（surface）。
+    self.view.backgroundColor = UIColor.clearColor;
 
     _backgroundView = [[A2BackgroundView alloc] initWithFrame:CGRectZero];
     _backgroundView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -78,6 +81,20 @@
                                           selector:@selector(handleThemeChanged:)
                                               name:A2ThemeDidChangeNotification
                                             object:nil];
+}
+
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    // 子类可能在 viewDidLoad 之后又往 self.view 上贴满屏容器；
+    // 每次出现都把背景层压回最底，保证任何页面都看得见用户设的背景。
+    [self.view sendSubviewToBack:_backgroundView];
+    if (_backgroundPlaybackEnabled) [_backgroundView resumePlayback];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    // 页面被盖住后暂停视频背景，避免多层页面同时解码耗电
+    [_backgroundView pausePlayback];
 }
 
 - (void)dealloc {

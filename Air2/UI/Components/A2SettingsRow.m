@@ -209,6 +209,11 @@
                                           selector:@selector(handleThemeChanged:)
                                               name:A2ThemeDidChangeNotification
                                             object:nil];
+    // 背景换成图片/视频时行底透明度也要跟着变
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                          selector:@selector(handleThemeChanged:)
+                                              name:A2BackgroundDidChangeNotification
+                                            object:nil];
 }
 
 - (void)dealloc {
@@ -388,9 +393,20 @@
 
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
+    A2ThemeManager *tm = A2ThemeManager.shared;
 
     // 背景：按层级取值，圆角按位置
     UIColor *fill = _useHighContainer ? t.cSurfaceContainerHigh : t.cSurfaceContainerLow;
+
+    // 有自定义背景（图片/视频）时行底半透明，让背景透出来。
+    // 这里如果保持不透明，设置页/版本页这类整页由行铺满的页面
+    // 会把背景完全盖住 —— 表现就是「背景只在主页显示」。
+    if (tm.hasCustomBackground) {
+        CGFloat alpha = tm.isDark ? 0.68 : 0.76;
+        alpha -= 0.08 * MIN(1.0, MAX(0.0, (CGFloat)tm.backgroundBlur / 100.0));
+        fill = [fill colorWithAlphaComponent:alpha];
+    }
+
     _fillView.backgroundColor = fill;
     _fillView.layer.cornerRadius = (_cardPosition == A2CardPositionMiddle)
         ? A2RadiusXS : A2RadiusXL;

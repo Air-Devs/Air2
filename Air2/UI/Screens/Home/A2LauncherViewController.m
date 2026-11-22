@@ -98,6 +98,8 @@
 @property (nonatomic, strong) UILabel *versionNameLabel;
 @property (nonatomic, strong) UILabel *versionMetaLabel;
 @property (nonatomic, strong) A2PrimaryButton *launchButton;
+/// 启动按钮的左右内缩容器（见 buildLaunchSection）
+@property (nonatomic, strong) UIView *launchContainer;
 
 /// 最近游玩
 
@@ -153,6 +155,17 @@
     [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
+- (void)viewWillAppear:(BOOL)animated {
+    [super viewWillAppear:animated];
+    // 背景视频只在本页可见时播放；被二级页面盖住时暂停（省电）
+    [_backgroundView resumePlayback];
+}
+
+- (void)viewWillDisappear:(BOOL)animated {
+    [super viewWillDisappear:animated];
+    [_backgroundView pausePlayback];
+}
+
 - (void)viewDidAppear:(BOOL)animated {
     [super viewDidAppear:animated];
     if (!_didPlayEntrance) {
@@ -163,6 +176,14 @@
 
 #pragma mark - 背景
 
+/// 主页背景为什么自建、没复用 A2BaseViewController 的那一份：
+///
+/// 主页不是 A2BaseViewController 的子类 —— 它是横屏三区布局
+/// （左侧背景区 + 右侧操作栏），没有基类的顶栏/滚动容器结构，
+/// 复用它反而要关掉一半的基类行为。所以这里保留独立的
+/// A2BackgroundView 实例，但媒体来源、模糊/遮罩/渐隐、
+/// 视频播放策略全部与基类共用同一套 A2BackgroundView / A2ThemeManager，
+/// 不存第二份配置。
 - (void)setupBackground {
     _backgroundView = [[A2BackgroundView alloc] initWithFrame:CGRectZero];
     _backgroundView.translatesAutoresizingMaskIntoConstraints = NO;
@@ -505,7 +526,7 @@
     [self buildLaunchSection];
 
     _mainStack = [[UIStackView alloc] initWithArrangedSubviews:
-                  @[_accountSection, _versionSection, _launchButton]];
+                  @[_accountSection, _versionSection, _launchContainer]];
     _mainStack.translatesAutoresizingMaskIntoConstraints = NO;
     _mainStack.axis = UILayoutConstraintAxisVertical;
     _mainStack.spacing = A2SpaceL;
@@ -659,9 +680,27 @@
 
 - (void)buildLaunchSection {
     _launchButton = [[A2PrimaryButton alloc] initWithTitle:@"启动游戏" style:A2ButtonStylePrimary];
-    _launchButton.minHeight = A2ButtonHeight;
+    // 高度：A2ButtonHeight（52）在侧栏整宽铺满时显得笨重，压到 44。
+    // 宽度：再左右各内缩 A2SpaceL，避免按钮边缘和卡片内边距贴死，
+    //       视觉上和上面的版本卡形成两级缩进。
+    _launchButton.minHeight = 44;
+    _launchButton.translatesAutoresizingMaskIntoConstraints = NO;
     [_launchButton addTarget:self action:@selector(launchGame)
             forControlEvents:UIControlEventTouchUpInside];
+
+    // 用一层容器做左右内缩：stack 里的 arrangedSubview 会强制铺满，
+    // 直接给按钮加 leading/trailing 约束会被 stack 覆盖掉。
+    _launchContainer = [[UIView alloc] initWithFrame:CGRectZero];
+    _launchContainer.translatesAutoresizingMaskIntoConstraints = NO;
+    [_launchContainer addSubview:_launchButton];
+    [NSLayoutConstraint activateConstraints:@[
+        [_launchButton.topAnchor constraintEqualToAnchor:_launchContainer.topAnchor],
+        [_launchButton.bottomAnchor constraintEqualToAnchor:_launchContainer.bottomAnchor],
+        [_launchButton.leadingAnchor constraintEqualToAnchor:_launchContainer.leadingAnchor
+                                                    constant:A2SpaceL],
+        [_launchButton.trailingAnchor constraintEqualToAnchor:_launchContainer.trailingAnchor
+                                                     constant:-A2SpaceL],
+    ]];
 }
 
 #pragma mark - 约束

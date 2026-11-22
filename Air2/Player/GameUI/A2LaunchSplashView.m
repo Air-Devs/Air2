@@ -40,6 +40,15 @@
 @property (nonatomic, strong) NSTimer *timer;
 @property (nonatomic, strong) NSDate *startTime;
 @property (nonatomic, assign, readwrite) A2LaunchStage stage;
+@property (nonatomic, assign, readwrite) double progress;
+
+/// 进度条轨道（圆角底）
+@property (nonatomic, strong) UIView *progressTrack;
+/// 进度条填充（用宽度约束驱动，避免 frame 动画在旋转时错位）
+@property (nonatomic, strong) UIView *progressFill;
+@property (nonatomic, strong) NSLayoutConstraint *progressBarWidth;
+/// 百分比文字
+@property (nonatomic, strong) UILabel *percentLabel;
 @end
 
 @implementation A2LaunchSplashView
@@ -99,8 +108,44 @@
     _logView.layer.cornerCurve = kCACornerCurveContinuous;
     _logView.hidden = YES;
 
+    // ---- 进度条 ----
+    //
+    // 对照 FCL / ZL2 的启动页：一条横向进度条 + 右侧百分比，
+    // 覆盖「点启动 → JVM 起来 → MC 加载 → 首帧出现」整段过程。
+    // Air2 原来只有转圈 + 阶段文字，用户看不到还要等多久。
+    _progressTrack = [[UIView alloc] initWithFrame:CGRectZero];
+    _progressTrack.translatesAutoresizingMaskIntoConstraints = NO;
+    _progressTrack.layer.cornerRadius = 3;
+    _progressTrack.layer.cornerCurve = kCACornerCurveContinuous;
+    _progressTrack.clipsToBounds = YES;
+
+    _progressFill = [[UIView alloc] initWithFrame:CGRectZero];
+    _progressFill.translatesAutoresizingMaskIntoConstraints = NO;
+    _progressFill.layer.cornerRadius = 3;
+    _progressFill.layer.cornerCurve = kCACornerCurveContinuous;
+    [_progressTrack addSubview:_progressFill];
+
+    _progressBarWidth = [_progressFill.widthAnchor constraintEqualToConstant:0];
+
+    _percentLabel = [[UILabel alloc] initWithFrame:CGRectZero];
+    _percentLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _percentLabel.font = [UIFont monospacedDigitSystemFontOfSize:12 weight:UIFontWeightMedium];
+    _percentLabel.textAlignment = NSTextAlignmentRight;
+    _percentLabel.text = @"0%";
+    [_percentLabel setContentHuggingPriority:UILayoutPriorityRequired
+                             forAxis:UILayoutConstraintAxisHorizontal];
+    [_percentLabel setContentCompressionResistancePriority:UILayoutPriorityRequired
+                                           forAxis:UILayoutConstraintAxisHorizontal];
+
+    UIStackView *progressRow = [[UIStackView alloc] initWithArrangedSubviews:
+                                @[_progressTrack, _percentLabel]];
+    progressRow.translatesAutoresizingMaskIntoConstraints = NO;
+    progressRow.axis = UILayoutConstraintAxisHorizontal;
+    progressRow.alignment = UIStackViewAlignmentCenter;
+    progressRow.spacing = A2SpaceS;
+
     UIStackView *stack = [[UIStackView alloc] initWithArrangedSubviews:
-                          @[_iconView, _titleLabel, _stageLabel]];
+                          @[_iconView, _titleLabel, _stageLabel, progressRow]];
     stack.translatesAutoresizingMaskIntoConstraints = NO;
     stack.axis = UILayoutConstraintAxisVertical;
     stack.alignment = UIStackViewAlignmentCenter;
@@ -127,6 +172,16 @@
         [stack.centerYAnchor constraintEqualToAnchor:self.centerYAnchor constant:-20],
         [stack.leadingAnchor constraintGreaterThanOrEqualToAnchor:self.leadingAnchor constant:40],
         [stack.trailingAnchor constraintLessThanOrEqualToAnchor:self.trailingAnchor constant:-40],
+
+        // 进度条：轨道撑满 stack 宽度，高 6；min 宽 220 让它在窄屏也可读
+        [_progressTrack.heightAnchor constraintEqualToConstant:6],
+        [_progressTrack.widthAnchor constraintGreaterThanOrEqualToConstant:220],
+        [progressRow.widthAnchor constraintEqualToAnchor:stack.widthAnchor],
+
+        [_progressFill.topAnchor constraintEqualToAnchor:_progressTrack.topAnchor],
+        [_progressFill.bottomAnchor constraintEqualToAnchor:_progressTrack.bottomAnchor],
+        [_progressFill.leadingAnchor constraintEqualToAnchor:_progressTrack.leadingAnchor],
+        _progressBarWidth,
 
         [statusRow.topAnchor constraintEqualToAnchor:stack.bottomAnchor constant:A2SpaceL],
         [statusRow.centerXAnchor constraintEqualToAnchor:self.centerXAnchor],
@@ -156,6 +211,28 @@
 
 #pragma mark - 阶段
 
+/// 阶段 -> 进度区间的起点。
+///
+/// 权重不是平均分的，按真实耗时估算：
+///   · 检查/补下载：文件多但大多命中缓存，给 0~28
+///   · JVM 启动 + 类加载：MC 首次加载类是大头，30~72
+///   · 渲染器初始化：ANGLE/MobileGlues 起来比较慢，72~92
+///   · 等窗口 + 首帧：最后一段，92~100
+/// 这样进度条不会在「等首帧」那段卡在 50% 不动，也不会前段跑太快后段爬。
++ (double)startProgressForStage:(A2LaunchStage)stage {
+    switch (stage) {
+        case A2LaunchStagePreparing:      return 0.00;
+        case A2LaunchStageRepairing:      return 0.06;
+        case A2LaunchStageStartingJVM:    return 0.28;
+        case A2LaunchStageLoadingClasses: return 0.42;
+        case A2LaunchStageInitializingGL: return 0.72;
+        case A2LaunchStageWaitingWindow:  return 0.92;
+        case A2LaunchStageFinished:       return 1.00;
+        case A2LaunchStageFailed:         return -1;    // 不推进
+    }
+    return 0;
+}
+
 - (void)setStage:(A2LaunchStage)stage message:(NSString *)message {
     _stage = stage;
     NSString *text = message.length ? message : [self defaultTextForStage:stage];
@@ -167,6 +244,64 @@
                     animations:^{
         self->_stageLabel.text = text;
     } completion:nil];
+
+    double start = [[self class] startProgressForStage:stage];
+    if (start >= 0) {
+        [self setProgress:start message:nil];
+    }
+
+    if (stage == A2LaunchStageFinished) {
+        // 首帧已经出来了，把进度条走满再淡出，别停在 99%
+        [self setProgress:1.0 message:nil];
+    }
+}
+
+- (void)setProgress:(double)progress message:(NSString *)message {
+    if (!isfinite(progress)) return;
+    double clamped = MAX(0.0, MIN(1.0, progress));
+    // 只进不退：阶段切换和字节回调可能乱序，回退会让进度条来回抖
+    if (clamped <= _progress) {
+        if (message.length) [self updateStageText:message];
+        return;
+    }
+    _progress = clamped;
+    [self applyProgress:clamped animated:YES];
+    if (message.length) [self updateStageText:message];
+}
+
+- (void)updateStageText:(NSString *)text {
+    if (!text.length) return;
+    [UIView transitionWithView:_stageLabel
+                      duration:0.18
+                       options:UIViewAnimationOptionTransitionCrossDissolve
+                    animations:^{
+        self->_stageLabel.text = text;
+    } completion:nil];
+}
+
+- (void)applyProgress:(double)progress animated:(BOOL)animated {
+    if (!_progressTrack || !_progressBarWidth) return;
+    [_progressTrack layoutIfNeeded];
+    CGFloat total = _progressTrack.bounds.size.width;
+    CGFloat w = MAX(0.0, total * progress);
+
+    void (^changes)(void) = ^{
+        self->_progressBarWidth.constant = w;
+        [self->_progressTrack layoutIfNeeded];
+    };
+    if (animated) {
+        [UIView animateWithDuration:0.35
+                              delay:0
+                            options:UIViewAnimationOptionCurveEaseOut | UIViewAnimationOptionBeginFromCurrentState
+                         animations:changes
+                         completion:nil];
+    } else {
+        changes();
+    }
+    // 百分比文字
+    _percentLabel.text = progress >= 1.0
+        ? @"100%"
+        : [NSString stringWithFormat:@"%d%%", (int)floor(progress * 100)];
 }
 
 - (NSString *)defaultTextForStage:(A2LaunchStage)stage {
@@ -301,6 +436,12 @@
     _spinner.color = t.cPrimary;
     _logView.backgroundColor = [t.cSurfaceContainer colorWithAlphaComponent:0.7];
     _logView.textColor = t.cOnSurfaceVariant;
+
+    // 进度条配色：轨道用表面容器的低透明版本，填充用主色（和 spinner 一致）
+    _progressTrack.backgroundColor = [t.cSurfaceContainer
+        colorWithAlphaComponent:0.55];
+    _progressFill.backgroundColor = t.cPrimary;
+    _percentLabel.textColor = t.cOnSurfaceVariant;
 }
 
 @end

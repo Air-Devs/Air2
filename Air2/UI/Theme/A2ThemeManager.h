@@ -51,6 +51,17 @@ extern NSNotificationName const A2ThemeDidChangeNotification;
 /// 背景变更通知（图片/模糊/遮罩）
 extern NSNotificationName const A2BackgroundDidChangeNotification;
 
+/// 背景来源种类。
+///
+/// 图片与视频共用这一套抽象：A2BackgroundView 只关心
+/// 「有没有媒体 / 是视频还是静态图 / 视频 URL 在哪」，
+/// 不关心文件是从相册还是文件 App 来的。
+typedef NS_ENUM(NSInteger, A2BackgroundMediaKind) {
+    A2BackgroundMediaKindNone = 0,   ///< 没设，用主题纯色
+    A2BackgroundMediaKindImage,      ///< 静态图片
+    A2BackgroundMediaKindVideo,      ///< 本地视频（静音循环）
+};
+
 @interface A2ThemeManager : NSObject
 
 + (instancetype)shared;
@@ -88,13 +99,30 @@ extern NSNotificationName const A2BackgroundDidChangeNotification;
 
 #pragma mark - 自定义背景
 
-/// 用户设置的背景图。nil 表示使用主题渐变。
+/// 用户设置的背景图。nil 表示使用主题纯色或视频。
 @property (nonatomic, strong, nullable) UIImage *backgroundImage;
 
-/// 背景模糊强度 0~100
+/// 背景来源种类（图片 / 视频 / 无）。视频优先于图片。
+@property (nonatomic, assign, readonly) A2BackgroundMediaKind backgroundMediaKind;
+
+/// 是否设置了任意自定义背景（图片或视频）。
+@property (nonatomic, assign, readonly) BOOL hasCustomBackground;
+
+/// 已复制进文档目录的视频 URL。
+///
+/// 注意：这是【运行时解析出来的绝对路径】，不写进 UserDefaults ——
+/// 沙盒容器的 UUID 在重装/迁移后会变，存绝对路径会失效。
+/// 持久化只存文件名，见 backgroundVideoFileName。
+@property (nonatomic, copy, nullable, readonly) NSURL *backgroundVideoURL;
+
+/// 视频首帧海报。播放前先显示它，解码失败时也用它兜底，避免黑屏。
+@property (nonatomic, strong, nullable, readonly) UIImage *backgroundPosterImage;
+
+/// 背景模糊强度 0~100，默认 0（用户没主动设置就是清晰原图/视频）。
 @property (nonatomic, assign) NSInteger backgroundBlur;
 
-/// 背景图在暗色模式下的遮罩强度 0.0~1.0，默认 0.28
+/// 背景在暗色模式下的遮罩强度 0.0~1.0，默认 0.28。
+/// 只在模糊强度 > 0 时按比例参与 —— 清晰模式不压暗。
 @property (nonatomic, assign) CGFloat backgroundDarkOverlay;
 
 /// 操作栏一侧的渐隐遮罩宽度比例 0.0~1.0，默认 0.35
@@ -105,7 +133,16 @@ extern NSNotificationName const A2BackgroundDidChangeNotification;
 - (BOOL)persistBackgroundImage:(UIImage *)image;
 /// 从沙盒读取已保存的背景图
 - (nullable UIImage *)loadPersistedBackground;
-/// 清除自定义背景
+
+/// 导入视频背景：把外部 URL 复制进文档目录（只存相对文件名），
+/// 同时生成首帧海报。文件 IO 在后台队列，completion 回主线程。
+- (void)importBackgroundVideoFromURL:(NSURL *)url
+                          completion:(nullable void (^)(BOOL ok, NSError * _Nullable error))completion;
+
+/// 清除自定义背景（图片、视频、海报一并清掉）
+- (void)clearBackgroundMedia;
+
+/// 兼容旧调用：等同于 clearBackgroundMedia
 - (void)clearBackgroundImage;
 
 #pragma mark - 广播

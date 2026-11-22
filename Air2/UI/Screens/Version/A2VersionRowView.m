@@ -167,6 +167,10 @@
                                           selector:@selector(applyTheme)
                                               name:A2ThemeDidChangeNotification
                                             object:nil];
+    [NSNotificationCenter.defaultCenter addObserver:self
+                                          selector:@selector(applyTheme)
+                                              name:A2BackgroundDidChangeNotification
+                                            object:nil];
 }
 
 - (void)dealloc {
@@ -259,9 +263,17 @@
 
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
+    A2ThemeManager *tm = A2ThemeManager.shared;
 
     // 选中当前版本时用强调容器色
-    _fillView.backgroundColor = self.isCurrent ? t.cSecondaryContainer : t.cSurfaceContainerLow;
+    UIColor *fill = self.isCurrent ? t.cSecondaryContainer : t.cSurfaceContainerLow;
+    // 有自定义背景时行底半透明，否则整列行会把背景盖死
+    if (tm.hasCustomBackground) {
+        CGFloat alpha = tm.isDark ? 0.68 : 0.76;
+        alpha -= 0.08 * MIN(1.0, MAX(0.0, (CGFloat)tm.backgroundBlur / 100.0));
+        fill = [fill colorWithAlphaComponent:alpha];
+    }
+    _fillView.backgroundColor = fill;
 
     _radioOuter.layer.borderColor = (self.isCurrent ? t.cPrimary : t.cOutline).CGColor;
     _radioInner.backgroundColor = t.cPrimary;

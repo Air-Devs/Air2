@@ -49,6 +49,11 @@ NS_ASSUME_NONNULL_BEGIN
 /// 是否使用滚动容器（默认 YES）。设为 NO 则用 plainContentView。
 @property (nonatomic, assign) BOOL usesScrollContent;
 
+/// 本页是否驱动背景视频播放（默认 YES）。
+/// 纯容器页（如下载页，内层还有一整套子页面）设 NO，
+/// 避免父页和子页同时解码同一个视频白耗电。
+@property (nonatomic, assign) BOOL backgroundPlaybackEnabled;
+
 /// 非滚动模式的内容容器
 @property (nonatomic, strong, readonly) UIView *plainContentView;
 

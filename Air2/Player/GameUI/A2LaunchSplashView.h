@@ -65,7 +65,16 @@ typedef NS_ENUM(NSInteger, A2LaunchStage) {
 
 @property (nonatomic, assign, readonly) A2LaunchStage stage;
 
+/// 当前进度 0~1。由 setStage:message: 按阶段权重自动推进，
+/// 也可在阶段内部用 -setProgress:message: 细调（例如下载阶段按字节数）。
+@property (nonatomic, assign, readonly) double progress;
+
 - (void)setStage:(A2LaunchStage)stage message:(nullable NSString *)message;
+
+/// 直接设定进度（0~1）。用于阶段内部的细粒度推进，
+/// 例如补下载走到 40%、70%。传进来的值会被夹紧到 [当前值, 1]，
+/// 进度条只进不退，避免来回跳动。
+- (void)setProgress:(double)progress message:(nullable NSString *)message;
 
 @property (nonatomic, assign) BOOL showsLog;
 - (void)appendLog:(NSString *)line;

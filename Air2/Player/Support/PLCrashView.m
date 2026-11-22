@@ -27,6 +27,21 @@
 #import "SurfaceViewController.h"
 #import "ios_uikit_bridge.h"
 #import "utils.h"
+#import "A2LogUploader.h"
+
+/// 取本地化文案；缺词时用中文 fallback。
+///
+/// 重要：localize(key, comment) 的第二个参数是 **comment**，不是 fallback；
+/// 没有对应 .strings 时 localize 会原样返回 key（例如 "crash.title.jvm_exit"）。
+/// 崩溃页是最后一道兜底 UI，绝不能让用户看到 key 字面量，
+/// 所以这里统一用「有翻译用翻译、没翻译用中文兜底」的入口。
+NSString *PLCrashLocalizedText(NSString *key, NSString *fallback) {
+    NSString *value = localize(key, nil);
+    if (value.length == 0 || [value isEqualToString:key]) {
+        return fallback.length > 0 ? fallback : key;
+    }
+    return value;
+}
 
 @interface PLCrashView ()
 // 数据
@@ -47,6 +62,7 @@ typedef NS_ENUM(NSInteger, CrashType) {
     CrashTypeRendererError,      // 渲染器错误
     CrashTypeModLoadingFailure,  // Mod 加载失败
     CrashTypeJavaException,      // Java 异常
+    CrashTypeJVMExit,            // JVM 非 0 退出（非信号，日志里也没有可识别特征）
     CrashTypeUnknown             // 未知错误
 };
 @property (nonatomic, assign) CrashType crashType;
@@ -74,6 +90,21 @@ typedef NS_ENUM(NSInteger, CrashType) {
 @property (nonatomic, strong) UIButton *githubButton;
 @property (nonatomic, strong) UIButton *fullLogButton;
 @property (nonatomic, strong) UIButton *exitButton;
+/// 上传日志并复制链接（对照 ZL2 ErrorScreen 的「分享链接」动作）。
+/// 旧实现只在 setupButtonsIntoContainer 里用了 _uploadButton 这个 ivar，
+/// 类扩展里没有声明、uploadLogAndCopyLink 也没有实现 —— 一旦按钮被点中
+/// 就是 unrecognized selector。这里补齐声明与实现。
+@property (nonatomic, strong) UIButton *uploadButton;
+/// 上传中标志：防止连点重复上传
+@property (nonatomic, assign) BOOL uploadInFlight;
+// 响应式布局容器：内容列 + 动作列
+@property (nonatomic, strong) UIStackView *contentStackView;
+@property (nonatomic, strong) UIStackView *actionStackView;
+@property (nonatomic, strong) UILabel *crashTypeLabel;
+// 横屏时动作列宽度约束（约 30%），竖屏失活
+@property (nonatomic, strong) NSLayoutConstraint *actionWidthConstraint;
+// 当前是否横屏布局
+@property (nonatomic, assign) BOOL landscapeLayout;
 // 错误卡片顶部红色 accent 条
 @property (nonatomic, strong) CAGradientLayer *accentGradientLayer;
 // 建议卡片顶部黄色 accent 条
@@ -86,7 +117,106 @@ typedef NS_ENUM(NSInteger, CrashType) {
 
 // 当前正在显示的崩溃 VC 实例（单例）
 static PLCrashView *currentCrashVC = nil;
+// 崩溃页专用窗口（见 +presentCrashViewController: 注释）
+static UIWindow *crashWindow = nil;
+// 崩溃页出现前的 key window，关闭崩溃页时还原
+static UIWindow *previousKeyWindow = nil;
 static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amethyst-iOS-MyRemastered/issues";
+
+#pragma mark - Crash Window
+
+/// 取当前可用的 UIWindowScene（前台优先，后台兜底）。
+///
+/// 崩溃可能发生在 App 被切到后台之后（JIT 等待 / 用户切走再回来），
+/// 旧实现只枚举 ForegroundActive/Inactive，找不到 key window 就 return ——
+/// 崩溃页被静默丢弃。这里补后台 scene 兜底。
++ (UIWindowScene *)activeWindowScene {
+    UIWindowScene *fallback = nil;
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:UIWindowScene.class]) continue;
+        UIWindowScene *windowScene = (UIWindowScene *)scene;
+        if (windowScene.activationState == UISceneActivationStateForegroundActive ||
+            windowScene.activationState == UISceneActivationStateForegroundInactive) {
+            return windowScene;
+        }
+        if (fallback == nil) fallback = windowScene;
+    }
+    return fallback;
+}
+
+/// 用独立 UIWindow 承载崩溃页（对照 ZL2 用独立 ErrorActivity 承载崩溃页的思路）。
+///
+/// 为什么不直接 present 在游戏 VC 上：
+///   JVM 退出路径里 JavaLauncher 会先调 UIKit_returnToSplitView() 换根，
+///   再调 handleExitCode: 弹崩溃页。两条都是 dispatch_async(main)，
+///   换根动画没结束时 present 出来的 VC 会跟着旧 root 一起被丢掉。
+///   独立 window（windowLevel = Alert + 1）不参与 rootViewController 替换，
+///   这也让崩溃页在「游戏 surface 被销毁」后仍然留在屏幕上。
++ (void)presentCrashViewController:(PLCrashView *)crashVC {
+    UIWindowScene *scene = [self activeWindowScene];
+    if (scene != nil) {
+        for (UIWindow *window in scene.windows) {
+            if (window.isKeyWindow) {
+                previousKeyWindow = window;
+                break;
+            }
+        }
+        UIWindow *window = [[UIWindow alloc] initWithWindowScene:scene];
+        window.frame = UIScreen.mainScreen.bounds;
+        window.windowLevel = UIWindowLevelAlert + 1;
+        window.backgroundColor = [UIColor clearColor];
+        window.opaque = NO;
+        // 崩溃页是深色玻璃风格（白色 8% 卡片 + labelColor 文字），
+        // 独立窗口里没有游戏画面可透出，强制深色保证对比度与可读性。
+        window.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
+        window.rootViewController = crashVC;
+        crashWindow = window;
+        [window makeKeyAndVisible];
+        NSLog(@"[PLCrashView] crash window presented on scene %@", NSStringFromClass(scene.class));
+        return;
+    }
+
+    // 兜底：没有可用 scene（理论上 iOS 14+ 不会发生）时退回模态呈现
+    UIWindow *keyWindow = nil;
+    for (UIWindow *window in UIApplication.sharedApplication.windows) {
+        if (window.isKeyWindow) {
+            keyWindow = window;
+            break;
+        }
+    }
+    UIViewController *rootVC = keyWindow.rootViewController ?: UIApplication.sharedApplication.delegate.window.rootViewController;
+    while (rootVC.presentedViewController) {
+        rootVC = rootVC.presentedViewController;
+    }
+    if (rootVC == nil) {
+        NSLog(@"[PLCrashView] no window/rootVC, crash UI dropped");
+        return;
+    }
+    crashVC.modalPresentationStyle = UIModalPresentationOverFullScreen;
+    crashVC.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
+    [rootVC presentViewController:crashVC animated:NO completion:nil];
+    NSLog(@"[PLCrashView] crash VC presented modally on %@", NSStringFromClass(rootVC.class));
+}
+
+/// 关闭并释放崩溃窗口。窗口的实际隐藏放到下一个 runloop，
+/// 避免在崩溃 VC 自己的方法里释放掉正在执行的对象（use-after-free）。
++ (void)teardownCrashWindow {
+    UIWindow *window = crashWindow;
+    UIWindow *restore = previousKeyWindow;
+    crashWindow = nil;
+    previousKeyWindow = nil;
+    currentCrashVC = nil;
+    if (window == nil) {
+        if (restore != nil) [restore makeKeyWindow];
+        return;
+    }
+    dispatch_async(dispatch_get_main_queue(), ^{
+        window.hidden = YES;
+        if (restore != nil && !restore.hidden) {
+            [restore makeKeyWindow];
+        }
+    });
+}
 
 #pragma mark - Public Methods
 
@@ -95,49 +225,26 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
 }
 
 + (void)showWithExitCode:(int)exitCode customTitle:(NSString *)customTitle customReason:(NSString *)customReason {
+    // 正常退出（返回启动器）绝不弹崩溃页。
+    // 调用链上游（PLLogOutputView.handleExitCode:）已经过滤过 0，
+    // 这里再兜一层，防止别处误调。
+    if (exitCode == 0) {
+        NSLog(@"[PLCrashView] exit code 0 (normal exit), skip crash UI");
+        return;
+    }
+
     dispatch_async(dispatch_get_main_queue(), ^{
-        // 如果已经存在崩溃界面，先 dismiss，避免叠加
+        // 如果已经存在崩溃界面，先拆掉，避免叠加
         if (currentCrashVC) {
-            [currentCrashVC dismissViewControllerAnimated:NO completion:nil];
-            currentCrashVC = nil;
-        }
-
-        UIWindow *keyWindow = nil;
-        if (@available(iOS 13.0, *)) {
-            for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
-                if (scene.activationState == UISceneActivationStateForegroundActive ||
-                    scene.activationState == UISceneActivationStateForegroundInactive) {
-                    UIWindowScene *windowScene = (UIWindowScene *)scene;
-                    for (UIWindow *window in windowScene.windows) {
-                        if (window.isKeyWindow) {
-                            keyWindow = window;
-                            break;
-                        }
-                    }
-                    if (keyWindow) break;
-                }
-            }
-        }
-
-        if (!keyWindow) return;
-
-        // 找到最顶层的 presented VC 来 present 崩溃界面。
-        // 旧实现把 UIView 直接 addSubview 到 keyWindow，存在生命周期无人管理、
-        // 旋转/安全区不跟随等问题。改为 UIViewController 后由系统管理生命周期。
-        UIViewController *rootVC = keyWindow.rootViewController;
-        while (rootVC.presentedViewController) {
-            rootVC = rootVC.presentedViewController;
+            [self teardownCrashWindow];
         }
 
         PLCrashView *crashVC = [[PLCrashView alloc] init];
         crashVC.exitCode = exitCode;
         crashVC.customTitle = customTitle;
         crashVC.customReason = customReason;
-        crashVC.modalPresentationStyle = UIModalPresentationOverFullScreen;
-        crashVC.modalTransitionStyle = UIModalTransitionStyleCrossDissolve;
-
         currentCrashVC = crashVC;
-        [rootVC presentViewController:crashVC animated:NO completion:nil];
+        [self presentCrashViewController:crashVC];
     });
 }
 
@@ -165,6 +272,8 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
 
 - (void)viewDidLayoutSubviews {
     [super viewDidLayoutSubviews];
+    // 横屏 / 竖屏两套排布（对照 ZL2 ErrorScreen.kt 的方向分支）
+    [self applyResponsiveLayout];
     // 根据屏幕高度动态调整日志卡片高度，避免小屏挤压按钮或大屏浪费空间
     [self adjustLogCardHeight];
     // 更新错误卡片顶部红色 accent 条的 frame
@@ -175,6 +284,38 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
     if (_suggestionAccentLayer && _suggestionsCardView) {
         _suggestionAccentLayer.frame = CGRectMake(0, 0, _suggestionsCardView.bounds.size.width, 2);
     }
+}
+
+/// 按当前方向切换主 StackView 的排布。
+///
+/// 横屏（游戏主场景）：axis = horizontal，内容列左、动作列右，动作列约 30% 宽；
+/// 竖屏（防御性兜底）：axis = vertical，内容在上、动作在下，动作列占满宽度。
+/// 切换只改 axis 和一条宽度约束，不重建视图。
+- (void)applyResponsiveLayout {
+    if (_mainStackView == nil || _actionStackView == nil) return;
+    BOOL landscape = self.view.bounds.size.width >= self.view.bounds.size.height;
+    if (landscape == _landscapeLayout && _actionWidthConstraint.active == landscape) {
+        return;
+    }
+    _landscapeLayout = landscape;
+    _mainStackView.axis = landscape ? UILayoutConstraintAxisHorizontal : UILayoutConstraintAxisVertical;
+    _mainStackView.alignment = landscape ? UIStackViewAlignmentTop : UIStackViewAlignmentFill;
+    _actionWidthConstraint.active = landscape;
+    // 竖屏时动作列排在内容之后，给一组更紧凑的按钮高度；
+    // 横屏保持 48pt，手指更容易点中。
+    CGFloat buttonHeight = landscape ? 48.0 : 50.0;
+    for (UIView *view in _actionStackView.arrangedSubviews) {
+        if (![view isKindOfClass:UIButton.class]) continue;
+        for (NSLayoutConstraint *constraint in view.constraints) {
+            if (constraint.firstAttribute == NSLayoutAttributeHeight) {
+                constraint.constant = buttonHeight;
+                break;
+            }
+        }
+    }
+    NSLog(@"[PLCrashView] responsive layout -> %@ (%.0fx%.0f)",
+          landscape ? @"landscape" : @"portrait",
+          self.view.bounds.size.width, self.view.bounds.size.height);
 }
 
 #pragma mark - Background
@@ -208,25 +349,28 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
 
 - (void)setupUI {
     // ============================================================
-    // FCL 风格崩溃界面：左边大日志框 + 右边按钮列
+    // 崩溃界面布局（对照 ZL2 ErrorScreen.kt 的横屏 / 竖屏两套排布）
     // ============================================================
-    // 参照 FCL (FoldCraftLauncher) 的崩溃界面布局：
-    //   - 顶部：简洁的错误信息卡片（图标 + 标题 + 错误代码）
-    //   - 下方水平分栏：
-    //     - 左侧（占 65% 宽度）：大日志文本框，显示崩溃日志内容
-    //     - 右侧（占 35% 宽度）：垂直排列的按钮列
-    //       - 重启启动器（蓝色强调）
-    //       - 退出启动器（退出进程，不重启）
-    //       - 分享日志
-    //       - 前往 GitHub Issues
-    //       - 查看完整日志
+    // ZL2 的 ErrorScreen 用 Configuration.orientation 分成两套：
+    //   横屏 ErrorScreenLandscape：左 70% 内容卡片（可滚动）+ 右 30% 动作列
+    //                              （顶部崩溃类型，底部四个动作）
+    //   竖屏 ErrorScreenPortrait ：内容纵向滚动，动作收进顶栏菜单
     //
-    // 关键修复：之前"重启启动器"和"退出启动器"按钮功能相同
-    // （都是返回启动器主界面），现在明确区分：
-    //   - 重启启动器：exit(0) + openURL 拉起应用（重启整个启动器）
-    //   - 退出启动器：exit(0) 直接退出进程（不重启）
+    // Air2 是横屏为主的游戏场景（A2AppDelegate 全局锁 Landscape），
+    // 所以横屏是主布局：左边错误信息 + 可滚动日志摘要，右边四个动作；
+    // 竖屏作为防御性兜底：内容在上、动作在下，同样纵向可滚动。
+    //
+    // 四个动作严格对齐 ZL2（ErrorScreen.kt ActionLayout）：
+    //   上传日志并复制链接（分享链接）/ 分享日志 / 重启 / 退出
+    // GitHub Issues 和「查看完整日志」降级为内容区底部的小号文字入口，
+    // 不占用主按钮位。
+    //
+    // 实现方式：一个可切换 axis 的 _mainStackView 装两个子栈 ——
+    //   横屏 → axis = horizontal，内容列 70% / 动作列 30%
+    //   竖屏 → axis = vertical，内容列在上、动作列在下
+    // 避免维护两套 constraint 组，切换时只改 axis 与一条宽度约束。
 
-    // 主滚动视图（内容超出屏幕时可滚动）
+    // 主滚动视图（内容超出屏幕时可滚动；日志卡片内部还有自己的滚动）
     _mainScrollView = [[UIScrollView alloc] init];
     _mainScrollView.translatesAutoresizingMaskIntoConstraints = NO;
     _mainScrollView.alwaysBounceVertical = YES;
@@ -235,11 +379,11 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
     _mainScrollView.contentInsetAdjustmentBehavior = UIScrollViewContentInsetAdjustmentNever;
     [self.view addSubview:_mainScrollView];
 
-    // 主垂直 StackView（错误卡片 + 水平分栏）
+    // 主 StackView（axis 由 applyResponsiveLayout 按方向切换）
     _mainStackView = [[UIStackView alloc] init];
-    _mainStackView.axis = UILayoutConstraintAxisVertical;
+    _mainStackView.axis = UILayoutConstraintAxisHorizontal;
     _mainStackView.spacing = 16;
-    _mainStackView.alignment = UIStackViewAlignmentFill;
+    _mainStackView.alignment = UIStackViewAlignmentTop;
     _mainStackView.distribution = UIStackViewDistributionFill;
     _mainStackView.translatesAutoresizingMaskIntoConstraints = NO;
     [_mainScrollView addSubview:_mainStackView];
@@ -260,46 +404,93 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
     _mainStackView.layoutMargins = UIEdgeInsetsMake(16, 20, 16, 20);
     _mainStackView.layoutMarginsRelativeArrangement = YES;
 
-    // 1. 错误信息卡片（顶部）
+    // 左侧内容列：错误卡片 + 建议卡片 + 日志卡片 + 次要入口
+    _contentStackView = [[UIStackView alloc] init];
+    _contentStackView.axis = UILayoutConstraintAxisVertical;
+    _contentStackView.spacing = 12;
+    _contentStackView.alignment = UIStackViewAlignmentFill;
+    _contentStackView.distribution = UIStackViewDistributionFill;
+    _contentStackView.translatesAutoresizingMaskIntoConstraints = NO;
+    [_mainStackView addArrangedSubview:_contentStackView];
+
+    // 右侧动作列：崩溃类型 + 四个动作
+    _actionStackView = [[UIStackView alloc] init];
+    _actionStackView.axis = UILayoutConstraintAxisVertical;
+    _actionStackView.spacing = 10;
+    _actionStackView.alignment = UIStackViewAlignmentFill;
+    _actionStackView.distribution = UIStackViewDistributionFill;
+    _actionStackView.translatesAutoresizingMaskIntoConstraints = NO;
+    [_mainStackView addArrangedSubview:_actionStackView];
+
+    // 横屏动作列约占 30% 宽（ZL2 是 7:3；中文按钮文字更长，留 30% 防截断）。
+    // 优先级 750：窄屏时允许内容列让步，不产生不可满足约束。
+    _actionWidthConstraint = [_actionStackView.widthAnchor constraintEqualToAnchor:_mainStackView.widthAnchor multiplier:0.30];
+    _actionWidthConstraint.priority = UILayoutPriorityDefaultHigh;
+    _actionWidthConstraint.active = YES;
+
+    // 1. 错误信息卡片
     [self setupErrorCard];
 
-    // 2. 快速修复建议卡片（可选，有建议时才显示）
+    // 2. 快速修复建议卡片（可选，有建议时才创建）
     [self setupSuggestionsCard];
 
-    // 3. 水平分栏容器：左日志 + 右按钮
-    UIStackView *horizontalSplit = [[UIStackView alloc] init];
-    horizontalSplit.axis = UILayoutConstraintAxisHorizontal;
-    horizontalSplit.spacing = 12;
-    horizontalSplit.alignment = UIStackViewAlignmentFill;
-    horizontalSplit.distribution = UIStackViewDistributionFill;
-    horizontalSplit.translatesAutoresizingMaskIntoConstraints = NO;
-    [_mainStackView addArrangedSubview:horizontalSplit];
-
-    // 3a. 左侧：日志卡片
+    // 3. 日志摘要卡片（内部 UITextView 可独立滚动）
     [self setupLogCard];
-    // 将日志卡片添加到水平分栏的左侧
-    [horizontalSplit addArrangedSubview:_logCardView];
+    [_contentStackView addArrangedSubview:_logCardView];
 
-    // 3b. 右侧：按钮列容器
-    UIStackView *buttonColumn = [[UIStackView alloc] init];
-    buttonColumn.axis = UILayoutConstraintAxisVertical;
-    buttonColumn.spacing = 10;
-    buttonColumn.alignment = UIStackViewAlignmentFill;
-    buttonColumn.distribution = UIStackViewDistributionFillEqually;
-    buttonColumn.translatesAutoresizingMaskIntoConstraints = NO;
-    [horizontalSplit addArrangedSubview:buttonColumn];
+    // 4. 次要入口（GitHub Issues / 完整日志）
+    [self setupSecondaryLinks];
 
-    // 设置左侧日志卡片占据约 65% 宽度，右侧按钮列占据约 35%
-    NSLayoutConstraint *logWidthConstraint = [_logCardView.widthAnchor constraintEqualToAnchor:horizontalSplit.widthAnchor multiplier:0.65];
-    logWidthConstraint.priority = UILayoutPriorityDefaultHigh;
-    logWidthConstraint.active = YES;
-
-    // 按钮列最小宽度（确保按钮文字不被截断）
-    [buttonColumn.widthAnchor constraintGreaterThanOrEqualToConstant:140].active = YES;
-
-    // 4. 创建按钮并添加到右侧按钮列
-    [self setupButtonsIntoContainer:buttonColumn];
+    // 5. 四个动作
+    [self setupButtonsIntoContainer:_actionStackView];
 }
+
+/// 次要入口：GitHub Issues + 查看完整日志。
+///
+/// 对照 ZL2 竖屏版把「更多」动作收进菜单的思路 —— 这两个是低频动作，
+/// 不该和「重启/退出/分享」抢主按钮位，放在内容区底部当文字链接。
+- (void)setupSecondaryLinks {
+    UIStackView *row = [[UIStackView alloc] init];
+    row.axis = UILayoutConstraintAxisHorizontal;
+    row.spacing = 8;
+    row.distribution = UIStackViewDistributionFillEqually;
+    row.alignment = UIStackViewAlignmentFill;
+    row.translatesAutoresizingMaskIntoConstraints = NO;
+
+    _githubButton = [self createSecondaryButtonWithTitle:PLCrashLocalizedText(@"crash.github_issue", @"前往 GitHub Issues")
+                                                    icon:@"link"
+                                                  action:@selector(openGitHubIssues)];
+    _fullLogButton = [self createSecondaryButtonWithTitle:PLCrashLocalizedText(@"crash.view_log", @"查看完整日志")
+                                                     icon:@"doc.text.magnifyingglass"
+                                                   action:@selector(showFullLog)];
+    [row addArrangedSubview:_githubButton];
+    [row addArrangedSubview:_fullLogButton];
+    [row.heightAnchor constraintEqualToConstant:36].active = YES;
+    [_contentStackView addArrangedSubview:row];
+}
+
+/// 小号文字按钮（内容区底部次要入口）
+- (UIButton *)createSecondaryButtonWithTitle:(NSString *)title icon:(NSString *)icon action:(SEL)action {
+    UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
+    button.translatesAutoresizingMaskIntoConstraints = NO;
+    button.backgroundColor = [[UIColor whiteColor] colorWithAlphaComponent:0.06];
+    button.layer.cornerRadius = 10;
+    button.layer.cornerCurve = kCACornerCurveContinuous;
+    button.titleLabel.font = [UIFont systemFontOfSize:13];
+    button.titleLabel.adjustsFontSizeToFitWidth = YES;
+    button.titleLabel.minimumScaleFactor = 0.8;
+    [button setTitleColor:[UIColor secondaryLabelColor] forState:UIControlStateNormal];
+    if (@available(iOS 13.0, *)) {
+        UIImageSymbolConfiguration *config = [UIImageSymbolConfiguration configurationWithPointSize:12 weight:UIImageSymbolWeightRegular];
+        [button setImage:[UIImage systemImageNamed:icon withConfiguration:config] forState:UIControlStateNormal];
+        button.tintColor = [UIColor secondaryLabelColor];
+        button.imageEdgeInsets = UIEdgeInsetsMake(0, -4, 0, 4);
+    }
+    [button setTitle:title forState:UIControlStateNormal];
+    [button addTarget:self action:action forControlEvents:UIControlEventTouchUpInside];
+    return button;
+}
+
 
 - (void)setupErrorCard {
     _errorCardView = [[UIView alloc] init];
@@ -313,7 +504,7 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
     _errorCardView.layer.shadowOpacity = 0.12;
     _errorCardView.layer.shadowRadius = 8;
     _errorCardView.translatesAutoresizingMaskIntoConstraints = NO;
-    [_mainStackView addArrangedSubview:_errorCardView];
+    [_contentStackView addArrangedSubview:_errorCardView];
     // 应用毛玻璃效果（适配自定义背景壁纸）
     (void)0;
 
@@ -344,7 +535,7 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
     // 错误标题
     _errorTitleLabel = [[UILabel alloc] init];
     _errorTitleLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _errorTitleLabel.text = _customTitle ?: localize(@"crash.error_title", nil);
+    _errorTitleLabel.text = _customTitle.length > 0 ? _customTitle : [self crashTitleText];
     _errorTitleLabel.font = [UIFont boldSystemFontOfSize:18];
     _errorTitleLabel.textColor = [UIColor labelColor];
     _errorTitleLabel.textAlignment = NSTextAlignmentCenter;
@@ -354,7 +545,8 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
     // 错误代码
     _errorCodeLabel = [[UILabel alloc] init];
     _errorCodeLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _errorCodeLabel.text = [NSString stringWithFormat:@"%@%d", localize(@"crash.error_code", nil), _exitCode];
+    _errorCodeLabel.text = [NSString stringWithFormat:@"%@%d",
+                            PLCrashLocalizedText(@"crash.error_code", @"退出代码："), _exitCode];
     _errorCodeLabel.font = [UIFont systemFontOfSize:14];
     _errorCodeLabel.textColor = [UIColor secondaryLabelColor];
     _errorCodeLabel.textAlignment = NSTextAlignmentCenter;
@@ -399,8 +591,8 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
         _oomSuggestionLabel.textAlignment = NSTextAlignmentCenter;
         _oomSuggestionLabel.numberOfLines = 0;
         NSString *suggestion = [NSString stringWithFormat:@"%@ %@",
-                                localize(@"crash.suggestion", @"建议操作"),
-                                localize(@"crash.suggestion.oom", @"iOS 内存限制导致崩溃，建议使用 GetMoreRam (LiveContainer) 解除内存限制后重试")];
+                                PLCrashLocalizedText(@"crash.suggestion", @"建议操作"),
+                                PLCrashLocalizedText(@"crash.suggestion.oom", @"iOS 内存限制导致崩溃，建议使用 GetMoreRam (LiveContainer) 解除内存限制后重试")];
         _oomSuggestionLabel.text = suggestion;
         [_errorCardView addSubview:_oomSuggestionLabel];
 
@@ -444,7 +636,7 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
     _suggestionsCardView.layer.borderWidth = 0.5;
     _suggestionsCardView.layer.borderColor = [[UIColor whiteColor] colorWithAlphaComponent:0.10].CGColor;
     _suggestionsCardView.translatesAutoresizingMaskIntoConstraints = NO;
-    [_mainStackView addArrangedSubview:_suggestionsCardView];
+    [_contentStackView addArrangedSubview:_suggestionsCardView];
     // 应用毛玻璃效果（适配自定义背景壁纸）
     (void)0;
 
@@ -480,7 +672,7 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
 
     _suggestionsTitleLabel = [[UILabel alloc] init];
     _suggestionsTitleLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _suggestionsTitleLabel.text = localize(@"crash.quick_fix", @"快速修复建议");
+    _suggestionsTitleLabel.text = PLCrashLocalizedText(@"crash.quick_fix", @"快速修复建议");
     _suggestionsTitleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
     _suggestionsTitleLabel.textColor = [UIColor labelColor];
     [titleRow addSubview:_suggestionsTitleLabel];
@@ -569,52 +761,53 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
 
     switch (self.crashType) {
         case CrashTypeOOM:
-            [result addObject:@{@"icon": @"arrow.down.circle", @"text": localize(@"crash.suggestion.oom_ram", @"降低内存分配（建议 1024-2048MB）")}];
-            [result addObject:@{@"icon": @"sparkles", @"text": localize(@"crash.suggestion.oom_getmoream", @"使用 GetMoreRam (LiveContainer) 解除 iOS 内存限制")}];
-            [result addObject:@{@"icon": @"trash", @"text": localize(@"crash.suggestion.oom_mods", @"移除重量级 Mod（如光影、高清材质）")}];
-            [result addObject:@{@"icon": @"arrow.clockwise", @"text": localize(@"crash.suggestion.oom_restart", @"重启启动器后重试（释放内存碎片）")}];
+            [result addObject:@{@"icon": @"arrow.down.circle", @"text": PLCrashLocalizedText(@"crash.suggestion.oom_ram", @"降低内存分配（建议 1024-2048MB）")}];
+            [result addObject:@{@"icon": @"sparkles", @"text": PLCrashLocalizedText(@"crash.suggestion.oom_getmoream", @"使用 GetMoreRam (LiveContainer) 解除 iOS 内存限制")}];
+            [result addObject:@{@"icon": @"trash", @"text": PLCrashLocalizedText(@"crash.suggestion.oom_mods", @"移除重量级 Mod（如光影、高清材质）")}];
+            [result addObject:@{@"icon": @"arrow.clockwise", @"text": PLCrashLocalizedText(@"crash.suggestion.oom_restart", @"重启启动器后重试（释放内存碎片）")}];
             break;
         case CrashTypeSegfault:
-            [result addObject:@{@"icon": @"cpu", @"text": localize(@"crash.suggestion.segfault_renderer", @"尝试切换渲染器（gl4es / MetalGlues / virgil）")}];
-            [result addObject:@{@"icon": @"shield", @"text": localize(@"crash.suggestion.segfault_jit", @"确保 JIT 已启用（TrollStore/SideStore + JIT 权限）")}];
-            [result addObject:@{@"icon": @"arrow.clockwise", @"text": localize(@"crash.suggestion.segfault_restart", @"重启启动器后重试")}];
+            [result addObject:@{@"icon": @"cpu", @"text": PLCrashLocalizedText(@"crash.suggestion.segfault_renderer", @"尝试切换渲染器（gl4es / MetalGlues / virgil）")}];
+            [result addObject:@{@"icon": @"shield", @"text": PLCrashLocalizedText(@"crash.suggestion.segfault_jit", @"确保 JIT 已启用（TrollStore/SideStore + JIT 权限）")}];
+            [result addObject:@{@"icon": @"arrow.clockwise", @"text": PLCrashLocalizedText(@"crash.suggestion.segfault_restart", @"重启启动器后重试")}];
             break;
         case CrashTypeAbort:
-            [result addObject:@{@"icon": @"exclamationmark.bubble", @"text": localize(@"crash.suggestion.abort_mods", @"检查 Mod 是否兼容（移除最近添加的 Mod）")}];
-            [result addObject:@{@"icon": @"cpu", @"text": localize(@"crash.suggestion.abort_renderer", @"尝试切换渲染器")}];
-            [result addObject:@{@"icon": @"arrow.clockwise", @"text": localize(@"crash.suggestion.abort_restart", @"重启启动器后重试")}];
+            [result addObject:@{@"icon": @"exclamationmark.bubble", @"text": PLCrashLocalizedText(@"crash.suggestion.abort_mods", @"检查 Mod 是否兼容（移除最近添加的 Mod）")}];
+            [result addObject:@{@"icon": @"cpu", @"text": PLCrashLocalizedText(@"crash.suggestion.abort_renderer", @"尝试切换渲染器")}];
+            [result addObject:@{@"icon": @"arrow.clockwise", @"text": PLCrashLocalizedText(@"crash.suggestion.abort_restart", @"重启启动器后重试")}];
             break;
         case CrashTypeModConflict:
-            [result addObject:@{@"icon": @"trash", @"text": localize(@"crash.suggestion.modconflict_remove", @"移除最近添加的 Mod")}];
-            [result addObject:@{@"icon": @"info.circle", @"text": localize(@"crash.suggestion.modconflict_check", @"检查 Mod 版本兼容性（Forge/Fabric/API 版本）")}];
-            [result addObject:@{@"icon": @"doc.text", @"text": localize(@"crash.suggestion.modconflict_log", @"查看完整日志定位冲突 Mod")}];
+            [result addObject:@{@"icon": @"trash", @"text": PLCrashLocalizedText(@"crash.suggestion.modconflict_remove", @"移除最近添加的 Mod")}];
+            [result addObject:@{@"icon": @"info.circle", @"text": PLCrashLocalizedText(@"crash.suggestion.modconflict_check", @"检查 Mod 版本兼容性（Forge/Fabric/API 版本）")}];
+            [result addObject:@{@"icon": @"doc.text", @"text": PLCrashLocalizedText(@"crash.suggestion.modconflict_log", @"查看完整日志定位冲突 Mod")}];
             break;
         case CrashTypeMissingLibrary:
-            [result addObject:@{@"icon": @"arrow.clockwise.circle", @"text": localize(@"crash.suggestion.missinglib_reinstall", @"重新安装当前游戏版本")}];
-            [result addObject:@{@"icon": @"folder", @"text": localize(@"crash.suggestion.missinglib_check", @"检查实例目录中的 libraries 文件夹是否完整")}];
-            [result addObject:@{@"icon": @"wifi", @"text": localize(@"crash.suggestion.missinglib_network", @"检查网络连接，确保下载源可访问")}];
+            [result addObject:@{@"icon": @"arrow.clockwise.circle", @"text": PLCrashLocalizedText(@"crash.suggestion.missinglib_reinstall", @"重新安装当前游戏版本")}];
+            [result addObject:@{@"icon": @"folder", @"text": PLCrashLocalizedText(@"crash.suggestion.missinglib_check", @"检查实例目录中的 libraries 文件夹是否完整")}];
+            [result addObject:@{@"icon": @"wifi", @"text": PLCrashLocalizedText(@"crash.suggestion.missinglib_network", @"检查网络连接，确保下载源可访问")}];
             break;
         case CrashTypeJavaVersionMismatch:
-            [result addObject:@{@"icon": @"hammer", @"text": localize(@"crash.suggestion.javaver_change", @"在设置中切换 Java 版本（8/17/21）")}];
-            [result addObject:@{@"icon": @"info.circle", @"text": localize(@"crash.suggestion.javaver_check", @"检查游戏版本要求的 Java 版本")}];
+            [result addObject:@{@"icon": @"hammer", @"text": PLCrashLocalizedText(@"crash.suggestion.javaver_change", @"在设置中切换 Java 版本（8/17/21）")}];
+            [result addObject:@{@"icon": @"info.circle", @"text": PLCrashLocalizedText(@"crash.suggestion.javaver_check", @"检查游戏版本要求的 Java 版本")}];
             break;
         case CrashTypeRendererError:
-            [result addObject:@{@"icon": @"cpu", @"text": localize(@"crash.suggestion.renderer_switch", @"尝试切换渲染器：gl4es / MetalGlues / virgil")}];
-            [result addObject:@{@"icon": @"eye.slash", @"text": localize(@"crash.suggestion.renderer_shader", @"禁用光影包后重试")}];
-            [result addObject:@{@"icon": @"arrow.down.circle", @"text": localize(@"crash.suggestion.renderer_resolution", @"降低游戏分辨率缩放比例")}];
+            [result addObject:@{@"icon": @"cpu", @"text": PLCrashLocalizedText(@"crash.suggestion.renderer_switch", @"尝试切换渲染器：gl4es / MetalGlues / virgil")}];
+            [result addObject:@{@"icon": @"eye.slash", @"text": PLCrashLocalizedText(@"crash.suggestion.renderer_shader", @"禁用光影包后重试")}];
+            [result addObject:@{@"icon": @"arrow.down.circle", @"text": PLCrashLocalizedText(@"crash.suggestion.renderer_resolution", @"降低游戏分辨率缩放比例")}];
             break;
         case CrashTypeModLoadingFailure:
-            [result addObject:@{@"icon": @"trash", @"text": localize(@"crash.suggestion.modload_remove", @"移除问题 Mod（查看日志中的错误行）")}];
-            [result addObject:@{@"icon": @"arrow.clockwise.circle", @"text": localize(@"crash.suggestion.modload_update", @"更新 Mod 加载器（Forge/Fabric/OptiFine）")}];
-            [result addObject:@{@"icon": @"info.circle", @"text": localize(@"crash.suggestion.modload_version", @"检查 Mod 是否支持当前 MC 版本")}];
+            [result addObject:@{@"icon": @"trash", @"text": PLCrashLocalizedText(@"crash.suggestion.modload_remove", @"移除问题 Mod（查看日志中的错误行）")}];
+            [result addObject:@{@"icon": @"arrow.clockwise.circle", @"text": PLCrashLocalizedText(@"crash.suggestion.modload_update", @"更新 Mod 加载器（Forge/Fabric/OptiFine）")}];
+            [result addObject:@{@"icon": @"info.circle", @"text": PLCrashLocalizedText(@"crash.suggestion.modload_version", @"检查 Mod 是否支持当前 MC 版本")}];
             break;
         case CrashTypeJavaException:
-            [result addObject:@{@"icon": @"doc.text", @"text": localize(@"crash.suggestion.java_log", @"查看完整日志定位异常堆栈")}];
-            [result addObject:@{@"icon": @"trash", @"text": localize(@"crash.suggestion.java_mods", @"检查 Mod 是否兼容（移除最近添加的 Mod）")}];
-            [result addObject:@{@"icon": @"arrow.clockwise", @"text": localize(@"crash.suggestion.java_restart", @"重启启动器后重试")}];
+            [result addObject:@{@"icon": @"doc.text", @"text": PLCrashLocalizedText(@"crash.suggestion.java_log", @"查看完整日志定位异常堆栈")}];
+            [result addObject:@{@"icon": @"trash", @"text": PLCrashLocalizedText(@"crash.suggestion.java_mods", @"检查 Mod 是否兼容（移除最近添加的 Mod）")}];
+            [result addObject:@{@"icon": @"arrow.clockwise", @"text": PLCrashLocalizedText(@"crash.suggestion.java_restart", @"重启启动器后重试")}];
             break;
         case CrashTypeNormal:
         case CrashTypeTerminated:
+        case CrashTypeJVMExit:
         case CrashTypeUnknown:
             // 这些类型不显示建议卡片
             break;
@@ -735,8 +928,10 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
         return;
     }
 
-    // 兜底：未知
-    self.crashType = CrashTypeUnknown;
+    // 兜底：JVM 非 0 退出，但日志里没有可识别特征。
+    // 不归到 CrashTypeUnknown：exitCode 本身已经能说明「进程异常退出」，
+    // 标题/原因按 JVM 退出码展示（对照 ZL2 ErrorActivity 的 JvmCrash(code, isSignal)）。
+    self.crashType = CrashTypeJVMExit;
     self.crashDetail = nil;
 }
 
@@ -768,7 +963,7 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
     // 日志标题
     _logTitleLabel = [[UILabel alloc] init];
     _logTitleLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _logTitleLabel.text = localize(@"crash.log_info", nil);
+    _logTitleLabel.text = PLCrashLocalizedText(@"crash.log_info", @"日志摘要");
     _logTitleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
     _logTitleLabel.textColor = [UIColor labelColor];
     [_logCardView addSubview:_logTitleLabel];
@@ -787,7 +982,7 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
     // 占位符（日志为空时显示，居中放大文字）
     _logPlaceholderLabel = [[UILabel alloc] init];
     _logPlaceholderLabel.translatesAutoresizingMaskIntoConstraints = NO;
-    _logPlaceholderLabel.text = localize(@"crash.log_info", nil);
+    _logPlaceholderLabel.text = PLCrashLocalizedText(@"crash.log_info", @"日志摘要");
     _logPlaceholderLabel.font = [UIFont systemFontOfSize:36 weight:UIFontWeightBold];
     _logPlaceholderLabel.textColor = [UIColor tertiaryLabelColor];
     _logPlaceholderLabel.textAlignment = NSTextAlignmentCenter;
@@ -818,45 +1013,41 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
 
 - (void)setupButtonsIntoContainer:(UIStackView *)container {
     // ============================================================
-    // FCL 风格按钮列（右侧垂直排列）
+    // 动作列（对照 ZL2 ErrorScreen.kt ActionLayout）
     // ============================================================
-    // 按钮顺序（从上到下）：
-    //   1. 重启启动器（蓝色强调）— exit(0) + openURL 拉起应用
-    //   2. 退出启动器（红色）— exit(0) 直接退出进程，不重启
-    //   3. 分享日志
-    //   4. 前往 GitHub Issues
-    //   5. 查看完整日志
+    // ZL2 横屏版右栏：顶部一行「崩溃类型」，底部四个动作按钮，顺序为
+    //   上传分享链接 → 分享日志 → 重启 → 退出。
+    // 竖屏版把这四项收进顶栏菜单 —— Air2 竖屏时动作列在内容下方，
+    // 顺序保持一致，减少两套布局的认知差异。
     //
-    // 关键修复：之前"重启启动器"和"退出启动器"功能相同
-    //   - 重启：调用 +restartLauncher（exit + relaunch）
-    //   - 退出：调用 dismissAndReturnToLauncher（仅返回启动器主界面，不退出进程）
-    // 用户反馈两个按钮效果一样（都回到启动器），不符合 FCL 行为。
-    // 现在"退出启动器"改为调用 exitLauncherAction（exit(0) 直接退出，不重启）。
+    // 主按钮区只保留 ZL2 的四个动作；GitHub Issues / 完整日志
+    // 作为低频入口放在内容区底部（setupSecondaryLinks）。
 
-    // 1. 重启启动器按钮（蓝色强调）
-    // 参照 FCL：很多崩溃是临时加载失败（JIT/dylib/内存碎片），重启即可解决。
-    _restartButton = [self createButtonWithTitle:localize(@"crash.restart_launcher", @"重启启动器")
-                                            icon:@"arrow.clockwise"
-                                   backgroundColor:[UIColor colorWithRed:0.2 green:0.6 blue:0.95 alpha:1.0]
-                                       textColor:[UIColor whiteColor]
-                                          bold:YES
-                                          action:@selector(restartLauncherAction)];
-    [container addArrangedSubview:_restartButton];
+    // 崩溃类型（对照 ZL2 的 stringResource(R.string.crash_type, ...)）
+    _crashTypeLabel = [[UILabel alloc] init];
+    _crashTypeLabel.translatesAutoresizingMaskIntoConstraints = NO;
+    _crashTypeLabel.text = [self crashTypeDescription];
+    _crashTypeLabel.font = [UIFont systemFontOfSize:12 weight:UIFontWeightMedium];
+    _crashTypeLabel.textColor = [UIColor secondaryLabelColor];
+    _crashTypeLabel.textAlignment = NSTextAlignmentCenter;
+    _crashTypeLabel.numberOfLines = 0;
+    [container addArrangedSubview:_crashTypeLabel];
 
-    // 2. 退出启动器按钮（红色强调）
-    // 关键修复：之前此按钮调用 dismissAndReturnToLauncher（返回启动器主界面），
-    // 与"重启启动器"效果一样（都是回到启动器）。现在改为直接 exit(0) 退出进程，
-    // 不重启应用，与 FCL 的"退出"行为一致。
-    _exitButton = [self createButtonWithTitle:localize(@"crash.return_launcher", @"退出启动器")
-                                         icon:@"xmark.circle.fill"
-                                backgroundColor:[UIColor colorWithRed:0.85 green:0.2 blue:0.2 alpha:1.0]
-                                    textColor:[UIColor whiteColor]
-                                       bold:YES
-                                       action:@selector(exitLauncherAction)];
-    [container addArrangedSubview:_exitButton];
+    // 1. 上传日志并复制链接（对照 ZL2「分享链接」/ onUploadClick）
+    //
+    // 「分享日志」是把文件扔进系统分享面板，对方还得下载文件、找解析器；
+    // 这里上传到日志托管服务并复制短链接，贴出去浏览器直接打开。
+    // 上传器复用 A2LogUploader（Automatic = mclo.gs 失败自动切 logshare.cn）。
+    _uploadButton = [self createButtonWithTitle:PLCrashLocalizedText(@"crash.upload_link", @"上传日志并复制链接")
+                                           icon:@"link.badge.plus"
+                                  backgroundColor:[UIColor colorWithRed:0.25 green:0.65 blue:0.45 alpha:0.55]
+                                      textColor:[UIColor whiteColor]
+                                         bold:YES
+                                         action:@selector(uploadLogAndCopyLink)];
+    [container addArrangedSubview:_uploadButton];
 
-    // 3. 分享日志按钮
-    _shareButton = [self createButtonWithTitle:localize(@"crash.share_log", @"分享日志")
+    // 2. 分享日志文件（对照 ZL2 onShareLogsClick）
+    _shareButton = [self createButtonWithTitle:PLCrashLocalizedText(@"crash.share_log", @"分享日志")
                                           icon:@"square.and.arrow.up"
                                  backgroundColor:[[UIColor whiteColor] colorWithAlphaComponent:0.15]
                                      textColor:[UIColor labelColor]
@@ -864,23 +1055,24 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
                                         action:@selector(shareLog)];
     [container addArrangedSubview:_shareButton];
 
-    // 4. GitHub Issues 按钮
-    _githubButton = [self createButtonWithTitle:localize(@"crash.github_issue", @"前往 GitHub Issues")
-                                           icon:@"link"
-                                  backgroundColor:[[UIColor colorWithRed:0.3 green:0.5 blue:0.9 alpha:1.0] colorWithAlphaComponent:0.3]
-                                      textColor:[UIColor whiteColor]
-                                         bold:NO
-                                         action:@selector(openGitHubIssues)];
-    [container addArrangedSubview:_githubButton];
+    // 3. 重启启动器（蓝色强调）— exit(0) + openURL 拉起应用
+    // 参照 FCL/ZL2：很多崩溃是临时加载失败（JIT/dylib/内存碎片），重启即可解决。
+    _restartButton = [self createButtonWithTitle:PLCrashLocalizedText(@"crash.restart_launcher", @"重启启动器")
+                                            icon:@"arrow.clockwise"
+                                   backgroundColor:[UIColor colorWithRed:0.2 green:0.6 blue:0.95 alpha:1.0]
+                                       textColor:[UIColor whiteColor]
+                                          bold:YES
+                                          action:@selector(restartLauncherAction)];
+    [container addArrangedSubview:_restartButton];
 
-    // 5. 查看完整日志按钮（透明文字按钮）
-    _fullLogButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    _fullLogButton.translatesAutoresizingMaskIntoConstraints = NO;
-    [_fullLogButton setTitle:localize(@"crash.view_log", @"查看日志详情") forState:UIControlStateNormal];
-    _fullLogButton.titleLabel.font = [UIFont systemFontOfSize:14];
-    [_fullLogButton setTitleColor:[UIColor secondaryLabelColor] forState:UIControlStateNormal];
-    [_fullLogButton addTarget:self action:@selector(showFullLog) forControlEvents:UIControlEventTouchUpInside];
-    [container addArrangedSubview:_fullLogButton];
+    // 4. 退出启动器（红色强调）— exit(0) 直接退出进程，不重启
+    _exitButton = [self createButtonWithTitle:PLCrashLocalizedText(@"crash.return_launcher", @"退出启动器")
+                                         icon:@"xmark.circle.fill"
+                                backgroundColor:[UIColor colorWithRed:0.85 green:0.2 blue:0.2 alpha:1.0]
+                                    textColor:[UIColor whiteColor]
+                                       bold:YES
+                                       action:@selector(exitLauncherAction)];
+    [container addArrangedSubview:_exitButton];
 }
 
 - (UIButton *)createButtonWithTitle:(NSString *)title icon:(NSString *)icon backgroundColor:(UIColor *)bgColor textColor:(UIColor *)textColor bold:(BOOL)bold action:(SEL)action {
@@ -892,6 +1084,10 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
 
     [button setTitleColor:textColor forState:UIControlStateNormal];
     button.titleLabel.font = bold ? [UIFont boldSystemFontOfSize:15] : [UIFont systemFontOfSize:15];
+    // 横屏动作列只有约 30% 宽，中文长标题需要自动缩放而不是被截断
+    button.titleLabel.adjustsFontSizeToFitWidth = YES;
+    button.titleLabel.minimumScaleFactor = 0.75;
+    button.titleLabel.numberOfLines = 1;
 
     if (@available(iOS 13.0, *)) {
         UIImageSymbolConfiguration *config = [UIImageSymbolConfiguration configurationWithPointSize:15 weight:bold ? UIImageSymbolWeightMedium : UIImageSymbolWeightRegular];
@@ -911,17 +1107,24 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
 }
 
 - (void)adjustLogCardHeight {
+    // 横屏 / 竖屏分别计算日志摘要卡片高度。
+    //
+    // 横屏（游戏主场景）给日志留最多空间，但不超过安全区的一半，
+    // 保证右侧四个动作按钮始终完整可见（对照 ZL2 横屏左 7 右 3 的比例感）。
+    // 竖屏时日志在内容流里，可以更高一些。
     CGFloat screenHeight = self.view.bounds.size.height;
-    // 根据屏幕高度调整日志卡片高度：
-    //   小屏幕（iPhone SE）日志区较矮，给按钮留空间
-    //   大屏幕（iPad）日志区较高，充分利用空间
     CGFloat logHeight;
-    if (screenHeight < 600) {
-        logHeight = 160;
-    } else if (screenHeight < 800) {
-        logHeight = 220;
+    if (_landscapeLayout) {
+        logHeight = MAX(180.0, screenHeight - 210.0);
+        logHeight = MIN(logHeight, 360.0);
     } else {
-        logHeight = 300;
+        if (screenHeight < 600) {
+            logHeight = 180;
+        } else if (screenHeight < 800) {
+            logHeight = 240;
+        } else {
+            logHeight = 320;
+        }
     }
     self.logCardHeightConstraint.constant = logHeight;
 }
@@ -996,54 +1199,110 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
     return NO;
 }
 
+/// 崩溃标题：按 CrashType 区分（对照 ZL2 ErrorScreen 顶栏按 crashType 换标题）。
+///
+/// 注意：localize 的第三级回退是「返回 key 本身」，所以旧代码里
+/// PLCrashLocalizedText(@"crash.error_title", nil) 在没有对应 .strings 时会把
+/// 字面量 "crash.error_title" 显示在标题上。这里全部给中文兜底，
+/// 保证任何语言包里崩溃页都有可读文案。
+- (NSString *)crashTitleText {
+    if (_customTitle.length > 0) {
+        return _customTitle;
+    }
+    switch (self.crashType) {
+        case CrashTypeOOM:
+            return PLCrashLocalizedText(@"crash.title.oom", @"游戏内存不足");
+        case CrashTypeSegfault:
+            return PLCrashLocalizedText(@"crash.title.segfault", @"游戏崩溃（段错误）");
+        case CrashTypeAbort:
+            return PLCrashLocalizedText(@"crash.title.abort", @"游戏异常终止");
+        case CrashTypeTerminated:
+            return PLCrashLocalizedText(@"crash.title.terminated", @"游戏被系统终止");
+        case CrashTypeModConflict:
+            return PLCrashLocalizedText(@"crash.title.mod_conflict", @"Mod 冲突");
+        case CrashTypeMissingLibrary:
+            return PLCrashLocalizedText(@"crash.title.missing_library", @"缺少游戏库文件");
+        case CrashTypeJavaVersionMismatch:
+            return PLCrashLocalizedText(@"crash.title.java_version", @"Java 版本不匹配");
+        case CrashTypeRendererError:
+            return PLCrashLocalizedText(@"crash.title.renderer", @"渲染器错误");
+        case CrashTypeModLoadingFailure:
+            return PLCrashLocalizedText(@"crash.title.mod_loading", @"Mod 加载失败");
+        case CrashTypeJavaException:
+            return PLCrashLocalizedText(@"crash.title.java_exception", @"Java 异常");
+        case CrashTypeJVMExit:
+            return PLCrashLocalizedText(@"crash.title.jvm_exit", @"游戏进程异常退出");
+        case CrashTypeNormal:
+            return PLCrashLocalizedText(@"crash.title.normal", @"游戏已结束");
+        case CrashTypeUnknown:
+        default:
+            return PLCrashLocalizedText(@"crash.title.unknown", @"游戏崩溃");
+    }
+}
+
+/// 崩溃类型描述，显示在动作列顶部（对照 ZL2 ErrorScreen 的 crash_type 行）。
+- (NSString *)crashTypeDescription {
+    NSString *typeName = [self crashTitleText];
+    return [NSString stringWithFormat:PLCrashLocalizedText(@"crash.type_line", @"崩溃类型：%@"), typeName];
+}
+
 /// 根据 analyzeCrashType 分析的崩溃类型，返回本地化的原因描述
 ///
 /// 参照 HMCL 的崩溃分析器，提供更精确的崩溃原因描述。
-/// 新增的崩溃类型：Mod 冲突、缺失库、Java 版本不匹配、渲染器错误、Mod 加载失败。
+/// 新增的崩溃类型：Mod 冲突、缺失库、Java 版本不匹配、渲染器错误、Mod 加载失败、
+/// JVM 非 0 退出（对照 ZL2 ErrorActivity 的 JvmCrash 分支）。
 - (NSString *)crashReasonText {
     // 优先使用自定义原因
     if (_customReason.length > 0) {
-        return [NSString stringWithFormat:@"%@%@", localize(@"crash.possible_reason", nil), _customReason];
+        return [NSString stringWithFormat:@"%@%@",
+                PLCrashLocalizedText(@"crash.possible_reason", @"可能原因："), _customReason];
     }
 
     NSString *reason = nil;
 
     switch (self.crashType) {
         case CrashTypeNormal:
-            reason = localize(@"crash.reason.normal", nil);
+            reason = PLCrashLocalizedText(@"crash.reason.normal", @"游戏正常结束（退出码 0）");
             break;
         case CrashTypeOOM:
-            reason = localize(@"crash.reason.memory", nil);
+            reason = PLCrashLocalizedText(@"crash.reason.memory", @"内存不足（OOM），iOS 因内存压力终止了游戏进程");
             break;
         case CrashTypeSegfault:
-            reason = localize(@"crash.reason.segmentation", nil);
+            reason = PLCrashLocalizedText(@"crash.reason.segmentation", @"段错误（SIGSEGV），原生库或 JNI 访问了非法内存");
             break;
         case CrashTypeAbort:
-            reason = localize(@"crash.reason.abort", nil);
+            reason = PLCrashLocalizedText(@"crash.reason.abort", @"程序异常终止（SIGABRT），通常是断言失败或未捕获异常");
             break;
         case CrashTypeTerminated:
-            reason = localize(@"crash.reason.terminated", nil);
+            reason = PLCrashLocalizedText(@"crash.reason.terminated", @"进程被外部信号终止（SIGTERM）");
             break;
         case CrashTypeModConflict:
-            reason = localize(@"crash.reason.mod_conflict", @"Mod 冲突导致崩溃（NoSuchMethodError/ClassCastException 等）");
+            reason = PLCrashLocalizedText(@"crash.reason.mod_conflict", @"Mod 冲突导致崩溃（NoSuchMethodError/ClassCastException 等）");
             break;
         case CrashTypeMissingLibrary:
-            reason = localize(@"crash.reason.missing_library", @"缺失游戏库文件（UnsatisfiedLinkError/NoClassDefFoundError）");
+            reason = PLCrashLocalizedText(@"crash.reason.missing_library", @"缺失游戏库文件（UnsatisfiedLinkError/NoClassDefFoundError）");
             break;
         case CrashTypeJavaVersionMismatch:
-            reason = localize(@"crash.reason.java_version", @"Java 版本不匹配（UnsupportedClassVersionError）");
+            reason = PLCrashLocalizedText(@"crash.reason.java_version", @"Java 版本不匹配（UnsupportedClassVersionError）");
             break;
         case CrashTypeRendererError:
-            reason = localize(@"crash.reason.renderer", @"渲染器错误（OpenGL/Metal/EGL 初始化失败）");
+            reason = PLCrashLocalizedText(@"crash.reason.renderer", @"渲染器错误（OpenGL/Metal/EGL 初始化失败）");
             break;
         case CrashTypeModLoadingFailure:
-            reason = localize(@"crash.reason.mod_loading", @"Mod 加载失败（Forge/Fabric/OptiFine 加载错误）");
+            reason = PLCrashLocalizedText(@"crash.reason.mod_loading", @"Mod 加载失败（Forge/Fabric/OptiFine 加载错误）");
             break;
         case CrashTypeJavaException:
-            reason = localize(@"crash.reason.java_exception", nil);
+            reason = PLCrashLocalizedText(@"crash.reason.java_exception", @"Java 异常导致游戏退出，详见下方日志");
+            break;
+        case CrashTypeJVMExit:
+            reason = [NSString stringWithFormat:
+                      PLCrashLocalizedText(@"crash.reason.jvm_exit", @"JVM 以退出码 %d 退出，日志里没有更具体的崩溃特征"),
+                      _exitCode];
             break;
         case CrashTypeUnknown:
-            reason = [NSString stringWithFormat:localize(@"crash.reason.unknown", @"未知错误 (代码: %d)"), _exitCode];
+        default:
+            reason = [NSString stringWithFormat:
+                      PLCrashLocalizedText(@"crash.reason.unknown", @"未知错误（退出码 %d）"), _exitCode];
             break;
     }
 
@@ -1052,26 +1311,163 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
         reason = [NSString stringWithFormat:@"%@\n%@", reason, self.crashDetail];
     }
 
-    return [NSString stringWithFormat:@"%@%@", localize(@"crash.possible_reason", nil), reason];
+    return [NSString stringWithFormat:@"%@%@",
+            PLCrashLocalizedText(@"crash.possible_reason", @"可能原因："), reason];
+}
+
+#pragma mark - Log Path Helpers
+
+/// 崩溃日志路径：统一走 latestlog.txt（与 A2LogUploader / PLLogOutputView 一致）。
+- (nullable NSString *)latestLogPath {
+    const char *home = getenv("POJAV_HOME");
+    if (home == NULL || home[0] == '\0') {
+        return nil;
+    }
+    return [NSString stringWithFormat:@"%s/latestlog.txt", home];
+}
+
+- (void)showAlertWithTitle:(NSString *)title message:(NSString *)message {
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:title
+                                            message:message
+                                     preferredStyle:UIAlertControllerStyleAlert];
+    [alert addAction:[UIAlertAction actionWithTitle:PLCrashLocalizedText(@"OK", @"好")
+                                              style:UIAlertActionStyleDefault
+                                            handler:nil]];
+    [self presentViewController:alert animated:YES completion:nil];
 }
 
 #pragma mark - Actions
 
+/// 分享日志文件（对照 ZL2 onShareLogsClick / shareFile）。
 - (void)shareLog {
-    NSString *latestlogPath = [NSString stringWithFormat:@"file://%s/latestlog.txt", getenv("POJAV_HOME")];
-    UIActivityViewController *activityVC = [[UIActivityViewController alloc] initWithActivityItems:@[@"latestlog.txt", [NSURL URLWithString:latestlogPath]] applicationActivities:nil];
-
-    activityVC.popoverPresentationController.sourceView = self.view;
-    activityVC.popoverPresentationController.sourceRect = CGRectMake(self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
-
+    NSString *latestlogPath = [self latestLogPath];
+    if (latestlogPath == nil || ![[NSFileManager defaultManager] fileExistsAtPath:latestlogPath]) {
+        [self showAlertWithTitle:PLCrashLocalizedText(@"crash.share_failed", @"分享失败")
+                         message:PLCrashLocalizedText(@"crash.log_missing", @"找不到 latestlog.txt，日志可能还没生成")];
+        return;
+    }
+    NSURL *logURL = [NSURL fileURLWithPath:latestlogPath];
+    UIActivityViewController *activityVC =
+        [[UIActivityViewController alloc] initWithActivityItems:@[logURL] applicationActivities:nil];
+    activityVC.popoverPresentationController.sourceView = _shareButton ?: self.view;
+    activityVC.popoverPresentationController.sourceRect = _shareButton ? _shareButton.bounds : CGRectMake(self.view.bounds.size.width / 2, self.view.bounds.size.height / 2, 1, 1);
     [self presentViewController:activityVC animated:YES completion:nil];
 }
 
-- (void)showFullLog {
-    // 显示完整的 PLLogOutputView
-    if ([SurfaceViewController currentInstance]) {
-        [[SurfaceViewController currentInstance].logOutputView actionToggleLogOutput];
+/// 上传日志并复制链接（对照 ZL2 ErrorActivity 的 ShareLinkOperation / onUploadClick）。
+///
+/// 复用 A2LogUploader，不重写上传协议：
+///   A2LogShareProviderAutomatic = 先 mclo.gs，失败自动切 logshare.cn。
+/// 成功后把 URL 写进 UIPasteboard 并提示用户；失败给出原因，不上抛异常。
+- (void)uploadLogAndCopyLink {
+    if (self.uploadInFlight) {
+        return;
     }
+    NSString *latestlogPath = [self latestLogPath];
+    if (latestlogPath == nil || ![[NSFileManager defaultManager] fileExistsAtPath:latestlogPath]) {
+        [self showAlertWithTitle:PLCrashLocalizedText(@"crash.upload_failed", @"上传失败")
+                         message:PLCrashLocalizedText(@"crash.log_missing", @"找不到 latestlog.txt，日志可能还没生成")];
+        return;
+    }
+
+    self.uploadInFlight = YES;
+    [self setUploadButtonBusy:YES];
+    __weak typeof(self) weakSelf = self;
+    [A2LogUploader uploadLogFileAtPath:latestlogPath
+                              provider:A2LogShareProviderAutomatic
+                            completion:^(A2LogShareResult *result) {
+        __strong typeof(weakSelf) self = weakSelf;
+        if (self == nil) return;
+        self.uploadInFlight = NO;
+        [self setUploadButtonBusy:NO];
+
+        if (result.url.length > 0) {
+            UIPasteboard.generalPasteboard.string = result.url;
+            NSString *message = [NSString stringWithFormat:
+                PLCrashLocalizedText(@"crash.upload_success", @"日志已上传，链接已复制到剪贴板：\n%@"), result.url];
+            UIAlertController *alert =
+                [UIAlertController alertControllerWithTitle:PLCrashLocalizedText(@"crash.upload_done", @"上传成功")
+                                                    message:message
+                                             preferredStyle:UIAlertControllerStyleAlert];
+            NSString *urlString = result.url;
+            [alert addAction:[UIAlertAction actionWithTitle:PLCrashLocalizedText(@"crash.open_link", @"打开链接")
+                                                      style:UIAlertActionStyleDefault
+                                                    handler:^(UIAlertAction *action) {
+                NSURL *url = [NSURL URLWithString:urlString];
+                if (url != nil) {
+                    [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
+                }
+            }]];
+            [alert addAction:[UIAlertAction actionWithTitle:PLCrashLocalizedText(@"OK", @"好")
+                                                      style:UIAlertActionStyleCancel
+                                                    handler:nil]];
+            [self presentViewController:alert animated:YES completion:nil];
+            NSLog(@"[PLCrashView] log uploaded: %@ (provider=%ld)", result.url, (long)result.provider);
+        } else {
+            NSString *reason = result.error.localizedDescription ?: PLCrashLocalizedText(@"crash.upload_unknown_error", @"未知错误");
+            NSString *message = [NSString stringWithFormat:
+                PLCrashLocalizedText(@"crash.upload_failure_detail", @"日志上传失败：%@\n可以改用「分享日志」把文件直接发出去。"), reason];
+            [self showAlertWithTitle:PLCrashLocalizedText(@"crash.upload_failed", @"上传失败") message:message];
+            NSLog(@"[PLCrashView] log upload failed: %@", result.error);
+        }
+    }];
+}
+
+/// 上传按钮忙碌态（防止连点重复上传）
+- (void)setUploadButtonBusy:(BOOL)busy {
+    if (_uploadButton == nil) return;
+    _uploadButton.enabled = !busy;
+    NSString *title = busy ? PLCrashLocalizedText(@"crash.uploading", @"正在上传日志…")
+                           : PLCrashLocalizedText(@"crash.upload_link", @"上传日志并复制链接");
+    [_uploadButton setTitle:title forState:UIControlStateNormal];
+    [_uploadButton setTitle:title forState:UIControlStateDisabled];
+}
+
+/// 查看完整日志。
+///
+/// 旧实现调用 surface.logOutputView（依赖 PLLogOutputView 实例），
+/// 但该 view 在当前工程从未被创建过，点了没有反应。
+/// 这里改成自包含的日志查看页：不依赖游戏 surface，崩溃后再打开也有效。
+- (void)showFullLog {
+    NSString *latestlogPath = [self latestLogPath];
+    NSString *content = latestlogPath ? [NSString stringWithContentsOfFile:latestlogPath
+                                                                 encoding:NSUTF8StringEncoding
+                                                                    error:nil] : nil;
+    if (content.length == 0) {
+        [self showAlertWithTitle:PLCrashLocalizedText(@"crash.view_log", @"查看完整日志")
+                         message:PLCrashLocalizedText(@"crash.log_missing", @"找不到 latestlog.txt，日志可能还没生成")];
+        return;
+    }
+
+    UIViewController *viewer = [[UIViewController alloc] init];
+    viewer.title = PLCrashLocalizedText(@"crash.view_log", @"日志详情");
+    viewer.view.backgroundColor = [UIColor systemBackgroundColor];
+
+    UITextView *textView = [[UITextView alloc] initWithFrame:CGRectZero];
+    textView.translatesAutoresizingMaskIntoConstraints = NO;
+    textView.editable = NO;
+    textView.alwaysBounceVertical = YES;
+    textView.text = content;
+    textView.font = [UIFont fontWithName:@"Menlo" size:11] ?: [UIFont systemFontOfSize:11];
+    [viewer.view addSubview:textView];
+    [NSLayoutConstraint activateConstraints:@[
+        [textView.topAnchor constraintEqualToAnchor:viewer.view.safeAreaLayoutGuide.topAnchor],
+        [textView.bottomAnchor constraintEqualToAnchor:viewer.view.safeAreaLayoutGuide.bottomAnchor],
+        [textView.leadingAnchor constraintEqualToAnchor:viewer.view.leadingAnchor],
+        [textView.trailingAnchor constraintEqualToAnchor:viewer.view.trailingAnchor],
+    ]];
+
+    UINavigationController *nav = [[UINavigationController alloc] initWithRootViewController:viewer];
+    viewer.navigationItem.rightBarButtonItem =
+        [[UIBarButtonItem alloc] initWithBarButtonSystemItem:UIBarButtonItemStyleDone
+                                                      target:self
+                                                      action:@selector(dismissLogViewer)];
+    [self presentViewController:nav animated:YES completion:nil];
+}
+
+- (void)dismissLogViewer {
+    [self dismissViewControllerAnimated:YES completion:nil];
 }
 
 - (void)openGitHubIssues {
@@ -1094,28 +1490,30 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
 /// 现在此方法直接调用 exit(0) 退出进程，不进行 relaunch。
 - (void)exitLauncherAction {
     NSLog(@"[PLCrashView] User tapped exit launcher, exiting process directly");
-    // 先清理崩溃界面
-    if (currentCrashVC) {
-        [currentCrashVC dismissViewControllerAnimated:NO completion:nil];
-        currentCrashVC = nil;
-    }
-    // 通知 SurfaceViewController 释放游戏资源
+    // 通知 SurfaceViewController 释放游戏资源 / 解除 fatalExitGroup 阻塞
     if ([SurfaceViewController currentInstance]) {
         [[SurfaceViewController currentInstance].logOutputView dismissAndReturnToLauncher];
     }
-    // 直接退出进程，不重启
+    // 直接退出进程，不重启（对照 FCL/ZL2 的退出动作，不是"返回启动器"）
     exit(0);
 }
 
 - (void)dismissAndReturnToLauncher {
-    // 调用 PLLogOutputView 的返回逻辑
+    // 调用 PLLogOutputView 的返回逻辑（解除 JVM 退出线程的阻塞）
     if ([SurfaceViewController currentInstance]) {
         [[SurfaceViewController currentInstance].logOutputView dismissAndReturnToLauncher];
     }
 
-    [self dismissViewControllerAnimated:YES completion:^{
-        currentCrashVC = nil;
-    }];
+    if (currentCrashVC == self) {
+        // 崩溃页现在是独立窗口的 root，不能走 dismissViewController；
+        // 由 +teardownCrashWindow 隐藏并释放窗口。
+        [PLCrashView teardownCrashWindow];
+    } else {
+        // 模态兜底路径
+        [self dismissViewControllerAnimated:YES completion:^{
+            currentCrashVC = nil;
+        }];
+    }
 }
 
 /// 重启启动器按钮的实例回调，委托给类方法 +restartLauncher
@@ -1138,14 +1536,11 @@ static NSString *const kGitHubIssuesURL = @"https://github.com/herbrine8403/Amet
 }
 
 /// 重启启动器：清理崩溃界面与游戏 surface，通过 exit(0) + relaunch 触发系统重启。
-/// 参照 FCL 的"重启软件"按钮：很多崩溃是临时加载失败，重启即可解决。
+/// 参照 FCL/ZL2 的"重启软件"按钮：很多崩溃是临时加载失败，重启即可解决。
 + (void)restartLauncher {
     dispatch_async(dispatch_get_main_queue(), ^{
-        // 1. 清理崩溃界面
-        if (currentCrashVC) {
-            [currentCrashVC dismissViewControllerAnimated:NO completion:nil];
-            currentCrashVC = nil;
-        }
+        // 1. 清理崩溃界面（独立窗口，先隐藏）
+        [self teardownCrashWindow];
 
         // 2. 通知 SurfaceViewController 释放游戏资源
         if ([SurfaceViewController currentInstance]) {

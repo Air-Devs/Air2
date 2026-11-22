@@ -22,6 +22,10 @@
 //
 #import <UIKit/UIKit.h>
 
+/// 取本地化文案；没有对应翻译时返回中文 fallback（不返回 key 字面量）。
+/// 崩溃页的标题/原因/按钮都必须走这个入口，避免用户看到 "crash.xxx" 原始 key。
+FOUNDATION_EXPORT NSString *PLCrashLocalizedText(NSString *key, NSString *fallback);
+
 // FCL 风格重构：PLCrashView 现为 UIViewController 子类（不再是 UIView）。
 // 类名保留为 PLCrashView 以保持向后兼容（PLLogOutputView 的调用点不变）。
 // 内部采用左右分栏布局（左日志 + 右按钮）+ Auto Layout + UIStackView，

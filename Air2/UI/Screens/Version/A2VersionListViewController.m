@@ -126,7 +126,14 @@
 
 - (void)applyTheme {
     A2ColorScheme *t = A2ThemeManager.shared.scheme;
-    self.backgroundColor = self.isCurrent ? t.cSecondaryContainer : t.cSurfaceContainerLow;
+    A2ThemeManager *tm = A2ThemeManager.shared;
+    UIColor *fill = self.isCurrent ? t.cSecondaryContainer : t.cSurfaceContainerLow;
+    if (tm.hasCustomBackground) {
+        CGFloat alpha = tm.isDark ? 0.68 : 0.76;
+        alpha -= 0.08 * MIN(1.0, MAX(0.0, (CGFloat)tm.backgroundBlur / 100.0));
+        fill = [fill colorWithAlphaComponent:alpha];
+    }
+    self.backgroundColor = fill;
     _titleLabel.textColor = self.isCurrent ? t.cOnSecondaryContainer : t.cOnSurface;
     _pathLabel.textColor = self.isCurrent
         ? [t.cOnSecondaryContainer colorWithAlphaComponent:0.75]

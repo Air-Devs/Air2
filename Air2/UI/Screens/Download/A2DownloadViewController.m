@@ -64,6 +64,9 @@
     // 必须写在 super 之前：基类在 [super viewDidLoad] 里就按它决定建 scroll 还是
     // plain 内容容器。晚设会让 plainContentView 一直是 nil。
     self.usesScrollContent = NO;
+    // 本页只是容器：真正的背景由内层子页面绘制/播放，
+    // 这里再播一遍会导致同一个视频被解码两次。
+    self.backgroundPlaybackEnabled = NO;
     [super viewDidLoad];
     self.hidesTopBar = YES;
 

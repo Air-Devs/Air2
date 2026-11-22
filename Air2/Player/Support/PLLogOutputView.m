@@ -208,15 +208,26 @@ static PLLogOutputView* current;
 }
 
 + (void)handleExitCode:(int)code {
-    if (!current) return;
-    
-    // 如果有错误，显示新的崩溃界面
+    // ★ [CRASH-UI] 崩溃界面与日志面板解耦（对照 ZL2 ErrorActivity）。
+    //
+    // 本工程 initCategory_LogView 只有定义（SurfaceViewController+LogView.m:28），
+    // 全仓没有任何调用点 ⇒ self.logOutputView / current 恒为 nil。
+    // 旧实现第一行 `if (!current) return;` 把所有退出码都吞了：
+    // hooked_exit / hooked_abort / JavaLauncher 的失败分支都走这条链，
+    // 结果就是「游戏崩了从来不弹 PLCrashView」。
+    //
+    // 现在：非 0 退出码无条件弹崩溃页（不依赖日志面板是否创建）；
+    // 只有 0 码才继续走下面依赖 current 的日志面板收尾。
     if (code != 0) {
         fatalErrorOccurred = YES;
         canAppendToLog = NO;
+        NSLog(@"[CrashUI] handleExitCode(%d): present PLCrashView (logOutputView=%@)",
+              code, current ? @"alive" : @"nil");
         [PLCrashView showWithExitCode:code];
         return;
     }
+
+    if (!current) return;
     
     // 退出代码为0时的降级处理（正常退出）
     dispatch_async(dispatch_get_main_queue(), ^(void){

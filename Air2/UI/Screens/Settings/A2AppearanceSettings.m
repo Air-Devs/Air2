@@ -127,7 +127,9 @@
     A2SettingsRow *bgRow = [[A2SettingsRow alloc] init];
     bgRow.symbolName = @"photo.fill";
     bgRow.title = @"自定义背景";
-    bgRow.subtitle = tm.backgroundImage ? @"已设置" : @"当前使用主题渐变";
+    bgRow.subtitle = (tm.backgroundMediaKind == A2BackgroundMediaKindVideo) ? @"已设置（视频）"
+                   : (tm.backgroundMediaKind == A2BackgroundMediaKindImage) ? @"已设置（图片）"
+                                                                            : @"当前使用主题纯色";
     bgRow.accessory = A2SettingsRowAccessoryDisclosure;
     bgRow.showsSeparator = NO;
     bgRow.onTap = ^{
