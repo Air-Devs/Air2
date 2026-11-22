@@ -35,6 +35,15 @@
 @end
 
 @implementation A2LaunchTaskItem
+
++ (instancetype)itemWithSymbol:(NSString *)symbol title:(NSString *)title {
+    A2LaunchTaskItem *it = [A2LaunchTaskItem new];
+    it->_symbolName = [symbol copy] ?: @"circle";
+    it->_title = [title copy] ?: @"";
+    it->_state = A2LaunchTaskStatePending;
+    return it;
+}
+
 @end
 
 @interface A2LaunchSplashView ()
@@ -181,14 +190,6 @@
 // ------------------------------------------------------------------
 //  启动任务清单
 // ------------------------------------------------------------------
-
-+ (instancetype)itemWithSymbol:(NSString *)symbol title:(NSString *)title {
-    A2LaunchTaskItem *it = [A2LaunchTaskItem new];
-    it->_symbolName = [symbol copy] ?: @"circle";
-    it->_title = [title copy] ?: @"";
-    it->_state = A2LaunchTaskStatePending;
-    return it;
-}
 
 - (void)setTasks:(NSArray<A2LaunchTaskItem *> *)tasks {
     _tasks = [tasks copy];
