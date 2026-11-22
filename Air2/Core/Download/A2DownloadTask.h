@@ -71,6 +71,13 @@ extern const NSInteger A2DownloadResourceClassUnknown;
 /// 是否处于活跃态（Running / Paused）—— 用于任务分组与排序。
 - (BOOL)isActive;
 
+/// 是否由外部流程驱动（如整合包安装）。
+/// 外部任务没有可暂停的引擎句柄，进度由流程自己推送 —— 任务页据此隐藏暂停/重试。
+@property (nonatomic, assign, readonly) BOOL externallyDriven;
+
+/// 外部流程的自定义详情文本（如「正在下载 (3/12)」）；无则 nil。
+@property (nonatomic, copy, readonly, nullable) NSString *detailText;
+
 @end
 
 #pragma mark - 内部可变接口
@@ -105,6 +112,15 @@ extern const NSInteger A2DownloadResourceClassUnknown;
 @property (nonatomic, copy, nullable) NSString *subdir;
 /// 完成回调；中心取出后立即置空，避免中心与调用方互相持有。
 @property (nonatomic, copy, nullable) void (^completion)(BOOL success, NSError * _Nullable error);
+
+@property (nonatomic, assign) BOOL externallyDriven;
+@property (nonatomic, copy, nullable) NSString *detailText;
+/// 外部任务自报的进度（0.0~1.0），覆盖按字节计算的 progress。
+@property (nonatomic, assign) double progressOverride;
+/// 外部任务自报的速度文本，覆盖按字节计算的速度。
+@property (nonatomic, copy, nullable) NSString *speedTextOverride;
+/// 外部任务的取消钩子：任务页点「取消」时回调，由流程自己收尾。
+@property (nonatomic, copy, nullable) void (^externalCancelHandler)(void);
 
 + (instancetype)taskWithTitle:(NSString *)title
                      subtitle:(nullable NSString *)subtitle

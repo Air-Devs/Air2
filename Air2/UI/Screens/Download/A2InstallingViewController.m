@@ -250,9 +250,17 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
         if (!self) return;
         if (self.finished) {
             [self backToDownloadCenter];
-        } else {
-            [self confirmCancelWithReason:@"page_back"];
+            return;
         }
+        // 整合包安装已登记到任务中心，由中心保活 —— 退出页面只是离开 UI，
+        // 安装继续跑，用户可以在「任务」页查看进度或取消。
+        if (self.modPackPath.length) {
+            [A2Toast show:@"安装已转入后台，可在「任务」页查看"
+                   inView:self.navigationController.view ?: self.view];
+            [self backToDownloadCenter];
+            return;
+        }
+        [self confirmCancelWithReason:@"page_back"];
     };
 
     _logOutput = [[A2TaskLogOutput alloc] initWithTitle:[NSString stringWithFormat:@"安装 %@", _versionName]];
@@ -270,7 +278,12 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
 }
 
 - (void)dealloc {
-    [_installer cancel];
+    // 整合包安装登记在任务中心，由中心强持有安装器并在后台继续；
+    // 这里再 cancel 会把「退出页面」变成「中断安装」。
+    // 普通安装没有任务登记，离开页面后无处可去，维持原有的取消行为。
+    if (_modPackPath.length == 0) {
+        [_installer cancel];
+    }
     [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
@@ -670,6 +683,11 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     [_progressBar setProgress:0 animated:NO];
     _progressBar.detailText = @"总进度 0%";
 
+    // 上一次的整合包安装器已经 settled，重试必须换一个新的实例。
+    if (_modPackPath.length) {
+        _packInstaller = [[A2ModPackInstaller alloc] init];
+    }
+
     [self startInstall];
 }
 
@@ -699,7 +717,7 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
     if (title.length == 0 && message.length == 0) {
         [A2Log log:@"[A2-INSTALL] 取消确认窗不弹（标题与正文都为空，不留空壳）reason=%@ version=%@",
                     reason ?: @"?", _versionName ?: @"?"];
-        [self.installer cancel];
+        [self cancelRunningInstall];
         [self.navigationController popViewControllerAnimated:YES];
         return;
     }
@@ -728,10 +746,19 @@ static NSArray<NSString *> *A2InstallStageTitles(void) {
                                             handler:^(UIAlertAction *a) {
         __weak typeof(self) weakSelf = self;
         [A2Log log:@"download: 取消安装 %@", weakSelf.versionName];
-        [weakSelf.installer cancel];
+        [weakSelf cancelRunningInstall];
         [weakSelf.navigationController popViewControllerAnimated:YES];
     }]];
     [self presentViewController:alert animated:YES completion:nil];
+}
+
+/// 取消当前正在跑的安装（整合包与普通安装各走各的入口）。
+- (void)cancelRunningInstall {
+    if (_modPackPath.length) {
+        [_packInstaller cancel];
+    } else {
+        [_installer cancel];
+    }
 }
 
 - (void)doneTapped {

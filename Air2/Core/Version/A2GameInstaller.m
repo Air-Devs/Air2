@@ -58,6 +58,10 @@ static void A2Main(dispatch_block_t block) {
 @property (nonatomic, assign) BOOL reuseVanilla;
 @property (nonatomic, assign) BOOL cancelled;
 @property (nonatomic, strong) NSURLSession *session;
+/// 本次安装自己发起的下载句柄。取消时只掐这些，
+/// 不能调 engine 的 cancelAll —— 那会把别的页面的任务一起杀掉。
+@property (nonatomic, strong) NSMutableArray<A2DownloadOperation *> *operations;
+@property (nonatomic, strong) NSLock *operationsLock;
 
 // ★批量下载总量进度★
 @property (nonatomic) BOOL a2InBatch;
@@ -85,16 +89,44 @@ static void A2Main(dispatch_block_t block) {
     if (!self) return nil;
     _session = [NSURLSession sessionWithConfiguration:
                 NSURLSessionConfiguration.defaultSessionConfiguration];
+    _operations = [NSMutableArray array];
+    _operationsLock = [[NSLock alloc] init];
     return self;
 }
 
 - (void)cancel {
     _cancelled = YES;
     [A2Log log:@"installer: 取消安装 %@", self.request.versionName ?: @"(未知)"];
-    // cancelOperation: 的参数标了 nonnull，传 nil 会警告。
-    // 这里改调 cancelAll —— 语义也更对：取消安装就该停掉所有下载。
-    [[A2DownloadEngine sharedClient] cancelAll];
+
+    [_operationsLock lock];
+    NSArray<A2DownloadOperation *> *pending = [_operations copy];
+    [_operations removeAllObjects];
+    [_operationsLock unlock];
+
+    for (A2DownloadOperation *operation in pending) {
+        [[A2DownloadEngine sharedClient] cancelOperation:operation];
+    }
     [_session invalidateAndCancel];
+}
+
+/// 登记本安装发起的下载；已被取消时立刻掐掉，避免取消后又冒出新请求。
+- (void)trackOperation:(A2DownloadOperation *)operation {
+    if (!operation) return;
+    [_operationsLock lock];
+    BOOL cancelled = _cancelled;
+    if (!cancelled) [_operations addObject:operation];
+    [_operationsLock unlock];
+
+    if (cancelled) {
+        [[A2DownloadEngine sharedClient] cancelOperation:operation];
+    }
+}
+
+- (void)untrackOperation:(A2DownloadOperation *)operation {
+    if (!operation) return;
+    [_operationsLock lock];
+    [_operations removeObjectIdenticalTo:operation];
+    [_operationsLock unlock];
 }
 
 #pragma mark - 主流程
@@ -682,7 +714,8 @@ static void A2Main(dispatch_block_t block) {
     __weak typeof(self) weakSelf = self;
     __block int64_t acc = 0;
     __block BOOL counted = NO;   // 每个文件只把总大小计入批次一次
-    [[A2DownloadEngine sharedClient] startRequest:req
+    __block A2DownloadOperation *operation = nil;
+    operation = [[A2DownloadEngine sharedClient] startRequest:req
         progress:^(int64_t delta, int64_t total) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self || self.cancelled || total <= 0) return;
@@ -731,9 +764,13 @@ static void A2Main(dispatch_block_t block) {
         speed:nil
         completion:^(BOOL success, NSError *error) {
         __strong typeof(weakSelf) self = weakSelf;
-        if (!self || self.cancelled) return;
+        if (!self) { if (then) then(success ? nil : error); return; }
+        [self untrackOperation:operation];
+        if (self.cancelled) return;
         if (then) then(success ? nil : error);
     }];
+
+    [self trackOperation:operation];
 }
 
 /// 批量下载（★有上限并行★）。

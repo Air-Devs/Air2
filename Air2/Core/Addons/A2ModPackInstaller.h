@@ -92,6 +92,11 @@ typedef NS_ENUM(NSInteger, A2ModPackFormat) {
 
 @interface A2ModPackInstaller : NSObject
 
+/// 本次安装登记到任务中心的任务 ID；未开始或已结束时为 nil。
+@property (nonatomic, copy, readonly, nullable) NSString *taskID;
+/// 是否已取消。
+@property (nonatomic, assign, readonly, getter=isCancelled) BOOL cancelled;
+
 /// 探测某个 zip 是哪种整合包格式（不安装，只识别）
 + (A2ModPackFormat)detectFormatAtPath:(NSString *)zipPath;
 
@@ -111,6 +116,10 @@ typedef NS_ENUM(NSInteger, A2ModPackFormat) {
                  gameHome:(NSString *)gameHome
                  progress:(void (^)(double progress, NSString *message))progress
                completion:(void (^)(BOOL success, NSError * _Nullable error))completion;
+
+/// 取消本次安装：中止正在进行的下载，并让 completion 收到一次失败回调。
+/// 已下载的文件保留，重复安装时会跳过。
+- (void)cancel;
 
 @end
 

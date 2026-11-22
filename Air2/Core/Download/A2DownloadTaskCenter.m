@@ -258,6 +258,8 @@ static const NSTimeInterval kTaskNotifyThrottle = 0.1;
     dispatch_async(self.queue, ^{
         A2DownloadTask *task = [self taskForID:taskID];
         if (!task || !task.request) return;
+        // 外部任务没有原始请求，重试必须由流程自己发起，中心不越权。
+        if (task.externallyDriven) return;
         if (task.state != A2DownloadStateFailed && task.state != A2DownloadStateCancelled) return;
 
         task.errorMessage = nil;
@@ -282,6 +284,20 @@ static const NSTimeInterval kTaskNotifyThrottle = 0.1;
         task.operation = nil;
         task.state = A2DownloadStateCancelled;
         task.speed = 0;
+        task.speedTextOverride = nil;
+
+        if (task.externallyDriven) {
+            // 外部任务：中心只负责改状态并回主线程通知流程去收尾。
+            void (^handler)(void) = task.externalCancelHandler;
+            task.externalCancelHandler = nil;
+            [A2Log log:@"download-task: 取消外部任务 %@ \"%@\"", taskID, task.title];
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (handler) handler();
+            });
+            [self notifyChange];
+            return;
+        }
+
         if (operation) {
             [[A2DownloadEngine sharedClient] cancelOperation:operation];
         }
@@ -297,6 +313,74 @@ static const NSTimeInterval kTaskNotifyThrottle = 0.1;
             if (task.isActive) [kept addObject:task];
         }
         [self.tasks setArray:kept];
+        [self notifyChange];
+    });
+}
+
+#pragma mark - 外部流程任务
+
+- (NSString *)registerExternalTaskWithTitle:(NSString *)title
+                                   subtitle:(nullable NSString *)subtitle
+                              cancelHandler:(nullable void (^)(void))cancelHandler {
+    A2DownloadTask *task = [A2DownloadTask taskWithTitle:title subtitle:subtitle createdAt:[NSDate date]];
+    task.externallyDriven = YES;
+    task.externalCancelHandler = cancelHandler;
+    task.state = A2DownloadStateRunning;
+
+    dispatch_sync(self.queue, ^{
+        self.sequence += 1;
+        task.taskID = [NSString stringWithFormat:@"%.0f-%lu",
+                       [NSDate date].timeIntervalSince1970 * 1000, (unsigned long)self.sequence];
+        [self.tasks addObject:task];
+    });
+
+    [A2Log log:@"download-task: 登记外部任务 %@ \"%@\"", task.taskID, title];
+    [self notifyChange];
+    return task.taskID;
+}
+
+- (void)updateExternalTaskWithID:(NSString *)taskID
+                        progress:(double)progress
+                      detailText:(nullable NSString *)detailText
+                       speedText:(nullable NSString *)speedText {
+    dispatch_async(self.queue, ^{
+        A2DownloadTask *task = [self taskForID:taskID];
+        // 结束后（含被取消）不再接受进度，否则取消中的任务会被推回 Running 观感。
+        if (!task || !task.externallyDriven || !task.isActive) return;
+
+        task.progressOverride = MAX(0.0, MIN(1.0, progress));
+        task.detailText = detailText.length ? detailText : nil;
+        task.speedTextOverride = speedText.length ? speedText : nil;
+        [self notifyChangeThrottled];
+    });
+}
+
+- (void)finishExternalTaskWithID:(NSString *)taskID
+                         success:(BOOL)success
+                           error:(nullable NSError *)error {
+    dispatch_async(self.queue, ^{
+        A2DownloadTask *task = [self taskForID:taskID];
+        if (!task || !task.externallyDriven) return;
+
+        // 用户在任务页点了取消：状态已经是 Cancelled，不能被这里覆盖成失败。
+        if (task.state == A2DownloadStateCancelled) {
+            task.externalCancelHandler = nil;
+            return;
+        }
+
+        task.externalCancelHandler = nil;
+        task.speedTextOverride = nil;
+        if (success) {
+            task.progressOverride = 1.0;
+            task.detailText = @"已完成";
+            task.state = A2DownloadStateCompleted;
+            [A2Log log:@"download-task: 外部任务完成 %@ \"%@\"", taskID, task.title];
+        } else {
+            task.state = A2DownloadStateFailed;
+            task.errorMessage = error.localizedDescription ?: @"任务失败";
+            [A2Log log:@"download-task: 外部任务失败 %@ \"%@\" - %@",
+                  taskID, task.title, error.localizedDescription ?: @"未知错误"];
+        }
         [self notifyChange];
     });
 }

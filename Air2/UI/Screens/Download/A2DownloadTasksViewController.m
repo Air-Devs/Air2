@@ -121,6 +121,20 @@ static A2DownloadProgressTone A2DownloadProgressToneForState(A2DownloadState sta
 static void A2DownloadApplyTaskToProgressRow(A2DownloadProgressRow *row,
                                              A2DownloadTask *task,
                                              double smoothedSpeed) {
+    // 外部任务（如整合包安装）：进度与详情都由流程推送，不做字节换算，
+    // 否则会显示成「已下载 0 B」。
+    if (task.externallyDriven) {
+        // 外部任务没有字节量，按下载阶段算会一直停在「准备中」。
+        row.stageText = (task.state == A2DownloadStateRunning) ? @"进行中" : A2DownloadStageText(task);
+        row.showsPercent = YES;
+        row.detailText = task.detailText;
+        row.remainingText = nil;
+        row.speedText = [task speedText];
+        [row setProgress:(CGFloat)task.progress animated:NO];
+        [row applyTone:A2DownloadProgressToneForState(task.state)];
+        return;
+    }
+
     BOOL hasKnownTotal = (task.totalBytes > 0);
     BOOL running = (task.state == A2DownloadStateRunning) && smoothedSpeed > 0;
 
@@ -396,6 +410,13 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
     self.errorLabel.text = task.errorMessage;
     self.errorLabel.hidden = !showsError;
 
+    // 外部任务（整合包安装）没有原始请求，重试只能由安装流程自己做，
+    // 这里只保留「取消」；进度详情用流程推送的文本（如「正在下载 (3/12)」）。
+    if (task.externallyDriven && task.detailText.length) {
+        self.versionLabel.text = task.detailText;
+        self.versionLabel.hidden = NO;
+    }
+
     // 进度块：百分比 / 已下总量 / 平滑速度 / 剩余时间。
     // 阶段文字与色调都在 A2DownloadApplyTaskToProgressRow 里统一算，
     // 单任务行与「总进度」卡因此不会出现两种口径。
@@ -403,11 +424,12 @@ static UIButton *A2DownloadMakePillButton(NSString *title) {
 
     // 按钮矩阵：Running/Paused → 暂停或继续 + 取消；Failed/Cancelled → 重试；Completed → 无。
     BOOL active = (task.state == A2DownloadStateRunning || task.state == A2DownloadStatePaused);
-    self.toggleButton.hidden = !active;
+    self.toggleButton.hidden = !active || task.externallyDriven;
     [self.toggleButton setTitle:(task.state == A2DownloadStateRunning ? @"暂停" : @"继续")
                        forState:UIControlStateNormal];
     self.retryButton.hidden = !(task.state == A2DownloadStateFailed ||
-                                task.state == A2DownloadStateCancelled);
+                                task.state == A2DownloadStateCancelled) ||
+                              task.externallyDriven;
     self.cancelButton.hidden = !active;
     self.actionRow.hidden = (self.toggleButton.hidden && self.retryButton.hidden &&
                              self.cancelButton.hidden);
