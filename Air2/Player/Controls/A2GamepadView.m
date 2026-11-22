@@ -291,7 +291,7 @@ static NSString *A2GamepadDefaultKey(A2GamepadRegion r) {
     };
     UIFont *font = [UIFont systemFontOfSize:MAX(9, r * 0.9) weight:UIFontWeightSemibold];
     for (size_t i = 0; i < sizeof(faces) / sizeof(faces[0]); i++) {
-        CGPoint c = [self centerForRegion:faces[i]];
+        CGPoint c = [self centerForRegion:faces[i].region];
         BOOL isActive = (self.activeRegion == faces[i].region);
 
         CGRect box = CGRectMake(c.x - r, c.y - r, r * 2, r * 2);
