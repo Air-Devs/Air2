@@ -81,7 +81,9 @@ static double A2DirectionCenterDeg(A2JoystickDirection d) {
     if (!self) return nil;
 
     _widget = widget;
-    _deadZone = (widget.deadZone > 0 && widget.deadZone < 0.9) ? widget.deadZone : 0.15;
+    // FCL 的 deadZone 缺省是 0（DirectionEventData.java:151-153）。
+    // 原来这里兜底 0.15，会让「没设死区」的 FCL/ZL2 布局凭空多出死区。
+    _deadZone = (widget.deadZone > 0 && widget.deadZone < 0.9) ? widget.deadZone : 0.0;
     _triggerMode = widget.triggerMode;
     _mouseSensitivity = 900;
     _pressedKeys = [NSMutableSet set];
@@ -183,13 +185,22 @@ static double A2DirectionCenterDeg(A2JoystickDirection d) {
     _knobOffset = visual;
     [self setNeedsLayout];
 
-    // ---- 死区重标定 ----
-    // 旧实现用 dist/radius 判方向，死区附近会反复触发；
-    // 这里先把死区扣掉再归一化，输出始终是平滑的 0~1。
+    // ---- 死区：硬死区，与 FCL 一致 ----
+    //
+    // FCL ControlDirection.java:821-832：
+    //     ratio = 距中心距离 / maxDistance * 100
+    //     if (deadZone > 0 && ratio < deadZone) → 杆体回中、释放全部方向
+    // 即「死区之内什么都不发」，而不是把死区扣掉后再重标定。
+    // 重标定会让死区边缘的输出从 0 跳变到接近 1，也不符合 FCL 的手感。
     CGFloat rawMagnitude = MIN(1.0, dist / radius);
     CGFloat normalized = 0;
-    if (rawMagnitude > self.deadZone) {
-        normalized = (rawMagnitude - self.deadZone) / MAX(0.01, 1.0 - self.deadZone);
+    if (self.deadZone <= 0.0 || rawMagnitude >= self.deadZone) {
+        normalized = rawMagnitude;
+    } else {
+        // 死区内：回中、方向归零
+        _knobOffset = CGPointZero;
+        [self setNeedsLayout];
+        normalized = 0;
     }
     normalized = MAX(0.0, MIN(1.0, normalized));
     _magnitude = normalized;

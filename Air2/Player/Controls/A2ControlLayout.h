@@ -220,6 +220,15 @@ typedef NS_ENUM(NSInteger, A2JoystickTriggerMode) {
 @property (nonatomic, assign) CGFloat deadZone;
 /// 是否允许「前进锁」（ZL2 的 canLock）
 @property (nonatomic, assign) BOOL canLock;
+
+/// 双击摇杆中心触发潜行。
+///
+/// 来源 FCL DirectionEventData.java:119 的 `sneak`，**默认值是 true**
+/// （不是 false）—— 缺字段时必须按 YES 处理，否则从 FCL 导入的摇杆
+/// 会静默失去双击潜行。
+@property (nonatomic, assign) BOOL sneakOnDoubleTap;
+/// 潜行时按下的键码（FCL 的 sneakKeycode，默认 42 = KEY_LEFTSHIFT）
+@property (nonatomic, assign) NSInteger sneakKeyCode;
 /// 锁定阈值（0~1）
 @property (nonatomic, assign) CGFloat lockThreshold;
 /// 八方向事件：@{@"north": @[A2ControlEvent], ..., @"south_west": @[...]}
@@ -316,6 +325,10 @@ typedef NS_ENUM(NSInteger, A2JoystickTriggerMode) {
 @property (nonatomic, assign) BOOL hideWhenGamepad;
 /// 接了手柄摇杆时隐藏本层（ZL2 默认 false）
 @property (nonatomic, assign) BOOL hideWhenJoystick;
+
+/// 层的可见时机（ZL2 layer.visibilityType：always / in_game / in_menu）。
+/// 与控件的 visibility 不是一回事：层是整体开关，控件是单个。
+@property (nonatomic, copy) NSString *visibilityType;
 
 /// ⚠️ 必须是 strong，不能用 copy ——
 /// copy 会把 NSMutableArray 复制成不可变的 NSArray，

@@ -303,8 +303,15 @@ static NSString *FCLVisibilityName(A2ControlVisibility v) {
     dirs[@"south_west"] = [down arrayByAddingObjectsFromArray:left];
     w.directionEvents = dirs;
 
-    // FCL 的 deadZone 是百分比 ×100 存储（0~90），内部用 0~1
-    w.deadZone = MAX(0.0, MIN(0.9, FCLNum(event[@"deadZone"], 50) / 100.0));
+    // FCL 的 deadZone 是百分比 ×100 存储（0~90），内部用 0~1。
+    // 缺省值必须是 0：FCL 的 DirectionEventData.java:151-153 默认就是 0，
+    // 原来写 50 会让「没设死区」的摇杆凭空多出 50% 死区。
+    w.deadZone = MAX(0.0, MIN(0.9, FCLNum(event[@"deadZone"], 0) / 100.0));
+
+    // 双击摇杆中心潜行：FCL DirectionEventData.java:119 默认 **true**，
+    // sneakKeycode 默认 42（KEY_LEFTSHIFT，见 :136）。
+    w.sneakOnDoubleTap = FCLBool(event[@"sneak"], YES);
+    w.sneakKeyCode = FCLNum(event[@"sneakKeycode"], 42);
     w.lockThreshold = MAX(0.0, MIN(1.0, FCLNum(event[@"lockThreshold"], 30) / 100.0));
     w.canLock = FCLBool(event[@"canLock"], NO);
     w.lockEvents = @[];
@@ -543,8 +550,8 @@ static NSString *FCLVisibilityName(A2ControlVisibility v) {
     event[@"leftKeycode"] = [self fclCodesFromEvents:w.directionEvents[@"west"]];
     event[@"rightKeycode"] = [self fclCodesFromEvents:w.directionEvents[@"east"]];
     event[@"followOption"] = @"CENTER_FOLLOW";
-    event[@"sneak"] = @NO;
-    event[@"sneakKeycode"] = @0;
+    event[@"sneak"] = @(w.sneakOnDoubleTap);
+    event[@"sneakKeycode"] = @(w.sneakKeyCode > 0 ? w.sneakKeyCode : 42);
     // 内部 0~1 → FCL 百分比 ×100（0~90 / 0~100）
     event[@"deadZone"] = @((NSInteger)llround(MAX(0.0, MIN(0.9, w.deadZone)) * 100.0));
     event[@"canLock"] = @(w.canLock);
