@@ -27,9 +27,30 @@
 //    2. 下载版本 json
 //    3. 下载客户端 jar
 //    4. 下载依赖库（libraries）
-//    5. 下载资源文件（assets）
+//    5. 下载资源文件（assets，含资源索引 / 资源对象 / 日志配置）
 //    6. 安装模组加载器（可选）
 //    7. 写入版本图标与配置
+//
+//  ## 下载覆盖（对照 ZL2 BaseMinecraftDownloader.kt / MinecraftDownloader.kt）
+//
+//    | 文件                   | 来源字段                              | 校验字段            |
+//    | ---------------------- | ------------------------------------- | ------------------- |
+//    | 版本 json              | version_manifest.versions[].url       | sha1 + size         |
+//    | 客户端 jar             | downloads.client.url                  | downloads.client.sha1/size |
+//    | 依赖库 artifact        | libraries[].downloads.artifact.url    | artifact.sha1/size  |
+//    | 资源索引               | assetIndex.url（老版本回退 assets）   | assetIndex.sha1/size |
+//    | 资源对象               | 索引 objects[].hash → resources CDN   | hash（就是 SHA1）/size |
+//    | 日志配置               | logging.client.file.url               | logging.client.file.sha1/size |
+//
+//  ## 有意不下载的项
+//
+//    · natives / downloads.classifiers：iOS 不使用本地 .so，启动器自带 dylib。
+//      与 A2VersionMetadata.tweakVersionJson 的 skip 判定、A2IntegrityChecker
+//      的 A2LibraryArtifactWanted 保持一致，否则会「修不完的假问题」。
+//    · org.lwjgl*：同上，由启动器提供。
+//    · rules 判定为不适用的库（isLibraryAllowed:）。
+//    · inheritsFrom 的父版本本体：加载器安装器只把加载器 json 叠在原版上，
+//      父版本由「安装原版」这一步保证；启动前的完整性检查沿继承链校验。
 //
 //  每个阶段都上报进度，可中断、可续传。
 //

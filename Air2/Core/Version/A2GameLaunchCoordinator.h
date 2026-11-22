@@ -20,86 +20,113 @@
 //  SPDX-License-Identifier: GPL-3.0-or-later
 //
 //
+//  启动编排器 —— 严格对照 ZL2 的 GameLaunchFlow.kt buildLaunchPhases（第 167~274 行）。
 //
-//  A2GameLaunchCoordinator.h
-//  Air2
+//  ## ZL2 的结构（任务清单，不是一条直线）
 //
-//  启动编排器 —— **严格对照 ZL2 的 GameLaunchFlow.kt（286 行）**。
-//
-//  ## ZL2 的结构（不是一条直线，是 Phase + Task 模型）
-//
-//    GameLaunchFlow.launch()
+//    GameLaunchFlow.launch() 第 126~157 行
 //      └─ TaskFlowExecutor.executePhasesAsync()
-//           └─ buildPhase {
-//                ├─ Task 1  账号校验        （条件执行）
-//                ├─ Task 2  扫描模组        （必做，可能打补丁）
-//                ├─ Task 3  完整性校验       （可跳过）
-//                └─ Task 4  启动游戏
-//              }
+//           └─ buildPhase { ... } 第 184~273 行
+//                ├─ Task 1  账号校验        （第 187~209 行，条件执行）
+//                ├─ Task 2  检查游戏环境    （第 213~242 行，必做）
+//                │            ├─ checkMods()            第 328~339 行
+//                │            ├─ checkRendererSupport() 第 344~365 行
+//                │            ├─ VersionInfoParser 解析 manifest 第 225~231 行
+//                │            └─ 打了补丁就重新检索依赖库并下载 第 234~241 行
+//                ├─ Task 3  校验并修复文件  （第 244~255 行，可跳过）
+//                └─ Task 4  启动游戏        （第 258~272 行）
 //
-//  ## 每个 Task 的细节
+//  ## Air2 的映射
 //
-//  **Task 1 · 账号校验**
-//    条件：有网络 && !skipAccountRefresh && AccountsManager.isLaunchCheckNeeded(account)
-//    微软账号：
-//      · 距过期 < 5 分钟 → 直接刷新
-//      · 否则 validateAccessToken，失败再刷新
-//    外置账号：
-//      · validateOrRefresh → 失败则 passwordLogin
-//    失败分两类（这个区分很重要）：
-//      · ReloginRequired → 引导用户重新登录
-//      · CheckFailed     → 网络/服务器问题，可重试
+//    ZL2 的一个「检查游戏环境」任务在 Air2 拆成三步，便于 UI 逐项显示
+//    等待 / 进行中 / 完成 / 失败：
 //
-//  **Task 2 · 扫描模组**
-//    读 mods 目录，然后：
-//      · 发现 touchcontroller → 开启触摸代理
-//      · lwjgl3ify 需要补丁 → patchLwjgl3ify
-//      · **打了补丁就要重新检索依赖库并下载** ← 这条容易漏
+//      1. 校验账号          A2AccountManager.refreshCurrentAccountIfNeeded:
+//      2. 扫描模组          A2LaunchPrecheck scanModsForVersion:report:
+//      3. 检查渲染器        A2LaunchPrecheck checkRendererForMCVersion:report:error:
+//      4. 解析版本清单      A2LaunchPrecheck parseManifestForVersion:report:error:
+//      5. 校验并修复文件    A2IntegrityChecker + A2IntegrityRepairer
+//      6. 启动游戏          JRE 检查 + 交给 UI 拉起 JVM
 //
-//  **Task 3 · 完整性校验**
-//    用的是 MinecraftDownloader(mode = VERIFY_AND_REPAIR)：
-//    只读【本地已存在的】版本 json，按它的 sha1/size 校验，
-//    缺的补下、错的删除重下。
-//    —— 注意：这与「DOWNLOAD 模式」是【同一个类的两个模式】，
-//       不是两套代码。这一点我之前理解错了。
+//    执行器用 A2TaskFlowExecutor：阶段 → 任务串行、协作式取消、UI 快照。
+//    每个任务失败时都会带上「哪个文件 / 哪个 URL / 什么原因 / 能否重试」
+//    （A2LaunchDiagnostics.h），不会只剩一句「启动失败」。
 //
-//  **Task 4 · 启动**
-//    runGame() → exitActivity()
+//  ## 观察接口
 //
-//  ## 我们的实现
+//    · A2LaunchProgressDidChangeNotification 每次状态变化都会在主线程发出；
+//      userInfo[@"progress"] 是旧的进度对象（兼容旧 UI），
+//      userInfo[@"steps"] 是当前完整的任务清单（含失败原因）。
+//    · -steps 可随时从任意线程取一份只读快照。
+//    · A2LaunchStepState 的数值与 Player/GameUI/A2LaunchSplashView.h 的
+//      A2LaunchTaskState 一一对应，UI 可直接映射。
 //
-//  Kotlin 协程 → ObjC 完成回调链；TaskFlowExecutor → 顺序执行 + 阶段通知。
-//  语义保持：Task 顺序、失败分类、可选跳过都要一致。
+//  ## 与旧版协调器的差异
+//
+//    · 旧版是嵌套 completion 链，没有统一取消；现在失败后后续任务不再执行，
+//      取消会传到修复器 / 批量下载。
+//    · 旧版在「文件不完整」时直接调 A2GameInstaller 重装原版；现在先走
+//      A2IntegrityRepairer 只补缺文件，只有版本 JSON 本身坏了才回退重装。
+//    · 旧版账号只判断 401/403；现在保留了同类分类，但补上了可重试标记。
 //
 
 #import <Foundation/Foundation.h>
+
 #import "A2VersionManager.h"
+#import "A2LaunchDiagnostics.h"
 
 NS_ASSUME_NONNULL_BEGIN
 
+/// 启动任务的粗分类。保留旧值顺序，UI 的 switch 不需要改。
 typedef NS_ENUM(NSInteger, A2LaunchTask) {
-    A2LaunchTaskCheckAccount = 0,   ///< 账号校验（条件执行）
-    A2LaunchTaskScanMods,           ///< 扫描模组（必做）
-    A2LaunchTaskVerifyFiles,        ///< 完整性校验（可跳过）
+    A2LaunchTaskCheckAccount = 0,   ///< 账号校验（离线/跳过时仍占一项，状态为 Skipped）
+    A2LaunchTaskScanMods,           ///< 扫描模组
+    A2LaunchTaskVerifyFiles,        ///< 完整性校验与修复
     A2LaunchTaskStartGame,          ///< 启动
 };
 
-/// 失败类型 —— 区分「要重新登录」和「网络问题」，处理方式完全不同
-typedef NS_ENUM(NSInteger, A2LaunchErrorKind) {
-    A2LaunchErrorKindReloginRequired = 0,   ///< 凭据被服务端拒绝
-    A2LaunchErrorKindCheckFailed,           ///< 网络/服务器问题
-    A2LaunchErrorKindFileIntegrity,         ///< 文件损坏且无法修复
-    A2LaunchErrorKindNoJRE,                 ///< 没有可用的 Java
-    A2LaunchErrorKindUnknown,
+/// 清单里单项的状态。数值必须与 A2LaunchTaskState（UI 层）一致。
+typedef NS_ENUM(NSInteger, A2LaunchStepState) {
+    A2LaunchStepStatePending = 0,   ///< 等待
+    A2LaunchStepStateRunning = 1,   ///< 进行中
+    A2LaunchStepStateDone = 2,      ///< 完成
+    A2LaunchStepStateFailed = 3,    ///< 失败
+    A2LaunchStepStateSkipped = 4,   ///< 跳过（离线账号 / 用户设置跳过校验）
 };
 
-/// 启动进度
+/// 任务清单里的一项，供 UI 直接渲染。
+@interface A2LaunchStep : NSObject
+
+/// 显示名（"校验账号" / "扫描模组" / ...）
+@property (nonatomic, copy, readonly) NSString *title;
+/// 当前状态
+@property (nonatomic, assign, readonly) A2LaunchStepState state;
+/// 一行细节（当前文件名 / 错误原因），可为 nil
+@property (nonatomic, copy, readonly, nullable) NSString *detail;
+/// 失败时的完整诊断（含 file/url/reason/retryable），成功/等待时为 nil
+@property (nonatomic, strong, readonly, nullable) NSError *error;
+/// 原样重试是否可能成功
+@property (nonatomic, assign, readonly, getter=isRetryable) BOOL retryable;
+
+@end
+
+/// 启动进度（兼容旧 UI 的字段 + 新增诊断字段）
 @interface A2LaunchProgress : NSObject
 @property (nonatomic, assign) A2LaunchTask task;
 @property (nonatomic, assign) double fraction;      ///< 0~1（整个流程）
 @property (nonatomic, assign) double taskFraction;  ///< 0~1（当前 Task）
 @property (nonatomic, copy) NSString *title;        ///< Task 名（"扫描模组"）
 @property (nonatomic, copy) NSString *message;      ///< 细节
+
+/// 新增：当前步骤在清单中的位置（-1 表示还没有任务在跑）
+@property (nonatomic, assign) NSInteger stepIndex;
+@property (nonatomic, assign) NSInteger stepCount;
+/// 新增：当前步骤状态（等待/进行中/完成/失败/跳过）
+@property (nonatomic, assign) A2LaunchStepState stepState;
+/// 新增：失败原因（不含文件/地址的短句）；成功时为 nil
+@property (nonatomic, copy, nullable) NSString *failureReason;
+/// 新增：原样重试是否可能成功
+@property (nonatomic, assign, getter=isRetryable) BOOL retryable;
 @end
 
 extern NSNotificationName const A2LaunchProgressDidChangeNotification;
@@ -111,17 +138,26 @@ extern NSNotificationName const A2LaunchProgressDidChangeNotification;
 @property (nonatomic, readonly, getter=isLaunching) BOOL launching;
 @property (nonatomic, readonly) A2LaunchTask currentTask;
 
+/// 完整任务清单（只读快照，任意线程可读）。空闲时为空数组。
+@property (nonatomic, copy, readonly) NSArray<A2LaunchStep *> *steps;
+
+/// 最近一次启动失败的错误（含 kind/file/url/reason/retryable）；成功后清空。
+@property (nonatomic, strong, readonly, nullable) NSError *lastError;
+
 /// 启动
 ///
 /// @param versionName 目标版本
 /// @param skipAccountRefresh 跳过账号校验（用户自己确保凭据有效）
 /// @param skipIntegrityCheck 跳过文件校验（对照 ZL2 的 version.skipGameIntegrityCheck）
-/// @param completion 结果。失败时 error.userInfo[@"kind"] 带 A2LaunchErrorKind
+/// @param completion 结果。失败时 error.userInfo 带 @"kind"（A2LaunchErrorKind）
+///                   以及 A2LaunchDiagnostics 的文件/地址/原因/可重试字段。
+///                   完成块在主线程回调。
 - (void)launchVersion:(NSString *)versionName
    skipAccountRefresh:(BOOL)skipAccountRefresh
   skipIntegrityCheck:(BOOL)skipIntegrityCheck
            completion:(void (^)(BOOL success, NSError * _Nullable error))completion;
 
+/// 取消当前流程。修复器/批量下载会收到取消；正在跑的校验会尽快返回。
 - (void)cancel;
 
 @end

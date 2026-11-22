@@ -229,7 +229,7 @@ static const NSInteger kSystemicFailureLimit = 12;
 - (void)startOneRequest:(A2DownloadRequest *)req state:(A2BatchRunState *)state {
     __weak typeof(self) weakSelf = self;
 
-    [[A2DownloadEngine sharedClient] startRequest:req
+    A2DownloadOperation *operation = [[A2DownloadEngine sharedClient] startRequest:req
         progress:^(int64_t delta, int64_t totalIgnore) {
             (void)totalIgnore;
             [weakSelf addDownloadedBytes:delta];
@@ -239,9 +239,14 @@ static const NSInteger kSystemicFailureLimit = 12;
         __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
 
+        [self removeActiveOperationForRequest:req];
+
         BOOL systemic = NO;
         if (success) {
             [self markFileDone];
+            // 重试轮里失败过、这一轮成功的文件，必须把旧失败记录清掉，
+            // 否则 finishWithSuccess 会拿一份陈旧失败表判定整批失败。
+            [self clearFailureForRequest:req];
         } else {
             systemic = [self recordFailure:req error:error];
         }
@@ -266,6 +271,16 @@ static const NSInteger kSystemicFailureLimit = 12;
         // 拉下一个，把车道填满
         [self pumpWithState:state];
     }];
+
+    // 登记在途操作，供 -cancel 逐个取消（只取消本批次的，不动别的下载）。
+    // 之前这里没有 addObject，_activeOps 永远是空的，取消按钮实际无效。
+    if (operation && operation.state != A2DownloadStateCompleted &&
+        operation.state != A2DownloadStateFailed &&
+        operation.state != A2DownloadStateCancelled) {
+        [_lock lock];
+        [_activeOps addObject:operation];
+        [_lock unlock];
+    }
 }
 
 - (void)finishRound:(A2BatchRunState *)state {
@@ -315,7 +330,33 @@ static const NSInteger kSystemicFailureLimit = 12;
     _counterDownloadedFiles += 1;
     // 任何一次成功都清零连续失败计数 —— 说明网络本身是通的
     _consecutiveFailures = 0;
-    _activeOps = [NSMutableArray array];
+    // 注意：不要在这里清空 _activeOps。之前这么写会把其它在途
+    // 下载的句柄一起丢掉，取消时一个都停不掉（只影响本批次）。
+    [_lock unlock];
+}
+
+/// 从在途表里移除某个请求对应的操作（完成/失败都要调）。
+- (void)removeActiveOperationForRequest:(A2DownloadRequest *)request {
+    NSString *path = request.destinationPath;
+    if (!path.length) return;
+
+    [_lock lock];
+    NSMutableArray<A2DownloadOperation *> *keep = [NSMutableArray arrayWithCapacity:_activeOps.count];
+    for (A2DownloadOperation *op in _activeOps) {
+        if ([op.request.destinationPath isEqualToString:path]) continue;
+        [keep addObject:op];
+    }
+    _activeOps = keep;
+    [_lock unlock];
+}
+
+/// 重试成功后清掉旧失败记录。
+- (void)clearFailureForRequest:(A2DownloadRequest *)request {
+    NSString *path = request.destinationPath;
+    if (!path.length) return;
+
+    [_lock lock];
+    [_failures removeObjectForKey:path];
     [_lock unlock];
 }
 

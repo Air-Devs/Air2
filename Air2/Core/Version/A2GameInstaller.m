@@ -28,6 +28,8 @@
 #import "A2ModLoaderInstaller.h"
 #import "A2APIModDownloader.h"
 #import "A2Log.h"
+#import "A2LaunchPrecheck.h"
+#import "A2LaunchDiagnostics.h"
 
 /// 官方版本清单地址（Mojang piston-meta）
 static NSString *const kVersionManifestURL = @"https://piston-meta.mojang.com/mc/game/version_manifest_v2.json";
@@ -56,6 +58,9 @@ static void A2Main(dispatch_block_t block) {
 @property (nonatomic, assign) BOOL cancelled;
 @property (nonatomic, strong) NSURLSession *session;
 @property (nonatomic, copy, nullable) void (^progressBlock)(A2InstallStage, double, NSString *);
+/// 原版版本 json（资源阶段的 logging 配置要从它取）。
+/// 之前 downloadAssetObjects: 拿不到它，日志配置声明只能丢掉。
+@property (nonatomic, strong, nullable) NSDictionary *versionJSON;
 @property (nonatomic, copy, nullable) void (^completionBlock)(BOOL, NSError *);
 @end
 
@@ -222,6 +227,28 @@ static void A2Main(dispatch_block_t block) {
         [self failWithMessage:@"版本信息解析失败"];
         return;
     }
+    self.versionJSON = json;
+
+    // 版本信息的最低校验：id / mainClass 缺失时后面的下载即使“成功”，
+    // 启动阶段也会以 ClassNotFoundException 收场，不如在安装时就说清楚。
+    NSString *jsonID = json[@"id"];
+    if (![jsonID isKindOfClass:NSString.class] || jsonID.length == 0) {
+        [self failWithMessage:@"版本 json 缺少 id 字段"];
+        return;
+    }
+    NSString *mainClass = json[@"mainClass"];
+    if (![mainClass isKindOfClass:NSString.class] || mainClass.length == 0) {
+        [self failWithMessage:
+         [NSString stringWithFormat:@"版本 json（%@）缺少 mainClass 字段", jsonID]];
+        return;
+    }
+    if ([json[@"inheritsFrom"] isKindOfClass:NSString.class]) {
+        [self failWithMessage:
+         [NSString stringWithFormat:
+          @"版本 json（%@）带 inheritsFrom，这是加载器版；原版安装器只能装原版基底。",
+          jsonID]];
+        return;
+    }
 
     // 客户端 jar 的下载地址
     NSDictionary *downloads = json[@"downloads"];
@@ -268,13 +295,60 @@ static void A2Main(dispatch_block_t block) {
         // 检查规则：allow/disallow（区分操作系统）
         if (![self isLibraryAllowed:lib]) continue;
 
-        NSDictionary *artifacts = lib[@"downloads"];
-        NSDictionary *artifact = artifacts[@"artifact"];
-        if (![artifact isKindOfClass:NSDictionary.class]) continue;
+        // natives / classifiers 在 iOS 上不需要（启动器自带 dylib），
+        // 与 A2VersionMetadata.tweakVersionJson 的 skip 判定保持一致。
+        if (lib[@"natives"]) continue;
 
-        NSString *relPath = artifact[@"path"];
-        NSString *url = artifact[@"url"];
-        if (!relPath.length || !url.length) continue;
+        NSDictionary *artifacts = lib[@"downloads"];
+        NSDictionary *artifact = [artifacts isKindOfClass:NSDictionary.class]
+                                 ? artifacts[@"artifact"] : nil;
+
+        NSString *relPath = nil;
+        NSString *url = nil;
+        NSString *sha1 = nil;
+        NSNumber *size = nil;
+
+        if ([artifact isKindOfClass:NSDictionary.class]) {
+            relPath = artifact[@"path"];
+            url = artifact[@"url"];
+            sha1 = artifact[@"sha1"];
+            size = artifact[@"size"];
+        } else {
+            // downloads 存在但没有 artifact：ZL2 BaseMinecraftDownloader
+            // 第 162~163 行视为「仅 natives/classifiers」并跳过。
+            // 只有整个 downloads 缺失时才走 name+url 兜底。
+            if ([artifacts isKindOfClass:NSDictionary.class]) continue;
+
+            // 老版本（1.6 及以前）的 libraries 常常只给
+            // name = "group:artifact:version" 与一个 maven 根 url，
+            // 没有 downloads.artifact。对照 ZL2 artifactToPath
+            // （Minecraft.DownloadUtils.kt 第 86~110 行）现场拼路径。
+            NSArray<NSString *> *parts = [lib[@"name"] componentsSeparatedByString:@":"];
+            if (parts.count < 3) continue;
+
+            NSString *group = [parts[0] stringByReplacingOccurrencesOfString:@"." withString:@"/"];
+            NSString *artifactId = parts[1];
+            NSString *version = parts[2];
+            NSString *classifier = parts.count > 3
+                ? [NSString stringWithFormat:@"-%@", parts[3]] : @"";
+            relPath = [NSString stringWithFormat:@"%@/%@/%@/%@-%@%@.jar",
+                       group, artifactId, version, artifactId, version, classifier];
+
+            NSString *base = lib[@"url"];
+            if (![base isKindOfClass:NSString.class] || base.length == 0) {
+                base = kLibrariesBaseURL;
+            }
+            url = [base hasSuffix:@"/"]
+                ? [base stringByAppendingString:relPath]
+                : [base stringByAppendingFormat:@"/%@", relPath];
+
+            id libSHA1 = lib[@"sha1"];
+            if ([libSHA1 isKindOfClass:NSString.class]) sha1 = libSHA1;
+            id libSize = lib[@"size"];
+            if ([libSize isKindOfClass:NSNumber.class]) size = libSize;
+        }
+
+        if (!relPath.length || ![url isKindOfClass:NSString.class] || url.length == 0) continue;
 
         NSString *dest = [libRoot stringByAppendingPathComponent:relPath];
 
@@ -286,9 +360,6 @@ static void A2Main(dispatch_block_t block) {
         //
         // 正确做法（对照 ZL2）：把 sha1 交给下载引擎，由它在【开始前】
         // 校验本地文件 —— 一致就跳过（省掉整个下载），不一致就重下。
-        NSString *sha1 = artifact[@"sha1"];
-        NSNumber *size = artifact[@"size"];
-
         [pending addObject:@[url, dest, sha1 ?: @"", size ?: @0]];
     }
 
@@ -349,7 +420,7 @@ static void A2Main(dispatch_block_t block) {
 
     if (!indexURL.length) {
         [self report:A2InstallStageDownloadAssets progress:1 message:@"无需下载资源"];
-        [self installLoaderIfNeeded];
+        [self afterAssetsJSON];
         return;
     }
 
@@ -359,7 +430,15 @@ static void A2Main(dispatch_block_t block) {
     [NSFileManager.defaultManager createDirectoryAtPath:indexesDir
                             withIntermediateDirectories:YES attributes:nil error:nil];
 
-    NSString *indexID = assetIndex[@"id"] ?: @"legacy";
+    // 老版本（1.6 及以前）没有 assetIndex，只有顶层 assets 字段。
+    // ZL2 BaseMinecraftDownloader.createAssetIndex 第 97 行用的是
+    // gameManifest.assets，缺 assetIndex 时这里同样回退。
+    NSString *indexID = assetIndex[@"id"];
+    if (indexID.length == 0) {
+        id legacyAssets = json[@"assets"];
+        indexID = [legacyAssets isKindOfClass:NSString.class] && [legacyAssets length]
+                  ? legacyAssets : @"legacy";
+    }
     NSString *indexPath = [indexesDir stringByAppendingPathComponent:
                            [indexID stringByAppendingPathExtension:@"json"]];
 
@@ -376,8 +455,13 @@ static void A2Main(dispatch_block_t block) {
 }
 
 /// 按索引逐个下载资源对象。
-/// 注意：数千个文件，这里只下必要的一批（音效/语言/字体），
-/// 材质与模型在启动时按需下载，避免安装阶段过久。
+///
+/// 对照 ZL2 BaseMinecraftDownloader.loadAssetsDownload（第 128~146 行）：
+/// 普通资源落到 assets/objects/<h[0:2]>/<hash>；
+/// 老版本索引带 virtual / map_to_resources 时要按对象名铺开：
+///   virtual          → assets/<key>
+///   map_to_resources → resources/<key>
+/// 之前这里一律按 hash 布局写，老版本启动会缺资源。
 - (void)downloadAssetObjects:(NSString *)indexPath assetsRoot:(NSString *)assetsRoot {
     NSData *data = [NSData dataWithContentsOfFile:indexPath];
     NSDictionary *index = data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
@@ -385,11 +469,19 @@ static void A2Main(dispatch_block_t block) {
 
     if (![objects isKindOfClass:NSDictionary.class] || objects.count == 0) {
         [self report:A2InstallStageDownloadAssets progress:1 message:@"资源已就绪"];
-        [self installLoaderIfNeeded];
+        [self afterAssetsJSON];
         return;
     }
 
+    // 与 A2IntegrityChecker.m 第 706~735 行的口径保持一致。
+    BOOL isVirtual = [index[@"virtual"] boolValue] ||
+                     [index[@"map_to_resources"] boolValue];
+    BOOL toResources = [index[@"map_to_resources"] boolValue];
+
     NSString *objectsRoot = [assetsRoot stringByAppendingPathComponent:@"objects"];
+    NSString *virtualRoot = toResources
+        ? [self.request.gameHome stringByAppendingPathComponent:@"resources"]
+        : assetsRoot;
     NSMutableArray<NSArray<NSString *> *> *pending = [NSMutableArray array];
 
     for (NSString *key in objects) {
@@ -397,10 +489,15 @@ static void A2Main(dispatch_block_t block) {
         NSString *hash = obj[@"hash"];
         if (hash.length < 2) continue;
 
-        // 对象按 hash 前两位分目录存
+        // 普通资源按 hash 前两位分目录存；虚拟资源按原始 key 铺开
         NSString *sub = [hash substringToIndex:2];
-        NSString *dir = [objectsRoot stringByAppendingPathComponent:sub];
-        NSString *dest = [dir stringByAppendingPathComponent:hash];
+        NSString *dest = nil;
+        if (isVirtual) {
+            dest = [virtualRoot stringByAppendingPathComponent:key];
+        } else {
+            NSString *dir = [objectsRoot stringByAppendingPathComponent:sub];
+            dest = [dir stringByAppendingPathComponent:hash];
+        }
 
         // 不在这里判存在 —— 交给下载引擎按 SHA1 校验。
         // 资源文件的 hash 字段【就是】它的 SHA1（MC 资源索引的定义），
@@ -413,7 +510,7 @@ static void A2Main(dispatch_block_t block) {
 
     if (pending.count == 0) {
         [self report:A2InstallStageDownloadAssets progress:1 message:@"资源已完整"];
-        [self installLoaderIfNeeded];
+        [self afterAssetsJSON];
         return;
     }
 
@@ -423,9 +520,48 @@ static void A2Main(dispatch_block_t block) {
                          (unsigned long)pending.count]
                thenRun:^(NSError *error) {
         if (error) { [self failWithError:error]; return; }
+        [self afterAssetsJSON];
+    }];
+}
+
+/// 资源下载完后的收尾：补齐 logging.client.file，再进加载器。
+///
+/// ZL2 的 loadLog4jXMLDownload 是注释掉的（BaseMinecraftDownloader.kt
+/// 第 189~199 行）；Air2 按 Vanilla 启动器约定补到
+/// {assets}/log_configs/<file.id>。文件不到 1KB，失败会带诊断。
+- (void)afterAssetsJSON {
+    NSDictionary *json = self.versionJSON;
+    NSDictionary *logging = json[@"logging"];
+    NSDictionary *client = [logging isKindOfClass:NSDictionary.class] ? logging[@"client"] : nil;
+    NSDictionary *file = [client isKindOfClass:NSDictionary.class] ? client[@"file"] : nil;
+
+    NSString *url = [file isKindOfClass:NSDictionary.class] ? file[@"url"] : nil;
+    NSString *configID = [file isKindOfClass:NSDictionary.class] ? file[@"id"] : nil;
+
+    if (![url isKindOfClass:NSString.class] || url.length == 0 ||
+        ![configID isKindOfClass:NSString.class] || configID.length == 0) {
+        [self installLoaderIfNeeded];
+        return;
+    }
+
+    NSString *dest = [A2LaunchPrecheck loggingConfigPathForGameHome:self.request.gameHome
+                                                                 id:configID];
+    if (dest.length == 0) {
+        [self installLoaderIfNeeded];
+        return;
+    }
+
+    [self report:A2InstallStageDownloadAssets progress:0.98 message:@"正在下载日志配置…"];
+    [self download:@[url] to:dest stageLabel:A2InstallStageDownloadAssets
+           message:@"正在下载日志配置"
+              sha1:file[@"sha1"]
+              size:file[@"size"]
+           thenRun:^(NSError *error) {
+        if (error) { [self failWithError:error]; return; }
         [self installLoaderIfNeeded];
     }];
 }
+
 
 #pragma mark - 加载器
 
@@ -645,13 +781,15 @@ static void A2Main(dispatch_block_t block) {
     if (sha1.length) req.expectedSHA1 = sha1;
     if (size) req.expectedSize = size.longLongValue;
 
+    // 累计字节必须是【本次下载】的局部变量。
+    // 之前写成 static —— 所有单文件下载共用同一份计数，第二个文件
+    // 一开始进度就超过 100%，表现为进度条乱跳。
+    __block int64_t acc = 0;
     __weak typeof(self) weakSelf = self;
     [[A2DownloadEngine sharedClient] startRequest:req
         progress:^(int64_t delta, int64_t total) {
         __strong typeof(weakSelf) self = weakSelf;
         if (!self || self.cancelled || total <= 0) return;
-        // 用累计值算阶段进度
-        static int64_t acc = 0;
         acc += delta;
         if (acc < 0) acc = 0;
         double p = MIN(1.0, (double)acc / (double)total);
@@ -691,6 +829,7 @@ static void A2Main(dispatch_block_t block) {
     // 每个文件都要等 piston-data / libraries.minecraft.net 的响应，
     // 几百个库就慢得离谱。BMCLAPI 镜像能把延迟从几百毫秒降到几十毫秒。
     NSMutableArray<A2DownloadRequest *> *requests = [NSMutableArray array];
+    NSMutableDictionary<NSString *, NSString *> *urlByPath = [NSMutableDictionary dictionary];
     A2MirrorResolver *mirror = [A2MirrorResolver shared];
 
     for (NSArray<NSString *> *pair in items) {
@@ -720,6 +859,11 @@ static void A2Main(dispatch_block_t block) {
         if (pair.count >= 4) {
             req.expectedSize = [pair[3] longLongValue];
         }
+
+        // 失败诊断要带地址：批量下载器只回传 path -> error，
+        // 这里保留 path -> 首个候选 URL 的映射，组装错误时补上。
+        NSString *firstURL = urls.firstObject.absoluteString;
+        if (pair[1].length && firstURL.length) urlByPath[pair[1]] = firstURL;
 
         [requests addObject:req];
     }
@@ -771,10 +915,25 @@ static void A2Main(dispatch_block_t block) {
         if (self.cancelled) return;
 
         if (failures.count > 0) {
-            [A2Log log:@"installer: %@ 完成，%lu 个文件失败",
-                  base, (unsigned long)failures.count];
+            // 对照 ZL2 TaskBatch.kt 第 91~99 行：批量下载仍有失败就抛
+            // DownloadFailedException，不让上层把「缺文件」当成功。
+            // 这里把首个失败文件 + 地址 + 原因打包成可诊断错误再上报。
+            NSString *firstPath = failures.allKeys.firstObject;
+            NSError *fileError = failures[firstPath];
+            NSString *reason = [NSString stringWithFormat:
+                                @"%@：%lu 个文件下载失败（首个：%@）。",
+                                base, (unsigned long)failures.count,
+                                fileError.localizedDescription ?: @"未知原因"];
+            NSError *error = A2LaunchDiagnose(A2LaunchErrorKindFileIntegrity,
+                                              @"下载游戏文件",
+                                              reason,
+                                              firstPath,
+                                              urlByPath[firstPath],
+                                              YES);
+            [A2Log log:@"installer: %@", error.localizedDescription];
+            if (then) then(error);
+            return;
         }
-        // 单文件失败不阻断 —— 依赖库里有可选组件，缺几个不影响启动
         if (then) then(nil);
     };
 
