@@ -58,13 +58,6 @@ typedef NS_ENUM(NSInteger, A2LaunchStage) {
     A2LaunchStageFailed,           ///< 失败
 };
 
-@interface A2LaunchSplashView : UIView
-
-@property (nonatomic, copy) NSString *versionName;
-@property (nonatomic, strong, nullable) UIImage *versionIcon;
-
-@property (nonatomic, assign, readonly) A2LaunchStage stage;
-
 // ------------------------------------------------------------------
 //  启动任务清单（对照 ZL2 GameLaunchFlow.buildLaunchPhases）
 //
@@ -104,12 +97,20 @@ typedef NS_ENUM(NSInteger, A2LaunchTaskState) {
 @end
 
 /// 用一份任务清单重建列表。传 nil 或空数组则隐藏清单。
+@interface A2LaunchSplashView : UIView
+
+@property (nonatomic, copy) NSString *versionName;
+@property (nonatomic, strong, nullable) UIImage *versionIcon;
+
+@property (nonatomic, assign, readonly) A2LaunchStage stage;
+
 - (void)setTasks:(nullable NSArray<A2LaunchTaskItem *> *)tasks;
 
 /// 更新某一项状态。索引越界会被忽略（不崩）。
 - (void)setTaskState:(A2LaunchTaskState)state
              atIndex:(NSInteger)index
               detail:(nullable NSString *)detail;
+
 
 /// 兼容旧调用：把语言级阶段映射到清单里「进行中」的那一项。
 - (void)setStage:(A2LaunchStage)stage message:(nullable NSString *)message;
