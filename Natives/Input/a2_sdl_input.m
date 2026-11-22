@@ -22,6 +22,7 @@
 static const int kA2SdlCursorPos   = 1003;
 static const int kA2SdlMouseButton = 1006;
 static const int kA2SdlKey         = 1005;
+static const int kA2SdlTextInput   = 1000;   // agent: pushText((char) i1)
 
 static JavaVM   *gVM = NULL;
 static jclass    gBridgeClass = NULL;
@@ -82,35 +83,92 @@ void a2_sdl_input_cursor(double x, double y) {
 }
 
 void a2_sdl_input_button(int button, int down) {
-    int sdlButton = (button == 0) ? 1 : (button == 1 ? 3 : button + 1);
+    // GLFW: 0=左 1=右 2=中；SDL: 1=左 2=中 3=右（不是简单 +1）
+    int sdlButton;
+    switch (button) {
+        case 0:  sdlButton = 1; break;
+        case 1:  sdlButton = 3; break;
+        case 2:  sdlButton = 2; break;
+        default: sdlButton = button + 1; break;
+    }
     a2_sdl_call(kA2SdlMouseButton, sdlButton, down ? 1 : 0, 0, 0);
 }
 
 static int a2_sdl_keycode_from_glfw(int key) {
+    // GLFW 的可打印键与 ASCII 一致；SDL3 对字母键同样用小写 ASCII。
     if (key >= 'A' && key <= 'Z') return key + 32;
-    if (key >= '0' && key <= '9') return key;
-    if (key == 32)  return 32;
-    if (key == 256) return 27;
-    if (key == 257) return 13;
-    if (key == 258) return 9;
-    if (key == 259) return 8;
-    if (key >= 290 && key <= 301) {
+    if (key >= 32 && key <= 96)  return key;
+
+    switch (key) {
+        case 256: return 27;               // ESCAPE
+        case 257: return 13;               // RETURN
+        case 258: return 9;                // TAB
+        case 259: return 8;                // BACKSPACE
+        case 260: return 1073741897;       // INSERT
+        case 261: return 127;              // DELETE（SDL3 用 0x7F 而非 scancode）
+        case 262: return 1073741903;       // RIGHT
+        case 263: return 1073741904;       // LEFT
+        case 264: return 1073741905;       // DOWN
+        case 265: return 1073741906;       // UP
+        case 266: return 1073741899;       // PAGE_UP
+        case 267: return 1073741902;       // PAGE_DOWN
+        case 268: return 1073741898;       // HOME
+        case 269: return 1073741901;       // END
+        case 280: return 1073741881;       // CAPS_LOCK
+        case 281: return 1073741895;       // SCROLL_LOCK
+        case 282: return 1073741907;       // NUM_LOCK
+        case 283: return 1073741894;       // PRINT_SCREEN
+        case 284: return 1073741896;       // PAUSE
+        case 340: return 1073742049;       // LEFT_SHIFT
+        case 341: return 1073742048;       // LEFT_CONTROL
+        case 342: return 1073742050;       // LEFT_ALT
+        case 343: return 1073742051;       // LEFT_SUPER
+        case 344: return 1073742053;       // RIGHT_SHIFT
+        case 345: return 1073742052;       // RIGHT_CONTROL
+        case 346: return 1073742054;       // RIGHT_ALT
+        case 347: return 1073742055;       // RIGHT_SUPER
+        case 348: return 1073741925;       // APPLICATION / MENU
+        default: break;
+    }
+
+    if (key >= 290 && key <= 301) {        // F1..F12
         static const int fk[12] = {1073741882, 1073741883, 1073741884, 1073741885,
                                    1073741886, 1073741887, 1073741888, 1073741889,
                                    1073741890, 1073741891, 1073741892, 1073741893};
         return fk[key - 290];
     }
-    if (key >= 320 && key <= 335) {     // 小键盘 KP_0..KP_ENTER
-        static const int kp[16] = {1073741912,1073741913,1073741914,1073741915,
-                                   1073741916,1073741917,1073741918,1073741919,
-                                   1073741920,1073741921,1073741922,1073741923,
-                                   1073741908,1073741909,1073741910,1073741911};
+
+    if (key >= 320 && key <= 336) {        // GLFW KP_0..KP_EQUAL
+        // SDL3 scancode：KP_0 = 98（不是 88）；顺序与 GLFW 320..336 不同，必须逐项列。
+        static const int kp[17] = {
+            1073741922,  // KP_0
+            1073741913,  // KP_1
+            1073741914,  // KP_2
+            1073741915,  // KP_3
+            1073741916,  // KP_4
+            1073741917,  // KP_5
+            1073741918,  // KP_6
+            1073741919,  // KP_7
+            1073741920,  // KP_8
+            1073741921,  // KP_9
+            1073741923,  // KP_DECIMAL
+            1073741908,  // KP_DIVIDE
+            1073741909,  // KP_MULTIPLY
+            1073741910,  // KP_SUBTRACT
+            1073741911,  // KP_ADD
+            1073741912,  // KP_ENTER
+            1073741927,  // KP_EQUAL
+        };
         return kp[key - 320];
     }
-    if (key == 340) return 1073742049;
-    if (key == 341) return 1073742048;
-    if (key == 342) return 1073742050;
     return key;
+}
+
+/// 26.3 的文本输入：agent 侧 pushText(char) 只写低 8 位，超过 ASCII 会变乱码，
+/// 因此只镜像 1..127；非 ASCII 在 agent 升级前不发送（避免把 CJK 打成问号）。
+void a2_sdl_input_text(int codepoint) {
+    if (codepoint <= 0 || codepoint > 127) return;
+    a2_sdl_call(kA2SdlTextInput, codepoint, 0, 0, 0);
 }
 
 void a2_sdl_input_key(int glfwKey, int down) {

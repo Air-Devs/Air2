@@ -201,6 +201,7 @@
 		AE3F7DCB7FAF64BF1D4EA3D9 /* a2_vmloader.m in Sources */ = {isa = PBXBuildFile; fileRef = 953C92615BB82B8F2A760D70 /* a2_vmloader.m */; };
 		76E4E21227BBCB64926C28DD /* A2ControlLayoutIO.m in Sources */ = {isa = PBXBuildFile; fileRef = 89007127877F1C02BD278415 /* A2ControlLayoutIO.m */; };
 		DCC09D3FB74B620E1FF29049 /* A2GameControlsView.m in Sources */ = {isa = PBXBuildFile; fileRef = 49C423A1E98F23EA857D3F73 /* A2GameControlsView.m */; };
+		65953F7B8C06C9F7B00F18E5 /* A2KeyCodeMap.m in Sources */ = {isa = PBXBuildFile; fileRef = EE3E757104B4525633B6E321 /* A2KeyCodeMap.m */; };
 		920A2D2957D697E609338C49 /* a2_controls_overlay.m in Sources */ = {isa = PBXBuildFile; fileRef = 4C2B21C1754762AA4B5EAA5B /* a2_controls_overlay.m */; };
 		0B3139358246F0181C9482EA /* a2_glfw_input.m in Sources */ = {isa = PBXBuildFile; fileRef = 933A49FD4221830D268A7AB8 /* a2_glfw_input.m */; };
 		34AA6CBDDC0541DFCC1C1BBA /* a2_glfw_overlay_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = DCA5F028E64087F787F6C202 /* a2_glfw_overlay_bridge.m */; };
@@ -436,6 +437,7 @@
 		953C92615BB82B8F2A760D70 /* a2_vmloader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_vmloader.m"; sourceTree = "<group>"; };
 		89007127877F1C02BD278415 /* A2ControlLayoutIO.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlLayoutIO.m"; sourceTree = "<group>"; };
 		49C423A1E98F23EA857D3F73 /* A2GameControlsView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameControlsView.m"; sourceTree = "<group>"; };
+		EE3E757104B4525633B6E321 /* A2KeyCodeMap.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2KeyCodeMap.m"; sourceTree = "<group>"; };
 		4C2B21C1754762AA4B5EAA5B /* a2_controls_overlay.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_controls_overlay.m"; sourceTree = "<group>"; };
 		933A49FD4221830D268A7AB8 /* a2_glfw_input.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_glfw_input.m"; sourceTree = "<group>"; };
 		DCA5F028E64087F787F6C202 /* a2_glfw_overlay_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_glfw_overlay_bridge.m"; sourceTree = "<group>"; };
@@ -660,6 +662,7 @@
 		7665B1CD998B74E654718928 /* a2_vmloader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_vmloader.h"; sourceTree = "<group>"; };
 		57EC1B6D16AA10F6067C10C9 /* A2ControlLayoutIO.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlLayoutIO.h"; sourceTree = "<group>"; };
 		B64B29D97F9B5C019647A01F /* A2GameControlsView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameControlsView.h"; sourceTree = "<group>"; };
+		2892F6D3B1697F794678ED4A /* A2KeyCodeMap.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2KeyCodeMap.h"; sourceTree = "<group>"; };
 		BC1BFCD3931CF2B23F207B8F /* a2_glfw_input.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_glfw_input.h"; sourceTree = "<group>"; };
 		408CE7916D149CDF4725C142 /* a2_glfw_trace.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_glfw_trace.h"; sourceTree = "<group>"; };
 		7098596D5BC01E0C70FA57C8 /* a2_glfw_window.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_glfw_window.h"; sourceTree = "<group>"; };
@@ -934,6 +937,7 @@
 			children = (
 				89007127877F1C02BD278415 /* A2ControlLayoutIO.m */,
 				49C423A1E98F23EA857D3F73 /* A2GameControlsView.m */,
+				EE3E757104B4525633B6E321 /* A2KeyCodeMap.m */,
 				4C2B21C1754762AA4B5EAA5B /* a2_controls_overlay.m */,
 				933A49FD4221830D268A7AB8 /* a2_glfw_input.m */,
 				DCA5F028E64087F787F6C202 /* a2_glfw_overlay_bridge.m */,
@@ -941,6 +945,7 @@
 				8E93C7E55E06F51CB6F80339 /* a2_sdl_input.m */,
 				57EC1B6D16AA10F6067C10C9 /* A2ControlLayoutIO.h */,
 				B64B29D97F9B5C019647A01F /* A2GameControlsView.h */,
+				2892F6D3B1697F794678ED4A /* A2KeyCodeMap.h */,
 				BC1BFCD3931CF2B23F207B8F /* a2_glfw_input.h */,
 				408CE7916D149CDF4725C142 /* a2_glfw_trace.h */,
 				7098596D5BC01E0C70FA57C8 /* a2_glfw_window.h */,
@@ -1774,6 +1779,7 @@
 				AE3F7DCB7FAF64BF1D4EA3D9 /* a2_vmloader.m in Sources */,
 				76E4E21227BBCB64926C28DD /* A2ControlLayoutIO.m in Sources */,
 				DCC09D3FB74B620E1FF29049 /* A2GameControlsView.m in Sources */,
+				65953F7B8C06C9F7B00F18E5 /* A2KeyCodeMap.m in Sources */,
 				920A2D2957D697E609338C49 /* a2_controls_overlay.m in Sources */,
 				0B3139358246F0181C9482EA /* a2_glfw_input.m in Sources */,
 				34AA6CBDDC0541DFCC1C1BBA /* a2_glfw_overlay_bridge.m in Sources */,
@@ -1843,7 +1849,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = "YES";
 				GCC_WARN_UNUSED_FUNCTION = "YES";
 				GCC_WARN_UNUSED_VARIABLE = "YES";
-				IPHONEOS_DEPLOYMENT_TARGET = "14.0";
+				IPHONEOS_DEPLOYMENT_TARGET = "15.0";
 				MTL_ENABLE_DEBUG_INFO = "INCLUDE_SOURCE";
 				ONLY_ACTIVE_ARCH = "YES";
 				SDKROOT = "iphoneos";
@@ -1875,7 +1881,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = "YES";
 				GCC_WARN_UNUSED_FUNCTION = "YES";
 				GCC_WARN_UNUSED_VARIABLE = "YES";
-				IPHONEOS_DEPLOYMENT_TARGET = "14.0";
+				IPHONEOS_DEPLOYMENT_TARGET = "15.0";
 				MTL_ENABLE_DEBUG_INFO = "NO";
 				SDKROOT = "iphoneos";
 				SUPPORTED_PLATFORMS = "iphoneos";
@@ -1887,7 +1893,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
-				CURRENT_PROJECT_VERSION = "f4f3ea6";
+				CURRENT_PROJECT_VERSION = "dbbecdc";
 				DEAD_CODE_STRIPPING = "NO";
 				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";
@@ -1933,7 +1939,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
-				CURRENT_PROJECT_VERSION = "f4f3ea6";
+				CURRENT_PROJECT_VERSION = "dbbecdc";
 				DEAD_CODE_STRIPPING = "NO";
 				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";

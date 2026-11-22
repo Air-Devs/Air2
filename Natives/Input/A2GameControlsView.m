@@ -34,6 +34,37 @@ extern void a2_glfw_input_post_key(long window, int key, int action);
 extern void a2_glfw_input_post_mouse_button(long window, int button, int action);
 extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
+/// 方向键顺序固定为 W/A/S/D，索引与 _pressed[] 一一对应。
+static NSArray<NSString *> *A2DirCids(void) {
+    static NSArray<NSString *> *ids = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ ids = @[ @"w", @"a", @"s", @"d" ]; });
+    return ids;
+}
+
+static int A2DirDefaultKey(int index) {
+    static const int keys[4] = { 87, 65, 83, 68 };
+    return (index >= 0 && index < 4) ? keys[index] : 0;
+}
+
+static double A2Clamp01(double v) {
+    if (v != v) return 0;                 // NaN
+    return v < 0 ? 0 : (v > 1 ? 1 : v);
+}
+
+/// 偏移量占可用空间的万分比；span <= 0 时按 0 处理，避免除零。
+static double A2Percent(double offset, double span) {
+    if (!(span > 0)) return 0;
+    return A2Clamp01(offset / span) * 10000.0;
+}
+
+/// JSON 里可能是 NSNull / 字符串；只有 NSNumber、NSString 能安全取 double。
+static double A2DoubleValue(id value) {
+    if ([value isKindOfClass:NSNumber.class]) return [(NSNumber *) value doubleValue];
+    if ([value isKindOfClass:NSString.class]) return [(NSString *) value doubleValue];
+    return 0;
+}
+
 #pragma mark - 摇杆
 
 @protocol A2StickDelegate <NSObject>
@@ -172,6 +203,16 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 - (void)a2_layoutDefaultMoveKeys;
 - (void)a2_placeMoveKey:(UIView *)v center:(CGPoint)c size:(CGFloat)s;
 - (void)a2_logControlLayout;
+- (void)a2_postCode:(int)code down:(BOOL)down;
+- (void)a2_holdControl:(NSString *)cid fallback:(int)def down:(BOOL)down;
+- (NSString *)a2_cidForView:(UIView *)v;
+- (NSArray<NSNumber *> *)a2_codesForControl:(NSString *)cid fallback:(int)def;
+- (void)a2_setKeys:(NSArray<NSNumber *> *)keys forControl:(NSString *)cid;
+- (UIButton *)a2_installCustomControlWithTitle:(NSString *)title cid:(NSString *)cid;
+- (void)a2_releaseAllInput;
+- (void)a2_restoreDefaultLayout;
+- (void)a2_pressBound:(NSString *)cid fallback:(int)def;
+- (BOOL)a2_releaseLatchedIfAny;
 @end
 
 @implementation A2GameControlsView {
@@ -191,15 +232,12 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     UIButton *_inventoryButton;
     UIButton *_f3Button;
     UIButton *_keyboardButton;
-    UIButton *_editButton;
     UIButton *_escButton;
     NSMutableArray<UIButton *> *_hotbar;
     NSMutableDictionary<NSString *, UIView *> *_movable;   // 可自定义的控件（编辑模式用）
     UITextField *_kbField;
     BOOL _kbVisible;
     BOOL _editing;
-    NSTimer *_useWatchdog;
-    NSTimer *_attackWatchdog;
     UIView *_selectionHandle;      // 选中框右下角的缩放把手
     __weak UIView *_selectedControl;
     NSMutableDictionary<NSString *, NSString *> *_customTitles;  // 自定义键 id → 显示名
@@ -207,11 +245,11 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     NSString *_pendingCid;                                        // 正在等待选键的控件 id
     NSMutableArray<NSNumber *> *_comboBuffer;                     // 组合键选择缓冲
     NSString *_latchedCid;                                        // 已锁存(按住)修饰键的控件
-    int _latchedModifier;                                         // 锁存中的 F 键码
+    NSMutableArray<NSNumber *> *_latchedModifiers;                // 锁存中的修饰键（组合键前 N-1 个）
     __weak UIView *_keypadMask;                                   // 键盘面板遮罩（供关闭用）
-    NSMutableDictionary<NSString *, NSNumber *> *_bindings;   // 控件id -> GLFW 键码
-    NSMutableDictionary<NSString *, NSValue *> *_restFrames;  // 编辑前位置（取消用）
-
+    NSMutableDictionary<NSString *, id> *_bindings;   // 控件id -> GLFW 键码（NSNumber）或组合键（NSArray）
+    // 按住型控件当前真正派发出去的键码（支持组合键/改绑定后正确抬起）
+    NSMutableDictionary<NSString *, NSArray<NSNumber *> *> *_heldCodes;
 
     BOOL _pressed[4];           // W A S D
     BOOL _sneaking;
@@ -233,6 +271,8 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
             _lastTapTime[i] = 0;
             _pressed[i] = NO;
         }
+        _heldCodes = [NSMutableDictionary dictionary];
+        _latchedModifiers = [NSMutableArray array];
         _hotbar = [NSMutableArray array];
         _movable = [NSMutableDictionary dictionary];
         _customTitles = [NSMutableDictionary dictionary];
@@ -241,9 +281,18 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
                                               selector:@selector(a2_layoutChanged:)
                                                   name:@"A2ControlLayoutChanged"
                                                 object:nil];
+        // ★退到后台/来电/控制中心★ 系统可能收不到 touchend，必须主动松开所有合成输入，
+        //   否则回到游戏会一直走/一直放方块（不靠看门狗定时器兜底）。
+        [NSNotificationCenter.defaultCenter addObserver:self
+                                              selector:@selector(a2_appReleaseInput:)
+                                                  name:UIApplicationWillResignActiveNotification
+                                                object:nil];
+        [NSNotificationCenter.defaultCenter addObserver:self
+                                              selector:@selector(a2_appReleaseInput:)
+                                                  name:UIApplicationDidEnterBackgroundNotification
+                                                object:nil];
         _bindings = [[NSUserDefaults.standardUserDefaults dictionaryForKey:kA2BindingsKey] mutableCopy]
                     ?: [NSMutableDictionary dictionary];
-        _restFrames = [NSMutableDictionary dictionary];
 
         [self a2_buildMoveKeys];
         [self a2_buildStick];
@@ -255,6 +304,10 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         [self a2_applySavedLayout];
     }
     return self;
+}
+
+- (void)dealloc {
+    [NSNotificationCenter.defaultCenter removeObserver:self];
 }
 
 #pragma mark - 构建
@@ -361,16 +414,21 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 
 - (void)a2_applyMode {
     BOOL stick = (_moveMode == A2MoveModeStick);
-    // ★五键各自独立★ 摇杆模式下逐个隐藏（没有容器了）
-    for (UIView *v in [self a2_moveKeyViews]) v.hidden = stick;
+    // ★五键各自独立★ 摇杆模式下逐个隐藏（没有容器了）；被删除的键也不能因切模式复活。
+    NSArray<UIView *> *views = [self a2_moveKeyViews];
+    NSArray<NSString *> *cids = @[ @"w", @"a", @"s", @"d", @"sneak" ];
+    for (NSUInteger i = 0; i < views.count; i++) {
+        BOOL removed = (i < cids.count) && [_removedIds containsObject:cids[i]];
+        views[i].hidden = stick || removed;
+        views[i].userInteractionEnabled = !removed;
+    }
     _stick.hidden = !stick;
 }
 
 #pragma mark - 分键
 
 - (void)a2_dirTouchDown:(UIButton *)sender {
-    int key = (int) sender.tag;
-    int idx = [self a2_indexForKey:key];
+    int idx = [self a2_indexForKey:(int) sender.tag];
     if (idx < 0) return;
 
     // 快速点两下同一个方向 = 疾跑
@@ -379,8 +437,9 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     _lastTapTime[idx] = now;
 
     if (!_pressed[idx]) {
+        NSArray<NSString *> *dirCids = A2DirCids();
         _pressed[idx] = YES;
-        a2_glfw_input_post_key(_window, key, 1);
+        [self a2_holdControl:dirCids[idx] fallback:A2DirDefaultKey(idx) down:YES];
     }
     if (doubleTap && !_sprintHeld) {
         _sprintHeld = YES;
@@ -390,12 +449,12 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 }
 
 - (void)a2_dirTouchUp:(UIButton *)sender {
-    int key = (int) sender.tag;
-    int idx = [self a2_indexForKey:key];
+    int idx = [self a2_indexForKey:(int) sender.tag];
     if (idx < 0) return;
     if (_pressed[idx]) {
         _pressed[idx] = NO;
-        a2_glfw_input_post_key(_window, key, 0);
+        NSArray<NSString *> *dirCids = A2DirCids();
+        [self a2_holdControl:dirCids[idx] fallback:A2DirDefaultKey(idx) down:NO];
     }
     // 松开方向 → 放掉疾跑
     if (_sprintHeld) {
@@ -418,20 +477,25 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
 #pragma mark - 潜行 / 跳跃
 
 - (void)a2_toggleSneak {
-    _sneaking = !_sneaking;
-    a2_glfw_input_post_key(_window, kKeyLeftShift, _sneaking ? 1 : 0);
+    if (!_sneaking) {
+        _sneaking = YES;
+        [self a2_holdControl:@"sneak" fallback:kKeyLeftShift down:YES];
+    } else {
+        _sneaking = NO;
+        [self a2_holdControl:@"sneak" fallback:kKeyLeftShift down:NO];
+    }
     _sneakButton.backgroundColor = _sneaking
         ? [UIColor colorWithRed:0.42 green:0.65 blue:1.0 alpha:0.45]
         : [UIColor colorWithWhite:1.0 alpha:0.14];
 }
 
 - (void)a2_jumpDown {
-    a2_glfw_input_post_key(_window, kKeySpace, 1);
+    [self a2_holdControl:@"jump" fallback:kKeySpace down:YES];
     _jumpButton.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.30];
 }
 
 - (void)a2_jumpUp {
-    a2_glfw_input_post_key(_window, kKeySpace, 0);
+    [self a2_holdControl:@"jump" fallback:kKeySpace down:NO];
     _jumpButton.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.14];
 }
 
@@ -445,10 +509,10 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
         if (ay > 0.38) { if (dir.y < 0) wantW = YES; else wantS = YES; }
         if (ax > 0.38) { if (dir.x < 0) wantA = YES; else wantD = YES; }
     }
-    [self a2_setKey:kKeyW on:wantW];
-    [self a2_setKey:kKeyA on:wantA];
-    [self a2_setKey:kKeyS on:wantS];
-    [self a2_setKey:kKeyD on:wantD];
+    [self a2_setKeyAtIndex:0 on:wantW];
+    [self a2_setKeyAtIndex:1 on:wantA];
+    [self a2_setKeyAtIndex:2 on:wantS];
+    [self a2_setKeyAtIndex:3 on:wantD];
 
     if (sprint != _sprintHeld) {
         _sprintHeld = sprint;
@@ -460,29 +524,45 @@ extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
     [self a2_toggleSneak];
 }
 
-- (void)a2_setKey:(int)key on:(BOOL)on {
-    int idx = [self a2_indexForKey:key];
-    if (idx < 0) return;
+- (void)a2_setKeyAtIndex:(int)idx on:(BOOL)on {
+    if (idx < 0 || idx >= 4) return;
     if (_pressed[idx] == on) return;
     _pressed[idx] = on;
-    a2_glfw_input_post_key(_window, key, on ? 1 : 0);
+    NSArray<NSString *> *dirCids = A2DirCids();
+    [self a2_holdControl:dirCids[idx] fallback:A2DirDefaultKey(idx) down:on];
 }
 
 #pragma mark - 收尾
 
-/// 移除/切换模式前把按住的键全部放开，避免"卡住一直走"
+/// 移除/切换模式/退后台前把按住的键全部放开，避免"卡住一直走"
 - (void)a2_releaseAll {
-    for (int i = 0; i < 4; i++) {
-        if (_pressed[i]) {
-            int keys[4] = { kKeyW, kKeyA, kKeyS, kKeyD };
-            a2_glfw_input_post_key(_window, keys[i], 0);
-            _pressed[i] = NO;
-        }
+    for (NSString *cid in [_heldCodes.allKeys copy]) {
+        [self a2_holdControl:cid fallback:0 down:NO];
     }
+    for (int i = 0; i < 4; i++) _pressed[i] = NO;
     if (_sprintHeld) {
         _sprintHeld = NO;
         a2_glfw_input_post_key(_window, kKeyLeftControl, 0);
     }
+    if (_sneaking) {
+        _sneaking = NO;
+        _sneakButton.backgroundColor = [UIColor colorWithWhite:1.0 alpha:0.14];
+    }
+}
+
+/// 松开所有合成输入：方向、疾跑、潜行、组合键、鼠标左右键。
+- (void)a2_releaseAllInput {
+    [self a2_releaseLatchedIfAny];
+    a2_glfw_input_post_mouse_button(_window, kMouseLeft, 0);
+    a2_glfw_input_post_mouse_button(_window, kMouseRight, 0);
+    [self a2_releaseAll];
+    _attackButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.14];
+    _useButton.backgroundColor    = [UIColor colorWithWhite:1 alpha:0.14];
+}
+
+- (void)a2_appReleaseInput:(NSNotification *)note {
+    [self a2_releaseAllInput];
+    a2_log_f(@"[A2-CONTROLS] %s ⇒ 已释放全部合成输入", note.name.UTF8String);
 }
 
 /// ★关键★ 空白区域不能吃触摸：否则游戏/视角触摸全被这层挡住。
@@ -501,16 +581,7 @@ static int a2_touchSeen = 0;
 - (void)willMoveToWindow:(UIWindow *)newWindow {
     [super willMoveToWindow:newWindow];
     if (newWindow == nil) {
-        [self a2_releaseLatchedIfAny];
-        [_useWatchdog invalidate]; _useWatchdog = nil;
-        [_attackWatchdog invalidate]; _attackWatchdog = nil;
-        a2_glfw_input_post_mouse_button(_window, kMouseLeft, 0);
-        a2_glfw_input_post_mouse_button(_window, kMouseRight, 0);
-        [self a2_releaseAll];
-        if (_sneaking) {
-            _sneaking = NO;
-            a2_glfw_input_post_key(_window, kKeyLeftShift, 0);
-        }
+        [self a2_releaseAllInput];
     }
 }
 
@@ -594,8 +665,8 @@ static int a2_touchSeen = 0;
     if (!a2PanLogOnce) {
         a2PanLogOnce = YES;
         NSArray *sorted = [a2PanNoCancelHit sortedArrayUsingSelector:@selector(compare:)];
-        a2_log_f(@"[A2-CTRL-PAN] pan.cancelsTouchesInView=NO 的键：%@（其余键保持 YES）",
-                 [sorted componentsJoinedByString:@","]);
+        a2_log_f(@"[A2-CTRL-PAN] pan.cancelsTouchesInView=NO 的键：%s（其余键保持 YES）",
+                 [sorted componentsJoinedByString:@","].UTF8String);
     }
     _attackButton.bounds    = CGRectMake(0, 0, 76, 76);
     _useButton.bounds       = CGRectMake(0, 0, 76, 76);
@@ -623,6 +694,23 @@ static int a2_touchSeen = 0;
     _f3Button.center        = CGPointMake(W - 110, 96);
     _keyboardButton.center  = CGPointMake(W - 174, 96);
     _escButton.center       = CGPointMake(W - 302, 96);
+}
+
+/// 恢复默认布局：清空删除记录、重新显示所有控件、回到默认坐标，并重新应用移动模式。
+- (void)a2_restoreDefaultLayout {
+    [_removedIds removeAllObjects];
+    [self a2_releaseAllInput];
+    for (UIView *v in _movable.allValues) {
+        v.hidden = NO;
+        v.userInteractionEnabled = YES;
+        v.alpha = 1.0;
+    }
+    [self a2_layoutDefaultButtons];
+    [self a2_layoutHotbar];
+    [self a2_applyMode];
+    [self a2_clampControlsIntoBounds];
+    [self a2_logControlLayout];
+    if (!_editing) [self a2_saveLayout];
 }
 
 #pragma mark - 默认布局：W/A/S/D/潜 五个独立键
@@ -775,9 +863,8 @@ static int a2_touchSeen = 0;
 }
 
 - (void)a2_hot:(UIButton *)sender {
-    int key = 48 + (int) sender.tag;
-    a2_glfw_input_post_key(_window, key, 1);
-    a2_glfw_input_post_key(_window, key, 0);
+    NSString *cid = [NSString stringWithFormat:@"hot%d", (int) sender.tag];
+    [self a2_pressBound:cid fallback:48 + (int) sender.tag];
 }
 
 - (void)a2_buildKeyboardField {
@@ -825,41 +912,20 @@ static int a2_touchSeen = 0;
 #pragma mark - 动作
 
 - (void)a2_attackDown {
-    a2_glfw_input_post_mouse_button(_window, kMouseLeft, 1);
+    [self a2_holdControl:@"attack" fallback:-1 down:YES];
     _attackButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.30];
-    [_attackWatchdog invalidate];
-    // 捕获值而不是在 block 里解引用 weakSelf（clang: dereferencing a __weak pointer is not allowed）
-    const long win = _window;
-    _attackWatchdog = [NSTimer scheduledTimerWithTimeInterval:2.0 repeats:NO block:^(NSTimer * _Nonnull timer) {
-        a2_glfw_input_post_mouse_button(win, kMouseLeft, 0);
-    }];
 }
 - (void)a2_attackUp {
-    [_attackWatchdog invalidate]; _attackWatchdog = nil;
-    a2_glfw_input_post_mouse_button(_window, kMouseLeft, 0);
+    [self a2_holdControl:@"attack" fallback:-1 down:NO];
     _attackButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.14];
 }
 - (void)a2_useDown {
-    a2_glfw_input_post_mouse_button(_window, kMouseRight, 1);
+    [self a2_holdControl:@"use" fallback:-2 down:YES];
     _useButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.30];
-    // ★看门狗★ 若 touch-up 丢了（手势/系统取消），2 秒后强制松开右键，
-    //   否则“点一下就一直放方块、再点一下才停”（用户实测）。
-    [_useWatchdog invalidate];
-    __weak typeof(self) weakSelf = self;
-    _useWatchdog = [NSTimer scheduledTimerWithTimeInterval:2.0 repeats:NO block:^(NSTimer * _Nonnull timer) {
-        [weakSelf a2_forceReleaseUse];
-    }];
 }
 - (void)a2_useUp {
-    [_useWatchdog invalidate]; _useWatchdog = nil;
-    a2_glfw_input_post_mouse_button(_window, kMouseRight, 0);
+    [self a2_holdControl:@"use" fallback:-2 down:NO];
     _useButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.14];
-}
-- (void)a2_forceReleaseUse {
-    _useWatchdog = nil;
-    a2_glfw_input_post_mouse_button(_window, kMouseRight, 0);
-    _useButton.backgroundColor = [UIColor colorWithWhite:1 alpha:0.14];
-    a2_log_f(@"[A2-CONTROLS] 「用」键看门狗：强制松开右键");
 }
 - (void)a2_tapE       { [self a2_pressBound:@"inventory" fallback:kKeyE]; }
 - (void)a2_tapF3      { [self a2_pressBound:@"f3" fallback:kKeyF3]; }
@@ -897,11 +963,7 @@ static int a2_touchSeen = 0;
         [weakSelf a2_exportLayoutToClipboard];
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"恢复默认布局" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *a) {
-        [weakSelf a2_layoutDefaultButtons];
-        [weakSelf a2_layoutHotbar];
-        for (UIView *v in weakSelf.a2_movableViews) v.alpha = 1.0;
-        [weakSelf a2_clampControlsIntoBounds];
-        [weakSelf a2_logControlLayout];
+        [weakSelf a2_restoreDefaultLayout];
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"完成" style:UIAlertActionStyleCancel handler:nil]];
 
@@ -1016,7 +1078,7 @@ static int a2_touchSeen = 0;
     // ★立即生效★ 写盘 + 广播：已存在的控件层收到后立刻重载，不必重启 App
     [NSUserDefaults.standardUserDefaults synchronize];
     [NSNotificationCenter.defaultCenter postNotificationName:@"A2ControlLayoutChanged" object:nil];
-    a2_log_f(@"[A2-CONTROLS] 方案已保存：%@（%lu 项）并广播立即生效", name, (unsigned long) entry.count);
+    a2_log_f(@"[A2-CONTROLS] 方案已保存：%s（%lu 项）并广播立即生效", name.UTF8String, (unsigned long) entry.count);
 }
 
 - (void)a2_applySavedLayout {
@@ -1032,17 +1094,36 @@ static int a2_touchSeen = 0;
     }
     if (![entry isKindOfClass:NSDictionary.class]) return;
 
+    // 切换方案后先恢复所有内置控件的显示，再按新方案的删除记录隐藏；
+    // 否则上一个方案删掉的键会一直保持隐藏，切回来也不复活。
+    for (NSString *cid in _movable) {
+        if ([cid hasPrefix:@"custom"]) continue;
+        UIView *v = _movable[cid];
+        v.hidden = NO;
+        v.userInteractionEnabled = YES;
+        v.alpha = 1.0;
+    }
+
+    // 删除记录必须一并载入：否则重进游戏后自定义键会复活、保存时又丢掉 _removed。
+    NSArray *removedIds = entry[@"_removed"];
+    _removedIds = [NSMutableSet setWithArray:[removedIds isKindOfClass:NSArray.class] ? removedIds : @[]];
+
     // 先重建上次保存过的自定义键（布局里带 t 的）
     for (NSString *cid in entry) {
         if (![cid hasPrefix:@"custom"]) continue;
-        if (_movable[cid] != nil) continue;
-        NSString *title = entry[cid][@"t"];
+        NSDictionary *saved = entry[cid];
+        if (![saved isKindOfClass:NSDictionary.class]) continue;
+        NSString *title = saved[@"t"];
         if (![title isKindOfClass:NSString.class]) continue;
-        [self a2_addCustomControlWithTitle:title];
-        _movable[cid].hidden = NO;
+        if (_movable[cid] == nil) {
+            [self a2_installCustomControlWithTitle:title cid:cid];
+        }
+        BOOL removed = [_removedIds containsObject:cid];
+        _movable[cid].hidden = removed;
+        _movable[cid].userInteractionEnabled = !removed;
     }
     // 再恢复/隐藏
-    for (NSString *removed in entry[@"_removed"] ?: @[]) {
+    for (NSString *removed in _removedIds) {
         UIView *v = _movable[removed];
         if (v != nil) { v.hidden = YES; v.userInteractionEnabled = NO; }
     }
@@ -1064,6 +1145,7 @@ static int a2_touchSeen = 0;
         }
         if (v == nil) continue;
         NSDictionary *e = entry[cid];
+        if (![e isKindOfClass:NSDictionary.class]) continue;
         v.bounds = CGRectMake(0, 0, [e[@"w"] doubleValue] * kx, [e[@"h"] doubleValue] * ky);
         // 夹回可见区域（留 1/4 边长余量，保证仍然抓得到）
         CGFloat halfW = CGRectGetWidth(v.bounds) * 0.5, halfH = CGRectGetHeight(v.bounds) * 0.5;
@@ -1073,72 +1155,119 @@ static int a2_touchSeen = 0;
                                MIN(MAX(y, halfH), curH - halfH));
         v.alpha = [e[@"a"] doubleValue] > 0 ? [e[@"a"] doubleValue] : 1.0;
     }
+    [self a2_applyMode];   // 摇杆模式下移动五键仍然隐藏，被删除的键也不因上面的恢复而复活
 }
 
 
 #pragma mark - 任意键绑定
 
-/// 取某控件当前绑定的键码（没绑过就用默认）。组合键时返回第一个键。
-- (int)a2_keyForControl:(NSString *)cid fallback:(int)def {
-    id v = _bindings[cid];
-    if ([v isKindOfClass:NSArray.class]) {
-        NSArray *a = v;
-        return a.count ? [a.firstObject intValue] : def;
+/// 把单个键码翻译成面板里显示的名字。
+- (NSString *)a2_nameForCode:(int)c {
+    if (c == 0) return @"未绑定";
+    if (c == -1) return @"鼠标左";
+    if (c == -2) return @"鼠标右";
+    if (c == -3) return @"鼠标中";
+    if (c >= 290 && c <= 301) return [NSString stringWithFormat:@"F%d", c - 289];
+    if (c == 32) return @"空格";
+    if (c == 256) return @"Esc";
+    if (c == 257) return @"Enter";
+    if (c == 258) return @"Tab";
+    if (c == 259) return @"⌫";
+    if (c == 340) return @"Shift";
+    if (c == 341) return @"Ctrl";
+    if (c == 342) return @"Alt";
+    if (c == 343) return @"Cmd";
+    if (c == 344) return @"右Shift";
+    if (c == 345) return @"右Ctrl";
+    if (c == 346) return @"右Alt";
+    if (c == 347) return @"右Cmd";
+    if (c >= 262 && c <= 265) {
+        NSArray *ar = @[ @"→", @"←", @"↓", @"↑" ];
+        return ar[c - 262];
     }
-    return [v isKindOfClass:NSNumber.class] ? [v intValue] : def;
+    if (c > 0 && c < 128) return [NSString stringWithFormat:@"%c", (char) c];
+    return [NSString stringWithFormat:@"#%d", c];
+}
+
+- (NSString *)a2_describeCodes:(NSArray<NSNumber *> *)codes {
+    if (codes.count == 0) return @"未绑定";
+    NSMutableArray *names = [NSMutableArray array];
+    for (NSNumber *n in codes) [names addObject:[self a2_nameForCode:n.intValue]];
+    return [names componentsJoinedByString:@" + "];
 }
 
 /// 把绑定翻译成人话（键位面板标题用）
 - (NSString *)a2_describeBindingFor:(NSString *)cid {
-    NSArray *codes = [self a2_codesForControl:cid fallback:0];
-    NSMutableArray *names = [NSMutableArray array];
-    for (NSNumber *n in codes) {
-        int c = n.intValue;
-        if (c == 0) { [names addObject:@"未绑定"]; continue; }
-        if (c == -1) { [names addObject:@"鼠标左"]; continue; }
-        if (c == -2) { [names addObject:@"鼠标右"]; continue; }
-        if (c >= 290 && c <= 301) { [names addObject:[NSString stringWithFormat:@"F%d", c - 289]]; continue; }
-        if (c == 32) { [names addObject:@"空格"]; continue; }
-        if (c == 256) { [names addObject:@"Esc"]; continue; }
-        if (c == 257) { [names addObject:@"Enter"]; continue; }
-        if (c == 258) { [names addObject:@"Tab"]; continue; }
-        if (c == 259) { [names addObject:@"⌫"]; continue; }
-        if (c == 340) { [names addObject:@"Shift"]; continue; }
-        if (c == 341) { [names addObject:@"Ctrl"]; continue; }
-        if (c == 342) { [names addObject:@"Alt"]; continue; }
-        if (c >= 262 && c <= 265) {
-            NSArray *ar = @[@"→", @"←", @"↓", @"↑"];
-            [names addObject:ar[c - 262]];
-            continue;
-        }
-        [names addObject:[NSString stringWithFormat:@"%c", (char)c]];
+    return [self a2_describeCodes:[self a2_codesForControl:cid fallback:0]];
+}
+
+/// 绑定值统一成「非零键码数组」：兼容旧存档的 NSNumber 和新版的 NSArray。
+/// 0 表示未绑定，不能作为按键派发。
+- (NSArray<NSNumber *> *)a2_codesFromValue:(id)value {
+    NSMutableArray<NSNumber *> *out = [NSMutableArray array];
+    if ([value isKindOfClass:NSNumber.class]) {
+        if ([(NSNumber *) value intValue] != 0) [out addObject:value];
+        return out;
     }
-    return [names componentsJoinedByString:@" + "];
+    if ([value isKindOfClass:NSArray.class]) {
+        for (id item in (NSArray *) value) {
+            if (![item isKindOfClass:NSNumber.class]) continue;
+            if ([(NSNumber *) item intValue] == 0) continue;
+            if (![out containsObject:item]) [out addObject:item];
+        }
+    }
+    return out;
 }
 
 /// 取某控件要派的全部键码（组合键 = 多个；普通键 = 一个）
 - (NSArray<NSNumber *> *)a2_codesForControl:(NSString *)cid fallback:(int)def {
-    id v = _bindings[cid];
-    if ([v isKindOfClass:NSArray.class]) {
-        return [(NSArray *)v count] ? v : @[ @(def) ];
-    }
-    if ([v isKindOfClass:NSNumber.class]) return @[ v ];
-    return @[ @(def) ];
+    NSArray<NSNumber *> *codes = [self a2_codesFromValue:_bindings[cid]];
+    return codes.count ? codes : @[ @(def) ];
+}
+
+/// 统一写绑定：单键存 NSNumber，组合键存 NSArray，便于旧代码与旧存档兼容。
+- (void)a2_setKeys:(NSArray<NSNumber *> *)keys forControl:(NSString *)cid {
+    NSArray<NSNumber *> *codes = [self a2_codesFromValue:keys];
+    if (codes.count == 0)      _bindings[cid] = @0;
+    else if (codes.count == 1) _bindings[cid] = codes.firstObject;
+    else                       _bindings[cid] = codes;
+    [NSUserDefaults.standardUserDefaults setObject:_bindings forKey:kA2BindingsKey];
+    a2_log_f(@"[A2-CONTROLS] 控件 %s 绑定键码 %s", cid.UTF8String, [_bindings[cid] description].UTF8String);
 }
 
 - (void)a2_setKey:(int)key forControl:(NSString *)cid {
-    _bindings[cid] = @(key);
-    [NSUserDefaults.standardUserDefaults setObject:_bindings forKey:kA2BindingsKey];
-    a2_log_f(@"[A2-CONTROLS] 控件 %@ 绑定键码 %d", cid, key);
+    [self a2_setKeys:@[ @(key) ] forControl:cid];
 }
 
 /// 编辑模式下点控件 = 改键位（拖动/捏合仍用于位置与大小）。
+/// 编辑模式下长按控件 = 释放可能锁存的组合键（避免旧修饰键一直按着）
 - (void)a2_longPressControl:(UILongPressGestureRecognizer *)g {
+    if (!_editing) return;
     if (g.state != UIGestureRecognizerStateBegan) return;
     UIView *v = g.view;
+    if ([self a2_cidForView:v].length > 0) [self a2_releaseLatchedIfAny];
+}
+
+/// 控件 → 绑定 id。编辑器手势与自定义键派发共用，避免各处重复遍历 _movable。
+- (NSString *)a2_cidForView:(UIView *)v {
+    if (v == nil) return nil;
     for (NSString *cid in _movable) {
-        if (_movable[cid] == v) { [self a2_releaseLatchedIfAny]; break; }
+        if (_movable[cid] == v) return cid;
     }
+    return nil;
+}
+
+/// 自定义键在游戏里按住/松开：走绑定里的全部键（支持组合键）。
+- (void)a2_customDown:(UIButton *)sender {
+    if (_editing) return;
+    [self a2_holdControl:[self a2_cidForView:sender] fallback:0 down:YES];
+}
+
+- (void)a2_customUp:(UIButton *)sender {
+    if (_editing) return;
+    NSString *cid = [self a2_cidForView:sender];
+    if (cid.length == 0) return;
+    [self a2_holdControl:cid fallback:0 down:NO];
 }
 
 - (void)a2_tapControl:(UITapGestureRecognizer *)tap {
@@ -1148,8 +1277,7 @@ static int a2_touchSeen = 0;
 
     // ★第一次点=选中（高亮 + 右下角缩放把手）★ 再点同一个才弹键位选择
     if (_selectedControl == v) {
-        NSString *cid = nil;
-        for (NSString *k in _movable) { if (_movable[k] == v) { cid = k; break; } }
+        NSString *cid = [self a2_cidForView:v];
         if (cid != nil) [self a2_presentKeyPickerFor:cid];
         return;
     }
@@ -1200,17 +1328,18 @@ static int a2_touchSeen = 0;
     [self a2_layoutHandleForSelected];
 }
 
-/// ★自定义按键★ 新建一个按钮并绑定（具体绑什么键，由用户再点一次从键位表里选）
-- (void)a2_addCustomControlWithTitle:(NSString *)title {
-    if (!_editing) return;
+/// ★内部创建★ 新建一个自定义键并挂上编辑器手势；cid 为空时自动分配 customN。
+/// 不校验 _editing —— 存档重建、外部布局导入、取消编辑回滚都要在非编辑态调用。
+- (UIButton *)a2_installCustomControlWithTitle:(NSString *)title cid:(NSString *)cid {
     NSString *name = title.length ? title : @"键";
+    if (cid.length > 0 && _movable[cid] != nil) return (UIButton *) _movable[cid];
 
-    // id 递增，且跳过历史已用的
-    NSInteger n = 1;
-    NSString *cid = nil;
-    do {
-        cid = [NSString stringWithFormat:@"custom%ld", (long)n++];
-    } while (_movable[cid] != nil || _customTitles[cid] != nil);
+    if (cid.length == 0) {
+        NSInteger n = 1;
+        do {
+            cid = [NSString stringWithFormat:@"custom%ld", (long)n++];
+        } while (_movable[cid] != nil || _customTitles[cid] != nil);
+    }
 
     UIButton *b = [self a2_makeButton:name];
     b.translatesAutoresizingMaskIntoConstraints = YES;
@@ -1221,19 +1350,38 @@ static int a2_touchSeen = 0;
     _movable[cid] = b;
     _customTitles[cid] = name;
 
+    [b addTarget:self action:@selector(a2_customDown:) forControlEvents:UIControlEventTouchDown];
+    [b addTarget:self action:@selector(a2_customUp:) forControlEvents:UIControlEventTouchUpInside |
+                                                           UIControlEventTouchUpOutside |
+                                                           UIControlEventTouchCancel];
+
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self action:@selector(a2_dragItem:)];
-    pan.cancelsTouchesInView = YES;
+    // 自定义键在游戏里要能按住不放：pan 不能吞掉按钮自己的 touch-up。
+    pan.cancelsTouchesInView = NO;
     [b addGestureRecognizer:pan];
+    UIPinchGestureRecognizer *pinch = [[UIPinchGestureRecognizer alloc] initWithTarget:self action:@selector(a2_pinchItem:)];
+    pinch.cancelsTouchesInView = NO;
+    [b addGestureRecognizer:pinch];
     UITapGestureRecognizer *tap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(a2_tapControl:)];
     tap.cancelsTouchesInView = NO;
     [b addGestureRecognizer:tap];
+    UILongPressGestureRecognizer *hold = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(a2_longPressControl:)];
+    hold.minimumPressDuration = 0.6;
+    hold.cancelsTouchesInView = NO;
+    [b addGestureRecognizer:hold];
 
-    [self a2_selectControl:b];
-    [self a2_saveLayout];
-    a2_log_f(@"[A2-CONTROLS] 新增自定义键：%@ (%@)", name, cid);
+    a2_log_f(@"[A2-CONTROLS] 创建自定义键：%s (%s)", name.UTF8String, cid.UTF8String);
+    return b;
 }
 
-/// ★删除选中★ 内置键与自定义键都可删；删内置的记进 _removedIds，重进不复活
+/// ★自定义按键★ 用户入口：只在编辑态允许新增。
+- (void)a2_addCustomControlWithTitle:(NSString *)title {
+    if (!_editing) return;
+    UIButton *b = [self a2_installCustomControlWithTitle:title cid:nil];
+    [self a2_selectControl:b];
+}
+
+/// ★删除选中★ 编辑期间只隐藏并记入 _removedIds：取消时能原样恢复，保存时才落盘。
 - (void)a2_removeSelectedControl {
     UIView *v = _selectedControl;
     if (v == nil) return;
@@ -1241,14 +1389,11 @@ static int a2_touchSeen = 0;
     for (NSString *k in _movable) { if (_movable[k] == v) { cid = k; break; } }
     if (cid == nil) return;
 
-    [v removeFromSuperview];
-    [_movable removeObjectForKey:cid];
-    [_customTitles removeObjectForKey:cid];
+    v.hidden = YES;
+    v.userInteractionEnabled = NO;
     [_removedIds addObject:cid];
-    _selectedControl = nil;
-    _selectionHandle.hidden = YES;
-    [self a2_saveLayout];
-    a2_log_f(@"[A2-CONTROLS] 删除控件：%@", cid);
+    [self a2_deselect];
+    a2_log_f(@"[A2-CONTROLS] 隐藏控件：%s（保存后生效）", cid.UTF8String);
 }
 
 - (void)a2_layoutChanged:(NSNotification *)n {
@@ -1256,6 +1401,10 @@ static int a2_touchSeen = 0;
 }
 
 - (void)a2_reloadSavedLayout {
+    [self a2_releaseAllInput];
+    // 绑定也可能被其它实例/编辑器改过，重读一次，避免继续用旧键码。
+    NSDictionary *savedBindings = [NSUserDefaults.standardUserDefaults dictionaryForKey:kA2BindingsKey];
+    if ([savedBindings isKindOfClass:NSDictionary.class]) _bindings = [savedBindings mutableCopy];
     [self a2_applySavedLayout];
     [self a2_clampControlsIntoBounds];
     [self a2_logControlLayout];
@@ -1407,7 +1556,7 @@ static int a2_touchSeen = 0;
            @[@"F11",@300], @[@"F12",@301] ],
         // ★符号键★（GLFW 用 ASCII 码，和 SDL 一致）
         @[ @[@"-",@45], @[@"=",@61], @[@"[",@91], @[@"]",@93], @[@"\\",@92],
-           @[@";",@59], @[@"'",@39], @[@",",@44], @[@".",@47], @[@"/",@47] ],
+           @[@";",@59], @[@"'",@39], @[@",",@44], @[@".",@46], @[@"/",@47] ],
         // ★小键盘★（GLFW KP_0..KP_9 = 320..329）
         @[ @[@"KP0",@320], @[@"KP1",@321], @[@"KP2",@322], @[@"KP3",@323],
            @[@"KP4",@324], @[@"KP5",@325], @[@"KP6",@326] ],
@@ -1436,7 +1585,7 @@ static int a2_touchSeen = 0;
         [col addArrangedSubview:line];
     }
 
-    a2_log_f(@"[A2-CONTROLS] 打开键盘面板：%@", cid);
+    a2_log_f(@"[A2-CONTROLS] 打开键盘面板：%s", cid.UTF8String);
 }
 
 - (void)a2_keyPadInnerTap:(UITapGestureRecognizer *)g { /* 吞掉，避免关面板 */ }
@@ -1449,18 +1598,12 @@ static int a2_touchSeen = 0;
 
     if (sw.isOn) {
         int code = (int)b.tag;
-        // ★任意键都能组合，最多 3 个★（不再限制必须以 F 键打头）
-        if (_comboBuffer.count >= 3) return;
+        // ★任意键都能组合，最多 4 个★
+        if (_comboBuffer.count >= 4) return;
         [_comboBuffer addObject:@(code)];
 
         UILabel *lb = (UILabel *)[mask viewWithTag:0xA2C3];
-        NSMutableArray *names = [NSMutableArray array];
-        for (NSNumber *n in _comboBuffer) {
-            int c = n.intValue;
-            [names addObject:(c >= 290 && c <= 301) ? [NSString stringWithFormat:@"F%d", c - 289]
-                                                    : [NSString stringWithFormat:@"%c", c]];
-        }
-        lb.text = [names componentsJoinedByString:@" + "];
+        lb.text = [self a2_describeCodes:_comboBuffer];
 
         UIButton *ok = (UIButton *)[mask viewWithTag:0xA2C2];
         ok.hidden = NO;
@@ -1474,9 +1617,7 @@ static int a2_touchSeen = 0;
 /// 组合键确定：写入绑定并自动关闭
 - (void)a2_comboConfirm {
     if (_pendingCid.length == 0 || _comboBuffer.count == 0) return;
-    _bindings[_pendingCid] = [_comboBuffer copy];
-    [NSUserDefaults.standardUserDefaults setObject:_bindings forKey:kA2BindingsKey];
-    a2_log_f(@"[A2-CONTROLS] 控件 %@ 绑定组合键 %@", _pendingCid, _comboBuffer);
+    [self a2_setKeys:[_comboBuffer copy] forControl:_pendingCid];
     [self a2_closeKeyPad];
 }
 
@@ -1491,15 +1632,16 @@ static int a2_touchSeen = 0;
 /// 松开锁存的修饰键（长按组合键控件、退出游戏、切布局时都会调）
 - (BOOL)a2_releaseLatchedIfAny {
     if (_latchedCid.length == 0) return NO;
-    a2_glfw_input_post_key(_window, _latchedModifier, 0);
-    a2_log_f(@"[A2-CONTROLS] 组合键释放：key=%d", _latchedModifier);
+    for (NSNumber *code in _latchedModifiers) [self a2_postCode:code.intValue down:NO];
+    a2_log_f(@"[A2-CONTROLS] 组合键释放：keys=%s（%s）",
+             [_latchedModifiers description].UTF8String, _latchedCid.UTF8String);
     [self a2_markLatched:NO forCid:_latchedCid];
     _latchedCid = nil;
-    _latchedModifier = 0;
+    [_latchedModifiers removeAllObjects];
     return YES;
 }
 
-/// 锁存时给控件加个高亮，让用户知道 F3 还按着
+/// 锁存时给控件加个高亮，让用户知道修饰键还按着
 - (void)a2_markLatched:(BOOL)on forCid:(NSString *)cid {
     UIView *v = _movable[cid];
     v.layer.borderWidth = on ? 2.0 : 1.0;
@@ -1507,52 +1649,92 @@ static int a2_touchSeen = 0;
                               : [UIColor colorWithWhite:1 alpha:0.22]).CGColor;
 }
 
-/// 按绑定发一次「按下+抬起」（-1/-2 走鼠标左右键）。
-- (void)a2_pressBound:(NSString *)cid fallback:(int)def {
-    NSArray<NSNumber *> *codes = [self a2_codesForControl:cid fallback:def];
-    int first = codes.firstObject.intValue;
-    if (first == -1) { a2_glfw_input_post_mouse_button(_window, 0, 1); a2_glfw_input_post_mouse_button(_window, 0, 0); return; }
-    if (first == -2) { a2_glfw_input_post_mouse_button(_window, 1, 1); a2_glfw_input_post_mouse_button(_window, 1, 0); return; }
+/// 单键派发：-1/-2/-3 走鼠标左/右/中键，其余走 GLFW 键码。
+- (void)a2_postCode:(int)code down:(BOOL)down {
+    switch (code) {
+        case -1: a2_glfw_input_post_mouse_button(_window, 0, down ? 1 : 0); break;
+        case -2: a2_glfw_input_post_mouse_button(_window, 1, down ? 1 : 0); break;
+        case -3: a2_glfw_input_post_mouse_button(_window, 2, down ? 1 : 0); break;
+        case 0:  break;
+        default: a2_glfw_input_post_key(_window, code, down ? 1 : 0); break;
+    }
+}
 
-    a2_log_f(@"[A2-CONTROLS] 按键合成 cid=%@ keys=%@ window=%ld", cid, codes, _window);
-    // ★组合键 = 锁存式★ 对应 Minecraft「按住 F3 + 单点 F4」的用法：
-    //   第 1 次点 → F3 按下并保持；之后每点一次 → 只点一下 F4；长按 → 松开 F3。
-    NSNumber *modifier = codes.firstObject;
+/// 按住型控件：按下时派发绑定里的全部键，抬起时按原样全部放开。
+/// 与 a2_pressBound: 的「点按/锁存」不同，这里适合方向、跳跃、攻击、自定义键这类需要持续按住的控件。
+- (void)a2_holdControl:(NSString *)cid fallback:(int)def down:(BOOL)down {
+    if (cid.length == 0) return;
+    if (down) {
+        if (_heldCodes[cid] != nil) return;
+        NSArray<NSNumber *> *codes = [self a2_codesForControl:cid fallback:def];
+        if (codes.count == 0) return;
+        _heldCodes[cid] = codes;
+        for (NSNumber *n in codes) [self a2_postCode:n.intValue down:YES];
+    } else {
+        NSArray<NSNumber *> *codes = _heldCodes[cid];
+        if (codes == nil) return;
+        [_heldCodes removeObjectForKey:cid];
+        for (NSNumber *n in codes) [self a2_postCode:n.intValue down:NO];
+    }
+}
+
+/// 按绑定发一次「按下+抬起」（-1/-2/-3 走鼠标）。
+/// 组合键 = 锁存式：第 1 次点 → 前 N-1 个键按下并保持；之后每点一次 → 单点最后一个键；
+/// 点另一个组合键 / 长按 / 退后台 / 离开窗口 → 松开全部锁存键。
+- (void)a2_pressBound:(NSString *)cid fallback:(int)def {
+    NSArray<NSNumber *> *bound = [self a2_codesForControl:cid fallback:def];
+    NSMutableArray<NSNumber *> *codes = [NSMutableArray array];
+    for (NSNumber *n in bound) {
+        if (n.intValue != 0 && ![codes containsObject:n]) [codes addObject:n];
+    }
+    if (codes.count == 0) {
+        a2_log_f(@"[A2-CONTROLS] 控件 %s 未绑定任何键，忽略", cid.UTF8String);
+        return;
+    }
+
+    int first = codes.firstObject.intValue;
+    a2_log_f(@"[A2-CONTROLS] 按键合成 cid=%s keys=%s window=%ld",
+             cid.UTF8String, [codes description].UTF8String, _window);
 
     if (codes.count == 1) {
-        a2_glfw_input_post_key(_window, modifier.intValue, 1);
+        if (first == -1 || first == -2 || first == -3) {
+            [self a2_postCode:first down:YES];
+            [self a2_postCode:first down:NO];
+            return;
+        }
+        [self a2_postCode:first down:YES];
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.18 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
-            a2_glfw_input_post_key(self->_window, modifier.intValue, 0);
+            [self a2_postCode:first down:NO];
         });
         return;
     }
 
-    NSNumber *target = codes[1];
+    NSArray<NSNumber *> *modifiers = [codes subarrayWithRange:NSMakeRange(0, codes.count - 1)];
+    NSNumber *target = codes.lastObject;
 
     if (_latchedCid.length == 0) {
-        // 开始按住修饰键
-        if ([self a2_releaseLatchedIfAny]) return;
         _latchedCid = cid;
-        _latchedModifier = modifier.intValue;
-        a2_glfw_input_post_key(_window, modifier.intValue, 1);
+        [_latchedModifiers setArray:modifiers];
+        for (NSNumber *code in _latchedModifiers) [self a2_postCode:code.intValue down:YES];
         [self a2_markLatched:YES forCid:cid];
-        a2_log_f(@"[A2-CONTROLS] 组合键锁存：按住 key=%d（%@）", _latchedModifier, cid);
+        a2_log_f(@"[A2-CONTROLS] 组合键锁存：按住 %s（%s）",
+                 [_latchedModifiers description].UTF8String, cid.UTF8String);
         return;
     }
 
     if ([_latchedCid isEqualToString:cid]) {
-        // 已按住 → 单点目标键
-        a2_glfw_input_post_key(_window, target.intValue, 1);
-        a2_glfw_input_post_key(_window, target.intValue, 0);
-        a2_log_f(@"[A2-CONTROLS] 组合键单点：key=%d（修饰键保持 %d）", target.intValue, _latchedModifier);
+        [self a2_postCode:target.intValue down:YES];
+        [self a2_postCode:target.intValue down:NO];
+        a2_log_f(@"[A2-CONTROLS] 组合键单点：key=%d（锁存 %s 保持）",
+                 target.intValue, [_latchedModifiers description].UTF8String);
         return;
     }
 
     // 点的是另一个组合键 ⇒ 先松开旧的，再锁存新的
     [self a2_releaseLatchedIfAny];
     _latchedCid = cid;
-    _latchedModifier = modifier.intValue;
-    a2_glfw_input_post_key(_window, modifier.intValue, 1);
+    [_latchedModifiers setArray:modifiers];
+    for (NSNumber *code in _latchedModifiers) [self a2_postCode:code.intValue down:YES];
     [self a2_markLatched:YES forCid:cid];
 }
 
@@ -1564,34 +1746,160 @@ static int a2_touchSeen = 0;
     CGFloat W = MAX(1.0, CGRectGetWidth(self.bounds));
     CGFloat H = MAX(1.0, CGRectGetHeight(self.bounds));
     for (NSString *cid in _movable) {
+        if ([_removedIds containsObject:cid]) continue;
         UIView *v = _movable[cid];
+        CGFloat width  = CGRectGetWidth(v.bounds);
+        CGFloat height = CGRectGetHeight(v.bounds);
+        NSArray<NSNumber *> *codes = [self a2_codesFromValue:_bindings[cid]];
+        NSString *label = _customTitles[cid];
+        if (label.length == 0 && [v isKindOfClass:UIButton.class]) {
+            label = [((UIButton *) v) titleForState:UIControlStateNormal] ?: @"";
+        }
+        // 位置同时给「中心点归一化」和「左上角占剩余空间万分比」两种语义：
+        // 前者给老调用方，后者能无损还原 FCL/ZL2 的排版。
+        double xPct = A2Percent(v.center.x - width * 0.5, MAX(1.0, W - width));
+        double yPct = A2Percent(v.center.y - height * 0.5, MAX(1.0, H - height));
         [out addObject:@{
             @"id": cid,
             @"x": @(v.center.x / W), @"y": @(v.center.y / H),
-            @"w": @(v.bounds.size.width / W), @"h": @(v.bounds.size.height / H),
+            @"w": @(width / W), @"h": @(height / H),
+            @"wPct": @(width / W * 10000.0), @"wRef": @"w",
+            @"hPct": @(height / H * 10000.0), @"hRef": @"h",
+            @"xPct": @(xPct), @"yPct": @(yPct),
             @"a": @(v.alpha),
-            @"key": _bindings[cid] ?: @0,
-            @"label": [v isKindOfClass:UIButton.class] ? ([((UIButton *)v) titleForState:UIControlStateNormal] ?: @"") : @"",
+            @"key": codes.firstObject ?: @0,
+            @"keys": codes,
+            @"label": label ?: @"",
         }];
     }
     return out;
 }
 
+/// 外部 id 映射成本地 id：方向盘 role 直接复用内置 W/A/S/D/潜；
+/// 其余未知 id 转成稳定的 custom_xxx，重复导入同一份布局不会越导越多。
+- (NSString *)a2_localCidForControl:(NSDictionary *)c {
+    static NSDictionary<NSString *, NSString *> *roles = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        roles = @{ @"up": @"w", @"down": @"s", @"left": @"a",
+                   @"right": @"d", @"sneak": @"sneak" };
+    });
+    NSString *role = [c[@"role"] description];
+    NSString *mapped = role.length ? roles[role] : nil;
+    if (mapped.length) return mapped;
+
+    NSString *external = [c[@"id"] description];
+    if (external.length == 0) external = @"key";
+    // A2 自己导出的内置 id（w/a/s/d/...）必须原样命中，不能另建 custom_w。
+    if (_movable[external] != nil) return external;
+    // A2 自己导出的自定义 id（custom1 / custom_xxx）原样保留，跨设备往返不改名。
+    if ([external hasPrefix:@"custom"]) return external;
+
+    NSMutableString *safe = [NSMutableString string];
+    for (NSUInteger i = 0; i < external.length; i++) {
+        unichar ch = [external characterAtIndex:i];
+        BOOL keep = (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+                    (ch >= '0' && ch <= '9') || ch == '-' || ch == '_';
+        [safe appendFormat:@"%C", keep ? ch : (unichar) '-'];
+    }
+    if (safe.length == 0) safe = [@"key" mutableCopy];
+    return [@"custom_" stringByAppendingString:safe];
+}
+
+/// 尺寸优先级：点 > 相对某条边的万分比 > 老调用方的归一化兜底。
+- (CGSize)a2_sizeForControl:(NSDictionary *)c canvas:(CGSize)canvas {
+    double width = A2DoubleValue(c[@"wPt"]);
+    double height = A2DoubleValue(c[@"hPt"]);
+
+    if (width <= 0) {
+        double wPct = A2DoubleValue(c[@"wPct"]);
+        if (wPct > 0) {
+            BOOL refHeight = [[c[@"wRef"] description] isEqualToString:@"h"];
+            width = (refHeight ? canvas.height : canvas.width) * wPct / 10000.0;
+        }
+    }
+    if (height <= 0) {
+        double hPct = A2DoubleValue(c[@"hPct"]);
+        if (hPct > 0) {
+            BOOL refWidth = [[c[@"hRef"] description] isEqualToString:@"w"];
+            height = (refWidth ? canvas.width : canvas.height) * hPct / 10000.0;
+        }
+    }
+
+    if (width <= 0)  width  = A2DoubleValue(c[@"w"]) * canvas.width;
+    if (height <= 0) height = A2DoubleValue(c[@"h"]) * canvas.height;
+
+    width  = MIN(MAX(width, 24.0), MAX(24.0, canvas.width));
+    height = MIN(MAX(height, 24.0), MAX(24.0, canvas.height));
+    return CGSizeMake(width, height);
+}
+
+/// 位置优先级：左上角剩余空间万分比（外部格式）> 中心点归一化（A2 老格式）。
+- (CGPoint)a2_centerForControl:(NSDictionary *)c size:(CGSize)size canvas:(CGSize)canvas {
+    double x = 0, y = 0;
+    if ([c[@"xPct"] isKindOfClass:NSNumber.class]) {
+        double p = A2Clamp01(A2DoubleValue(c[@"xPct"]) / 10000.0);
+        x = (canvas.width - size.width) * p + size.width * 0.5;
+    } else {
+        x = A2DoubleValue(c[@"x"]) * canvas.width;
+    }
+    if ([c[@"yPct"] isKindOfClass:NSNumber.class]) {
+        double p = A2Clamp01(A2DoubleValue(c[@"yPct"]) / 10000.0);
+        y = (canvas.height - size.height) * p + size.height * 0.5;
+    } else {
+        y = A2DoubleValue(c[@"y"]) * canvas.height;
+    }
+    x = MIN(MAX(x, size.width * 0.5), MAX(size.width * 0.5, canvas.width - size.width * 0.5));
+    y = MIN(MAX(y, size.height * 0.5), MAX(size.height * 0.5, canvas.height - size.height * 0.5));
+    return CGPointMake(x, y);
+}
+
+/// 从导入项取绑定：优先 keys 数组，其次兼容 key = NSNumber / NSArray。
+- (NSArray<NSNumber *> *)a2_codesFromControlDictionary:(NSDictionary *)c {
+    id raw = c[@"keys"];
+    if (![raw isKindOfClass:NSArray.class] || [(NSArray *) raw count] == 0) raw = c[@"key"];
+    return [self a2_codesFromValue:raw];
+}
+
 - (void)a2_applyControlsNormalized:(NSArray<NSDictionary *> *)controls {
-    CGFloat W = CGRectGetWidth(self.bounds), H = CGRectGetHeight(self.bounds);
-    NSInteger applied = 0;
+    [self a2_releaseAllInput];
+    CGSize canvas = self.bounds.size;
+    if (canvas.width <= 1 || canvas.height <= 1) {
+        a2_log_f(@"[A2-CONTROLS] 导入跳过：画布尺寸还没准备好（%.0fx%.0f）", canvas.width, canvas.height);
+        return;
+    }
+
+    NSInteger applied = 0, created = 0, skipped = 0;
     for (NSDictionary *c in controls) {
-        NSString *cid = c[@"id"];
+        if (![c isKindOfClass:NSDictionary.class]) { skipped++; continue; }
+        NSString *cid = [self a2_localCidForControl:c];
+
         UIView *v = _movable[cid];
-        if (v == nil) continue;   // 外部布局里我们不认识的控件：跳过并计数
-        v.bounds = CGRectMake(0, 0, [c[@"w"] doubleValue] * W, [c[@"h"] doubleValue] * H);
-        v.center = CGPointMake([c[@"x"] doubleValue] * W, [c[@"y"] doubleValue] * H);
-        if (c[@"a"] != nil) v.alpha = MAX(0.15, [c[@"a"] doubleValue]);
-        if (c[@"key"] != nil) [self a2_setKey:[c[@"key"] intValue] forControl:cid];
+        if (v == nil) {
+            NSString *title = [c[@"label"] isKindOfClass:NSString.class] ? c[@"label"] : @"";
+            if (title.length == 0) title = cid;
+            v = [self a2_installCustomControlWithTitle:title cid:cid];
+            created++;
+        }
+        if (v == nil) { skipped++; continue; }
+
+        CGSize size = [self a2_sizeForControl:c canvas:canvas];
+        v.bounds = CGRectMake(0, 0, size.width, size.height);
+        v.center = [self a2_centerForControl:c size:size canvas:canvas];
+        v.alpha = c[@"a"] != nil ? MAX(0.15, A2DoubleValue(c[@"a"])) : 1.0;
+        v.hidden = NO;
+        v.userInteractionEnabled = YES;
+        [_removedIds removeObject:cid];
+
+        NSArray<NSNumber *> *codes = [self a2_codesFromControlDictionary:c];
+        if (codes.count) [self a2_setKeys:codes forControl:cid];
         applied++;
     }
-    a2_log_f(@"[A2-CONTROLS] 已导入 %ld/%lu 项（其余为外部格式中我们不认识的控件）",
-             (long) applied, (unsigned long) controls.count);
+
+    [self a2_deselect];
+    [self a2_applyMode];
+    a2_log_f(@"[A2-CONTROLS] 已导入 %ld/%lu 项（新建 %ld，跳过 %ld）",
+             (long) applied, (unsigned long) controls.count, (long) created, (long) skipped);
 }
 
 - (void)a2_importLayoutFromClipboard {
@@ -1604,7 +1912,8 @@ static int a2_touchSeen = 0;
     id json = [NSJSONSerialization JSONObjectWithData:[text dataUsingEncoding:NSUTF8StringEncoding]
                                               options:0 error:&err];
     if (json == nil) {
-        a2_log_f(@"[A2-CONTROLS] 导入失败：不是合法 JSON（%@）", err.localizedDescription ?: @"");
+        a2_log_f(@"[A2-CONTROLS] 导入失败：不是合法 JSON（%s）",
+                 (err.localizedDescription ?: @"").UTF8String);
         return;
     }
     A2ControlLayoutFormat fmt = [A2ControlLayoutIO detectFormat:json];
@@ -1614,6 +1923,7 @@ static int a2_touchSeen = 0;
         return;
     }
     [self a2_applyControlsNormalized:controls];
+    if (!_editing) [self a2_saveLayout];   // 游戏内导入立即落盘；编辑器里等用户点保存
     a2_log_f(@"[A2-CONTROLS] 导入完成：格式=%ld 共 %lu 项", (long) fmt, (unsigned long) controls.count);
 }
 
@@ -1712,7 +2022,8 @@ static int a2_touchSeen = 0;
     a2Last = s;
     [self a2_layoutDefaultButtons];
     [self a2_layoutHotbar];
-    [self a2_applySavedLayout];
+    // 编辑中旋转/分屏不能重读存档，否则未保存的拖动/缩放会被覆盖。
+    if (!_editing) [self a2_applySavedLayout];
     [self a2_migrateLayoutVersionIfNeeded];   // ★一次性★ 旧存档里簇在左上角 ⇒ 整簇重锚左下角
     [self a2_clampControlsIntoBounds];   // ★边界判断★ 防止默认布局在 iPad 上跑出屏幕
     [self a2_logControlLayout];          // ★真机核对★ 每个键的最终 frame + 屏幕尺寸
@@ -1720,9 +2031,79 @@ static int a2_touchSeen = 0;
 
 #pragma mark - 编辑器 API（设置里的控件布局编辑器调用）
 
+/// 进入编辑器 / 导入前拍快照：位置、尺寸、透明度、隐藏态、自定义键标题、绑定、删除记录。
+- (NSDictionary<NSString *, id> *)a2_editorStateSnapshot {
+    NSMutableDictionary<NSString *, NSDictionary *> *frames = [NSMutableDictionary dictionary];
+    for (NSString *cid in _movable) {
+        UIView *v = _movable[cid];
+        frames[cid] = @{
+            @"x": @(v.center.x), @"y": @(v.center.y),
+            @"w": @(CGRectGetWidth(v.bounds)), @"h": @(CGRectGetHeight(v.bounds)),
+            @"a": @(v.alpha), @"hidden": @(v.hidden),
+        };
+    }
+    NSDictionary<NSString *, id> *snapshot = @{
+        @"frames": frames,
+        @"titles": [_customTitles copy],
+        @"removed": _removedIds.allObjects ?: @[],
+        @"bindings": [_bindings copy],
+    };
+    a2_log_f(@"[A2-CONTROLS] 编辑器快照：%lu 项控件，%lu 个自定义键",
+             (unsigned long) frames.count, (unsigned long) _customTitles.count);
+    return snapshot;
+}
+
+/// 取消编辑：把控件与绑定恢复到快照时的状态，并删掉编辑期间新建的自定义键。
+- (void)a2_restoreEditorState:(NSDictionary<NSString *, id> *)snapshot {
+    if (![snapshot isKindOfClass:NSDictionary.class]) return;
+    NSDictionary *titles = [snapshot[@"titles"] isKindOfClass:NSDictionary.class] ? snapshot[@"titles"] : @{};
+
+    // 1. 删掉快照之后新建的自定义键（含尚未保存的导入控件）。
+    for (NSString *cid in [_customTitles.allKeys copy]) {
+        if (titles[cid] != nil) continue;
+        [_movable[cid] removeFromSuperview];
+        [_movable removeObjectForKey:cid];
+        [_customTitles removeObjectForKey:cid];
+        [_bindings removeObjectForKey:cid];
+        [_removedIds removeObject:cid];
+    }
+
+    // 2. 补回快照里有、编辑期间被删掉的自定义键（隐藏只影响显示，不影响存在）。
+    for (NSString *cid in titles) {
+        if (_movable[cid] != nil) continue;
+        [self a2_installCustomControlWithTitle:titles[cid] cid:cid];
+    }
+
+    // 3. 位置 / 尺寸 / 透明度 / 隐藏态。
+    NSDictionary *frames = [snapshot[@"frames"] isKindOfClass:NSDictionary.class] ? snapshot[@"frames"] : @{};
+    for (NSString *cid in frames) {
+        UIView *v = _movable[cid];
+        NSDictionary *f = frames[cid];
+        if (v == nil || ![f isKindOfClass:NSDictionary.class]) continue;
+        v.bounds = CGRectMake(0, 0, [f[@"w"] doubleValue], [f[@"h"] doubleValue]);
+        v.center = CGPointMake([f[@"x"] doubleValue], [f[@"y"] doubleValue]);
+        v.alpha = [f[@"a"] doubleValue] > 0 ? [f[@"a"] doubleValue] : 1.0;
+        BOOL hidden = [f[@"hidden"] boolValue];
+        v.hidden = hidden;
+        v.userInteractionEnabled = !hidden;
+    }
+
+    // 4. 删除记录与绑定。
+    NSArray *removed = [snapshot[@"removed"] isKindOfClass:NSArray.class] ? snapshot[@"removed"] : @[];
+    _removedIds = [NSMutableSet setWithArray:removed];
+    NSDictionary *bindings = [snapshot[@"bindings"] isKindOfClass:NSDictionary.class] ? snapshot[@"bindings"] : @{};
+    _bindings = [bindings mutableCopy] ?: [NSMutableDictionary dictionary];
+    [NSUserDefaults.standardUserDefaults setObject:_bindings forKey:kA2BindingsKey];
+
+    [self a2_deselect];
+    a2_log_f(@"[A2-CONTROLS] 编辑器取消：已恢复到进入前状态（%lu 项控件）",
+             (unsigned long) frames.count);
+}
+
 - (void)a2_setEditing:(BOOL)editing {
     _editing = editing;
-    if (!editing) [self a2_deselect];
+    if (editing) [self a2_releaseAllInput];   // 进编辑前松开所有按住的合成键
+    else [self a2_deselect];
     // 编辑时允许拖动/捏合；非编辑态手势仍挂着但不吞触摸（cancelsTouchesInView=NO）
 }
 

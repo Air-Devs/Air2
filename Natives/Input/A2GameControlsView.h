@@ -49,10 +49,16 @@ typedef NS_ENUM(NSInteger, A2MoveMode) {
 /// 删除当前选中的控件（内置/自定义均可）
 - (void)a2_removeSelectedControl;
 
+/// 当前布局快照（编辑器中点「取消」时用来回滚）
+- (NSDictionary<NSString *, id> *)a2_editorStateSnapshot;
+/// 恢复到快照状态（会删掉编辑期间新建的自定义键并还原绑定）
+- (void)a2_restoreEditorState:(NSDictionary<NSString *, id> *)snapshot;
+
 /// 保存当前布局到「当前方案」并落盘。
 - (void)a2_saveLayoutNow;
 
-/// 导出当前控件（归一化模型：id/x/y/w/h/a/key/label）。
+/// 导出当前控件（归一化模型：id/x/y/w/h/a/key/keys/label，
+/// 以及 xPct/yPct/wPct/hPct 与参考边 wRef/hRef；wPt/hPt 只在导入外部布局时出现）。
 - (NSArray<NSDictionary *> *)a2_exportControls;
 
 /// 应用外部布局（同 a2_exportControls 的结构）。

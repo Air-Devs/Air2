@@ -232,8 +232,8 @@ Air2 侧等价实现已存在：`Natives/Support/a2_rppairing.h:44-60`（帧/信
 | 超时 | **无协议级超时**：`accept()` 一直阻塞。StikPair 只靠后台任务的过期回调兜底；Air2 的既有口径是 300 s 预算后就中止 | `[IDV]` 无超时；`[SP] PairingController.swift:221-228`；`a2_rppairing_pairable_host.h` 的 `A2RPPairableHostDefaultBudgetSeconds` |
 
 **后台能力要点**：`BGContinuedProcessingTask` 属 **iOS 26+**；StikPair 的工程把整体
-deployment target 设成 **27.0**（`[SP] project.yml:6`）。Air2 的 target 是 **14.0**
-（`scripts/gen_xcodeproj.py:22`）⇒ 接这套必须 `@available` 包裹 + 退化路径。
+deployment target 设成 **27.0**（`[SP] project.yml:6`）。Air2 的 target 是 **15.0**
+（`scripts/gen_xcodeproj.py:20`）⇒ 接这套必须 `@available` 包裹 + 退化路径。
 
 ---
 

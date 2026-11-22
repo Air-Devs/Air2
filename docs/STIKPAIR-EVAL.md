@@ -133,7 +133,7 @@
 | 全仓 **0 个 `.swift` 文件** | `find . -name '*.swift'` 空 |
 | 工程由脚本生成，**只扫 `.m`/`.mm`** 作为编译单元，`.h` 进头文件组 | `scripts/gen_xcodeproj.py:285-298`（判断在 `:295`） |
 | 已有第三方**静态库**接线范式可复用 | `MBEDTLS_LDFLAGS`（`scripts/gen_xcodeproj.py:228-232`）、`target_ldflags()`（`:236-244`）、写入 build settings（`:657`） |
-| 部署目标 14.0（StikPair 是 27.0） | `scripts/gen_xcodeproj.py:22` vs `[SP] project.yml:6` |
+| 部署目标 15.0（StikPair 是 27.0） | `scripts/gen_xcodeproj.py:20` vs `[SP] project.yml:6` |
 
 结论与做法：
 - **不引入 Swift**：把 StikPair 那份 Rust 薄壳**按规格自研重写**（C ABI，纯 C 头），用 **ObjC** 调用。

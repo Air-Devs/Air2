@@ -103,7 +103,7 @@ python3 tests/Natives/run_tlspsk_tunnel_tests.py
    pairingData TLV 交给 `A2RPPairSetupSession`）。本轮入口只到「生成码 + 显示状态 + 判据行」。
 4. **iOS 27 设置里的「与 <名字> 配对」是否出现**、输码后 M1–M6 是否走完、产出的 plist
    能否被设备在后续 pair-verify 中认可 —— 全部需要 iOS 27 真机（`docs/STIKPAIR-SPEC.md` §9 的 6–9 条）。
-5. **后台保活**：`BGContinuedProcessingTask` 需 iOS 26+ 且本仓 deployment target 是 14.0，
+5. **后台保活**：`BGContinuedProcessingTask` 需 iOS 26+ 且本仓 deployment target 是 15.0，
    入口页目前不申请后台任务（用户切到系统设置期间被挂起是已知风险，见规格 §5）。
 
 ---

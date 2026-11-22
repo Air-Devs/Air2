@@ -1,7 +1,7 @@
 # Air2
 
 > 全新的 iOS 端 Minecraft: Java Edition 启动器
-> 基于 pojav 系后端重新开发，目标平台 iOS 14.0+（arm64）
+> 基于 pojav 系后端重新开发，目标平台 iOS 15.0+（arm64）
 
 Air2 是 [Air-Devs](https://github.com/Air-Devs) 组织的下一代 iOS 启动器项目。
 与 ZL2（Android / Kotlin / Compose）同源设计理念，但面向 iOS 原生技术栈重新实现：

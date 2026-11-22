@@ -30,7 +30,7 @@ fi
 
 export PATH="/usr/local/bin:$HOME/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 SDK="$(xcrun --sdk iphoneos --show-sdk-path)"
-CLANG="xcrun -sdk iphoneos clang -arch arm64 -mios-version-min=14.0 -O2 -fno-common"
+CLANG="xcrun -sdk iphoneos clang -arch arm64 -mios-version-min=15.0 -O2 -fno-common"
 # ★熵源★：库用 ALT 钩子，由 App 侧 Natives/Support/a2_tlspsk_mbedtls.m 的
 #   mbedtls_hardware_poll（SecRandomCopyBytes）提供 ⇒ 库不依赖 /dev/urandom。
 DEFS="-DMBEDTLS_ENTROPY_HARDWARE_ALT"

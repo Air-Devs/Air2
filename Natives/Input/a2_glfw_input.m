@@ -543,6 +543,9 @@ void a2_glfw_input_post_char(long window, int codepoint, int mods) {
     ev.i0 = codepoint;
     ev.i1 = mods;
     a2_glfw_event_post(&ev);
+    // ★26.3★ 文本输入也要镜像进 SDL：agent 侧 type=1000 → pushText(char)。
+    //   （26.2 及更早没有 SdlInputBridge，自动 no-op）
+    a2_sdl_input_text(codepoint);
 }
 
 /// ★游戏内控件用★ 合成一次按键事件（key 用 GLFW 键码；action: 1=按下 0=抬起）。

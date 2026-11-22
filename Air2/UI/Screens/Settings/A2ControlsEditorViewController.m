@@ -15,6 +15,7 @@
 @property (nonatomic, strong) UIView *canvas;
 @property (nonatomic, strong) UIStackView *toolbar;
 @property (nonatomic, assign) CGSize designSize;
+@property (nonatomic, strong) NSDictionary<NSString *, id> *editorSnapshot;
 @end
 
 @implementation A2ControlsEditorViewController
@@ -168,9 +169,11 @@
     _controls.translatesAutoresizingMaskIntoConstraints = YES;
     _controls.frame = CGRectMake(0, 0, _designSize.width, _designSize.height);
     [_canvas addSubview:_controls];
-    [_controls a2_setEditing:YES];
     // ★编辑器显示的就是游戏在用的那份存档布局★（否则编辑一次保存后，再进来看到的是重置版）
     [_controls a2_reloadSavedLayout];
+    // 快照必须在「载入存档」之后拍，否则取消会把默认布局当成用户布局恢复。
+    _editorSnapshot = [_controls a2_editorStateSnapshot];
+    [_controls a2_setEditing:YES];
 
     // 点画布空白 = 取消选中
     UITapGestureRecognizer *bg = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(a2_editorBackgroundTap:)];
@@ -246,11 +249,17 @@
 
 - (void)save {
     [self.controls a2_saveLayoutNow];
+    [self.controls a2_setEditing:NO];
     [A2Log log:@"[A2-CONTROLS] 布局已从设置页保存"];
     [self dismissViewControllerAnimated:YES completion:nil];
 }
 
 - (void)cancel {
+    // 编辑期间 add/delete 不落盘，这里直接回滚到快照，避免「点取消却改了布局」。
+    if (_editorSnapshot != nil) {
+        [self.controls a2_restoreEditorState:_editorSnapshot];
+    }
+    [self.controls a2_setEditing:NO];
     [self dismissViewControllerAnimated:YES completion:nil];
 }
 
