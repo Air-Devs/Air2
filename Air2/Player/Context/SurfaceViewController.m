@@ -1959,18 +1959,13 @@ static int A2RequiredJavaVersionForMCVersion(NSString *verName) {
     splash.userInteractionEnabled = NO;
     splash.versionName = self.currentVersionName ?: @"Minecraft";
 
-    // 启动前检查清单（对照 ZL2 buildLaunchPhases 的四个 addTask）。
-    // 顺序与 A2LaunchTask 枚举一致，所以 task 的值可以直接当行号用。
-    [splash setTasks:@[
-        [A2LaunchTaskItem itemWithSymbol:@"person.crop.circle"
-                                  title:@"检查账号"],
-        [A2LaunchTaskItem itemWithSymbol:@"puzzlepiece.extension"
-                                  title:@"检查游戏环境"],
-        [A2LaunchTaskItem itemWithSymbol:@"checkmark.shield"
-                                  title:@"校验并修复文件"],
-        [A2LaunchTaskItem itemWithSymbol:@"paperplane.fill"
-                                  title:@"启动游戏"],
-    ]];
+    // 启动前检查清单：直接取 A2GameLaunchCoordinator 的 steps。
+    //
+    // 这些步骤是真实执行的那几项（校验账号 / 扫描模组 / 检查渲染器 /
+    // 解析版本清单 / 校验并修复文件 / 启动游戏），数量和名字都由
+    // coordinator 决定，UI 不再自己硬编码 —— 账号检查这类步骤是按条件
+    // 加入的，硬编码会与实际执行对不上。
+    [splash setTasks:[self launchTaskItemsFromSteps:A2GameLaunchCoordinator.shared.steps]];
     [splash setStage:A2LaunchStagePreparing message:@"正在准备启动…"];
 
     self.launchOverlayView = splash;
@@ -1998,21 +1993,64 @@ static int A2RequiredJavaVersionForMCVersion(NSString *verName) {
 
         A2LaunchSplashView *sv = (A2LaunchSplashView *)self.launchOverlayView;
         if ([sv isKindOfClass:A2LaunchSplashView.class]) {
-            // 把清单推进到当前任务：之前的全部标完成，当前这项标进行中。
-            // A2LaunchTask 的取值是 0..3，与 setTasks: 里的行号一一对应。
-            NSInteger idx = (NSInteger)p.task;
-            if (idx >= 0 && idx < 4) {
-                for (NSInteger i = 0; i < idx; i++) {
-                    [sv setTaskState:A2LaunchTaskStateDone atIndex:i detail:nil];
+            // 用 coordinator 的真实步骤列表刷新清单。
+            // 步骤数量可能在启动过程中变化（账号校验是条件性的），
+            // 数量变了就重建，否则原地更新每一项的状态。
+            NSArray<A2LaunchStep *> *steps = note.userInfo[@"steps"];
+            if ([steps isKindOfClass:NSArray.class] && steps.count) {
+                // 步骤数量变了才重建行视图（重建会打断过渡动画），
+                // 数量没变就原地改状态。
+                static NSUInteger lastStepCount = 0;
+                if (steps.count != lastStepCount) {
+                    lastStepCount = steps.count;
+                    [sv setTasks:[self launchTaskItemsFromSteps:steps]];
                 }
-                [sv setTaskState:A2LaunchTaskStateRunning
-                         atIndex:idx
-                          detail:p.message];
+                for (NSUInteger i = 0; i < steps.count; i++) {
+                    A2LaunchStep *step = steps[i];
+                    // A2LaunchStepState 与 A2LaunchTaskState 数值一一对应
+                    // （见 A2GameLaunchCoordinator.h:61 的注释）
+                    [sv setTaskState:(A2LaunchTaskState)step.state
+                             atIndex:(NSInteger)i
+                              detail:step.detail];
+                }
             }
             [sv setStage:stage message:p.message];
             [sv appendLog:[NSString stringWithFormat:@"[%@] %@", p.title, p.message]];
         }
     }];
+}
+
+/// 把 coordinator 的步骤转成启动遮罩用的清单项。
+///
+/// A2LaunchStep 只带 title/state/detail，图标由 UI 按步骤序号给：
+/// 六个步骤的图标顺序与 A2LaunchPrecheck 里注册的顺序一致。
+static NSArray<NSString *> *A2LaunchStepSymbols(void) {
+    static NSArray<NSString *> *symbols;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        symbols = @[@"person.crop.circle",        // 校验账号
+                    @"puzzlepiece.extension",     // 扫描模组
+                    @"cpu",                       // 检查渲染器
+                    @"doc.text.magnifyingglass",  // 解析版本清单
+                    @"checkmark.shield",          // 校验并修复文件
+                    @"paperplane.fill"];          // 启动游戏
+    });
+    return symbols;
+}
+
+- (NSArray<A2LaunchTaskItem *> *)launchTaskItemsFromSteps:(NSArray<A2LaunchStep *> *)steps {
+    NSMutableArray<A2LaunchTaskItem *> *items = [NSMutableArray array];
+    NSArray<NSString *> *symbols = A2LaunchStepSymbols();
+    for (NSUInteger i = 0; i < steps.count; i++) {
+        A2LaunchStep *step = steps[i];
+        NSString *symbol = i < symbols.count ? symbols[i] : @"circle";
+        A2LaunchTaskItem *item = [A2LaunchTaskItem itemWithSymbol:symbol
+                                                            title:step.title ?: @""];
+        item.state = (A2LaunchTaskState)step.state;
+        item.detail = step.detail;
+        [items addObject:item];
+    }
+    return items;
 }
 
 - (void)cancelLaunch {
