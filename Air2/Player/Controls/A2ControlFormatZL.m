@@ -183,21 +183,34 @@ static NSString *ZLStr(id v) {
         layer.hideWhenMouse = ZLBool(lj[@"hideWhenMouse"], YES);
         layer.hideWhenGamepad = ZLBool(lj[@"hideWhenGamepad"], YES);
         layer.hideWhenJoystick = ZLBool(lj[@"hideWhenJoystick"], NO);
+        layer.visibilityType = ZLStr(lj[@"visibilityType"]) ?: @"always";
         layer.rawJSON = lj;
 
-        // 六组控件：前三种是 ZL2 原生，后三种是 Air2 扩展键
+        // 读法：先看 Air2 的私有扩展对象，回退到旧版写在图层顶层的键。
+        //
+        // ZL2 的 ControlLayer 数据类只有三个控件数组
+        // （zl2/LayerController/.../layout/ControlLayer.kt:43-62）:
+        //     normalButtons / textBoxes / joystickButtons
+        // gamepadButtons / gyroscopeButtons / hotbarButtons /
+        // viewAreas / scrollButtons 在 ZL2 里**根本不存在**，
+        // kotlinx.serialization 用 ignoreUnknownKeys，写进顶层会被直接丢掉。
+        // 所以这五类改存到 air2Extensions 里，既不污染官方键也不丢数据。
+        NSDictionary *ext = [lj[@"air2Extensions"] isKindOfClass:NSDictionary.class]
+                          ? lj[@"air2Extensions"] : @{};
+        #define A2ZL_BUCKET(key) \
+            [self arrayOrEmpty:(ext[key] ?: lj[key])]
+
         NSArray<NSArray *> *buckets = @[
             [self arrayOrEmpty:lj[@"normalButtons"]],
             [self arrayOrEmpty:lj[@"joystickButtons"]],
             [self arrayOrEmpty:lj[@"textBoxes"]],
-            [self arrayOrEmpty:lj[@"gamepadButtons"]],
-            [self arrayOrEmpty:lj[@"gyroscopeButtons"]],
-            [self arrayOrEmpty:lj[@"hotbarButtons"]],
-            // Air2 扩展：视角区 / 滚轮（ZL2 没有这两种类型，
-            // 作为未知键写回时 ZL2 会原样保留，再导回 Air2 能恢复）
-            [self arrayOrEmpty:lj[@"viewAreas"]],
-            [self arrayOrEmpty:lj[@"scrollButtons"]],
+            A2ZL_BUCKET(@"gamepadButtons"),
+            A2ZL_BUCKET(@"gyroscopeButtons"),
+            A2ZL_BUCKET(@"hotbarButtons"),
+            A2ZL_BUCKET(@"viewAreas"),
+            A2ZL_BUCKET(@"scrollButtons"),
         ];
+        #undef A2ZL_BUCKET
         A2ControlWidgetType types[8] = {
             A2ControlWidgetTypeButton,
             A2ControlWidgetTypeJoystick,
@@ -327,7 +340,7 @@ static NSString *ZLStr(id v) {
 
     NSMutableDictionary *d = [NSMutableDictionary dictionary];
     d[@"uuid"] = w.identifier ?: [[NSUUID UUID] UUIDString];
-    d[@"text"] = @{@"default": w.text ?: @""};
+    d[@"text"] = @{@"default": w.text ?: @"", @"matchQueue": @[]};
     d[@"position"] = @{
         @"x": @([self zlPositionFromPercent:w.xPercent sizePercent:w.widthPercent]),
         @"y": @([self zlPositionFromPercent:w.yPercent sizePercent:w.heightPercent]),
@@ -476,14 +489,18 @@ static NSString *ZLStr(id v) {
         lj[@"hideWhenMouse"] = @(layer.hideWhenMouse);
         lj[@"hideWhenGamepad"] = @(layer.hideWhenGamepad);
         lj[@"hideWhenJoystick"] = @(layer.hideWhenJoystick);
+        lj[@"visibilityType"] = layer.visibilityType ?: @"always";
         lj[@"normalButtons"] = buttons;
         lj[@"joystickButtons"] = joysticks;
         lj[@"textBoxes"] = texts;
-        if (gamepads.count) lj[@"gamepadButtons"] = gamepads;
-        if (gyros.count) lj[@"gyroscopeButtons"] = gyros;
-        if (hotbars.count) lj[@"hotbarButtons"] = hotbars;
-        if (views.count) lj[@"viewAreas"] = views;
-        if (scrolls.count) lj[@"scrollButtons"] = scrolls;
+        // 这五类 ZL2 没有对应字段，收进私有扩展对象，见读取端的说明。
+        NSMutableDictionary *ext = [NSMutableDictionary dictionary];
+        if (gamepads.count) ext[@"gamepadButtons"] = gamepads;
+        if (gyros.count)    ext[@"gyroscopeButtons"] = gyros;
+        if (hotbars.count)  ext[@"hotbarButtons"] = hotbars;
+        if (views.count)    ext[@"viewAreas"] = views;
+        if (scrolls.count)  ext[@"scrollButtons"] = scrolls;
+        if (ext.count)      lj[@"air2Extensions"] = ext;
         [layers addObject:lj];
     }
 
