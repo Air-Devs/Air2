@@ -378,3 +378,38 @@
   （manifest 申请了 `launch.args` / `launch.gameArgs` / `launch.classpath` / `launch.env.code` /
   `java.agent` / `native.code` 任一项 ⇒ 会改启动链），弹窗 `A2PluginLaunchChainConfirm`
   （安装器写完校验、**写 registry 之前**逐次弹 10 次；任一次取消 ⇒ 安装终止、清暂存、不写 registry）。
+
+---
+
+## ADR-015：输入统一走「源 → 绑定表 → 内核汇」，三种源共用一套接口
+
+- **状态**：已接受（键盘已实现；虚拟按钮 / 手柄只有接口）
+- **日期**：2026-11-28
+- **背景**：用户要求「给目前所有的 MC 内核加一套输入方式：虚拟按钮 / 键盘 / 手柄都能映射到
+  键盘所有按键或手柄任何按键」。此前输入分四条路各写各的翻译：`A2GlfwView` 内联 HID 表直接投
+  GLFW 事件、`A2GameControlsView` 每个控件自己算键码、26.3 的 SDL 镜像只能在投递函数里逐处补、
+  手柄完全没有。再加手柄就是第五份翻译，且「改绑」无处安放。
+- **决策**：
+  1. 三层固定：**源**（`A2InputSource`）只报触发，**绑定表**（`A2InputBindingTable`）决定落点，
+     **内核汇**（`A2InputSink`）负责投递；三者之间的唯一通道是 `A2InputRouter`。
+  2. 触发/事件是**值类型**（高频路径不分配对象），但必须带 `sourceKind` / `targetKind`：
+     键盘空间（GLFW 键码）与手柄空间（`A2GamepadButton`）数值会撞，共用一个 `int` 必然串号。
+  3. 虚拟按钮的触发是**控件 id**（不是键码）：控件键位用户可改，id 不可改；否则改绑等于换控件。
+  4. 键盘默认**直通**（没改绑的键就是它自己），显式绑定压过直通。
+  5. 防卡键五条（按下时解算/松开复用、落点引用计数、重复按下忽略、未按先松忽略、
+     `releaseAllHeldTargets`）写进映射层，不散落在各源里。
+  6. **未实现的源必须如实失败**（`A2InputErrorCodeNotImplemented`），不允许「start 成功但什么都不做」。
+  7. 内核汇对收不了的目标空间返回 `NO` 并计数（当前 MC 没有原生手柄通道），
+     而不是「投了就算成功」。
+- **理由**：加一种输入或一个内核都只需实现一个协议；改绑只有一处数据源；卡键这类只在真机
+  复现的问题被状态机集中兜住；「未实现」在启动日志里就可见，不必等用户插手柄才发现。
+- **风险 / 边界**：
+  - 映射层要求**主线程**调用（不加锁）。非主线程投递只记日志，不崩。
+  - 绑定表是 `NSCopying`：映射层持有副本，编辑器改表不会绕过「换表先抬键」。
+  - 本迭代**不做**映射编辑器 UI 与持久化（绑定表已可 JSON 往返，属 App 层）；
+    摇杆轴不给接口（没有内核收，给假接口等于埋假通道）。
+- **落地**：`Natives/Input/A2InputTypes` / `A2InputSource` / `A2InputSink` / `A2InputBinding` /
+  `A2InputRouter` / `A2KeyboardInputSource` / `A2VirtualButtonInputSource` / `A2GamepadInputSource` /
+  `A2KernelInputSink`；装配点 `a2_glfw_input.m` 的 `a2_glfw_input_router()`；
+  键盘转发在 `A2GlfwView.pressesBegan/Ended`；
+  说明见 `docs/INPUT-MAPPING.md`；测试 `tests/Input/`（86 例，`python3 tests/Input/run_input_mapping_tests.py`）。

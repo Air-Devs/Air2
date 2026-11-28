@@ -54,6 +54,12 @@ jobs:
       - name: ★A2PROBE★ GL 断点探针单测（node，cmd 99）
         run: node tests/JIT/jit_probe_tests.js
 
+      # [INPUT-MAP-1] 输入映射层：纯 Foundation + clang，无 UIKit/JVM 依赖。
+      # 先按仓内惯例「暂不挡构建」（与下面那组一致）；跑稳之后再摘 continue-on-error。
+      - name: ★INPUT-MAP★ 输入映射层单测（clang）
+        continue-on-error: true
+        run: python3 tests/Input/run_input_mapping_tests.py
+
       - name: Plan / Runtime / Instance 套件（暂不挡构建，日志照打）
         continue-on-error: true
         run: |

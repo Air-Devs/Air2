@@ -2,9 +2,10 @@
 //  Natives/Input/a2_glfw_input.m
 //  Air2 —— 自研 GLFW 输入层（阶段 A）· 实现
 // ----------------------------------------------------------------------------
-//  职责：把 iOS 的触摸与**外接**键盘事件，翻译成 GLFW 语义事件并投进事件总线。
+//  职责：把 iOS 的触摸事件翻译成 GLFW 语义事件并投进事件总线。
 //    · 触摸 → 光标位置 + 鼠标左键（GLFW 语义：一根主触摸 = 指针）
-//    · 外接键盘按下/抬起 → GLFW_KEY_*（HID usage → GLFW 键码，紧凑标准表）
+//    · 外接键盘按下/抬起 → 转发给映射层的键盘源（[INPUT-MAP-1] 起不在本文件翻译）
+//    · 外接键盘字符 → CHAR 事件（文本输入不是「按了哪个键」，不参与改绑）
 //  软键盘文本输入（字符/文本/IME）是阶段 B，本文件不做。
 //
 //  ★为什么用「一根主触摸 = 指针」★
@@ -21,6 +22,14 @@
 #import "a2_glfw_window.h"
 #import "a2_log.h"
 
+// [INPUT-MAP-1] 统一输入映射层：键盘不再在本文件里翻译，改由「源 → 映射 → 内核汇」。
+#import "A2GamepadInputSource.h"
+#import "A2InputBinding.h"
+#import "A2InputRouter.h"
+#import "A2KernelInputSink.h"
+#import "A2KeyboardInputSource.h"
+#import "A2VirtualButtonInputSource.h"
+
 #import <UIKit/UIKit.h>
 #import <QuartzCore/QuartzCore.h>
 #import <string.h>
@@ -34,69 +43,12 @@
 #define A2_GLFW_SCROLL_POINTS_PER_NOTCH 10.0
 
 // ============================================================================
-//  HID usage → GLFW 键码（紧凑标准表）
+//  HID → GLFW 键码表已搬到 A2KeyboardInputSource（[INPUT-MAP-1]）
 // ============================================================================
-// UIKeyboardHIDUsage 就是 USB HID Keyboard/Keypad usage ID（公开标准）。
-// 覆盖主界面所需：字母/数字/标点/编辑键/方向键/F 键/修饰键。
-// ★完整表（含各国布局与多媒体键）属阶段 B 补全★ —— 本表已足够「进主界面 + 基本操作」。
-static int a2_glfw_key_from_hid(long hid) {
-    // USB HID 0x04..0x1D = 字母 a..z ⇒ GLFW_KEY_A(65)..GLFW_KEY_Z(90)（连续）
-    if (hid >= 0x04 && hid <= 0x1D) {
-        return 65 + (int) (hid - 0x04);
-    }
-    // USB HID 0x1E..0x26 = 数字 1..9 ⇒ GLFW_KEY_1(49)..GLFW_KEY_9(57)
-    if (hid >= 0x1E && hid <= 0x26) {
-        return 49 + (int) (hid - 0x1E);
-    }
-    switch (hid) {
-        case 0x27: return 48;   // 0      -> GLFW_KEY_0
-        case 0x28: return 257;  // Return -> GLFW_KEY_ENTER
-        case 0x29: return 256;  // Escape -> GLFW_KEY_ESCAPE
-        case 0x2A: return 259;  // Delete/Backspace -> GLFW_KEY_BACKSPACE
-        case 0x2B: return 258;  // Tab    -> GLFW_KEY_TAB
-        case 0x2C: return 32;   // Space  -> GLFW_KEY_SPACE
-        case 0x2D: return 45;   // -      -> GLFW_KEY_MINUS
-        case 0x2E: return 61;   // =      -> GLFW_KEY_EQUAL
-        case 0x2F: return 91;   // [      -> GLFW_KEY_LEFT_BRACKET
-        case 0x30: return 93;   // ]      -> GLFW_KEY_RIGHT_BRACKET
-        case 0x31: return 92;   // \      -> GLFW_KEY_BACKSLASH
-        case 0x33: return 59;   // ;      -> GLFW_KEY_SEMICOLON
-        case 0x34: return 39;   // '      -> GLFW_KEY_APOSTROPHE
-        case 0x35: return 96;   // `      -> GLFW_KEY_GRAVE_ACCENT
-        case 0x36: return 44;   // ,      -> GLFW_KEY_COMMA
-        case 0x37: return 46;   // .      -> GLFW_KEY_PERIOD
-        case 0x38: return 47;   // /      -> GLFW_KEY_SLASH
-        case 0x39: return 280;  // CapsLock -> GLFW_KEY_CAPS_LOCK
-        case 0x46: return 283;  // PrintScreen -> GLFW_KEY_PRINT_SCREEN
-        case 0x47: return 281;  // ScrollLock  -> GLFW_KEY_SCROLL_LOCK
-        case 0x48: return 284;  // Pause       -> GLFW_KEY_PAUSE
-        case 0x49: return 260;  // Insert      -> GLFW_KEY_INSERT
-        case 0x4A: return 268;  // Home        -> GLFW_KEY_HOME
-        case 0x4B: return 266;  // PageUp      -> GLFW_KEY_PAGE_UP
-        case 0x4C: return 261;  // DeleteFwd   -> GLFW_KEY_DELETE
-        case 0x4D: return 269;  // End         -> GLFW_KEY_END
-        case 0x4E: return 267;  // PageDown    -> GLFW_KEY_PAGE_DOWN
-        case 0x4F: return 262;  // Right       -> GLFW_KEY_RIGHT
-        case 0x50: return 263;  // Left        -> GLFW_KEY_LEFT
-        case 0x51: return 264;  // Down        -> GLFW_KEY_DOWN
-        case 0x52: return 265;  // Up          -> GLFW_KEY_UP
-        case 0x53: return 282;  // NumLock     -> GLFW_KEY_NUM_LOCK
-        case 0xE0: return 341;  // LCtrl  -> GLFW_KEY_LEFT_CONTROL
-        case 0xE1: return 340;  // LShift -> GLFW_KEY_LEFT_SHIFT
-        case 0xE2: return 342;  // LAlt   -> GLFW_KEY_LEFT_ALT
-        case 0xE3: return 343;  // LGUI   -> GLFW_KEY_LEFT_SUPER
-        case 0xE4: return 345;  // RCtrl  -> GLFW_KEY_RIGHT_CONTROL
-        case 0xE5: return 344;  // RShift -> GLFW_KEY_RIGHT_SHIFT
-        case 0xE6: return 346;  // RAlt   -> GLFW_KEY_RIGHT_ALT
-        case 0xE7: return 347;  // RGUI   -> GLFW_KEY_RIGHT_SUPER
-        default: break;
-    }
-    // F1..F12：HID 0x3A..0x45 ⇒ GLFW_KEY_F1(290)..F12(301)（连续）
-    if (hid >= 0x3A && hid <= 0x45) {
-        return 290 + (int) (hid - 0x3A);
-    }
-    return -1;   // GLFW_KEY_UNKNOWN（官方值为 -1）
-}
+//  搬走的原因：表是「键盘这个源怎么翻译自己」的知识，属于源。留在本文件会出现
+//  两份口径（一份给视图、一份给映射层），同一个物理键可能在两条路径上给出两个
+//  键码 —— 那样用户改绑的键和实际按下的键就永远对不上。
+//  本文件只保留「修饰位」的翻译：CHAR（文本输入）事件仍然带 mods。
 
 // UIKeyModifierFlags → GLFW mods 位（官方 glfw3.h：SHIFT=1, CONTROL=2, ALT=4, SUPER=8）
 static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
@@ -116,6 +68,9 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 // ★不能叫 window★：UIView 自带 readonly 的 `window`(UIWindow *)，同名 long 会把它覆盖掉，
 //   UIKit 把本视图加进层级时问 [view window] 会拿到句柄数字 ⇒ objc_msgSend 崩。
 @property (nonatomic, assign) long  glfwWindow;
+/// [INPUT-MAP-1] 本窗口的输入路由器（装配在 a2_glfw_input_router()）。
+/// ★强引用★：视图是路由器的生命周期锚点；路由器只弱登记在窗口表里。
+@property (nonatomic, strong) A2InputRouter *a2InputRouter;
 @property (nonatomic, assign) NSInteger activeTouches;
 /// 主触点（第一根手指）：多点触控时锁定它，避免光标在两根手指之间跳。
 @property (nonatomic, weak)   UITouch *a2PrimaryTouch;
@@ -127,6 +82,8 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
 @property (nonatomic) BOOL  a2ScrollGestureInstalled;
 // 滚动（间接输入）：声明在类内，避免 GCC_WARN_UNDECLARED_SELECTOR 警告。
 - (void)a2_scroll:(UIPanGestureRecognizer *)pan;
+// [INPUT-MAP-1] 键盘源（装配保证存在；窗口句柄为 0 时可能为 nil）。
+- (A2KeyboardInputSource *)a2KeyboardSource;
 @end
 
 @implementation A2GlfwView
@@ -169,6 +126,9 @@ static int a2_glfw_mods_from_flags(UIKeyModifierFlags flags) {
     self = [super initWithFrame:CGRectZero];
     if (self != nil) {
         _glfwWindow = window;
+        // [INPUT-MAP-1] 窗口一有视图就把映射层装好：键盘源已启动、内核汇已接上。
+        // 虚拟按钮源/手柄源也在这里注册（只有接口，start 会如实失败并留日志）。
+        _a2InputRouter = a2_glfw_input_router(window);
         self.multipleTouchEnabled = YES;
         self.backgroundColor = [UIColor blackColor];
         self.opaque = YES;
@@ -462,55 +422,46 @@ static const NSTimeInterval kA2HoldDelay = 0.25;
 
 // ---- 外接键盘（按下/抬起）----
 - (void)pressesBegan:(NSSet<UIPress *> *)presses withEvent:(UIPressesEvent *)event {
+    int mods = a2_glfw_mods_from_flags(event.modifierFlags);
+    A2KeyboardInputSource *keyboard = [self a2KeyboardSource];
     for (UIPress *pr in presses) {
         UIKey *key = pr.key;
         if (key == nil) {
             continue;
         }
-        int gkey = a2_glfw_key_from_hid((long) key.keyCode);
-        if (gkey < 0) {
-            continue;   // 未覆盖的键：跳过（阶段 B 补全表）
-        }
-        A2GlfwEvent ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.window = self.glfwWindow;
-        ev.type = A2_GLFW_EVENT_KEY;
-        ev.i0 = gkey;
-        ev.i1 = (int) key.keyCode;                      // scancode = HID usage
-        ev.i2 = A2_GLFW_PRESS;
-        ev.i3 = a2_glfw_mods_from_flags(event.modifierFlags);
-        a2_glfw_event_post(&ev);
+        // ① 按键：交给映射层（改绑 / 键盘直通 / 多源同落点的引用计数都在那里）。
+        //    未覆盖的 HID usage 由键盘源自己记日志（只报一次），这里不做判断。
+        [keyboard handleHIDUsage:(long) key.keyCode action:A2InputActionPress mods:mods];
 
-        // ★同一次按下也是文本输入源★：外接键盘的字符 → CHAR 事件
-        //   （MC 的文本/聊天输入读的是 glfwSetCharCallback，不是 key 回调）。
-        [self postChar:key mods:a2_glfw_mods_from_flags(event.modifierFlags)];
+        // ② 文本：仍是 CHAR 通道。★字符流不是「按了哪个键」★：
+        //    MC 的聊天/告示牌输入读 glfwSetCharCallback，改绑不该影响打出来的字。
+        [self postChar:key mods:mods];
     }
 }
 
 - (void)pressesEnded:(NSSet<UIPress *> *)presses withEvent:(UIPressesEvent *)event {
+    int mods = a2_glfw_mods_from_flags(event.modifierFlags);
+    A2KeyboardInputSource *keyboard = [self a2KeyboardSource];
     for (UIPress *pr in presses) {
         UIKey *key = pr.key;
         if (key == nil) {
             continue;
         }
-        int gkey = a2_glfw_key_from_hid((long) key.keyCode);
-        if (gkey < 0) {
-            continue;
-        }
-        A2GlfwEvent ev;
-        memset(&ev, 0, sizeof(ev));
-        ev.window = self.glfwWindow;
-        ev.type = A2_GLFW_EVENT_KEY;
-        ev.i0 = gkey;
-        ev.i1 = (int) key.keyCode;
-        ev.i2 = A2_GLFW_RELEASE;
-        ev.i3 = a2_glfw_mods_from_flags(event.modifierFlags);
-        a2_glfw_event_post(&ev);
+        // 抬起必须和按下走同一条路：否则映射层记的「按下集合」永远清不掉
+        // （MC 里就是「松手了还在走」）。
+        [keyboard handleHIDUsage:(long) key.keyCode action:A2InputActionRelease mods:mods];
     }
 }
 
 - (void)pressesCancelled:(NSSet<UIPress *> *)presses withEvent:(UIPressesEvent *)event {
     [self pressesEnded:presses withEvent:event];
+}
+
+- (A2KeyboardInputSource *)a2KeyboardSource {
+    id<A2InputSource> source = [self.a2InputRouter sourceForKind:A2InputSourceKindKeyboard];
+    // 装配（a2_glfw_input_router）保证键盘源存在；这里不兜底造一个：
+    // 造出来也没有汇，按键会静默消失 —— 那比 nil 更难查。
+    return (A2KeyboardInputSource *) source;
 }
 
 @end
@@ -546,23 +497,73 @@ void a2_glfw_input_post_char(long window, int codepoint, int mods) {
 }
 
 /// ★游戏内控件用★ 合成一次按键事件（key 用 GLFW 键码；action: 1=按下 0=抬起）。
-/// 调用方：Air2/Player/Controls/A2GameControlsView（屏幕上的方向/跳跃/潜行等按钮）。
+/// 调用方：A2GameControlsView（屏幕上的方向/跳跃/潜行等按钮）、A2KernelInputSink。
 /// 为什么走同一条事件总线：MC 只认 GLFW 回调，绕开它自己造一条会与真实输入打架。
 void a2_glfw_input_post_key(long window, int key, int action) {
+    a2_glfw_input_post_key_event(window, key, 0, action, 0);
+}
+
+/// ★映射层投递键盘事件走这条★：硬件键盘的 scancode 与 Ctrl/Shift 组合键都在这里带下去。
+/// ★26.3 内核★：GLFW 总线 + SDL 镜像一次做完，调用方不需要判断版本。
+void a2_glfw_input_post_key_event(long window, int key, int scancode, int action, int mods) {
     A2GlfwEvent ev;
     memset(&ev, 0, sizeof(ev));
     ev.window = window;
     ev.type = A2_GLFW_EVENT_KEY;
     ev.i0 = key;
-    ev.i1 = 0;       // scancode：控件合成用不到
-    ev.i2 = action;  // GLFW_PRESS=1 / GLFW_RELEASE=0
-    ev.i3 = 0;       // mods
+    ev.i1 = scancode;   // 0 = 合成输入；硬件键盘 = HID usage
+    ev.i2 = action;     // GLFW_PRESS=1 / GLFW_RELEASE=0
+    ev.i3 = mods;
     a2_glfw_event_post(&ev);    // ★26.3★ 键事件镜像到 SDL（26.2 自动 no-op）
     a2_sdl_input_key(key, action ? 1 : 0);
-
 }
 
 UIView *a2_glfw_input_make_view(long window) {
     A2GlfwView *view = [[A2GlfwView alloc] initWithWindowHandle:window];
     return view;
+}
+
+// ============================================================================
+//  [INPUT-MAP-1] 映射层装配（每个窗口一份）
+// ============================================================================
+//  ★登记表是「强键 → 弱值」★：窗口句柄做键，路由器做弱值。
+//  路由器的强引用归视图（A2GlfwView.a2InputRouter）——视图没了，条目自动消失，
+//  不需要在窗口销毁路径上加钩子（那条路径上有 JVM 退出与线程收尾，越少动越好）。
+static NSMapTable<NSNumber *, A2InputRouter *> *A2InputRouterTable(void) {
+    static NSMapTable<NSNumber *, A2InputRouter *> *table = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        table = [NSMapTable strongToWeakObjectsMapTable];
+    });
+    return table;
+}
+
+A2InputRouter *a2_glfw_input_router(long window) {
+    if (window == 0) {
+        return nil;
+    }
+    NSNumber *key = @(window);
+    A2InputRouter *existing = [A2InputRouterTable() objectForKey:key];
+    if (existing != nil) {
+        return existing;
+    }
+
+    A2InputRouter *router = [[A2InputRouter alloc] initWithBindings:[A2InputBindingTable defaultTable]];
+
+    // ① 内核汇：一份覆盖所有内核（GLFW 总线 + 26.3 的 SDL 镜像都在投递函数里）。
+    [router addSink:[[A2KernelInputSink alloc] initWithWindowHandle:window]];
+
+    // ② 键盘源：本迭代真正实现的那一种。
+    [router addSource:[[A2KeyboardInputSource alloc] init]];
+
+    // ③ 虚拟按钮源 / 手柄源：只有接口。[INPUT-MAP-2] / [INPUT-MAP-3] 补实现。
+    //    ★在这里注册而不是不注册★：让「未接线」这件事在启动日志里就可见，
+    //    而不是等用户插上手柄发现没反应才去猜。
+    [router addSource:[[A2VirtualButtonInputSource alloc] init]];
+    [router addSource:[[A2GamepadInputSource alloc] init]];
+
+    [A2InputRouterTable() setObject:router forKey:key];
+    a2_log_criterion(@"[INPUT-MAP] 输入映射层已装配 window=%ld（键盘已实现；虚拟按钮/手柄仅接口）",
+                     window);
+    return router;
 }

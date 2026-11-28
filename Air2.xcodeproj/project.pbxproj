@@ -201,6 +201,13 @@
 		AE3F7DCB7FAF64BF1D4EA3D9 /* a2_vmloader.m in Sources */ = {isa = PBXBuildFile; fileRef = 953C92615BB82B8F2A760D70 /* a2_vmloader.m */; };
 		76E4E21227BBCB64926C28DD /* A2ControlLayoutIO.m in Sources */ = {isa = PBXBuildFile; fileRef = 89007127877F1C02BD278415 /* A2ControlLayoutIO.m */; };
 		DCC09D3FB74B620E1FF29049 /* A2GameControlsView.m in Sources */ = {isa = PBXBuildFile; fileRef = 49C423A1E98F23EA857D3F73 /* A2GameControlsView.m */; };
+		8CF5294A7290C5889C45D511 /* A2GamepadInputSource.m in Sources */ = {isa = PBXBuildFile; fileRef = 5C1F7CB9FBEC957DA4089E9B /* A2GamepadInputSource.m */; };
+		8AE5F4FBCB793FAF7024D75C /* A2InputBinding.m in Sources */ = {isa = PBXBuildFile; fileRef = 4CC65EE45FD7AC58B943298B /* A2InputBinding.m */; };
+		F8DBF8DC3C69E1FCB9807A09 /* A2InputRouter.m in Sources */ = {isa = PBXBuildFile; fileRef = 9F5003F1943D7BA541DF5D57 /* A2InputRouter.m */; };
+		AB94DCA67D99B3FEBD4250BD /* A2InputTypes.m in Sources */ = {isa = PBXBuildFile; fileRef = 0CE14240C0D8441B1819934B /* A2InputTypes.m */; };
+		746B608CF1CE9D6BBA106A5B /* A2KernelInputSink.m in Sources */ = {isa = PBXBuildFile; fileRef = A914FA13EC9D91B62418AED5 /* A2KernelInputSink.m */; };
+		CF6E48EE34F214382738F201 /* A2KeyboardInputSource.m in Sources */ = {isa = PBXBuildFile; fileRef = C4CCBDA2BA2FDE9E736470DD /* A2KeyboardInputSource.m */; };
+		8C5A13C86C2BB4CDFE282175 /* A2VirtualButtonInputSource.m in Sources */ = {isa = PBXBuildFile; fileRef = 19A409750A74F9F98DFA72F7 /* A2VirtualButtonInputSource.m */; };
 		920A2D2957D697E609338C49 /* a2_controls_overlay.m in Sources */ = {isa = PBXBuildFile; fileRef = 4C2B21C1754762AA4B5EAA5B /* a2_controls_overlay.m */; };
 		0B3139358246F0181C9482EA /* a2_glfw_input.m in Sources */ = {isa = PBXBuildFile; fileRef = 933A49FD4221830D268A7AB8 /* a2_glfw_input.m */; };
 		34AA6CBDDC0541DFCC1C1BBA /* a2_glfw_overlay_bridge.m in Sources */ = {isa = PBXBuildFile; fileRef = DCA5F028E64087F787F6C202 /* a2_glfw_overlay_bridge.m */; };
@@ -436,6 +443,13 @@
 		953C92615BB82B8F2A760D70 /* a2_vmloader.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_vmloader.m"; sourceTree = "<group>"; };
 		89007127877F1C02BD278415 /* A2ControlLayoutIO.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ControlLayoutIO.m"; sourceTree = "<group>"; };
 		49C423A1E98F23EA857D3F73 /* A2GameControlsView.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GameControlsView.m"; sourceTree = "<group>"; };
+		5C1F7CB9FBEC957DA4089E9B /* A2GamepadInputSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2GamepadInputSource.m"; sourceTree = "<group>"; };
+		4CC65EE45FD7AC58B943298B /* A2InputBinding.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2InputBinding.m"; sourceTree = "<group>"; };
+		9F5003F1943D7BA541DF5D57 /* A2InputRouter.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2InputRouter.m"; sourceTree = "<group>"; };
+		0CE14240C0D8441B1819934B /* A2InputTypes.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2InputTypes.m"; sourceTree = "<group>"; };
+		A914FA13EC9D91B62418AED5 /* A2KernelInputSink.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2KernelInputSink.m"; sourceTree = "<group>"; };
+		C4CCBDA2BA2FDE9E736470DD /* A2KeyboardInputSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2KeyboardInputSource.m"; sourceTree = "<group>"; };
+		19A409750A74F9F98DFA72F7 /* A2VirtualButtonInputSource.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2VirtualButtonInputSource.m"; sourceTree = "<group>"; };
 		4C2B21C1754762AA4B5EAA5B /* a2_controls_overlay.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_controls_overlay.m"; sourceTree = "<group>"; };
 		933A49FD4221830D268A7AB8 /* a2_glfw_input.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_glfw_input.m"; sourceTree = "<group>"; };
 		DCA5F028E64087F787F6C202 /* a2_glfw_overlay_bridge.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "a2_glfw_overlay_bridge.m"; sourceTree = "<group>"; };
@@ -660,6 +674,15 @@
 		7665B1CD998B74E654718928 /* a2_vmloader.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_vmloader.h"; sourceTree = "<group>"; };
 		57EC1B6D16AA10F6067C10C9 /* A2ControlLayoutIO.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ControlLayoutIO.h"; sourceTree = "<group>"; };
 		B64B29D97F9B5C019647A01F /* A2GameControlsView.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GameControlsView.h"; sourceTree = "<group>"; };
+		71648833B5ED92C277E226F8 /* A2GamepadInputSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2GamepadInputSource.h"; sourceTree = "<group>"; };
+		B2A40A123440A822D66CD7CC /* A2InputBinding.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InputBinding.h"; sourceTree = "<group>"; };
+		E4865286460EAFFB97AB1385 /* A2InputRouter.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InputRouter.h"; sourceTree = "<group>"; };
+		A9415A2E864F65A9669B1AC4 /* A2InputSink.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InputSink.h"; sourceTree = "<group>"; };
+		E873A8C517430FEA93FB1A8B /* A2InputSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InputSource.h"; sourceTree = "<group>"; };
+		F96373A2D20E5A22925DD3C8 /* A2InputTypes.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2InputTypes.h"; sourceTree = "<group>"; };
+		0F80171B63EADA5924644EF6 /* A2KernelInputSink.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2KernelInputSink.h"; sourceTree = "<group>"; };
+		54D77A085A69744E0BE6325E /* A2KeyboardInputSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2KeyboardInputSource.h"; sourceTree = "<group>"; };
+		2BC4BFF6925BBCD746009297 /* A2VirtualButtonInputSource.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2VirtualButtonInputSource.h"; sourceTree = "<group>"; };
 		BC1BFCD3931CF2B23F207B8F /* a2_glfw_input.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_glfw_input.h"; sourceTree = "<group>"; };
 		408CE7916D149CDF4725C142 /* a2_glfw_trace.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_glfw_trace.h"; sourceTree = "<group>"; };
 		7098596D5BC01E0C70FA57C8 /* a2_glfw_window.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_glfw_window.h"; sourceTree = "<group>"; };
@@ -934,6 +957,13 @@
 			children = (
 				89007127877F1C02BD278415 /* A2ControlLayoutIO.m */,
 				49C423A1E98F23EA857D3F73 /* A2GameControlsView.m */,
+				5C1F7CB9FBEC957DA4089E9B /* A2GamepadInputSource.m */,
+				4CC65EE45FD7AC58B943298B /* A2InputBinding.m */,
+				9F5003F1943D7BA541DF5D57 /* A2InputRouter.m */,
+				0CE14240C0D8441B1819934B /* A2InputTypes.m */,
+				A914FA13EC9D91B62418AED5 /* A2KernelInputSink.m */,
+				C4CCBDA2BA2FDE9E736470DD /* A2KeyboardInputSource.m */,
+				19A409750A74F9F98DFA72F7 /* A2VirtualButtonInputSource.m */,
 				4C2B21C1754762AA4B5EAA5B /* a2_controls_overlay.m */,
 				933A49FD4221830D268A7AB8 /* a2_glfw_input.m */,
 				DCA5F028E64087F787F6C202 /* a2_glfw_overlay_bridge.m */,
@@ -941,6 +971,15 @@
 				8E93C7E55E06F51CB6F80339 /* a2_sdl_input.m */,
 				57EC1B6D16AA10F6067C10C9 /* A2ControlLayoutIO.h */,
 				B64B29D97F9B5C019647A01F /* A2GameControlsView.h */,
+				71648833B5ED92C277E226F8 /* A2GamepadInputSource.h */,
+				B2A40A123440A822D66CD7CC /* A2InputBinding.h */,
+				E4865286460EAFFB97AB1385 /* A2InputRouter.h */,
+				A9415A2E864F65A9669B1AC4 /* A2InputSink.h */,
+				E873A8C517430FEA93FB1A8B /* A2InputSource.h */,
+				F96373A2D20E5A22925DD3C8 /* A2InputTypes.h */,
+				0F80171B63EADA5924644EF6 /* A2KernelInputSink.h */,
+				54D77A085A69744E0BE6325E /* A2KeyboardInputSource.h */,
+				2BC4BFF6925BBCD746009297 /* A2VirtualButtonInputSource.h */,
 				BC1BFCD3931CF2B23F207B8F /* a2_glfw_input.h */,
 				408CE7916D149CDF4725C142 /* a2_glfw_trace.h */,
 				7098596D5BC01E0C70FA57C8 /* a2_glfw_window.h */,
@@ -1774,6 +1813,13 @@
 				AE3F7DCB7FAF64BF1D4EA3D9 /* a2_vmloader.m in Sources */,
 				76E4E21227BBCB64926C28DD /* A2ControlLayoutIO.m in Sources */,
 				DCC09D3FB74B620E1FF29049 /* A2GameControlsView.m in Sources */,
+				8CF5294A7290C5889C45D511 /* A2GamepadInputSource.m in Sources */,
+				8AE5F4FBCB793FAF7024D75C /* A2InputBinding.m in Sources */,
+				F8DBF8DC3C69E1FCB9807A09 /* A2InputRouter.m in Sources */,
+				AB94DCA67D99B3FEBD4250BD /* A2InputTypes.m in Sources */,
+				746B608CF1CE9D6BBA106A5B /* A2KernelInputSink.m in Sources */,
+				CF6E48EE34F214382738F201 /* A2KeyboardInputSource.m in Sources */,
+				8C5A13C86C2BB4CDFE282175 /* A2VirtualButtonInputSource.m in Sources */,
 				920A2D2957D697E609338C49 /* a2_controls_overlay.m in Sources */,
 				0B3139358246F0181C9482EA /* a2_glfw_input.m in Sources */,
 				34AA6CBDDC0541DFCC1C1BBA /* a2_glfw_overlay_bridge.m in Sources */,
@@ -1887,7 +1933,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
-				CURRENT_PROJECT_VERSION = "f4f3ea6";
+				CURRENT_PROJECT_VERSION = "dbbecdc";
 				DEAD_CODE_STRIPPING = "NO";
 				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";
@@ -1933,7 +1979,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
-				CURRENT_PROJECT_VERSION = "f4f3ea6";
+				CURRENT_PROJECT_VERSION = "dbbecdc";
 				DEAD_CODE_STRIPPING = "NO";
 				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";

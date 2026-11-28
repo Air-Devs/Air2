@@ -7,6 +7,7 @@
 #include <sys/sysctl.h>
 #include <string.h>
 #import "a2_log.h"
+#import "a2_glfw_input.h"      // 合成输入的唯一声明处（不再手写 extern，避免签名漂移）
 #import "A2ControlLayoutIO.h"
 
 // GLFW 键码（与 Java 侧 GLFW.java 常量一致）
@@ -29,10 +30,9 @@ static NSString *const kA2BindingsKey  = @"A2ControlBindings";   // {控件id: G
 static NSString *const kA2CtrlLayoutVerKey = @"A2ControlLayoutVersion";
 static const NSInteger kA2CtrlLayoutVer = 3;
 
-/// 输入层：把一次输入合成进 GLFW 事件总线（实现见 Natives/Input/a2_glfw_input.m）
-extern void a2_glfw_input_post_key(long window, int key, int action);
-extern void a2_glfw_input_post_mouse_button(long window, int button, int action);
-extern void a2_glfw_input_post_char(long window, int codepoint, int mods);
+// 输入层：a2_glfw_input_post_key / _mouse_button / _char 的声明在 a2_glfw_input.h。
+// ★[INPUT-MAP-1]★ 控件目前仍直接投 GLFW 事件；[INPUT-MAP-2] 会改走映射层
+// （A2VirtualButtonInputSource → A2InputRouter），届时这里的调用点全部换掉。
 
 #pragma mark - 摇杆
 

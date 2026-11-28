@@ -97,7 +97,7 @@ Swift ↔ Objective-C ↔ JVM 的**唯一**跨界通道。
 |---|---|
 | `Context/` | JVM 创建/销毁、类加载器、线程组 |
 | `Renderer/` | Metal 层管理、EGL/GL 桥、surface 生命周期 |
-| `Input/` | 触摸、键盘、鼠标、手柄、陀螺仪的事件注入 |
+| `Input/` | 触摸、键盘、鼠标、手柄、陀螺仪的事件注入；[INPUT-MAP-1] 三源统一映射（虚拟按钮/键盘/手柄 → 键盘键/手柄键），见 `docs/INPUT-MAPPING.md` |
 | `Controls/` | 自定义控件的原生渲染与命中测试 |
 | `Support/` | JIT 环境、签名处理、崩溃探针、诊断日志 |
 
