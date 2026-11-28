@@ -203,14 +203,17 @@
     }
 
     A2InputEvent event;
-    if (![self resolveEventForTrigger:trigger event:&event]) {
+    A2InputBinding *binding = nil;
+    if (![self resolveEventForTrigger:trigger event:&event binding:&binding]) {
         _unmappedTriggerCount++;
         return;
     }
 
     event.scancode = trigger.scancode;   // 键盘 scancode 透传给内核（见 A2InputTrigger 说明）
 
-    [self announceIfNeededForSourceKind:trigger.sourceKind];
+    [self announceIfNeededForSourceKind:trigger.sourceKind
+                                 binding:binding
+                                 trigger:trigger];
 
     NSString *targetKey = A2InputEventTargetKey(event);
     _heldByTrigger[triggerKey] = targetKey;
@@ -257,10 +260,16 @@
 }
 
 /// 触发 → 事件。查不到绑定且不满足键盘直通时返回 NO（调用方计为「未映射」）。
-- (BOOL)resolveEventForTrigger:(A2InputTrigger)trigger event:(A2InputEvent *)event {
-    A2InputBinding *binding = [_bindings bindingForTrigger:trigger];
-    if (binding != nil) {
-        *event = A2InputEventMake(binding.targetKind, binding.targetCode, A2InputActionPress, trigger.mods);
+/// 命中的绑定会回填到 binding（供判据行说明「这个键被改成了什么」）。
+- (BOOL)resolveEventForTrigger:(A2InputTrigger)trigger
+                         event:(A2InputEvent *)event
+                       binding:(A2InputBinding **)binding {
+    A2InputBinding *hit = [_bindings bindingForTrigger:trigger];
+    if (hit != nil) {
+        *event = A2InputEventMake(hit.targetKind, hit.targetCode, A2InputActionPress, trigger.mods);
+        if (binding != NULL) {
+            *binding = hit;
+        }
         return YES;
     }
     if (trigger.sourceKind == A2InputSourceKindKeyboard && _bindings.keyboardPassthrough) {
@@ -294,14 +303,22 @@
     }
 }
 
-- (void)announceIfNeededForSourceKind:(A2InputSourceKind)sourceKind {
+- (void)announceIfNeededForSourceKind:(A2InputSourceKind)sourceKind
+                              binding:(A2InputBinding *)binding
+                              trigger:(A2InputTrigger)trigger {
     NSNumber *key = @(sourceKind);
     if ([_announcedSourceKinds containsObject:key]) {
         return;
     }
     [_announcedSourceKinds addObject:key];
-    a2_log_criterion(@"[INPUT-MAP] 首个 %@ 触发已到达映射层（绑定 %d 条）",
-                     A2InputSourceKindName(sourceKind), (int) _bindings.bindings.count);
+    // ★判据行里带上「这个触发落到了哪」★：真机上「按 A 出来的却是 SPACE」这类问题，
+    // 一眼就能看出是绑定表生效了还是直通生效了，不必再去猜。
+    NSString *route = (binding != nil)
+        ? binding.displayDescription
+        : [NSString stringWithFormat:@"%@ 直通 → key %@",
+           A2InputSourceKindName(sourceKind), A2InputKeyDisplayName(trigger.code)];
+    a2_log_criterion(@"[INPUT-MAP] 首个 %@ 触发已到达映射层：%@（绑定 %d 条）",
+                     A2InputSourceKindName(sourceKind), route, (int) _bindings.bindings.count);
 }
 
 #pragma mark - 防卡键

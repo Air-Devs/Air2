@@ -209,7 +209,7 @@ typedef struct {
 | 行 | 含义 |
 |---|---|
 | `[INPUT-MAP] 输入映射层已装配 window=` | 映射层在该窗口装好了 |
-| `[INPUT-MAP] 首个 keyboard 触发已到达映射层` | 键盘这条路真的通了（每种源只报一次） |
+| `[INPUT-MAP] 首个 keyboard 触发已到达映射层：keyboard 直通 → key A` | 该源真的通了，并直接写出「落到了哪」（直通还是改绑，一眼可见；每种源只报一次） |
 | `[INPUT-MAP] 没有内核接收落点种类 …` | 该目标空间在当前内核没有通道（例如手柄键直接投递） |
 | `[RT] [INPUT-MAP] 源 virtual-button 未启动：…` | 未实现的源被如实拒绝启动 |
 | `[INPUT-MAP] 键盘 HID usage 未覆盖：0x..` | 有个物理键没有对应 GLFW 键码（只报一次） |
