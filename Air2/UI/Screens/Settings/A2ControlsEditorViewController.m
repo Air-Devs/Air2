@@ -9,6 +9,7 @@
 #import "A2ControlLayoutIO.h"
 #import "A2Log.h"
 #import "A2Toast.h"
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>   // UTType（iOS 14+ 文档选择器）
 
 @interface A2ControlsEditorViewController () <UIDocumentPickerDelegate>
 @property (nonatomic, strong) A2GameControlsView *controls;

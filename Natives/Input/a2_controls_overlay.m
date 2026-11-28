@@ -15,6 +15,7 @@
 #import <Foundation/Foundation.h>
 #import <UIKit/UIKit.h>
 #import "A2GameControlsView.h"
+#import "a2_host_window.h"   // key window 口径（替掉废弃的 UIApplication.keyWindow）
 
 static __weak A2GameControlsView *gA2SdlControls = nil;
 static BOOL gA2SdlControlsScheduled = NO;
