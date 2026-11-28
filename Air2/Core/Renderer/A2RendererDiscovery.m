@@ -32,6 +32,22 @@ static const char *const kA2RendererMagicMarker = "AIR2RENDERER";
 static const NSInteger kA2DiscoveryMaxDepth = 2;
 
 
+// 属性在 .h 里是 readonly（发现结果不该被外部改写），
+// 但本文件需要写它们，所以在这里重声明为 readwrite。
+// 直接写 item->_xxx 会因为「跨类的私有 ivar」编译失败：
+//     error: instance variable '_libraryPath' is private
+@interface A2DiscoveredRenderer ()
+@property (nonatomic, copy, readwrite) NSString *identifier;
+@property (nonatomic, copy, readwrite) NSString *displayName;
+@property (nonatomic, copy, readwrite, nullable) NSString *summary;
+@property (nonatomic, copy, readwrite) NSString *libraryPath;
+@property (nonatomic, copy, readwrite) NSString *sourceName;
+@property (nonatomic, assign, readwrite) BOOL hasManifest;
+@property (nonatomic, copy, readwrite, nullable) NSDictionary *manifest;
+@property (nonatomic, copy, readwrite, nullable) NSString *minMCVersion;
+@property (nonatomic, copy, readwrite, nullable) NSString *maxMCVersion;
+@end
+
 @implementation A2DiscoveredRenderer
 @end
 
@@ -184,19 +200,19 @@ static const NSInteger kA2DiscoveryMaxDepth = 2;
     BOOL hasManifest = (manifest != nil);
 
     A2DiscoveredRenderer *item = [A2DiscoveredRenderer new];
-    item->_libraryPath = [path copy];
-    item->_sourceName = [source copy];
-    item->_hasManifest = hasManifest;
-    item->_manifest = [manifest copy];
+    item.libraryPath = [path copy];
+    item.sourceName = [source copy];
+    item.hasManifest = hasManifest;
+    item.manifest = [manifest copy];
 
     NSString *manifestID = [self stringIn:manifest key:@"rendererID"];
-    item->_identifier = manifestID.length ? manifestID : identifier;
-    item->_displayName = [self stringIn:manifest key:@"displayName"] ?:
+    item.identifier = manifestID.length ? manifestID : identifier;
+    item.displayName = [self stringIn:manifest key:@"displayName"] ?:
                          [self displayNameFromLibraryPath:path];
-    item->_summary = [self stringIn:manifest key:@"description"] ?:
+    item.summary = [self stringIn:manifest key:@"description"] ?:
                      (hasManifest ? nil : @"未提供 manifest，按默认参数使用");
-    item->_minMCVersion = [self stringIn:manifest key:@"minMCVer"];
-    item->_maxMCVersion = [self stringIn:manifest key:@"maxMCVer"];
+    item.minMCVersion = [self stringIn:manifest key:@"minMCVer"];
+    item.maxMCVersion = [self stringIn:manifest key:@"maxMCVer"];
     return item;
 }
 
@@ -336,23 +352,23 @@ static NSString *const kA2PluginInfoPlistKey = @"Air2RendererPlugin";
             }
 
             A2DiscoveredRenderer *item = [A2DiscoveredRenderer new];
-            item->_libraryPath = libPath ?: bundlePath;
-            item->_sourceName = @"已安装 App";
-            item->_hasManifest = YES;
-            item->_manifest = [manifest copy];
+            item.libraryPath = libPath ?: bundlePath;
+            item.sourceName = @"已安装 App";
+            item.hasManifest = YES;
+            item.manifest = [manifest copy];
             NSString *mid = [manifest[@"rendererID"] isKindOfClass:NSString.class]
                           ? manifest[@"rendererID"] : nil;
-            item->_identifier = mid.length ? mid : entry;
+            item.identifier = mid.length ? mid : entry;
             NSString *dn = [manifest[@"displayName"] isKindOfClass:NSString.class]
                          ? manifest[@"displayName"] : nil;
-            item->_displayName = dn.length ? dn
+            item.displayName = dn.length ? dn
                 : [info[@"CFBundleDisplayName"] isKindOfClass:NSString.class]
                     ? info[@"CFBundleDisplayName"] : entry;
-            item->_summary = [manifest[@"description"] isKindOfClass:NSString.class]
+            item.summary = [manifest[@"description"] isKindOfClass:NSString.class]
                            ? manifest[@"description"] : @"来自已安装的渲染器插件 App";
-            item->_minMCVersion = [manifest[@"minMCVer"] isKindOfClass:NSString.class]
+            item.minMCVersion = [manifest[@"minMCVer"] isKindOfClass:NSString.class]
                                 ? manifest[@"minMCVer"] : nil;
-            item->_maxMCVersion = [manifest[@"maxMCVer"] isKindOfClass:NSString.class]
+            item.maxMCVersion = [manifest[@"maxMCVer"] isKindOfClass:NSString.class]
                                 ? manifest[@"maxMCVer"] : nil;
             [out addObject:item];
 
