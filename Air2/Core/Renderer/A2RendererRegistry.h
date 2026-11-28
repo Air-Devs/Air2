@@ -70,6 +70,19 @@ NS_ASSUME_NONNULL_BEGIN
 /// 版本兼容范围
 @property (nonatomic, copy, nullable) NSString *minMCVer;
 @property (nonatomic, copy, nullable) NSString *maxMCVer;
+
+/// dylib 的绝对路径。
+///
+/// 内置渲染器和「用户丢进目录」的渲染器都靠它定位 —— 只有一个名字
+/// （如 libmobileglues.dylib）无法区分 Frameworks 里的和 Documents 里的
+/// 同名文件，启动时可能加载错版本。
+@property (nonatomic, copy, nullable) NSString *libraryPath;
+
+/// 该项来自哪次扫描，用于 UI 分组与排障。
+@property (nonatomic, copy, nullable) NSString *discoverySource;
+
+/// 是否带有可信的 manifest（由 A2RendererDiscovery 判定）。
+@property (nonatomic, assign) BOOL hasManifest;
 @end
 
 @interface A2RendererRegistry : NSObject

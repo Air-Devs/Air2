@@ -26,6 +26,7 @@
 //
 
 #import "A2RendererRegistry.h"
+#import "A2RendererDiscovery.h"
 #import "A2RendererImporter.h"
 #import "A2RendererLoader.h"
 #import "A2Logger.h"
@@ -110,6 +111,43 @@ static NSString *const kSelectedRendererKey = @"A2SelectedRendererID";
         [list addObject:e];
     }
 
+    // ---- 3. 目录自动发现（等价于安卓「装了就发现」）----
+    //
+    // 扫 Frameworks/、Documents/Air2/Renderers/、越狱共享目录里的 *.dylib。
+    // 前两步已经登记过的不重复加：内置按 dylib 名登记，插件按 rendererID 登记，
+    // 用「库路径」和「标识」两把尺子去重。
+    NSMutableSet<NSString *> *knownPaths = [NSMutableSet set];
+    NSMutableSet<NSString *> *knownIDs = [NSMutableSet set];
+    for (A2RendererEntry *e in list) {
+        if (e.libraryPath.length) [knownPaths addObject:e.libraryPath];
+        if (e.identifier.length) [knownIDs addObject:e.identifier];
+    }
+
+    // 把已登记的库路径传进去：内置的 41 个 dylib 不必再逐个读 256KB 做探测
+    NSArray<A2DiscoveredRenderer *> *discovered =
+        [A2RendererDiscovery.shared scanSkippingLibraryPaths:knownPaths];
+    NSUInteger added = 0;
+    for (A2DiscoveredRenderer *d in discovered) {
+        if ([knownPaths containsObject:d.libraryPath]) continue;
+        if ([knownIDs containsObject:d.identifier]) continue;
+
+        A2RendererEntry *e = [A2RendererEntry new];
+        e.identifier = d.identifier;
+        e.displayName = d.displayName;
+        e.summary = d.summary;
+        e.builtin = NO;
+        e.sourceName = d.sourceName;
+        e.minMCVer = d.minMCVersion;
+        e.maxMCVer = d.maxMCVersion;
+        e.libraryPath = d.libraryPath;
+        e.discoverySource = d.sourceName;
+        e.hasManifest = d.hasManifest;
+        [list addObject:e];
+        [knownIDs addObject:d.identifier];
+        [knownPaths addObject:d.libraryPath];
+        added++;
+    }
+
     self.allRenderers = list;
 
     [A2Logger info:@"A2RendererRegistry"
@@ -117,6 +155,12 @@ static NSString *const kSelectedRendererKey = @"A2SelectedRendererID";
                     (unsigned long)list.count,
                     (unsigned long)[self builtinRenderers].count,
                     (unsigned long)plugins.count]];
+    if (added > 0) {
+        [A2Logger info:@"A2RendererRegistry"
+               message:[NSString stringWithFormat:@"额外发现 %lu 个渲染器（扫描耗时 %.0f ms）",
+                        (unsigned long)added,
+                        A2RendererDiscovery.shared.lastScanDuration * 1000.0]];
+    }
 }
 
 /// 内置渲染器 —— 按 bundle 里【实际存在】的 dylib 列出。
