@@ -47,8 +47,7 @@ static NSString *const kCurrentLogName  = @"lastlog.txt";
 static NSString *const kPreviousLogName = @"lastlog.old.txt";
 /// ★单文件模式★：控制台归档（stderr 的去处）就是会话日志本身 ——
 /// 用户只要看一份，A2Log 行与 native/NSLog 行都写在 Documents/lastlog.txt。
-static NSString *const kConsoleLogName    = @"lastlog.txt";
-static NSString *const kConsoleLogOldName = @"lastlog.old.txt";
+static NSString *const kConsoleLogName = @"lastlog.txt";
 
 // ★没有「运行时轮转」的常量与句柄★：单文件模式下 lastlog.txt 就是 stderr 的落点，
 //   按大小就地截断会把 A2Log 刚写的行一起抹掉 ⇒ 轮转只在 startSession（启动时）做一次。
@@ -184,6 +183,28 @@ static void a2_log_console_write(NSString *text) {
     fputc('\n', stderr);
     fflush(stderr);
     funlockfile(stderr);
+}
+
+/// 接上控制台归档：打开 lastlog.txt → dup2 到 stderr/stdout。
+/// 任一步失败即放弃（日志设施绝不能反过来把启动搞死）。
+/// ★不在这里轮转★：轮转只在 a2_log_rotate（startSession）里做一次（单文件模式）。
+static void a2_log_console_open(void) {
+    NSString *current = a2_log_path_named(kConsoleLogName);
+    if (!current) { return; }
+
+    int fd = open(current.fileSystemRepresentation, O_WRONLY | O_CREAT | O_APPEND, 0644);
+    if (fd < 0) { return; }
+    if (dup2(fd, STDERR_FILENO) != STDERR_FILENO) {
+        close(fd);
+        return;
+    }
+    // ★stdout 也接进同一份日志★（2026-10-17）
+    //   HotSpot 的线程栈（SIGQUIT 的 Full thread dump）与部分 VM 输出默认走 stdout；
+    //   之前只 dup2 了 stderr ⇒ 真机上 SIGQUIT 之后一行 dump 都没有。
+    //   stdout 不参与崩溃恢复，接失败不影响任何逻辑。
+    (void) dup2(fd, STDOUT_FILENO);
+    // dup2 之后这份 fd 已经没人用（运行时轮转已撤）⇒ 关掉，别留一个悬着的描述符。
+    close(fd);
 }
 
 #pragma mark - 会话日志落点（判据行共用）
