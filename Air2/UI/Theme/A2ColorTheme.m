@@ -166,8 +166,8 @@ void A2PairSchemePublic(A2ColorScheme *out, A2RawScheme *light, A2RawScheme *dar
                          name:(NSString *)name
                          desc:(NSString *)desc
                      gradient:(NSArray<UIColor *> *)gradient
-                lightOverride:(void (^)(A2RawScheme *))lightOverride
-                 darkOverride:(void (^)(A2RawScheme *))darkOverride {
+                lightOverride:(void (^ _Nullable)(id scheme))lightOverride
+                 darkOverride:(void (^ _Nullable)(id scheme))darkOverride {
 
     // 内置主题用中性基准风格（TonalSpot）
     A2PaletteParams params = A2PaletteParamsForStyle(A2PaletteStyleTonalSpot);
@@ -177,8 +177,9 @@ void A2PairSchemePublic(A2ColorScheme *out, A2RawScheme *light, A2RawScheme *dar
     A2FillSchemeWithParams(light, seed, YES, params);
     A2FillSchemeWithParams(dark, seed, NO, params);
 
-    if (lightOverride) lightOverride(light);
-    if (darkOverride) darkOverride(dark);
+    // ★形参是 id（头文件对外口径）★：内部 A2RawScheme 不对外暴露，这里显式传实例即可。
+    if (lightOverride) lightOverride((id) light);
+    if (darkOverride) darkOverride((id) dark);
 
     A2ColorScheme *merged = [A2ColorScheme new];
     A2PairSchemePublic(merged, light, dark);

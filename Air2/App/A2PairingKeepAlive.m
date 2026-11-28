@@ -44,7 +44,9 @@ static void A2PairingAudioStart(void) {
 
     AVAudioEngine *engine = [[AVAudioEngine alloc] init];
     AVAudioPlayerNode *player = [[AVAudioPlayerNode alloc] init];
-    const AVAudioFormat *fmt = [[AVAudioFormat alloc] initStandardFormatWithSampleRate:44100 channels:1];
+    // ★不要加 const★：AVAudioEngine 的 attach/connect/schedule 都按可写对象收参，
+    //   const 限定符在传参时会被丢弃（-Wqualifiers），而且这里本就不需要不可变视图。
+    AVAudioFormat *fmt = [[AVAudioFormat alloc] initStandardFormatWithSampleRate:44100 channels:1];
     [engine attachNode:player];
     [engine connect:player to:engine.mainMixerNode format:fmt];
 

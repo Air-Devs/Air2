@@ -76,16 +76,11 @@
     // iOS 14 起用 forOpeningContentTypes:，旧的 initWithDocumentTypes:inMode: 已废弃。
     // 用 UTTypeData 而不是具体类型 —— 整合包扩展名多样（.mrpack / .zip），
     // 限制死类型反而会选不中。
-    UIDocumentPickerViewController *picker;
-    if (@available(iOS 14.0, *)) {
-        picker = [[UIDocumentPickerViewController alloc]
-                  initForOpeningContentTypes:@[UTTypeData]
-                                     asCopy:YES];
-    } else {
-        picker = [[UIDocumentPickerViewController alloc]
-                  initWithDocumentTypes:@[@"public.data"]
-                                 inMode:UIDocumentPickerModeImport];
-    }
+    // ★部署目标 14.0 ⇒ 只用 iOS 14 的 API★：旧的 initWithDocumentTypes:inMode: 分支
+    //   永远不可达，留着只会多两条废弃告警（且是「看起来像兼容」的假兼容）。
+    UIDocumentPickerViewController *picker =
+        [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeData]
+                                                                   asCopy:YES];
     picker.delegate = self;
     picker.allowsMultipleSelection = NO;
     [self presentViewController:picker animated:YES completion:nil];

@@ -125,7 +125,6 @@ static NSString *A2PlanMavenRelativePath(NSString *mavenName) {
 + (nullable NSDictionary *)mergedVersionJSONFromDirectory:(NSString *)versionDir
                                                 versionID:(NSString *)versionID
                                                     error:(NSError *_Nullable *_Nullable)error {
-    NSFileManager *fm = NSFileManager.defaultManager;
     NSMutableArray<NSDictionary *> *chain = [NSMutableArray array];   // 父在前
     NSMutableSet<NSString *> *seen = [NSMutableSet set];
     NSString *current = versionID;

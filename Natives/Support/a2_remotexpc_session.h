@@ -110,7 +110,6 @@ NSString *A2RemoteXPCErrorKindName(A2RemoteXPCErrorKind kind);
                                  error:(A2RemoteXPCErrorKind *_Nullable)errorOut;
 
 /// 发一条 pairingData TLV，同步取回对端的下一条 pairingData TLV。
-/// @param fromPeerOut 回填「这条对端消息是从哪条流来的」（诊断用；可为 NULL）。
 /// @return nil ⇒ 失败，reason 写明原因、error 给出分类。
 /// ★语义不变★：本方法现在由下面两个原语组合而成（无复制实现）。
 - (NSData *_Nullable)exchangePairingData:(NSData *)tlv

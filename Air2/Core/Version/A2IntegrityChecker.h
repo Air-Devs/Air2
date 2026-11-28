@@ -17,6 +17,8 @@
 
 #import <Foundation/Foundation.h>
 
+NS_ASSUME_NONNULL_BEGIN
+
 typedef NS_ENUM(NSInteger, A2IntegrityLevel) {
     A2IntegrityLevelOK = 0,      ///< 全部就绪
     A2IntegrityLevelWarning,     ///< 能启动，但缺库/资源（可能黑屏/无音效）
@@ -44,5 +46,7 @@ typedef NS_ENUM(NSInteger, A2IntegrityLevel) {
                                  gameHome:(NSString *)gameHome;
 
 @end
+
+NS_ASSUME_NONNULL_END
 
 #endif

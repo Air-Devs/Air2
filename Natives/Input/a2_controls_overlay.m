@@ -40,7 +40,7 @@ UIWindow *a2_top_visible_window(void) {
         if (w.isHidden || w.alpha < 0.01 || w.bounds.size.width <= 1) continue;
         if (top == nil || w.windowLevel >= top.windowLevel) top = w;
     }
-    return top ?: UIApplication.sharedApplication.keyWindow;
+    return top ?: a2_host_key_window();   // key window 口径见 a2_host_window.h
 }
 
 /// ★主窗口★（★GL 宿主表面专用口径★）—— drawable 必须挂在真正被合成到屏幕上的那个窗口上。

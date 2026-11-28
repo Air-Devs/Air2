@@ -153,9 +153,7 @@
     section.footerText = @"Modrinth 与 CurseForge 均可直接使用，无需额外配置。"
                           "国内网络建议保持镜像加速开启。";
 
-    BOOL hasKey = [A2CurseForgeAPI hasAPIKey];
-
-        // Key 是内置的（参考 ZL2 的构建期注入），
+    // Key 是内置的（参考 ZL2 的构建期注入），
     // 用户无需配置，因此这里不再有「填写 / 验证 / 清除 Key」的入口。
 
     // ---- 镜像加速 ----

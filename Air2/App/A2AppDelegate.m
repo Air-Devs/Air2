@@ -32,6 +32,7 @@
 #import "A2GameDirMigration.h"
 #import "A2VersionIsolation.h"   // A2GamePath：恢复用户选定目录的安全作用域访问权
 #import "A2Log.h"
+#import "A2KeyWindow.h"   // key window 的唯一口径（替掉废弃的 UIApplication.keyWindow）
 #import "A2CrashReportViewController.h"
 #import "A2PairingKeepAlive.h"   // [PAIRWIRE-KEEPALIVE] 配对期间保活
 #import "A2RendererImporter.h"  // 导入的渲染器插件：启动时扫一遍（见 docs/RENDERER_PLUGIN_SPEC.md）
@@ -128,7 +129,7 @@ didFinishLaunchingWithOptions:(NSDictionary<UIApplicationLaunchOptionsKey, id> *
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.2 * NSEC_PER_SEC)),
                            dispatch_get_main_queue(), ^{
                 // ★不是弹窗★：整页崩溃报告（可滚动 + 导出日志），照老 Air 的做法。
-                UIViewController *top = UIApplication.sharedApplication.keyWindow.rootViewController;
+                UIViewController *top = A2KeyWindow().rootViewController;
                 while (top.presentedViewController) top = top.presentedViewController;
                 A2CrashReportViewController *vc =
                     [[A2CrashReportViewController alloc] initWithReport:msg logPath:oldLog];

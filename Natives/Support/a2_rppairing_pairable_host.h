@@ -53,7 +53,7 @@ NS_ASSUME_NONNULL_BEGIN
 #pragma mark - 纯逻辑：authTag / TXT / 服务名
 
 /// SipHash-2-4：key 为 16 字节（按两个【小端】u64 取用）。
-uint64_t A2RPSipHash24WithKey16(const uint8_t key[A2RPPairableHostAltIRKBytes],
+uint64_t A2RPSipHash24WithKey16(const uint8_t key[_Nonnull A2RPPairableHostAltIRKBytes],
                                 const void *bytes, size_t length);
 
 /// authTag（6 字节，未 base64）：SipHash-2-4(altIRK, identifier) 的 8 字节小端输出取前 6 字节逆序。

@@ -107,8 +107,11 @@ static NSString *const kCellID = @"A2FileCell";
 
 - (void)setupAddButton {
     // 右上 + 只做“新建文件夹”（唯一写操作入口，语义单一）。
+    __weak typeof(self) weakSelf = self;
     [self addTrailingButtonWithSymbol:@"plus" action:^{
-        __strong typeof(self) self = self;
+        // ★原来写的是 `__strong typeof(self) self = self;`★：初始化式里的 self 指的是
+        //   正在声明的那个自己 ⇒ 读到未初始化值（-Wuninitialized），闭包里等于拿着野指针。
+        __strong typeof(weakSelf) self = weakSelf;
         if (!self) return;
         [self askForNameWithTitle:@"新建文件夹" initial:@"" done:^(NSString *name) {
             NSError *err = nil;

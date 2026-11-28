@@ -92,7 +92,10 @@
         NSMutableString *ascii = [NSMutableString string];
         for (NSUInteger i = 0; i < leftover.length; i++) {
             unichar c = [leftover characterAtIndex:i];
-            [ascii appendFormat:@"%C", (c < 0x4E00 || c > 0x9FFF) ? c : (unichar)' '];
+            // ★必须显式收回 unichar★：三元表达式会把两臂提升成 int，而 %C 要的是 unichar
+            //   （长度不同的两套整型 ⇒ -Wformat，真机上还可能打出乱码）。
+            unichar out = (c < 0x4E00 || c > 0x9FFF) ? c : (unichar) ' ';
+            [ascii appendFormat:@"%C", out];
         }
         NSString *trimmed = [ascii stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet];
         if (trimmed.length) [parts addObject:trimmed];

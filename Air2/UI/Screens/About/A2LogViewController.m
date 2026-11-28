@@ -43,8 +43,10 @@
     [super viewDidLoad];
     self.pageTitle = @"运行日志";
 
+    // ★weakSelf★：按钮被 self 持有，block 再强捕获 self 就是环（页面退出也不释放）。
+    __weak typeof(self) weakSelf = self;
     [self addTrailingButtonWithSymbol:@"square.and.arrow.up" action:^{
-        [self exportLog];
+        [weakSelf exportLog];
     }];
 
     // ---- 路径 / 大小 / 用法 ----

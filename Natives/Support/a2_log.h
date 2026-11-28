@@ -23,6 +23,12 @@
 
 #import <Foundation/Foundation.h>
 
+// ★为什么整段进审计区★：本头被 145 个编译单元包含，只要有一处指针带 _Nullable、
+// 其余没标，clang 就对每个包含它的 TU 报一次 -Wnullability-completeness
+// （145 条噪音，把真正的警告埋了）。要么全标，要么全不标；这里选全标。
+// 唯一的「可能为 NULL」是 a2_log_set_sink 的 sink（传 NULL = 取消注入），已单独标注。
+NS_ASSUME_NONNULL_BEGIN
+
 // 阶段模型：对齐 §2 启动链与 §5-P1 判据（阶段 5→6→7→完成）。
 // 前置阶段 1~4（环境/JIT/渲染器/运行环境）由既有 AmeLaunchProgress 覆盖，本层不重复定义。
 typedef NS_ENUM(NSInteger, A2Stage) {
@@ -75,5 +81,7 @@ void a2_log_fatal(NSString *fmt, ...);
 /// 与 a2_log_f 不同：前缀行首即为 `[RT-STRICT]`（不再叠 `[RT] `），便于真机判据一眼分辨
 /// 「回退旧链」这类异常安全网事件。仍无状态、不读环境（严格与否由调用方显式判定）。
 void a2_log_strict(NSString *fmt, ...);
+
+NS_ASSUME_NONNULL_END
 
 #endif /* A2_LOG_H */

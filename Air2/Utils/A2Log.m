@@ -50,12 +50,9 @@ static NSString *const kPreviousLogName = @"lastlog.old.txt";
 static NSString *const kConsoleLogName    = @"lastlog.txt";
 static NSString *const kConsoleLogOldName = @"lastlog.old.txt";
 
-/// 控制台归档的大小上限：到了就就地轮转。2 MiB 够放下一次会话的 native 判据行与控制台噪声。
-static const unsigned long long kConsoleLogCapBytes = 2ULL * 1024ULL * 1024ULL;
-
-/// 控制台归档的句柄（-1 = 尚未归档）。★与 stderr 是同一个打开文件描述（dup2）★，
-/// 所以 ftruncate 它 = 截断 stderr 的落点；以 O_APPEND 打开 ⇒ 截断后继续从 0 处往后写。
-static int gConsoleFd = -1;
+// ★没有「运行时轮转」的常量与句柄★：单文件模式下 lastlog.txt 就是 stderr 的落点，
+//   按大小就地截断会把 A2Log 刚写的行一起抹掉 ⇒ 轮转只在 startSession（启动时）做一次。
+//   曾经留着的 kConsoleLogCapBytes / gConsoleFd 因此没有任何读者（-Wunused-const-variable）。
 
 /// 串行队列：保证多线程下的写入不交错。
 static dispatch_queue_t a2_log_queue(void) {
@@ -189,79 +186,6 @@ static void a2_log_console_write(NSString *text) {
     funlockfile(stderr);
 }
 
-/// 超上限就地轮转：当前内容留档成 latestlog.old.txt（有界：≤ 上限），归档截断后继续写。
-/// ★调用前必须已持有队列★。
-static void a2_log_console_guard(void) {
-    // ★单文件模式★：会话日志与控制台归档是同一个文件，按大小就地截断会把另一路
-    //   刚写的行一起抹掉 ⇒ 这里不再做运行时轮转；只在启动时把 lastlog.txt 轮转成
-    //   lastlog.old.txt（见 a2_log_rotate / a2_log_console_open）。
-    return;
-    if (gConsoleFd < 0) { return; }
-    struct stat info;
-    if (fstat(gConsoleFd, &info) != 0) { return; }
-    if ((unsigned long long)info.st_size < kConsoleLogCapBytes) { return; }
-
-    NSString *current = a2_log_path_named(kConsoleLogName);
-    NSString *previous = a2_log_path_named(kConsoleLogOldName);
-    NSFileManager *fm = NSFileManager.defaultManager;
-    if (current && previous) {
-        if ([fm fileExistsAtPath:previous]) {
-            [fm removeItemAtPath:previous error:nil];
-        }
-        [fm copyItemAtPath:current toPath:previous error:nil];
-    }
-    if (ftruncate(gConsoleFd, 0) != 0) { return; }
-    a2_log_console_write(@"[A2-LOG] latestlog.txt 已达上限，已轮转为 latestlog.old.txt 并从头继续写");
-}
-
-/// 30 秒一次的上限守护。★上限要成立，就得与「谁在写」无关★ ——
-/// 光靠判据行触发不够：JVM 栈回溯、其它 NSLog 也会往 stderr 灌。
-static void a2_log_console_install_guard_timer(void) {
-    static dispatch_source_t timer = nil;
-    static dispatch_once_t once;
-    dispatch_once(&once, ^{
-        timer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, a2_log_queue());
-        dispatch_source_set_timer(timer,
-                                  dispatch_time(DISPATCH_TIME_NOW, (int64_t)(30 * NSEC_PER_SEC)),
-                                  (uint64_t)(30 * NSEC_PER_SEC),
-                                  (uint64_t)(5 * NSEC_PER_SEC));
-        dispatch_source_set_event_handler(timer, ^{
-            // 本 handler 就在 a2_log_queue() 上跑 ⇒ 已持有队列。
-            a2_log_console_guard();
-        });
-        dispatch_resume(timer);
-    });
-}
-
-/// 轮转并接上：删 .old → 现档改名 .old → 新建现档 → dup2 到 stderr。
-/// 任一步失败即放弃（日志设施绝不能反过来把启动搞死）。
-static void a2_log_console_open(void) {
-    NSFileManager *fm = NSFileManager.defaultManager;
-    NSString *current = a2_log_path_named(kConsoleLogName);
-    NSString *previous = a2_log_path_named(kConsoleLogOldName);
-    if (!current || !previous) { return; }
-
-    // ★单文件模式★：轮转只在 a2_log_rotate（startSession）里做一次。
-    //   这里若再 move 一次，会把本轮刚建好的 lastlog.txt 挪成 .old，
-    //   而会话句柄仍指向被挪走的那份 ⇒ 两份又分叉。故此处只打开、不轮转。
-    (void)fm;
-    (void)previous;
-    int fd = open(current.fileSystemRepresentation, O_WRONLY | O_CREAT | O_APPEND, 0644);
-    if (fd < 0) { return; }
-    if (dup2(fd, STDERR_FILENO) != STDERR_FILENO) {
-        close(fd);
-        return;
-    }
-    // ★stdout 也接进同一份日志★（2026-10-17）
-    //   HotSpot 的线程栈（SIGQUIT 的 Full thread dump）与部分 VM 输出默认走 stdout；
-    //   之前只 dup2 了 stderr ⇒ 真机上 SIGQUIT 之后一行 dump 都没有。
-    //   stdout 不参与崩溃恢复，接失败不影响任何逻辑。
-    (void)dup2(fd, STDOUT_FILENO);
-    // ★不 close(fd)★：轮转（ftruncate）还要用它；它与 stderr 同一个打开文件描述。
-    gConsoleFd = fd;
-    a2_log_console_install_guard_timer();
-}
-
 #pragma mark - 会话日志落点（判据行共用）
 
 void a2_log_session_sink(const char *utf8Line) {
@@ -271,7 +195,6 @@ void a2_log_session_sink(const char *utf8Line) {
     NSString *line = a2_log_single_line(raw);
     dispatch_sync(a2_log_queue(), ^{
         a2_log_append(line);
-        a2_log_console_guard();   // 顺手看一次控制台归档的大小（判据行是稳定触发点）
     });
 }
 
@@ -320,7 +243,6 @@ void a2_log_session_sink(const char *utf8Line) {
     va_end(args);
     dispatch_sync(a2_log_queue(), ^{
         a2_log_append(message);
-        a2_log_console_guard();
     });
     // ★同一行也进控制台归档★（latestlog.txt）：会话文件读不到时（例如用户只拿得到
     //   Documents 里的 latestlog.txt），启动链的判据行仍然可查 —— 不让日志只存在一处。

@@ -72,9 +72,17 @@
 }
 
 - (void)a2_pickImportFile {
-    NSArray<NSString *> *types = @[ @"public.json", @"public.plain-text", @"public.data" ];
+    // ★部署目标 14.0 ⇒ 用 UTType 版本★：旧的 initWithDocumentTypes:inMode: 从 iOS 14 起废弃。
+    //   字符串标识符原样转 UTType，认不出来的直接跳过（不猜、不塞一个假类型）。
+    NSMutableArray<UTType *> *types = [NSMutableArray array];
+    for (NSString *identifier in @[ @"public.json", @"public.plain-text", @"public.data" ]) {
+        UTType *type = [UTType typeWithIdentifier:identifier];
+        if (type != nil) {
+            [types addObject:type];
+        }
+    }
     UIDocumentPickerViewController *picker =
-        [[UIDocumentPickerViewController alloc] initWithDocumentTypes:types inMode:UIDocumentPickerModeImport];
+        [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:types asCopy:YES];
     picker.delegate = self;
     picker.allowsMultipleSelection = NO;
     [self presentViewController:picker animated:YES completion:nil];

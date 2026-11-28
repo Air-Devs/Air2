@@ -301,7 +301,7 @@ static void A2Main(dispatch_block_t b) {
 /// 从 OptiFine 官方页面解析。
 /// 页面地址：https://optifine.net/downloads
 /// 每个条目形如：
-///   <a href="adloadx?f=OptiFine_1.10.2_HD_U_C1.jar">...
+///   <a href="adloadx?f=OptiFine_1.10.2_HD_U_C1.jar">…</a>
 - (void)fetchOptiFineFromHTML:(NSString *)mcVersion
                    completion:(void (^)(NSArray<A2ModLoaderVersion *> *, NSError *))completion {
 

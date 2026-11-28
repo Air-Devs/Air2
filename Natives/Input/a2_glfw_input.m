@@ -364,7 +364,7 @@ static const NSTimeInterval kA2HoldDelay = 0.25;
         if (sSens < 0) {
             id v = [NSUserDefaults.standardUserDefaults objectForKey:@"A2ViewSensitivity"];
             double d = (v != nil) ? [NSUserDefaults.standardUserDefaults doubleForKey:@"A2ViewSensitivity"]
-                                  : ((UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) ? 1.25 : 1.0);
+                                  : ((UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad) ? 1.25 : 1.0);
             sSens = (d >= 0.3 && d <= 3.0) ? d : 1.0;
         }
         CGFloat dx = (p.x - self.a2LastTouch.x) * sSens;

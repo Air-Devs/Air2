@@ -23,6 +23,7 @@
 #import "A2CrashGuard.h"
 #import "A2Log.h"
 #import "A2CrashReportViewController.h"
+#import "A2KeyWindow.h"   // key window 的唯一口径（替掉废弃的 UIApplication.keyWindow）
 #import <UIKit/UIKit.h>
 #include <execinfo.h>
 #include <pthread.h>
@@ -117,7 +118,7 @@ static void A2SignalHandler(int sig) {
             NSString *path = @(gA2CrashReportPath);
             NSString *text = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:NULL];
             if (text.length > 4000) text = [text substringFromIndex:text.length - 4000];
-            UIViewController *top = UIApplication.sharedApplication.keyWindow.rootViewController;
+            UIViewController *top = A2KeyWindow().rootViewController;
             while (top.presentedViewController) top = top.presentedViewController;
             // 与「上次启动异常」统一：整页崩溃报告（可滚动 + 导出日志），不用弹窗。
             A2CrashReportViewController *vc =

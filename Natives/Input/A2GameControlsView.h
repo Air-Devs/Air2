@@ -30,6 +30,10 @@ typedef NS_ENUM(NSInteger, A2MoveMode) {
 - (instancetype)initWithWindowHandle:(long)window NS_DESIGNATED_INITIALIZER;
 - (instancetype)initWithFrame:(CGRect)frame NS_UNAVAILABLE;
 - (instancetype)init NS_UNAVAILABLE;
+/// ★必须显式声明★：本类指定了 designated initializer，父类的 -initWithCoder: 也得覆盖
+/// （否则 -Wobjc-designated-initializers）。控件只由代码创建，从 nib/Storyboard 反序列化
+/// 没有意义 ⇒ 直接标成不可用，比写一个空实现更诚实。
+- (instancetype)initWithCoder:(NSCoder *)coder NS_UNAVAILABLE;
 
 /// 切换移动模式（即时生效 + 持久化）。
 - (void)setMoveMode:(A2MoveMode)mode;

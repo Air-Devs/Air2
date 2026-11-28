@@ -187,6 +187,7 @@
 		4BE5F7816DB3CEF6CBE3809A /* A2PaletteStyle.m in Sources */ = {isa = PBXBuildFile; fileRef = E6F6FA4C47FD771177075404 /* A2PaletteStyle.m */; };
 		7B7A47F5F8AA510170F1A159 /* A2ThemeManager.m in Sources */ = {isa = PBXBuildFile; fileRef = 5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */; };
 		0771576A647FFB4348CEC538 /* A2Typography.m in Sources */ = {isa = PBXBuildFile; fileRef = 42B68771E09EA8BB40AC83D7 /* A2Typography.m */; };
+		52592C98716AE8924F1C7243 /* A2KeyWindow.m in Sources */ = {isa = PBXBuildFile; fileRef = 6465630014BFDF1348D7E133 /* A2KeyWindow.m */; };
 		9DBF1C18D3CF37C75F4CD2C1 /* A2LaunchContract.m in Sources */ = {isa = PBXBuildFile; fileRef = 66180FFBC0643CB5454B7D9F /* A2LaunchContract.m */; };
 		D5A31B16172968FB7F50E8EB /* A2LaunchMemory.m in Sources */ = {isa = PBXBuildFile; fileRef = FABB5CB317D92C2E1FD06240 /* A2LaunchMemory.m */; };
 		3146645C6E4FEF74DF4E4317 /* A2LaunchRuntimeFacts.m in Sources */ = {isa = PBXBuildFile; fileRef = BECB5FBB14A09216F6F71BB2 /* A2LaunchRuntimeFacts.m */; };
@@ -429,6 +430,7 @@
 		E6F6FA4C47FD771177075404 /* A2PaletteStyle.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2PaletteStyle.m"; sourceTree = "<group>"; };
 		5655D4360D221D1EE1F0B8FC /* A2ThemeManager.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2ThemeManager.m"; sourceTree = "<group>"; };
 		42B68771E09EA8BB40AC83D7 /* A2Typography.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2Typography.m"; sourceTree = "<group>"; };
+		6465630014BFDF1348D7E133 /* A2KeyWindow.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2KeyWindow.m"; sourceTree = "<group>"; };
 		66180FFBC0643CB5454B7D9F /* A2LaunchContract.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchContract.m"; sourceTree = "<group>"; };
 		FABB5CB317D92C2E1FD06240 /* A2LaunchMemory.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchMemory.m"; sourceTree = "<group>"; };
 		BECB5FBB14A09216F6F71BB2 /* A2LaunchRuntimeFacts.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = "A2LaunchRuntimeFacts.m"; sourceTree = "<group>"; };
@@ -660,6 +662,7 @@
 		812104F4721E701E0A31697D /* A2PaletteStyle.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2PaletteStyle.h"; sourceTree = "<group>"; };
 		789AF4E406F5B8122812523E /* A2ThemeManager.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2ThemeManager.h"; sourceTree = "<group>"; };
 		2146F61DDD3A2234BEDF108A /* A2Typography.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2Typography.h"; sourceTree = "<group>"; };
+		9617E995436EB26AEB871604 /* A2KeyWindow.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2KeyWindow.h"; sourceTree = "<group>"; };
 		39F6293D97FE03FDFC5D3DE4 /* A2LaunchContract.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchContract.h"; sourceTree = "<group>"; };
 		9CDA54A9359EF4776173E445 /* A2LaunchMemory.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchMemory.h"; sourceTree = "<group>"; };
 		85C93CC11854E1E0B8FD1810 /* A2LaunchRuntimeFacts.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "A2LaunchRuntimeFacts.h"; sourceTree = "<group>"; };
@@ -686,6 +689,7 @@
 		BC1BFCD3931CF2B23F207B8F /* a2_glfw_input.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_glfw_input.h"; sourceTree = "<group>"; };
 		408CE7916D149CDF4725C142 /* a2_glfw_trace.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_glfw_trace.h"; sourceTree = "<group>"; };
 		7098596D5BC01E0C70FA57C8 /* a2_glfw_window.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_glfw_window.h"; sourceTree = "<group>"; };
+		68311AD87D5BDA341F17EF6B /* a2_host_window.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_host_window.h"; sourceTree = "<group>"; };
 		438CB429F256BAD24C3CA637 /* a2_sdl_input.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_sdl_input.h"; sourceTree = "<group>"; };
 		D5167F3BAFE3C0EB46EB263B /* a2_eagl_egl.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_eagl_egl.h"; sourceTree = "<group>"; };
 		2D5EE38B9E92A558A8A68E9A /* a2_frame_perf.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "a2_frame_perf.h"; sourceTree = "<group>"; };
@@ -915,12 +919,14 @@
 		07456E46BBC30DF8EE54F44C /* Utils */ = {
 			isa = PBXGroup;
 			children = (
+				6465630014BFDF1348D7E133 /* A2KeyWindow.m */,
 				66180FFBC0643CB5454B7D9F /* A2LaunchContract.m */,
 				FABB5CB317D92C2E1FD06240 /* A2LaunchMemory.m */,
 				BECB5FBB14A09216F6F71BB2 /* A2LaunchRuntimeFacts.m */,
 				CE8E02818B37C0AFFABF71D5 /* A2Log.m */,
 				70E537F57063CE783BE3A38B /* A2MurmurHash2.m */,
 				7EC0262DD08DEE92A0AD385D /* A2Strings.m */,
+				9617E995436EB26AEB871604 /* A2KeyWindow.h */,
 				39F6293D97FE03FDFC5D3DE4 /* A2LaunchContract.h */,
 				9CDA54A9359EF4776173E445 /* A2LaunchMemory.h */,
 				85C93CC11854E1E0B8FD1810 /* A2LaunchRuntimeFacts.h */,
@@ -983,6 +989,7 @@
 				BC1BFCD3931CF2B23F207B8F /* a2_glfw_input.h */,
 				408CE7916D149CDF4725C142 /* a2_glfw_trace.h */,
 				7098596D5BC01E0C70FA57C8 /* a2_glfw_window.h */,
+				68311AD87D5BDA341F17EF6B /* a2_host_window.h */,
 				438CB429F256BAD24C3CA637 /* a2_sdl_input.h */,
 			);
 			path = Input;
@@ -1799,6 +1806,7 @@
 				4BE5F7816DB3CEF6CBE3809A /* A2PaletteStyle.m in Sources */,
 				7B7A47F5F8AA510170F1A159 /* A2ThemeManager.m in Sources */,
 				0771576A647FFB4348CEC538 /* A2Typography.m in Sources */,
+				52592C98716AE8924F1C7243 /* A2KeyWindow.m in Sources */,
 				9DBF1C18D3CF37C75F4CD2C1 /* A2LaunchContract.m in Sources */,
 				D5A31B16172968FB7F50E8EB /* A2LaunchMemory.m in Sources */,
 				3146645C6E4FEF74DF4E4317 /* A2LaunchRuntimeFacts.m in Sources */,
@@ -1933,7 +1941,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
-				CURRENT_PROJECT_VERSION = "dbbecdc";
+				CURRENT_PROJECT_VERSION = "1a1f4c5";
 				DEAD_CODE_STRIPPING = "NO";
 				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";
@@ -1979,7 +1987,7 @@
 			isa = XCBuildConfiguration;
 			buildSettings = {
 				CODE_SIGN_STYLE = "Automatic";
-				CURRENT_PROJECT_VERSION = "dbbecdc";
+				CURRENT_PROJECT_VERSION = "1a1f4c5";
 				DEAD_CODE_STRIPPING = "NO";
 				ENABLE_USER_SCRIPT_SANDBOXING = "NO";
 				GENERATE_INFOPLIST_FILE = "NO";

@@ -54,14 +54,27 @@ typedef NS_ENUM(NSInteger, A2LoaderCardState) {
 };
 
 /// 加载器 → 图标符号。本项目自定，不套用任何上游的配图。
+/// ★所有枚举值都显式列出、刻意不写 default★：将来新增加载器时编译器会在这里报
+///   -Wswitch，提醒补图标；写 default 就会静默落到 cube.fill（卡片上全是同一个图标，
+///   而没人会注意到）。未知值仍由末尾的兜底返回处理。
 static NSString *A2LoaderSymbol(A2ModLoaderType type) {
     switch (type) {
         case A2ModLoaderTypeFabric:       return @"puzzlepiece.extension.fill";
         case A2ModLoaderTypeQuilt:        return @"square.grid.3x3.fill";
         case A2ModLoaderTypeLegacyFabric: return @"clock.arrow.circlepath";
+        case A2ModLoaderTypeBabric:       return @"puzzlepiece.fill";      // Beta 1.7.3 的 Fabric 分支
         case A2ModLoaderTypeForge:        return @"hammer.fill";
         case A2ModLoaderTypeNeoForge:     return @"flame.fill";
+        case A2ModLoaderTypeCleanroom:    return @"hammer.circle.fill";    // Forge 1.12.2 延续版
+        case A2ModLoaderTypeLiteLoader:   return @"bolt.fill";
         case A2ModLoaderTypeOptiFine:     return @"wand.and.stars";
+        case A2ModLoaderTypeRift:         return @"sparkles";
+        // 前置模组：用与对应加载器同一族但更「轻」的符号
+        case A2ModLoaderTypeFabricAPI:       return @"puzzlepiece.fill";
+        case A2ModLoaderTypeQuiltAPI:        return @"square.grid.2x2.fill";
+        case A2ModLoaderTypeLegacyFabricAPI: return @"clock.arrow.circlepath";
+        case A2ModLoaderTypeBabricAPI:       return @"puzzlepiece.fill";
+        case A2ModLoaderTypeUnknown:         return @"cube.fill";
     }
     return @"cube.fill";
 }

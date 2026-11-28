@@ -62,12 +62,6 @@ typedef NS_ENUM(NSInteger, A2ThemeKind) {
 + (NSArray<A2ColorTheme *> *)allThemes;
 + (instancetype)themeFromImage:(UIImage *)image;
 
-/// 从「种子色 + 配色风格」构造主题（颜色主题弹窗用）
-+ (instancetype)themeWithSeedColor:(UIColor *)seed
-                      paletteStyle:(NSInteger)style
-                              name:(NSString *)name
-                              desc:(NSString *)desc;
-
 /// 构造主题。override 块用于手调关键色，让成品不完全依赖算法。
 + (instancetype)themeWithSeed:(UIColor *)seed
                          kind:(A2ThemeKind)kind
@@ -76,6 +70,20 @@ typedef NS_ENUM(NSInteger, A2ThemeKind) {
                      gradient:(NSArray<UIColor *> *)gradient
                 lightOverride:(void (^ _Nullable)(id scheme))lightOverride
                  darkOverride:(void (^ _Nullable)(id scheme))darkOverride;
+
+@end
+
+/// ★分类声明★：`themeWithSeedColor:paletteStyle:name:desc:` 的实现在
+/// A2ColorTheme+Seed.m（颜色主题弹窗专用入口）。声明必须放在分类里 ——
+/// 写在主类接口上会被 clang 当成「主类该实现却没实现」，
+/// 同时又告「分类重复实现主类方法」，两条告警其实同一个根因。
+@interface A2ColorTheme (Seed)
+
+/// 从「种子色 + 配色风格」构造主题（颜色主题弹窗用）
++ (instancetype)themeWithSeedColor:(UIColor *)seed
+                      paletteStyle:(NSInteger)style
+                              name:(NSString *)name
+                              desc:(NSString *)desc;
 
 @end
 

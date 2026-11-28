@@ -149,17 +149,11 @@
         return;
     }
 
-    UIDocumentPickerViewController *picker;
-    if (@available(iOS 14.0, *)) {
-        // 插件包是 .air2plugin / .zip，系统没有对应的 UTType，用 UTTypeData 兜底
-        picker = [[UIDocumentPickerViewController alloc]
-                  initForOpeningContentTypes:@[UTTypeData]
-                                     asCopy:YES];
-    } else {
-        picker = [[UIDocumentPickerViewController alloc]
-                  initWithDocumentTypes:@[@"public.data"]
-                                 inMode:UIDocumentPickerModeImport];
-    }
+    // ★部署目标 14.0 ⇒ 只用 iOS 14 的 API★（旧分支永远不可达，只多两条废弃告警）。
+    //   插件包是 .air2plugin / .zip，系统没有对应的 UTType，用 UTTypeData 兜底。
+    UIDocumentPickerViewController *picker =
+        [[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeData]
+                                                                   asCopy:YES];
     picker.delegate = self;
     picker.allowsMultipleSelection = NO;
     [self presentViewController:picker animated:YES completion:nil];

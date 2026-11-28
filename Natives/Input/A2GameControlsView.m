@@ -8,6 +8,7 @@
 #include <string.h>
 #import "a2_log.h"
 #import "a2_glfw_input.h"      // 合成输入的唯一声明处（不再手写 extern，避免签名漂移）
+#import "a2_host_window.h"     // key window 口径（Natives 侧，替掉废弃的 UIApplication.keyWindow）
 #import "A2ControlLayoutIO.h"
 
 // GLFW 键码（与 Java 侧 GLFW.java 常量一致）
@@ -121,7 +122,7 @@ static const NSInteger kA2CtrlLayoutVer = 3;
     // 疾跑 = 拖出半径的 80%
     // ★疾跑阈值★ iPad 上摇杆半径大、手指位移也大，80% 容易误判成疾跑
     //   ⇒ iPad 抬到 92%；另外允许用 A2StickSprintThreshold(0~1) 覆盖。
-    double th = (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) ? 0.92 : 0.80;
+    double th = (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad) ? 0.92 : 0.80;
     id ov = [NSUserDefaults.standardUserDefaults objectForKey:@"A2StickSprintThreshold"];
     if (ov != nil) {
         double v = [NSUserDefaults.standardUserDefaults doubleForKey:@"A2StickSprintThreshold"];
@@ -905,7 +906,7 @@ static int a2_touchSeen = 0;
     }]];
     [sheet addAction:[UIAlertAction actionWithTitle:@"完成" style:UIAlertActionStyleCancel handler:nil]];
 
-    if (UI_USER_INTERFACE_IDIOM() == UIUserInterfaceIdiomPad) {
+    if (UIDevice.currentDevice.userInterfaceIdiom == UIUserInterfaceIdiomPad) {
         sheet.popoverPresentationController.sourceView = self;
         sheet.popoverPresentationController.sourceRect = self.bounds;
     }
@@ -1633,7 +1634,7 @@ static int a2_touchSeen = 0;
     UIViewController *vc = (UIViewController *) r;
     // ★兜底★ 控件挂在"游戏视图"（普通 UIView）上，响应链常到 UIWindow 就断，
     //   那样 present 会静默失败 —— 表现为「点了有高亮但没反应」。
-    if (vc == nil) vc = UIApplication.sharedApplication.keyWindow.rootViewController;
+    if (vc == nil) vc = a2_host_key_window().rootViewController;
     if (vc == nil) {
         for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
             if (![scene isKindOfClass:UIWindowScene.class]) continue;

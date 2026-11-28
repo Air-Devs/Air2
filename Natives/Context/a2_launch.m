@@ -554,7 +554,7 @@ int a2_launch_jvm_with_argv(int argc, const char *const argv[], A2LaunchInput in
     //   SymbolTable::do_lookup ← jni_FindClass ← a2_launch_jvm_with_argv。
     {
         JNIEnv *threadEnv = NULL;
-        jint ar = (*vm)->AttachCurrentThread(vm, (void **)&threadEnv, NULL);
+        jint ar = (*vm)->AttachCurrentThread(vm, &threadEnv, NULL);
         a2_log_f(@"[RT-P1] AttachCurrentThread rc=%d env=%p（创建线程的 env=%p）", ar, threadEnv, env);
         if (ar == 0 && threadEnv != NULL) env = threadEnv;
     }
@@ -592,7 +592,7 @@ int a2_launch_jvm_with_argv(int argc, const char *const argv[], A2LaunchInput in
         }
         dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
             JNIEnv *tenv = NULL;
-            if (vmRef == NULL || (*vmRef)->AttachCurrentThread(vmRef, (void **)&tenv, NULL) != 0 || tenv == NULL) {
+            if (vmRef == NULL || (*vmRef)->AttachCurrentThread(vmRef, &tenv, NULL) != 0 || tenv == NULL) {
                 a2_log_fatal(@"[RT-P1] main 派发线程 AttachCurrentThread 失败");
                 return;
             }

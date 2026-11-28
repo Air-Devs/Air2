@@ -104,7 +104,9 @@ BOOL A2RPPairSetupUSBPathAvailable(NSString *_Nullable *_Nullable reason);
 ///   ② 握手：收设备请求 → 回 `allowsPairSetup=YES / allowsPinlessPairing=NO` 的响应；
 ///   ③ 把 pair-setup 的 TLV 装进 `event.pairingData`（data 为 base64）。
 /// 帧/信封/事件的全部编解码走 a2_rppairing_pairable_host_wire（纯函数，有单测）。
-@interface A2RPPairSetupPairableHostJSONTransport : NSObject
+// ★显式遵循 A2RPPairSetupMessageTransport★：本类实现了 required 的 exchangePairingData:…，
+//   但之前没声明遵循，于是把实例当 id<协议> 返回时会被判为类型不兼容（-Wincompatible-pointer-types）。
+@interface A2RPPairSetupPairableHostJSONTransport : NSObject <A2RPPairSetupMessageTransport>
 
 /// 只包一条已被接受的字节通道；★不在这里握手★（上下文还用不上，见 beginSession）。
 + (nullable instancetype)transportWithStream:(nullable id<A2RPByteStream>)stream

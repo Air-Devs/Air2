@@ -39,7 +39,7 @@ static int a2_sdl_prepare(void) {
     if (getVMs(&gVM, 1, &n) != JNI_OK || gVM == NULL || n < 1) { gState = -1; return 0; }
 
     JNIEnv *env = NULL;
-    if ((*gVM)->AttachCurrentThread(gVM, (void **)&env, NULL) != JNI_OK || env == NULL) {
+    if ((*gVM)->AttachCurrentThread(gVM, &env, NULL) != JNI_OK || env == NULL) {
         gState = -1;
         return 0;
     }
@@ -70,7 +70,7 @@ static void a2_sdl_call(int type, int i1, int i2, int i3, int i4) {
 
     JNIEnv *env = NULL;
     if ((*gVM)->GetEnv(gVM, (void **)&env, JNI_VERSION_1_6) != JNI_OK) {
-        if ((*gVM)->AttachCurrentThread(gVM, (void **)&env, NULL) != JNI_OK) return;
+        if ((*gVM)->AttachCurrentThread(gVM, &env, NULL) != JNI_OK) return;
     }
     (*env)->CallStaticVoidMethod(env, gBridgeClass, gDispatchMid,
                                  (jint)type, (jint)i1, (jint)i2, (jint)i3, (jint)i4);

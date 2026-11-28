@@ -5,6 +5,7 @@
 
 #import "A2LaunchOverlay.h"
 #import "A2Log.h"
+#import "A2KeyWindow.h"
 
 NSNotificationName const A2LaunchStageNotification = @"A2LaunchStageNotification";
 
@@ -23,7 +24,8 @@ static UIProgressView *gProgress = nil;
     if (gOverlayView != nil) {
         return;   // 幂等
     }
-    UIWindow *win = UIApplication.sharedApplication.keyWindow;
+    // ★A2KeyWindow 找不到时返回 nil，正是下面 0.3s 重试所依赖的语义★（见 A2KeyWindow.h）。
+    UIWindow *win = A2KeyWindow();
     if (win == nil) {
         // 场景启动早期 keyWindow 可能还没就绪：稍后重试一次，不递归
         dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.3 * NSEC_PER_SEC)),
